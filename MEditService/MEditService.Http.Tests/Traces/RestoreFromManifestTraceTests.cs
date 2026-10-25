@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -7,15 +6,11 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MEditService.Http.Tests.Api;
+namespace MEditService.Http.Tests.Traces;
 
-[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class RestoreFromManifestTraceTests : HostedTests
 {
     private const string Mod = "RestoredMod";
-    private const string HashOfKept = "gO3vE0ddOto=";
-    private const string HashOfOriginal = "PclCUmd0Z4s=";
-    private const string HashOfTheZip = "AAECAwQFBgc=";
     private const string Gesture = "a-gesture";
 
     private readonly ScratchDirectory _instance = new("restore-from-manifest-");
@@ -32,23 +27,12 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
     private string StatCache => Path.Combine(_instance, "stat-cache");
 
-    private static string Original => string.Concat(Enumerable.Range(0, 1000).Select(line => $"{line:D7}\n"));
-
     private string FileText(string path) => File.ReadAllText(Path.Combine(ModFolder, path));
 
     private void ModInstalledFromADownload()
     {
-        Directory.CreateDirectory(ModFolder);
-        File.WriteAllText(Path.Combine(ModFolder, "kept.txt"), "kept");
-        File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), Original);
+        DownloadedMod.Install(ModFolder, Downloads);
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "[General]");
-        Directory.CreateDirectory(Downloads);
-        using var zip = ZipFile.Open(Path.Combine(Downloads, "Mod.zip"), ZipArchiveMode.Create);
-        foreach (var (entry, content) in new[] { ("kept.txt", "kept"), ("edited.txt", Original) })
-        {
-            using var writer = new StreamWriter(zip.CreateEntry(entry).Open());
-            writer.Write(content);
-        }
     }
 
     private void ChangedSinceItsUpdate()
@@ -64,9 +48,9 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         {
             ["path"] = Path.Combine(Downloads, downloadName),
             ["size"] = 7,
-            ["hash"] = HashOfTheZip,
+            ["hash"] = DownloadedMod.HashOfTheZip,
             ["entries"] = new JsonArray(
-                new JsonObject { ["path"] = "kept.txt", ["hash"] = HashOfKept }, new JsonObject { ["path"] = "edited.txt", ["hash"] = HashOfOriginal }),
+                new JsonObject { ["path"] = "kept.txt", ["hash"] = DownloadedMod.HashOfKept }, new JsonObject { ["path"] = "edited.txt", ["hash"] = DownloadedMod.HashOfOriginal }),
         };
         var mod = new JsonObject
         {
@@ -192,16 +176,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AModHandedBothItsMetadataAndWhyItCouldNotBeRead_IsRefused()
-    {
-        var request = WhatRestoreDestroysRequest(Metadata("2.0"), metadataUnreadable: "access denied");
-
-        var response = await Client.PostAsJsonAsync("/mod-status", request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
     public async Task AModWhoseMetadataCouldNotBeRead_IsUnreadableInItsStatus_NamingWhy()
     {
         ModInstalledFromADownload();
@@ -239,7 +213,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.Equal(["edited.txt", "kept.txt"], Paths(restored, "written"));
         Assert.Equal(["nonCompiledPlugin.txt"], Paths(restored, "namedByNoLine"));
-        Assert.Equal((Original, "kept"), (FileText("edited.txt"), FileText("kept.txt")));
+        Assert.Equal((DownloadedMod.Original, "kept"), (FileText("edited.txt"), FileText("kept.txt")));
         var progress = await stream.EventsUntil("restore-from-manifest-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Mod);
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
@@ -257,36 +231,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             "/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false, asksWhatItLacks: asksWhatItLacks));
 
         Assert.Equal(logged, Logged.Count(entry => entry.Message.StartsWith($"Refused Restore from manifest of {Mod}: NotFound", StringComparison.Ordinal)));
-    }
-
-    [Theory]
-    [InlineData("folder")]
-    [InlineData("pin")]
-    public async Task RestoringWithASubmoduleMissingAField_Is400(string field)
-    {
-        var submodule = new JsonObject { ["folder"] = Path.Combine(_instance, "source", "Mod"), ["pin"] = "0123abc" };
-        submodule.Remove(field);
-        var request = Request("restore-from-manifest", "Mod.zip", submodule: submodule);
-
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData("name")]
-    [InlineData("dataFolder")]
-    [InlineData("files")]
-    public async Task RestoringWithAGameFolderMissingAField_Is400(string field)
-    {
-        var request = Request("restore-from-manifest", "Mod.zip");
-        var gameFolder = new JsonObject { ["name"] = "Fallout4", ["dataFolder"] = Path.Combine(_instance, "Data"), ["files"] = new JsonArray() };
-        gameFolder.Remove(field);
-        request["gameFolder"] = gameFolder;
-
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -340,51 +284,47 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.Equal(("Locked", "Unreadable"), (skipped.GetProperty("item").GetString(), skipped.GetProperty("refusal").GetString()));
     }
 
-    [Theory]
-    [InlineData("statCache")]
-    [InlineData("exclusionMark")]
-    public async Task RestoringWithAFieldMissing_Is400(string field)
+    private const string AMod = """ "name": "RestoredMod", "folder": "/mods/RestoredMod", "metadataFiles": ["meta.ini"] """;
+
+    public static TheoryData<string, string> NotARequestToRestore => new()
     {
-        var request = Request("restore-from-manifest", "Mod.zip");
-        request.Remove(field);
-
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task RestoringNoMod_Is400()
-    {
-        var request = Request("restore-from-manifest", "Mod.zip");
-        request["mods"] = new JsonArray();
-
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
+        { "no mod", """{"mods": [], "statCache": "/cache", "exclusionMark": ".mohidden"}""" },
+        { "no stat cache", $$"""{"mods": [{ {{AMod}} }], "exclusionMark": ".mohidden"}""" },
+        { "no exclusion mark", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache"}""" },
+        { "a submodule with no folder", $$"""{"mods": [{ {{AMod}}, "submodule": {"pin": "0123abc"} }], "statCache": "/cache", "exclusionMark": ".mohidden"}""" },
+        { "a submodule with no pin", $$"""{"mods": [{ {{AMod}}, "submodule": {"folder": "/source/Mod"} }], "statCache": "/cache", "exclusionMark": ".mohidden"}""" },
+        { "a game folder with no name", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"dataFolder": "/Data", "files": []} }""" },
+        { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"name": "Fallout4", "files": []} }""" },
+        { "a game folder with no files", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"name": "Fallout4", "dataFolder": "/Data"} }""" },
+    };
 
     [Theory]
-    [InlineData("[]")]
-    [InlineData("[{\"name\":\"RestoredMod\"}]")]
-    public async Task AskingWhatRestoreDestroysInNoModOrAModWithNoFolder_Is400(string mods)
+    [MemberData(nameof(NotARequestToRestore))]
+    public async Task ARequestThatDoesNotSayWhatToRestore_Is400(string lacking, string body)
     {
-        var request = WhatRestoreDestroysRequest();
-        request["mods"] = JsonNode.Parse(mods);
+        var response = await Client.PostJson("/restore-from-manifest", body);
 
-        var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
-    [Fact]
-    public async Task AskingWhatRestoreDestroysWithNoStatCache_Is400()
+    public static TheoryData<string, string, string> NotAQuestionOfModFolders => new()
     {
-        var request = WhatRestoreDestroysRequest();
-        request.Remove("statCache");
+        { "/what-restore-destroys", "no mod", """{"mods": [], "statCache": "/cache"}""" },
+        { "/what-restore-destroys", "a mod with no folder", """{"mods": [{"name": "RestoredMod"}], "statCache": "/cache"}""" },
+        { "/what-restore-destroys", "no stat cache", $$"""{"mods": [{ {{AMod}} }]}""" },
+        { "/mod-status", "no mod", """{"mods": [], "statCache": "/cache"}""" },
+        {
+            "/mod-status", "a mod handed both its metadata and why it could not be read",
+            $$"""{"mods": [{ {{AMod}}, "metadata": {"version": "2.0"}, "metadataUnreadable": "access denied"}], "statCache": "/cache"}"""
+        },
+    };
 
-        var response = await Client.PostAsJsonAsync("/what-restore-destroys", request);
+    [Theory]
+    [MemberData(nameof(NotAQuestionOfModFolders))]
+    public async Task AQuestionThatDoesNotNameEachModsFolder_Is400(string route, string lacking, string body)
+    {
+        var response = await Client.PostJson(route, body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal((route, lacking, HttpStatusCode.BadRequest), (route, lacking, response.StatusCode));
     }
 }

@@ -21,13 +21,12 @@ public sealed class SwaggerSchemaTests
         return JsonDocument.Parse(body).RootElement.Clone();
     }
 
-    [Theory]
-    [InlineData("FieldMetadata", "elementType", "FieldMetadata")]
-    public async Task NullableRefProperty_IsNullableViaAllOfWrapper_BecauseOpenApi30ForbidsKeywordsBesideARef(string schemaName, string propertyName, string refTarget)
+    [Fact]
+    public async Task NullableRefProperty_IsNullableViaAllOfWrapper_BecauseOpenApi30ForbidsKeywordsBesideARef()
     {
         var root = await GetSchemaAsync();
         var prop = root.GetProperty("components").GetProperty("schemas")
-            .GetProperty(schemaName).GetProperty("properties").GetProperty(propertyName);
+            .GetProperty("FieldMetadata").GetProperty("properties").GetProperty("elementType");
 
         Assert.False(prop.TryGetProperty("$ref", out _));
 
@@ -37,7 +36,7 @@ public sealed class SwaggerSchemaTests
         Assert.True(prop.TryGetProperty("allOf", out var allOf));
         Assert.Equal(1, allOf.GetArrayLength());
         Assert.Equal(
-            $"#/components/schemas/{refTarget}",
+            "#/components/schemas/FieldMetadata",
             allOf[0].GetProperty("$ref").GetString());
     }
 

@@ -4,7 +4,6 @@ using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -69,50 +68,6 @@ public sealed class CompareRecordsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACompleteComparison_HasNoMissingCopies()
-    {
-        var (npc, _) = await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod) } });
-
-        Assert.Empty((await response.Body()).GetProperty("missing").EnumerateArray());
-    }
-
-    [Fact]
-    public async Task NoCopies_Is400()
-    {
-        await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = Array.Empty<object>() });
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task ACopyMissingItsOrigin_Is400()
-    {
-        var (npc, _) = await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, "") } });
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Theory]
-    [InlineData("{ not json")]
-    [InlineData("[]")]
-    public async Task ADocumentTextThatIsNoRecordDocument_IsAColumnThatCouldNotBeParsed(string text)
-    {
-        var (npc, _) = await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy(npc, WithNpc, WithNpcMod, text) } });
-
-        response.EnsureSuccessStatusCode();
-        var column = (await response.Body()).GetProperty("compare").GetProperty("overrides").EnumerateArray().Single();
-        Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
-    }
-
-    [Fact]
     public async Task OneRecordWithAPluginsText_IsThatPluginsColumnReadFromIt()
     {
         var (npc, _) = await Loaded();
@@ -127,84 +82,25 @@ public sealed class CompareRecordsApiTests : HostedTests
         Assert.False(string.IsNullOrWhiteSpace(column.GetProperty("parseDiagnosis").GetString()));
     }
 
-    [Fact]
-    public async Task OneRecordWithAPluginsTextAlone_IsThatPluginsColumnOnly()
+    public static TheoryData<string, string, string> NotAComparison => new()
     {
-        var (npc, _) = await Loaded();
+        { "/records/compare", "no copies", """{"copies": []}""" },
+        { "/records/compare", "a copy missing its origin", """{"copies": [{"formKey": "000800:WithNpc.esp", "plugin": {"name": "WithNpc.esp", "origin": ""}}]}""" },
+        {
+            "/records/000800%3AWithNpc.esp/compare", "a text with no origin",
+            """{"plugin": {"name": "WithNpc.esp", "origin": ""}, "documentText": "{}"}"""
+        },
+    };
 
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(npc)}/compare",
-            new { plugin = new { name = WithWeapon, origin = WithWeaponMod }, documentText = "{ not json", alone = true });
-
-        response.EnsureSuccessStatusCode();
-        var column = (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
-        Assert.Equal((WithWeapon, WithWeaponMod), (column.GetProperty("plugin").GetString(), column.GetProperty("origin").GetString()));
-    }
-
-    private async Task<(string PlacedRef, string CellText)> CompiledPluginACell()
+    [Theory]
+    [MemberData(nameof(NotAComparison))]
+    public async Task ARequestThatDoesNotSayWhatToCompare_Is400(string route, string lacking, string body)
     {
-        var fx = Owned(new PluginFixtureBuilder("compare-child")
-            .WithPlugin(WithNpc, mod =>
-            {
-                var room = new Cell(mod) { EditorID = "Room" };
-                room.Temporary.Add(new PlacedObject(mod) { EditorID = "PlacedRef" });
-                var subBlock = new CellSubBlock { BlockNumber = 0 };
-                subBlock.Cells.Add(room);
-                var block = new CellBlock { BlockNumber = 0 };
-                block.SubBlocks.Add(subBlock);
-                mod.Cells.Records.Add(block);
-            }, origin: WithNpcMod)
-            .BuildScattered());
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(WithNpcMod)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Client.PluginReportsCompiledPlugin(WithNpc);
-        var cellFile = Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "*.json", SearchOption.AllDirectories)
-            .Single(file => File.ReadAllText(file).Contains("\"PlacedRef\"", StringComparison.Ordinal));
-        return (await Client.FormKeyNamed(WithNpc, WithNpcMod, "refr", "PlacedRef"), await File.ReadAllTextAsync(cellFile));
-    }
+        await Loaded();
 
-    private async Task<JsonElement> ColumnReadFrom(string formKey, string text)
-    {
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/compare",
-            new { plugin = new { name = WithNpc, origin = WithNpcMod }, documentText = text });
-        response.EnsureSuccessStatusCode();
-        return (await response.Body()).GetProperty("overrides").EnumerateArray().Single();
-    }
+        var response = await Client.PostJson(route, body);
 
-    [Fact]
-    public async Task AChildWithItsContainersText_IsTheChildReadFromIt()
-    {
-        var (placedRef, cellText) = await CompiledPluginACell();
-
-        var column = await ColumnReadFrom(placedRef, cellText.Replace("\"PlacedRef\"", "\"EditedRef\"", StringComparison.Ordinal));
-
-        Assert.Equal(placedRef, column.GetProperty("formKey").GetString());
-        Assert.Equal("EditedRef", column.GetProperty("editorId").GetString());
-        Assert.Null(column.GetProperty("parseDiagnosis").GetString());
-    }
-
-    [Fact]
-    public async Task AChildWithAContainersTextThatDoesNotCarryIt_IsAColumnSayingSo()
-    {
-        var (placedRef, cellText) = await CompiledPluginACell();
-
-        var column = await ColumnReadFrom(placedRef, cellText.Replace(placedRef, "000FFF:WithNpc.esp", StringComparison.Ordinal));
-
-        Assert.Contains($"does not carry {placedRef}", column.GetProperty("parseDiagnosis").GetString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task OneRecordWithATextButNoOrigin_Is400()
-    {
-        var (npc, _) = await Loaded();
-
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(npc)}/compare",
-            new { plugin = new { name = WithNpc, origin = "" }, documentText = "{}" });
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]

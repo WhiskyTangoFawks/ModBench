@@ -17,7 +17,7 @@ public sealed class ResolveNamesApiTests(LoadedApiFixture<TestPluginFixture> loa
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var named = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
         Assert.Equal(TestPluginFixture.PluginName, named[0].GetProperty("plugin").GetProperty("name").GetString());
-        Assert.False(string.IsNullOrEmpty(named[0].GetProperty("plugin").GetProperty("origin").GetString()));
+        Assert.Equal("Data/", named[0].GetProperty("plugin").GetProperty("origin").GetString());
         Assert.Equal("TestNPC02", named[1].GetProperty("editorId").GetString());
     }
 }

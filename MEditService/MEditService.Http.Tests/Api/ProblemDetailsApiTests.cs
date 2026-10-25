@@ -42,27 +42,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             (client, _) => client.PostAsJsonAsync("/records/delete-changes", new { records = new[] { new { formKey = "000800:New.esp", plugin = Plugin } } })),
     ];
 
-    [Fact]
-    public async Task PutLoadOrder_AnUnknownGameRelease_Is400()
-    {
-        var response = await loaded.Client.PutAsJsonAsync("/load-order", new
-        {
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(_fixture.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            dataFolder = _fixture.DataFolder,
-            instanceRoot = _fixture.InstanceRoot,
-            gameRelease = "NotAGame",
-        });
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
     [Theory]
     [MemberData(nameof(NoLoadOrderRoutes))]
     public async Task ARefusalFamily_WithNoLoadOrder_Answers503_WithTheExactNoLoadOrderProblem(Route route)

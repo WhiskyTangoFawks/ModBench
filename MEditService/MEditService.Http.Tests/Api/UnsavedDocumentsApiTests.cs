@@ -59,21 +59,12 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
         Assert.Contains((await Client.Plugin(Plugin)).GetProperty("laterReadFailure").EnumerateArray(), stop => stop.GetProperty("message").GetString() is { } message && message.Contains("is no record document", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task PuttingADocumentByARelativePath_Is400()
+    [Theory]
+    [InlineData("""{"documents": [{"path": "plugin-source/Typed.esp/Typed.json", "text": "{}"}]}""")]
+    [InlineData("{}")]
+    public async Task PuttingADocumentByARelativePath_OrNoDocuments_Is400(string body)
     {
-        var response = await Client.PutAsJsonAsync("/unsaved-documents", new
-        {
-            documents = new[] { new { path = Path.Combine("plugin-source", Plugin, "Typed.json"), text = "{}" } },
-        });
-
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task PuttingNoDocuments_Is400()
-    {
-        var response = await Client.PutAsJsonAsync("/unsaved-documents", new { });
+        var response = await Client.PutJson("/unsaved-documents", body);
 
         await response.AssertIsProblem(HttpStatusCode.BadRequest);
     }

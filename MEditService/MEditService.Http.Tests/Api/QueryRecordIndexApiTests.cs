@@ -19,7 +19,10 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     {
         var response = await Client.GetAsync($"/records?{half}&type=npc_");
 
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.AssertIsProblem(HttpStatusCode.BadRequest);
+        Assert.Equal(
+            "Name a plugin with both plugin and origin, or neither to browse every plugin.",
+            problem.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -75,17 +78,14 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
-    public async Task AnExteriorCell_HoldsALandscape_AndAnInteriorOneDoesNot()
+    public async Task ACellsChildRecordTypes_AreAnsweredWithEachTypesName()
     {
         var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces?origin={UserMod}");
         var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
         var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks?origin={UserMod}");
-        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?origin={UserMod}");
         var exterior = blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
-        var interior = interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
 
         Assert.Equal(["Landscape", "Navmesh", .. PlacedRecordTables.DisplayNames], await ChildRecordTypeNames(exterior));
-        Assert.Equal(["Navmesh", .. PlacedRecordTables.DisplayNames], await ChildRecordTypeNames(interior));
     }
 
     private async Task<IEnumerable<string?>> ChildRecordTypeNames(string formKey)

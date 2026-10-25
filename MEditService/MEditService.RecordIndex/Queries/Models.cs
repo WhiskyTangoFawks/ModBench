@@ -8,12 +8,7 @@ namespace MEditService.RecordIndex.Queries;
 
 // One Kind B diagnosis. Text is PluginDiagnosis.Describe()'s exact refusal fragment, so the
 // Problems panel and the init refusal share one vocabulary.
-public record PluginDiagnosisReport(
-    string Plugin,
-    string Origin,
-    string? Anchor,
-    string Message,
-    string Text);
+public record PluginDiagnosisReport(string Plugin, string Origin, string Text);
 
 /// <summary>One plugin row as the wire shows it: the load order's facts, what reading the file told the Index, and
 /// what a filter, a parse failure and the rows' own derivation add.</summary>

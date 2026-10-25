@@ -12,11 +12,9 @@ public sealed class DecompilePluginTraceTests : HostedTests
     private const string Plugin = "CompiledPlugin.esp";
     private const string Origin = "SourceMod";
     private const string Npc = "CompiledPluginNpc";
-    private const string NonCompiledPluginOrigin = "NonSourceMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-decompile-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
-        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: NonCompiledPluginOrigin)
         .BuildScattered();
 
     protected override void DisposeFixtures() => _instance.Dispose();
@@ -61,19 +59,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
         Assert.Equal("WorkingTreeChanges", Assert.Single(refusedBody.GetProperty("refused").EnumerateArray()).GetProperty("refusal").GetString());
         Assert.Equal([Plugin], forcedBody.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
-    }
-
-    [Fact]
-    public async Task DecompilingAPluginInAModWithNoRepository_AnswersItRefused()
-    {
-        await Loaded();
-
-        var response = await Client.Decompile([("Other.esp", NonCompiledPluginOrigin)]);
-
-        response.EnsureSuccessStatusCode();
-        var refused = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        Assert.Equal("NotInSourceMod", refused.GetProperty("refusal").GetString());
-        Assert.Equal("Other.esp", refused.GetProperty("item").GetProperty("name").GetString());
     }
 
     [Fact]

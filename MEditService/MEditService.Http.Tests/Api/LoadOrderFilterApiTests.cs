@@ -6,71 +6,64 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+public sealed class LoadOrderFilterApiTests : HostedTests
 {
-    private readonly HttpClient _client = loaded.Client;
-
-    private Task ClearFilterAsync() => _client.DeleteAsync("/load-order/filter");
+    private async Task Loaded()
+    {
+        var fixture = Owned(TestPluginFixture.Create());
+        (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fixture.DataFolder, fixture.InstanceRoot, fixture.Plugins)))
+            .EnsureSuccessStatusCode();
+    }
 
     [Fact]
-    public async Task PostFilter_ValidSql_Returns204()
+    public async Task SettingAFilter_Is204_AndGettingIt_AnswersTheSqlAndItsSource()
     {
-        var resp = await _client.SetFilter();
-        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
+        await Loaded();
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Client.SetFilter()).StatusCode);
+
+        var body = await Client.GetFromJsonAsync<JsonElement>("/load-order/filter");
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
+        Assert.Equal("npcs.sql", body.GetProperty("source").GetString());
     }
 
     [Fact]
     public async Task PostFilter_SqlNamingAColumnNoRelationHas_Returns400SayingWhy()
     {
-        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\" WHERE no_such_column = 1", source = "wrong.sql" });
+        await Loaded();
+
+        var resp = await Client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\" WHERE no_such_column = 1", source = "wrong.sql" });
 
         var problem = await resp.AssertIsProblem(HttpStatusCode.BadRequest);
         Assert.Contains("no_such_column", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task GetFilter_WithNoFilterInForce_Returns204()
-    {
-        await ClearFilterAsync();
-        var resp = await _client.GetAsync("/load-order/filter");
-        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetFilter_AfterPostFilter_ReturnsTheSqlAndItsSource()
-    {
-        await _client.SetFilter();
-
-        var resp = await _client.GetAsync("/load-order/filter");
-        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
-        Assert.Equal("npcs.sql", body.GetProperty("source").GetString());
-    }
-
-    [Fact]
     public async Task PostFilter_WithoutASource_Returns400()
     {
-        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+        await Loaded();
+
+        var resp = await Client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
     [Fact]
-    public async Task DeleteFilter_WithNoLoadOrder_Returns204()
+    public async Task ClearingTheFilter_Is204_AndGettingIt_AnswersNoFilterInForce()
     {
-        await using var app = new MEditHost();
+        await Loaded();
+        await Client.SetFilter();
 
-        var del = await app.CreateClient().DeleteAsync("/load-order/filter");
+        Assert.Equal(HttpStatusCode.NoContent, (await Client.DeleteAsync("/load-order/filter")).StatusCode);
 
-        Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Client.GetAsync("/load-order/filter")).StatusCode);
     }
 
     [Fact]
-    public async Task DeleteFilter_AfterAPostFilter_Returns204()
+    public async Task ClearingTheFilter_WithNoLoadOrder_Is204()
     {
-        await _client.PostAsJsonAsync("/load-order/filter",
-            new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
+        var del = await Client.DeleteAsync("/load-order/filter");
 
-        var del = await _client.DeleteAsync("/load-order/filter");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
     }
 }

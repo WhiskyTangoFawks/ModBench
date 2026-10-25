@@ -20,8 +20,6 @@ internal static class OtherTool
 
     internal static void DeletesTheFile(string path) => File.Delete(path);
 
-    internal static void DeletesTheDirectory(string path) => Directory.Delete(path, recursive: true);
-
     internal static void WritesTheFile(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
@@ -50,29 +48,11 @@ internal static class OtherTool
             throw new InvalidOperationException($"chmod {mode} {path} failed: {chmod.StandardError.ReadToEnd()}");
     }
 
-    /// <summary>A document moved by hand to <paramref name="renamedTo"/>, a path relative to its own
-    /// folder in which <c>{0}</c> stands for its current file name.</summary>
-    internal static void RenamesASourceDocument(string modFolder, string plugin, string textItCarries, string renamedTo)
-    {
-        var document = SourceDocumentCarrying(modFolder, plugin, textItCarries);
-        File.Move(document, AnotherTool.Beside(document, renamedTo));
-    }
-
     /// <summary>The first half of a move that copies, then deletes: <paramref name="document"/> copied
     /// to <paramref name="copiedTo"/>, relative to its folder, <c>{0}</c> standing for its file
     /// name.</summary>
     internal static void CopiesASourceDocument(string document, string copiedTo) =>
         File.Copy(document, AnotherTool.Beside(document, copiedTo));
-
-    /// <summary>The user reverting one document to what the repository last saw: a write under the
-    /// source tree that git makes rather than Modbench.</summary>
-    internal static void RevertsASourceDocument(string modFolder, string plugin, string textItCarries)
-    {
-        var document = SourceDocumentCarrying(modFolder, plugin, textItCarries);
-        GitProbe.Run(
-            Path.Combine(modFolder, ".git"), modFolder,
-            "restore", "--", Path.GetRelativePath(modFolder, document).Replace('\\', '/'));
-    }
 
     internal static string SourceDocumentCarrying(string modFolder, string plugin, string text) =>
         Directory

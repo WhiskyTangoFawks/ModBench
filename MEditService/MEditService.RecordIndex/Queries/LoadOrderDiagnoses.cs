@@ -21,5 +21,5 @@ internal static class LoadOrderDiagnoses
     }
 
     private static PluginDiagnosisReport Report(RegisteredPlugin plugin, PluginDiagnosis diagnosis) =>
-        new(plugin.Name, plugin.Origin, diagnosis.Anchor, diagnosis.Message, diagnosis.Describe());
+        new(plugin.Name, plugin.Origin, diagnosis.Describe());
 }

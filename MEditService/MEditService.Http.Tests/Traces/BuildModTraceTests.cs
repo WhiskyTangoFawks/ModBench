@@ -4,6 +4,7 @@ using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using static MEditService.Http.Tests.TestSupport.Wire;
 
 namespace MEditService.Http.Tests.Traces;
 
@@ -39,12 +40,6 @@ public sealed class BuildModTraceTests : HostedTests
         (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
     }
 
-    private static async Task<JsonElement> Answer(HttpResponseMessage response)
-    {
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
     [Fact]
     public async Task BuildingAMod_CompilesEveryPluginOfItFromItsSource_NamesThePluginChangedOutsideModbench_AndReportsItsProgress()
     {
@@ -61,14 +56,14 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(Origin, built.GetProperty("mod").GetString());
-        Assert.Equal("1.2.3", new MEditService.ModFolderAdapter.ModFolderRepository(TimeProvider.System).ReadManifest(_builtFolder, Origin)?.Version);
+        Assert.Contains("\"version\":\"1.2.3\"", File.ReadAllText(Path.Combine(_builtFolder, $"{Origin}.manifest.json")), StringComparison.Ordinal);
         Assert.Empty(built.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             [SecondPlugin, Plugin],
             built.GetProperty("compiled").EnumerateArray().Select(p => p.GetProperty("name").GetString()).Order());
         Assert.Equal([Plugin], built.GetProperty("overwritten").EnumerateArray().Select(p => p.GetString()));
-        Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(Plugin, formKey), 3);
-        Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(SecondPlugin, otherFormKey), 3);
+        Assert.Equal(0.75, await HeightMaxInTheBytesAt(Path.Combine(_builtFolder, Plugin), formKey), 3);
+        Assert.Equal(0.5, await HeightMaxInTheBytesAt(Path.Combine(_builtFolder, SecondPlugin), otherFormKey), 3);
 
         var progress = await stream.EventsUntil(
             "build-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
@@ -80,15 +75,9 @@ public sealed class BuildModTraceTests : HostedTests
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
         var source = Client.SourceFolderSentFor(Origin);
-        var remote = Path.Combine(_instance.Root, "remote");
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-        {
-            var copy = Path.Combine(remote, Path.GetRelativePath(source, file));
-            Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
-            File.Copy(file, copy);
-        }
-        var pin = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim();
         using var submodule = new PinnedSubmodule(_instance.Root, Origin);
+        AnotherTool.CopyDirectory(source, submodule.Remote);
+        var pin = PinnedSubmodule.Git(submodule.Remote, "rev-parse", "HEAD").Trim();
         submodule.Pin(pin);
         var manifest = JsonSerializer.Serialize(new { package = new { submodule = Origin }, files = new[] { new { path = Plugin } } });
         File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest.json"), manifest);
@@ -164,27 +153,8 @@ public sealed class BuildModTraceTests : HostedTests
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
 
-        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
-        var response = await Client.PostAsync("/build", content);
+        var response = await Client.PostJson("/build", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
-    }
-
-    private async Task<double> HeightMaxOfTheWrittenBytes(string plugin, string formKey)
-    {
-        using var elsewhere = new PluginFixtureBuilder("trace-build-reader").BuildScattered();
-        using var reader = new MEditHost();
-        using var client = reader.CreateClient();
-        var copied = Path.Combine(Directory.CreateDirectory(Path.Combine(elsewhere.Root, "ReadingMod")).FullName, plugin);
-        File.Copy(Path.Combine(_builtFolder, plugin), copied);
-
-        (await client.PutLoadOrder(
-            elsewhere,
-            [new LoadOrderEntry(plugin, copied, "ReadingMod", Line: 0, Enabled: true, Winning: true)]))
-            .EnsureSuccessStatusCode();
-
-        return (await client.Record(formKey)).GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
-            .GetProperty("value").GetDouble();
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 }

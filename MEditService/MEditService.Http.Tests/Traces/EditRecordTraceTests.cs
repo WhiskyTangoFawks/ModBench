@@ -36,9 +36,6 @@ public sealed class EditRecordTraceTests : HostedTests
     private Task<HttpResponseMessage> Edit(string formKey, string member, object value) =>
         Client.Edit(formKey, Plugin, Origin, member, value);
 
-    private static async Task<JsonElement> Body(HttpResponseMessage response) =>
-        await response.Content.ReadFromJsonAsync<JsonElement>();
-
     [Fact]
     public async Task EditingARecord_IsApplied_PushedAsRowsChanged_AndAnsweredByTheNextRead()
     {
@@ -49,7 +46,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var applied = await Edit(formKey, "HeightMax", 0.75);
 
         applied.EnsureSuccessStatusCode();
-        Assert.NotEmpty((await Body(applied)).GetProperty("documents").EnumerateArray());
+        Assert.NotEmpty((await applied.Body()).GetProperty("documents").EnumerateArray());
         await Client.NextSnapshot(fx);
 
         var rows = Assert.Single(await stream.EventsUntil(
@@ -87,7 +84,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var response = await Client.DeleteRecords([(formKey, Plugin, Origin)]);
 
         response.EnsureSuccessStatusCode();
-        Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
         await Client.NextSnapshot(fx);
         var rows = Assert.Single(await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
@@ -113,7 +110,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var created = await Client.CreateRecord(Plugin, Origin, "npc_");
 
         created.EnsureSuccessStatusCode();
-        var formKey = (await Body(created)).GetProperty("formKey").GetString().Require();
+        var formKey = (await created.Body()).GetProperty("formKey").GetString().Require();
         await Client.NextSnapshot(fx);
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
@@ -133,7 +130,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var response = await Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 1, op: "frobnicate");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var problem = await Body(response);
+        var problem = await response.Body();
         Assert.Equal("InvalidEnvelope", problem.GetProperty("refusal").GetString());
         Assert.Equal("HeightMax", problem.GetProperty("path").GetString());
     }
@@ -144,7 +141,7 @@ public sealed class EditRecordTraceTests : HostedTests
         using var fx = await TwoRecordsAndTwoDestinations();
         var records = await NpcFormKeys(Plugin, Origin);
 
-        var answer = await Body(await CopyBothIntoBoth(records, "Override"));
+        var answer = await (await CopyBothIntoBoth(records, "Override")).Body();
 
         Assert.Equal(
             [(records[0], OtherPlugin), (records[1], OtherPlugin)],
@@ -201,7 +198,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var response = await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin), replace: true);
 
         response.EnsureSuccessStatusCode();
-        Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
         await Client.NextSnapshot(fx);
         await Wire.Eventually(async () => await HeightMax(formKey) == copiedHeight, "the replacement to be answered");
     }
@@ -220,7 +217,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var response = await Client.Copy([(formKey, Plugin, Origin)], "New", [(OtherPlugin, OtherOrigin)]);
 
         response.EnsureSuccessStatusCode();
-        var landed = Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        var landed = Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
         Assert.Contains(
             landed.GetProperty("documents").EnumerateArray(),
             document => document.GetProperty("text").GetString().Require().Contains("000A00:" + OtherPlugin, StringComparison.Ordinal));

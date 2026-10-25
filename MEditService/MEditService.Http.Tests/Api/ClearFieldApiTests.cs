@@ -6,57 +6,39 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded)
-    : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+public sealed class ClearFieldApiTests : HostedTests
 {
-    private readonly HttpClient _client = loaded.Client;
-
     private const string Origin = "ClearableMod";
     private const string Plugin = "Clearable.esp";
 
     [Fact]
     public async Task ASetOfJsonNull_ClearsTheMember()
     {
-        using var fx = new PluginFixtureBuilder("api-clear-field")
+        var fx = Owned(new PluginFixtureBuilder("api-clear-field")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
-            .BuildScattered();
-        var plugins = fx.Plugins.Where(p => p.Origin == Origin);
-        (await _client.PutLoadOrderAndAwaitReady(new
-        {
-            dataFolder = fx.DataFolder,
-            instanceRoot = fx.InstanceRoot,
-            plugins = plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            gameRelease = "Fallout4",
-            stringsLanguage = "English",
-        })).EnsureSuccessStatusCode();
-        (await _client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-        await _client.NextSnapshot(fx, Origin);
-        await _client.PluginReportsCompiledPlugin(Plugin);
-        var created = await _client.CreateRecord(Plugin, Origin, "npc_");
+            .BuildScattered());
+        (await Client.PutLoadOrder(fx, Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx, Origin);
+        await Client.PluginReportsCompiledPlugin(Plugin);
+        var created = await Client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();
         var formKey = JsonStrings.Of((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
-        await _client.NextSnapshot(fx, Origin);
+        await Client.NextSnapshot(fx, Origin);
         await Wire.Eventually(
-            async () => (await _client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative))).IsSuccessStatusCode,
+            async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative))).IsSuccessStatusCode,
             "the created record reached the record index");
 
         var url = new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative);
-        async Task<bool> HoldsHeight() => (await _client.GetStringAsync(url)).Contains("0.75", StringComparison.Ordinal);
+        async Task<bool> HoldsHeight() => (await Client.GetStringAsync(url)).Contains("0.75", StringComparison.Ordinal);
 
-        (await _client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-        await _client.NextSnapshot(fx, Origin);
+        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx, Origin);
         await Wire.Eventually(HoldsHeight, "the set reached the record index");
 
-        var cleared = await _client.Edit(formKey, Plugin, Origin, "HeightMax", JsonDocument.Parse("null").RootElement);
+        var cleared = await Client.Edit(formKey, Plugin, Origin, "HeightMax", JsonDocument.Parse("null").RootElement);
         Assert.True(cleared.IsSuccessStatusCode, await cleared.Content.ReadAsStringAsync());
-        await _client.NextSnapshot(fx, Origin);
+        await Client.NextSnapshot(fx, Origin);
 
         await Wire.Eventually(async () => !await HoldsHeight(), "the clear reached the record index");
     }
