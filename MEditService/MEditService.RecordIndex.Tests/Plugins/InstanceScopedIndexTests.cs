@@ -21,8 +21,6 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string DataFolder => Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
 
-    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
-
     private string AnInstance(string name, string editorId)
     {
         var instanceRoot = Path.Combine(_root, name);
@@ -47,31 +45,17 @@ public sealed class InstanceScopedIndexTests : IDisposable
         var a = AnInstance("instance-a", "NpcFromA");
         var b = AnInstance("instance-b", "NpcFromB");
 
-        using (var first = OpenIndex(holder)) first.Reconcile(holder, dataFolder, OrderIn(a), GameRelease.Fallout4, a);
-        using (var second = OpenIndex(holder)) second.Reconcile(holder, dataFolder, OrderIn(b), GameRelease.Fallout4, b);
+        using (var first = Indexes.Open(holder)) first.Reconcile(holder, dataFolder, OrderIn(a), GameRelease.Fallout4, a);
+        using (var second = Indexes.Open(holder)) second.Reconcile(holder, dataFolder, OrderIn(b), GameRelease.Fallout4, b);
 
-        using (var warmB = OpenIndex(holder))
+        using (var warmB = Indexes.Open(holder))
         {
             warmB.Reconcile(holder, dataFolder, OrderIn(b), GameRelease.Fallout4, b);
             Assert.Equal(["NpcFromB"], EditorIdsIn(warmB));
         }
 
-        using var warmA = OpenIndex(holder);
+        using var warmA = Indexes.Open(holder);
         warmA.Reconcile(holder, dataFolder, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warmA));
-    }
-
-    [Fact]
-    public void TheSameInstanceLoadedTwice_KeepsItsIndexBetweenLaunches()
-    {
-        var holder = new LoadOrderHolder();
-        var dataFolder = DataFolder;
-        var a = AnInstance("instance-warm", "NpcFromA");
-
-        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, dataFolder, OrderIn(a), GameRelease.Fallout4, a);
-
-        using var warm = OpenIndex(holder);
-        warm.Reconcile(holder, dataFolder, OrderIn(a), GameRelease.Fallout4, a);
-        Assert.Equal(["NpcFromA"], EditorIdsIn(warm));
     }
 }

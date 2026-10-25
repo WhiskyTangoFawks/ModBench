@@ -1258,12 +1258,7 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
 
-        // Guarded because Dispose owns the scope: double disposal is a supported call pattern here.
-        lock (_turns)
-        {
-            if (_disposed) return;
-            _disposed = true;
-        }
+        lock (_turns) _disposed = true;
 
         _disposal.Cancel();
         if (!EnterExclusiveWithin(CloseLimit))

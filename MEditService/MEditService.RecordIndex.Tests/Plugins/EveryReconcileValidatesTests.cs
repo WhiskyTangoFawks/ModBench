@@ -92,16 +92,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_TakesTheRowsOfANonCompiledPluginBinaryGoneFromDisk_AndNamesThePlugin()
-    {
-        File.Delete(_nonCompiledPlugin.Path);
-
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
-
-        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
-    }
-
-    [Fact]
     public void AReconcile_KeepsNoHashOfAFileTheLoadOrderNoLongerNames()
     {
         using (new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -226,24 +216,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == NonCompiledPlugin);
-    }
-
-    [Fact]
-    public async Task AnEqualSnapshot_TriesAFailedReconcileAgain()
-    {
-        var blocker = Path.GetDirectoryName(IndexFiles.In(_fixture.InstanceRoot))
-            ?? throw new InvalidOperationException("The record index file sits in a folder.");
-        _index.Dispose();
-        Directory.Delete(blocker, recursive: true);
-        File.WriteAllText(blocker, "not a folder");
-        var holder = new LoadOrderHolder();
-        using var failing = Indexes.Open(holder);
-        holder.Apply(_holder.Current);
-        Waits.Reached(() => failing.Status.State == LoadOrderState.Failed, "the first arrival's failure");
-
-        File.Delete(blocker);
-        failing.NextSnapshotUntil(() => failing.Status.State == LoadOrderState.Ready, "the equal arrival's retry");
-        Assert.NotEmpty(failing.ListedIn(_nonCompiledPlugin.Key));
     }
 
     [Fact]

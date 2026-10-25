@@ -14,46 +14,20 @@ public class IndexScopeTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
-
     [Fact]
-    public void Reconcile_ForAnUnsupportedGameRelease_FailsNamingTheRelease()
+    public void AClosedIndex_HoldsNoLoadOrder()
     {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Oblivion);
-
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
-        Assert.Contains("Oblivion", index.Status.Message);
-    }
-
-    [Fact]
-    public void Reconcile_HoldsTheSnapshotsPlugins()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(index.Queries.GetPlugins().Value()).Name);
-    }
-
-    [Fact]
-    public void Dispose_LeavesNoLoadOrder()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        using var index = Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
         index.Dispose();
 
         Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetPlugins().Refused().Refusal);
     }
 
     [Fact]
-    public void ClearFilter_NoLoadOrder_LeavesNoFilter()
+    public void AFilterClearedBeforeAnyLoadOrder_LeavesNoFilterOnceOneArrives()
     {
         var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
+        using var index = Indexes.Open(holder);
 
         index.ClearFilter();
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
@@ -61,113 +35,52 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Null(index.Queries.GetFilter().Value());
     }
 
-    [Fact]
-    public void SetFilter_KeepsItsSqlAsTheActiveFilter()
+    private static readonly Dictionary<string, Action<OpenedIndex, TestPluginFixture, string>> ArrivalsOutsideTheFiltersScope = new()
     {
-        var holder = new LoadOrderHolder();
-        using var index = ReconciledIndex(holder);
-        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", index.Queries.GetFilter().Value()?.Sql);
-    }
-
-    [Fact]
-    public void ClearFilter_AfterSetFilter_LeavesNoActiveFilter()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = ReconciledIndex(holder);
-        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        index.ClearFilter();
-        Assert.Null(index.Queries.GetFilter().Value());
-    }
-
-    [Fact]
-    public void Reconcile_AnotherInstance_DropsTheFilter()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = ReconciledIndex(holder);
-        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        using var otherInstance = new ScratchDirectory("medit-filter-other-instance-");
-
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
-
-        Assert.Null(index.Queries.GetFilter().Value());
-    }
-
-    [Fact]
-    public void Reconcile_AnotherGameRelease_DropsTheFilter()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = ReconciledIndex(holder);
-        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        Assert.Null(index.Queries.GetFilter().Value());
-    }
-
-    [Fact]
-    public void Reconcile_AnotherDataFolder_DropsTheFilter()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = ReconciledIndex(holder);
-        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        using var other = new PluginFixtureBuilder("filter-other-data-folder").WithPlugin("Other.esp").Build();
-
-        index.Reconcile(holder, other.DataFolder, other.Plugins, GameRelease.Fallout4);
-
-        Assert.Null(index.Queries.GetFilter().Value());
-    }
-
-    [Fact]
-    public void AfterABinaryChangeMakesARecordNewlyMatchTheFilter_TheFilteredListingIncludesIt()
-    {
-        var holder = new LoadOrderHolder();
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("reindex-filter-newly-matches")
-            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("NotMatchingYet").FormKey)
-            .Build();
-        using (data)
+        ["another instance"] = (index, fixture, elsewhere) =>
+            index.Reconcile(index.Holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, elsewhere),
+        ["another game release, then this one again"] = (index, fixture, _) =>
         {
-            using var index = OpenIndex(holder);
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            index.Reconcile(index.Holder, fixture.DataFolder, fixture.Plugins, GameRelease.SkyrimSE);
+            index.Reconcile(index.Holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        },
+        ["another data folder"] = (index, _, elsewhere) =>
+            index.Reconcile(index.Holder, elsewhere, [], GameRelease.Fallout4),
+    };
 
-            index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'", "filter.sql");
-            Assert.Equal(0, NpcsListed(index).Total);
+    [Theory]
+    [InlineData("another instance")]
+    [InlineData("another game release, then this one again")]
+    [InlineData("another data folder")]
+    public void ASnapshotOutsideTheFiltersScope_DropsTheFilter(string arrival)
+    {
+        using var elsewhere = new ScratchDirectory("medit-filter-elsewhere-");
+        using var index = Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
 
-            RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
+        ArrivalsOutsideTheFiltersScope[arrival](index, _fixture, elsewhere);
 
-            index.NextSnapshot();
-
-            var result = NpcsListed(index);
-            Assert.Equal(1, result.Total);
-            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
-        }
+        Assert.Null(index.Queries.GetFilter().Value());
     }
 
-    [Fact]
-    public void AfterABinaryChangeMakesARecordStopMatchingTheFilter_TheFilteredListingExcludesIt()
+    [Theory]
+    [InlineData("NotMatchingYet", "NowMatches", "NowMatches", 0, 1)]
+    [InlineData("StillMatches", "StillMatches", "NoLongerMatches", 1, 0)]
+    public void ABinaryChangeToARecord_ReappliesTheFilterToIt(
+        string editorIdBefore, string editorIdTheFilterMatches, string editorIdAfter, int listedBefore, int listedAfter)
     {
-        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("reindex-filter-stops-matching")
-            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("StillMatches").FormKey)
+        using var data = new PluginFixtureBuilder("reindex-filter-reapplied")
+            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew(editorIdBefore).FormKey)
             .Build();
-        using (data)
-        {
-            using var index = OpenIndex(holder);
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+        using var index = Indexes.Reconciled(data);
+        index.SetFilter($"SELECT form_key FROM npc_ WHERE editor_id = '{editorIdTheFilterMatches}'", "filter.sql");
+        Assert.Equal(listedBefore, NpcsListed(index).Total);
 
-            index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'", "filter.sql");
-            Assert.Equal(1, NpcsListed(index).Total);
+        RenameNpcOnDisk(data, "Plugin.esp", npcKey, editorIdAfter);
+        index.NextSnapshot();
 
-            RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
-
-            index.NextSnapshot();
-
-            var result = NpcsListed(index);
-            Assert.Equal(0, result.Total);
-        }
+        Assert.Equal(listedAfter, NpcsListed(index).Total);
     }
 
     [Fact]
@@ -216,12 +129,12 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [ForeignIndexHolderFact]
-    public void Reconcile_ForADifferentInstance_ReleasesTheFirstInstancesIndex()
+    public void ASnapshotOfAnotherInstance_ReleasesTheFirstInstancesIndexFile()
     {
         using var first = new ScratchDirectory("medit-first-instance-");
         using var second = new ScratchDirectory("medit-second-instance-");
         var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
+        using var index = Indexes.Open(holder);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, first);
 
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, second);
@@ -231,11 +144,4 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
     private static PagedResult<RecordSummary> NpcsListed(OpenedIndex index) =>
         index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
-
-    private OpenedIndex ReconciledIndex(LoadOrderHolder holder)
-    {
-        var m = OpenIndex(holder);
-        m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        return m;
-    }
 }

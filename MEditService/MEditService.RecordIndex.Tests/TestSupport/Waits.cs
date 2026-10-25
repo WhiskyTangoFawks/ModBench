@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Time.Testing;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
@@ -29,4 +30,31 @@ internal static class Waits
 
     internal static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>
         await Task.WhenAny(task, Task.Delay(timeout)) == task;
+
+    internal static async Task AdvancingUntil(this FakeTimeProvider clock, Task task, TimeSpan step)
+    {
+        while (!await CompletesWithin(task, TimeSpan.FromMilliseconds(50))) clock.Advance(step);
+    }
+
+    /// <summary>Whether a reader polling <paramref name="seen"/> on a thread of its own ever caught it
+    /// holding while <paramref name="act"/> ran.</summary>
+    internal static async Task<bool> EverSeenWhile(Func<bool> seen, Action act)
+    {
+        var stopped = false;
+        var reader = Task.Run(() =>
+        {
+            var ever = false;
+            while (!Volatile.Read(ref stopped)) ever |= seen();
+            return ever;
+        });
+        try
+        {
+            act();
+        }
+        finally
+        {
+            Volatile.Write(ref stopped, true);
+        }
+        return await reader;
+    }
 }

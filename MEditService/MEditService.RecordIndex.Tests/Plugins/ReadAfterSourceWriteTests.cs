@@ -62,7 +62,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     {
         var read = Read();
 
-        while (await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(50))) != read) _clock.Advance(TimeSpan.FromMinutes(2));
+        await _clock.AdvancingUntil(read, TimeSpan.FromMinutes(2));
 
         var refused = (await read.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);

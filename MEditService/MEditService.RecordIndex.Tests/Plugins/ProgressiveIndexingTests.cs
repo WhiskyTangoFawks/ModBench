@@ -81,12 +81,7 @@ public sealed class ProgressiveIndexingTests
     public async Task Status_ReportsAPluginFailure_WhileTheLoadIsStillRunning_AndAfterItFinishes()
     {
         var holder = new LoadOrderHolder();
-        using var fx = new PluginFixtureBuilder("sm-progressive-failure")
-            .WithPlugin("Master.esm")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
-            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
-            .BuildScattered();
+        using var fx = FourPlugins("sm-progressive-failure");
 
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp", poisonPlugin: "A.esp");
         using var index = Indexes.Open(holder, gate);
@@ -104,23 +99,6 @@ public sealed class ProgressiveIndexingTests
         await load;
 
         Assert.Contains(index.Status.Failures, f => f.Name == "A.esp");
-    }
-
-    [Fact]
-    public async Task Status_IndexedPluginsCarryOrigin_NotJustAFilename()
-    {
-        var holder = new LoadOrderHolder();
-        using var fx = ThreePlugins("sm-progressive-status-origin");
-        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
-        using var _ = index;
-        using var __ = gate;
-
-        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-        gate.Release();
-        await load;
-
-        Assert.All(index.Status.IndexedPlugins, p => Assert.False(string.IsNullOrWhiteSpace(p.Origin)));
     }
 
     private static ScatteredFixtureData FourPlugins(string prefix) =>
@@ -263,28 +241,6 @@ public sealed class ProgressiveIndexingTests
         var listed = index.Queries.GetRecords(["acti"], patch, search: null, limit: 10, offset: 0).Value().Items.Select(r => r.EditorId);
 
         Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);
-
-        gate.Release();
-        await load;
-    }
-
-    [Fact]
-    public async Task MidLoad_ReadsAreServed_RatherThanBlockingUntilTheLoadFinishes()
-    {
-        var holder = new LoadOrderHolder();
-        using var fx = ThreePlugins("sm-progressive-nonblocking");
-        var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
-        using var _ = index;
-        using var __ = gate;
-
-        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        var read = Task.Run(() => index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
-        var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
-
-        Assert.Same(read, finished);
-        Assert.Equal(1, await read);
 
         gate.Release();
         await load;

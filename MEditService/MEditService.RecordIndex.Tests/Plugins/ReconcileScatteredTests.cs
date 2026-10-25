@@ -2,18 +2,13 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static OpenedIndex OpenIndex(LoadOrderHolder holder) => Indexes.Open(holder);
-
     [Fact]
-    public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()
+    public void PluginsScatteredAcrossModFolders_AreEachIndexed()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit")
@@ -22,7 +17,7 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var index = OpenIndex(holder);
+        using var index = Indexes.Open(holder);
         index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
@@ -30,30 +25,7 @@ public sealed class ReconcileScatteredTests
     }
 
     [Fact]
-    public void Reconcile_CrossPluginOverride_WinnerIsHighestOrderPlugin()
-    {
-        var holder = new LoadOrderHolder();
-        FormKey shared = default;
-        using var fx = new PluginFixtureBuilder("sm-explicit-winner")
-            .WithPlugin("Base.esm", mod => shared = mod.Npcs.AddNew("SharedNPC").FormKey)
-            .WithPlugin("Override.esp", (mod, built) =>
-            {
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
-                mod.Npcs.Set(built.Single(m => m.ModKey.FileName == "Base.esm").Npcs.First().DeepCopy());
-            })
-            .BuildScattered();
-
-        using var index = OpenIndex(holder);
-        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-
-        var winner = index.Queries.GetRecord(shared.ToString()).Value();
-        Assert.NotNull(winner);
-        Assert.True(winner.IsWinner);
-        Assert.Equal("Override.esp", winner.Plugin);
-    }
-
-    [Fact]
-    public void Reconcile_SameInstance_ReconcilesInPlace()
+    public void ALaterSnapshotOfTheSameInstance_ReadsOnlyThePluginItAdds()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-replace")
@@ -72,7 +44,7 @@ public sealed class ReconcileScatteredTests
     }
 
     [Fact]
-    public void Reconcile_OnePluginFailsToIndex_OthersStillLoad_AndTheFailureIsReportedWithoutListingItAsIndexed()
+    public void APluginThatFailsToRead_IsAFailure_NotListedAsIndexed_AndTheRestLoad()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-index-failure")

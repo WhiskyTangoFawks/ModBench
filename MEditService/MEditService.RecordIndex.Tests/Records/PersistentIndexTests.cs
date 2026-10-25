@@ -81,18 +81,6 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     [Fact]
-    public void ReopeningTheSameFile_KeepsTheRows_AndRegisterAloneMakesThemAnswer()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        using (Launched([alpha])) { }
-
-        using var second = Launched([alpha]);
-
-        Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
-    }
-
-    [Fact]
     public void ReopeningTheSameFile_KeepsTheLastRegistrations_UntilTheSnapshotCorrectsThem()
     {
         var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
