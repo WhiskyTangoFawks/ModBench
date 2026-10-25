@@ -166,16 +166,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(NpcGroupFolder));
     }
 
-    [Fact]
-    public void RemovingAFlatRecordNoFileHolds_DeletesNothing_ThoughNotEvenItsGroupFolderExists()
-    {
-        var repository = Opened();
-
-        repository.Remove(Plugin, new RecordIdentity("000900:Fixture.esp", "weap", "Absent")).Wrote();
-
-        Assert.NotNull(repository.RecordOf(Plugin, Npc).Value());
-    }
-
     private static string WithEditorId(string editorId) => NpcBody.Replace(NpcEditorId, editorId, StringComparison.Ordinal);
 
     private IEnumerable<string> NpcFileNames() =>

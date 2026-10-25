@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -149,13 +150,24 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void ADeleteOfAFormKeyNoDocumentHolds_IsRefusedAsRecordNotFound()
+    public void ADeleteOfAFormKeyNoDocumentHolds_RefusesItAsRecordNotFound_AndAnswersOnlyTheRestsFiles()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
+        var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
+        var absent = new RecordAt(mod.Plugin, $"FFFFFF:{mod.Plugin.Name}");
+        var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
+        var npcFile = TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
+        var otherNpcFile = TreeTampering.FileOf(
+            mod.ModFolder, mod.Plugin, new RecordIdentity(otherNpc.FormKey, "npc_", SourceEditFixture.OtherNpcEditorId));
 
-        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, "FFFFFF:Fixture.esp")]);
+        var result = mod.DeleteHandler.DeleteChangesSync([npc, absent, otherNpc]);
 
         var refused = Assert.Single(result.Refused);
+        Assert.Equal(absent, refused.Item);
         Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
+        Assert.Contains(absent.FormKey, refused.Message, StringComparison.Ordinal);
+        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record));
+        Assert.Equal([npcFile, otherNpcFile], result.Applied.SelectMany(applied => applied.Deletions));
+        Assert.Empty(result.Applied.SelectMany(applied => applied.Documents));
     }
 }

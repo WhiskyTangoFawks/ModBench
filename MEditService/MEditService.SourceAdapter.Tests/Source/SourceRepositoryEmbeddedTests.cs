@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
@@ -791,13 +792,33 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.True(Directory.Exists(directory));
     }
 
-    [Fact]
-    public void RemovingAnEmbeddedRecordNoDocumentHolds_IsNotCarried()
+    public enum Layout
     {
-        var refused = Assert.IsType<SourceFailure.NotCarried>(
-            Repository.Remove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")).Failed());
+        FlatRecordWithNoGroupFolder,
+        EmbeddedChild,
+        DirectoryPerRecordContainer,
+        Header,
+    }
 
-        Assert.StartsWith("No document in Embedded.esp's tree holds 00FFFF:Embedded.esp.", refused.Reason, StringComparison.Ordinal);
+    private static RecordIdentity AbsentIn(Layout layout) => layout switch
+    {
+        Layout.FlatRecordWithNoGroupFolder => new("00FFFF:Embedded.esp", "weap", "Absent"),
+        Layout.EmbeddedChild => new("00FFFF:Embedded.esp", "refr", "Absent"),
+        Layout.DirectoryPerRecordContainer => new("00FFFF:Embedded.esp", "cell", "Absent"),
+        Layout.Header => PluginHeader.IdentityOf(PluginName),
+        _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, null),
+    };
+
+    [Theory]
+    [InlineData(Layout.FlatRecordWithNoGroupFolder, "00FFFF:Embedded.esp")]
+    [InlineData(Layout.EmbeddedChild, "00FFFF:Embedded.esp")]
+    [InlineData(Layout.DirectoryPerRecordContainer, "00FFFF:Embedded.esp")]
+    [InlineData(Layout.Header, "000000:Embedded.esp")]
+    public void RemovingARecordNoDocumentHolds_IsNotCarried_WhateverItsLayout(Layout layout, string formKey)
+    {
+        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.Remove(Plugin, AbsentIn(layout)).Failed());
+
+        Assert.StartsWith($"No document in Embedded.esp's tree holds {formKey}.", refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -27,7 +27,7 @@ internal sealed class SourceRepositoryWrites(
     /// directory-per-record container's folder, or its file.</summary>
     internal SourceChanges ChangesToRemove(PluginAddress plugin, RecordIdentity identity)
     {
-        if (locator.Locate(plugin, identity) is not { } unit)
+        if (locator.Locate(plugin, identity) is not { } unit || !unit.IsEmbedded && !files.FileExists(unit.FullPath))
         {
             throw SourceStopException.NotCarried(
                 $"No document in {plugin.Name}'s tree holds {identity.FormKey}. {SourceFailure.NotCarried.DefectOrOutsideChange}");

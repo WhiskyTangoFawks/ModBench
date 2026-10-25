@@ -180,7 +180,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void WhileARebuildReopensTheStore_AStatusReadNeverWaitsOnTheRecordFilter()
+    public void WhileARebuildReappliesTheRecordFilter_TheStatusAnswersWithoutWaitingForIt()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-status");
         var holder = new LoadOrderHolder();
@@ -192,15 +192,7 @@ public sealed class StoreRebuildTests : IDisposable
         var filterTakes = filtering.Elapsed;
 
         Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
-        var longestRead = TimeSpan.Zero;
-        var refilling = Stopwatch.StartNew();
-        while (refilling.Elapsed < Waits.Patience)
-        {
-            var reading = Stopwatch.StartNew();
-            var state = index.Status.State;
-            if (reading.Elapsed > longestRead) longestRead = reading.Elapsed;
-            if (state == LoadOrderState.Ready) break;
-        }
+        var longestRead = Waits.LongestRead(() => index.Status.State, state => state == LoadOrderState.Ready);
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
