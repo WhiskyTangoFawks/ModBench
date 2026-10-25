@@ -29,6 +29,8 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
     });
 
     it.each<[string, ModOrderChange, string]>([
+      ['a mod moved that is not listed', { kind: 'moveMods', mods: ['Nope'], place: { kind: 'modOrder' }, end: 'winning' }, 'Mod not found in modlist: Nope'],
+      ['a separator moved that is not listed', { kind: 'moveSeparators', separators: ['Nope'], place: { kind: 'modOrder' }, end: 'winning' }, 'Separator not found in modlist: Nope'],
       ['a move to a separator that is not listed', { kind: 'moveMods', mods: ['Alpha'], place: { kind: 'separator', name: 'Nope' }, end: 'losing' }, 'Separator not found in modlist: Nope'],
       ['a separator renamed that is not listed', { kind: 'renameSeparator', from: 'Nope', to: 'Other' }, 'Separator not found in modlist: Nope'],
       ['a separator added beside a mod that is not listed', { kind: 'addSeparator', separator: 'New', anchor: { kind: 'mod', name: 'Nope' } }, 'Mod not found in modlist: Nope'],

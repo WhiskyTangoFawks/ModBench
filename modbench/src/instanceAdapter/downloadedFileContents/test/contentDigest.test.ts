@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { digestOf, md5Of } from '../contentDigest';
 
-describe('digestOf', () => {
+describe('a file\'s hash, as mEdit\'s manifest carries it', () => {
   it.each([
     ['hello', 'o22fiH2CxyY='],
     ['kept', 'gO3vE0ddOto='],
@@ -25,7 +25,7 @@ describe('digestOf', () => {
   });
 });
 
-describe('md5Of', () => {
+describe('a file\'s MD5', () => {
   it.each([
     ['', 'd41d8cd98f00b204e9800998ecf8427e'],
     ['hello', '5d41402abc4b2a76b9719d911017c592'],

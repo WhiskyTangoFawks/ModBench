@@ -3,7 +3,7 @@
 
 import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
-import { gameFolderResolver, STEAM, type GameDetectors } from '../gameFolder/gameFolderResolver';
+import { gameFolderResolver, STEAM } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
 import type { GameFolder, InstallationFileReader, GameFolderSetting } from '../instanceAdapter';
 import type { FomodEngine } from '../fomodInstaller/fomodInstaller';
@@ -35,17 +35,11 @@ export const enabledModsIn = (instanceRoot: string) => async (profile: string): 
 
 const MO2_PROGRAM = 'ModOrganizer.exe';
 
-interface Mo2Machine {
-  gameFolderSetting: GameFolderSetting;
-  /** Steam and Wine detection; the real ones when omitted. */
-  detectors?: GameDetectors;
-}
-
 export type Mo2InstanceOptions = {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
   fomodEngine: FomodEngine;
-} & (Mo2Machine | { context: Mo2Context });
+} & ({ gameFolderSetting: GameFolderSetting } | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here (common.md, States, story 4). Synchronous: the composition
@@ -58,9 +52,9 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const { instanceRoot, installationFileReader, fomodEngine } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
-    resolveGameFolder: gameFolderResolver(options.gameFolderSetting, options.detectors),
-    resolveDownloadsFolder: downloadsDirectoryResolver(options.detectors),
-    resolveMyGames: myGamesResolver(instanceRoot, options.detectors ?? STEAM),
+    resolveGameFolder: gameFolderResolver(options.gameFolderSetting),
+    resolveDownloadsFolder: downloadsDirectoryResolver(),
+    resolveMyGames: myGamesResolver(instanceRoot, STEAM),
     watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
     mo2Running: () => programRunning(MO2_PROGRAM),
   };

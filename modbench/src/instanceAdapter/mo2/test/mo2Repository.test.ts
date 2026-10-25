@@ -1,4 +1,3 @@
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -6,16 +5,13 @@ import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
-import { NO_DETECTORS } from '../../../test/noDetectors';
-import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { mo2InstanceAdapter } from '../mo2Instance';
-import type { ConfigurationFile, ManagerAdapter as Adapter } from '../../publisher';
+import { managerOver } from '../../../test/mo2/adapterOver';
+import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { whitelistIgnoreList, withSourceModLines } from '../layout';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 let root: string;
 
@@ -23,14 +19,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const adapterAt = (instanceRoot: string, publisherFile: ConfigurationFile | undefined) => mo2InstanceAdapter({
-  instanceRoot, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-  installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
-}, publisherFile);
-
 async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
-  return adapterAt(root, undefined);
+  return managerOver(root);
 }
 
 async function put(path: string, text = 'x'): Promise<void> {
@@ -113,7 +104,7 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('lets git see the publisher\'s configuration', async () => {
       root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
-      const adapter = adapterAt(root, { name: 'publisher.json', spelling: { separators: [], ends: '"', nativeStarts: [] } });
+      const adapter = managerOver(root, {}, { name: 'publisher.json', spelling: { separators: [], ends: '"', nativeStarts: [] } });
       await put('publisher.json', '{}');
       await put('other.json', '{}');
       runGit('init', '--quiet');
@@ -217,7 +208,7 @@ describe('the MO2 adapter\'s repository', () => {
       runGit('init', '--quiet');
       await before.refuseUnpublishedPins();
       await before.writePathTokens();
-      const adapter = adapterAt(root, { name: 'publisher.json', spelling: { separators: [], ends: '"' } });
+      const adapter = managerOver(root, {}, { name: 'publisher.json', spelling: { separators: [], ends: '"' } });
 
       const beforeCovered = (await adapter.reading()).repositorySetUp;
       await adapter.writePathTokens();
@@ -411,12 +402,13 @@ describe('the MO2 adapter\'s repository', () => {
       });
 
       it.each([
-        [['fork', 'origin'], 'origin'],
-        [['upstream', 'fork'], 'fork'],
-      ])('reads origin, else the first remote by name, of %j', async (remotes, read) => {
+        ['fork', 'origin', 'origin'],
+        ['upstream', 'fork', 'fork'],
+      ])('reads origin, else the first remote by name, of %s and %s', async (first, second, read) => {
         const adapter = await instance();
         const folder = await sourceMod('Mod A', 'Mod A');
-        for (const remote of remotes) git(folder, 'remote', 'add', remote, `https://example.test/${remote}.git`);
+        git(folder, 'remote', 'add', first, `https://example.test/${first}.git`);
+        git(folder, 'remote', 'add', second, `https://example.test/${second}.git`);
 
         expect(await adapter.sourceHost(folder)).toEqual({ kind: 'read', answer: { kind: 'host', url: `https://example.test/${read}.git` } });
       });

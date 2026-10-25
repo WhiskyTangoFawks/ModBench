@@ -1,4 +1,3 @@
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rename as fsRename, rm, symlink, writeFile } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
@@ -26,13 +25,9 @@ const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(re
 
 import { listEntries } from '../../files';
 import type { FileOrigin } from '../../instanceAdapter';
-import { mo2InstanceAdapter } from '../mo2Instance';
 import type { ManagerAdapter } from '../../publisher';
-import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
-import { readPluginLines } from '../../../test/mo2/adapterOver';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
-import { NO_DETECTORS } from '../../../test/noDetectors';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
+import { managerOver, readPluginLines } from '../../../test/mo2/adapterOver';
+import { assertOnlyChanged, cloneCorpusFixture, snapshotTree, textsUnder } from '../../../test/mo2/corpusFixture';
 
 const MOD = 'mods/Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Patch Mod' };
@@ -78,12 +73,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
   beforeEach(async () => {
     root = cloneCorpusFixture();
-    adapter = mo2InstanceAdapter({
-      instanceRoot: root,
-      gameFolderSetting: fixedGameFolderSetting(),
-      detectors: NO_DETECTORS,
-      installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
-    }, undefined);
+    adapter = managerOver(root);
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);
     await put(SECONDARY_PLUGINS, '*Unofficial Fallout 4 Patch.esp\r\nPatch Mod.esp\r\n*Last.esp\r\n');
@@ -94,12 +84,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  describe('originHoldsPlugin', () => {
-    it('answers whether the origin\'s folder holds a plugin file of the name, compared without case', async () => {
-      expect(await adapter.originHoldsPlugin(ORIGIN, 'patch mod.ESP')).toBe(true);
-      expect(await adapter.originHoldsPlugin(ORIGIN, 'Renamed Patch.esp')).toBe(false);
-    });
-
+  describe('whether an origin holds a plugin', () => {
     it('finds the folder of a mod named in another case', async () => {
       expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'patch mod' }, 'Patch Mod.esp')).toBe(true);
     });
@@ -126,10 +111,20 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
     const after = await snapshotTree(root);
     assertOnlyChanged(before, after, new Set([...NAMED_FOR_IT.flat(), DEFAULT_PLUGINS, SECONDARY_PLUGINS]));
-    for (const [from, to] of NAMED_FOR_IT) {
-      expect(after.has(from), from).toBe(false);
-      expect(after.get(to)?.toString(), to).toBe(before.get(from)?.toString());
-    }
+    expect(textsUnder(after, MOD)).toEqual({
+      [`${MOD}/meta.ini`]: '[General]\r\ngameName=Fallout4\r\nmodid=0\r\nversion=1.2.3\r\ncategory="-1,"\r\ninstallationFile=\r\n',
+      [`${MOD}/Renamed Patch.esp`]: 'placeholder plugin bytes: Patch Mod.esp',
+      [`${MOD}/Renamed Patch.ini`]: `${MOD}/Patch Mod.ini`,
+      [`${MOD}/Renamed Patch - Main.ba2`]: `${MOD}/Patch Mod - Main.ba2`,
+      [`${MOD}/Renamed Patch - Textures.ba2`]: `${MOD}/Patch Mod - Textures.ba2`,
+      [`${MOD}/Strings/Renamed Patch_en.STRINGS`]: `${MOD}/Strings/Patch Mod_en.STRINGS`,
+      [`${MOD}/Strings/Renamed Patch_en.DLSTRINGS`]: `${MOD}/Strings/Patch Mod_en.DLSTRINGS`,
+      [`${MOD}/Patch Mod_Extra.esp`]: `${MOD}/Patch Mod_Extra.esp`,
+      [`${MOD}/Strings/Patch Mod_Extra_en.STRINGS`]: `${MOD}/Strings/Patch Mod_Extra_en.STRINGS`,
+      [`${MOD}/Strings/Patch Mod_xx.STRINGS`]: `${MOD}/Strings/Patch Mod_xx.STRINGS`,
+      [`${MOD}/plugin-source/Patch Mod.esp/record.json`]: `${MOD}/plugin-source/Patch Mod.esp/record.json`,
+      [`${MOD}/Other Archive - Main.ba2`]: `${MOD}/Other Archive - Main.ba2`,
+    });
     expect(await readPluginLines(root)).toEqual([
       { name: 'NonAsciiRetexture.esp', enabled: true },
       { name: 'Renamed Patch.esp', enabled: true },
@@ -159,11 +154,10 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     expect(await text(DEFAULT_LOAD_ORDER)).toContain('Renamed Patch.esp');
   }, 2000);
 
-  it('leaves the files of other plugins named alike, the plugin source and an archive of another name where they are', async () => {
+  it.each(NOT_NAMED_FOR_IT)('leaves the files of other plugins named alike, the plugin source and an archive of another name where they are: %s', async (path) => {
     await rename();
 
-    const after = await snapshotTree(root);
-    for (const path of NOT_NAMED_FOR_IT) expect(after.has(path), path).toBe(true);
+    expect((await snapshotTree(root)).has(path)).toBe(true);
   });
 
   it('leaves an archive that belongs to a plugin whose name starts with this one, as the archive\'s name cut at its last " - " is that plugin\'s', async () => {

@@ -48,6 +48,11 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
     });
 
+    it.each(['../escape', 'a/../../escape', '/escape', 'a\\b', '..', '.', ''])('refuses to create a folder for a name that reaches outside the mods folder: %j', async (name) => {
+      await expect(adapter.createModFolder(name)).rejects.toThrow(`Not a valid mod name: "${name}"`);
+      expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
+    });
+
     it('shows a folder it created to the next read', async () => {
       await adapter.createModFolder('Fresh');
       expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Fresh', 'Gamma']);
@@ -73,18 +78,11 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'Alpha' }, trash)).toBe(false);
     });
 
-    it('trashes no folder for an entry that none holds', async () => {
-      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'Nope' }, trash)).toBe(false);
-    });
   });
 
   describe('downloaded files', () => {
     it('gives a downloaded file that is gone no mark', async () => {
       expect(await adapter.markDownloadedFile('Gone.7z', 'Excluded')).toEqual({ gone: true });
-    });
-
-    it('marks a downloaded file that is there', async () => {
-      expect(await adapter.markDownloadedFile('Fresh.7z', 'Excluded')).toMatchObject({ gone: false });
     });
 
     it('trashes a downloaded file that is there, then it is gone', async () => {

@@ -6,6 +6,8 @@ import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import { gameFolderResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
 import { adapterForInstance } from '../../instanceAdapter/openInstance';
+import { mo2InstanceAdapter } from '../../instanceAdapter/mo2/mo2Instance';
+import type { ConfigurationFile, ManagerAdapter } from '../../instanceAdapter/publisher';
 import { mo2Watch } from '../../instanceAdapter/mo2/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
 import type { ReadingSource } from '../../instanceAdapter/instanceReading';
@@ -16,6 +18,7 @@ import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
 import { NO_DETECTORS } from '../noDetectors';
 import { fixedGameFolderSetting } from '../gameFolderSetting';
 import { FOMOD_ENGINE } from '../fomodEngine';
+import { expectKind } from '../expectKind';
 
 /** What a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -52,6 +55,10 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 /** The parts of one reading, each asked on its own. */
 export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined);
 
+export const managerOver = (root: string, answers: AdapterAnswers = {}, publisherFile?: ConfigurationFile): ManagerAdapter => mo2InstanceAdapter({
+  instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE, context: contextOver(root, answers),
+}, publisherFile);
+
 /** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
   adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE, context: contextOver(root, answers) });
@@ -71,8 +78,7 @@ export const readActiveProfile = async (root: string): Promise<string> => (await
 /** A downloaded file as the adapter lists it; undefined when it is not listed. */
 export async function readDownloadedFile(root: string, name: string): Promise<DownloadedFile | undefined> {
   const { downloadedFiles } = await readInstanceOf(root);
-  if (downloadedFiles.kind !== 'listed') throw new Error(`expected listed, got ${downloadedFiles.reason}`);
-  return downloadedFiles.files?.find((file) => file.name === name);
+  return expectKind(downloadedFiles, 'listed').files?.find((file) => file.name === name);
 }
 
 /** Each listed mod's own files, as a reading holds them. */

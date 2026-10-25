@@ -15,7 +15,7 @@ const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(re
 import { mkdir, mkdtemp, readdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { FomodDialog, InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
+import type { FomodAnswer, FomodDialog, InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
 import type { FomodMove } from '../../../wire/fomodPage';
 import { programsOf, SCRIPT_EXTENDER_FOLDERS } from '../../../tables/gamePaths';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
@@ -174,21 +174,22 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
   describe('the root it chooses inside the release, and whether the release is a FOMOD', () => {
     const NO_CHOICES = { fomod: { kind: 'plainCopy', why: 'no choices were given for its steps' } };
+    const CHOSE_NOTHING: FomodAnswer = { kind: 'choices', steps: [] };
     it.each([
-      ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}],
-      ['files at the top', ['foo.esp', 'meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}],
-      ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], ['foo.esp', 'textures/x.dds'], {}],
-      ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], ['foo.esp'], {}],
-      ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], ['foo.esp'], {}],
-      ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], ['ModA/foo.esp', 'readme.txt'], {}],
-      ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/ModuleConfig.xml'], NO_CHOICES],
-      ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/moduleconfig.xml'], NO_CHOICES],
-      ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], NO_CHOICES],
+      ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}, CHOSE_NOTHING],
+      ['files at the top', ['foo.esp', 'meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}, CHOSE_NOTHING],
+      ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], ['foo.esp', 'textures/x.dds'], {}, CHOSE_NOTHING],
+      ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], ['foo.esp'], {}, CHOSE_NOTHING],
+      ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], ['foo.esp'], {}, CHOSE_NOTHING],
+      ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], ['ModA/foo.esp', 'readme.txt'], {}, CHOSE_NOTHING],
+      ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/ModuleConfig.xml'], NO_CHOICES, undefined],
+      ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/moduleconfig.xml'], NO_CHOICES, undefined],
+      ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], NO_CHOICES, undefined],
       ['a scripted FOMOD, whatever its answer', ['MyMod/fomod/script.cs', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/script.cs'],
-        { fomod: { kind: 'plainCopy', why: 'its installer is a script, which Modbench does not run' } }],
-      ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], {}],
-    ])('%s', async (_, release, landed, how) => {
-      const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, how === NO_CHOICES ? undefined : { kind: 'choices', steps: [] });
+        { fomod: { kind: 'plainCopy', why: 'its installer is a script, which Modbench does not run' } }, CHOSE_NOTHING],
+      ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], {}, CHOSE_NOTHING],
+    ])('%s', async (_, release, landed, how, answer) => {
+      const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, answer);
 
       expect(outcome).toEqual({ landed: true, ...how });
       expect(await filesIn(folder(MOD))).toEqual([...landed, 'meta.ini'].sort());

@@ -97,6 +97,9 @@ export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 export const sameEntry = (manager: Pick<InstanceAdapter, 'entryKey'>, a: EntryRef, b: EntryRef): boolean =>
   a.kind === b.kind && manager.entryKey(a) === manager.entryKey(b);
 
+/** Whether `name` names one entry of a folder: neither empty, `.` nor `..`, and no separator, so no path reaches outside the folder. */
+export const isBareName = (name: string): boolean => name !== '' && name !== '.' && name !== '..' && !/[\\/]/.test(name);
+
 /** Why a change naming an entry mod order does not list is refused. */
 export const entryNotFound = (entry: EntryRef): string =>
   `${entry.kind === 'mod' ? 'Mod' : 'Separator'} not found in modlist: ${entry.name}`;
@@ -691,7 +694,7 @@ export interface InstanceAdapter {
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.
-  /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
+  /** Refuses a name that is not a bare name, and a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
   /** Renames the folder that holds `from` to `to`, in place. Refuses when none holds `from`, and a
    *  folder already there under another name, matched as the manager matches names. */

@@ -8,77 +8,44 @@ const iniOf = (downloadDirectory?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n[Settings]\r\n${
     downloadDirectory === undefined ? '' : `download_directory=@ByteArray(${downloadDirectory.replaceAll('\\', '\\\\')})\r\n`}`;
 
-const resolvedDir = async (
-  instanceRoot: string, ini: string, detectors: GameDetectors = NO_DETECTORS,
-): Promise<string> => {
-  const resolution = await downloadsDirectoryResolver(detectors)(instanceRoot, ini);
-  if (resolution.kind !== 'resolved') throw new Error(`expected resolved, got unresolved: ${resolution.reason}`);
-  return resolution.downloadsDir;
-};
+const resolved = (downloadsDir: string) => ({ kind: 'resolved', downloadsDir });
 
 describe('the downloads directory resolver', () => {
   const INSTANCE_ROOT = join('/instances', 'My Instance');
+  const OUTSIDE = join('/mnt', 'storage', 'downloads');
 
-  it('defaults to downloads/ under the instance root when the setting is absent', async () => {
-    expect(await resolvedDir(INSTANCE_ROOT, iniOf())).toBe(join(INSTANCE_ROOT, 'downloads'));
-  });
-
-  it('resolves %BASE_DIR% to the instance root', async () => {
-    expect(await resolvedDir(INSTANCE_ROOT, iniOf('%BASE_DIR%/MyDownloads'))).toBe(join(INSTANCE_ROOT, 'MyDownloads'));
-  });
-
-  it('takes an absolute path outright, even when it lies outside the instance', async () => {
-    const outside = join('/mnt', 'storage', 'downloads');
-    expect(await resolvedDir(INSTANCE_ROOT, iniOf(outside))).toBe(outside);
-  });
-
-  it('resolves a relative path against the instance root, Modbench\'s own choice as MO2 resolves it against its own process working directory (settings.cpp:1667-1686), not determinable from the instance alone', async () => {
-    expect(await resolvedDir(INSTANCE_ROOT, iniOf('MyDownloads'))).toBe(join(INSTANCE_ROOT, 'MyDownloads'));
+  it.each([
+    ['defaults to downloads/ under the instance root when the setting is absent', undefined, join(INSTANCE_ROOT, 'downloads')],
+    ['resolves %BASE_DIR% to the instance root', '%BASE_DIR%/MyDownloads', join(INSTANCE_ROOT, 'MyDownloads')],
+    ['takes an absolute path outright, even when it lies outside the instance', OUTSIDE, OUTSIDE],
+    ['resolves a relative path against the instance root, Modbench\'s own choice as MO2 resolves it against its own process working directory (settings.cpp:1667-1686), not determinable from the instance alone',
+      'MyDownloads', join(INSTANCE_ROOT, 'MyDownloads')],
+  ])('%s', async (_, downloadDirectory, downloadsDir) => {
+    expect(await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf(downloadDirectory))).toEqual(resolved(downloadsDir));
   });
 
   it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive absolute path, as MO2 under Proton writes it, to its POSIX path', async () => {
     const real = join('/home', 'user', 'MyDownloads');
     const winePath = 'Z:' + real.replaceAll('/', '\\');
 
-    expect(await resolvedDir(INSTANCE_ROOT, iniOf(winePath))).toBe(real);
+    expect(await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf(winePath))).toEqual(resolved(real));
   });
 
   it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C:-drive absolute path into the Proton prefix's drive_c, sharing gamePath's own Wine translation", async () => {
     const prefix = join('/home', 'user', '.steam', 'compatdata', '377160', 'pfx');
     const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix) };
 
-    const resolved = await resolvedDir(INSTANCE_ROOT, iniOf('C:\\Games\\MO2\\downloads'), detectors);
-
-    expect(resolved).toBe(join(prefix, 'drive_c', 'Games/MO2/downloads'));
-  });
-
-  it('unwraps an @ByteArray(...) value the same way every other ModOrganizer.ini string does', async () => {
-    expect(await resolvedDir(INSTANCE_ROOT, iniOf('Downloads'))).toBe(join(INSTANCE_ROOT, 'Downloads'));
+    expect(await downloadsDirectoryResolver(detectors)(INSTANCE_ROOT, iniOf('C:\\Games\\MO2\\downloads')))
+      .toEqual(resolved(join(prefix, 'drive_c', 'Games/MO2/downloads')));
   });
 
   describe.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) an untranslatable download_directory answers unresolved with why rather than guessing at the default folder, which is not the folder MO2 names', () => {
-    it('answers unresolved, naming the key and the drive, for a drive letter neither Z nor C', async () => {
-      const resolution = await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf('D:\\Games\\downloads'));
-
-      expect(resolution.kind).toBe('unresolved');
-      if (resolution.kind !== 'unresolved') throw new Error('unreachable');
-      expect(resolution.reason).toMatch(/download_directory/);
-      expect(resolution.reason).toMatch(/drive/i);
-    });
-
-    it('answers unresolved, naming the prefix, for a C: path with no determinable Proton prefix', async () => {
-      const detectors: GameDetectors = NO_DETECTORS;
-
-      const resolution = await downloadsDirectoryResolver(detectors)(INSTANCE_ROOT, iniOf('C:\\Games\\downloads'));
-
-      expect(resolution.kind).toBe('unresolved');
-      if (resolution.kind !== 'unresolved') throw new Error('unreachable');
-      expect(resolution.reason).toMatch(/prefix/i);
-    });
-
-    it('never rejects — the untranslatable path answers unresolved rather than throwing', async () => {
-      await expect(downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf('D:\\Games\\downloads')))
-        .resolves.toMatchObject({ kind: 'unresolved' });
+    it.each([
+      ['naming the key and the drive, for a drive letter neither Z nor C', 'D:\\Games\\downloads', /download_directory.*drive/i],
+      ['naming the prefix, for a C: path with no determinable Proton prefix', 'C:\\Games\\downloads', /download_directory.*prefix/i],
+    ])('answers unresolved, %s', async (_, downloadDirectory, reason) => {
+      expect(await downloadsDirectoryResolver(NO_DETECTORS)(INSTANCE_ROOT, iniOf(downloadDirectory)))
+        .toEqual({ kind: 'unresolved', reason: expect.stringMatching(reason) as unknown });
     });
   });
 });

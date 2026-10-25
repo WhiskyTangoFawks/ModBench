@@ -27,12 +27,4 @@ describe('a line the instance repeats', () => {
     expect({ mods: reading.mods, pluginOrder: reading.pluginOrder }).toEqual({ mods: before.mods, pluginOrder: before.pluginOrder });
     expect(reading.orderNotes).toEqual([`${note} on more than one line; the first line holds`]);
   });
-
-  it('sets a mod\'s state by the last line that spells it in another case, as MO2 reads it', async () => {
-    await appendFile(join(dir, DEFAULT_MODLIST), '-PATCH MOD\n');
-
-    const reading = await readInstanceOf(dir);
-
-    expect(reading.mods.find((mod) => mod.name === 'Patch Mod')?.enabled).toBe(false);
-  });
 });

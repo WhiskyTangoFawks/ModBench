@@ -166,14 +166,16 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
 
   it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers once each reason a folder\'s watch failed, signalling each failure, and forgets one removed', async () => {
     const created = join(root, 'Created');
-    const unreadable = [join(created, 'Unreadable'), join(created, 'AlsoUnreadable')];
-    for (const folder of unreadable) {
-      await mkdir(folder, { recursive: true });
-      await chmod(folder, 0o000);
-    }
+    const unreadable = join(created, 'Unreadable');
+    const alsoUnreadable = join(created, 'AlsoUnreadable');
+    await mkdir(unreadable, { recursive: true });
+    await mkdir(alsoUnreadable);
+    await chmod(unreadable, 0o000);
+    await chmod(alsoUnreadable, 0o000);
 
     await held.created(created);
-    for (const folder of unreadable) await chmod(folder, 0o755);
+    await chmod(unreadable, 0o755);
+    await chmod(alsoUnreadable, 0o755);
     const answered = held.failures();
     await rm(created, { recursive: true });
     held.removed(created);

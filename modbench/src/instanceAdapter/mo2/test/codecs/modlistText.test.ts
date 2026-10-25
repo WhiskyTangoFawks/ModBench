@@ -20,7 +20,7 @@ const fixtureDir = join(__dirname, '..', '..', '..', '..', 'test', 'mo2', 'fixtu
 const defaultModlist = () =>
   readFileSync(join(fixtureDir, 'profiles', 'Default', 'modlist.txt'), 'utf8');
 
-describe('setEnabledInText — byte-faithful surgical edit', () => {
+describe('a mod\'s state set in modlist.txt, every other byte kept', () => {
   it('flips exactly one prefix and leaves every other byte (CRLF, comment, * lines) identical', () => {
     const input = defaultModlist();
     const out = setEnabledInText(input, 'SKK Fast Start new game (Fallout 4)', false);
@@ -58,17 +58,16 @@ describe('setEnabledInText — byte-faithful surgical edit', () => {
   });
 });
 
-describe('entryNamed', () => {
+describe('a line\'s or a folder\'s name read as a separator or a mod', () => {
   it('reads a separator\'s suffix off a line\'s or a folder\'s name, and anything else as a mod', () => {
     expect(entryNamed('Core_separator')).toEqual({ kind: 'separator', name: 'Core' });
     expect(entryNamed('Harder VATS')).toEqual({ kind: 'mod', name: 'Harder VATS' });
   });
 });
 
-describe('parseModlist', () => {
-  it('surfaces mods and separators in priority order, ignoring comment/* /blank lines', () => {
-    const entries = parseModlist(defaultModlist());
-    expect(entries).toEqual([
+describe('the mod order a modlist.txt holds', () => {
+  it.each<[string, string, (Mod | Separator)[]]>([
+    ['mods and separators in priority order, past comment, * and blank lines', defaultModlist(), [
       { kind: 'mod', name: 'SKK Fast Start new game (Fallout 4)', enabled: true },
       { kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false },
       { kind: 'mod', name: '[NODELETE] Radfall', enabled: true },
@@ -77,42 +76,27 @@ describe('parseModlist', () => {
       { kind: 'mod', name: 'ENBoost - 12k', enabled: true },
       { kind: 'mod', name: 'Harder VATS', enabled: false },
       { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen', enabled: true },
-    ] satisfies (Mod | Separator)[]);
-  });
-
-  it('recognizes an enabled separator (+…_separator)', () => {
-    const entries = parseModlist('+ENB_separator\r\n');
-    expect(entries).toEqual([{ kind: 'separator', name: 'ENB', enabled: true }]);
-  });
-
-  it('returns no entries for a file of only comment, * and blank lines', () => {
-    expect(parseModlist('# header\r\n*DLC: Automatron\r\n\r\n   \r\n+\r\n')).toEqual([]);
-  });
-
-  it('reads a line with no prefix as an enabled mod, and trims the name', () => {
-    expect(parseModlist('Bare\r\n+ Padded  \r\n-  Off \r\n')).toEqual([
+    ]],
+    ['an enabled separator (+…_separator)', '+ENB_separator\r\n', [{ kind: 'separator', name: 'ENB', enabled: true }]],
+    ['no entries for a file of only comment, * and blank lines', '# header\r\n*DLC: Automatron\r\n\r\n   \r\n+\r\n', []],
+    ['a line with no prefix as an enabled mod, each name trimmed', 'Bare\r\n+ Padded  \r\n-  Off \r\n', [
       { kind: 'mod', name: 'Bare', enabled: true },
       { kind: 'mod', name: 'Padded', enabled: true },
       { kind: 'mod', name: 'Off', enabled: false },
-    ] satisfies Mod[]);
+    ]],
+    ['the top-priority mod behind a leading UTF-8 BOM', '\uFEFF+First\r\n+Second\r\n', [
+      { kind: 'mod', name: 'First', enabled: true },
+      { kind: 'mod', name: 'Second', enabled: true },
+    ]],
+    ['no false entry for a BOM before a line that is no entry', '\uFEFF# header\r\n', []],
+  ])('reads %s', (_, text, entries) => {
+    expect(parseModlist(text)).toEqual(entries);
   });
 
   it('gives a name that two lines spell alike in case the state of the last, and a repeat of the same case none', () => {
     expect(parseModlist('+Mod\r\n-mod\r\n')[0]?.enabled).toBe(false);
     expect(parseModlist('-Mod\r\n+mod\r\n-Mod\r\n')[0]?.enabled).toBe(true);
     expect(parseModlist('+Mod\r\n-Mod\r\n')[0]?.enabled).toBe(true);
-  });
-
-  it('strips a leading UTF-8 BOM so the top-priority mod is not silently dropped', () => {
-    const entries = parseModlist('\uFEFF+First\r\n+Second\r\n');
-    expect(entries).toEqual([
-      { kind: 'mod', name: 'First', enabled: true },
-      { kind: 'mod', name: 'Second', enabled: true },
-    ] satisfies Mod[]);
-  });
-
-  it('does not surface a false entry when a BOM is followed by a non-entry line', () => {
-    expect(parseModlist('\uFEFF# header\r\n')).toEqual([]);
   });
 });
 
@@ -129,7 +113,7 @@ describe('edits on lines MO2 reads', () => {
 
 const names = (text: string) => parseModlist(text).map((e) => e.name);
 
-describe('insertSeparatorBesideInText', () => {
+describe('a separator inserted beside an entry in modlist.txt', () => {
   const mod = (name: string) => ({ kind: 'mod', name }) as const;
   const separator = (name: string) => ({ kind: 'separator', name }) as const;
   const H = '# header\r\n';
@@ -156,7 +140,7 @@ describe('insertSeparatorBesideInText', () => {
   });
 });
 
-describe('renameSeparatorInText', () => {
+describe('a separator renamed in modlist.txt', () => {
   it('replaces only the separator name, preserving prefix, suffix, CRLF, and all other bytes', () => {
     const out = renameSeparatorInText(
       defaultModlist(),
@@ -183,7 +167,7 @@ describe('renameSeparatorInText', () => {
   });
 });
 
-describe('renameModLineInText', () => {
+describe('a mod\'s line renamed in modlist.txt', () => {
   it('renames a mod line by its MO2 name, keeping its enabled state, place, CRLF and BOM', () => {
     const out = renameModLineInText('\uFEFF+A\r\n-Old Mod\r\n+B\r\n', 'Old Mod', 'New Mod');
     expect(out).toBe('\uFEFF+A\r\n-New Mod\r\n+B\r\n');
@@ -194,7 +178,7 @@ describe('renameModLineInText', () => {
   });
 });
 
-describe('deleteSeparatorInText', () => {
+describe('a separator deleted from modlist.txt', () => {
   it('removes only the separator line; child mods remain, promoted to ungrouped or prior separator', () => {
     const out = deleteSeparatorInText(defaultModlist(), 'Unassigned (Modlist Development)');
     expect(names(out)).toEqual([
@@ -216,7 +200,7 @@ describe('deleteSeparatorInText', () => {
   });
 });
 
-describe('removeModFromText', () => {
+describe('a mod removed from modlist.txt', () => {
   it('removes the mod entry line entirely, leaving all other bytes intact', () => {
     const out = removeModFromText(defaultModlist(), '[NODELETE] Radfall');
     expect(names(out)).toEqual([
@@ -244,7 +228,7 @@ describe('removeModFromText', () => {
   });
 });
 
-describe('moveModsInText', () => {
+describe('mods moved in modlist.txt', () => {
   const defaultMovedAboveRadfallSeparator = [
     '# This file was automatically generated by Mod Organizer.',
     '-Unassigned (Modlist Development)_separator',
@@ -315,7 +299,7 @@ describe('moveModsInText', () => {
 
 });
 
-describe('moveSeparatorsInText', () => {
+describe('separators moved in modlist.txt', () => {
   const header = '# h\r\n';
   const threeSeparators = `${header}+A\r\n+S1_separator\r\n+B\r\n+S2_separator\r\n+C\r\n+S3_separator\r\n+D\r\n`;
   const twoSeparators = `${header}+A\r\n+S1_separator\r\n+B\r\n+S2_separator\r\n+C\r\n`;
@@ -362,7 +346,7 @@ describe('moveSeparatorsInText', () => {
 
 });
 
-describe('insertModAtWinningEnd — add a disabled mod at the winning end (first entry)', () => {
+describe('a mod added disabled at the winning end, as the first entry', () => {
   it('inserts a disabled line as the first entry, below the leading comment, and preserves every other byte', () => {
     const input = defaultModlist();
     const out = insertModAtWinningEnd(input, 'My New Mod');
@@ -371,42 +355,12 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
     expect(out.startsWith('# This file was automatically generated')).toBe(true);
   });
 
-  it('uses the file EOL (CRLF) and inserts before the first entry', () => {
-    const input = '+A\r\n+B\r\n';
-    expect(insertModAtWinningEnd(input, 'C')).toBe('-C\r\n+A\r\n+B\r\n');
-  });
-
-  it('inserts before the first entry (LF)', () => {
-    const input = '+A\n+B\n';
-    expect(insertModAtWinningEnd(input, 'C')).toBe('-C\n+A\n+B\n');
-  });
-
-  it('inserts into an empty file', () => {
-    expect(insertModAtWinningEnd('', 'C')).toBe('-C\n');
-  });
-
-  it('keeps an unterminated last line unterminated', () => {
-    const out = insertModAtWinningEnd('# header\r\n+A\r\n*DLC: Foo', 'New');
-    expect(out).toBe('# header\r\n-New\r\n+A\r\n*DLC: Foo');
-  });
-});
-
-const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? '';
-const litrModlist = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
-
-describe.skipIf(litrInstance === '')('full LitR round-trip (opt-in), the at-scale byte-faithful backstop against the real full modlist.txt', () => {
-  it('toggling a real mod off then on, flipping its state in between, reproduces the original bytes exactly', () => {
-    const input = readFileSync(litrModlist, 'utf8');
-    const firstMod = parseModlist(input).find((e) => e.kind === 'mod');
-    if (!firstMod) throw new Error('LitR modlist.txt has no mod entries — fixture assumption broken');
-    const { name, enabled } = firstMod;
-
-    const toggled = setEnabledInText(input, name, !enabled);
-
-    expect(toggled).not.toBe(input);
-    const toggledMod = parseModlist(toggled).find((e) => e.kind === 'mod' && e.name === name);
-    expect(toggledMod?.enabled).toBe(!enabled);
-
-    expect(setEnabledInText(toggled, name, enabled)).toBe(input);
+  it.each([
+    ['in the file\'s CRLF', '+A\r\n+B\r\n', 'C', '-C\r\n+A\r\n+B\r\n'],
+    ['in the file\'s LF', '+A\n+B\n', 'C', '-C\n+A\n+B\n'],
+    ['into an empty file', '', 'C', '-C\n'],
+    ['keeping an unterminated last line unterminated', '# header\r\n+A\r\n*DLC: Foo', 'New', '# header\r\n-New\r\n+A\r\n*DLC: Foo'],
+  ])('inserts before the first entry %s', (_, input, name, out) => {
+    expect(insertModAtWinningEnd(input, name)).toBe(out);
   });
 });

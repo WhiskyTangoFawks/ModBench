@@ -80,6 +80,26 @@ describe('the token filter', () => {
   });
 
   it.each([
+    ['unquoted in a program\'s arguments', 'x=-o C:\\\\Users\\\\me\\\\LitR\\\\out', 'x=-o {instance folder:\\\\}\\\\out'],
+    ['in a list\'s second entry', 'x=C:/Users/me/LitR/a, C:/Users/me/LitR/b', 'x={instance folder:/}/a, {instance folder:/}/b'],
+    ['after an option\'s colon', 'x="-o:C:\\\\Users\\\\me\\\\LitR\\\\out"', 'x="-o:{instance folder:\\\\}\\\\out"'],
+    ['after a semicolon', 'x=C:/Users/me/LitR/a;C:/Users/me/LitR/b', 'x={instance folder:/}/a;{instance folder:/}/b'],
+    ['after a comma', 'x=C:/Users/me/LitR/a,C:/Users/me/LitR/b', 'x={instance folder:/}/a,{instance folder:/}/b'],
+  ])('holds a folder by its token %s', async (_place, written, held) => {
+    expect(await heldByGit(DRIVE, 'win32', written)).toBe(held);
+  });
+
+  it.each([
+    ['a longer name', 'x=C:/Users/me/LitR2/x.exe'],
+    ['a space and more', 'x=C:/Users/me/LitR Backup/x.exe'],
+    ['a plus', 'x=C:/Users/me/LitR+/x.exe'],
+    ['a parenthesis', 'x=C:/Users/me/LitR(GOG)/x.exe'],
+    ['a letter beyond ASCII', 'x=C:/Users/me/LitRé/x.exe'],
+  ])('holds a path whose folder\'s name begins with a folder\'s and goes on with %s as it is', async (_name, written) => {
+    expect(await heldByGit(DRIVE, 'win32', written)).toBe(written);
+  });
+
+  it.each([
     ['the instance folder\'s token, the commit holding no token of its own', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={instance folder:/}/downloads/a.7z', []],
     ['the downloads folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={downloads folder:/}/a.7z', ['downloads folder']],
     ['the game folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/Stock Game/Data', 'x={game folder:/}/Data', ['game folder']],

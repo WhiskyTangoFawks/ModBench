@@ -24,7 +24,7 @@ const resolverWith = (
   settingValue?: string, detectors: GameDetectors = NO_DETECTORS,
 ) => gameFolderResolver(fixedGameFolderSetting(settingValue), detectors);
 
-describe('documentsFolder', () => {
+describe('the Documents folder Windows names', () => {
   it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
     const commands: string[] = [];
 
@@ -38,7 +38,7 @@ describe('documentsFolder', () => {
   });
 });
 
-describe('normalizeGamePath', () => {
+describe('a game path in the platform\'s own form', () => {
   it('leaves a native Windows path untouched', async () => {
     expect(await normalizeGamePath('C:\\Games\\Fallout4', 'win32', noDetectPrefix)).toBe('C:\\Games\\Fallout4');
   });
@@ -256,8 +256,12 @@ describe('the game folder resolver', () => {
     expect(asked).toBe(false);
   });
 
-  it('asks Steam nothing when the setting answers the root, not detecting up front on every branch, which reads Steam\'s library file (and spawns `reg query` on Windows) on every recompute', async () => {
+  it.each([
+    ['the setting', (root: string) => [root, undefined]],
+    ['the game path the manager names', (root: string) => [undefined, root]],
+  ] as const)('asks Steam nothing when %s answers the root, not detecting up front on every branch, which reads Steam\'s library file (and spawns `reg query` on Windows) on every recompute', async (_, sources) => {
     const gameRoot = await gameFolder();
+    const [setting, managerPath] = sources(gameRoot);
     let asked = 0;
     const detectors: GameDetectors = {
       ...NO_DETECTORS,
@@ -265,22 +269,7 @@ describe('the game folder resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith(gameRoot, detectors)(managerNaming());
-
-    expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
-    expect(asked).toBe(0);
-  });
-
-  it('asks Steam nothing when the game path the manager names answers the root', async () => {
-    const gameRoot = await gameFolder();
-    let asked = 0;
-    const detectors: GameDetectors = {
-      ...NO_DETECTORS,
-      paths: () => { asked += 1; return Promise.resolve(null); },
-      winePrefix: noDetectPrefix,
-    };
-
-    const resolved = await resolverWith(undefined, detectors)(managerNaming(gameRoot));
+    const resolved = await resolverWith(setting, detectors)(managerNaming(managerPath));
 
     expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
