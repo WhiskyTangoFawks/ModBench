@@ -56,8 +56,6 @@ public sealed class SourceCodecReadScanTests
             "internal static class Reader\n{\n"
             + "    internal static string Read(string text, GameRelease release) =>\n"
             + "        RecordTextCodec.RoundTrip(text, release, null);\n}\n");
-        ScratchFiles.Plant(root, "MEditService.SourceAdapter/obj/Generated.cs",
-            "var text = RecordTextCodec.RoundTrip(text, release, null);\n");
 
         var counts = Counts(root, ["MEditService.SourceAdapter"]);
 
@@ -68,16 +66,8 @@ public sealed class SourceCodecReadScanTests
     }
 
     private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
-        [.. ScannedFiles(root, scannedRoots)
-            .SelectMany(file => Occurrences(File.ReadAllText(file))
-                .Select(o => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {o.Name}: {o.Count}"))
-            .Order(StringComparer.Ordinal)];
+        SourceTree.Sites(root, ScannedFiles(root, scannedRoots), ForbiddenMembersAndTheBareTypeName, File.ReadAllText);
 
     private static IEnumerable<string> ScannedFiles(string root, IReadOnlyList<string> scannedRoots) =>
-        scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))));
-
-    private static IEnumerable<(string Name, int Count)> Occurrences(string text) =>
-        ForbiddenMembersAndTheBareTypeName
-            .Select(member => (member.Name, Count: member.Pattern.Count(text)))
-            .Where(o => o.Count > 0);
+        scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)));
 }

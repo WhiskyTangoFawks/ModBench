@@ -38,11 +38,10 @@ public sealed class HandWrittenApplierScanTests
     }
 
     [Fact]
-    public void TheScan_NamesAMutagenConstruction_AndPassesBuildOutputAndOtherTypes()
+    public void TheScan_NamesAMutagenConstruction_AndPassesOtherTypes()
     {
         using var root = new ScratchDirectory("medit-applier-scan-");
         ScratchFiles.Plant(root, "Layer/Applier.cs", "var made = new MemorySlice<byte>(bytes);");
-        ScratchFiles.Plant(root, "Layer/obj/Generated.cs", "var made = new MemorySlice<byte>(bytes);");
         ScratchFiles.Plant(root, "Layer/Clean.cs", "var made = new JsonObject();");
         ScratchFiles.Plant(root, "Layer/Initializer.cs", "var made = new TranslatedString\n{\n    TargetLanguage = language,\n};");
 

@@ -15,9 +15,8 @@ public sealed class ComparisonDoorBoundaryTests
 
     private static IEnumerable<string> ScanForMaskConsultation(string projectRoot)
     {
-        return Directory.EnumerateFiles(projectRoot, "*.cs", SearchOption.AllDirectories)
+        return SourceTree.CSharpFiles(projectRoot)
             .Where(f => !Path.GetFileName(f).Equals("ModelIdentity.cs", StringComparison.Ordinal))
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Where(f =>
             {
                 var text = File.ReadAllText(f);

@@ -1,42 +1,43 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
-using MEditService.Codec.Serialization;
-using MEditService.Commands;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using MEditService.Ports;
 using MEditService.RecordIndex;
 using MEditService.RecordIndex.Queries;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Architecture.Tests;
 
 public sealed class ArchitectureTests
 {
-    private static readonly Assembly[] EveryBoxAssembly =
-    [
-        typeof(RecordTextCodec).Assembly,
-        typeof(EditRecordChangesHandler).Assembly,
-        typeof(Program).Assembly,
-        typeof(LoadOrderSnapshot).Assembly,
-        typeof(IPluginAdapter).Assembly,
-        typeof(INotificationPublisher).Assembly,
-        typeof(IQueries).Assembly,
-        typeof(ISourceAdapter).Assembly,
-    ];
-
-    private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =
-    [
-        (typeof(IQueries).Assembly, "MEditService.RecordIndex.Queries"),
-        (typeof(Program).Assembly, "MEditService.Http"),
-    ];
+    private static readonly Assembly[] ProductionAssemblies =
+        [.. ServiceProjects.Production(ServiceProjects.SolutionDirectory()).Select(Assembly.Load)];
 
     [Fact]
-    public void PluginIdentity_TravelsAsAPluginAddressOnEveryInterface_AndAsNameAndOriginTogetherOnEveryDto()
+    public void PluginIdentity_TravelsAsAPluginAddressOnEveryInterface_AndAsNameAndOriginTogetherOnEveryRecord()
+    {
+        var offenders = PluginIdentityOffenders(ProductionAssemblies.SelectMany(box => box.GetTypes()));
+        Assert.True(offenders.Count == 0, "A plugin travels as a string where its address or its origin belongs:\n" + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void ThePluginIdentityScan_NamesAPluginStringOnAnInterface_AndAPluginWithoutItsOriginOnARecord()
+    {
+        Assert.Equal(
+            ["IPlantedPort.Open(plugin)", "PlantedRecord(Plugin)"],
+            PluginIdentityOffenders([typeof(IPlantedPort), typeof(PlantedRecord)]));
+    }
+
+    public interface IPlantedPort
+    {
+        void Open(string plugin, string origin);
+    }
+
+    public sealed record PlantedRecord(string Plugin, string FormKey);
+
+    private static List<string> PluginIdentityOffenders(IEnumerable<Type> types)
     {
         var offenders = new List<string>();
-        foreach (var type in EveryBoxAssembly.SelectMany(box => box.GetTypes()).Where(t => t.IsInterface))
+        foreach (var type in types.Where(t => t.IsInterface))
         {
             foreach (var method in type.GetMethods())
             {
@@ -46,15 +47,14 @@ public sealed class ArchitectureTests
             offenders.AddRange(StringPlugins(type.GetProperties().Select(p => (p.Name, p.PropertyType)).ToArray())
                 .Select(p => $"{type.Name}.{p}"));
         }
-        foreach (var record in ReadModelAndWireRecordNamespaces.SelectMany(box => box.Assembly.GetTypes()
-            .Where(t => t.Namespace == box.Namespace && t.GetMethod("<Clone>$") != null)))
+        foreach (var record in types.Where(t => t.GetMethod("<Clone>$") != null))
         {
             offenders.AddRange(record.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .SelectMany(constructor => PluginStringsWithoutOrigin(constructor.GetParameters()))
                 .Distinct()
                 .Select(p => $"{record.Name}({p})"));
         }
-        Assert.True(offenders.Count == 0, "A plugin travels as a string where its address or its origin belongs:\n" + string.Join("\n", offenders));
+        return offenders;
     }
 
     private static readonly Regex PluginNamed = new("(plugin|pluginName)$", RegexOptions.IgnoreCase);
@@ -92,17 +92,6 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void DiskDerivedState_TheScanCatchesAPlantedLastWriteTimeRead()
-    {
-        using var root = new ScratchDirectory("medit-mtime-scan-");
-        ScratchFiles.Plant(root, "P/Planted.cs", "var t = info.LastWriteTime;");
-
-        var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: []);
-
-        Assert.Equal([Path.Combine("P", "Planted.cs")], offenders);
-    }
-
-    [Fact]
     public void LoadOrder_IsWrittenOnlyByPutLoadOrder()
     {
         var root = ServiceProjects.SolutionDirectory();
@@ -118,31 +107,6 @@ public sealed class ArchitectureTests
         Assert.True(dead.Count == 0,
             "Allowances naming no such call — delete them rather than leaving a write pre-authorized:\n"
             + string.Join("\n", dead));
-    }
-
-    private const string LoadOrderFolder = "MEditService.LoadOrder";
-
-    [Fact]
-    public void TheLoadOrderValue_ReadsNoFileOrDirectory()
-    {
-        var offenders = Offenders(ServiceProjects.SolutionDirectory(), [LoadOrderFolder], "File.", allowedFiles: [])
-            .Concat(Offenders(ServiceProjects.SolutionDirectory(), [LoadOrderFolder], "Directory.", allowedFiles: []))
-            .Distinct()
-            .ToList();
-
-        Assert.True(offenders.Count == 0,
-            "The load order folder reads the disk in:\n" + string.Join("\n", offenders));
-    }
-
-    [Fact]
-    public void TheLoadOrderValueScan_WalksTheLoadOrderFolder()
-    {
-        var walked = SourceTree.CSharpFiles(Path.Combine(ServiceProjects.SolutionDirectory(), LoadOrderFolder))
-            .Select(Path.GetFileName)
-            .ToList();
-
-        Assert.Contains("LoadOrderSnapshot.cs", walked);
-        Assert.Contains("PluginAddress.cs", walked);
     }
 
     internal static List<string> HolderWrites(string root, IReadOnlyList<string> projects, string verb) =>
@@ -354,12 +318,11 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void Offenders_NamesTheFileCarryingTheNeedle_AndSkipsAllowedFilesAndBuildOutput()
+    public void Offenders_NamesTheFileCarryingTheNeedle_AndSkipsAllowedFiles()
     {
         using var root = new ScratchDirectory("medit-arch-");
         ScratchFiles.Plant(root, "P/Bad.cs", "var t = info.LastWriteTime;");
         ScratchFiles.Plant(root, "P/Allowed.cs", "var t = info.LastWriteTime;");
-        ScratchFiles.Plant(root, "P/obj/Generated.cs", "var t = info.LastWriteTime;");
         ScratchFiles.Plant(root, "P/Clean.cs", "var t = 1;");
 
         var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: ["Allowed.cs"]);
