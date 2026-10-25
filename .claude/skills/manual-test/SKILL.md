@@ -32,7 +32,7 @@ code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
      "$(git rev-parse --show-toplevel)/DevListFallout" &
 ```
 
-The workspace root must be a real MO2 instance directory (CONTRIBUTING.md § Launch the extension). Default to `DevListFallout/` (CONTRIBUTING.md § Local folders) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
+A folder the window opens must be a real MO2 instance directory (CONTRIBUTING.md § Launch the extension). Default to `DevListFallout/` (CONTRIBUTING.md § Local folders) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
 
 Run one Extension Development Host per MO2 instance at a time: a worktree isolates the tree, not the runtime.
 
