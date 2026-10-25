@@ -7,10 +7,10 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { collapsedReading, type Reading } from './presentation';
-import type { CompareResult, FieldDiff, FieldMetadata } from './types';
+import type { CompareResult, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, leafMeta as leaf, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldCompared, fieldMeta, hostPickingEnum, panelClient,
   postedEnvelopes as sharedPostedEnvelopes, required,
 } from './test/fixtures';
 
@@ -30,27 +30,30 @@ const dataMeta = fieldMeta({
   name: 'Data', type: 'struct',
   leafTypeName: 'ConditionData',
   fields: [
-    leaf('RunOnType', 'enum', {
+    fieldMeta({
+      name: 'RunOnType', type: 'enum',
       default: 'Subject',
       enumMembers: FALLOUT4_RUN_ON_VALUES.map(value => ({ value, bitValue: null, label: null })),
       siblingsInUse: Object.fromEntries(FALLOUT4_RUN_ON_VALUES.map(v => [v, v === 'Reference' ? ['Reference'] : []])),
     }),
-    leaf('Reference', 'formKey'),
-    leaf('Unknown3', 'int'),
-    leaf('Function', 'enum', {
+    fieldMeta({ name: 'Reference', type: 'formKey' }),
+    fieldMeta({ name: 'Unknown3', type: 'int' }),
+    fieldMeta({
+      name: 'Function', type: 'enum',
       enumMembers: Object.keys(GET_PARAMETER_TYPES_SLOTS_OF_THE_FUNCTIONS_USED).map(value => ({ value, bitValue: null, label: null })),
       siblingsInUse: GET_PARAMETER_TYPES_SLOTS_OF_THE_FUNCTIONS_USED,
     }),
-    leaf('ParameterOneRecord', 'formKey'),
-    leaf('ParameterOneNumber', 'int'),
-    leaf('ParameterOneString', 'string'),
-    leaf('ParameterTwoRecord', 'formKey'),
-    leaf('ParameterTwoNumber', 'int'),
-    leaf('ParameterTwoString', 'string'),
-    leaf('EventFunction', 'int'),
-    leaf('EventMember', 'int'),
-    leaf('Parameter3', 'formKey'),
-    leaf('MutagenObjectType', 'enum', {
+    fieldMeta({ name: 'ParameterOneRecord', type: 'formKey' }),
+    fieldMeta({ name: 'ParameterOneNumber', type: 'int' }),
+    fieldMeta({ name: 'ParameterOneString', type: 'string' }),
+    fieldMeta({ name: 'ParameterTwoRecord', type: 'formKey' }),
+    fieldMeta({ name: 'ParameterTwoNumber', type: 'int' }),
+    fieldMeta({ name: 'ParameterTwoString', type: 'string' }),
+    fieldMeta({ name: 'EventFunction', type: 'int' }),
+    fieldMeta({ name: 'EventMember', type: 'int' }),
+    fieldMeta({ name: 'Parameter3', type: 'formKey' }),
+    fieldMeta({
+      name: 'MutagenObjectType', type: 'enum',
       displayLabel: 'Kind', isDiscriminator: true,
       enumMembers: [
         { value: 'FunctionConditionData', bitValue: null, label: 'Function' },
@@ -60,8 +63,9 @@ const dataMeta = fieldMeta({
   ],
 });
 
-const leafTypedComparisonValueMetaShapedAsItsFirstLeaf: FieldMetadata = leaf('ComparisonValue', 'float', {
-  variants: { ConditionFloat: leaf('ComparisonValue', 'float'), ConditionGlobal: leaf('ComparisonValue', 'formKey') },
+const leafTypedComparisonValueMetaShapedAsItsFirstLeaf: FieldMetadata = fieldMeta({
+  name: 'ComparisonValue', type: 'float',
+  variants: { ConditionFloat: fieldMeta({ name: 'ComparisonValue', type: 'float' }), ConditionGlobal: fieldMeta({ name: 'ComparisonValue', type: 'formKey' }) },
 });
 
 const conditionsMeta = fieldMeta({
@@ -71,18 +75,21 @@ const conditionsMeta = fieldMeta({
     leafTypeName: 'Condition',
     fields: [
       dataMeta,
-      leaf('CompareOperator', 'enum', {
+      fieldMeta({
+        name: 'CompareOperator', type: 'enum',
         enumMembers: ['EqualTo', 'NotEqualTo', 'GreaterThan', 'GreaterThanOrEqualTo', 'LessThan', 'LessThanOrEqualTo']
           .map(value => ({ value, bitValue: null, label: null })),
       }),
-      leaf('Flags', 'flags', {
+      fieldMeta({
+        name: 'Flags', type: 'flags',
         enumMembers: [
           { value: 'OR', bitValue: '1', label: null },
           { value: 'ParametersUseAliases', bitValue: '2', label: null },
         ],
       }),
       leafTypedComparisonValueMetaShapedAsItsFirstLeaf,
-      leaf('MutagenObjectType', 'enum', {
+      fieldMeta({
+        name: 'MutagenObjectType', type: 'enum',
         displayLabel: 'Kind', isDiscriminator: true,
         enumMembers: [
           { value: 'ConditionFloat', bitValue: null, label: 'Float' },
@@ -97,10 +104,6 @@ const conditionsElementType = required(conditionsMeta.elementType, "conditionsMe
 const conditionsElementTypeFields = required(conditionsElementType.fields, "conditionsMeta's elementType fields");
 
 type Condition = Record<string, unknown>;
-
-function reflectedPropertyOf(value: unknown, name: string): unknown {
-  return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
-}
 
 const documentSpelledCondition = (over: Condition = {}, data: Condition = {}): Condition => ({
   MutagenObjectType: 'ConditionFloat',
@@ -119,69 +122,9 @@ const documentSpelledCondition = (over: Condition = {}, data: Condition = {}): C
 
 const PLUGIN = 'MyMod.esp';
 
-function compareResult(
-  byColumn: Record<string, Condition[]>, resolutions: Record<string, string> = {},
-  meta: FieldMetadata = conditionsMeta,
-): CompareResult {
-  const columns = Object.keys(byColumn);
-  const at = (column: string, index: number, path: string[]): unknown => {
-    const rows = byColumn[column];
-    if (!rows) throw new Error(`compareResult: no rows recorded for column "${column}"`);
-    return path.reduce<unknown>((v, name) => reflectedPropertyOf(v, name), rows[index]);
-  };
-
-  const resolutionsFor = (path: string[], index: number) => {
-    const resolutionEntriesAsTuplesSoFromEntriesAvoidsItsAnyOverload = columns
-      .map(c => [c, at(c, index, path)] as const)
-      .filter(([, v]) => typeof v === 'string' && resolutions[v])
-      .map(([c, v]): [string, { state: 'ResolvedValidType'; recordType: null; editorId: string | undefined }] =>
-        [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
-    return resolutionEntriesAsTuplesSoFromEntriesAvoidsItsAnyOverload.length > 0 ? Object.fromEntries(resolutionEntriesAsTuplesSoFromEntriesAvoidsItsAnyOverload) : undefined;
-  };
-
-  const valuesFor = (path: string[], index: number) =>
-    Object.fromEntries(columns.map(c => [c, at(c, index, path) ?? null]));
-
-  const memberDiffsOfEveryMemberSomeColumnCarries = (path: string[], index: number): FieldDiff[] => {
-    const keys = [...new Set(columns.flatMap(c => {
-      const value = at(c, index, path);
-      return Object.keys(typeof value === 'object' && value !== null ? value : {});
-    }))];
-    return keys.map(name => diffNode({
-      fieldName: name,
-      values: valuesFor([...path, name], index),
-      winnerColumn: columns[0], cellStates: {},
-      resolutions: resolutionsFor([...path, name], index),
-      children: name === 'Data' ? memberDiffsOfEveryMemberSomeColumnCarries([...path, name], index) : undefined,
-    }));
-  };
-
-  const [firstColumn] = columns;
-  if (!firstColumn) throw new Error('compareResult: at least one column expected');
-  const firstColumnRows = byColumn[firstColumn];
-  if (!firstColumnRows) throw new Error(`compareResult: no rows recorded for column "${firstColumn}"`);
-
-  return compareResultFixture({
-    conflictAll: 'NoConflict',
-    overrides: columns.map((plugin, i) => compareOverride({
-      formKey: '000001:MyMod.esp', plugin,
-      isWinner: i === 0, editorId: 'TestCobj',
-      fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
-    })),
-    diffs: [diffNode({
-      fieldName: 'Conditions',
-      values: Object.fromEntries(columns.map(c => [c, byColumn[c]])),
-      winnerColumn: columns[0], cellStates: {},
-      children: firstColumnRows.map((_, i) => diffNode({
-        fieldName: `[${i}]`,
-        values: valuesFor([], i),
-        indexes: Object.fromEntries(columns.filter(c => i < (byColumn[c]?.length ?? 0)).map(c => [c, i])),
-        winnerColumn: columns[0], cellStates: {},
-        children: memberDiffsOfEveryMemberSomeColumnCarries([], i),
-      })),
-    })],
-  });
-}
+const compareResult = (
+  byColumn: Record<string, Condition[]>, resolutions: Record<string, string> = {}, meta: FieldMetadata = conditionsMeta,
+): CompareResult => fieldCompared(meta, byColumn, { formKey: '000001:MyMod.esp', editorId: 'TestCobj', editorIds: resolutions });
 
 const oneColumn = (
   elements: Condition[], resolutions: Record<string, string> = {}, meta: FieldMetadata = conditionsMeta,
@@ -210,16 +153,11 @@ async function collapseConditions() {
   await waitFor(() => expect(screen.getAllByRole('button', { expanded: false })).toHaveLength(indexCells.length));
 }
 
-function summaryOf(index: number): string {
-  const td = screen.getAllByText(`[${index}]`).find(el => el.tagName === 'TD');
-  if (!td) throw new Error(`the [${index}] row cell`);
-  const row = td.closest('tr');
-  if (!row) throw new Error(`the [${index}] row`);
-  const cells = Array.from(row.querySelectorAll('td'));
-  const summaryCell = cells[1];
-  if (!summaryCell) throw new Error(`the [${index}] row's summary cell`);
-  return summaryCell.textContent;
-}
+const elementCells = (index: number): HTMLTableCellElement[] => Array.from(required(
+  required(screen.getAllByText(`[${index}]`).find(el => el.tagName === 'TD'), `the [${index}] row cell`).closest('tr'),
+  `the [${index}] row`).querySelectorAll('td'));
+
+const summaryOf = (index: number): string => required(elementCells(index)[1], `the [${index}] row's summary cell`).textContent;
 
 const rowLabelTdNotAValueCellOfTheSameText = (name: string): HTMLElement | undefined =>
   screen.queryAllByText(name).find(el => el.tagName === 'TD');
@@ -231,15 +169,9 @@ async function openFirstConditionData() {
 
 async function openMemberEditor(memberName: string): Promise<HTMLTableCellElement> {
   await openFirstConditionData();
-  const labelled = rowLabelTdNotAValueCellOfTheSameText(memberName);
-  if (!labelled) throw new Error(`the ${memberName} row label cell`);
-  const row = labelled.closest('tr');
-  if (!row) throw new Error(`the ${memberName} row`);
-  const cell = row.querySelectorAll('td')[1];
-  if (!cell) throw new Error(`the ${memberName} row's value cell`);
-  const trigger = cell.querySelector('[data-open-trigger]');
-  if (!trigger) throw new Error(`the ${memberName} value cell's open trigger`);
-  fireEvent.doubleClick(trigger);
+  const labelled = required(rowLabelTdNotAValueCellOfTheSameText(memberName), `the ${memberName} row label cell`);
+  const cell = required(required(labelled.closest('tr'), `the ${memberName} row`).querySelectorAll('td')[1], `the ${memberName} row's value cell`);
+  fireEvent.doubleClick(required(cell.querySelector('[data-open-trigger]'), `the ${memberName} value cell's open trigger`));
   return cell;
 }
 
@@ -282,16 +214,8 @@ describe('a collapsed condition reads as xEdit prose', () => {
     renderPanel();
     await collapseConditions();
 
-    const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
-    if (!td) throw new Error('the [0] row cell');
-    const row = td.closest('tr');
-    if (!row) throw new Error('the [0] row');
-    const cells = Array.from(row.querySelectorAll('td'));
-    const firstColumnCell = cells[1];
-    const secondColumnCell = cells[2];
-    if (!firstColumnCell || !secondColumnCell) throw new Error("both columns' [0] row cells");
-    expect(firstColumnCell.textContent).toBe('Subject.IsSneaking = 1.000000 AND');
-    expect(secondColumnCell.textContent).toBe('Subject.IsSneaking = 1.000000');
+    expect(elementCells(0).slice(1).map(cell => cell.textContent))
+      .toEqual(['Subject.IsSneaking = 1.000000 AND', 'Subject.IsSneaking = 1.000000']);
   });
 
   it('an expanded condition shows its members instead of the summary', async () => {
@@ -417,18 +341,19 @@ describe('collapsedReading of a condition whose function is its kind', () => {
     ['GetStageDoneConditionData', 'GetStageDone'], ['GetIsIDConditionData', 'GetIsID'], ['GetEventDataConditionData', 'GetEventData'],
   ];
   const own = (name: string, type: FieldMetadata['type'], kind: string, extra: Partial<FieldMetadata> = {}) =>
-    leaf(name, type, { allowsNull: true, variants: { [kind]: leaf(name, type, extra) } });
+    fieldMeta({ name, type, allowsNull: true, variants: { [kind]: fieldMeta({ name, type, ...extra }) } });
   const kindPerFunctionData = fieldMeta({
     name: 'Data', type: 'struct', leafTypeName: 'ConditionData',
     fields: [
-      leaf('RunOnType', 'enum', { default: 'Subject', enumMembers: [{ value: 'Subject', bitValue: null, label: null }] }),
-      leaf('UseAliases', 'bool'),
+      fieldMeta({ name: 'RunOnType', type: 'enum', default: 'Subject', enumMembers: [{ value: 'Subject', bitValue: null, label: null }] }),
+      fieldMeta({ name: 'UseAliases', type: 'bool' }),
       own('Quest', 'formKey', 'GetStageDoneConditionData', { indexWhen: ['UseAliases'] }),
       own('Stage', 'int', 'GetStageDoneConditionData'),
       own('Object', 'formKey', 'GetIsIDConditionData', { indexWhen: ['UseAliases'] }),
       own('Function', 'enum', 'GetEventDataConditionData', { enumMembers: [{ value: 'GetValue', bitValue: null, label: null }] }),
       own('VariableName', 'string', 'GetEventDataConditionData'),
-      leaf('MutagenObjectType', 'enum', {
+      fieldMeta({
+        name: 'MutagenObjectType', type: 'enum',
         displayLabel: 'Function', isDiscriminator: true,
         enumMembers: kinds.map(([value, label]) => ({ value: value ?? '', bitValue: null, label: label ?? null })),
       }),
@@ -462,60 +387,28 @@ describe('collapsedReading of a condition whose function is its kind', () => {
 });
 
 describe('a condition shows one row per parameter slot in use', () => {
-  it('a record-slot function renders ParameterOneRecord and neither of its aliases', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, {
-      Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
-    })]);
+  const dataRowLabels = () => {
+    const rows = Array.from(document.querySelectorAll('tbody tr'));
+    const labels = rows.map(tr => tr.querySelector('td')?.textContent);
+    return labels.slice(labels.indexOf('Data') + 1, labels.indexOf('CompareOperator'));
+  };
+
+  it.each([
+    ['a record-slot function renders ParameterOneRecord and neither of its aliases',
+      { Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp', ParameterOneNumber: 0, ParameterOneString: '' },
+      ['RunOnType', 'Unknown3', 'Function', 'ParameterOneRecord', 'Kind']],
+    ['a number-slot function renders ParameterOneNumber and not the record twin sharing its four bytes',
+      { Function: 'GetVATSValue', ParameterOneNumber: 10, ParameterTwoNumber: 0, ParameterOneRecord: '00000000:Null', ParameterTwoRecord: '00000000:Null' },
+      ['RunOnType', 'Unknown3', 'Function', 'ParameterOneNumber', 'ParameterTwoNumber', 'Kind']],
+    ['Parameter #3 is written whatever the function is, so it is never hidden', { Function: 'IsSneaking' }, ['RunOnType', 'Unknown3', 'Function', 'Kind']],
+    ['the reference row appears only under Run On = Reference', { Function: 'IsSneaking', Reference: '00000000:Null' },
+      ['RunOnType', 'Unknown3', 'Function', 'Kind']],
+  ])('%s', async (_case, data, rows) => {
+    currentCompare = oneColumn([documentSpelledCondition({}, data)]);
     renderPanel();
     await openFirstConditionData();
 
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneRecord')).toBeDefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneNumber')).toBeUndefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneString')).toBeUndefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterTwoRecord')).toBeUndefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterTwoNumber')).toBeUndefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterTwoString')).toBeUndefined();
-  });
-
-  it('a number-slot function renders ParameterOneNumber and not the record twin sharing its four bytes', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, {
-      Function: 'GetVATSValue', ParameterOneNumber: 10, ParameterTwoNumber: 0,
-    })]);
-    renderPanel();
-    await openFirstConditionData();
-
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneNumber')).toBeDefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterTwoNumber')).toBeDefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneRecord')).toBeUndefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterTwoRecord')).toBeUndefined();
-  });
-
-  it('Parameter #3 is written whatever the function is, so it is never hidden', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, { Function: 'IsSneaking' })]);
-    renderPanel();
-    await openFirstConditionData();
-
-    expect(rowLabelTdNotAValueCellOfTheSameText('Unknown3')).toBeDefined();
-  });
-
-  it('the reference row appears only under Run On = Reference', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, { Function: 'IsSneaking' })]);
-    renderPanel();
-    await openFirstConditionData();
-
-    expect(rowLabelTdNotAValueCellOfTheSameText('Reference')).toBeUndefined();
-  });
-
-  it('a slot any column uses is shown, so a conflicting override never hides its own data', async () => {
-    currentCompare = compareResult({
-      [PLUGIN]: [documentSpelledCondition({}, { Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp' })],
-      'Other.esp': [documentSpelledCondition({}, { Function: 'GetVATSValue', ParameterOneNumber: 3 })],
-    });
-    renderPanel();
-    await openFirstConditionData();
-
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneRecord')).toBeDefined();
-    expect(rowLabelTdNotAValueCellOfTheSameText('ParameterOneNumber')).toBeDefined();
+    expect(dataRowLabels()).toEqual(rows);
   });
 });
 

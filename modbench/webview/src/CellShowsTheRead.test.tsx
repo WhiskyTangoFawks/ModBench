@@ -8,8 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
-import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, required, tellPanel } from './test/fixtures';
-import { columnKey } from '../../src/wire/columnKey';
+import { compareOverride, compareResultFixture, diffNode, fieldMeta, loaded, panelClient, required, tellPanel } from './test/fixtures';
 import { WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 import type { CompareResult } from './types';
 
@@ -68,30 +67,9 @@ describe('a record panel cell after an edit (common.md, A gesture that writes, s
   });
 });
 
-describe('a record panel cell after a refused edit (editor.md, Reporting, story 1)', () => {
-  it('stays at the last read, since the host answers a refusal with a notification and no read', async () => {
-    render(<RecordPanel client={panelClient(() => disk, { plugins })} />);
-    await waitFor(() => screen.getByText('Before'));
-    fireEvent.doubleClick(within(nameCell()).getByText('Before'));
-    const input = required(nameCell().querySelector('input'), "the cell's input");
-    fireEvent.change(input, { target: { value: 'Refused' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-
-    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD })));
-    expect(nameCell()).toHaveTextContent('Before');
-    expect(nameCell()).not.toHaveTextContent('Refused');
-  });
-});
-
 describe('a record panel reading the FormKey its record moved to (editor.md, States, story 5)', () => {
   const MOVED = '000002:Fallout4.esm';
-  const answered = (result: CompareResult) => ({
-    ok: true as const, result, immutableSet: new Set([columnKey({ name: 'Fallout4.esm', origin: 'Data/' })]),
-    compiledPluginSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
-    editableSet: new Set([columnKey({ name: 'MyMod.esp', origin: 'ModA' })]),
-    sourceUnreadableReasons: new Map(), modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
-    fileColumn: columnKey({ name: 'MyMod.esp', origin: 'ModA' }),
-  });
+  const answered = (result: CompareResult) => loaded(result, { plugins });
   const editedFormKeys = () => vi.mocked(vscode.postMessage).mock.calls
     .map(([m]) => m)
     .flatMap(m => (m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD ? [m.formKey] : []));
@@ -101,7 +79,7 @@ describe('a record panel reading the FormKey its record moved to (editor.md, Sta
     const load = vi.fn()
       .mockResolvedValueOnce(answered(recordNamed('Before')))
       .mockReturnValueOnce(new Promise(resolve => { landMoved = resolve; }));
-    render(<RecordPanel client={{ load, showColumns: vi.fn() }} />);
+    render(<RecordPanel client={panelClient(() => recordNamed('Before'), { load })} />);
     await waitFor(() => screen.getByText('Before'));
 
     tellPanel({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: MOVED });

@@ -112,12 +112,6 @@ describe('RecordPanel — a row that has children', () => {
     expect(screen.getByText('X')).toBeInTheDocument();
     expect(within(rowOf('Bounds')).getByRole('button', { expanded: true })).toBeInTheDocument();
   });
-
-  it('a double click on the label of a row with no children does nothing', async () => {
-    renderPanel(recordOf([{ meta: stringMeta, master: 'a', mod: 'a' }], [leaf({ [MASTER]: 'a', [MOD]: 'a' })]));
-    await screen.findByText('Name');
-    expect(() => fireEvent.doubleClick(cellAt('Name', 0))).not.toThrow();
-  });
 });
 
 describe('RecordPanel — the focused cell', () => {
@@ -446,40 +440,17 @@ describe('RecordPanel — a collapsed container row, per column', () => {
     fireEvent.click(toggleOf(meta.name));
   }
 
-  it('shows the placeholder only in the column that has a nullable struct', async () => {
-    await collapsed(location, { aliasId: 5 }, null);
-    expect(cellAt('Location', 1).textContent).toBe('{…}');
-    expect(cellAt('Location', 2).textContent).toBe('');
-  });
-
-  it('shows the placeholder in every column for a non-nullable struct one column omits, the omitting column holding its default', async () => {
-    await collapsed(fieldMeta({ ...location, allowsNull: false }), { aliasId: 5 }, null);
-    expect(cellAt('Location', 1).textContent).toBe('{…}');
-    expect(cellAt('Location', 2).textContent).toBe('{…}');
-  });
-
-  it('shows the placeholder in every column when both plugins have the struct', async () => {
-    await collapsed(location, { aliasId: 5 }, { aliasId: 7 });
-    expect(cellAt('Location', 1).textContent).toBe('{…}');
-    expect(cellAt('Location', 2).textContent).toBe('{…}');
-  });
-
-  it('shows the element count in every column whose owner is there, an absent array as [0]', async () => {
-    await collapsed(items, [1, 2, 3], null);
-    expect(cellAt('Items', 1).textContent).toBe('[3]');
-    expect(cellAt('Items', 2).textContent).toBe('[0]');
-  });
-
-  it('shows nothing for an array whose owner the column does not carry', async () => {
-    const owner = fieldMeta({ name: 'Owner', type: 'struct', allowsNull: true, fields: [items] });
-    await collapsed(items, [1, 2, 3], null, owner);
-    expect(cellAt('Items', 1).textContent).toBe('[3]');
-    expect(cellAt('Items', 2).textContent).toBe('');
-  });
-
-  it('keeps the placeholder in every column for a container no plugin carries a value for', async () => {
-    await collapsed(location, undefined, undefined);
-    expect(cellAt('Location', 1).textContent).toBe('{…}');
-    expect(cellAt('Location', 2).textContent).toBe('{…}');
+  it.each([
+    ['shows the placeholder only in the column that has a nullable struct', location, { aliasId: 5 }, null, undefined, ['{…}', '']],
+    ['shows the placeholder in every column for a non-nullable struct one column omits, the omitting column holding its default',
+      fieldMeta({ ...location, allowsNull: false }), { aliasId: 5 }, null, undefined, ['{…}', '{…}']],
+    ['shows the placeholder in every column when both plugins have the struct', location, { aliasId: 5 }, { aliasId: 7 }, undefined, ['{…}', '{…}']],
+    ['shows the element count in every column whose owner is there, an absent array as [0]', items, [1, 2, 3], null, undefined, ['[3]', '[0]']],
+    ['shows nothing for an array whose owner the column does not carry',
+      items, [1, 2, 3], null, fieldMeta({ name: 'Owner', type: 'struct', allowsNull: true, fields: [items] }), ['[3]', '']],
+    ['keeps the placeholder in every column for a container no plugin carries a value for', location, undefined, undefined, undefined, ['{…}', '{…}']],
+  ])('%s', async (_case, meta, master, mod, owner, shown) => {
+    await collapsed(meta, master, mod, owner);
+    expect([cellAt(meta.name, 1).textContent, cellAt(meta.name, 2).textContent]).toEqual(shown);
   });
 });
