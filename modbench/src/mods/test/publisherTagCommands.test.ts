@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { normalize } from 'node:path';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom } from '../../test/vscodeMock';
 
 const { registerCommand, createQuickPick } = vi.hoisted(() => ({
@@ -16,7 +17,7 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { progressSteps } from '../../test/recordedProgress';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerPublisherTagCommands, publisherKeyContext } from '../publisherTagCommands';
@@ -25,10 +26,15 @@ import { ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { modCommands } from '../../modCommands/modCommands';
+import { unreadStatus } from '../../test/unreadStatus';
+import { file, folder } from './indexedValue';
 
 const INCLUDE: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
 const ALWAYS_ENABLED: PublisherTag = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
 const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
+const DECLARED = [INCLUDE, IGNORE, ALWAYS_ENABLED];
 
 const LISTED: Record<string, readonly PublisherTag[]> = {
   '/instance/mods/M': [INCLUDE, ALWAYS_ENABLED],
@@ -39,20 +45,19 @@ const value: InstanceValue = {
   ...instanceValueFixture({
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
   }),
-  publisherTags: [INCLUDE, IGNORE, ALWAYS_ENABLED],
+  publisherTags: DECLARED,
   publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [] },
 };
 
-const changePublisherTag = vi.fn();
-const commands = { changePublisherTag };
-const instance = { value, refresh: () => { progressSteps.push('read'); return Promise.resolve(); } };
+const instance = { ...instanceThatReads, value };
 
 const origin = { kind: 'mod', name: 'M' } as const;
 const modM = new ModNode({ kind: 'mod', name: 'M', enabled: true });
 const modN = new ModNode({ kind: 'mod', name: 'N', enabled: true });
-const fileA = new FileNode(modM, origin, { relativePath: 'a.dds', path: '/instance/mods/M/a.dds', sourcePath: '', excluded: false, markedExcluded: false, includedPath: 'a.dds' }, 'a.dds');
-const fileB = new FileNode(modM, origin, { relativePath: 'b.dds', path: '/instance/mods/M/b.dds', sourcePath: '', excluded: false, markedExcluded: false, includedPath: 'b.dds' }, 'b.dds');
-const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/instance/mods/M/textures', excluded: false }, [], [], 'textures');
+const fileA = new FileNode(modM, origin, file('mods/M', 'a.dds'), 'a.dds');
+const fileB = new FileNode(modM, origin, file('mods/M', 'b.dds'), 'b.dds');
+const folderTextures = new FolderNode(modM, origin, folder('mods/M', 'textures'), [], [], 'textures');
+const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, file('mods/M', 'a.dds'), 'a.dds');
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -60,10 +65,14 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(call[1](...args));
 }
 
-const register = (selection: readonly ModlistNode[] = [], reporter = recordingReporter()) => {
-  registerPublisherTagCommands(commands, instance, () => selection, reporter);
-  return reporter;
+const register = (selection: readonly ModlistNode[] = [], answers: InstanceAnswers = {}) => {
+  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('M', 'N') }), { publisherTags: DECLARED, ...answers });
+  const reporter = recordingReporter();
+  registerPublisherTagCommands(modCommands(fake.adapter, { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) }, unreadStatus), instance, () => selection, reporter);
+  return { fake, reporter };
 };
+
+const tagChange = (change: 'add' | 'remove', tag: string, ...paths: string[]) => ({ verb: 'changePublisherTag', change, tag, paths: paths.map(normalize) });
 
 let offered: string[];
 const pickByLabel = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => {
@@ -79,26 +88,22 @@ beforeEach(() => {
   vi.clearAllMocks();
   progressSteps.length = 0;
   offered = [];
-  changePublisherTag.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
 });
 
 describe('the keys the publisher tag items of the menus wait on (mods.md, Menus and keys)', () => {
-  it('say whether the instance has a publisher, one whose tags mark paths, and whether the selection holds a tag', () => {
-    expect(publisherKeyContext(value, [modM, fileB])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
-    expect(publisherKeyContext(value, [fileB, modN])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: false });
-    expect(publisherKeyContext(value, [modN, fileA])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
-    expect(publisherKeyContext(value, [modN, folderTextures])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
-    expect(publisherKeyContext({ ...value, publisherTags: [ALWAYS_ENABLED] }, [])).toMatchObject({ hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false });
-  });
+  const keys = { hasPublisher: true, hasPathPublisher: true };
 
-  it('count no Overwrite row as one a publisher tag can be added to or removed from, though the configuration lists a tag on its path', () => {
-    const inOverwrite = new FileNode(
-      new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' },
-      { relativePath: 'a.dds', path: '/instance/mods/M/a.dds', sourcePath: '', excluded: false, markedExcluded: false, includedPath: 'a.dds' }, 'a.dds');
-
-    expect(publisherKeyContext(value, [inOverwrite])).toMatchObject({ holdsTaggableRow: false, holdsPublisherTag: false });
-    expect(publisherKeyContext(value, [inOverwrite, modN])).toMatchObject({ holdsTaggableRow: true, holdsPublisherTag: false });
-    expect(publisherKeyContext(value, [inOverwrite, fileA])).toMatchObject({ holdsTaggableRow: true, holdsPublisherTag: true });
+  it.each<[string, InstanceValue, ModlistNode[], object]>([
+    ['a mod row whose folder holds a tag', value, [modM, fileB], { ...keys, holdsPublisherTag: true }],
+    ['no row that holds a tag', value, [fileB, modN], { ...keys, holdsPublisherTag: false }],
+    ['a file row that holds a tag', value, [modN, fileA], { ...keys, holdsPublisherTag: true }],
+    ['a folder row that holds a tag', value, [modN, folderTextures], { ...keys, holdsPublisherTag: true }],
+    ['a publisher whose tags mark no path, over no row', { ...value, publisherTags: [ALWAYS_ENABLED] }, [], { hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false }],
+    ['an Overwrite row alone, though the configuration lists a tag on its path', value, [inOverwrite], { holdsTaggableRow: false, holdsPublisherTag: false }],
+    ['an Overwrite row beside a mod that holds no tag', value, [inOverwrite, modN], { holdsTaggableRow: true, holdsPublisherTag: false }],
+    ['an Overwrite row beside a file that holds a tag', value, [inOverwrite, fileA], { holdsTaggableRow: true, holdsPublisherTag: true }],
+  ])('over %s', (_case, state, selection, expected) => {
+    expect(publisherKeyContext(state, selection)).toMatchObject(expected);
   });
 
   it.each([{ kind: 'none' }, { kind: 'unreadable', reason: 'x' }] as const)('say no publisher while its configuration is %j', (publisherConfiguration) => {
@@ -106,65 +111,60 @@ describe('the keys the publisher tag items of the menus wait on (mods.md, Menus 
   });
 });
 
-describe('modbench.mod.addPublisherTag (publishing.md, Publisher tags, story 2)', () => {
+describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
   it('offers every declared tag over mods, and adds the picked one to every selected mod', async () => {
     pickByLabel('Always Enabled');
-    register();
+    const { fake } = register();
 
     await invoke('modbench.mod.addPublisherTag', modM, [modM, modN, fileA]);
 
     expect(offered).toEqual(['Include', 'Ignore', 'Always Enabled']);
-    expect(changePublisherTag).toHaveBeenCalledWith('add', 'Always Enabled', [{ origin }, { origin: { kind: 'mod', name: 'N' } }]);
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'read', 'progress closes']);
+    expect(fake.calls).toEqual([tagChange('add', 'Always Enabled', '/mods/M', '/mods/N')]);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'Instance loader: read every file again', 'progress closes']);
   });
 
   it('offers only the tags that mark paths over files and folders, and adds to the files and folders alone', async () => {
     pickByLabel('Ignore');
-    register();
+    const { fake } = register();
 
     await invoke('modbench.mod.addPublisherTag', fileA, [fileA, folderTextures, modM]);
 
     expect(offered).toEqual(['Include', 'Ignore']);
-    expect(changePublisherTag).toHaveBeenCalledWith('add', 'Ignore', [{ origin, relativePath: 'a.dds' }, { origin, relativePath: 'textures' }]);
+    expect(fake.calls).toEqual([tagChange('add', 'Ignore', '/mods/M/a.dds', '/mods/M/textures')]);
   });
 
   it('takes the view\'s selection from the palette', async () => {
     pickByLabel('Include');
-    register([fileB]);
+    const { fake } = register([fileB]);
 
     await invoke('modbench.mod.addPublisherTag');
 
-    expect(changePublisherTag).toHaveBeenCalledWith('add', 'Include', [{ origin, relativePath: 'b.dds' }]);
+    expect(fake.calls).toEqual([tagChange('add', 'Include', '/mods/M/b.dds')]);
   });
 
   it('changes nothing on Esc', async () => {
     escape();
-    const reporter = register();
+    const { fake, reporter } = register();
 
     await invoke('modbench.mod.addPublisherTag', modM);
 
-    expect(changePublisherTag).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
+    expect([fake.calls, reporter.reports]).toEqual([[], []]);
   });
 
   it('names each refused row and why, and nothing for those that landed', async () => {
     pickByLabel('Include');
-    changePublisherTag.mockResolvedValue({
-      applied: true, outcome: { landed: [{ origin }], refused: [{ item: { origin, relativePath: 'a.dds' }, reason: 'It is outside the instance.' }] },
-    });
-    const reporter = register();
+    const { reporter } = register([], { outsideInstance: new Set([normalize('/mods/M/a.dds')]) });
 
-    await invoke('modbench.mod.addPublisherTag', fileA, [fileA]);
+    await invoke('modbench.mod.addPublisherTag', fileA, [fileA, fileB]);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not add Include on 1 of 1 file and folder rows.', detail: '"M/a.dds" (It is outside the instance.)' },
+      { severity: 'error', message: 'Could not add Include on 1 of 2 file and folder rows.', detail: '"M/a.dds" (It is outside the instance.)' },
     ]);
   });
 
   it('reports a refusal of the whole selection', async () => {
     pickByLabel('Include');
-    changePublisherTag.mockResolvedValue({ applied: false, refusal: 'compiler_settings.json is not JSON' });
-    const reporter = register();
+    const { reporter } = register([], { refusals: refusing('changePublisherTag', 'compiler_settings.json is not JSON') });
 
     await invoke('modbench.mod.addPublisherTag', modM);
 
@@ -172,35 +172,33 @@ describe('modbench.mod.addPublisherTag (publishing.md, Publisher tags, story 2)'
   });
 
   it('takes an agent\'s rows and tag without a pick', async () => {
-    register();
+    const { fake } = register();
 
     await invoke('modbench.mod.addPublisherTag', new AgentCall(
       [{ kind: 'mod', name: 'M' }, { kind: 'file', origin, relativePath: 'textures' }], { tag: 'Include' }));
 
     expect(createQuickPick).not.toHaveBeenCalled();
-    expect(changePublisherTag).toHaveBeenCalledWith('add', 'Include', [{ origin }, { origin, relativePath: 'textures' }]);
+    expect(fake.calls).toEqual([tagChange('add', 'Include', '/mods/M', '/mods/M/textures')]);
   });
 });
 
-describe('modbench.mod.removePublisherTag (publishing.md, Publisher tags, story 2)', () => {
+describe('remove publisher tag (publishing.md, Publisher tags, story 2)', () => {
   it('offers only the tags the selection holds, in the publisher\'s order, and removes the picked one from every selected row', async () => {
     pickByLabel('Include');
-    register();
+    const { fake } = register();
 
     await invoke('modbench.mod.removePublisherTag', folderTextures, [folderTextures, fileA, fileB]);
 
     expect(offered).toEqual(['Include', 'Ignore']);
-    expect(changePublisherTag).toHaveBeenCalledWith('remove', 'Include', [
-      { origin, relativePath: 'textures' }, { origin, relativePath: 'a.dds' }, { origin, relativePath: 'b.dds' },
-    ]);
+    expect(fake.calls).toEqual([tagChange('remove', 'Include', '/mods/M/textures', '/mods/M/a.dds', '/mods/M/b.dds')]);
   });
 
   it('offers nothing, and changes nothing, over rows that hold no tag', async () => {
-    register();
+    const { fake } = register();
 
     await invoke('modbench.mod.removePublisherTag', fileB, [fileB]);
 
     expect(createQuickPick).not.toHaveBeenCalled();
-    expect(changePublisherTag).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
   });
 });

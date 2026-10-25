@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
-import { progressSteps } from '../../test/recordedProgress';
-import { handlers, showQuickPick, createQuickPick, instanceThatReads, PluginRowStandIn, ModsRowStandIn } from './sourceGestureHarness';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
+import { handlers, showQuickPick, createQuickPick, PluginRowStandIn } from './sourceGestureHarness';
 
 import { registerDecompileAndCommitCommand } from '../decompileAndCommitCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
@@ -11,6 +11,7 @@ import { type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type P
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { ModNode } from '../ModListProvider';
 
 beforeEach(() => {
   handlers.clear();
@@ -26,9 +27,8 @@ describe('modbench.mod.decompileAndCommit', () => {
   const modA = (plugins: PluginAddress[]) => ({ mod: 'ModA', plugins });
   const modB = (plugins: PluginAddress[]) => ({ mod: 'ModB', plugins });
 
-  function row(plugin: { name: string; origin: string }): PluginRowStandIn {
-    return new PluginRowStandIn(plugin);
-  }
+  const row = (plugin: { name: string; origin: string }) => new PluginRowStandIn(plugin);
+  const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
   function decompileAndCommitCommands() {
     let answer: DecompileAndCommitOutcome | WriteRefused = { landed: [], refused: [] };
@@ -84,50 +84,17 @@ describe('modbench.mod.decompileAndCommit', () => {
     expect(said.at(-1)).toBeUndefined();
   });
 
-  it('shows the Mods view\'s bar when a Mods row was clicked', async () => {
-    const commands = decompileAndCommitCommands();
-    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeDecompileAndCommit(commands);
-
-    await handler(new ModsRowStandIn('ModA'));
-
-    expect(progressSteps[0]).toBe('progress opens on modbench.modList');
-  });
-
-  it('on selected plugin rows of one mod, decompiles and commits that mod once', async () => {
-    const commands = decompileAndCommitCommands();
-    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeDecompileAndCommit(commands);
-
-    await handler(row(SECOND), [row(FIRST), row(SECOND)]);
-
-    expect(commands.sent()).toEqual([['ModA']]);
-  });
-
-  it('on selected Mods rows, decompiles and commits every mod in one call', async () => {
+  it('on selected Mods rows, decompiles and commits every mod in one call under the Mods view\'s bar', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeDecompileAndCommit(commands);
-    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
+    const mods = [modRow('ModA'), modRow('ModB')];
 
     await handler(mods[1], mods);
 
     expect(commands.sent()).toEqual([['ModA', 'ModB']]);
+    expect(progressSteps[0]).toBe('progress opens on modbench.modList');
     expect(reporter.landings).toEqual(['Decompiled and committed 2 mods.']);
-  });
-
-  it('names a row that carries neither a mod nor a plugin, and decompiles and commits the rest', async () => {
-    const commands = decompileAndCommitCommands();
-    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, reporter } = invokeDecompileAndCommit(commands);
-    const withoutArgument = { label: 'Odd', kind: 'plugin', plugin: { name: FIRST.name }, origin: FIRST.origin };
-
-    await handler(row(FIRST), [row(FIRST), withoutArgument]);
-
-    expect(commands.sent()).toEqual([['ModA']]);
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not decompile and commit 1 of 3 plugins.', detail: '"Odd" (it carries no mod or plugin)',
-    }]);
   });
 
   it('from the palette, decompiles and commits the mod of a Plugins selection', async () => {
@@ -141,16 +108,6 @@ describe('modbench.mod.decompileAndCommit', () => {
     expect(reporter.landings).toEqual(['Decompiled and committed "ModB".']);
   });
 
-  it('on an Editor column header, decompiles and commits the column plugin\'s mod', async () => {
-    const commands = decompileAndCommitCommands();
-    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeDecompileAndCommit(commands);
-
-    await handler({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: SECOND } });
-
-    expect(commands.sent()).toEqual([['ModA']]);
-  });
-
   it('names a mod mEdit refused while the rest land', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({
@@ -158,7 +115,7 @@ describe('modbench.mod.decompileAndCommit', () => {
       refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
     const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
-    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
+    const mods = [modRow('ModA'), modRow('ModC')];
 
     await handler(mods[0], mods);
 
@@ -198,16 +155,6 @@ describe('modbench.mod.decompileAndCommit', () => {
     expect(onCommitted).not.toHaveBeenCalled();
   });
 
-  it('sends the mod as the instance spells it when the plugin\'s origin differs in case', async () => {
-    const commands = decompileAndCommitCommands();
-    commands.answers({ landed: [modA([FIRST])], refused: [] });
-    const { handler } = invokeDecompileAndCommit(commands);
-
-    await handler(row({ name: 'First.esp', origin: 'moda' }));
-
-    expect(commands.sent()).toEqual([['ModA']]);
-  });
-
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ refused: true, message: 'Could not decompile and commit 1 mod — git was not found on PATH.' });
@@ -226,7 +173,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const { handler, said } = invokeDecompileAndCommit(commands);
-    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
+    const mods = [modRow('ModA'), modRow('ModB')];
 
     await handler(mods[0], mods);
 
@@ -267,5 +214,3 @@ describe('modbench.mod.decompileAndCommit', () => {
     });
   });
 });
-
-

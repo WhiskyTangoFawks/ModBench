@@ -11,16 +11,11 @@ const ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST = groupModOrder([
 ]);
 
 describe('the move pick for mods', () => {
-  it('offers Ungrouped, then each separator as the view shows them with losing at the top', () => {
-    const items = modsMovePick(ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST, 'losingAtTop', ['Beta']);
-
-    expect(items.map((i) => i.label)).toEqual(['Ungrouped', 'Late', 'Middle', 'Early']);
-  });
-
-  it('offers Ungrouped, then each separator as the view shows them with winning at the top', () => {
-    const items = modsMovePick(ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST, 'winningAtTop', ['Beta']);
-
-    expect(items.map((i) => i.label)).toEqual(['Ungrouped', 'Early', 'Middle', 'Late']);
+  it.each([
+    ['losingAtTop', ['Ungrouped', 'Late', 'Middle', 'Early']],
+    ['winningAtTop', ['Ungrouped', 'Early', 'Middle', 'Late']],
+  ] as const)('offers Ungrouped, then each separator as the view shows them with %s', (direction, labels) => {
+    expect(modsMovePick(ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST, direction, ['Beta']).map((i) => i.label)).toEqual(labels);
   });
 
   it('marks each place that holds a selected mod as current, and no other', () => {
@@ -44,9 +39,11 @@ describe('the move pick for mods', () => {
 });
 
 describe('the move pick for separators', () => {
-  it('offers the other separators as the view shows them, in either direction', () => {
-    expect(separatorsMovePick(ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST, 'losingAtTop', ['Middle']).map((i) => i.label)).toEqual(['Late', 'Early']);
-    expect(separatorsMovePick(ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST, 'winningAtTop', ['Middle']).map((i) => i.label)).toEqual(['Early', 'Late']);
+  it.each([
+    ['losingAtTop', ['Late', 'Early']],
+    ['winningAtTop', ['Early', 'Late']],
+  ] as const)('offers the other separators as the view shows them with %s', (direction, labels) => {
+    expect(separatorsMovePick(ENTRIES_IN_MODLIST_ORDER_WINNING_FIRST, direction, ['Middle']).map((i) => i.label)).toEqual(labels);
   });
 
   it('leaves out every selected separator, and each item carries the separator it lands above', () => {

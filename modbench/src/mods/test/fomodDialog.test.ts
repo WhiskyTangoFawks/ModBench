@@ -39,7 +39,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { fomodDialog } from '../fomodDialog';
-import type { AskQuestion } from '../../ports/dialog';
+import { scriptedDialog } from '../../test/surfacingDoubles';
 import * as vscode from 'vscode';
 import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 
@@ -138,13 +138,13 @@ describe('the FOMOD installer\'s page, in a tab', () => {
   });
 
   it('names the missing files in a modal confirmation, and installs without them only on Install anyway', async () => {
-    const ask = vi.fn<AskQuestion>().mockResolvedValueOnce('Install anyway').mockResolvedValueOnce(undefined);
+    const ask = scriptedDialog('Install anyway', undefined);
     const dialog = fomodDialog(EXTENSION, ask, PROGRESS);
 
     expect(await dialog.confirmMissing(['a.esp', 'b/c.esp'])).toBe(true);
     expect(await dialog.confirmMissing(['a.esp'])).toBe(false);
 
-    expect(ask.mock.calls[0]).toEqual([expect.stringContaining('names files its archive does not hold'), { modal: true, detail: 'a.esp\nb/c.esp' }, 'Install anyway']);
+    expect(ask.asked[0]).toEqual({ message: 'This FOMOD names files its archive does not hold.', detail: 'a.esp\nb/c.esp', buttons: ['Install anyway'] });
   });
 
   it('closes the view\'s progress while the user is asked, and shows it again after', () => {

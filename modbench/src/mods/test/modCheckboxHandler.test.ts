@@ -20,7 +20,7 @@ function modNode(name: string, enabled = true): ModNode {
   return new ModNode({ kind: 'mod', name, enabled });
 }
 
-describe('onModCheckboxChanged', () => {
+describe('a checkbox click in Mods', () => {
   it('fires enable once over every mod the click checked', async () => {
     const a = modNode('A', false);
     const b = modNode('B', false);

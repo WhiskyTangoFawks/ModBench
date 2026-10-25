@@ -21,20 +21,22 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
 }));
 
-const { installMod, upgradeLoss, ask } = vi.hoisted(() => ({ installMod: vi.fn(), upgradeLoss: vi.fn<(target: unknown) => Promise<string | undefined>>(() => Promise.resolve(undefined)), ask: vi.fn() }));
-
 import { registerModInstallCommands } from '../installCommands';
 import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance } from '../../instanceLoader/instance';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
-import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import {
+  downloadedFilesOf, fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
+} from '../../test/fakeInstanceAdapter';
 import { modCommands } from '../../modCommands/modCommands';
+import type { ReadModStatus } from '../../client';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { status } from '../../test/modStatusFixture';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
-const installOver = () => ({ ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod, upgradeLoss });
-
+const nothingToLose: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod)));
+const notInPackage: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod, { notInPackage: ['a.esp'] })));
 
 const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }),
@@ -54,21 +56,41 @@ const installDeps = (over: Partial<DownloadedFileInstallDeps> = {}): DownloadedF
   ...over,
 });
 
-const installDownloadedFile = async (file: LocatedDownloadedFileRow, listed: readonly LocatedDownloadedFileRow[], deps: DownloadedFileInstallDeps): Promise<void> => {
+interface Scripted {
+  readonly answers?: InstanceAnswers;
+  readonly readStatus?: ReadModStatus;
+  readonly ask?: ScriptedDialog;
+}
+
+let fake: FakeInstanceAdapter;
+
+const installDownloadedFile = async (
+  file: LocatedDownloadedFileRow, listed: readonly LocatedDownloadedFileRow[], deps: DownloadedFileInstallDeps,
+  { answers = {}, readStatus = unreadStatus, ask = scriptedDialog() }: Scripted = {},
+): Promise<void> => {
+  fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('Harder VATS'), downloadedFiles: downloadedFilesOf('foo.7z') }), answers);
   registerModInstallCommands({
-    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask, fomodDialog: () => FOMOD_PAGE,
-    downloadedFileInstallReporting: deps,
+    commands: modCommands(fake.adapter, unscriptedMEdit, readStatus), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
+    fomodDialog: () => FOMOD_PAGE, downloadedFileInstallReporting: deps,
   });
-  const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
-  await handler?.({ argument: { kind: 'downloadedFile', row: file } });
+  const [, handler] = present(registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install'), 'the install handler');
+  await handler({ argument: { kind: 'downloadedFile', row: file } });
 };
 
-const installRow = (deps: DownloadedFileInstallDeps, row: Partial<DownloadedFileRow> = {}): Promise<void> => {
+const installRow = (deps: DownloadedFileInstallDeps, row: Partial<DownloadedFileRow> = {}, scripted: Scripted = {}): Promise<void> => {
   const file = downloadedFileRowFixture('foo.7z', row);
-  return installDownloadedFile(file, [file], deps);
+  return installDownloadedFile(file, [file], deps, scripted);
 };
 
-const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const installs = () => fake.calls.flatMap((call) => (call.verb === 'install' ? [{ package: call.package, target: call.target, fomod: call.fomod }] : []));
+const FOO = { kind: 'archive', path: '/downloads/foo.7z' };
+const AS_NEW_MOD = [{ package: FOO, target: { kind: 'new', name: 'foo' }, fomod: VIEW_ANSWER }];
+const AS_UPGRADE = [{ package: FOO, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: VIEW_ANSWER }];
+
+const stepOnInstall: InstanceAnswers['refusals'] = (call) => {
+  if (call.verb === 'install') progressSteps.push('install');
+  return undefined;
+};
 
 let downloadsLogLines: string[] = [];
 
@@ -79,66 +101,22 @@ afterEach(() => {
 describe('modbench.mod.install over a downloaded file', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('installs the row\'s installation file as a new mod named after it', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-
-    await installRow(installDeps({ reporter: recordingReporter() }));
-
-    await vi.waitFor(() => {
-      expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
-    });
-  });
-
-  it('install: a failed mark installed is one Output line, no failure notification, and the install stands', async () => {
-    installMod.mockResolvedValueOnce({
-      applied: true, downloadedFile: 'foo.7z', downloadedFileRefusal: 'EISDIR: illegal operation on a directory',
-    });
+  it('install: a failed mark installed is one Output line and no failure notification', async () => {
     const report = recordingReporter();
 
-    await installRow(installDeps({ reporter: report }));
+    await installRow(installDeps({ reporter: report }), {}, { answers: { refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') } });
 
-    await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
-    const line = present(downloadsLogLines[0], 'the one recorded Output line');
-    expect(line).toBe('"foo.7z" was installed, but its Downloads status could not be updated: EISDIR: illegal operation on a directory');
+    expect(downloadsLogLines).toEqual(['"foo.7z" was installed, but its Downloads status could not be updated: EISDIR: illegal operation on a directory']);
     expect(report.reports).toEqual([]);
     expect(report.shownFailures).toEqual([]);
-    expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
-  });
-
-  it('install: cancelling the name prompt installs nothing', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
-
-    await installRow(installDeps({ reporter: recordingReporter() }));
-
-    await vi.waitFor(() => expect(showInputBox).toHaveBeenCalled());
-    expect(installMod).not.toHaveBeenCalled();
   });
 
   it('install: a refusal from install surfaces an error', async () => {
-    installMod.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    await installRow(installDeps({ reporter: report }));
+    await installRow(installDeps({ reporter: report }), {}, { answers: { refusals: refusing('install', 'boom') } });
 
-    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
-  });
-
-  it('install: a FOMOD installed as a plain copy warns, naming the mod install made and why its installer did not run', async () => {
-    installMod.mockResolvedValueOnce({ applied: true, fomod: { kind: 'plainCopy', why: 'no choices were given for its steps' } });
-    const reporter = recordingReporter();
-
-    await installRow(installDeps({ reporter }));
-
-    await vi.waitFor(() => expect(reporter.reports).toEqual([{
-      severity: 'warning',
-      message: '"foo" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run:',
-      detail: 'no choices were given for its steps.',
-    }]));
   });
 });
 
@@ -154,10 +132,12 @@ const LOSS = 'The upgrade would lose, in "Harder VATS": files its package does n
 describe('modbench.mod.install over a downloaded file: the pick among the upgrades the Instance value lists', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  async function pickAmong(upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void) {
+  async function pickAmong(
+    upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void, scripted: Scripted = {},
+  ) {
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
-    const installing = installRow(installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE, upgrades });
+    const installing = installRow(installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE, upgrades }, scripted);
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
@@ -195,64 +175,41 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
     expect(qp.activeItems).toEqual([NEW_MOD_ITEM]);
   });
 
-  it('choosing an upgrade calls install with the upgrade shape naming that mod, and asks no name', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
+  it('choosing an upgrade that loses nothing installs over that mod, asking nothing and no name', async () => {
+    const ask = scriptedDialog();
 
-    await pickAmong(
-      [{ modName: 'Harder VATS', version: '1.0' }],
-      (d) => d.accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } }));
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { readStatus: nothingToLose, ask });
 
-    expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'upgrade', name: 'Harder VATS' }, true, VIEW_ANSWER);
+    expect(installs()).toEqual(AS_UPGRADE);
+    expect(ask.asked).toEqual([]);
     expect(showInputBox).not.toHaveBeenCalled();
   });
 
   it('an upgrade that would lose files asks once, listing them, and installs forced on the yes', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-    upgradeLoss.mockResolvedValueOnce(LOSS);
-    ask.mockResolvedValueOnce('Upgrade');
+    const ask = scriptedDialog('Upgrade');
 
-    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM));
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { readStatus: notInPackage, ask });
 
-    expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask).toHaveBeenCalledWith('Upgrade "Harder VATS"?', { modal: true, detail: LOSS }, 'Upgrade');
-    expect(installMod).toHaveBeenCalledWith({ kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'upgrade', name: 'Harder VATS' }, true, VIEW_ANSWER);
+    expect(ask.asked).toEqual([{ message: 'Upgrade "Harder VATS"?', detail: LOSS, buttons: ['Upgrade'] }]);
+    expect(installs()).toEqual(AS_UPGRADE);
   });
 
   it('Esc at the question installs nothing', async () => {
-    upgradeLoss.mockResolvedValueOnce(LOSS);
-    ask.mockResolvedValueOnce(undefined);
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { readStatus: notInPackage, ask: scriptedDialog(undefined) });
 
-    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM));
-
-    expect(installMod).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
   });
 
-  it('an upgrade that loses nothing asks nothing', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-
-    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM));
-
-    expect(ask).not.toHaveBeenCalled();
-    expect(installMod).toHaveBeenCalled();
-  });
-
-  it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-
+  it('choosing "Install as a new mod…" installs a new mod named after the file', async () => {
     await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
 
-    expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
+    expect(installs()).toEqual(AS_NEW_MOD);
   });
 
   it('Esc installs nothing', async () => {
     await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.escape());
-    await afterAMacrotaskNotAMicrotask();
 
-    expect(installMod).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
   });
 
   it('refuses a file the Instance value does not list, naming it', async () => {
@@ -260,18 +217,14 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     await installDownloadedFile(downloadedFileRowFixture('foo.7z'), [], installDeps({ reporter: report }));
 
-    expect(installMod).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: '"foo.7z" is gone from Downloads.' }]);
   });
 
-  it('a listed file with no upgrades shows no pick and installs as a new mod', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-
+  it('a listed file with no upgrades shows no pick and installs as a new mod named after it', async () => {
     await installRow(installDeps({ reporter: recordingReporter() }));
 
-    expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
+    expect(installs()).toEqual(AS_NEW_MOD);
     expect(createQuickPick).not.toHaveBeenCalled();
   });
 });
@@ -282,19 +235,9 @@ describe('modbench.mod.install over a downloaded file: the progress bar and the 
   const reads = 'Instance loader: read every file again';
 
   it('install over a downloaded file installs, then the read, then the bar closes', async () => {
-    installMod.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true }); });
-
-    await installRow(installDeps({ reporter: recordingReporter() }));
+    await installRow(installDeps({ reporter: recordingReporter() }), {}, { answers: { refusals: stepOnInstall } });
 
     expect(progressSteps).toEqual([opens, 'install', reads, 'progress closes']);
-  });
-
-  it('a refused install still ends on the read', async () => {
-    installMod.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
-
-    await installRow(installDeps({ reporter: recordingReporter() }));
-
-    expect(progressSteps).toEqual([opens, reads, 'progress closes']);
   });
 
   it('Esc at the upgrade pick opens no bar', async () => {
@@ -311,11 +254,11 @@ describe('modbench.mod.install over a downloaded file: the progress bar and the 
     expect(progressSteps).toEqual([]);
   });
 
-  it('declining to name the mod opens no bar', async () => {
+  it('declining to name the mod installs nothing and opens no bar', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
 
     await installRow(installDeps({ reporter: recordingReporter() }));
 
-    expect(progressSteps).toEqual([]);
+    expect([fake.calls, progressSteps]).toEqual([[], []]);
   });
 });

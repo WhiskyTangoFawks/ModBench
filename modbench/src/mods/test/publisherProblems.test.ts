@@ -5,7 +5,7 @@ vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri: { file: u
 
 import type { PublisherConfiguration, PublisherTag } from '../../instanceAdapter/instanceAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { valueWithSourceDirs } from './sourceDirsFixture';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { PublisherProblems } from '../publisherProblems';
 
 const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
@@ -17,7 +17,7 @@ const naming = (...lines: number[]): PublisherConfiguration => ({
 });
 
 const instanceHolding = (publisherConfiguration: PublisherConfiguration) =>
-  new FakeInstance({ ...valueWithSourceDirs(new Map()), publisherConfiguration });
+  new FakeInstance(instanceValueFixture({ publisherConfiguration }));
 
 const lineRange = (line: number) => new Range(line, 0, line, Number.MAX_SAFE_INTEGER);
 

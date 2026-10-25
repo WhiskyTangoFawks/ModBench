@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Mod, OriginFile } from '../../instanceLoader/instance';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile, uriFrom,
 } from '../../test/vscodeMock';
@@ -16,9 +15,9 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 
-const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, version: '1.0' });
-const file = (relativePath: string): OriginFile =>
-  ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
+import { file, folder, mod as unversioned } from './indexedValue';
+
+const mod = (name: string) => ({ ...unversioned(name), version: '1.0' });
 
 function providerOver(statuses: readonly ModStatus[], holdsRepository = true, over: Partial<InstanceValue> = {}) {
   const byMod = new Map(statuses.map((held) => [held.mod, held]));
@@ -26,8 +25,8 @@ function providerOver(statuses: readonly ModStatus[], holdsRepository = true, ov
   const value = instanceValueFixture({
     holdsRepository,
     mods: [mod('ModA'), mod('ModB'), mod('ModC')],
-    filesByMod: new Map([['ModA', [file('meshes/a.nif'), file('readme.txt')]]]),
-    foldersByMod: new Map([['ModA', [{ relativePath: 'meshes', path: '/instance/mods/ModA/meshes', excluded: false }]]]),
+    filesByMod: new Map([['ModA', [file('mods/ModA', 'meshes/a.nif'), file('mods/ModA', 'readme.txt')]]]),
+    foldersByMod: new Map([['ModA', [folder('mods/ModA', 'meshes')]]]),
     ...over,
   });
   const provider = new ModListProvider({ instance: new FakeInstance(value), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
@@ -96,33 +95,25 @@ describe('a separator row says no manifest or differs as a mod does, looked up b
     expect((await row(provider, 'weapons')).description).toBe(description);
   });
 
-  it('counts in the view\'s badge when it differs', () => {
-    const { provider } = separatorProvider(status('Weapons_separator', { namedByNoLine: ['mine.txt'] }));
-
-    expect(provider.badge()?.value).toBe(1);
-  });
-
-  it('counts in the view\'s badge with the mods that have none', () => {
-    const { provider } = separatorProvider(status('Weapons_separator', { noManifest: true }));
-
-    expect(provider.badge()).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' });
+  it.each([
+    ['when it differs', status('Weapons_separator', { namedByNoLine: ['mine.txt'] })],
+    ['when it has no manifest', status('Weapons_separator', { noManifest: true })],
+  ])('counts in the view\'s badge %s', (_case, held) => {
+    expect(separatorProvider(held).provider.badge()).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' });
   });
 });
 
 describe('a file row says differs when its bytes differ or no line names it, and a folder when a file in it does (mods.md, A row, File and folder)', () => {
-  it('says differs on the file and the folder that holds it, and nothing on a file that matches', async () => {
-    const { provider } = providerOver([status('ModA', { differing: ['meshes/a.nif'] })]);
+  it.each([
+    ['a file whose bytes differ, and the folder that holds it', status('ModA', { differing: ['meshes/a.nif'] }), ['differs', 'differs', undefined]],
+    ['a file no line names', status('ModA', { namedByNoLine: ['readme.txt'] }), [undefined, undefined, 'differs']],
+  ])('says differs on %s, and nothing on a file that matches', async (_case, held, expected) => {
+    const { provider } = providerOver([held]);
     const modRow = await row(provider, 'ModA');
-    const folder = await row(provider, 'meshes', modRow);
+    const meshes = await row(provider, 'meshes', modRow);
 
-    expect([folder.description, (await row(provider, 'a.nif', folder)).description, (await row(provider, 'readme.txt', modRow)).description])
-      .toEqual(['differs', 'differs', undefined]);
-  });
-
-  it('says differs on a file no line names', async () => {
-    const { provider } = providerOver([status('ModA', { namedByNoLine: ['readme.txt'] })]);
-
-    expect((await row(provider, 'readme.txt', await row(provider, 'ModA'))).description).toBe('differs');
+    expect([meshes.description, (await row(provider, 'a.nif', meshes)).description, (await row(provider, 'readme.txt', modRow)).description])
+      .toEqual(expected);
   });
 });
 

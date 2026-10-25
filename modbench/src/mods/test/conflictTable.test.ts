@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { conflictTable as tableOf } from '../conflictTable';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { conflictTable } from '../conflictTable';
 import { file, indexedValueOf, mod } from './indexedValue';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ConflictCellValue, ConflictRow, ConflictTable } from '../../wire/conflictTable';
@@ -7,9 +7,6 @@ import type { Copy, FileCopies } from '../sameCopies';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const read = (value: InstanceValue) => ({ value, sequence: 1 });
-
-const conflictTable = (view: ReturnType<typeof read>, name: string, copies: readonly FileCopies[], cellValue: ConflictCellValue = 'size') =>
-  tableOf(view, name, copies, cellValue);
 
 const shape = (rows: readonly ConflictRow[]): unknown[] => rows.map((row) =>
   (row.kind === 'folder' ? { folder: row.path, rows: shape(row.rows) } : { file: row.path, cells: row.cells.map((cell) => cell !== null) }));
@@ -23,6 +20,10 @@ const firstRowCells = (table: ConflictTable) => {
   return row?.kind === 'file' ? row.cells : [];
 };
 
+const winningCells = (table: ConflictTable, path: string) => (table.kind === 'table'
+  ? table.rows.flatMap((row) => (row.kind === 'file' && row.path === path ? [row.cells.map((cell) => cell?.winning === true)] : []))
+  : []);
+
 describe('the conflict table\'s columns, over a mod order listed winning-first', () => {
   it('has one column per enabled mod with a copy of a row\'s file, losing on the left, and outlines the opened mod\'s', async () => {
     const value = await indexedValueOf([mod('High'), mod('Off', false), mod('Middle'), mod('Low'), mod('Apart')], {
@@ -33,7 +34,7 @@ describe('the conflict table\'s columns, over a mod order listed winning-first',
       Apart: { files: [file('Apart', 'c.dds')] },
     });
 
-    const table = conflictTable(read(value), 'Middle', []);
+    const table = conflictTable(read(value), 'Middle', [], 'size');
 
     expect(table.kind === 'table' && table.columns).toMatchObject([
       { name: 'Low', origin: { kind: 'mod', name: 'Low' }, opened: false },
@@ -51,7 +52,7 @@ describe('the conflict table\'s rows', () => {
       Opened: { files: [...shared, 'textures/alone.dds', 'alone.txt'].map((path) => file('Opened', path)) },
     });
 
-    const table = conflictTable(read(value), 'Opened', []);
+    const table = conflictTable(read(value), 'Opened', [], 'size');
 
     expect(table.kind === 'table' && shape(table.rows)).toEqual([
       { folder: 'meshes', rows: [{ file: 'meshes/m.nif', cells: [true, true] }] },
@@ -71,7 +72,7 @@ describe('the conflict table\'s rows', () => {
       Low: { files: [file('Low', 'b.dds')] },
     });
 
-    const table = conflictTable(read(value), 'Opened', []);
+    const table = conflictTable(read(value), 'Opened', [], 'size');
 
     expect(table.kind === 'table' && shape(table.rows)).toEqual([
       { file: 'a.dds', cells: [false, true, true] },
@@ -86,7 +87,7 @@ describe('the conflict table\'s rows', () => {
       Low: { files: [file('Low', 'a.dds'), file('Low', 'b.dds'), file('Low', 'c.dds')] },
     });
 
-    const table = conflictTable(read(value), 'Opened', []);
+    const table = conflictTable(read(value), 'Opened', [], 'size');
 
     expect(table.kind === 'table' && table.columns.map((column) => column.name)).toEqual(['Low', 'Opened']);
     expect(table.kind === 'table' && shape(table.rows)).toEqual([
@@ -101,7 +102,7 @@ describe('the conflict table\'s rows', () => {
       Opened: { files: [file('Opened', 'a.dds'), file('Opened', 'b.dds')] },
     }, { files: [file('overwrite', 'a.dds')] });
 
-    const table = conflictTable(read(value), 'Opened', []);
+    const table = conflictTable(read(value), 'Opened', [], 'size');
 
     expect(table.kind === 'table' && table.columns).toMatchObject([
       { name: 'Opened', origin: { kind: 'mod', name: 'Opened' }, opened: true },
@@ -135,7 +136,7 @@ describe('the conflict table\'s Overwrite column', () => {
       named({ kind: 'runtimeOutput' }), named({ kind: 'mod', name: 'Overwrite' }), named({ kind: 'mod', name: 'Opened' }),
     ] }];
 
-    const table = conflictTable(read(value), 'Opened', copies);
+    const table = conflictTable(read(value), 'Opened', copies, 'size');
 
     expect(table.kind === 'table' && table.columns).toMatchObject([
       { name: 'Opened', origin: { kind: 'mod', name: 'Opened' } },
@@ -146,7 +147,7 @@ describe('the conflict table\'s Overwrite column', () => {
   });
 
   it('colours Overwrite\'s copy, which wins, an Override over the master, and its column and row with it', async () => {
-    const table = colours(conflictTable(read(await shared()), 'Opened', [overwriteCopies]));
+    const table = colours(conflictTable(read(await shared()), 'Opened', [overwriteCopies], 'size'));
 
     expect(table).toEqual({ columns: ['Master', 'Override'], rows: [{ file: 'a.dds', state: 'Override', cells: ['Master', 'Override'] }] });
   });
@@ -160,7 +161,7 @@ describe('the conflict table\'s Overwrite column', () => {
 
 describe('the conflict table\'s states', () => {
   it('is an empty table before the first read lands', () => {
-    expect(conflictTable({ value: instanceValueFixture(), sequence: 0 }, 'Opened', [])).toEqual({ kind: 'table', columns: [], rows: [] });
+    expect(conflictTable({ value: instanceValueFixture(), sequence: 0 }, 'Opened', [], 'size')).toEqual({ kind: 'table', columns: [], rows: [] });
   });
 
   it('says a mod with no file order conflict has none', async () => {
@@ -169,7 +170,7 @@ describe('the conflict table\'s states', () => {
       Opened: { files: [file('Opened', 'a.dds')] },
     });
 
-    expect(conflictTable(read(value), 'Opened', [])).toEqual({ kind: 'message', text: 'No file order conflicts.' });
+    expect(conflictTable(read(value), 'Opened', [], 'size')).toEqual({ kind: 'message', text: 'No file order conflicts.' });
   });
 
   it('says a disabled mod\'s files take no part, though another mod has its files', async () => {
@@ -178,13 +179,13 @@ describe('the conflict table\'s states', () => {
       Opened: { files: [file('Opened', 'a.dds')] },
     });
 
-    expect(conflictTable(read(value), 'Opened', [])).toEqual({ kind: 'message', text: 'Disabled: its files take no part in mod order.' });
+    expect(conflictTable(read(value), 'Opened', [], 'size')).toEqual({ kind: 'message', text: 'Disabled: its files take no part in mod order.' });
   });
 
   it('says a mod gone from the mod list is gone, naming it', async () => {
     const value = await indexedValueOf([mod('Other')], { Other: { files: [file('Other', 'a.dds')] } });
 
-    expect(conflictTable(read(value), 'Opened', [])).toEqual({ kind: 'message', text: '"Opened" is gone from the mod list.' });
+    expect(conflictTable(read(value), 'Opened', [], 'size')).toEqual({ kind: 'message', text: '"Opened" is gone from the mod list.' });
   });
 });
 
@@ -207,36 +208,23 @@ const colours = (table: ConflictTable) => {
 async function threeMods(copies: FileCopies[], paths = ['a.dds']) {
   const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], Object.fromEntries(
     ['High', 'Middle', 'Low'].map((name) => [name, { files: paths.map((path) => file(name, path)) }])));
-  return colours(conflictTable(read(value), 'Middle', copies));
+  return colours(conflictTable(read(value), 'Middle', copies, 'size'));
 }
 
 describe('the conflict table\'s colours, the record panel\'s read for a file', () => {
-  it('gives a row whose every copy is the same no colour: the master, and copies identical to it', async () => {
-    expect(await threeMods([winningFirstCopies('a.dds', { High: 0, Middle: 0, Low: 0 })])).toEqual({
-      columns: ['Master', 'IdenticalToMaster', 'IdenticalToMaster'],
-      rows: [{ file: 'a.dds', state: 'NoConflict', cells: ['Master', 'IdenticalToMaster', 'IdenticalToMaster'] }],
-    });
-  });
-
-  it('makes a row an Override when every copy that differs from the master is the winning copy\'s', async () => {
-    expect(await threeMods([winningFirstCopies('a.dds', { High: 1, Middle: 1, Low: 0 })])).toEqual({
-      columns: ['Master', 'Override', 'Override'],
-      rows: [{ file: 'a.dds', state: 'Override', cells: ['Master', 'Override', 'Override'] }],
-    });
-  });
-
-  it('makes a row a Conflict when a copy differs from both the master and the winner: the winner wins, that copy loses', async () => {
-    expect(await threeMods([winningFirstCopies('a.dds', { High: 2, Middle: 1, Low: 0 })])).toEqual({
-      columns: ['Master', 'ConflictLoses', 'ConflictWins'],
-      rows: [{ file: 'a.dds', state: 'Conflict', cells: ['Master', 'ConflictLoses', 'ConflictWins'] }],
-    });
+  it.each([
+    ['no colour when every copy is the same: the master, and copies identical to it', { High: 0, Middle: 0, Low: 0 }, 'NoConflict', ['Master', 'IdenticalToMaster', 'IdenticalToMaster']],
+    ['an Override when every copy that differs from the master is the winning copy\'s', { High: 1, Middle: 1, Low: 0 }, 'Override', ['Master', 'Override', 'Override']],
+    ['a Conflict when a copy differs from both the master and the winner: the winner wins, that copy loses', { High: 2, Middle: 1, Low: 0 }, 'Conflict', ['Master', 'ConflictLoses', 'ConflictWins']],
+  ])('makes a row %s', async (_case, copies, state, cells) => {
+    expect(await threeMods([winningFirstCopies('a.dds', copies)])).toEqual({ columns: cells, rows: [{ file: 'a.dds', state, cells }] });
   });
 
   it('gives every copy the same as the winner ConflictWins, and a copy the same as the master IdenticalToMaster, in a Conflict row', async () => {
     const value = await indexedValueOf([mod('A'), mod('B'), mod('C'), mod('D'), mod('E')], Object.fromEntries(
       ['A', 'B', 'C', 'D', 'E'].map((name) => [name, { files: [file(name, 'a.dds')] }])));
 
-    const table = colours(conflictTable(read(value), 'A', [winningFirstCopies('a.dds', { A: 1, B: 2, C: 1, D: 0, E: 0 })]));
+    const table = colours(conflictTable(read(value), 'A', [winningFirstCopies('a.dds', { A: 1, B: 2, C: 1, D: 0, E: 0 })], 'size'));
 
     expect(table.rows).toEqual([
       { file: 'a.dds', state: 'Conflict', cells: ['Master', 'IdenticalToMaster', 'ConflictWins', 'ConflictLoses', 'ConflictWins'] },
@@ -250,7 +238,7 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
       Low: { files: [file('Low', 'b.dds')] },
     });
 
-    const table = colours(conflictTable(read(value), 'Middle', [winningFirstCopies('a.dds', { High: 1, Middle: 0 }), winningFirstCopies('b.dds', { Middle: 0, Low: 0 })]));
+    const table = colours(conflictTable(read(value), 'Middle', [winningFirstCopies('a.dds', { High: 1, Middle: 0 }), winningFirstCopies('b.dds', { Middle: 0, Low: 0 })], 'size'));
 
     expect(table.rows).toEqual([
       { file: 'a.dds', state: 'Override', cells: [null, 'Master', 'Override'] },
@@ -278,7 +266,7 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
 
     const table = colours(conflictTable(read(value), 'Middle', [
       winningFirstCopies('a.dds', { High: 0, Middle: 0 }), winningFirstCopies('b.dds', { High: 0, Middle: 0, Low: 0 }),
-    ]));
+    ], 'size'));
 
     expect(table.columns).toEqual(['Master', 'Master', 'IdenticalToMaster']);
   });
@@ -288,7 +276,7 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
       High: { files: [file('High', 'a.dds')] }, Low: { files: [file('Low', 'a.dds')] },
     });
 
-    const table = conflictTable(read(value), 'High', [winningFirstCopies('a.dds', { High: 'in use', Low: 0 })]);
+    const table = conflictTable(read(value), 'High', [winningFirstCopies('a.dds', { High: 'in use', Low: 0 })], 'size');
 
     expect(table).toMatchObject({
       columns: [{ state: null }, { state: null }],
@@ -303,12 +291,10 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
       Other: { files: [file('Other', 'b.dds')] },
     }, { files: [file('overwrite', 'b.dds')] });
 
-    const table = conflictTable(read(value), 'High', [winningFirstCopies('a.dds', { High: 0, Low: 0 })]);
+    const table = conflictTable(read(value), 'High', [winningFirstCopies('a.dds', { High: 0, Low: 0 })], 'size');
 
-    const winning = (path: string) => table.kind === 'table'
-      ? table.rows.flatMap((row) => (row.kind === 'file' && row.path === path ? [row.cells.map((cell) => cell?.winning === true)] : [])) : [];
-    expect(winning('a.dds')).toEqual([[false, false, true, false]]);
-    expect(winning('b.dds')).toEqual([[false, false, false, true]]);
+    expect(winningCells(table, 'a.dds')).toEqual([[false, false, true, false]]);
+    expect(winningCells(table, 'b.dds')).toEqual([[false, false, false, true]]);
   });
 
   it('shows no state while the which-copies answer has not landed', async () => {
@@ -316,9 +302,9 @@ describe('the conflict table\'s colours, the record panel\'s read for a file', (
   });
 });
 
-
-
 describe('the conflict table\'s cell values', () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+
   const copiesOf = (...stamps: Omit<Copy & { kind: 'read' }, 'origin'>[]): FileCopies[] => [{
     relativePath: 'a.dds',
     copies: stamps.map((stamp, index): Copy => ({ ...stamp, origin: { kind: 'mod', name: ['High', 'Middle', 'Low'][index] ?? '' } })),
@@ -336,24 +322,18 @@ describe('the conflict table\'s cell values', () => {
     ]);
   });
 
-  it('shows the size, by default the cell value, in the unit that keeps it short', async () => {
-    expect((await cellsOf(copies, 'size')).map((cell) => cell?.value)).toEqual(['512 B', '2 KB', '1.5 MB']);
-  });
-
-  it('shows the date modified as a day', async () => {
-    expect((await cellsOf(copies, 'dateModified')).map((cell) => cell?.value)).toEqual(['1970-01-01', '2020-09-13', '2023-11-14']);
+  it.each([
+    ['the size in the unit that keeps it short', 'size', ['512 B', '2 KB', '1.5 MB']],
+    ['the date modified as a day', 'dateModified', ['1970-01-01', '2020-09-13', '2023-11-14']],
+  ] as const)('shows %s', async (_case, cellValue, values) => {
+    expect((await cellsOf(copies, cellValue)).map((cell) => cell?.value)).toEqual(values);
   });
 
   it('shows the day in the local time, as the tooltip\'s date does', async () => {
-    const was = process.env.TZ;
-    process.env.TZ = 'America/Los_Angeles';
-    try {
-      const evening = copiesOf(stamped(0, 9n, BigInt(Date.UTC(2023, 10, 15, 3) / 1000)));
-      expect((await cellsOf(evening, 'dateModified')).map((cell) => cell?.value)).toEqual([undefined, undefined, '2023-11-14']);
-    } finally {
-      if (was === undefined) delete process.env.TZ;
-      else process.env.TZ = was;
-    }
+    vi.stubEnv('TZ', 'America/Los_Angeles');
+    const evening = copiesOf(stamped(0, 9n, BigInt(Date.UTC(2023, 10, 15, 3) / 1000)));
+
+    expect((await cellsOf(evening, 'dateModified')).map((cell) => cell?.value)).toEqual([undefined, undefined, '2023-11-14']);
   });
 
   it('keeps A for the master\'s contents: with the master unreadable the letters start at B, equal letters still equal bytes', async () => {

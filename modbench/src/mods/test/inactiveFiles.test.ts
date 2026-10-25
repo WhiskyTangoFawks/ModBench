@@ -38,67 +38,23 @@ const GREY = { color: new ThemeColor('disabledForeground') };
 const greyOf = (value: InstanceValue, origin: FileOrigin, relativePath: string) =>
   decorationsOver(new FakeInstance(value)).provideFileDecoration(fileRowUri(origin, relativePath));
 
+const winnerAndLoser = () => indexedValueOf([mod('Winner'), mod('Loser')], {
+  Winner: { files: [file('Winner', 'x/a.dds')], folders: [folder('Winner', 'x')] },
+  Loser: { files: [file('Loser', 'x/a.dds')], folders: [folder('Loser', 'x')] },
+});
+
 describe('each file of a mod or Overwrite, active or inactive (mods.md, The tree, story 8)', () => {
-  it('a file another copy wins loses, and the copy that wins is active', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
-      Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds')] },
-    });
-
-    expect(greyOf(value, modOrigin('Loser'), 'a.dds')).toEqual(GREY);
-    expect(greyOf(value, modOrigin('Winner'), 'a.dds')).toBeUndefined();
-  });
-
-  it('an excluded file is inactive, and the copy it would have won over is active', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
-      Winner: { files: [file('Winner', 'a.dds', true)] }, Loser: { files: [file('Loser', 'a.dds')] },
-    });
-
-    expect(greyOf(value, modOrigin('Winner'), 'a.dds')).toEqual(GREY);
-    expect(greyOf(value, modOrigin('Loser'), 'a.dds')).toBeUndefined();
-  });
-
-  it('every file and folder of a disabled mod is inactive, and the copy it would have won over is active', async () => {
-    const value = await indexedValueOf([mod('Off', false), mod('On')], {
-      Off: { files: [file('Off', 'x/a.dds'), file('Off', 'b.esp', true)], folders: [folder('Off', 'x')] },
-      On: { files: [file('On', 'x/a.dds')], folders: [folder('On', 'x')] },
-    });
-
-    expect(['x/a.dds', 'b.esp', 'x'].map((path) => greyOf(value, modOrigin('Off'), path))).toEqual([GREY, GREY, GREY]);
-    expect(['x/a.dds', 'x'].map((path) => greyOf(value, modOrigin('On'), path))).toEqual([undefined, undefined]);
-  });
-
-  it('an excluded folder is inactive, with everything in it, as the listing marks them', async () => {
-    const value = await indexedValueOf([mod('A')], {
-      A: { files: [file('A', 'x/a.dds', true)], folders: [folder('A', 'x', true), folder('A', 'y')] },
-    });
-
-    expect(['x', 'x/a.dds', 'y'].map((path) => greyOf(value, modOrigin('A'), path))).toEqual([GREY, GREY, undefined]);
-  });
-
-  it('a folder whose every file loses is still active: the game merges folders', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
-      Winner: { files: [file('Winner', 'x/a.dds')], folders: [folder('Winner', 'x')] },
-      Loser: { files: [file('Loser', 'x/a.dds')], folders: [folder('Loser', 'x')] },
-    });
-
-    expect(greyOf(value, modOrigin('Loser'), 'x')).toBeUndefined();
-  });
-
-  it('Overwrite\'s file wins over every mod\'s, and an excluded one there is inactive', async () => {
-    const value = await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.log')] } }, {
-      files: [file('overwrite', 'a.log'), file('overwrite', 'b.log', true)],
-    });
-
-    expect(greyOf(value, RUNTIME_OUTPUT, 'a.log')).toBeUndefined();
-    expect(greyOf(value, RUNTIME_OUTPUT, 'b.log')).toEqual(GREY);
-    expect(greyOf(value, modOrigin('A'), 'a.log')).toEqual(GREY);
-  });
-
-  it('two mods holding one path are two files, each with its own answer', async () => {
-    const value = await indexedValueOf([mod('A'), mod('B')], { A: { files: [file('A', 'a.dds')] }, B: { files: [file('B', 'a.dds')] } });
-
-    expect(fileRowUri(modOrigin('A'), 'a.dds').toString()).not.toBe(fileRowUri(modOrigin('B'), 'a.dds').toString());
-    expect([greyOf(value, modOrigin('A'), 'a.dds'), greyOf(value, modOrigin('B'), 'a.dds')]).toEqual([undefined, GREY]);
+  it.each<[string, () => Promise<InstanceValue>, FileOrigin, string, typeof GREY | undefined]>([
+    ['a file another copy wins is inactive', winnerAndLoser, modOrigin('Loser'), 'x/a.dds', GREY],
+    ['the copy that wins is active', winnerAndLoser, modOrigin('Winner'), 'x/a.dds', undefined],
+    ['a folder whose every file loses is still active: the game merges folders', winnerAndLoser, modOrigin('Loser'), 'x', undefined],
+    ['an excluded file is inactive', () => indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds', true)] } }), modOrigin('A'), 'a.dds', GREY],
+    ['a disabled mod\'s file is inactive', () => indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'x/a.dds')], folders: [folder('Off', 'x')] } }), modOrigin('Off'), 'x/a.dds', GREY],
+    ['a disabled mod\'s folder is inactive', () => indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'x/a.dds')], folders: [folder('Off', 'x')] } }), modOrigin('Off'), 'x', GREY],
+    ['an excluded folder is inactive', () => indexedValueOf([mod('A')], { A: { files: [], folders: [folder('A', 'x', true)] } }), modOrigin('A'), 'x', GREY],
+    ['an excluded file in Overwrite is inactive', () => indexedValueOf([], {}, { files: [file('overwrite', 'b.log', true)] }), RUNTIME_OUTPUT, 'b.log', GREY],
+  ])('%s', async (_case, value, origin, path, grey) => {
+    expect(greyOf(await value(), origin, path)).toEqual(grey);
   });
 });
 

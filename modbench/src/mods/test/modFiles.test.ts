@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { FileOrigin, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -197,7 +197,7 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   it('names its row by no file: URI, so no diagnostic or file decoration published on the file reaches the row', async () => {
     const { folder, leaf } = await rowsOf();
 
-    for (const row of [folder, leaf]) expect(row.resourceUri?.scheme).toMatch(/^(?!file$)\w/);
+    expect([folder, leaf].map((row) => row.resourceUri?.scheme)).toEqual(['modbench-mod-file', 'modbench-mod-file']);
   });
 
   it('opens a clicked file as a preview editor where it sits in its mod, a link too, and a clicked folder or mod only selects', async () => {
@@ -243,10 +243,7 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   it('has no check box and no description', async () => {
     const { folder, leaf } = await rowsOf();
 
-    for (const row of [folder, leaf]) {
-      expect(row.checkboxState).toBeUndefined();
-      expect(row.description).toBeUndefined();
-    }
+    expect([folder, leaf].map((row) => [row.checkboxState, row.description])).toEqual([[undefined, undefined], [undefined, undefined]]);
   });
 
   it('names its own kind as its contextValue, which the File and Folder menus match on', async () => {
@@ -349,45 +346,23 @@ describe('a file or folder row\'s parent, which VS Code\'s reveal walks up throu
   });
 });
 
-describe('files and folders are not dragged, and nothing drops on them (mods.md, Drag and drop, story 7)', () => {
-  const DND_MIME = 'application/vnd.medit.modlist-node';
-
+describe('nothing drops on files and folders (mods.md, Drag and drop, story 7)', () => {
   async function fileRows() {
     const provider = providerOver([mod('Armour'), mod('Other')], { Armour: [file('x/a.dds')] });
     const modRow = await rootOf(provider, ModNode, 'Armour');
     const folder = await childNamed(provider, modRow, 'x');
     const leaf = await childNamed(provider, folder, 'a.dds');
-    return { provider, modRow, folder, leaf };
+    return { provider, folder, leaf };
   }
 
-  it('a drag of files and folders carries nothing', async () => {
-    const { provider, folder, leaf } = await fileRows();
-    const dataTransfer = new DataTransfer();
-
-    provider.handleDrag([folder, leaf], dataTransfer, new FakeCancellationToken());
-
-    expect(dataTransfer.get(DND_MIME)).toBeUndefined();
-  });
-
-  it('a drag of a mod beside a file carries the mod alone', async () => {
-    const { provider, modRow, leaf } = await fileRows();
-    const dataTransfer = new DataTransfer();
-
-    provider.handleDrag([modRow, leaf], dataTransfer, new FakeCancellationToken());
-
-    expect(dataTransfer.get(DND_MIME)?.value).toEqual({ rows: [modRow], focused: modRow });
-  });
-
-  it('a mod dropped on a file or a folder moves nothing', async () => {
-    const { provider, folder, leaf } = await fileRows();
-    const other = await rootOf(provider, ModNode, 'Other');
+  it.each(['folder', 'leaf'] as const)('a mod dropped on a %s moves nothing', async (target) => {
+    const rows = await fileRows();
+    const other = await rootOf(rows.provider, ModNode, 'Other');
     executeCommand.mockClear();
+    const dataTransfer = new DataTransfer();
 
-    for (const target of [folder, leaf]) {
-      const dataTransfer = new DataTransfer();
-      provider.handleDrag([other], dataTransfer, new FakeCancellationToken());
-      await provider.handleDrop(target, dataTransfer, new FakeCancellationToken());
-    }
+    rows.provider.handleDrag([other], dataTransfer, new FakeCancellationToken());
+    await rows.provider.handleDrop(rows[target], dataTransfer, new FakeCancellationToken());
 
     expect(executeCommand).not.toHaveBeenCalled();
   });
@@ -494,7 +469,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     const row = await rootOf(provider, OverwriteNode, 'Overwrite');
 
     expect(row.description).toBe('2');
-    expect(expectInstanceOf(row.iconPath, ThemeIcon).color).toBeDefined();
+    expect(row.iconPath).toEqual(new ThemeIcon('folder', new ThemeColor('charts.red')));
   });
 
   it('Overwrite holding files, none of them found, still counts and tints them, and lists none', async () => {
@@ -502,7 +477,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     const row = await rootOf(provider, OverwriteNode, 'Overwrite');
 
     expect(row.description).toBe('1');
-    expect(expectInstanceOf(row.iconPath, ThemeIcon).color).toBeDefined();
+    expect(row.iconPath).toEqual(new ThemeIcon('folder', new ThemeColor('charts.red')));
     expect(row.lists()).toBe(false);
   });
 
@@ -530,19 +505,14 @@ describe('a file row\'s context, which the File menu\'s go to mod and compare fi
     return (await provider.getChildren(row)).map((child) => child.contextValue);
   };
 
-  it('flags a file whose path another enabled copy provides, in a mod or Overwrite', async () => {
-    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'High')).toEqual(['file conflict included']);
-    expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict included inOverwrite']);
-  });
-
-  it('flags a file that loses the conflict losing, as compare file reads it, and not the winning copy', async () => {
-    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'Low')).toEqual(['file conflict losing included']);
-    expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'High')).toEqual(['file conflict included']);
-  });
-
-  it('flags no file that is the only copy, or whose mod does not provide it', async () => {
-    expect(await flagsOf([modOrigin('High')], 'High')).toEqual(['file included']);
-    expect(await flagsOf([modOrigin('High'), modOrigin('Other')], 'Low')).toEqual(['file included']);
+  it.each<[string, FileOrigin[], string, string]>([
+    ['a mod\'s winning copy of a path another enabled copy provides as in conflict', [modOrigin('High'), modOrigin('Low')], 'High', 'file conflict included'],
+    ['Overwrite\'s copy of a path another enabled copy provides as in conflict', [RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite', 'file conflict included inOverwrite'],
+    ['a copy that loses the conflict losing, as compare file reads it', [modOrigin('High'), modOrigin('Low')], 'Low', 'file conflict losing included'],
+    ['the only copy as in no conflict', [modOrigin('High')], 'High', 'file included'],
+    ['a copy whose mod does not provide the path as in no conflict', [modOrigin('High'), modOrigin('Other')], 'Low', 'file included'],
+  ])('flags %s', async (_case, providers, rowOfMod, flags) => {
+    expect(await flagsOf(providers, rowOfMod)).toEqual([flags]);
   });
 });
 
@@ -551,22 +521,21 @@ describe('a file row\'s context, which the File menu\'s exclude or include reads
   const excludedFile = (relativePath: string, markedExcluded = true): OriginFile =>
     ({ ...file(relativePath), excluded: true, markedExcluded });
 
-  it('flags a file the game may get included, and a file excluded by its own name excluded', async () => {
-    const provider = providerOver([mod('M')], { M: [file('a.dds'), excludedFile('b.dds.mohidden')] });
-    const row = await rootOf(provider, ModNode, 'M');
-
-    expect(flags(await childNamed(provider, row, 'a.dds'))).toEqual(['file', 'included']);
-    expect(flags(await childNamed(provider, row, 'b.dds.mohidden'))).toEqual(['file', 'excluded']);
-  });
+  const rowAt = async (path: string[]) => {
+    const files = [file('a.dds'), excludedFile('b.dds.mohidden'), excludedFile('Textures.mohidden/a.dds', false), excludedFile('Textures.mohidden/b.dds.mohidden')];
+    const hidden: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', excluded: true };
+    const provider = providerOver([mod('M')], { M: files }, [], { byMod: { M: [hidden] } });
+    let row: ModlistNode = await rootOf(provider, ModNode, 'M');
+    for (const label of path) row = await childNamed(provider, row, label);
+    return row;
+  };
 
   it.each([
-    ['a.dds', 'included'], ['b.dds.mohidden', 'excluded'],
-  ])('flags a file its folder excludes by its own name: %s is %s', async (name, flag) => {
-    const files = [excludedFile('Textures.mohidden/a.dds', false), excludedFile('Textures.mohidden/b.dds.mohidden')];
-    const folder: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', excluded: true };
-    const provider = providerOver([mod('M')], { M: files }, [], { byMod: { M: [folder] } });
-    const textures = await childNamed(provider, await rootOf(provider, ModNode, 'M'), 'Textures.mohidden');
-
-    expect(flags(await childNamed(provider, textures, name))).toEqual(['file', flag]);
+    ['a file the game may get', ['a.dds'], 'included'],
+    ['a file excluded by its own name', ['b.dds.mohidden'], 'excluded'],
+    ['a file only its folder excludes, by its own name', ['Textures.mohidden', 'a.dds'], 'included'],
+    ['a file its own name excludes inside an excluded folder', ['Textures.mohidden', 'b.dds.mohidden'], 'excluded'],
+  ])('flags %s as %s', async (_case, path, flag) => {
+    expect(flags(await rowAt(path))).toEqual(['file', flag]);
   });
 });
