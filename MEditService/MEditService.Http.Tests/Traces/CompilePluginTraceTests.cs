@@ -1,9 +1,8 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using static MEditService.Http.Tests.TestSupport.Wire;
 
 namespace MEditService.Http.Tests.Traces;
 
@@ -31,12 +30,6 @@ public sealed class CompilePluginTraceTests : HostedTests
         return fx;
     }
 
-    private static async Task<JsonElement> Answer(HttpResponseMessage response)
-    {
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
     [Fact]
     public async Task CompilingAnEditedPlugin_AnswersItApplied_AndItsBytesCarryTheEdit()
     {
@@ -49,7 +42,7 @@ public sealed class CompilePluginTraceTests : HostedTests
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var applied = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal((Plugin, Origin), (applied.GetProperty("name").GetString(), applied.GetProperty("origin").GetString()));
-        Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
+        Assert.Equal(0.75, await HeightMaxInTheBytesAt(Written(fx, Origin), formKey), 3);
     }
 
     [Fact]
@@ -76,49 +69,20 @@ public sealed class CompilePluginTraceTests : HostedTests
         Assert.Equal(
             $"{NonCompiledPlugin} is not a compiled plugin, so there is no source to compile.",
             refused.GetProperty("message").GetString());
-        Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
-        Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(fx, OtherPlugin, OtherOrigin, otherFormKey), 3);
+        Assert.Equal(0.75, await HeightMaxInTheBytesAt(Written(fx, Origin), formKey), 3);
+        Assert.Equal(0.5, await HeightMaxInTheBytesAt(Written(fx, OtherOrigin), otherFormKey), 3);
     }
 
-    private static async Task<double> HeightMaxOfTheWrittenBytes(
-        ScatteredFixtureData fx, string plugin, string origin, string formKey) =>
-        (await RecordInTheWrittenBytes(fx, plugin, origin, formKey)).GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
-            .GetProperty("value").GetDouble();
+    private static string Written(ScatteredFixtureData fx, string origin) => fx.Plugins.Single(p => p.Origin == origin).Path;
 
-    private static async Task<JsonElement> RecordInTheWrittenBytes(
-        ScatteredFixtureData fx, string plugin, string origin, string formKey)
-    {
-        using var elsewhere = new PluginFixtureBuilder("trace-compile-reader").BuildScattered();
-        using var reader = new MEditHost();
-        using var client = reader.CreateClient();
-        var copied = Path.Combine(Directory.CreateDirectory(Path.Combine(elsewhere.Root, "ReadingMod")).FullName, plugin);
-        File.Copy(fx.Plugins.Single(p => p.Origin == origin).Path, copied);
-
-        (await client.PutLoadOrder(
-            elsewhere,
-            [new LoadOrderEntry(plugin, copied, "ReadingMod", Line: 0, Enabled: true, Winning: true)]))
-            .EnsureSuccessStatusCode();
-
-        return await client.Record(formKey);
-    }
-
-    [Fact]
-    public async Task CompilingNoPlugin_Is400()
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("[{\"name\": \"Compiled.esp\", \"origin\": \"\"}]")]
+    public async Task CompilingNoPlugin_OrAPluginWithoutAnOrigin_Is400(string plugins)
     {
         using var fx = await LoadedAndCompiledPlugin();
 
-        var response = await Client.Compile([]);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CompilingAPluginWithoutAnOrigin_Is400()
-    {
-        using var fx = await LoadedAndCompiledPlugin();
-
-        var response = await Client.Compile([(Plugin, string.Empty)]);
+        var response = await Client.PostJson("/plugins/compile", $"{{\"plugins\": {plugins}}}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

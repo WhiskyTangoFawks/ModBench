@@ -130,9 +130,3 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 }
 
-[Collection(ProcessEnvironmentCollection.Name)]
-public sealed class RenameSourceWithoutGitApiTests : HostedTests
-{
-    private const string Plugin = "CompiledPlugin.esp";
-    private const string Origin = "SourceMod";
-}

@@ -351,7 +351,7 @@ describe('the Plugins view\'s Problems', () => {
     }));
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getDiagnoses', [
-      { plugin: 'Test.esp', origin: 'ModA', message: 'short', text: 'short' },
+      { plugin: 'Test.esp', origin: 'ModA', text: 'short' },
     ]);
 
     client.emit(tick({
@@ -379,8 +379,8 @@ describe('the Plugins view\'s Problems', () => {
     }));
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getDiagnoses', [
-      { plugin: 'Test.esp', origin: 'ModA', message: 'short', text: 'short' },
-      { plugin: 'Vanilla.esm', origin: 'Data/', message: 'short', text: 'short' },
+      { plugin: 'Test.esp', origin: 'ModA', text: 'short' },
+      { plugin: 'Vanilla.esm', origin: 'Data/', text: 'short' },
     ]);
 
     client.emit(tick({ state: 'Ready', conflictsComputed: true }));

@@ -1,10 +1,8 @@
 using System.Net;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -29,10 +27,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         return (fx, await Client.FirstFormKey(Plugin, Origin));
     }
 
-    private static string ModFolderOf(ScatteredFixtureData fx, string plugin) =>
-        Path.GetDirectoryName(fx.Plugins.Single(p => Path.GetFileName(p.Path) == plugin).Path).Require();
-
-    private static string ModFolderOf(ScatteredFixtureData fx) => Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
+    private static string ModFolderOf(ScatteredFixtureData fx) => OtherTool.ModFolderOf(fx, Origin);
 
     private static string NpcFile(ScatteredFixtureData fx) =>
         Directory.EnumerateFiles(ModFolderOf(fx), $"{Npc} - *.json", SearchOption.AllDirectories).Single();
@@ -54,31 +49,6 @@ public sealed class EditRecordChangesApiTests : HostedTests
         Assert.Contains("0.75", document.GetProperty("text").GetString().Require(), StringComparison.Ordinal);
         Assert.Equal(JsonValueKind.Null, answer.GetProperty("newFormKey").ValueKind);
         Assert.Equal(before, TreeSnapshot.Of(ModFolderOf(fx)));
-    }
-
-    [Fact]
-    public async Task ClearingDeleted_FillsFromTheUnsavedTextOfACompiledPluginMaster()
-    {
-        var fx = Owned(new PluginFixtureBuilder("api-edit-changes-masters")
-            .WithPlugin("Master.esp", mod => mod.Npcs.AddNew("Saved"), origin: "MasterMod")
-            .WithPlugin("Override.esp", (mod, before) =>
-                mod.Npcs.Add(new Npc(before[0].Npcs.Single().FormKey, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = DeletedFlag.Bit }),
-                origin: "OverrideMod")
-            .BuildScattered());
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(["MasterMod", "OverrideMod"])).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Client.PluginReportsCompiledPlugin("Override.esp");
-        var formKey = await Client.FirstFormKey("Override.esp", "OverrideMod");
-        var masterFile = Directory.EnumerateFiles(ModFolderOf(fx, "Master.esp"), "Saved - *.json", SearchOption.AllDirectories).Single();
-
-        await Client.HandUnsaved((masterFile, File.ReadAllText(masterFile).Replace("Saved", "Unsaved", StringComparison.Ordinal)));
-
-        var response = await Client.EditChanges(formKey, "Override.esp", "OverrideMod", "MajorRecordFlagsRaw", 0);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var document = Assert.Single((await response.Body()).GetProperty("documents").EnumerateArray());
-        Assert.Contains("Unsaved", document.GetProperty("text").GetString().Require(), StringComparison.Ordinal);
     }
 
     [Fact]

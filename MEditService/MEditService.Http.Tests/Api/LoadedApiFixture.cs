@@ -25,21 +25,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     public async Task InitializeAsync()
     {
         Client = _app.CreateClient();
-        var resp = await Client.PutLoadOrderAndAwaitReady(new
-        {
-            plugins = Plugin.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(Plugin.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Plugin.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            dataFolder = Plugin.DataFolder,
-            instanceRoot = Plugin.InstanceRoot,
-            gameRelease = "Fallout4",
-            stringsLanguage = "English",
-        });
+        var resp = await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(Plugin.DataFolder, Plugin.InstanceRoot, Plugin.Plugins));
         resp.EnsureSuccessStatusCode();
     }
 

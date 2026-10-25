@@ -77,13 +77,29 @@ public sealed class CreateRecordApiTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingACell_InAWorldspace_AnswersTheNewFormKey()
+    public async Task CreatingACell_InAWorldspace_LandsItAtTheGridPositionAsked()
     {
-        await Loaded();
+        var fx = await Loaded();
 
         var response = await Create("cell", _worldspace, new { x = 1, y = -2 });
 
         response.EnsureSuccessStatusCode();
-        Assert.EndsWith(":" + Plugin, (await response.Body()).GetProperty("formKey").GetString().Require(), StringComparison.Ordinal);
+        var formKey = (await response.Body()).GetProperty("formKey").GetString().Require();
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => await CellOfTheWorldspace(formKey) is not null, "the created cell to be read");
+        var cell = Assert.NotNull(await CellOfTheWorldspace(formKey));
+        Assert.Equal((1, -2), (cell.GetProperty("cellX").GetInt32(), cell.GetProperty("cellY").GetInt32()));
+    }
+
+    private async Task<JsonElement?> CellOfTheWorldspace(string formKey)
+    {
+        var response = await Client.GetAsync(new Uri(
+            $"/plugins/{Plugin}/worldspaces/{Uri.EscapeDataString(_worldspace)}/blocks?origin={Origin}", UriKind.Relative));
+        if (!response.IsSuccessStatusCode) return null;
+        return (await response.Body()).GetProperty("blocks").EnumerateArray()
+            .SelectMany(block => block.GetProperty("subBlocks").EnumerateArray())
+            .SelectMany(subBlock => subBlock.GetProperty("cells").EnumerateArray())
+            .Cast<JsonElement?>()
+            .SingleOrDefault(c => c?.GetProperty("formKey").GetString() == formKey);
     }
 }

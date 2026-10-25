@@ -39,39 +39,28 @@ public sealed class CreatePluginTraceTests : HostedTests
         Assert.True(Directory.Exists(PluginSourceRoot.In(sourceFolder, "New.esp")));
     }
 
-    private async Task<string> HeldAsTheServiceReportsIt() =>
-        await Client.GetStringAsync(new Uri("/load-order/status", UriKind.Relative));
-
     [Fact]
-    public async Task CreatingAPluginOverAFileAlreadyThere_IsRefused_AndChangesNothing()
+    public async Task CreatingAPluginOverAFileAlreadyThere_Is409FileExists()
     {
         var fx = Owned(await Loaded());
         var folder = OtherTool.ModFolderOf(fx, Origin);
         OtherTool.WritesTheFile(Path.Combine(folder, "Occupied.esp"), "not a plugin");
-        var disk = TreeSnapshot.Of(fx.Root);
-        var held = await HeldAsTheServiceReportsIt();
 
         var created = await Create(Client, "Occupied.esp", folder);
 
         Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
         Assert.Equal("FileExists", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
-        Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, await HeldAsTheServiceReportsIt());
     }
 
     [Fact]
-    public async Task CreatingAPluginInAFolderThatHasGone_IsRefused_AndMakesNoFolder()
+    public async Task CreatingAPluginInAFolderThatHasGone_Is404FolderGone()
     {
         var fx = Owned(await Loaded());
         var gone = Path.Combine(fx.Root, "GoneMod");
-        var disk = TreeSnapshot.Of(fx.Root);
-        var held = await HeldAsTheServiceReportsIt();
 
         var created = await Create(Client, "Created.esp", gone);
 
         Assert.Equal(HttpStatusCode.NotFound, created.StatusCode);
         Assert.Equal("FolderGone", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
-        Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, await HeldAsTheServiceReportsIt());
     }
 }

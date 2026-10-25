@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -47,29 +46,31 @@ public sealed class SuccessStatusApiTests(LoadedApiFixture<TestPluginFixture> lo
     }
 
     [Fact]
-    public async Task GetPluginDiagnoses_Is200WithAReportPerPlugin()
+    public async Task GetPluginDiagnoses_Is200_WithNoReportForAPluginThatReadsWhole()
     {
         var response = await Client.GetAsync(new Uri("/plugins/diagnoses", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(JsonValueKind.Array, (await response.Body()).ValueKind);
+        Assert.Empty((await response.Body()).EnumerateArray());
     }
 
     [Fact]
-    public async Task GetCreatableRecordTypes_Is200()
+    public async Task GetCreatableRecordTypes_Is200_NamingANonPlayerCharacterAmongThem()
     {
         var response = await Client.GetAsync(new Uri("/record-types/creatable", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotEmpty((await response.Body()).EnumerateArray());
+        Assert.Contains(
+            ("npc_", "Non-Player Character"),
+            (await response.Body()).EnumerateArray().Select(t => (t.GetProperty("type").GetString(), t.GetProperty("displayName").GetString())));
     }
 
     [Fact]
-    public async Task GetCreatablePluginExtensions_Is200()
+    public async Task GetCreatablePluginExtensions_Is200_NamingTheHeldReleasesExtensions()
     {
         var response = await Client.GetAsync(new Uri("/plugins/creatable-extensions", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotEmpty((await response.Body()).EnumerateArray());
+        Assert.Equal([".esm", ".esl", ".esp"], (await response.Body()).EnumerateArray().Select(e => e.GetString()));
     }
 }

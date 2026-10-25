@@ -18,19 +18,19 @@ public sealed class ScriptEditTraceTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         return (
-            Directory.EnumerateFiles(modFolder, $"{Npc} - *.json", SearchOption.AllDirectories).Single(),
+            Directory.EnumerateFiles(OtherTool.ModFolderOf(fx, Origin), $"{Npc} - *.json", SearchOption.AllDirectories).Single(),
             await Client.FirstFormKey(Plugin, Origin));
     }
 
     [Fact]
-    public async Task AnEdit_Is204()
+    public async Task AnEdit_Is204_AndWritesTheRecordsDocument()
     {
-        var (_, formKey) = await LoadedAndCompiledPlugin();
+        var (npcFile, formKey) = await LoadedAndCompiledPlugin();
 
         var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Contains("0.75", File.ReadAllText(npcFile), StringComparison.Ordinal);
     }
 }

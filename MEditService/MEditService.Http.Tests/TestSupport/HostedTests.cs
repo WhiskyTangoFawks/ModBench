@@ -14,8 +14,6 @@ public abstract class HostedTests : IDisposable
 
     protected HttpClient Client { get; private set; }
 
-    protected IServiceProvider Services => _app.Services;
-
     protected IReadOnlyList<LogEntry> Logged
     {
         get

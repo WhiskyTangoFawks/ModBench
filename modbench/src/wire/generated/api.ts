@@ -1584,8 +1584,6 @@ export interface components {
         PluginDiagnosisReport: {
             plugin: string;
             origin: string;
-            anchor?: string | null;
-            message: string;
             text: string;
         };
         PluginLoadFailure: {

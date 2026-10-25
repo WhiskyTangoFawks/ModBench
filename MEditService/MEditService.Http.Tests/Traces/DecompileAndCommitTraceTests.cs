@@ -51,6 +51,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "installed.dds"), "hello");
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "[General]");
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
@@ -67,50 +68,23 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         Assert.Equal(["assets/textures/added.dds", "assets/textures/installed.dds"], committed);
     }
 
-    [Fact]
-    public async Task InitOfNoMod_Is400()
+    public static TheoryData<string, string> NotARequestToInit => new()
+    {
+        { "no mod", """{"mods": []}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "sourceFolder": "s", "metadataFiles": []}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "metadataFiles": []}]}""" },
+        { "a mod naming a blank file of the mod manager's", """{"mods": [{"name": "InitializedMod", "sourceFolder": "s", "metadataFiles": [" "]}]}""" },
+    };
+
+    [Theory]
+    [MemberData(nameof(NotARequestToInit))]
+    public async Task ARequestThatDoesNotSayWhatToInit_Is400(string lacking, string body)
     {
         await Loaded();
 
-        var response = await Client.DecompileAndCommit([]);
+        var response = await Client.PostJson("/decompile-and-commit", body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task InitOfAModWithoutAName_Is400()
-    {
-        await Loaded();
-
-        var response = await Client.DecompileAndCommit(string.Empty);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task InitOfAModWithoutASourceFolder_Is400()
-    {
-        await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
-        {
-            mods = new[] { new { name = Origin, metadataFiles = Array.Empty<string>() } },
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task InitOfAModNamingABlankFileOfTheModManagers_Is400()
-    {
-        await Loaded();
-
-        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
-        {
-            mods = new[] { new { name = Origin, metadataFiles = new[] { " " } } },
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]

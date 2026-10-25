@@ -1,112 +1,34 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
 public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
-    private readonly HttpClient _client = loaded.Client;
+    private const string ARecord = """{"formKey": "000800:TestPlugin.esp", "plugin": {"name": "TestPlugin.esp", "origin": "Data/"}}""";
 
-    private const string Origin = "EditableMod";
-    private const string Plugin = "Editable.esp";
-    private const string DestOrigin = "DestinationMod";
-    private const string DestPlugin = "Destination.esp";
-
-    private static ScatteredFixtureData BuildOneModOnePlugin() =>
-        new PluginFixtureBuilder("api-write-one")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
-            .BuildScattered();
-
-    private static ScatteredFixtureData BuildSourceAndDestination() =>
-        new PluginFixtureBuilder("api-write-two")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
-            .WithPlugin(DestPlugin, mod => mod.Npcs.AddNew("DestNpc"), origin: DestOrigin)
-            .BuildScattered();
-
-    private async Task Load(ScatteredFixtureData fx)
+    public static TheoryData<string, string, string> NotAWrite => new()
     {
-        var load = await _client.PutLoadOrderAndAwaitReady(new
+        { "/records/delete-changes", "no records", """{"records": []}""" },
         {
-            dataFolder = fx.DataFolder,
-            instanceRoot = fx.InstanceRoot,
-            plugins = fx.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(fx.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            gameRelease = "Fallout4",
-            stringsLanguage = "English",
-        });
-        load.EnsureSuccessStatusCode();
-    }
-
-    private async Task Init(string origin) =>
-        (await _client.DecompileAndCommit(origin)).EnsureSuccessStatusCode();
-
-    private async Task<string> FirstNpcFormKey(string plugin, string origin)
-    {
-        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type=npc_");
-        return JsonStrings.Of(records.GetProperty("items")[0].GetProperty("formKey"));
-    }
-
-    private static string ModFolderOf(ScatteredFixtureData fx, string origin)
-    {
-        var path = fx.Plugins.Single(p => p.Origin == origin).Path;
-        return Path.GetDirectoryName(path)
-            ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory.");
-    }
-
-    [Fact]
-    public async Task DeletingNoRecordsIsABadRequest()
-    {
-        var response = await _client.PostAsJsonAsync("/records/delete-changes", new { records = Array.Empty<object>() });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task DeletingARecordWithNoOriginIsABadRequest()
-    {
-        var response = await _client.PostAsJsonAsync("/records/delete-changes", new
+            "/records/delete-changes", "a record with no origin",
+            """{"records": [{"formKey": "000800:TestPlugin.esp", "plugin": {"name": "TestPlugin.esp", "origin": ""}}]}"""
+        },
+        { "/records/copy-changes", "no destination", $$"""{"records": [{{ARecord}}], "mode": "Override", "destinations": []}""" },
         {
-            records = new[] { new { formKey = "000800:Editable.esp", plugin = new { name = Plugin, origin = "" } } },
-        });
+            "/records/copy-changes", "a copy as new that replaces",
+            $$"""{"records": [{{ARecord}}], "mode": "New", "destinations": [{"name": "TestPlugin.esp", "origin": "Data/"}], "replace": true}"""
+        },
+    };
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CopyingWithNoDestinationIsABadRequest()
+    [Theory]
+    [MemberData(nameof(NotAWrite))]
+    public async Task AWriteThatCannotBeMade_IsABadRequest(string route, string lacking, string body)
     {
-        using var fx = BuildSourceAndDestination();
-        await Load(fx);
-        var formKey = await FirstNpcFormKey(Plugin, Origin);
+        var response = await loaded.Client.PostJson(route, body);
 
-        var response = await _client.Copy([(formKey, Plugin, Origin)], "Override", []);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CopyingAsNewWithReplaceIsABadRequestAndCopiesNothing()
-    {
-        using var fx = BuildSourceAndDestination();
-        await Load(fx);
-        await Init(DestOrigin);
-        var formKey = await FirstNpcFormKey(Plugin, Origin);
-        var destination = TreeSnapshot.Of(ModFolderOf(fx, DestOrigin));
-
-        var response = await _client.Copy(formKey, (Plugin, Origin), "New", (DestPlugin, DestOrigin), replace: true);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(destination, TreeSnapshot.Of(ModFolderOf(fx, DestOrigin)));
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 }

@@ -8,7 +8,7 @@ import type { PluginAddress, PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
 
 const report = (plugin: string, origin: string, text: string): PluginDiagnosisReport => ({
-  plugin, origin, anchor: null, message: 'm', text,
+  plugin, origin, text,
 });
 
 function entriesAsFsPathAndDiagnosticsInInsertionOrder(collection: FakeDiagnosticCollection) {

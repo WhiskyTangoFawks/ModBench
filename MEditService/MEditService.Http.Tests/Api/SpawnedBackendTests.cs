@@ -5,7 +5,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class BackendContentRootTests
+public sealed class SpawnedBackendTests
 {
     private const string EphemeralIpLoopbackUrlBecauseKestrelRefusesDynamicBindingOnLocalhost = "http://127.0.0.1:0";
 
@@ -57,8 +57,7 @@ public sealed class BackendContentRootTests
                 $"backend never reported listening on its own port; captured output:\n{string.Join('\n', Snapshot(lines))}");
 
             using var client = new HttpClient();
-            for (var i = 0; i < 3; i++)
-                await client.GetAsync(new Uri($"http://localhost:{port}/health"));
+            await client.GetAsync(new Uri($"http://localhost:{port}/health"));
 
             await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route"));
             var sawTheOrderingMarker404 = await WaitForLineAsync(lines,

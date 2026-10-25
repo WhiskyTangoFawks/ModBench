@@ -57,7 +57,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
             return [$"{where}: the codec could not read its own document — {ex.Message}"];
         }
 
-        return reserialized == document.Text ? [] : [$"{where}: {FirstDifference(document.Text, reserialized)}"];
+        return reserialized == document.Text ? [] : [$"{where}: {Golden.FirstDifference(document.Text, reserialized)}"];
     }
 
     private static string RoundTripRecord(string recordType, string stored)
@@ -67,18 +67,4 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
 
     private static string RoundTripHeader(string stored) =>
         Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(stored), GameRelease.Fallout4)));
-
-    private static string FirstDifference(string expected, string actual)
-    {
-        var expectedLines = expected.Split('\n');
-        var actualLines = actual.Split('\n');
-        for (var i = 0; i < Math.Max(expectedLines.Length, actualLines.Length); i++)
-        {
-            var left = i < expectedLines.Length ? expectedLines[i] : "(no line)";
-            var right = i < actualLines.Length ? actualLines[i] : "(no line)";
-            if (!string.Equals(left, right, StringComparison.Ordinal))
-                return $"line {i + 1}: stored '{left}' vs reserialized '{right}'";
-        }
-        return "no line differs";
-    }
 }

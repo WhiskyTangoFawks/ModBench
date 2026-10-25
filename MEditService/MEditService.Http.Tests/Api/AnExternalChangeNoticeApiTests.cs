@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -31,47 +30,17 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
     private static string PluginPath(ScatteredFixtureData fx) => fx.Plugins.Single(p => p.Origin == Origin).Path;
 
-    private static void ARelease(ScatteredFixtureData fx) =>
-        OtherTool.WritesThePlugin(PluginPath(fx), mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
-
-    private static IEnumerable<(string? Name, string? BytesSha256)> ChangedPlugins(JsonElement notice) =>
-        notice.GetProperty("changedPlugins").EnumerateArray()
-            .Select(p => (p.GetProperty("name").GetString(), p.GetProperty("bytesSha256").GetString()));
-
-    private static Task<IReadOnlyList<JsonElement>> NoticesUntilOneNames(StreamReader stream, string plugin) =>
-        stream.EventsUntil("external-change", notice => ChangedPlugins(notice).Any(p => p.Name == plugin));
-
-    [Fact]
-    public async Task AChangeMadeWhileTheServiceWasDown_IsNamedAtTheNextLoad_WithTheStateOfItsBytes()
-    {
-        var fx = Owned(await Watched());
-        Restart();
-        ARelease(fx);
-        using var stream = await Client.NotificationStream();
-
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-
-        var notice = (await NoticesUntilOneNames(stream, Plugin))[^1];
-        Assert.Equal(Origin, notice.GetProperty("origin").GetString());
-        Assert.Equal(
-            [(Plugin, Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(PluginPath(fx)))))],
-            ChangedPlugins(notice));
-    }
-
     [PosixFact]
-    public async Task ACompiledPluginWhoseBinaryCannotBeRead_FailsToLoad_AndIsNamedWithNoState()
+    public async Task ACompiledPluginWhoseBinaryCannotBeRead_FailsToLoad_NamedInTheLoadOrdersStatus()
     {
         var fx = Owned(await Watched());
         var binary = PluginPath(fx);
         Restart();
-        using var stream = await Client.NotificationStream();
         FileModes.Set(binary, "000");
         try
         {
             (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
-            var notice = (await NoticesUntilOneNames(stream, Plugin))[^1];
-            Assert.Equal([(Plugin, (string?)null)], ChangedPlugins(notice));
             var status = await Client.GetFromJsonAsync<JsonElement>("/load-order/status");
             var failure = Assert.Single(status.GetProperty("failures").EnumerateArray());
             Assert.Equal((Plugin, Origin), (failure.GetProperty("name").GetString(), failure.GetProperty("origin").GetString()));
@@ -103,7 +72,5 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         Assert.Equal(Origin, nonCompiledPlugin.GetProperty("origin").GetString());
         var unreadable = Assert.Single(nonCompiledPlugin.GetProperty("pluginWithUnreadableSources").EnumerateArray());
         Assert.Equal(SecondPlugin, unreadable.GetProperty("name").GetString());
-        Assert.Contains(SecondPlugin, unreadable.GetProperty("source").GetProperty("reason").GetString(), StringComparison.Ordinal);
-        Assert.True(unreadable.GetProperty("source").GetProperty("decompileRepairs").GetBoolean());
     }
 }

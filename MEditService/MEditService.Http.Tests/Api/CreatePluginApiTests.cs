@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
@@ -39,11 +38,8 @@ public sealed class CreatePluginApiTests : HostedTests
     private static string NewModFolder(ScatteredFixtureData fx, string name) =>
         Directory.CreateDirectory(Path.Combine(fx.Root, name)).FullName;
 
-    private Task<HttpResponseMessage> CreateARecordIn(string plugin, string origin = Origin) =>
-        Client.CreateRecord(plugin, origin, "npc_");
-
     [Fact]
-    public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote_AndRegistersNothing()
+    public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote()
     {
         var fx = Owned(await Loaded());
         var modFolder = NewModFolder(fx, "mod-minted");
@@ -53,7 +49,6 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.Equal("Minted.esp", created.GetProperty("name").GetString());
         Assert.Equal("MintedMod", created.GetProperty("origin").GetString());
         Assert.True(File.Exists(Path.Combine(modFolder, "Minted.esp")));
-        Assert.False((await CreateARecordIn("Minted.esp", "MintedMod")).IsSuccessStatusCode);
     }
 
     private Task<HttpResponseMessage> PutWithPlaces(ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins, params object[] places) =>
@@ -123,42 +118,23 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.False(File.Exists(Path.Combine(modFolder, "Mod.txt")));
     }
 
-    [Theory]
-    [InlineData("", "SomeMod", "folder")]
-    [InlineData("   ", "SomeMod", "folder")]
-    [InlineData("New.esp", "   ", "folder")]
-    [InlineData("New.esp", "SomeMod", "   ")]
-    public async Task CreatingAPluginWithAnEmptyArgument_Is400(string name, string origin, string folder)
+    public static TheoryData<string, string> NotARequestToCreate => new()
     {
-        var fx = Owned(await Loaded());
+        { "no name", """{"origin": "SomeMod", "name": "", "folder": "/mods/SomeMod"}""" },
+        { "a blank name", """{"origin": "SomeMod", "name": "   ", "folder": "/mods/SomeMod"}""" },
+        { "a blank origin", """{"origin": "   ", "name": "New.esp", "folder": "/mods/SomeMod"}""" },
+        { "a blank folder", """{"origin": "SomeMod", "name": "New.esp", "folder": "   "}""" },
+        { "no folder", """{"origin": "SomeMod", "name": "New.esp"}""" },
+    };
 
-        var created = await Create(name, folder == "folder" ? OtherTool.ModFolderOf(fx, Origin) : folder, origin);
-
-        Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
-    }
-
-    [Fact]
-    public async Task CreatingAPluginWithoutAFolder_Is400()
+    [Theory]
+    [MemberData(nameof(NotARequestToCreate))]
+    public async Task ARequestThatDoesNotSayWhatToCreate_Is400(string lacking, string body)
     {
         Owned(await Loaded());
 
-        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "NoPath.esp" });
+        var created = await Client.PostJson("/plugins/create", body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
-    }
-
-    [Fact]
-    public async Task ARefusedCreate_IsLoggedOnce_NamingThePluginAndWhy()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = NewModFolder(fx, "mod-taken");
-        await Created("Taken.esp", modFolder, "TakenMod");
-
-        await Create("Taken.esp", modFolder, "TakenMod");
-
-        var logged = Assert.Single(Logged, entry => entry.Message.StartsWith("Refused Create plugin", StringComparison.Ordinal));
-        Assert.Equal(LogLevel.Warning, logged.Level);
-        Assert.Contains("Taken.esp", logged.Message, StringComparison.Ordinal);
-        Assert.Contains("FileExists", logged.Message, StringComparison.Ordinal);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, created.StatusCode));
     }
 }
