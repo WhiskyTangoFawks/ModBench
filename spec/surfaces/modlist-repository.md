@@ -30,12 +30,13 @@ A mod folder has one package ([ADR-0023](../adr/0023-a-mod-folder-has-only-one-p
 9. Each separator to have a manifest that names nothing, so a clone has the separator. Cites: Never break the instance for its owner
 10. The manifest to hold the mod's version beside its installation file's page on its host, so it holds all that restore writes into the mod's metadata. Cites: Never break the instance for its owner
 11. The mod's metadata, where the mod manager keeps it in the mod folder, to be no file of the mod: no line names it, status never says it differs, and restore never sends it to the trash. Cites: Orthogonality
-12. The manifest to be a JSON file that I review in git. It has one line for each package, one for each file and one for each step, the files in alphabetical order, so a diff shows what changed and nothing else. Cites: Existing tools
+12. The manifest to be a JSON file that I review in git. It has one line for each package, one for each file, one for each step and one for each tool, the files in alphabetical order, so a diff shows what changed and nothing else. Cites: Existing tools
 13. The manifest to name the installation file by its page on its host, such as the file's page on Nexus, so I can read it in a diff and open it.
 14. A mod from the game folder to differ only when a file it takes changes, never when the game folder gains or changes a file the mod does not take. Cites: ADR-0023
 15. A mod from the game folder to name the game folder as its package, never to leave its package unnamed. A mod is from the game folder when its metadata names no installation file and the game folder holds each of its files with their bytes. Cites: ADR-0023
 16. Each manifest to be `<mod>.manifest.json`, so VS Code opens it as JSON and the ignore list never matches a mod's own files. Cites: Existing tools
 17. Any manifest to hold the steps that build its mod folder, in the order they run, and a file a step makes to say so. I write the steps, update manifest keeps them, and restore runs them. Cites: ADR-0022
+18. The manifest to name each tool its steps run, with the tool's page, so a diff shows what I install to build the mod. I write these lines, as I write the steps, and update manifest keeps them. Cites: mods.md, Build, story 14
 
 ## Status
 
@@ -88,7 +89,7 @@ As a user, I want:
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or installation file's page on its host differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Cites: Confirm what destroys
 3. A source mod with a remote rebuilt from its submodule at the commit the repository pins and the installation files its manifest names, and the submodule cloned when it is absent. When the branch the submodule follows is at that commit, restore checks out the branch, so I land on a branch. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Cites: ADR-0023; ADR-0003
-4. A mod skipped, and named with what it lacks, when an installation file or a game file its manifest names is missing or has other bytes, or when its package does not hold a file, holds a file with other bytes, or has no host. An installation file story 10 downloads is not missing. Every other mod lands. Cites: A selection is one gesture, and each item lands on its own
+4. A mod skipped, and named with what it lacks, when an installation file or a game file its manifest names is missing or has other bytes, or when its package does not hold a file, holds a file with other bytes, or has no host, or when this machine has no task for a tool its manifest names (mods.md, Build, story 14). An installation file story 10 downloads is not missing. Every other mod lands. Cites: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from the installation file or the game folder is byte-checked. Cites: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Cites: mods.md, What install does, story 5
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Cites: Never silently wrong
@@ -125,6 +126,7 @@ What I expect to need and choose not to build yet, each with why.
 4. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
 5. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
 6. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
+7. An external tool that needs the load order, such as xEdit, run by a step. It reads the game's data folder, so it waits for Modbench to deploy the load order there.
 
 ## Test seam
 
