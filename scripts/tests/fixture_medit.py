@@ -47,18 +47,18 @@ class Fixture(NamedTuple):
     load_order: JsonRecord
 
 
-def checked_in(folder: pathlib.Path) -> list[str]:
+def committable(folder: pathlib.Path) -> list[str]:
     in_a_repository = subprocess.run(
         ['git', 'rev-parse', '--is-inside-work-tree'], cwd=folder, capture_output=True, check=False).returncode == 0
     if in_a_repository:
         return subprocess.run(
-            ['git', 'ls-files', '-z'], cwd=folder, capture_output=True, encoding='utf-8', check=True).stdout.split('\0')[:-1]
+            ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd=folder, capture_output=True, encoding='utf-8', check=True).stdout.split('\0')[:-1]
     # The Windows VM runs the gates on a copy of what git would commit, and the copy has no repository to ask.
     return sorted(path.relative_to(folder).as_posix() for path in folder.rglob('*') if path.is_file())
 
 
-def copy_checked_in(source: pathlib.Path, destination: pathlib.Path) -> None:
-    for relative in checked_in(source):
+def copy_committable(source: pathlib.Path, destination: pathlib.Path) -> None:
+    for relative in committable(source):
         copy = destination / relative
         copy.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source / relative, copy)
@@ -70,7 +70,7 @@ def fixture_medit() -> Generator[Fixture]:
     with tempfile.TemporaryDirectory() as temporary:
         scratch = pathlib.Path(temporary)
         instance = scratch / 'instance'
-        copy_checked_in(INSTANCE, instance)
+        copy_committable(INSTANCE, instance)
         (instance / 'overwrite').mkdir()
         # DevListFallout has no game folder; an empty one stands in, so the game loads no plugin of its own.
         game = scratch / 'game'
@@ -266,7 +266,7 @@ class FileStamp(NamedTuple):
 def file_stamps(folder: pathlib.Path) -> list[FileStamp]:
     return sorted(
         FileStamp(relative, (folder / relative).stat().st_size, (folder / relative).stat().st_mtime_ns)
-        for relative in checked_in(folder))
+        for relative in committable(folder))
 
 
 def changed(folder: pathlib.Path) -> list[str]:
