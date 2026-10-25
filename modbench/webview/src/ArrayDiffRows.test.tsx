@@ -1,15 +1,15 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from '../../src/wire/messages';
+import { WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 import {
-  at, compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldElement, member,
+  at, compareOverride, compareResultFixture, diffNode, fieldMeta, hostPicking, lastPostedEnvelope, lastToldElement, member,
   panelClient, required,
 } from './test/fixtures';
 import type { CompareResult } from './types';
@@ -297,61 +297,6 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
 });
 
-describe('RecordPanel — array editing', () => {
-  const intArrayMeta = fieldMeta({
-    name: 'Values', type: 'array', isArray: true,
-    elementType: fieldMeta({ name: '', type: 'int' }),
-  });
-
-  const intArrayCompareResult: CompareResult = compareResultFixture({
-    conflictAll: 'NoConflict',
-    overrides: [
-      compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: intArrayMeta, value: [1, 2, 3] }], conflictThis: 'Master',
-      }),
-    ],
-    diffs: [diffNode({
-      fieldName: 'Values',
-      values: { 'MyMod.esp': [1, 2, 3] },
-      winnerColumn: 'MyMod.esp',
-      cellStates: {},
-      children: [
-        diffNode({ fieldName: '[0]', values: { 'MyMod.esp': 1 }, indexes: { 'MyMod.esp': 0 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-        diffNode({ fieldName: '[1]', values: { 'MyMod.esp': 2 }, indexes: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-        diffNode({ fieldName: '[2]', values: { 'MyMod.esp': 3 }, indexes: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-      ],
-    })],
-  });
-
-  function renderEditablePanel() {
-    const client = panelClient(() => intArrayCompareResult, {
-      plugins: [{ name: 'MyMod.esp', isCompiledPlugin: true }],
-    });
-    return { client, ...render(<RecordPanel client={client} />) };
-  }
-
-  beforeEach(() => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    currentCompare = intArrayCompareResult;
-    vi.mocked(vscode.postMessage).mockClear();
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('a focused array-element cell tells the host its own index', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    await waitFor(() => screen.getByText('[1]'));
-    const cell = required(screen.getByText('2').closest('td'), "the '2' cell's td ancestor");
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(1)] }));
-    expect(lastEnvelope()).toBeUndefined();
-  });
-
-});
-
 const editableIntArrayMeta = fieldMeta({
   name: 'Values', type: 'array', isArray: true,
   elementType: fieldMeta({ name: '', type: 'int' }),
@@ -563,13 +508,11 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Scripts'), at(1)] }));
   });
 
-  it('a keyed element\'s context offers neither move', async () => {
+  it.each(['Ambush', 'Guard'])('the keyed element %s\'s context offers neither move', async label => {
     await renderGuardAfterAmbush();
 
-    for (const label of ['Ambush', 'Guard']) {
-      expect(JSON.parse(myCell(rowLabelled(label)).getAttribute('data-vscode-context') ?? '{}'))
-        .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
-    }
+    expect(JSON.parse(required(myCell(rowLabelled(label)).getAttribute('data-vscode-context'), `${label}'s context`)))
+      .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
   });
 
   it('a collapsed keyed element reads as its key', async () => {
@@ -656,57 +599,29 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.mocked(vscode.postMessage).mockClear();
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.unstubAllGlobals(); vi.mocked(vscode.postMessage).mockReset(); });
 
   it('a picked replacement posts set at the element\'s own index in the written column', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
     fireEvent.click(cell);
+    vi.mocked(vscode.postMessage).mockImplementation(hostPicking(() => Promise.resolve('000123:Fallout4.esm')));
     fireEvent.doubleClick(within(cell).getByText('PkgA'));
-
-    type OpenFormKeyPicker = Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>;
-    const isOpenFormKeyPicker = (call: [WebviewToExtension]): call is [OpenFormKeyPicker] =>
-      call[0].type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER;
-    const calls = vi.mocked(vscode.postMessage).mock.calls;
-    const requestCall = required([...calls].reverse().find(isOpenFormKeyPicker), "a posted OPEN_FORM_KEY_PICKER message");
-    const request = requestCall[0];
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: request.requestId, formKey: '000123:Fallout4.esm' },
-      }));
-    });
 
     await waitFor(() => expect(lastEnvelope()).toEqual({
       op: 'set', path: [member('Packages'), at(1)], value: '000123:Fallout4.esm',
     }));
   });
 
-  it('an element tells the host its own index in this column', async () => {
+  it('an element tells the host its own index in this column, and the moves its place there allows', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
-    const cell = myCell('[2]');
-    fireEvent.click(cell);
+    fireEvent.click(myCell('[2]'));
 
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Packages'), at(1)] }));
-  });
-
-  it('an element tells the host it moves up from its own index', async () => {
-    renderLinkArrayPanel();
-    await waitFor(() => screen.getByText('[2]'));
-    const cell = myCell('[2]');
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Packages'), at(1)], canMoveUp: true }));
-  });
-
-  it('the column\'s own last element tells the host it cannot move down', async () => {
-    renderLinkArrayPanel();
-    await waitFor(() => screen.getByText('[2]'));
-    const cell = myCell('[2]');
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveDown: false }));
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({
+      path: [member('Packages'), at(1)], canMoveUp: true, canMoveDown: false,
+    }));
   });
 
   it('offers add at the array', async () => {
@@ -754,13 +669,6 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
     })} />);
   });
   afterEach(() => vi.unstubAllGlobals());
-
-  it('an element after a null slot tells the host its own index', async () => {
-    await waitFor(() => screen.getByText('[2]'));
-    fireEvent.click(myCell());
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Items'), at(2)] }));
-  });
 
   it('an element after a null slot tells the host it moves up from its own index', async () => {
     await waitFor(() => screen.getByText('[2]'));

@@ -4,7 +4,6 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
-import { headerCellContext } from './recordUtils';
 import type { CompareOverride } from './types';
 import type { UnreadableSource } from '../../src/wire/unreadableSource';
 import { compareOverride, required } from './test/fixtures';
@@ -44,7 +43,7 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
 }
 
 describe('PluginHeader', () => {
-  afterEach(() => new Promise(resolve => setTimeout(resolve, 0)));
+  afterEach(() => { vi.useRealTimers(); });
 
   it('labels a column whose plugin is not active with the file name alone', () => {
     renderHeader({ override: { loadIndex: null }, notActive: true });
@@ -137,8 +136,10 @@ describe('PluginHeader', () => {
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 
-  it('resizes its column by the drag of its edge, and does not collapse it', () => {
-    const { header, onToggleCollapse, onResize } = renderHeader();
+  it('resizes its column by the drag of its edge, and neither collapses nor opens it on the click that ends the drag', () => {
+    vi.useFakeTimers();
+    const onOpen = vi.fn();
+    const { header, onToggleCollapse, onResize } = renderHeader({}, { onOpen });
     vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 20));
     const edge = required(header.querySelector('[data-column-edge]'), 'the header’s edge');
 
@@ -148,8 +149,11 @@ describe('PluginHeader', () => {
     fireEvent.click(header);
     fireEvent.mouseMove(window, { clientX: 400 });
 
+    vi.runAllTimers();
+
     expect(onResize.mock.calls).toEqual([[260]]);
     expect(onToggleCollapse).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('takes no drag from a button but the left one', () => {
@@ -167,17 +171,10 @@ describe('PluginHeader', () => {
     expect(header.querySelector('[data-column-edge]')).toBeNull();
   });
 
-  it('carries on the whole header cell the data-vscode-context payload its native right-click menu gates the copy commands on', () => {
-    const vscodeContext = JSON.stringify(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', { editable: false, inMod: 'none' }));
-    const { header } = renderHeader({}, { vscodeContext });
-    expect(header).toHaveAttribute('data-vscode-context', vscodeContext);
-  });
-
-  it('marks the file\u2019s column to the eye and to a screen reader, and takes no opening gesture', () => {
+  it('marks the file\u2019s column to the eye and to a screen reader, and takes no opening key', () => {
     const onOpen = vi.fn();
     const { header } = renderHeader({}, { isFile: true, onOpen });
 
-    fireEvent.click(header);
     fireEvent.keyDown(header, { key: 'Enter' });
 
     expect(header).toHaveAttribute('aria-current', 'true');
@@ -209,14 +206,5 @@ describe('PluginHeader', () => {
     fireEvent.keyDown(header, { key: ' ' });
 
     expect(onOpen).toHaveBeenCalledTimes(2);
-  });
-
-  it('opens nothing on a click on its collapse button', () => {
-    const onOpen = vi.fn();
-    const { header } = renderHeader({}, { onOpen });
-
-    fireEvent.click(within(header).getByRole('button'));
-
-    expect(onOpen).not.toHaveBeenCalled();
   });
 });

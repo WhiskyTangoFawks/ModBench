@@ -5,9 +5,6 @@ import type { FieldMetadata } from './types';
 interface FlagCellProps {
   value: unknown;
   meta: FieldMetadata;
-  // Whether this cell's column can be written — presence of somewhere to write is the
-  // editability signal (see ScalarCell's identical contract).
-  editable?: boolean;
   // The flags now set, as the member spells them. Optional: a caller with nowhere to
   // write renders read-only rather than crashing.
   onCommit?: (v: unknown) => void;
@@ -19,18 +16,16 @@ interface FlagCellProps {
 
 /** A `flags` member's checkbox list (xedit.md, divergence 5). There is no text state and nothing
  *  to open, so F2 is inert. */
-export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
+export function FlagCell({ value, meta, onCommit, collapsed }: FlagCellProps) {
   // Absent means default: no names set.
   const names = flagNames(value, meta);
 
   if (collapsed) return <span>{names.join(', ')}</span>;
 
   // editor.md, Columns, story 4: a cell that cannot be written reads as one that can, and a click on
-  // it changes nothing.
-  const writable = editable && onCommit != null;
-  // A name the metadata does not list stays where the document put it; only the toggled name moves.
+  // it changes nothing. A name the metadata does not list stays where the document put it.
   const toggle = (name: string) => {
-    if (writable) onCommit(flagsValue(names.includes(name) ? names.filter(n => n !== name) : [...names, name], meta));
+    if (onCommit) onCommit(flagsValue(names.includes(name) ? names.filter(n => n !== name) : [...names, name], meta));
   };
 
   return (

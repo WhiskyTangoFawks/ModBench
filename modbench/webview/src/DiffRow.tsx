@@ -47,7 +47,6 @@ function renderCell(
       <FormKeyCell
         value={value} meta={meta}
         checkError={checkError} resolution={resolution}
-        editable={onCommit != null}
         onCommit={onCommit}
       />
     );
@@ -72,7 +71,6 @@ function renderCell(
       <FlagCell
         value={value}
         meta={meta}
-        editable={onCommit != null}
         onCommit={onCommit}
         collapsed={rowCollapsed}
       />
@@ -81,7 +79,7 @@ function renderCell(
   if (meta.type === 'translatedString' && checkError) {
     return (
       <span title={checkError}>
-        <ScalarCell value={value} meta={meta} editable={onCommit != null} onCommit={onCommit} displayOverride={NO_STRINGS_FILE} />
+        <ScalarCell value={value} meta={meta} onCommit={onCommit} displayOverride={NO_STRINGS_FILE} />
       </span>
     );
   }
@@ -89,7 +87,6 @@ function renderCell(
     <ScalarCell
       value={value}
       meta={meta}
-      editable={onCommit != null}
       onCommit={onCommit}
       displayOverride={reading}
     />

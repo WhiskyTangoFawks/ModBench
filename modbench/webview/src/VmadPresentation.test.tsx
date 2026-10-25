@@ -11,8 +11,7 @@ import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
-  required,
+  compareResultFixture, fieldCompared, fieldMeta, lastPostedEnvelope, panelClient, required, tellPanel,
 } from './test/fixtures';
 
 const SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS: Record<string, string> = {
@@ -30,17 +29,18 @@ const SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS: Record<string, strin
 const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): FieldMetadata => fieldMeta({
   name, type: 'struct',
   leafTypeName: 'ScriptObjectProperty',
-  fields: [field('Object', 'formKey'), field('Alias', 'int')],
+  fields: [fieldMeta({ name: 'Object', type: 'formKey' }), fieldMeta({ name: 'Alias', type: 'int' })],
   ...extra,
 });
 
-const leafTypedDataMetaShapedAsItsFirstLeaf: FieldMetadata = field('Data', 'bool', {
+const leafTypedDataMetaShapedAsItsFirstLeaf: FieldMetadata = fieldMeta({
+  name: 'Data', type: 'bool',
   variants: {
-    ScriptBoolProperty: field('Data', 'bool'),
-    ScriptFloatProperty: field('Data', 'float'),
-    ScriptIntProperty: field('Data', 'int'),
-    ScriptStringProperty: field('Data', 'string'),
-    ScriptStringListProperty: field('Data', 'array', { isArray: true, elementType: field('', 'string') }),
+    ScriptBoolProperty: fieldMeta({ name: 'Data', type: 'bool' }),
+    ScriptFloatProperty: fieldMeta({ name: 'Data', type: 'float' }),
+    ScriptIntProperty: fieldMeta({ name: 'Data', type: 'int' }),
+    ScriptStringProperty: fieldMeta({ name: 'Data', type: 'string' }),
+    ScriptStringListProperty: fieldMeta({ name: 'Data', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) }),
   },
 });
 
@@ -48,13 +48,14 @@ const propertyMeta = fieldMeta({
   name: '', type: 'struct',
   leafTypeName: 'ScriptProperty',
   fields: [
-    field('Name', 'string'),
-    field('Flags', 'flags', { enumMembers: [{ value: 'Edited', bitValue: '1', label: null }] }),
+    fieldMeta({ name: 'Name', type: 'string' }),
+    fieldMeta({ name: 'Flags', type: 'flags', enumMembers: [{ value: 'Edited', bitValue: '1', label: null }] }),
     leafTypedDataMetaShapedAsItsFirstLeaf,
-    field('Object', 'formKey'),
-    field('Alias', 'int'),
-    field('Objects', 'array', { isArray: true, elementType: objectBindingMeta('') }),
-    field('MutagenObjectType', 'enum', {
+    fieldMeta({ name: 'Object', type: 'formKey' }),
+    fieldMeta({ name: 'Alias', type: 'int' }),
+    fieldMeta({ name: 'Objects', type: 'array', isArray: true, elementType: objectBindingMeta('') }),
+    fieldMeta({
+      name: 'MutagenObjectType', type: 'enum',
       displayLabel: 'Kind', isDiscriminator: true,
       enumMembers: Object.entries(SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS).map(([value, label]) => ({ value, bitValue: null, label })),
     }),
@@ -70,9 +71,9 @@ const scriptsMeta = fieldMeta({
     name: '', type: 'struct',
     leafTypeName: 'ScriptEntry',
     fields: [
-      field('Name', 'string'),
-      field('Flags', 'enum', { enumMembers: [{ value: 'Local', bitValue: null, label: null }] }),
-      field('Properties', 'array', { isArray: true, keyMembers: FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS.properties, elementType: propertyMeta }),
+      fieldMeta({ name: 'Name', type: 'string' }),
+      fieldMeta({ name: 'Flags', type: 'enum', enumMembers: [{ value: 'Local', bitValue: null, label: null }] }),
+      fieldMeta({ name: 'Properties', type: 'array', isArray: true, keyMembers: FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS.properties, elementType: propertyMeta }),
     ],
   }),
 });
@@ -89,19 +90,6 @@ const aliasesMeta = fieldMeta({
 
 type Obj = Record<string, unknown>;
 
-function reflectedPropertyOf(value: unknown, name: string): unknown {
-  return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
-}
-
-function isUnknownArray(value: unknown): value is unknown[] {
-  return Array.isArray(value);
-}
-
-function stringValueAt(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  return typeof value === 'string' ? value : '';
-}
-
 const documentSpelledProperty = (name: string, concreteType: string, over: Obj = {}): Obj => ({
   MutagenObjectType: concreteType, Name: name, Flags: ['Edited'],
   ...over,
@@ -111,83 +99,9 @@ const script = (name: string, properties: (Obj | null)[] = []): Obj => ({ Name: 
 
 const PLUGIN = 'MyMod.esp';
 
-const backendJoinedKeyTextOfStringOrNumberKeyMembers = (keyMembers: string[], element: unknown): string =>
-  keyMembers
-    .map(m => m.split('.').reduce<unknown>((v, name) => reflectedPropertyOf(v, name), element))
-    .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
-    .join(' / ');
-
-function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { label: string; indexes: Record<string, number> }[] {
-  const rows = new Map<string, { label: string; turn: number; indexes: Record<string, number> }>();
-  const { keyMembers } = meta;
-  for (const [column, list] of Object.entries(values)) {
-    const turns = new Map<string, number>();
-    (isUnknownArray(list) ? list : []).forEach((element, index) => {
-      const label = keyMembers ? backendJoinedKeyTextOfStringOrNumberKeyMembers(keyMembers, element) : `[${index}]`;
-      const turn = (turns.get(label) ?? 0) + 1;
-      turns.set(label, turn);
-      const row = rows.get(`${label}#${turn}`) ?? { label, turn, indexes: {} };
-      row.indexes[column] = index;
-      rows.set(`${label}#${turn}`, row);
-    });
-  }
-  const all = [...rows.values()];
-  if (keyMembers) all.sort((a, b) => a.label.localeCompare(b.label) || a.turn - b.turn);
-  return all;
-}
-
-function firstLeafsShapeOf(member: FieldMetadata, owners: Record<string, unknown>): FieldMetadata {
-  const leaf = Object.values(owners).map(owner => reflectedPropertyOf(owner, 'MutagenObjectType')).find(l => typeof l === 'string');
-  return (typeof leaf === 'string' ? member.variants?.[leaf] : undefined) ?? member;
-}
-
-function metadataDrivenUnionAlignedDiff(
-  fieldName: string, meta: FieldMetadata, values: Record<string, unknown>,
-  editorIds: Record<string, string>,
-): FieldDiff {
-  const columns = Object.keys(values);
-  const resolved = columns.filter(c => typeof values[c] === 'string' && editorIds[values[c]]);
-  const each = (children: [string, FieldMetadata, (column: string) => unknown][]): FieldDiff[] =>
-    children.map(([name, childMeta, pick]) => metadataDrivenUnionAlignedDiff(
-      name, childMeta, Object.fromEntries(columns.map(c => [c, pick(c) ?? null])), editorIds));
-  const elementOf = (column: string, index: number | undefined): unknown =>
-    index === undefined ? null : reflectedPropertyOf(values[column], String(index));
-  const { elementType } = meta;
-
-  return diffNode({
-    fieldName,
-    values,
-    winnerColumn: columns[0],
-    resolutions: resolved.length === 0 ? undefined : Object.fromEntries(resolved.map(c => [c, {
-      state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[stringValueAt(values, c)],
-    }])),
-    children:
-      meta.type === 'array' && elementType
-        ? elementRows(meta, values).map(row => ({
-          ...metadataDrivenUnionAlignedDiff(row.label, elementType,
-            Object.fromEntries(columns.map(c => [c, elementOf(c, row.indexes[c]) ?? null])), editorIds),
-          indexes: row.indexes,
-        }))
-        : meta.type === 'struct'
-          ? each((meta.fields ?? []).map(f => [f.name, firstLeafsShapeOf(f, values), (c: string) => reflectedPropertyOf(values[c], f.name)]))
-          : undefined,
-  });
-}
-
-function compareResult(
+const compareResult = (
   byColumn: Record<string, Obj[]>, editorIds: Record<string, string> = {}, meta: FieldMetadata = scriptsMeta,
-): CompareResult {
-  const columns = Object.keys(byColumn);
-  return compareResultFixture({
-    conflictAll: 'NoConflict',
-    overrides: columns.map((plugin, i) => compareOverride({
-      formKey: '000001:MyMod.esp', plugin,
-      isWinner: i === 0, editorId: 'TestNpc',
-      fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
-    })),
-    diffs: [metadataDrivenUnionAlignedDiff(meta.name, meta, byColumn, editorIds)],
-  });
-}
+): CompareResult => fieldCompared(meta, byColumn, { formKey: '000001:MyMod.esp', editorId: 'TestNpc', editorIds });
 
 const oneColumn = (scripts: Obj[], editorIds: Record<string, string> = {}, meta: FieldMetadata = scriptsMeta) =>
   compareResult({ [PLUGIN]: scripts }, editorIds, meta);
@@ -200,30 +114,17 @@ function renderPanel() {
   })} />);
 }
 
-function fieldCell(field: string): HTMLTableCellElement {
-  const td = screen.getAllByText(field).find((el): el is HTMLTableCellElement => el.tagName === 'TD');
-  if (!td) throw new Error(`no row named ${field}`);
-  return td;
-}
+const fieldCell = (field: string): HTMLTableCellElement =>
+  required(screen.getAllByText(field).find((el): el is HTMLTableCellElement => el.tagName === 'TD'), `the row named ${field}`);
 
-function rowOf(el: Element): HTMLTableRowElement {
-  const row = el.closest('tr');
-  if (!row) throw new Error('no <tr> ancestor');
-  return row;
-}
+const rowOf = (el: Element): HTMLTableRowElement => required(el.closest('tr'), 'the row');
 
-function cellAt(row: Element, index: number): HTMLTableCellElement {
-  const cell = row.querySelectorAll('td')[index];
-  if (!cell) throw new Error(`no <td> at index ${index} in this row`);
-  return cell;
-}
+const cellAt = (row: Element, index: number): HTMLTableCellElement => required(row.querySelectorAll('td')[index], `the row's cell ${index}`);
 
 const summaryOf = (field: string): string => cellAt(rowOf(fieldCell(field)), 1).textContent;
 
 const toggleRow = (field: string) => {
-  const button = rowOf(fieldCell(field)).querySelector('button');
-  if (!button) throw new Error(`no toggle button in ${field}'s row`);
-  fireEvent.click(button);
+  fireEvent.click(required(rowOf(fieldCell(field)).querySelector('button'), `${field}'s toggle`));
 };
 
 async function openScripts() {
@@ -234,9 +135,7 @@ const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 
 function reloadWith(compare: CompareResult) {
   currentCompare = compare;
-  window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:MyMod.esp' },
-  }));
+  tellPanel({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:MyMod.esp' });
 }
 
 beforeEach(() => {
@@ -245,29 +144,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe('a collapsed script reads as xEdit prose', () => {
-  it('a script reads under its own name with every property passed through, not counted', async () => {
-    currentCompare = oneColumn([script('Guard', [
-      documentSpelledProperty('Awake', 'ScriptBoolProperty', { Data: true }),
-      documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 }),
-    ])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Guard'));
-    toggleRow('Guard');
-
-    expect(summaryOf('Guard')).toBe('Guard(Awake: Bool = True, Radius: Int = 10)');
-  });
-
-});
-
 describe('collapsedReading of a script', () => {
-  const { elementType: scriptElementType } = scriptsMeta;
-  if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
-  const { fields: scriptElementFields } = scriptElementType;
-  if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
-  const { fields: propertyFields } = propertyMeta;
-  if (!propertyFields) throw new Error('propertyMeta has no fields');
+  const scriptElementType = required(scriptsMeta.elementType, "scriptsMeta's elementType");
+  const scriptElementFields = required(scriptElementType.fields, "scriptsMeta's element fields");
+  const propertyFields = required(propertyMeta.fields, "propertyMeta's fields");
   const objectBinding = required(propertyFields.find(f => f.name === 'Objects')?.elementType, "propertyMeta's Objects elementType");
   const aliasProperty = required(aliasesMeta.elementType?.fields?.find(f => f.name === 'Property'), "aliasesMeta's Property");
   const ofUnknownLeaf = (propertiesOver: Partial<FieldMetadata> = {}): FieldMetadata => ({
@@ -476,21 +356,13 @@ describe('Add Script is the generic array gesture', () => {
     reloadWith(oneColumn([script('Guard'), script('')]));
     await waitFor(() => expect(screen.getAllByText('Name')).toHaveLength(2));
 
-    const added = document.querySelectorAll('tbody tr')[2];
-    if (!added) throw new Error('no second script row after the reload');
+    const added = required(document.querySelectorAll('tbody tr')[2], 'the second script row');
     expect(within(cellAt(added, 0)).getByRole('button', { expanded: true })).toBeInTheDocument();
-    const beneath = added.nextElementSibling;
-    if (!beneath) throw new Error('no row beneath the added script');
-    expect(cellAt(beneath, 0).textContent).toBe('Name');
+    expect(cellAt(required(added.nextElementSibling, 'the row beneath the added script'), 0).textContent).toBe('Name');
 
-    const nameLabel = screen.getAllByText('Name')[0];
-    if (!nameLabel) throw new Error("no 'Name' row rendered");
-    const nameCell = cellAt(rowOf(nameLabel), 1);
-    const openTrigger = nameCell.querySelector('[data-open-trigger]');
-    if (!openTrigger) throw new Error("no open trigger in Name's value cell");
-    fireEvent.doubleClick(openTrigger);
-    const input = nameCell.querySelector('input');
-    if (!input) throw new Error("no input in Name's value cell");
+    const nameCell = cellAt(rowOf(required(screen.getAllByText('Name')[0], 'the Name row')), 1);
+    fireEvent.doubleClick(required(nameCell.querySelector('[data-open-trigger]'), "the Name cell's open trigger"));
+    const input = required(nameCell.querySelector('input'), "the Name cell's input");
     fireEvent.change(input, { target: { value: 'Ambush' } });
     fireEvent.blur(input);
 

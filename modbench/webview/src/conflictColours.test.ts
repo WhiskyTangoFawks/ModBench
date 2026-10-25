@@ -23,33 +23,26 @@ const CONFLICT_ALL: ConflictAll[] = ['OnlyOne', 'NoConflict', 'Override', 'Confl
 const CONFLICT_THIS: ConflictThis[] = ['OnlyOne', 'Master', 'IdenticalToMaster', 'Override', 'ConflictWins', 'ConflictLoses'];
 
 describe('conflict theme colours', () => {
-  it('every contributed colour id has at most one dot, since VS Code replaces only the first', () => {
-    for (const { id } of contributedColours()) {
-      expect(id.split('.').length - 1, id).toBeLessThanOrEqual(1);
-    }
+  const ids = contributedColours().map(({ id }) => id);
+
+  it.each(ids)('%s has at most one dot, since VS Code replaces only the first', id => {
+    expect(id.split('.').length - 1).toBeLessThanOrEqual(1);
   });
 
   it('the panel paints exactly the conflict colours the manifest contributes, under the variable VS Code names each', () => {
-    const vscodeVariables = contributedColours().filter(({ id }) => id.startsWith('modbench.conflict')).map(({ id }) => {
+    const vscodeVariables = ids.filter(id => id.startsWith('modbench.conflict')).map(id => {
       const [namespace, ...rest] = id.split('.');
       return `var(--vscode-${namespace}-${rest.join('.')})`;
     });
-    const painted = new Set<string>();
-    for (const state of CONFLICT_ALL) {
-      const background = rowBackground(state);
-      if (background) painted.add(background);
-    }
-    for (const state of CONFLICT_THIS) {
-      const { backgroundColor, color } = getCellStyle(state);
-      for (const value of [backgroundColor, color]) if (typeof value === 'string') painted.add(value);
-    }
-    expect([...painted].sort()).toEqual(vscodeVariables.sort());
+    const painted = [
+      ...CONFLICT_ALL.map(rowBackground),
+      ...CONFLICT_THIS.flatMap(state => [getCellStyle(state).backgroundColor, getCellStyle(state).color]),
+    ].filter((value): value is string => typeof value === 'string');
+
+    expect([...new Set(painted)].sort()).toEqual(vscodeVariables.sort());
   });
 
-  it('each has a default for every kind of theme', () => {
-    for (const colour of contributedColours()) {
-      expect(Object.keys(colour.defaults).sort(), colour.id)
-        .toEqual(['dark', 'highContrast', 'highContrastLight', 'light']);
-    }
+  it.each(contributedColours())('$id has a default for every kind of theme', ({ defaults }) => {
+    expect(Object.keys(defaults).sort()).toEqual(['dark', 'highContrast', 'highContrastLight', 'light']);
   });
 });

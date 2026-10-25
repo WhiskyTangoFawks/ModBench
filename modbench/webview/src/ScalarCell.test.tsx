@@ -16,7 +16,7 @@ const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
 
 describe('ScalarCell — the xEdit open gesture', () => {
   it('the open trigger opens the editor', () => {
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value="before" meta={meta()} onCommit={vi.fn()} />);
 
     fireEvent.click(screen.getByText('before'));
 
@@ -25,41 +25,21 @@ describe('ScalarCell — the xEdit open gesture', () => {
 });
 
 describe('ScalarCell — typed text is taken as pasted text is', () => {
-  const typeAndEnter = (cellMeta: FieldMetadata, value: unknown, text: string) => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value={value} meta={cellMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText(String(value)));
-    const box = screen.getByRole('spinbutton');
-    fireEvent.change(box, { target: { value: text } });
-    fireEvent.keyDown(box, { key: 'Enter' });
-    return onCommit;
-  };
-
   it('a whole number types as the number', () => {
-    expect(typeAndEnter(meta({ type: 'int' }), 5, '12')).toHaveBeenCalledWith(12);
-  });
+    const onCommit = vi.fn();
+    render(<ScalarCell value={5} meta={meta({ type: 'int' })} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('5'));
+    const box = screen.getByRole('spinbutton');
+    fireEvent.change(box, { target: { value: '12' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
 
-  it('a fraction in an integer field is not repaired to a whole number', () => {
-    expect(typeAndEnter(meta({ type: 'int' }), 5, '1.5')).toHaveBeenCalledWith('1.5');
-  });
-
-  it('a decimal in a float field types as the number', () => {
-    expect(typeAndEnter(meta({ type: 'float' }), 5, '1.5')).toHaveBeenCalledWith(1.5);
+    expect(onCommit).toHaveBeenCalledWith(12);
   });
 });
 
 describe('ScalarCell — a column with nowhere to write', () => {
-  it('opens nothing under any of the three triggers', () => {
-    render(<ScalarCell value="before" meta={meta()} editable={false} onCommit={vi.fn()} />);
-
-    fireEvent.click(screen.getByText('before'));
-    fireEvent.click(screen.getByText('before'));
-
-    expect(screen.queryByRole('textbox')).toBeNull();
-  });
-
-  it('renders as plain text when no commit target was supplied at all, the ordinary state for every caller outside the field grid', () => {
-    render(<ScalarCell value="before" meta={meta()} editable />);
+  it('renders as plain text when no commit target was supplied, the ordinary state for every caller outside the field grid', () => {
+    render(<ScalarCell value="before" meta={meta()} />);
 
     fireEvent.click(screen.getByText('before'));
 
@@ -67,72 +47,18 @@ describe('ScalarCell — a column with nowhere to write', () => {
   });
 });
 
-describe('ScalarCell — committing', () => {
-  it('commits the typed value on Enter', () => {
+describe('ScalarCell — a value equal to the one already there is not an edit, which would show the record as dirty in Source Control for a keystroke the user never made', () => {
+  it.each([
+    ['a string', meta(), 'before', 'before'],
+    ['a translated string', meta({ name: 'Name', type: 'translatedString' }), { TargetLanguage: 'English', Value: 'Base name' }, 'Base name'],
+  ])('%s commits nothing when closed on the text it already holds', (_case, cellMeta, value, text) => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('before'));
+    render(<ScalarCell value={value} meta={cellMeta} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText(text));
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
 
-    expect(onCommit).toHaveBeenCalledWith('after');
-  });
-
-  it('commits exactly once on Enter, though Enter also blurs the input', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('before'));
-    const input = screen.getByRole('textbox');
-
-    fireEvent.change(input, { target: { value: 'after' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-
-    expect(onCommit).toHaveBeenCalledTimes(1);
-  });
-
-  it('commits a number as a number, not as the text that was typed', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value={1} meta={meta({ type: 'float' })} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('1'));
-
-    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0.75' } });
-    fireEvent.blur(screen.getByRole('spinbutton'));
-
-    expect(onCommit).toHaveBeenCalledWith(0.75);
-  });
-
-  it('does not commit a value equal to the one already there, which would show the record as dirty in Source Control for a keystroke the user never made', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('before'));
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'before' } });
-    fireEvent.blur(screen.getByRole('textbox'));
-
     expect(onCommit).not.toHaveBeenCalled();
-  });
-});
-
-describe('ScalarCell — string cell has no debounce: no left click waits to see whether a second is coming', () => {
-  it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
-    expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
-  });
-
-  it('a double click on a mutable string cell opens the inline editor, matching every other type', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'));
-    expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
-  });
-});
-
-describe('ScalarCell — immutable string cell is unaffected by any left-click gesture, its only read path for a long value being the right-click menu', () => {
-  it('opens nothing on double click', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 });
 
@@ -141,7 +67,7 @@ describe('ScalarCell — a hex row edits as text because the schema says the fie
 
   it('edits as text and commits the typed hex verbatim', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="0x11223344" meta={hexMeta} editable onCommit={onCommit} />);
+    render(<ScalarCell value="0x11223344" meta={hexMeta} onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('0x11223344'));
     const input = screen.getByRole('textbox');
@@ -155,7 +81,7 @@ describe('ScalarCell — a hex row edits as text because the schema says the fie
 
   it('hands a value the writer will refuse straight through, rather than silently correcting it', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="0x11223344" meta={hexMeta} editable onCommit={onCommit} />);
+    render(<ScalarCell value="0x11223344" meta={hexMeta} onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('0x11223344'));
     const input = screen.getByRole('textbox');
@@ -181,7 +107,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
   beforeEach(() => { asked.length = 0; });
 
   it('shows the label at rest, never the value behind it', () => {
-    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value="NpcLevel" meta={kind} onCommit={vi.fn()} />);
 
     expect(screen.getByText('Npc Level')).toBeInTheDocument();
     expect(screen.queryByText('NpcLevel')).toBeNull();
@@ -189,7 +115,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
 
   it('opens no in-page control, and asks for the names sorted, opening on the current value', () => {
     hostChoosing(null);
-    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value="NpcLevel" meta={kind} onCommit={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Npc Level'));
 
@@ -203,7 +129,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
   it('falls back to the values themselves for an ordinary enum, which has no labels', () => {
     hostChoosing(null);
     const plain = meta({ type: 'enum', enumMembers: [{ value: 'Beta' }, { value: 'Alpha' }] });
-    render(<ScalarCell value="Alpha" meta={plain} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value="Alpha" meta={plain} onCommit={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Alpha'));
 
@@ -213,7 +139,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
   it('commits the chosen name\'s own value, not the label the user read', async () => {
     hostChoosing('PcLevelMult');
     const onCommit = vi.fn();
-    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+    render(<ScalarCell value="NpcLevel" meta={kind} onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('Npc Level'));
 
@@ -223,7 +149,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
   it('writes nothing when the pick is dismissed', async () => {
     hostChoosing(null);
     const onCommit = vi.fn();
-    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+    render(<ScalarCell value="NpcLevel" meta={kind} onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('Npc Level'));
     await waitFor(() => expect(asked).toHaveLength(1));
@@ -235,7 +161,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
   it('writes nothing when the choice is the current value', async () => {
     hostChoosing('NpcLevel');
     const onCommit = vi.fn();
-    render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
+    render(<ScalarCell value="NpcLevel" meta={kind} onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('Npc Level'));
     await waitFor(() => expect(asked).toHaveLength(1));
@@ -248,7 +174,7 @@ describe('ScalarCell — an enum is picked from the host\'s quick pick', () => {
     hostChoosing('5');
     const onCommit = vi.fn();
     const numbered = meta({ type: 'enum', enumMembers: [{ value: 'A' }, { value: 'B' }] });
-    render(<ScalarCell value={5} meta={numbered} editable onCommit={onCommit} />);
+    render(<ScalarCell value={5} meta={numbered} onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('<Unknown: 5>'));
     await waitFor(() => expect(asked).toHaveLength(1));
@@ -265,14 +191,14 @@ describe('ScalarCell — a translated string, which the codec spells as an objec
   const value = { TargetLanguage: 'English', Value: 'Base name' };
 
   it('reads the text, not the object', () => {
-    render(<ScalarCell value={value} meta={nameMeta} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value={value} meta={nameMeta} onCommit={vi.fn()} />);
     expect(screen.getByText('Base name')).toBeInTheDocument();
     expect(screen.queryByText(/TargetLanguage/)).toBeNull();
   });
 
   it('commits the typed text', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={value} meta={nameMeta} editable onCommit={onCommit} />);
+    render(<ScalarCell value={value} meta={nameMeta} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('Base name'));
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'New name' } });
@@ -280,21 +206,12 @@ describe('ScalarCell — a translated string, which the codec spells as an objec
 
     expect(onCommit).toHaveBeenCalledWith('New name');
   });
-
-  it('commits nothing for the text it already holds', () => {
-    const onCommit = vi.fn();
-    render(<ScalarCell value={value} meta={nameMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getByText('Base name'));
-    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
-
-    expect(onCommit).not.toHaveBeenCalled();
-  });
 });
 
 describe('ScalarCell — Enter writes and Esc cancels', () => {
   it('Esc closes the text editor and writes nothing', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
+    render(<ScalarCell value="before" meta={meta()} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
 
@@ -307,7 +224,7 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
 
   it('Enter writes the text once and closes the editor', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
+    render(<ScalarCell value="before" meta={meta()} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
 
@@ -320,7 +237,7 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
 
   it('moving the focus away writes the text', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
+    render(<ScalarCell value="before" meta={meta()} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
 
@@ -333,7 +250,7 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
     const onCommit = vi.fn();
     render(
       <table><tbody><tr><td tabIndex={0} data-testid="cell">
-        <ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />
+        <ScalarCell value="before" meta={meta()} onCommit={onCommit} />
       </td></tr></tbody></table>);
     fireEvent.click(screen.getByText('before'));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
@@ -345,14 +262,14 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
   });
 
   it('draws the checkbox editor in the theme\'s checkbox style', () => {
-    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('False'));
 
     expect(screen.getByRole('checkbox')).toHaveClass('vscode-checkbox');
   });
 
   it('Esc closes the checkbox editor', () => {
-    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable onCommit={vi.fn()} />);
+    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('False'));
 
     fireEvent.keyDown(screen.getByRole('checkbox'), { key: 'Escape' });

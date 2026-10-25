@@ -1,9 +1,9 @@
 import { pluginCanBeEdited } from '../../../src/wire/pluginEditable';
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, isString, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
-import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
+import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
 import { unreadableSources, type UnreadableSource } from '../../../src/wire/unreadableSource';
 
@@ -66,37 +66,49 @@ export interface PanelOpts {
   load?: RecordPanelClient['load'];
 }
 
-function winnerColumn({ overrides }: CompareResult): string | undefined {
+function winnerColumn({ overrides }: CompareResult): ColumnKey | undefined {
   const winner = overrides.find(o => o.isWinner);
   return winner && copyColumnKey(winner);
 }
 
-// `compare` is a thunk so a test that edits and reloads gets the new document on the second load;
-// its result is a real CompareResult, not a freehand value cast at the boundary.
-export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}): RecordPanelClient {
+export type Loaded = Awaited<ReturnType<RecordPanelClient['load']>>;
+
+/** The read `RecordPanelClient.load` answers for `result`, its plugin facts taken from `opts`.
+ *  A null result is records no plugin holds, which `gone` names. */
+export function loaded(
+  result: CompareResult | null, opts: Omit<PanelOpts, 'load'> & { gone?: string[]; copiesLacking?: string[] } = {},
+): Extract<Loaded, { ok: true }> {
   const plugins = opts.plugins ?? [];
   // ADR-0012: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
   const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
     new Set(plugins.filter(p).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data/' })));
   return {
+    ok: true,
+    ...(result === null ? { result, gone: opts.gone ?? [], copiesLacking: opts.copiesLacking ?? [] } : { result }),
+    immutableSet: columnsWhere(p => p.isImmutable === true),
+    // ADR-0007: an unstated plugin is non-compiled plugin.
+    compiledPluginSet: columnsWhere(p => p.isCompiledPlugin === true),
+    editableSet: columnsWhere(pluginCanBeEdited),
+    sourceUnreadableReasons: unreadableSources(plugins.map(p => ({ ...p, origin: p.origin ?? 'Data/' }))),
+    modsByOrigin: opts.modsByOrigin ?? {},
+    conflictsComputed: opts.conflictsComputed ?? true,
+    loadFailures: opts.loadFailures ?? [],
+    fileColumn: opts.fileColumn === undefined
+      ? result ? winnerColumn(result) : undefined
+      : required(result?.overrides.map(copyColumnKey).find(key => key === opts.fileColumn), `the column ${opts.fileColumn} in the read`),
+    fileCopyAlone: opts.fileCopyAlone ?? false,
+    fileOverriddenBy: opts.fileOverriddenBy ?? null,
+  };
+}
+
+// `compare` is a thunk so a test that edits and reloads gets the new document on the second load;
+// its result is a real CompareResult, not a freehand value cast at the boundary.
+export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}): RecordPanelClient {
+  return {
     showColumns: vi.fn(),
-    load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({
-      ok: true,
-      // A fresh clone per load(): a fixture is one shared module-level object, and a test that
-      // edits and reloads must not hand the panel the same reference twice.
-      result: structuredClone(compare()),
-      immutableSet: columnsWhere(p => p.isImmutable === true),
-      // ADR-0007: an unstated plugin is non-compiled plugin.
-      compiledPluginSet: columnsWhere(p => p.isCompiledPlugin === true),
-      editableSet: new Set(plugins.filter(pluginCanBeEdited).map(x => columnKey({ name: x.name, origin: x.origin ?? 'Data/' }))),
-      sourceUnreadableReasons: unreadableSources(plugins.map(p => ({ ...p, origin: p.origin ?? 'Data/' }))),
-      modsByOrigin: opts.modsByOrigin ?? {},
-      conflictsComputed: opts.conflictsComputed ?? true,
-      loadFailures: opts.loadFailures ?? [],
-      fileColumn: opts.fileColumn ?? winnerColumn(compare()),
-      fileCopyAlone: opts.fileCopyAlone ?? false,
-      fileOverriddenBy: opts.fileOverriddenBy ?? null,
-    })),
+    // A fresh clone per load(): a fixture is one shared module-level object, and a test that
+    // edits and reloads must not hand the panel the same reference twice.
+    load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve(loaded(structuredClone(compare()), opts))),
   };
 }
 
@@ -142,10 +154,88 @@ export const lastPostedEnvelope = (
   postMessage: (msg: WebviewToExtension) => void,
 ): RecordEditEnvelope | undefined => postedEnvelopes(postMessage).at(-1);
 
-/** A leaf whose `type` arrives as a plain string, the shape a schema fixture reads most naturally. */
-export const leafMeta = (
-  name: string, type: FieldMetadata['type'], extra: Partial<FieldMetadata> = {},
-): FieldMetadata => fieldMeta({ name, type, ...extra });
+const memberOf = (value: unknown, name: string): unknown =>
+  typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
+
+// A keyed element's label joins its string and number key members.
+const keyTextOf = (keyMembers: string[], element: unknown): string =>
+  keyMembers
+    .map(m => m.split('.').reduce<unknown>(memberOf, element))
+    .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
+    .join(' / ');
+
+function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { label: string; indexes: Record<string, number> }[] {
+  const rows = new Map<string, { label: string; turn: number; indexes: Record<string, number> }>();
+  const { keyMembers } = meta;
+  for (const [column, list] of Object.entries(values)) {
+    const turns = new Map<string, number>();
+    (Array.isArray(list) ? list : []).forEach((element: unknown, index) => {
+      const label = keyMembers ? keyTextOf(keyMembers, element) : `[${index}]`;
+      const turn = (turns.get(label) ?? 0) + 1;
+      turns.set(label, turn);
+      const row = rows.get(`${label}#${turn}`) ?? { label, turn, indexes: {} };
+      row.indexes[column] = index;
+      rows.set(`${label}#${turn}`, row);
+    });
+  }
+  const all = [...rows.values()];
+  if (keyMembers) all.sort((a, b) => a.label.localeCompare(b.label) || a.turn - b.turn);
+  return all;
+}
+
+function firstLeafsShapeOf(member: FieldMetadata, owners: Record<string, unknown>): FieldMetadata {
+  const leaf = Object.values(owners).map(owner => memberOf(owner, 'MutagenObjectType')).find(isString);
+  return (leaf === undefined ? undefined : member.variants?.[leaf]) ?? member;
+}
+
+/** A diff node of each column's value, the first column its winner: a struct's members by its
+ *  schema, less any no column carries, and an array's elements by key or position. */
+export function alignedDiff(
+  fieldName: string, meta: FieldMetadata, values: Record<string, unknown>, editorIds: Record<string, string> = {},
+): FieldDiff {
+  const columns = Object.keys(values);
+  const editorIdOf = (column: string) => { const v = values[column]; return isString(v) ? editorIds[v] : undefined; };
+  const resolved = columns.filter(c => editorIdOf(c) !== undefined);
+  const elementOf = (column: string, index: number | undefined): unknown =>
+    index === undefined ? null : memberOf(values[column], String(index));
+  const { elementType } = meta;
+  const memberDiffs = (fields: FieldMetadata[]): FieldDiff[] => fields
+    .map(f => ({ f, held: Object.fromEntries(columns.map(c => [c, memberOf(values[c], f.name) ?? null])) }))
+    .filter(({ held }) => Object.values(held).some(v => v !== null))
+    .map(({ f, held }) => alignedDiff(f.name, firstLeafsShapeOf(f, values), held, editorIds));
+
+  return diffNode({
+    fieldName,
+    values,
+    winnerColumn: columns[0],
+    resolutions: resolved.length === 0 ? undefined : Object.fromEntries(resolved.map(c => [c, {
+      state: 'ResolvedValidType' as const, recordType: null, editorId: editorIdOf(c) ?? null,
+    }])),
+    children:
+      meta.type === 'array' && elementType
+        ? elementRows(meta, values).map(row => ({
+          ...alignedDiff(row.label, elementType,
+            Object.fromEntries(columns.map(c => [c, elementOf(c, row.indexes[c]) ?? null])), editorIds),
+          indexes: row.indexes,
+        }))
+        : meta.type === 'struct' ? memberDiffs(meta.fields ?? []) : undefined,
+  });
+}
+
+/** A record of one field, from each column's document of it; the first column wins. */
+export function fieldCompared(
+  meta: FieldMetadata, byColumn: Record<string, unknown>,
+  { formKey, editorId, editorIds = {} }: { formKey: string; editorId: string; editorIds?: Record<string, string> },
+): CompareResult {
+  return compareResultFixture({
+    conflictAll: 'NoConflict',
+    overrides: Object.keys(byColumn).map((plugin, i) => compareOverride({
+      formKey, plugin, isWinner: i === 0, editorId,
+      fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
+    })),
+    diffs: [alignedDiff(meta.name, meta, byColumn, editorIds)],
+  });
+}
 
 export const member = (name: string): PathHop => ({ kind: 'member', name });
 export const at = (index: number): PathHop => ({ kind: 'index', index });

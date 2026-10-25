@@ -89,8 +89,6 @@ export function pickEnumValue(choices: EnumChoice[], current: string): Promise<s
   );
 }
 
-// RecordPanelClient's own read: the host's mEdit client answers with the
-// comparison, the plugin list and conflictsComputed, untransformed.
 export function requestRecordLoad(formKey: string, columns: RecordCopy[]): Promise<RecordLoadAnswer> {
   return requestReply(
     EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED,
