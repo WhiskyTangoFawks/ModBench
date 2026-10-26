@@ -9,11 +9,11 @@ import { hostTasks } from '../../tasks';
 
 const TEST_PORT = present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run');
 
-// PowerShell, the shell a Windows task runs in, answers 1 for any native command that exits non-zero.
+const POWERSHELL_FAILURE_CODE = 1;
 const RUNS: readonly { label: string; args: string[]; ran: string; code: number }[] = [
   { label: 'Process step', args: ['textures', '3'], ran: 'textures 3', code: 3 },
-  { label: 'Shell step', args: ['textures', '1'], ran: 'textures 1', code: 1 },
-  { label: 'Shell line step', args: [], ran: '1', code: 1 },
+  { label: 'Shell step', args: ['textures', `${POWERSHELL_FAILURE_CODE}`], ran: `textures ${POWERSHELL_FAILURE_CODE}`, code: POWERSHELL_FAILURE_CODE },
+  { label: 'Shell line step', args: [], ran: `${POWERSHELL_FAILURE_CODE}`, code: POWERSHELL_FAILURE_CODE },
 ];
 
 describe('a step\'s user task, as .vscode-test.mjs writes it: a script that records its arguments and MEDIT_PORT in its folder and exits with the last', () => {
