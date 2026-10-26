@@ -38,7 +38,22 @@ public sealed class UpdateManifestHandler
                 $"was not updated: '{_repository.InstallationFileName(installationFile.Path)}' not in the downloads folder.");
         }
 
-        if (installationFile is null && instance.GameFolder is null && NamesTheGameFolder(mod))
+        Manifest? held;
+        try
+        {
+            held = _repository.ReadManifest(mod.Folder, mod.Name);
+        }
+        catch (InvalidDataException e)
+        {
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(UpdateManifestRefusal.ManifestUnreadable, $"was not updated: {e.Message}.");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
+                UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: its manifest could not be read: {e.Message}");
+        }
+
+        if (installationFile is null && instance.GameFolder is null && held?.Package is ManifestPackage.GameFolder)
         {
             return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.GameFolderNotFound, "was not updated: its manifest names the game folder, and the game folder was not found.");
@@ -50,7 +65,7 @@ public sealed class UpdateManifestHandler
         {
             read = _repository.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             manifest = new ManifestBuilder(installationFile is null ? null : (_repository.InstallationFileName(installationFile.Path), installationFile), instance.GameFolder)
-                .Manifest(read.Files, mod.Version);
+                .Manifest(read.Files, mod.Version, held);
         }
         catch (DirectoryNotFoundException)
         {
@@ -81,18 +96,6 @@ public sealed class UpdateManifestHandler
 
     private static string[] PathsWhere<TEntry>(Manifest manifest) where TEntry : PackageEntry =>
         [.. manifest.Files.Where(file => file.Entry is TEntry).Select(file => file.Path).Order(StringComparer.Ordinal)];
-
-    private bool NamesTheGameFolder(ModToUpdate mod)
-    {
-        try
-        {
-            return _repository.ReadManifest(mod.Folder, mod.Name)?.Package is ManifestPackage.GameFolder;
-        }
-        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
 
     private ItemAnswer<UpdateManifestRefusal, ModUpdated> LeftToItsBuild(ModToUpdate mod, string sourceFolder, InstanceToUpdate instance)
     {

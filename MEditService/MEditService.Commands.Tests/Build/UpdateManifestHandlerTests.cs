@@ -180,6 +180,72 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AManifestsSteps_AreKeptAsWritten_AndEachFileAStepMakesStaysSo_ThereOrNot_UnreportedAsAGap()
+    {
+        WithFiles([("textures/a.dds", "optimised"), ("textures/b.dds", "original")]);
+        ManifestFile[] madeByStep = [new("textures/a.dds", new PackageEntry.MadeByStep()), new("textures/c.dds", new PackageEntry.MadeByStep())];
+        _folders.Manifests[Mod] = new Manifest(null, madeByStep)
+        {
+            Steps = [new ManifestStep("Optimise textures", ["textures/a.dds"]), new ManifestStep("Archive", [])],
+        };
+
+        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("textures/a.dds", "original"), ("textures/b.dds", "original"))));
+
+        Assert.Equal([("Optimise textures", "textures/a.dds"), ("Archive", "")], _folders.Manifests[Mod].Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.Equal(madeByStep, _folders.Manifests[Mod].Files.Where(file => file.Entry is PackageEntry.MadeByStep).OrderBy(file => file.Path, StringComparer.Ordinal));
+        Assert.Empty(updated.OtherBytes);
+    }
+
+    [Fact]
+    public async Task AManifestsOutputExclusionsAndArchives_AreKeptAsWritten()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+        _folders.Manifests[Mod] = new Manifest(null, [])
+        {
+            Output = "Stock Game",
+            Exclude = ["docs/readme.txt"],
+            Archives = [new ManifestArchive("Mod - Main.ba2", ["meshes/a.nif"])],
+        };
+
+        await Landed(ModFrom("Mod"));
+
+        var kept = _folders.Manifests[Mod];
+        Assert.Equal("Stock Game", kept.Output);
+        Assert.Equal(["docs/readme.txt"], kept.Exclude);
+        Assert.Equal([("Mod - Main.ba2", "meshes/a.nif")], kept.Archives.Select(archive => (archive.Path, string.Join('|', archive.Files))));
+    }
+
+    public static TheoryData<Exception, UpdateManifestRefusal, string> ManifestsItCannotRead => new()
+    {
+        { new InvalidDataException("its manifest cannot be read at line 1"), UpdateManifestRefusal.ManifestUnreadable, "was not updated: its manifest cannot be read at line 1." },
+        {
+            new IOException("Mod.manifest.json is held by another process"), UpdateManifestRefusal.ModFilesUnreadable,
+            "was not updated: its manifest could not be read: Mod.manifest.json is held by another process"
+        },
+        {
+            new UnauthorizedAccessException("Mod.manifest.json is read-protected"), UpdateManifestRefusal.ModFilesUnreadable,
+            "was not updated: its manifest could not be read: Mod.manifest.json is read-protected"
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(ManifestsItCannotRead))]
+    public async Task AModWhoseManifestCannotBeRead_IsRefusedNamingWhy_ItsManifestLeftAsItWas_AndTheOthersLand(
+        Exception thrown, UpdateManifestRefusal refusal, string why)
+    {
+        _folders.WithFile(Mod, "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
+        _folders.ManifestReadThrows[Mod] = thrown;
+
+        var result = await Update([ModFrom("Mod"), ModFrom("Fine")]);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("Mod", refusal), (refused.Item, refused.Refusal));
+        Assert.Equal(why, refused.Message);
+        Assert.False(_folders.Manifests.ContainsKey(Mod));
+        Assert.Equal(["Fine"], result.Applied.Select(l => l.Mod));
+    }
+
+    [Fact]
     public async Task AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
     {
         _folders.WithFile(Mod, "a.txt", "hello");

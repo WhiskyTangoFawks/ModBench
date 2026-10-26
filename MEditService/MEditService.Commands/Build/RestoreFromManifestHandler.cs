@@ -55,6 +55,7 @@ public sealed class RestoreFromManifestHandler
         var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFile).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
         if (resolved.Built is { } submodule) return Lacked([new PackageContents.Lack.SubmoduleMissing(submodule)]);
+        if (StepsNotRun.Why(manifest, "restore") is { } notRun) return Skipped(RestoreRefusal.StepNotRun, notRun);
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;

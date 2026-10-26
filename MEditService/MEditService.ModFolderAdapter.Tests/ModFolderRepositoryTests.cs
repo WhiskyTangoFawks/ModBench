@@ -381,6 +381,20 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(status.Differing);
     }
 
+    [Fact]
+    public void AFileAStepMakes_IsNoGapAndDoesNotDiffer_ButIsGoneWhenTheFolderLacksIt()
+    {
+        Write("made.dds", "whatever the step wrote");
+        ManifestFile[] madeByStep = [new("made.dds", new PackageEntry.MadeByStep()), new("lacked.dds", new PackageEntry.MadeByStep())];
+        _repository.WriteManifest(_root, "mod", new Manifest(Package, madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
+
+        var status = Status();
+
+        Assert.Empty(status.NotInPackage);
+        Assert.Empty(status.Differing);
+        Assert.Equal(["lacked.dds"], status.Gone);
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -490,6 +504,31 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(4, parsed.RootElement.GetProperty("files").GetArrayLength());
     }
 
+    [Fact]
+    public void AManifest_HasALineForEachStep_InTheOrderTheyRun_AndSaysWhichFileAStepMakes()
+    {
+        var manifest = new Manifest(Package, [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep()), new ManifestFile("a.nif", new PackageEntry.Held())])
+        {
+            Steps = [new ManifestStep("Optimise textures", ["--in", "textures"]), new ManifestStep("Archive", [])],
+        };
+
+        _repository.WriteManifest(_root, "mod", manifest);
+
+        Assert.Equal(
+            "{\n"
+            + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"},\n"
+            + "\"steps\": [\n"
+            + "{\"task\":\"Optimise textures\",\"args\":[\"--in\",\"textures\"]},\n"
+            + "{\"task\":\"Archive\"}\n"
+            + "],\n"
+            + "\"files\": [\n"
+            + "{\"path\":\"a.nif\"},\n"
+            + "{\"path\":\"textures/a.dds\",\"madeByStep\":true}\n"
+            + "]\n"
+            + "}\n",
+            File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
+    }
+
     public static TheoryData<ManifestPackage, string> PackagesAndTheirLines => new()
     {
         { new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), "{\"submodule\":\"Mod\",\"version\":\"2\"}" },
@@ -591,6 +630,21 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void AManifestsSteps_ReadBackInTheirOrder_WithTheFilesTheyMake()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
+        {
+            Steps = [new ManifestStep("Zip", ["a", "b"]), new ManifestStep("Archive", [])],
+        });
+
+        var read = _repository.ReadManifest(_root, "mod");
+
+        Assert.NotNull(read);
+        Assert.Equal([("Zip", "a|b"), ("Archive", "")], read.Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.Equal([new ManifestFile("b.dds", new PackageEntry.MadeByStep())], read.Files);
+    }
+
+    [Fact]
     public void ReadManifest_OfAModWithNone_IsNull()
     {
         Write("a.txt", "abc");
@@ -614,6 +668,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "holds 'remote'")]
     [InlineData("{\"package\": {\"version\": 7}, \"files\": []}", "cannot be read")]
     [InlineData("{}", "cannot be read")]
+    [InlineData("{\"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"madeByStep\":false}]}", "its file 1: its madeByStep is false")]
+    [InlineData("{\"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"madeByStep\":true,\"otherBytes\":true}]}", "its file 1: it says both")]
+    [InlineData("{\"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"madeByStep\":true,\"inPackage\":false}]}", "its file 1: it says both")]
+    [InlineData("{\"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"madeByStep\":true,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"madeByStep\":true}]}", "its file 1: it says a step makes the file, and the manifest holds no step")]
+    [InlineData("{\"steps\": [{\"task\":\"\"}], \"files\": []}", "its manifest cannot be read at its step 1: it names no task")]
+    [InlineData("{\"steps\": [{\"args\":[\"a\"]}], \"files\": []}", "its manifest cannot be read at its step 1")]
+    [InlineData("{\"steps\": [{\"task\":\"Zip\",\"args\":[1]}], \"files\": []}", "its manifest cannot be read at its step 1")]
     public void ReadManifest_WithTextItCannotRead_RefusesNamingWhere(string text, string where)
     {
         Write("mod.manifest.json", text);

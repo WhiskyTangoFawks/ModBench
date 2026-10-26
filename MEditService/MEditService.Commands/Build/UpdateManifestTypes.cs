@@ -35,6 +35,9 @@ public enum UpdateManifestRefusal
     /// <summary>A file of the mod could not be read.</summary>
     ModFilesUnreadable,
 
+    /// <summary>The mod's manifest cannot be read, so what it holds that no folder shows, such as its steps, cannot be kept.</summary>
+    ManifestUnreadable,
+
     /// <summary>The mod's manifest could not be written.</summary>
     NotWritten,
 

@@ -22,4 +22,7 @@ public enum BuildRefusal
 
     /// <summary>An archive takes a file that is not an asset of the source.</summary>
     ArchiveFileNotAnAsset,
+
+    /// <summary>The manifest holds a step, which runs a VS Code task that build cannot run.</summary>
+    StepNotRun,
 }

@@ -1056,7 +1056,7 @@ export interface components {
             isSubmodule: boolean;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "StepNotRun";
         BuildRefused: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
@@ -1860,7 +1860,7 @@ export interface components {
             refused: components["schemas"]["RestoreRefused"][];
         };
         /** @enum {string} */
-        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt";
+        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt" | "StepNotRun";
         RestoreRefused: {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];
@@ -1938,7 +1938,7 @@ export interface components {
             version?: string | null;
         };
         /** @enum {string} */
-        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "GameFolderNotFound" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";
+        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "GameFolderNotFound" | "ModFilesUnreadable" | "ManifestUnreadable" | "NotWritten" | "LeftToItsBuild";
         UpdateManifestRefused: {
             item: string;
             refusal: components["schemas"]["UpdateManifestRefusal"];

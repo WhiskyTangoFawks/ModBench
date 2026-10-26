@@ -112,9 +112,10 @@ public sealed class SourceManifestTests : IDisposable
     }
 
     [Theory]
-    [InlineData("{\"output\": \"A\", \"steps\": [], \"files\": []}", "its manifest holds 'steps', which Modbench does not read")]
+    [InlineData("{\"output\": \"A\", \"deltas\": [], \"files\": []}", "its manifest holds 'deltas', which Modbench does not read")]
     [InlineData("{\"output\": \"A\", \"package\": {\"repository\": \"A\", \"remote\": \"x\"}, \"files\": []}", "its manifest's package holds 'remote', which Modbench does not read")]
     [InlineData("{\"output\": \"A\", \"files\": [{\"path\": \"a.esp\"}, {\"path\": \"b.esp\", \"hash\": \"x\"}]}", "its manifest's file 2 holds 'hash', which Modbench does not read")]
+    [InlineData("{\"output\": \"A\", \"steps\": [{\"task\": \"Zip\", \"env\": {}}], \"files\": []}", "its manifest's step 1 holds 'env', which Modbench does not read")]
     public void AManifestHoldingAKeyModbenchDoesNotRead_IsUnreadable_NamingIt_SoNoWriteDropsIt(string text, string why)
     {
         File.WriteAllText(Path.Combine(_source, "A.manifest.json"), text);

@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file with a line for its output, its package and version, its exclusions, each archive,
-/// and each file in alphabetical order, so a change to one file is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file with a line for each part, each step in the order they run, and each file in
+/// alphabetical order, so a change to one file is one line in a diff.</summary>
 internal static class ManifestText
 {
     private const string OutputKey = "output";
@@ -18,12 +18,13 @@ internal static class ManifestText
         if (manifest.Output is { } output) members.Add($"\"{OutputKey}\": " + Value(writer => writer.WriteStringValue(output)));
         if (manifest.Package is not null) members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
         if (manifest.Exclude.Count > 0)
-            members.Add("\"exclude\": " + Value(writer => Paths(writer, manifest.Exclude.Order(StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal))));
+            members.Add("\"exclude\": " + Value(writer => Strings(writer, manifest.Exclude.Order(StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal))));
         if (manifest.Archives.Count > 0)
         {
-            var archives = manifest.Archives.Select(archive => Value(writer => writer.WriteStringValue(archive.Path)) + ": " + Value(writer => Paths(writer, archive.Files)));
+            var archives = manifest.Archives.Select(archive => Value(writer => writer.WriteStringValue(archive.Path)) + ": " + Value(writer => Strings(writer, archive.Files)));
             members.Add("\"archives\": {\n" + string.Join(",\n", archives) + "\n}");
         }
+        if (manifest.Steps.Count > 0) members.Add("\"steps\": [\n" + string.Join(",\n", manifest.Steps.Select(step => Value(writer => StepLine(writer, step)))) + "\n]");
         var files = manifest.Files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
         members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
         return "{\n" + string.Join(",\n", members) + "\n}\n";
@@ -35,10 +36,13 @@ internal static class ManifestText
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "exclude", "archives", "files");
+            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "exclude", "archives", "steps", "files");
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
+            List<ManifestStep> steps = root.TryGetProperty("steps", out var held) ? [.. held.EnumerateArray().Index().Select(entry => StepOf(entry.Index, entry.Item))] : [];
+            if (steps.Count == 0 && files.FindIndex(file => file.Entry is PackageEntry.MadeByStep) is var madeByStep and >= 0)
+                throw Unreadable(madeByStep, "it says a step makes the file, and the manifest holds no step");
             var (package, version) = root.TryGetProperty("package", out var line) ? PackageOf(line) : (null, null);
-            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root) };
+            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root), Steps = steps };
         }
         catch (JsonException e)
         {
@@ -66,27 +70,27 @@ internal static class ManifestText
     }
 
     private static List<string> ExclusionsOf(JsonElement root) =>
-        root.TryGetProperty("exclude", out var paths) ? InTheFolder("exclude", PathsOf(paths)) : [];
+        root.TryGetProperty("exclude", out var paths) ? InTheFolder("exclude", StringsOf(paths)) : [];
 
     private static List<ManifestArchive> ArchivesOf(JsonElement root)
     {
         if (!root.TryGetProperty("archives", out var archives)) return [];
-        List<ManifestArchive> packed = [.. archives.EnumerateObject().Select(archive => new ManifestArchive(archive.Name, PathsOf(archive.Value)))];
+        List<ManifestArchive> packed = [.. archives.EnumerateObject().Select(archive => new ManifestArchive(archive.Name, StringsOf(archive.Value)))];
         InTheFolder("archives", [.. packed.Select(archive => archive.Path), .. packed.SelectMany(archive => archive.Files)]);
         return packed;
     }
 
-    private static List<string> PathsOf(JsonElement paths) => [.. paths.EnumerateArray().Select(Text)];
+    private static List<string> StringsOf(JsonElement strings) => [.. strings.EnumerateArray().Select(Text)];
 
     private static List<string> InTheFolder(string key, List<string> paths) =>
         paths.FirstOrDefault(path => !Manifest.IsPathInTheFolder(path)) is { } outside
             ? throw new InvalidDataException($"its manifest's '{key}' names '{outside}', which is not a path in the folder")
             : paths;
 
-    private static void Paths(Utf8JsonWriter writer, IEnumerable<string> paths)
+    private static void Strings(Utf8JsonWriter writer, IEnumerable<string> strings)
     {
         writer.WriteStartArray();
-        foreach (var path in paths) writer.WriteStringValue(path);
+        foreach (var text in strings) writer.WriteStringValue(text);
         writer.WriteEndArray();
     }
 
@@ -105,19 +109,37 @@ internal static class ManifestText
         return (new ManifestPackage.SourceRepository(Text(line.GetProperty("repository")), IsSubmodule: false), version);
     }
 
+    private static ManifestStep StepOf(int index, JsonElement line)
+    {
+        try
+        {
+            Known(line, $"its manifest's step {index + 1}", "task", "args");
+            var task = Text(line.GetProperty("task"));
+            if (string.IsNullOrWhiteSpace(task)) throw new InvalidDataException($"its manifest cannot be read at its step {index + 1}: it names no task");
+            return new ManifestStep(task, line.TryGetProperty("args", out var args) ? StringsOf(args) : []);
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            throw new InvalidDataException($"its manifest cannot be read at its step {index + 1}", e);
+        }
+    }
+
     private static ManifestFile FileOf(int index, JsonElement line)
     {
         try
         {
-            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage", "otherBytes");
+            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage", "otherBytes", "madeByStep");
             var path = Text(line.GetProperty("path"));
-            var notHeld = FlagOf(index, line, "inPackage", written: false);
-            var otherBytes = FlagOf(index, line, "otherBytes", written: true);
+            var says = new (bool Set, string Says, PackageEntry Entry)[]
+            {
+                (FlagOf(index, line, "inPackage", written: false), "its package does not hold the file", new PackageEntry.NotHeld()),
+                (FlagOf(index, line, "otherBytes", written: true), "its package holds it with other bytes", new PackageEntry.OtherBytes()),
+                (FlagOf(index, line, "madeByStep", written: true), "a step makes it", new PackageEntry.MadeByStep()),
+            }.Where(flag => flag.Set).ToList();
             var movedTo = line.TryGetProperty("packagePath", out var packagePath) ? Text(packagePath) : null;
-            if (notHeld && otherBytes) throw Unreadable(index, "it says both that its package does not hold the file and that it holds it with other bytes");
-            if ((notHeld || otherBytes) && movedTo is not null) throw Unreadable(index, "it names a path in its package for a file its package does not hold with its bytes");
-            if (notHeld) return new ManifestFile(path, new PackageEntry.NotHeld());
-            if (otherBytes) return new ManifestFile(path, new PackageEntry.OtherBytes());
+            if (says is [var one, var other, ..]) throw Unreadable(index, $"it says both that {one.Says} and that {other.Says}");
+            if (says.Count > 0 && movedTo is not null) throw Unreadable(index, "it names a path in its package for a file its package does not hold with its bytes");
+            if (says is [var only]) return new ManifestFile(path, only.Entry);
             return new ManifestFile(path, movedTo is null ? new PackageEntry.Held() : new PackageEntry.HeldAt(movedTo));
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
@@ -165,6 +187,18 @@ internal static class ManifestText
         writer.WriteEndObject();
     }
 
+    private static void StepLine(Utf8JsonWriter writer, ManifestStep step)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("task", step.Task);
+        if (step.Args.Count > 0)
+        {
+            writer.WritePropertyName("args");
+            Strings(writer, step.Args);
+        }
+        writer.WriteEndObject();
+    }
+
     private static void FileLine(Utf8JsonWriter writer, ManifestFile file)
     {
         writer.WriteStartObject();
@@ -179,6 +213,9 @@ internal static class ManifestText
                 break;
             case PackageEntry.OtherBytes:
                 writer.WriteBoolean("otherBytes", true);
+                break;
+            case PackageEntry.MadeByStep:
+                writer.WriteBoolean("madeByStep", true);
                 break;
         }
         writer.WriteEndObject();
