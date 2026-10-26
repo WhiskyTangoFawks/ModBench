@@ -2303,13 +2303,17 @@ describe('RecordPanel — Collapse No Conflict on columns', () => {
   });
 
   it('restores a collapsed column from its header, and a re-read leaves it restored', async () => {
-    await collapsed();
+    const load = vi.fn().mockResolvedValue(loaded(result, { plugins: pluginsResponse }));
+    renderPanel(result, { load });
+    await screen.findByText('Edited text');
+    collapse('again');
     fireEvent.click(collapseButton(sameStrip()));
-    expect(screen.getByText('Same.esp')).toBeInTheDocument();
 
     loadRecord();
 
-    await waitFor(() => expect(screen.getByText('Same.esp')).toBeInTheDocument());
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText('Same.esp')).toBeInTheDocument();
   });
 
   it('collapses a restored column again when the gesture runs again', async () => {
