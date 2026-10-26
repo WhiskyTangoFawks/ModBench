@@ -1,5 +1,6 @@
 using System.Text;
 using MEditService.ModFolderAdapter;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -66,13 +67,15 @@ internal sealed class FakeModFolders : IModFolderRepository
         return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
     }
 
-    /// <summary>The hash a line's package fixes is the one the last keep held for its path.</summary>
-    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held = null)
+    /// <summary>The hash a line's package fixes is the one the last keep held for its path. A source mod's manifest is the
+    /// one held for its source folder.</summary>
+    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held, string? sourceFolder)
     {
+        var at = sourceFolder ?? modFolder;
         if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
-        if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
-        if (!Manifests.TryGetValue(modFolder, out var manifest)) return new(modName, NoManifest: true, [], [], [], []);
-        var kept = KeptPackageHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
+        if (UnreadableManifests.Contains(at)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
+        if (!Manifests.TryGetValue(at, out var manifest)) return new(modName, NoManifest: true, [], [], [], []);
+        var kept = KeptPackageHashes.GetValueOrDefault(at) ?? new Dictionary<string, string>();
         var there = manifest.Files.ToLookup(line => _files.ContainsKey((modFolder, line.Path)));
         return new(
             modName, NoManifest: false,
@@ -148,6 +151,21 @@ internal sealed class FakeModFolders : IModFolderRepository
         _manifests[modFolder] = text;
         return true;
     }
+
+    public SpelledManifest? RemoveManifest(string modFolder, string modName, string sourceFolder)
+    {
+        if (modFolder == sourceFolder || !Manifests.Remove(modFolder)) return null;
+        _manifests.Remove(modFolder, out var text);
+        return new SpelledManifest($"{modName}.manifest.json", Encoding.UTF8.GetBytes(text ?? ""));
+    }
+
+    public Answer<Manifest?, string> ReadSourceManifest(string sourceFolder) =>
+        UnreadableManifests.Contains(sourceFolder) ? "its manifest cannot be read at line 1" : Manifests.GetValueOrDefault(sourceFolder);
+
+    public bool WriteSourceManifest(string sourceFolder, Manifest manifest) => WriteManifest(sourceFolder, string.Empty, manifest);
+
+    public SpelledManifest SpellSourceManifest(Manifest manifest) =>
+        new($"{manifest.Output}.manifest.json", Encoding.UTF8.GetBytes($"{{\"output\": \"{manifest.Output}\", \"files\": []}}"));
 
     private Stream Open(string folder, string path)
     {

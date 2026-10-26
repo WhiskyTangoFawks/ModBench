@@ -5,20 +5,20 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class BuildConfigurationApiTests : HostedTests
+public sealed class SourceManifestApiTests : HostedTests
 {
-    private readonly ScratchDirectory _sourceFolder = new("api-build-configuration-");
+    private readonly ScratchDirectory _sourceFolder = new("api-source-manifest-");
 
     protected override void DisposeFixtures() => _sourceFolder.Dispose();
 
-    private string BuildJson => Path.Combine(_sourceFolder, "build.json");
+    private string Manifest => Path.Combine(_sourceFolder, "Old Name.manifest.json");
 
-    private Task<HttpResponseMessage> Change(object body) => Client.PostAsJsonAsync("/build-configuration", body);
+    private Task<HttpResponseMessage> Change(object body) => Client.PostAsJsonAsync("/source-manifest", body);
 
     [Fact]
-    public async Task ARenameAndAnExclusion_WrittenToTheBuildConfiguration_Is204()
+    public async Task ARenameAndAnExclusion_WrittenToTheManifest_Is204()
     {
-        File.WriteAllText(BuildJson, "{\"output\": \"Old Name\"}");
+        File.WriteAllText(Manifest, "{\"output\": \"Old Name\", \"files\": []}");
 
         var response = await Change(new { sourceFolder = _sourceFolder.Path, output = "New Name", exclude = new[] { "textures/a.dds" } });
 
@@ -36,7 +36,7 @@ public sealed class BuildConfigurationApiTests : HostedTests
     [MemberData(nameof(NotAChange))]
     public async Task ARequestThatDoesNotSayWhatToChange_Is400(string lacking, string body)
     {
-        var response = await Client.PostJson("/build-configuration", body);
+        var response = await Client.PostJson("/source-manifest", body);
 
         Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
@@ -50,7 +50,7 @@ public sealed class BuildConfigurationApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ASourceFolderWithNoBuildConfiguration_Is422()
+    public async Task ASourceFolderWithNoManifest_Is422()
     {
         var response = await Change(new { sourceFolder = _sourceFolder.Path, output = "New Name" });
 
@@ -58,9 +58,9 @@ public sealed class BuildConfigurationApiTests : HostedTests
     }
 
     [PosixFact]
-    public async Task AConfigurationTheDiskWillNotLetBeWritten_Is500()
+    public async Task AManifestTheDiskWillNotLetBeWritten_Is500()
     {
-        File.WriteAllText(BuildJson, "{\"output\": \"Old Name\"}");
+        File.WriteAllText(Manifest, "{\"output\": \"Old Name\", \"files\": []}");
         FileModes.Set(_sourceFolder, "555");
         HttpResponseMessage response;
         try

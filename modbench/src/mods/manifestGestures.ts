@@ -175,7 +175,7 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
   if (listing.destroys.length > 0 && !(await confirmRestore(deps.ask, label, toRun))) return;
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.restoreFromManifest(toRestore, { onProgress: (status) => { show(restoreMessage(status, label)); }, signal }));
+      commands.restoreFromManifest(toRestore, { onProgress: (status) => { show(restoreMessage(status, label)); }, signal }, toRun.everyMod));
     if (!outcome.applied) {
       reporter.report('error', outcome.refusal, outcome.unfinished.length === 0
         ? undefined
@@ -209,7 +209,7 @@ async function restoreFromManifestForAgent(
   const notRestored = new Set(refused.map(({ item }) => item));
   const toRestore = mods.filter((mod) => !notRestored.has(mod));
   if (toRestore.length === 0) return { applied: true, outcome: named(label, { landed: [], refused }) };
-  const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(toRestore));
+  const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(toRestore, {}, argument.length === 0));
   if (!outcome.applied) {
     return { applied: false, refusal: outcome.refusal, ...(outcome.unfinished.length === 0 ? {} : { detail: `Not finished: ${quoted(label, outcome.unfinished)}. Restoring again finishes them.` }) };
   }
@@ -223,6 +223,7 @@ async function restoreFromManifestForAgent(
 
 function restoreMessage(status: RestoreStatus, label: Label): string {
   switch (status.phase) {
+    case 'Cloning': return 'Restore from manifest — cloning the submodules the instance repository pins…';
     case 'ReadingFiles': return `Restore from manifest — reading the files of "${label(status.mod)}"…`;
     case 'Downloading': return `Restore from manifest — downloading "${status.file}" from Nexus…`;
     case 'Restoring': return `Restore from manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;

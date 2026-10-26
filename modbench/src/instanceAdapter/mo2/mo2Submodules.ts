@@ -6,13 +6,13 @@ import { errnoCode } from '../errno';
 import { git } from '../git';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, isRepository, remove, write } from '../files';
-import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote } from '../instanceAdapter';
+import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceModsIn } from './sourceMods';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
 
 interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 
@@ -196,6 +196,17 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
 
     submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
       ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),
+
+    // modlist-repository.md, Restore from manifest, story 3: an absent submodule's mod is named only in the manifest it holds.
+    async unclonedSubmodules() {
+      if (!(await isRepository(instanceRoot))) return [];
+      const uncloned: UnclonedSubmodule[] = [];
+      for (const name of await sourceEntries(instanceRoot, submodulesFile(instanceRoot))) {
+        if (await isRepository(join(sourceRootDir(instanceRoot), name))) continue;
+        uncloned.push({ name, ...await submoduleIn(instanceRoot, name) });
+      }
+      return uncloned;
+    },
 
     repositoryOnDisk: () => isRepository(instanceRoot),
 

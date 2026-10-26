@@ -167,7 +167,7 @@ export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 /** A mod to decompile and commit, with its installation files and the mod manager's own files in its folder (ADR-0013). */
 export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
-/** A mod to build: the source folder whose build configuration names it, its folder and its installation files
+/** A mod to build: the source folder whose manifest names it, its folder and its installation files
  *  (ADR-0013). */
 export type BuildMod = components['schemas']['BuildModRequest'];
 
@@ -223,6 +223,10 @@ export interface UpdateManifestOutcome {
 
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
 export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
+
+/** Each submodule cloned, by the folder git checked it out in, with why its branch was left elsewhere, and each not cloned,
+ *  by that folder, with why. */
+export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
 
 /** The instance's facts restore from manifest needs: the stat cache's folder, the game folder with the game files handed so
  *  far, the mod manager's exclusion mark and the archives a build packs. */
@@ -292,9 +296,8 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['RecordFilter'];
 
-/** A change to a source mod's build configuration: the output folder's new name, and paths in the mod folder to
- *  exclude or include. */
-export type BuildConfigurationChange = Omit<components['schemas']['BuildConfigurationRequest'], 'sourceFolder'>;
+/** A change to a source mod's manifest: the output folder's new name, and paths in the mod folder to exclude or include. */
+export type SourceManifestChange = Omit<components['schemas']['SourceManifestRequest'], 'sourceFolder'>;
 
 /** target-architecture.d2's mEdit client (ADR-0002). */
 export interface MEditClient {
@@ -333,13 +336,15 @@ export interface MEditClient {
   decompileAndRepair(
     plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean, agreedDrops: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  // Rename's and exclude's half in mEdit: the build configuration in `sourceFolder`, written in its working tree.
-  changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
+  // Rename's and exclude's half in mEdit: the manifest in the repository in `sourceFolder`, written in its working tree.
+  changeSourceManifest(sourceFolder: string, change: SourceManifestChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
   updateManifest(mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options?: ModlistCallOptions): Promise<UpdateManifestOutcome | WriteRefused>;
   restoreFromManifest(mods: readonly RestoreMod[], facts: RestoreFacts, options?: ModlistCallOptions): Promise<RestoreOutcome | WriteRefused>;
+  // modlist-repository.md, Restore from manifest, story 3: each submodule cloned at its pin, or named with why it was not.
+  cloneSubmodules(submodules: readonly NonNullable<RestoreMod['submodule']>[]): Promise<SubmodulesCloned | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

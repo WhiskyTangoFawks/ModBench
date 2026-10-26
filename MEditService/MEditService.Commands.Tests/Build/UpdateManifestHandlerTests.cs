@@ -18,7 +18,7 @@ public sealed class UpdateManifestHandlerTests
     private UpdateManifestHandler Handler => TestEditService.UpdateManifestHandler(_folders, _notifications);
 
     private static ModToUpdate ModFrom(string name, InstallationFile? installationFile = null) =>
-        new(name, $"mods/{name}", installationFile, [], IsSourceMod: false, Version: null);
+        new(name, $"mods/{name}", installationFile, [], SourceFolder: null, Version: null);
 
     private Manifest BuiltSourceMod()
     {
@@ -27,8 +27,8 @@ public sealed class UpdateManifestHandlerTests
             new ManifestFile("a.esp", new PackageEntry.Held()),
             new ManifestFile("z.txt", new PackageEntry.NotHeld()),
         ]);
-        _folders.Manifests[Mod] = built;
-        _folders.KeptPackageHashes[Mod] = new Dictionary<string, string> { ["a.esp"] = "built" };
+        _folders.Manifests[Source] = built;
+        _folders.KeptPackageHashes[Source] = new Dictionary<string, string> { ["a.esp"] = "built" };
         return built;
     }
 
@@ -37,7 +37,9 @@ public sealed class UpdateManifestHandlerTests
         foreach (var (path, text) in files) _folders.WithFile(Mod, path, text);
     }
 
-    private static ModToUpdate SourceMod => new("Mod", Mod, null, [], IsSourceMod: true, Version: null);
+    private const string Source = "source/Mod";
+
+    private static ModToUpdate SourceMod => new("Mod", Mod, null, [], SourceFolder: Source, Version: null);
 
     private InstallationFile DownloadedFile(string path, params (string Path, string Hash)[] entries)
     {
@@ -80,7 +82,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
 
-        var updated = await Landed(new ModToUpdate("Mod", Mod, null, ["meta.ini"], IsSourceMod: false, Version: null));
+        var updated = await Landed(new ModToUpdate("Mod", Mod, null, ["meta.ini"], SourceFolder: null, Version: null));
 
         var manifest = _folders.Manifests[Mod];
         Assert.Null(manifest.Package);
@@ -94,7 +96,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile(Mod, "meshes/a.nif", "hello");
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("meshes/a.nif", "hello")) with { Page = "https://www.nexusmods.com/fallout4/mods/1" };
 
-        await Landed(new ModToUpdate("Mod", Mod, downloadedFile, [], IsSourceMod: false, Version: null));
+        await Landed(new ModToUpdate("Mod", Mod, downloadedFile, [], SourceFolder: null, Version: null));
 
         Assert.IsType<PackageEntry.Held>(FileOf(Mod, "meshes/a.nif").Entry);
         Assert.Equal(
@@ -311,19 +313,9 @@ public sealed class UpdateManifestHandlerTests
 
         var updated = await Landed(SourceMod);
 
-        Assert.Same(built, _folders.Manifests[Mod]);
+        Assert.Same(built, _folders.Manifests[Source]);
         Assert.False(updated.ManifestWritten);
         Assert.Equal(["z.txt"], updated.NotInPackage);
-    }
-
-    [Fact]
-    public async Task AModWhoseManifestNamesItsSource_IsLeftToItsBuild_ThoughItsSourceIsNotThere()
-    {
-        var built = BuiltSourceMod();
-
-        await Landed(ModFrom("Mod"));
-
-        Assert.Same(built, _folders.Manifests[Mod]);
     }
 
     [Theory]
@@ -339,7 +331,7 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal(
             (UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote."),
             (refused.Refusal, refused.Message));
-        Assert.Same(built, _folders.Manifests[Mod]);
+        Assert.Same(built, _folders.Manifests[Source]);
     }
 
     [Fact]
@@ -429,7 +421,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
 
-        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")), new ModToUpdate("Mod", Mod, null, ["meta.ini"], IsSourceMod: false, Version: null));
+        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")), new ModToUpdate("Mod", Mod, null, ["meta.ini"], SourceFolder: null, Version: null));
 
         Assert.Null(manifest.Package);
     }

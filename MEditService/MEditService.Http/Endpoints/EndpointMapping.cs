@@ -121,14 +121,14 @@ internal static class EndpointMapping
             _ => 422,
         });
 
-    /// <summary>A build configuration change's refusal, leaving the configuration as it was (ADR-0019).</summary>
-    internal static IResult Refusal(BuildConfigurationRefusal refusal, string? message) => Results.Problem(
+    /// <summary>A source mod's manifest change's refusal, leaving the manifest as it was (ADR-0019).</summary>
+    internal static IResult Refusal(SourceManifestRefusal refusal, string? message) => Results.Problem(
         detail: message,
         statusCode: refusal switch
         {
-            BuildConfigurationRefusal.OutsideTheMod => 400,
+            SourceManifestRefusal.OutsideTheMod => 400,
             // The request is sound; the disk refused the write.
-            BuildConfigurationRefusal.WriteFailed => 500,
+            SourceManifestRefusal.WriteFailed => 500,
             _ => 422,
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
@@ -260,7 +260,7 @@ internal static class EndpointMapping
         return Refusal(refusal, result.Message);
     }
 
-    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, BuildConfigurationResult result)
+    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, SourceManifestChangeResult result)
     {
         if (result.Refusal is not { } refusal) return Results.NoContent();
 

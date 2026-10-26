@@ -440,10 +440,10 @@ describe('renameMod', () => {
     expect(verbs(fake.calls)).toEqual(['renameModFolder']);
   });
 
-  describe('a source mod: the build configuration written with the folder', () => {
-    it('renames the folder and the output its build configuration names, then the lines', async () => {
+  describe('a source mod: the manifest written with the folder', () => {
+    it('renames the folder and the output its manifest names, then the lines', async () => {
       const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, sourced);
-      mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+      mEdit.setCommandResult('changeSourceManifest', { changed: true });
 
       const outcome = await rename(commands);
 
@@ -452,22 +452,22 @@ describe('renameMod', () => {
       expect(verbs(fake.calls)).toEqual(['renameModFolder', 'keepOutOfPublisher', 'changeModOrder', 'changeModOrder']);
     });
 
-    it('puts the folder back and writes no line when mEdit refuses the build configuration', async () => {
+    it('puts the folder back and writes no line when mEdit refuses the manifest', async () => {
       const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, sourced);
-      mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
+      mEdit.setCommandResult('changeSourceManifest', { refused: true, message: 'it holds no manifest' });
 
       const outcome = await rename(commands);
 
-      expect(outcome).toEqual({ applied: false, refusal: 'it holds no build configuration' });
+      expect(outcome).toEqual({ applied: false, refusal: 'it holds no manifest' });
       expect(fake.calls).toEqual([
         { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
         { verb: 'renameModFolder', from: 'Harder VATS 2', to: 'Harder VATS' },
       ]);
     });
 
-    it('names both failures when the folder cannot be put back after mEdit refuses the build configuration', async () => {
+    it('names both failures when the folder cannot be put back after mEdit refuses the manifest', async () => {
       const mEdit = new InMemoryMEditClient();
-      mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
+      mEdit.setCommandResult('changeSourceManifest', { refused: true, message: 'it holds no manifest' });
       const { commands } = over(FIXTURE_ORDER, {
         refusals: (call) => (call.verb === 'renameModFolder' && call.from === 'Harder VATS 2' ? 'the folder is in use' : undefined),
       }, mEdit, sourced);
@@ -476,14 +476,14 @@ describe('renameMod', () => {
 
       expect(outcome).toEqual({
         applied: false,
-        refusal: 'it holds no build configuration The folder could not be renamed back to "Harder VATS": the folder is in use',
+        refusal: 'it holds no manifest The folder could not be renamed back to "Harder VATS": the folder is in use',
       });
     });
   });
 });
 
 const configuredBy = (mEdit: InMemoryMEditClient) =>
-  mEdit.calls.filter((call) => call.method === 'changeBuildConfiguration').map((call) => call.args);
+  mEdit.calls.filter((call) => call.method === 'changeSourceManifest').map((call) => call.args);
 
 describe('markFiles', () => {
   const MARK = fakeInstanceAdapter().adapter.exclusionMark;
@@ -498,14 +498,14 @@ describe('markFiles', () => {
   const fileOf = (name: string, relativePath: string) => ({ origin: { kind: 'mod', name }, relativePath }) as const;
   const markOf = (file: ReturnType<typeof fileOf>, mark: OriginFileMark): AdapterCall =>
     ({ verb: 'markOriginFile', origin: file.origin, relativePath: file.relativePath, mark });
-  const UNREACHABLE = { refused: true, message: 'Could not change the build configuration — mEdit could not be reached.', unreachable: true } as const;
+  const UNREACHABLE = { refused: true, message: 'Could not change the manifest — mEdit could not be reached.', unreachable: true } as const;
 
   it.each([
     ['Excluded', 'Textures/a.dds', { exclude: ['Textures/a.dds'] }],
     ['Included', `Textures/b.dds${MARK}`, { include: ['Textures/b.dds'] }],
-  ] as const)('marks a file %s, and the build configuration\'s exclusion with it', async (mark, relativePath, change) => {
+  ] as const)('marks a file %s, and the manifest\'s exclusion with it', async (mark, relativePath, change) => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+    mEdit.setCommandResult('changeSourceManifest', { changed: true });
     const file = fileOf('Harder VATS', relativePath);
 
     const outcome = await commands.markFiles([file], mark);
@@ -518,9 +518,9 @@ describe('markFiles', () => {
   it('asks mEdit once for every file of a source mod, before any file is marked, and marks none when it refuses', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     let markedWhenAsked = -1;
-    mEdit.setCommandHandler('changeBuildConfiguration', () => {
+    mEdit.setCommandHandler('changeSourceManifest', () => {
       markedWhenAsked = fake.calls.length;
-      return Promise.resolve({ refused: true, message: 'it holds no build configuration' });
+      return Promise.resolve({ refused: true, message: 'it holds no manifest' });
     });
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds')];
 
@@ -528,33 +528,33 @@ describe('markFiles', () => {
 
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'b.dds'] }]]);
     expect(markedWhenAsked).toBe(0);
-    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: files.map((item) => ({ item, reason: 'it holds no build configuration' })) } });
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: files.map((item) => ({ item, reason: 'it holds no manifest' })) } });
     expect(fake.calls).toEqual([]);
   });
 
   it('marks the file of a mod with no source though mEdit refuses a source mod\'s', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
+    mEdit.setCommandResult('changeSourceManifest', { refused: true, message: 'it holds no manifest' });
     const inSource = fileOf('Harder VATS', 'a.dds');
     const inNoSource = fileOf('ENBoost', 'b.dds');
 
     const outcome = await commands.markFiles([inSource, inNoSource], 'Excluded');
 
-    expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: 'it holds no build configuration' }] } });
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: 'it holds no manifest' }] } });
     expect(fake.calls).toEqual([markOf(inNoSource, 'Excluded')]);
   });
 
   it('refuses the whole selection, configuring and marking nothing, when the source mods cannot be read', async () => {
-    const { fake, mEdit, commands } = over(FIXTURE_ORDER, { unreadReads: { sourceMods: 'build.json is locked' } }, undefined, SOURCES);
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, { unreadReads: { sourceMods: 'Harder VATS.manifest.json is locked' } }, undefined, SOURCES);
 
-    expect(await commands.markFiles([fileOf('Harder VATS', 'a.dds')], 'Excluded')).toEqual({ applied: false, refusal: 'build.json is locked' });
+    expect(await commands.markFiles([fileOf('Harder VATS', 'a.dds')], 'Excluded')).toEqual({ applied: false, refusal: 'Harder VATS.manifest.json is locked' });
     expect(configuredBy(mEdit)).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
 
   it('refuses the whole selection once, marking no file, when mEdit cannot be reached', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', UNREACHABLE);
+    mEdit.setCommandResult('changeSourceManifest', UNREACHABLE);
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds'), fileOf('ENBoost', 'c.dds')];
 
     const outcome = await commands.markFiles(files, 'Excluded');
@@ -565,7 +565,7 @@ describe('markFiles', () => {
 
   it('puts back a source mod\'s configuration already changed when mEdit cannot be reached for the next, naming what could not be put back', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, TWO_SOURCES);
-    mEdit.setCommandHandler('changeBuildConfiguration', () => Promise.resolve(configuredBy(mEdit).length === 1 ? { changed: true } : UNREACHABLE));
+    mEdit.setCommandHandler('changeSourceManifest', () => Promise.resolve(configuredBy(mEdit).length === 1 ? { changed: true } : UNREACHABLE));
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('ENBoost', 'c.dds')];
 
     const outcome = await commands.markFiles(files, 'Excluded');
@@ -573,14 +573,14 @@ describe('markFiles', () => {
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [OTHER, { exclude: ['c.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
     expect(outcome).toEqual({
       applied: false,
-      refusal: `${UNREACHABLE.message} The build configuration in "${SOURCE}" could not be put back: ${UNREACHABLE.message}`,
+      refusal: `${UNREACHABLE.message} The manifest in "${SOURCE}" could not be put back: ${UNREACHABLE.message}`,
     });
     expect(fake.calls).toEqual([]);
   });
 
   it('names why a configuration already changed could not be put back', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, TWO_SOURCES);
-    mEdit.setCommandHandler('changeBuildConfiguration', (folder, change) => Promise.resolve(
+    mEdit.setCommandHandler('changeSourceManifest', (folder, change) => Promise.resolve(
       change.include !== undefined ? { refused: true, message: 'the disk refused the write' } : folder === SOURCE ? { changed: true } : UNREACHABLE));
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('ENBoost', 'c.dds')];
 
@@ -588,13 +588,13 @@ describe('markFiles', () => {
 
     expect(outcome).toEqual({
       applied: false,
-      refusal: `${UNREACHABLE.message} The build configuration in "${SOURCE}" could not be put back: the disk refused the write`,
+      refusal: `${UNREACHABLE.message} The manifest in "${SOURCE}" could not be put back: the disk refused the write`,
     });
   });
 
   it('leaves a file gone from disk out of the configuration, and lands the rest', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+    mEdit.setCommandResult('changeSourceManifest', { changed: true });
     const marked = fileOf('Harder VATS', 'a.dds');
     const gone = fileOf('Harder VATS', 'gone.dds');
 
@@ -606,7 +606,7 @@ describe('markFiles', () => {
 
   it('takes back the exclusion of a file the adapter refuses, with the adapter\'s reason', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') }, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+    mEdit.setCommandResult('changeSourceManifest', { changed: true });
     const file = fileOf('Harder VATS', 'a.dds');
 
     const outcome = await commands.markFiles([file], 'Excluded');
@@ -617,7 +617,7 @@ describe('markFiles', () => {
 
   it('refuses a file the adapter cannot read, leaving it out of the configuration, and lands the rest', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, { unreadOriginFile: (file) => (file.relativePath === 'bad.dds' ? 'permission denied' : undefined) }, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+    mEdit.setCommandResult('changeSourceManifest', { changed: true });
     const unread = fileOf('Harder VATS', 'bad.dds');
     const marked = fileOf('Harder VATS', 'a.dds');
 
@@ -629,14 +629,14 @@ describe('markFiles', () => {
 
   it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') }, undefined, SOURCES);
-    mEdit.setCommandHandler('changeBuildConfiguration', (_, change) =>
+    mEdit.setCommandHandler('changeSourceManifest', (_, change) =>
       Promise.resolve(change.exclude === undefined ? { refused: true, message: 'the disk refused the write' } : { changed: true }));
     const refusedFile = fileOf('Harder VATS', 'a.dds');
 
     const outcome = await commands.markFiles([refusedFile], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [
-      { item: refusedFile, reason: 'permission denied Its change to the build configuration could not be taken back: the disk refused the write' },
+      { item: refusedFile, reason: 'permission denied Its change to the manifest could not be taken back: the disk refused the write' },
     ] } });
   });
 });
@@ -872,9 +872,9 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     expect(verbs(fake.calls)).toEqual(['renameModFolder']);
   });
 
-  it('rename moves none when mEdit refuses the build configuration', async () => {
+  it('rename moves none when mEdit refuses the manifest', async () => {
     const mEdit = new InMemoryMEditClient();
-    mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
+    mEdit.setCommandResult('changeSourceManifest', { refused: true, message: 'it holds no manifest' });
     const { fake, commands } = publisherOver({}, mEdit, sourceMods(new Map([['Harder VATS', '/instance/source/Harder VATS']])));
 
     await commands.renameMod('Harder VATS', 'Harder VATS 2');

@@ -45,7 +45,6 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task AnAbsentSubmodule_IsClonedAndBuiltAtItsPin_NamingEachFileNoLineNames()
     {
-        Manifested();
         File.WriteAllText(Path.Combine(ModFolder, "notes.txt"), "mine");
 
         var restored = Assert.Single((await Restore(_first)).Applied);
@@ -57,22 +56,21 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
-    public async Task AFileItsBuildConfigurationExcludes_ComesBackUnderTheExclusionMarkHanded_AndItsLineNamesItSo()
+    public async Task AFileItsManifestExcludes_ComesBackUnderTheExclusionMarkHanded_AndItsLineNamesItSo()
     {
         var excluding = Commit("{\"output\": \"Mod\", \"exclude\": [\"meshes/c.nif\"]}", "excluded");
-        Manifested();
 
         Assert.Single((await Restore(excluding)).Applied);
 
         Assert.Equal("excluded", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif.excluded")));
         Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
-        Assert.Equal(["meshes/c.nif.excluded"], _folders.ReadManifest(ModFolder, ModName).Require().Files.Select(file => file.Path));
+        Assert.Equal(["meshes/c.nif.excluded"], _folders.ReadSourceManifest(SourceFolder).Value().Require().Files.Select(file => file.Path));
     }
 
     [Fact]
     public async Task AManifestNamingASubmodule_WhoseRequestHandsNone_IsNotFound_NamingIt()
     {
-        Manifested();
+        CommitAtHead(Commit("{\"output\": \"Mod\", \"package\": {\"submodule\": \"Mod\"}}", "c"));
 
         var skipped = Assert.Single((await Restore(pin: null)).Refused);
 
@@ -84,25 +82,27 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task ASourceModWithNoHost_IsSkipped_SayingSo_AndNothingIsWritten()
     {
-        _folders.WriteManifest(ModFolder, ModName, new Manifest(
-            new ManifestPackage.SourceRepository(ModName, IsSubmodule: false), [new ManifestFile("meshes/c.nif", new PackageEntry.Held())]));
+        Directory.CreateDirectory(SourceFolder);
+        _folders.WriteSourceManifest(SourceFolder, new Manifest(
+            new ManifestPackage.SourceRepository(ModName, IsSubmodule: false), [new ManifestFile("meshes/c.nif", new PackageEntry.Held())])
+        { Output = ModName });
 
-        var skipped = Assert.Single((await Restore(_first)).Refused);
+        var skipped = Assert.Single((await Restore(pin: null)).Refused);
 
         Assert.Equal((RestoreRefusal.NoHost, "was skipped: its package has no host."), (skipped.Refusal, skipped.Message));
-        Assert.False(Directory.Exists(SourceFolder));
+        Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
     }
 
     [Fact]
     public async Task TheRebuild_WritesAManifestNamingTheSubmodule_WithTheVersionItsManifestHeld()
     {
-        Manifested(version: "1.2.3");
+        var versioned = Commit("{\"output\": \"Mod\", \"package\": {\"submodule\": \"Mod\", \"version\": \"1.2.3\"}}", "c");
 
-        await Restore(_first);
+        await Restore(versioned);
 
         Assert.Equal(
             (new ManifestPackage.SourceRepository(ModName, IsSubmodule: true), "1.2.3"),
-            (_folders.ReadManifest(ModFolder, ModName)?.Package, _folders.ReadManifest(ModFolder, ModName)?.Version));
+            (_folders.ReadSourceManifest(SourceFolder).Value()?.Package, _folders.ReadSourceManifest(SourceFolder).Value()?.Version));
     }
 
     [Fact]
@@ -132,8 +132,6 @@ public sealed class RestoreASourceModTests : IDisposable
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, remote))]));
         Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, remote, [])])).Value().Applied);
         Git(_submodule.Instance, "config", "-f", ".gitmodules", "submodule.Mod.url", remote);
-        _folders.WriteManifest(ModFolder, ModName, new Manifest(
-            new ManifestPackage.SourceRepository(ModName, IsSubmodule: true), [new ManifestFile("Fixture.esp", new PackageEntry.Held())]));
         return (plugin, Git(remote, "rev-parse", "HEAD").Trim());
     }
 
@@ -142,7 +140,6 @@ public sealed class RestoreASourceModTests : IDisposable
     {
         Assert.Equal(_first, CommitAtHead(_first));
         File.WriteAllText(Path.Combine(SourceFolder, "assets", "meshes", "c.nif"), "changed");
-        Manifested();
 
         var restored = Assert.Single((await Restore(_first)).Applied);
 
@@ -157,7 +154,6 @@ public sealed class RestoreASourceModTests : IDisposable
         Git(SourceFolder, "checkout", "-q", "main");
         Git(SourceFolder, "commit", "-q", "--allow-empty", "-m", "unpushed");
         Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
-        Manifested();
 
         var restored = Assert.Single((await Restore(_second, branch: "main")).Applied);
 
@@ -168,7 +164,6 @@ public sealed class RestoreASourceModTests : IDisposable
     public async Task ASubmoduleAtAnotherCommit_IsSkippedNamingTheCommit_AndNothingIsWritten()
     {
         Assert.Equal(_second, CommitAtHead(_second));
-        Manifested();
 
         var skipped = Assert.Single((await Restore(_first)).Refused);
 
@@ -182,7 +177,6 @@ public sealed class RestoreASourceModTests : IDisposable
     public async Task APinItsRemoteDoesNotHold_IsSkippedNamingThePin()
     {
         const string Unpushed = "0123456789012345678901234567890123456789";
-        Manifested();
 
         var skipped = Assert.Single((await Restore(Unpushed)).Refused);
 
@@ -195,20 +189,18 @@ public sealed class RestoreASourceModTests : IDisposable
     public async Task ASubmoduleWhoseBuildRefusesTheMod_IsSkippedWithTheBuildsReason()
     {
         var other = Commit("{\"output\": \"Other\"}", "other");
-        Manifested();
 
         var skipped = Assert.Single((await Restore(other)).Refused);
 
         Assert.Equal(
             (RestoreRefusal.NotBuilt, BuildRefusal.OutputNotThisMod,
-                "was not built: its build configuration names the output folder 'Other', not its folder 'Mod'."),
+                "was not built: its manifest names the output folder 'Other', not its folder 'Mod'."),
             (skipped.Refusal, skipped.BuildRefusal, skipped.Message));
     }
 
     [Fact]
     public async Task ASubmoduleWhosePluginsCannotCompile_AsGitCannotRun_IsNotBuilt_NamingWhy_AndNothingIsWritten()
     {
-        Manifested();
 
         var skipped = Assert.Single((await Restore(_first, source: new GitGoneSourceAdapter())).Refused);
 
@@ -221,7 +213,6 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task ARestoreCancelledWhileItClonesASubmodule_StopsTheClone_AndSkipsTheMod()
     {
-        Manifested();
         using var cancelling = new CancellationTokenSource();
         var notifications = new InMemoryNotificationPublisher { OnPublish = _ => cancelling.Cancel() };
 
@@ -235,7 +226,6 @@ public sealed class RestoreASourceModTests : IDisposable
     public async Task AnArchiveItsBuildDidNotPack_LeavesTheModNotFinished_NamingIt()
     {
         var packed = Commit("{\"output\": \"Mod\", \"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\"]}}", "packed");
-        Manifested();
 
         var unfinished = Assert.Single((await Restore(packed)).Refused);
 
@@ -243,10 +233,6 @@ public sealed class RestoreASourceModTests : IDisposable
             (RestoreRefusal.NotFinished, $"was not finished: 'Mod - Main.ba2' was not packed: Modbench packs no archive for this game."),
             (unfinished.Refusal, unfinished.Message));
     }
-
-    private void Manifested(string? version = null) =>
-        _folders.WriteManifest(ModFolder, ModName, new Manifest(
-            new ManifestPackage.SourceRepository(ModName, IsSubmodule: true), [new ManifestFile("meshes/c.nif", new PackageEntry.Held())], version));
 
     private string CommitAtHead(string pin)
     {
@@ -262,12 +248,17 @@ public sealed class RestoreASourceModTests : IDisposable
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null)],
+            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder)],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null), "restore", cancel);
     }
 
-    private string Commit(string configuration, string mesh) =>
-        _submodule.Commit(("build.json", configuration), ("assets/meshes/c.nif", mesh));
+    private string Commit(string manifest, string mesh)
+    {
+        foreach (var held in Directory.GetFiles(_submodule.Remote, "*.manifest.json")) File.Delete(held);
+        return _submodule.Commit(
+            ($"{System.Text.Json.Nodes.JsonNode.Parse(manifest)?["output"]?.GetValue<string>()}.manifest.json", manifest[..^1] + ", \"files\": []}"),
+            ("assets/meshes/c.nif", mesh));
+    }
 
     private static string Git(string folder, params string[] args) => PinnedSubmodule.Git(folder, args);
 }

@@ -5,7 +5,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to build, with the source folder whose build configuration names its folder, the folder, its version,
+/// <summary>A mod to build, with the source folder whose manifest names its folder, the folder, its version,
 /// and its metadata files, which no manifest line names.</summary>
 public sealed record ModToBuild(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule);

@@ -58,9 +58,9 @@ public interface ISourceAdapter
     string ContentStamp(string text);
 
     /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree,
-    /// the assets and a build configuration naming <paramref name="output"/>, then any <paramref name="repair"/>.</summary>
+    /// the assets and <paramref name="manifest"/> at its root, then any <paramref name="repair"/>.</summary>
     SourceFailure? Init(
-        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null);
 
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
@@ -69,10 +69,6 @@ public interface ISourceAdapter
     /// <summary>The commit at HEAD of <paramref name="submodule"/>. git first checks out an empty folder at the pin, on its
     /// branch when that branch is at the pin; a failed or cancelled clone leaves the folder empty.</summary>
     Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel);
-
-    /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
-    /// else it says, in the working tree.</summary>
-    SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once
     /// written: what a round-trip gate compiles, so that it compiles what is written.</summary>

@@ -14,10 +14,10 @@ public enum BuildRefusal
     /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
     NoLoadOrder,
 
-    /// <summary>The source folder holds no build configuration that reads, or assets one mod folder cannot hold.</summary>
+    /// <summary>The source folder holds no manifest that reads, or assets one mod folder cannot hold.</summary>
     SourceUnreadable,
 
-    /// <summary>The build configuration names an output folder that is not the mod's (mods.md, Build, story 4).</summary>
+    /// <summary>The manifest names an output folder that is not the mod's (mods.md, Build, story 4).</summary>
     OutputNotThisMod,
 
     /// <summary>An archive takes a file that is not an asset of the source.</summary>

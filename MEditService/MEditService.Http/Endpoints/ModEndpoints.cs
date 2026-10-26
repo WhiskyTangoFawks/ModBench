@@ -1,6 +1,5 @@
 using MEditService.Commands;
 using MEditService.Commands.Build;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -14,8 +13,8 @@ internal static class ModEndpoints
             .WithName("BuildMod")
             .WithTags("Mods")
             .WithDescription(
-                "Writes each source mod's folder from its source as its build configuration says: the base from its " +
-                "installation files, its assets over it, each plugin compiled, each archive packed, and its manifest last. A file the " +
+                "Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin " +
+                "compiled, each archive packed, and its manifest last. A file the " +
                 "build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
                 "what failed when a read or write stopped it part way. " +
                 "Progress is the build-progress notification.")
@@ -29,19 +28,20 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the files no installation file yields as its assets, and a build configuration naming " +
+                "plugin it provides, the files no installation file yields as its assets, and a manifest naming " +
                 "its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
             .Produces<DecompileAndCommitResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        app.MapPost("/build-configuration", ChangeBuildConfiguration)
-            .WithName("ChangeBuildConfiguration")
+        app.MapPost("/source-manifest", ChangeSourceManifest)
+            .WithName("ChangeSourceManifest")
             .WithTags("Mods")
             .WithDescription(
-                "Writes a source mod's build configuration in its working tree, keeping all else it says: the output folder's " +
-                "new name, and the paths in the mod folder its build excludes. Modbench writes the mod folder in the same gesture.")
+                "Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's " +
+                "new name, which names the manifest, and the paths in the mod folder its build excludes. Modbench writes the mod " +
+                "folder in the same gesture.")
             .Produces(204)
             .ProducesProblem(400)
             .ProducesProblem(422)
@@ -69,8 +69,8 @@ internal static class ModEndpoints
             EndpointMapping.Refusal);
     }
 
-    internal static IResult ChangeBuildConfiguration(
-        BuildConfigurationRequest req, ChangeBuildConfigurationHandler handler, ILoggerFactory loggerFactory)
+    internal static IResult ChangeSourceManifest(
+        SourceManifestRequest req, ChangeSourceManifestHandler handler, ILoggerFactory loggerFactory)
     {
         IReadOnlyList<string> exclude = req.Exclude ?? [], include = req.Include ?? [];
         if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is null && exclude.Count + include.Count == 0)
@@ -80,8 +80,8 @@ internal static class ModEndpoints
         }
 
         return EndpointMapping.Answered(
-            "Change build configuration", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder,
-            handler.Change(req.SourceFolder, new BuildConfigurationChange(req.Output, exclude, include)));
+            "Change source manifest", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder,
+            handler.Change(req.SourceFolder, new SourceManifestChange(req.Output, exclude, include)));
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
@@ -110,16 +110,16 @@ internal static class ModEndpoints
     }
 }
 
-/// <summary>A source mod's folder, and what to change in its build configuration: the output folder's new name, and
-/// forward-slash paths in the mod folder to exclude or include.</summary>
-internal sealed record BuildConfigurationRequest(
+/// <summary>A source mod's folder, and what to change in its manifest: the output folder's new name, and forward-slash
+/// paths in the mod folder to exclude or include.</summary>
+internal sealed record SourceManifestRequest(
     string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
 
 /// <summary>The mods to build with the instance's facts (ADR-0013): the mod manager's exclusion mark, the game's
 /// archive variants, if any, and the stat cache's folder.</summary>
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache);
 
-/// <summary>A mod by name, the source folder whose build configuration names it, its folder, its version, its metadata
+/// <summary>A mod by name, the source folder whose manifest names it, its folder, its version, its metadata
 /// files, which its manifest does not name, and whether the Instance adapter makes its repository a submodule (ADR-0022).</summary>
 internal sealed record BuildModRequest(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false);

@@ -67,7 +67,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 const register = (selection: readonly ModlistNode[] = [], answers: InstanceAnswers = {}) => {
   const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('M', 'N') }), { publisherTags: DECLARED, ...answers });
   const reporter = recordingReporter();
-  registerPublisherTagCommands(modCommands(fake.adapter, { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) }, unreadStatus), instance, () => selection, reporter);
+  registerPublisherTagCommands(modCommands(fake.adapter, { changeSourceManifest: () => Promise.reject(new Error('unscripted')) }, unreadStatus), instance, () => selection, reporter);
   return { fake, reporter };
 };
 

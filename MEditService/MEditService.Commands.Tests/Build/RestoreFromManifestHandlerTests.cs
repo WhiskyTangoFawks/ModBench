@@ -25,7 +25,7 @@ public sealed class RestoreFromManifestHandlerTests
     private static InstanceToRestore Instance() => new("stat-cache", ".mohidden", Archives: null, GameFolder: null);
 
     private static ModToRestore ModFrom(string folder, InstallationFile? installationFile = null) =>
-        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile, ["meta.ini"], Submodule: null, UnreadableGameFiles: null, UnreadableInstallationFile: null);
+        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile, ["meta.ini"], Submodule: null, UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder: null);
 
     private Task<RestoreFromManifestResult> Restore(params ModToRestore[] mods) => RestoreIn(Instance(), mods);
 

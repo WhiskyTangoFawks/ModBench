@@ -73,7 +73,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public string ContentStamp(string text) => throw Unreached();
 
     public SourceFailure? Init(
-        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null)
     {
         if (IsSourceMod(sourceFolder) || HoldsAnotherRepository(sourceFolder))
@@ -85,8 +85,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _builds[sourceFolder];
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => throw Unreached();
-
-    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) => throw Unreached();
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         TestAdapters.Source().ReadBackOf(pluginFileName, tree, gameRelease);

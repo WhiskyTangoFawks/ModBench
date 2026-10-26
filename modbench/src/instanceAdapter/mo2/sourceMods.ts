@@ -1,33 +1,39 @@
-// The source mods: each repository in the source folder, and the mod its build configuration builds
-// (ADR-0007). A rename leaves the repository where it is, so the output, never the folder's name, says
-// which mod a source builds.
+// The source mods: each repository in the source folder, and the mod its manifest builds (ADR-0022). A rename leaves the
+// repository where it is, so the output, never the folder's name, says which mod a source builds.
 
 import { join } from 'node:path';
-import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from '../files';
+import { get, ignoreSkippedLink, isRepository, listDir, listFolders, readOrAbsent } from '../files';
 import type { SourceMods } from '../instanceAdapter';
-import { BUILD_OUTPUT_KEY } from '../../wire/sourceMod';
-import { buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
+import { MANIFEST_OUTPUT_KEY, MANIFEST_SUFFIX } from '../../wire/sourceMod';
+import { modFolderName, sourceRootDir } from './layout';
 import { modNameKey } from './codecs/modlistText';
 
+async function manifestIn(sourceFolder: string): Promise<{ name: string; text: string } | { reason: string }> {
+  try {
+    const [manifest, other] = (await listDir(sourceFolder))
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(MANIFEST_SUFFIX)).map(({ name }) => name).sort((a, b) => a.localeCompare(b));
+    if (manifest === undefined) return { reason: 'it has no manifest' };
+    if (other !== undefined) return { reason: `it holds two manifests, ${manifest} and ${other}` };
+    return { name: manifest, text: await get(join(sourceFolder, manifest)) };
+  } catch (err) {
+    return { reason: `its manifest cannot be read: ${errorMessage(err)}` };
+  }
+}
+
 async function outputOf(sourceFolder: string): Promise<{ output: string } | { reason: string }> {
-  let text: string;
+  const manifest = await manifestIn(sourceFolder);
+  if ('reason' in manifest) return manifest;
+  let parsed: unknown;
   try {
-    text = await get(buildConfigurationFile(sourceFolder));
+    parsed = JSON.parse(manifest.text);
   } catch (err) {
-    return { reason: errnoCode(err) === 'ENOENT' ? 'it has no build configuration' : `its build configuration cannot be read: ${errorMessage(err)}` };
+    return { reason: `its manifest is not JSON: ${errorMessage(err)}` };
   }
-  let configuration: unknown;
-  try {
-    configuration = JSON.parse(text);
-  } catch (err) {
-    return { reason: `its build configuration is not JSON: ${errorMessage(err)}` };
-  }
-  const output = typeof configuration === 'object' && configuration !== null && BUILD_OUTPUT_KEY in configuration
-    ? configuration[BUILD_OUTPUT_KEY] : undefined;
-  if (typeof output !== 'string') return { reason: 'its build configuration names no output' };
-  return modFolderName(output) === undefined ? { reason: `its build configuration's output "${output}" is not a folder name` } : { output };
+  const output = typeof parsed === 'object' && parsed !== null && MANIFEST_OUTPUT_KEY in parsed ? parsed[MANIFEST_OUTPUT_KEY] : undefined;
+  if (typeof output !== 'string') return { reason: 'its manifest names no output folder' };
+  if (modFolderName(output) === undefined) return { reason: `its manifest's output "${output}" is not a folder name` };
+  return manifest.name === `${output}${MANIFEST_SUFFIX}` ? { output } : { reason: `its manifest ${manifest.name} is not named for its output "${output}"` };
 }
 
 // MO2 matches mod names without case, so an output names the mod whatever its case.

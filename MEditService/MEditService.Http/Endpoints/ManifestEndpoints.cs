@@ -13,8 +13,8 @@ internal static class ManifestEndpoints
             .WithName("UpdateManifest")
             .WithTags("Modlist")
             .WithDescription(
-                "Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes: that one " +
-                "is refused when its folder differs from what the build wrote. A mod with no installation file names the game " +
+                "Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes in its " +
+                "repository: that one is refused when its folder differs from what the build wrote. A mod with no installation file names the game " +
                 "folder as its package when the game files the request hands hold each of its files with their bytes. A mod lands or is refused on its own, " +
                 "and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, " +
                 "which names the request's gesture.")
@@ -26,14 +26,24 @@ internal static class ManifestEndpoints
             .WithTags("Modlist")
             .WithDescription(
                 "Writes each file a mod's manifest names whose bytes differ, from the installation files and game files " +
-                "it names (ADR-0022), or builds a mod whose manifest names its submodule at the commit the instance repository " +
-                "pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for " +
+                "it names (ADR-0022), or builds a source mod, whose manifest is in its repository, from the submodule handed at " +
+                "the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for " +
                 "the extension's trash; it writes no other file. A " +
                 "mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is " +
                 "named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
                 "which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: " +
                 "its NotFound answers are not logged as skips.")
             .Produces<RestoreFromManifestResult>()
+            .ProducesProblem(400);
+
+        app.MapPost("/clone-submodules", CloneSubmodules)
+            .WithName("CloneSubmodules")
+            .WithTags("Modlist")
+            .WithDescription(
+                "Clones each source mod's submodule the source folder lacks at the commit the instance repository pins, on its branch " +
+                "when that branch is at the pin, so restore from manifest reads the manifest it holds. Each submodule is cloned, " +
+                "named with why its branch was left elsewhere, or named with why it was not cloned.")
+            .Produces<CloneSubmodulesResult>()
             .ProducesProblem(400);
 
         app.MapPost("/what-restore-destroys", WhatRestoreDestroys)
@@ -81,7 +91,7 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.UpdateManifestAsync(
             [.. mods.Select(mod => new ModToUpdate(
-                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.IsSourceMod, mod.Version))],
+                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.SourceFolder, mod.Version))],
             new InstanceToUpdate(req.StatCache, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         return EndpointMapping.Answered("Update manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result);
@@ -104,13 +114,19 @@ internal static class ManifestEndpoints
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule(),
-                mod.UnreadableGameFiles, mod.UnreadableInstallationFile))],
+                mod.UnreadableGameFiles, mod.UnreadableInstallationFile, mod.SourceFolder))],
             new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         return EndpointMapping.Answered(
             "Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result,
             refusal => !req.AsksWhatItLacks || refusal != RestoreRefusal.NotFound);
     }
+
+    internal static IResult CloneSubmodules(CloneSubmodulesRequest req, CloneSubmodulesHandler handler, ILoggerFactory loggerFactory, CancellationToken aborted) =>
+        req.Submodules is { Count: > 0 } submodules && submodules.All(submodule => submodule is { IsWhole: true })
+            ? EndpointMapping.Answered(
+                "Clone submodules", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), handler.Clone([.. submodules.Select(submodule => submodule.ToSubmodule())], aborted))
+            : EndpointMapping.BadRequest("At least one submodule is required, and every submodule needs the folder git checks it out in and the commit the instance repository pins.");
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
     {
@@ -194,9 +210,10 @@ internal interface IModRequest
     InstallationFileRequest? InstallationFile { get; }
 }
 
-/// <summary>A mod, whether it is a source mod, whose build writes its manifest, and its version as its metadata says.</summary>
+/// <summary>A mod, a source mod's source folder, whose repository holds the manifest its build writes, and its version as its
+/// metadata says.</summary>
 internal sealed record UpdateManifestModRequest(
-    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, bool IsSourceMod, string? Version)
+    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder, string? Version)
     : IModRequest;
 
 /// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). AsksWhatItLacks marks a request
@@ -205,11 +222,11 @@ internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
     GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false);
 
-/// <summary>A mod, with the submodule its manifest names, none until a refusal names it, and why the request could not read a game
-/// file, by its game path, or an installation file, by its name.</summary>
+/// <summary>A mod, with the submodule its manifest names once a refusal names it, why the request could not read a game
+/// file, by path, or an installation file, by name, and a source mod's source folder.</summary>
 internal sealed record RestoreFromManifestModRequest(
     string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule,
-    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null)
+    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null, string? SourceFolder = null)
     : IModRequest;
 
 /// <summary>A submodule as the Instance adapter reads the instance repository (ADR-0013): the folder git checks it out in, the
@@ -220,6 +237,9 @@ internal sealed record SubmoduleRequest(string Folder, string Pin, string? Branc
 
     internal Submodule ToSubmodule() => new(Folder, Pin, Branch);
 }
+
+/// <summary>The submodules to clone, as the Instance adapter reads the instance repository (ADR-0013).</summary>
+internal sealed record CloneSubmodulesRequest(IReadOnlyList<SubmoduleRequest> Submodules);
 
 /// <summary>The mods to read the folders of against their manifests, and the stat cache's folder.</summary>
 internal sealed record ModFoldersRequest(IReadOnlyList<ModByFolder> Mods, string StatCache);

@@ -38,7 +38,7 @@ public sealed class ModStatusMetadataTests : IDisposable
             ? new ManifestPackage.InstallationFile(file.Name, 1, "hash", file.Page)
             : manifest.Version is not null ? new ManifestPackage.GameFolder("Fallout4", "hash") : null;
         _repository.WriteManifest(_root, "mod", new Manifest(package, [], manifest.Version));
-        return _repository.Status(_root, "mod", new HashSet<string>(), _statCache, held);
+        return _repository.Status(_root, "mod", new HashSet<string>(), _statCache, held, sourceFolder: null);
     }
 
     [Theory]
@@ -81,7 +81,7 @@ public sealed class ModStatusMetadataTests : IDisposable
     [Fact]
     public void AModWithNoManifest_HasNoMetadataToDifferFrom()
     {
-        var status = _repository.Status(_root, "mod", new HashSet<string>(), _statCache, Metadata("1.0"));
+        var status = _repository.Status(_root, "mod", new HashSet<string>(), _statCache, Metadata("1.0"), sourceFolder: null);
 
         Assert.False(status.MetadataDiffers);
         Assert.Null(status.ManifestMetadata);

@@ -4,6 +4,7 @@ using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -56,8 +57,9 @@ public sealed class ArchivePackerTests : IDisposable
 
     private async Task<(byte[]? Archive, ArchiveRefused? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
     {
+        _folders.WriteSourceManifest(SourceFolder, new Manifest(null, []) { Output = "Mod", Archives = [new ManifestArchive(Archive, files)] });
         var source = new FakeSourceAdapter().Building(SourceFolder, new SourceToBuild(
-            "Mod", [], [new ArchiveToPack(Archive, files)], [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
+            [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_scratch, null, GameRelease.Fallout4, []));
 

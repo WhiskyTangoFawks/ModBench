@@ -15,8 +15,8 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
+  type BackendStatus, type SourceManifestChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
+  type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -505,11 +505,11 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused> {
+  async changeSourceManifest(sourceFolder: string, change: SourceManifestChange): Promise<{ changed: true } | WriteRefused> {
     return this.mutate({
-      op: `changeBuildConfiguration(${sourceFolder})`,
-      failMsg: `Could not change the build configuration in "${sourceFolder}"`,
-      post: () => this.apiClient.POST('/build-configuration', { body: { sourceFolder, ...change } }),
+      op: `changeSourceManifest(${sourceFolder})`,
+      failMsg: `Could not change the manifest in "${sourceFolder}"`,
+      post: () => this.apiClient.POST('/source-manifest', { body: { sourceFolder, ...change } }),
       noContent: { changed: true },
     });
   }
@@ -575,6 +575,14 @@ class HttpMEditClient implements MEditClient {
       post: () => this.apiClient.POST('/update-manifest', { body: { mods: [...mods], ...facts, gesture } }),
       outcome: (answer) => selectionOutcome(answer),
     }));
+  }
+
+  cloneSubmodules(submodules: readonly NonNullable<RestoreMod['submodule']>[]): Promise<SubmodulesCloned | WriteRefused> {
+    return this.mutate({
+      op: `cloneSubmodules(${submodules.length})`,
+      failMsg: 'Could not clone the submodules the instance repository pins',
+      post: () => this.apiClient.POST('/clone-submodules', { body: { submodules: [...submodules] } }),
+    });
   }
 
   restoreFromManifest(

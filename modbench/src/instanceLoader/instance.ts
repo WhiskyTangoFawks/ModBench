@@ -45,7 +45,7 @@ interface InstancePaths {
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
   readonly modDirs: ReadonlyMap<string, string>;
-  /** Each source mod's source folder, by mod name: the repository whose build configuration names it as its output,
+  /** Each source mod's source folder, by mod name: the repository whose manifest names it as its output,
    *  listed in the mod order or not. */
   readonly sourceDirs: ReadonlyMap<string, string>;
 }

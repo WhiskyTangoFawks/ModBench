@@ -66,6 +66,23 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal([new ManifestFile("meshes/c.nif", new PackageEntry.Held())], manifest.Files);
     }
 
+    [Fact]
+    public async Task ABuild_WritesItsManifestInItsRepository_KeepingWhatItBuildsFrom_AndNoneInTheModFolder()
+    {
+        WriteSource("{\"output\": \"Mod\", \"exclude\": [\"meshes/c.nif\"], \"archives\": {\"Mod - Main.ba2\": [\"meshes/d.nif\"]}}",
+            ("meshes/c.nif", "c"), ("meshes/d.nif", "d"));
+
+        await Landed();
+
+        Assert.Equal(["Mod.manifest.json"], Directory.GetFiles(SourceFolder).Select(Path.GetFileName));
+        var manifest = ManifestWritten().Require();
+        Assert.Equal("Mod", manifest.Output);
+        Assert.Equal(["meshes/c.nif"], manifest.Exclude);
+        Assert.Equal(["Mod - Main.ba2"], manifest.Archives.Select(archive => archive.Path));
+        Assert.Equal(["meshes/c.nif.excluded"], manifest.Files.Select(file => file.Path));
+        Assert.Null(new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName));
+    }
+
     [Theory]
     [InlineData("assets/meshes/c.nif", "changed", true)]
     [InlineData("assets/meshes/c.nif", "c", false)]
@@ -147,23 +164,23 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AModWhoseSourceFolderHoldsNoBuildConfiguration_IsRefused_WritingNothing()
+    public async Task AModWhoseRepositoryHoldsNoManifest_IsRefused_WritingNothing()
     {
         Directory.CreateDirectory(SourceFolder);
 
         var refused = Assert.Single((await Build(_noArchives)).Refused);
 
         Assert.Equal(BuildRefusal.SourceUnreadable, refused.Refusal);
-        Assert.Equal($"was not built: '{SourceFolder}' holds no build configuration.", refused.Message);
+        Assert.Equal($"was not built: '{SourceFolder}' holds no manifest.", refused.Message);
         Assert.False(Directory.Exists(ModFolder));
     }
 
     [Theory]
     [InlineData("{\"output\": \"Other\"}", BuildRefusal.OutputNotThisMod,
-        "its build configuration names the output folder 'Other', not its folder 'Mod'.")]
+        "its manifest names the output folder 'Other', not its folder 'Mod'.")]
     [InlineData("{\"output\": \"Mod\", \"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\", \"a.txt\"]}}", BuildRefusal.ArchiveFileNotAnAsset,
         "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source.")]
-    public async Task ABuildThatCannotMakeTheFolderTheConfigurationSays_RefusesTheMod_WritingNothing(
+    public async Task ABuildThatCannotMakeTheFolderItsManifestSays_RefusesTheMod_WritingNothing(
         string configuration, BuildRefusal refusal, string why)
     {
         WriteSource(configuration, ("meshes/c.nif", "c"));
@@ -197,7 +214,7 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(["a.txt"], built.Overwritten);
         Assert.StartsWith("The build stopped before compiling, as a file could not be read or written: ", built.Failure, StringComparison.Ordinal);
         Assert.Contains("z.txt", built.Failure, StringComparison.Ordinal);
-        Assert.Null(ManifestWritten());
+        Assert.Empty(ManifestWritten().Require().Files);
     }
 
     [Fact]
@@ -288,8 +305,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
         Assert.Empty(built.Refused);
 
-        var manifest = new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName).Require();
-        Assert.Equal("1.2.3", manifest.Version);
+        Assert.Equal("1.2.3", ManifestWritten().Require().Version);
     }
 
     private async Task InitializedWithALocalizedPlugin()
@@ -323,7 +339,8 @@ public sealed class BuildModHandlerTests : IDisposable
 
     private void WriteSource(string configuration, params (string Path, string Text)[] assets)
     {
-        Write(SourceFolder, "build.json", Encoding.UTF8.GetBytes(configuration));
+        var output = System.Text.Json.Nodes.JsonNode.Parse(configuration)?["output"]?.GetValue<string>();
+        Write(SourceFolder, $"{output}.manifest.json", Encoding.UTF8.GetBytes(configuration[..^1] + ", \"files\": []}"));
         foreach (var (path, text) in assets) WriteAsset(path, Encoding.UTF8.GetBytes(text));
     }
 
@@ -336,9 +353,10 @@ public sealed class BuildModHandlerTests : IDisposable
         return GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "rev-parse", "HEAD").Trim();
     }
 
-    private Manifest? ManifestWritten() => new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName);
+    private Manifest? ManifestWritten() => new ModFolderRepository(TimeProvider.System).ReadSourceManifest(SourceFolder).Value();
 
-    private ModStatus Status() => new ModFolderRepository(TimeProvider.System).Status(ModFolder, ModName, new HashSet<string> { MetaIni }, StatCache);
+    private ModStatus Status() =>
+        new ModFolderRepository(TimeProvider.System).Status(ModFolder, ModName, new HashSet<string> { MetaIni }, StatCache, held: null, SourceFolder);
 
     private void WriteAsset(string path, byte[] bytes) => Write(Path.Combine(SourceFolder, "assets"), path, bytes);
 

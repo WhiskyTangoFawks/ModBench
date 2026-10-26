@@ -3,6 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -94,13 +95,39 @@ internal sealed class ModInit(
         }
 
         setPhase(DecompileAndCommitPhase.Committing);
+        // modlist-repository.md, The manifest, story 1: a source mod's manifest is in its repository instead, so the one in its
+        // folder goes before the commit, and comes back when the commit fails.
+        SpelledManifest? removed;
+        try
+        {
+            removed = modFolders.RemoveManifest(mod.Folder, mod.Name, toCommit.SourceFolder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: the manifest in its folder could not be removed: {ex.Message}");
+        }
+
         if (Commit(mod, toCommit.SourceFolder, verified, assets, repair) is { } failure)
         {
             logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", mod.Name, failure.Reason);
-            return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}");
+            return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}{PutBack(mod.Folder, removed)}");
         }
 
         return ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Landed([.. verified.Select(v => v.Plugin.Key)]);
+    }
+
+    private string PutBack(string modFolder, SpelledManifest? removed)
+    {
+        if (removed is null) return "";
+        try
+        {
+            modFolders.WriteFile(modFolder, removed.Name, content => content.Write(removed.Text));
+            return "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"; the manifest its folder held, '{removed.Name}', could not be put back: {ex.Message}";
+        }
     }
 
     private static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
@@ -136,7 +163,7 @@ internal sealed class ModInit(
                 sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, modFolders.FolderName(mod.Folder),
+        return source.Init(sourceFolder, modFolders.SpellSourceManifest(new Manifest(null, []) { Output = modFolders.FolderName(mod.Folder) }),
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Key, v.Source.BinarySha256)))], assets,
             repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
     }

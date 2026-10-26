@@ -123,7 +123,7 @@ export interface OriginFileRef {
 
 interface SourceModWriters {
   readonly adapter: InstanceAdapter;
-  readonly mEdit: Pick<MEditClient, 'changeBuildConfiguration'>;
+  readonly mEdit: Pick<MEditClient, 'changeSourceManifest'>;
 }
 
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
@@ -160,7 +160,7 @@ function bySourceFolder(reads: readonly ReadFile[], sourceMods: SourceMods): Sou
   return groups;
 }
 
-type ExclusionChange = (sourceFolder: string, files: readonly ReadFile[], to: OriginFileMark) => ReturnType<MEditClient['changeBuildConfiguration']>;
+type ExclusionChange = (sourceFolder: string, files: readonly ReadFile[], to: OriginFileMark) => ReturnType<MEditClient['changeSourceManifest']>;
 
 // Each source mod's refusal by its source folder; or, when mEdit cannot be reached, the whole selection's, with the
 // configurations already changed put back.
@@ -175,7 +175,7 @@ async function configureEach(
     if (isRefused(answer) && answer.unreachable) {
       const notPutBack = await Promise.all(configured.map(async ([folder, of]) => {
         const putBack = await change(folder, of, UNMARK[mark]);
-        return isRefused(putBack) ? [` The build configuration in "${folder}" could not be put back: ${putBack.message}`] : [];
+        return isRefused(putBack) ? [` The manifest in "${folder}" could not be put back: ${putBack.message}`] : [];
       }));
       return { unreachable: [answer.message, ...notPutBack.flat()].join('') };
     }
@@ -197,7 +197,7 @@ async function markInSourceMod(
   return {
     landed: outcome.landed,
     refused: outcome.refused.map(({ item, reason }) => ({
-      item, reason: `${reason} Its change to the build configuration could not be taken back: ${takenBack.message}`,
+      item, reason: `${reason} Its change to the manifest could not be taken back: ${takenBack.message}`,
     })),
   };
 }
@@ -231,7 +231,7 @@ async function markFiles(
   }
   const { read, unread } = await readEach(adapter, files);
   const change: ExclusionChange = (sourceFolder, of, to) =>
-    mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath)));
+    mEdit.changeSourceManifest(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath)));
   const groups = bySourceFolder(read, sourceMods);
   const configured = await configureEach(change, groups, mark);
   if ('unreachable' in configured) return { applied: false, refusal: configured.unreachable };
@@ -513,7 +513,7 @@ async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string
   return { ...(tagRefusal !== undefined && { tagRefusal }), ...(keepOutRefusal !== undefined && { keepOutRefusal }) };
 }
 
-// The folder, then a source mod's build configuration, then the line in each profile, the active one first. A
+// The folder, then a source mod's manifest, then the line in each profile, the active one first. A
 // profile that does not list the mod is left as it was.
 async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
@@ -534,7 +534,7 @@ async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to:
   } catch (err) {
     return refuse(err);
   }
-  const configured = sourceFolder === undefined ? undefined : await mEdit.changeBuildConfiguration(sourceFolder, { output: to });
+  const configured = sourceFolder === undefined ? undefined : await mEdit.changeSourceManifest(sourceFolder, { output: to });
   if (configured !== undefined && isRefused(configured)) {
     try {
       await adapter.renameModFolder(to, from);

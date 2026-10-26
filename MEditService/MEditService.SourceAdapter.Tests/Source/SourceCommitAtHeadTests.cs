@@ -13,8 +13,8 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     public SourceCommitAtHeadTests()
     {
         _submodule = new PinnedSubmodule(_root);
-        _commits["first"] = _submodule.Commit(("build.json", "first"));
-        _commits["second"] = _submodule.Commit(("build.json", "second"));
+        _commits["first"] = _submodule.Commit(("readme.txt", "first"));
+        _commits["second"] = _submodule.Commit(("readme.txt", "second"));
     }
 
     public void Dispose()
@@ -33,7 +33,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.Equal(new SubmoduleHead(_commits[at]), CommitAtHead(_commits[at]).Value());
 
         Assert.Equal(_commits[at], Git(SourceFolder, "rev-parse", "HEAD").Trim());
-        Assert.Equal(at, File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
+        Assert.Equal(at, File.ReadAllText(Path.Combine(SourceFolder, "readme.txt")));
         Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
     }
 
@@ -239,7 +239,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
 
         Assert.Equal(_commits["first"], CommitAtHead(_commits["second"]).Value().Commit);
 
-        Assert.Equal("first", File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
+        Assert.Equal("first", File.ReadAllText(Path.Combine(SourceFolder, "readme.txt")));
     }
 
     [Fact]

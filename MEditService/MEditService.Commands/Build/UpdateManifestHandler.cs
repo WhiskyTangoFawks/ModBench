@@ -28,7 +28,7 @@ public sealed class UpdateManifestHandler
 
     private ItemAnswer<UpdateManifestRefusal, ModUpdated> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
     {
-        if (mod.IsSourceMod || NamesASource(mod)) return LeftToItsBuild(mod, instance);
+        if (mod.SourceFolder is { } sourceFolder) return LeftToItsBuild(mod, sourceFolder, instance);
 
         var installationFile = mod.InstallationFile;
         if (installationFile is not null && !_repository.InstallationFileExists(installationFile.Path))
@@ -80,15 +80,11 @@ public sealed class UpdateManifestHandler
             statCacheNotWritten));
     }
 
-    private bool NamesASource(ModToUpdate mod) => NamesPackage<ManifestPackage.SourceRepository>(mod);
-
-    private bool NamesTheGameFolder(ModToUpdate mod) => NamesPackage<ManifestPackage.GameFolder>(mod);
-
-    private bool NamesPackage<TPackage>(ModToUpdate mod) where TPackage : ManifestPackage
+    private bool NamesTheGameFolder(ModToUpdate mod)
     {
         try
         {
-            return _repository.ReadManifest(mod.Folder, mod.Name)?.Package is TPackage;
+            return _repository.ReadManifest(mod.Folder, mod.Name)?.Package is ManifestPackage.GameFolder;
         }
         catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -96,9 +92,9 @@ public sealed class UpdateManifestHandler
         }
     }
 
-    private ItemAnswer<UpdateManifestRefusal, ModUpdated> LeftToItsBuild(ModToUpdate mod, InstanceToUpdate instance)
+    private ItemAnswer<UpdateManifestRefusal, ModUpdated> LeftToItsBuild(ModToUpdate mod, string sourceFolder, InstanceToUpdate instance)
     {
-        var status = _repository.Status(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+        var status = _repository.Status(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache, held: null, sourceFolder);
         if (status.Unreadable is { } unreadable)
             return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: {unreadable.Why}.");
         if (status.NoManifest)

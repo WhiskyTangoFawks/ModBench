@@ -321,7 +321,7 @@ export type OriginFileMarked =
   | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
-/** Every repository in the source folder, listed in the mod order or not, by the mod its build configuration
+/** Every repository in the source folder, listed in the mod order or not, by the mod its manifest
  *  names as its output (ADR-0007). A note names each repository left out, and why. */
 export interface SourceMods {
   readonly folders: ReadonlyMap<string, string>;
@@ -340,6 +340,10 @@ export type SourceHost = { readonly kind: 'host'; readonly url: string } | { rea
 
 /** Why one source mod is not as a submodule would be. */
 export interface SubmoduleNote { readonly mod: string; readonly note: string }
+
+/** A submodule `.gitmodules` names in the source folder that holds no repository yet, by its name, with where git checks it
+ *  out and its pin, or what the instance repository lacks of it. */
+export type UnclonedSubmodule = { readonly name: string } & (Submodule | { readonly lacks: string });
 
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
 
@@ -650,6 +654,8 @@ export interface InstanceAdapter {
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */
   submodule(name: string): Promise<Submodule | { readonly lacks: string }>;
+  /** Each submodule `.gitmodules` names in the source folder whose folder holds no repository. */
+  unclonedSubmodules(): Promise<readonly UnclonedSubmodule[]>;
   /** Whether the instance folder holds a repository now, read from disk. */
   repositoryOnDisk(): Promise<boolean>;
   /** Takes back the repository `git init` made. Rejects, removing nothing, when it holds a commit or a ref. */

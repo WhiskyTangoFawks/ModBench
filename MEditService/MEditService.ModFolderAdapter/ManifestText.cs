@@ -4,16 +4,26 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file with a line for its package, which holds its version, and a line for each file in
-/// alphabetical order, so a change to one file is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file with a line for its output, its package and version, its exclusions, each archive,
+/// and each file in alphabetical order, so a change to one file is one line in a diff.</summary>
 internal static class ManifestText
 {
+    private const string OutputKey = "output";
+
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static string Of(Manifest manifest)
     {
         List<string> members = [];
+        if (manifest.Output is { } output) members.Add($"\"{OutputKey}\": " + Value(writer => writer.WriteStringValue(output)));
         if (manifest.Package is not null) members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
+        if (manifest.Exclude.Count > 0)
+            members.Add("\"exclude\": " + Value(writer => Paths(writer, manifest.Exclude.Order(StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal))));
+        if (manifest.Archives.Count > 0)
+        {
+            var archives = manifest.Archives.Select(archive => Value(writer => writer.WriteStringValue(archive.Path)) + ": " + Value(writer => Paths(writer, archive.Files)));
+            members.Add("\"archives\": {\n" + string.Join(",\n", archives) + "\n}");
+        }
         var files = manifest.Files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
         members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
         return "{\n" + string.Join(",\n", members) + "\n}\n";
@@ -25,11 +35,10 @@ internal static class ManifestText
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            var root = parsed.RootElement;
+            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "exclude", "archives", "files");
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
-            if (!root.TryGetProperty("package", out var line)) return new Manifest(null, files);
-            var (package, version) = PackageOf(line);
-            return new Manifest(package, files, version);
+            var (package, version) = root.TryGetProperty("package", out var line) ? PackageOf(line) : (null, null);
+            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root) };
         }
         catch (JsonException e)
         {
@@ -43,8 +52,47 @@ internal static class ManifestText
 
     private static string Text(JsonElement value) => value.GetString() ?? throw new FormatException();
 
+    // modlist-repository.md, The manifest: a key no member reads would be dropped by the next write, so it refuses the read.
+    private static JsonElement Known(JsonElement line, string where, params string[] keys) =>
+        line.EnumerateObject().Select(member => member.Name).FirstOrDefault(name => !keys.Contains(name, StringComparer.Ordinal)) is { } unknown
+            ? throw new InvalidDataException($"{where} holds '{unknown}', which Modbench does not read")
+            : line;
+
+    private static string? OutputOf(JsonElement root)
+    {
+        if (!root.TryGetProperty(OutputKey, out var named)) return null;
+        var output = Text(named);
+        return Manifest.IsFolderName(output) ? output : throw new InvalidDataException($"its manifest's output '{output}' is not a folder name");
+    }
+
+    private static List<string> ExclusionsOf(JsonElement root) =>
+        root.TryGetProperty("exclude", out var paths) ? InTheFolder("exclude", PathsOf(paths)) : [];
+
+    private static List<ManifestArchive> ArchivesOf(JsonElement root)
+    {
+        if (!root.TryGetProperty("archives", out var archives)) return [];
+        List<ManifestArchive> packed = [.. archives.EnumerateObject().Select(archive => new ManifestArchive(archive.Name, PathsOf(archive.Value)))];
+        InTheFolder("archives", [.. packed.Select(archive => archive.Path), .. packed.SelectMany(archive => archive.Files)]);
+        return packed;
+    }
+
+    private static List<string> PathsOf(JsonElement paths) => [.. paths.EnumerateArray().Select(Text)];
+
+    private static List<string> InTheFolder(string key, List<string> paths) =>
+        paths.FirstOrDefault(path => !Manifest.IsPathInTheFolder(path)) is { } outside
+            ? throw new InvalidDataException($"its manifest's '{key}' names '{outside}', which is not a path in the folder")
+            : paths;
+
+    private static void Paths(Utf8JsonWriter writer, IEnumerable<string> paths)
+    {
+        writer.WriteStartArray();
+        foreach (var path in paths) writer.WriteStringValue(path);
+        writer.WriteEndArray();
+    }
+
     private static (ManifestPackage Package, string? Version) PackageOf(JsonElement line)
     {
+        Known(line, "its manifest's package", "installationFile", "size", "hash", "page", "gameFolder", "submodule", "repository", "version");
         var version = line.TryGetProperty("version", out var held) ? Text(held) : null;
         if (line.TryGetProperty("installationFile", out var name))
         {
@@ -61,6 +109,7 @@ internal static class ManifestText
     {
         try
         {
+            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage");
             var path = Text(line.GetProperty("path"));
             if (line.TryGetProperty("inPackage", out var held) && !held.GetBoolean()) return new ManifestFile(path, new PackageEntry.NotHeld());
             return new ManifestFile(path, line.TryGetProperty("packagePath", out var packagePath) ? new PackageEntry.HeldAt(Text(packagePath)) : new PackageEntry.Held());

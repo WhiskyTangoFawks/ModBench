@@ -46,18 +46,15 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
     public SourceFailure? Init(
-        string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null) =>
-        SourceFailure.Answer(() => GitInit.Init(sourceFolder, output, plugins, assets, repair));
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, manifest, plugins, assets, repair));
 
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) =>
-        SourceFailure.Answer(() => BuildConfiguration.ToBuild(sourceFolder));
+        SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder));
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) =>
         SourceFailure.Answer(() => Submodules.CommitAtHead(submodule, cancel));
-
-    public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
-        SourceFailure.Answer(() => BuildConfiguration.Change(sourceFolder, change));
 
     public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         SourceRepository.ReadBackOf(pluginFileName, tree, gameRelease);

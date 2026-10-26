@@ -34,11 +34,13 @@ public sealed class RestoreFromManifestHandler
 
     private async Task<ItemAnswer<RestoreSkip, ModRestored>> RestoreModAsync(ModToRestore mod, InstanceToRestore instance, CancellationToken cancel)
     {
-        Manifest manifest;
+        if (mod.Submodule is { } pinned) return await RebuildAsync(mod, instance, pinned, cancel);
+
+        Manifest? held;
         try
         {
-            if (_repository.ReadManifest(mod.Folder, mod.Name) is not { } held) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
-            manifest = held;
+            if (mod.SourceFolder is null) held = _repository.ReadManifest(mod.Folder, mod.Name);
+            else if (!_repository.ReadSourceManifest(mod.SourceFolder).Holds(out held, out var why)) return Skipped(RestoreRefusal.ManifestUnreadable, why);
         }
         catch (InvalidDataException e)
         {
@@ -49,14 +51,10 @@ public sealed class RestoreFromManifestHandler
             return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
+        if (held is not { } manifest) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
         var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFile).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
-        if (resolved.Built is { } submodule)
-        {
-            return mod.Submodule is { } pinned
-                ? await RebuildAsync(mod, instance, pinned, manifest.Version, cancel)
-                : Lacked([new PackageContents.Lack.SubmoduleMissing(submodule)]);
-        }
+        if (resolved.Built is { } submodule) return Lacked([new PackageContents.Lack.SubmoduleMissing(submodule)]);
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;
@@ -95,12 +93,13 @@ public sealed class RestoreFromManifestHandler
     // modlist-repository.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
     // and only at the commit the instance repository pins.
     private async Task<ItemAnswer<RestoreSkip, ModRestored>> RebuildAsync(
-        ModToRestore mod, InstanceToRestore instance, Submodule submodule, string? version, CancellationToken cancel)
+        ModToRestore mod, InstanceToRestore instance, Submodule submodule, CancellationToken cancel)
     {
         if (!_source.CommitAtHead(submodule, cancel).Holds(out var checkedOut, out var failure))
             return Skipped(RestoreRefusal.SourceUnavailable, $"its submodule could not be cloned or read: {failure.Reason.TrimEnd('.')}");
         if (checkedOut.Commit != submodule.Pin)
             return Skipped(RestoreRefusal.SourceAtAnotherCommit, $"its submodule is at {checkedOut.Commit}, not at {submodule.Pin}, the commit the instance repository pins");
+        var version = VersionIn(submodule.Folder);
 
         var metadataFiles = mod.MetadataFiles.ToHashSet(StringComparer.Ordinal);
         Dictionary<string, string> before;
@@ -144,6 +143,10 @@ public sealed class RestoreFromManifestHandler
                 new RestoreSkip(RestoreRefusal.NotFinished), $"was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
     }
+
+    // A manifest that cannot be read refuses the build that follows, naming why.
+    private string? VersionIn(string sourceFolder) =>
+        _repository.ReadSourceManifest(sourceFolder).Holds(out var manifest, out _) ? manifest?.Version : null;
 
     private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
         _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);

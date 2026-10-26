@@ -7,8 +7,6 @@ namespace MEditService.ModFolderAdapter;
 /// matches names in.</summary>
 public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fileExists) : IModFolderRepository
 {
-    private const string ManifestExtension = ".manifest.json";
-
     public ModFolderRepository(TimeProvider time) : this(time, File.Exists)
     {
     }
@@ -46,14 +44,19 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     private bool FoundAt(string modFolder, string line, HashSet<string> onDisk) =>
         !onDisk.Contains(line) && fileExists(Path.Combine(modFolder, line));
 
-    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held = null)
+    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held, string? sourceFolder)
     {
         try
         {
-            if (ReadManifest(modFolder, modName) is not { } manifest) return new(modName, NoManifest: true, [], [], [], []);
+            Manifest? manifest;
+            if (sourceFolder is null) manifest = ReadManifest(modFolder, modName);
+            else if (!ReadSourceManifest(sourceFolder).Holds(out manifest, out var why)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, why));
+            if (manifest is null) return new(modName, NoManifest: true, [], [], [], []);
 
+            // A folder its build has not made yet lacks every file its manifest names.
+            var there = Directory.Exists(modFolder);
             var cache = new StatCache(statCache, modFolder, time);
-            var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
+            var onDisk = there ? FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal) : [];
             List<string> differing = [], gone = [], notInPackage = [];
             foreach (var line in manifest.Files)
             {
@@ -62,8 +65,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
                 if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
                 else if (fixedBy is { } fixes && !HoldsWhatItIsFixedBy(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
             }
-            var namedByNoLine = NamedByNoLine(modFolder, modName, manifest, leftOut);
-            var statCacheNotWritten = cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]);
+            var namedByNoLine = there ? NamedByNoLine(modFolder, modName, manifest, leftOut) : [];
+            var statCacheNotWritten = there ? cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]) : null;
             var says = ModMetadata.Of(manifest);
             return new(
                 modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), null, statCacheNotWritten,
@@ -105,7 +108,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     private IEnumerable<string> FilesOf(string modFolder, string modName) =>
         new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
             .Select(file => PathIn(modFolder, file.FullName))
-            .Where(path => path != ManifestName(modName) && !TempName.HoldsTemp(path));
+            .Where(path => path != ManifestName.Of(modName) && !TempName.HoldsTemp(path));
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 
@@ -169,7 +172,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
-        var name = ManifestName(modName);
+        var name = ManifestName.Of(modName);
         var path = Path.Combine(modFolder, name);
         var text = ManifestText.Of(manifest);
         if (File.Exists(path) && File.ReadAllText(path, Encoding.UTF8) == text) return false;
@@ -178,9 +181,24 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         return true;
     }
 
+    public SpelledManifest? RemoveManifest(string modFolder, string modName, string sourceFolder)
+    {
+        var name = ManifestName.Of(modName);
+        var path = Path.Combine(modFolder, name);
+        if (SameFolder(modFolder, sourceFolder) || !File.Exists(path)) return null;
+        var removed = new SpelledManifest(name, File.ReadAllBytes(path));
+        File.Delete(path);
+        return removed;
+    }
+
+    private static bool SameFolder(string one, string other) =>
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
     public Manifest? ReadManifest(string modFolder, string modName)
     {
-        var path = Path.Combine(modFolder, ManifestName(modName));
+        var path = Path.Combine(modFolder, ManifestName.Of(modName));
         return File.Exists(path) ? ManifestText.Parse(File.ReadAllText(path, Encoding.UTF8)) : null;
     }
 
@@ -190,5 +208,59 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         return FileHash.Of(content);
     }
 
-    private static string ManifestName(string modName) => modName + ManifestExtension;
+    public Answer<Manifest?, string> ReadSourceManifest(string sourceFolder)
+    {
+        try
+        {
+            List<string> held = Directory.Exists(sourceFolder) ? ManifestsIn(sourceFolder) : [];
+            if (held is []) return (Manifest?)null;
+            if (held is [var one, var other, ..]) return $"its repository holds two manifests, '{Path.GetFileName(one)}' and '{Path.GetFileName(other)}'";
+            var name = Path.GetFileName(held[0]);
+            var manifest = ManifestText.Parse(File.ReadAllText(held[0], Encoding.UTF8));
+            if (manifest.Output is not { } output) return "its manifest names no output folder";
+            return name == ManifestName.Of(output) ? manifest : $"its manifest '{name}' is not named for its output folder '{output}'";
+        }
+        catch (InvalidDataException e)
+        {
+            return e.Message;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"its manifest could not be read: {e.Message}";
+        }
+    }
+
+    public bool WriteSourceManifest(string sourceFolder, Manifest manifest)
+    {
+        var spelled = SpellSourceManifest(manifest);
+        var path = Path.Combine(sourceFolder, spelled.Name);
+        var there = ManifestsIn(sourceFolder).SingleOrDefault();
+        // A name that differs in case alone is the same file where the file system matches names without case.
+        if (there is not null && there != path && string.Equals(there, path, StringComparison.OrdinalIgnoreCase))
+        {
+            File.Move(there, path);
+            there = path;
+        }
+        if (there == path && File.ReadAllBytes(path).AsSpan().SequenceEqual(spelled.Text)) return false;
+
+        WriteFile(sourceFolder, spelled.Name, content => content.Write(spelled.Text));
+        if (there is null || there == path) return true;
+        try
+        {
+            File.Delete(there);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            File.Delete(path);
+            throw;
+        }
+        return true;
+    }
+
+    public SpelledManifest SpellSourceManifest(Manifest manifest) =>
+        new(ManifestName.Of(manifest.Output ?? throw new ArgumentException("A source mod's manifest names its output folder.", nameof(manifest))),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(ManifestText.Of(manifest)));
+
+    private static List<string> ManifestsIn(string sourceFolder) =>
+        [.. Directory.EnumerateFiles(sourceFolder).Where(path => ManifestName.Is(Path.GetFileName(path))).Order(StringComparer.Ordinal)];
 }

@@ -14,7 +14,7 @@ public sealed class SourceCloneUnderUserGitConfigTests : IDisposable
     public void AClone_UnderAUserConfigThatNamesAnotherDefaultRemote_StillTakesTheRemotesMain()
     {
         using var submodule = new PinnedSubmodule(_root);
-        var release = submodule.Commit(("build.json", "release"));
+        var release = submodule.Commit(("readme.txt", "release"));
         PinnedSubmodule.Git(submodule.Remote, "checkout", "-q", "-b", "edit");
         submodule.Pin(release);
 

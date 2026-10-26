@@ -65,7 +65,7 @@ public sealed class SwaggerSchemaTests
     [InlineData("post", "/plugins/create-in-mod", RefusalKind.PluginCreate)]
     [InlineData("post", "/plugins/rename-source-changes", RefusalKind.RenameSource)]
     [InlineData("post", "/plugins/move-last-written", RefusalKind.RenameSource)]
-    [InlineData("post", "/build-configuration", RefusalKind.BuildConfiguration)]
+    [InlineData("post", "/source-manifest", RefusalKind.SourceManifest)]
     [InlineData("post", "/records/{formKey}/edit", RefusalKind.RecordEdit)]
     [InlineData("post", "/records/{formKey}/edit-changes", RefusalKind.RecordEdit)]
     [InlineData("post", "/records/copy", RefusalKind.RecordEdit)]
@@ -83,7 +83,7 @@ public sealed class SwaggerSchemaTests
         Assert.Empty(StatusesTheMappingGives(kind).Select(status => status.ToString(CultureInfo.InvariantCulture)).Except(declared));
     }
 
-    public enum RefusalKind { PutLoadOrder, PluginCreate, RenameSource, BuildConfiguration, RecordEdit }
+    public enum RefusalKind { PutLoadOrder, PluginCreate, RenameSource, SourceManifest, RecordEdit }
 
     private static readonly Type EndpointMapping = typeof(Program).Assembly.GetType("MEditService.Http.Endpoints.EndpointMapping")
         ?? throw new InvalidOperationException("EndpointMapping moved.");
@@ -93,7 +93,7 @@ public sealed class SwaggerSchemaTests
         RefusalKind.PutLoadOrder => Each<PutLoadOrderRefusal>(r => Mapped(new PutLoadOrderRefused(r, "m"))),
         RefusalKind.PluginCreate => Each<PluginCreateRefusal>(r => Mapped(r, "m")),
         RefusalKind.RenameSource => Each<RenameSourceRefusal>(r => Mapped(r, "m")),
-        RefusalKind.BuildConfiguration => Each<BuildConfigurationRefusal>(r => Mapped(r, "m")),
+        RefusalKind.SourceManifest => Each<SourceManifestRefusal>(r => Mapped(r, "m")),
         RefusalKind.RecordEdit => Each<RecordEditRefusal>(r => Mapped(new RecordEditRefused(r, "m"))),
         _ => throw new InvalidEnumArgumentException(nameof(kind), (int)kind, typeof(RefusalKind)),
     };
