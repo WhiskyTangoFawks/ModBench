@@ -233,7 +233,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
   const skipped = "'ModB' was skipped: a file could not be read: denied";
   const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
-  const modStatus = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [] }];
+  const modStatus = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [] }];
 
   const posts: {
     name: string; verb: Verb; answer: unknown; reads: unknown; path: string; body: unknown;

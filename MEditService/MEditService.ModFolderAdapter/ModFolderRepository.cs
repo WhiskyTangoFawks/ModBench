@@ -50,18 +50,19 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         {
             Manifest? manifest;
             if (sourceFolder is null) manifest = ReadManifest(modFolder, modName);
-            else if (!ReadSourceManifest(sourceFolder).Holds(out manifest, out var why)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, why));
-            if (manifest is null) return new(modName, NoManifest: true, [], [], [], []);
+            else if (!ReadSourceManifest(sourceFolder).Holds(out manifest, out var why)) return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: true, why));
+            if (manifest is null) return new(modName, NoManifest: true, [], [], [], [], []);
 
             // A folder its build has not made yet lacks every file its manifest names.
             var there = Directory.Exists(modFolder);
             var cache = new StatCache(statCache, modFolder, time);
             var onDisk = there ? FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal) : [];
-            List<string> differing = [], gone = [], notInPackage = [];
+            List<string> differing = [], gone = [], notInPackage = [], otherBytes = [];
             foreach (var line in manifest.Files)
             {
                 var fixedBy = manifest.FixedBy(line);
-                if (fixedBy is null) notInPackage.Add(line.Path);
+                if (line.Entry is PackageEntry.OtherBytes) otherBytes.Add(line.Path);
+                else if (fixedBy is null) notInPackage.Add(line.Path);
                 if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
                 else if (fixedBy is { } fixes && !HoldsWhatItIsFixedBy(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
             }
@@ -69,16 +70,16 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             var statCacheNotWritten = there ? cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]) : null;
             var says = ModMetadata.Of(manifest);
             return new(
-                modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), null, statCacheNotWritten,
+                modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), Ordered(otherBytes), null, statCacheNotWritten,
                 Held(held, manifest)?.DiffersFrom(says) == true, says, NoHost: manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false });
         }
         catch (InvalidDataException e)
         {
-            return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, e.Message));
+            return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: true, e.Message));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: false, $"a file could not be read: {e.Message}"));
+            return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: false, $"a file could not be read: {e.Message}"));
         }
     }
 

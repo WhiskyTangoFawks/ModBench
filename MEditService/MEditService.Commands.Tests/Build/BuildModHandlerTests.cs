@@ -137,7 +137,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
         await Landed(_noArchives, isSubmodule: true);
 
-        Assert.Equal(new ModStatus(ModName, NoManifest: false, [], ["notes.txt"], [], []), Status());
+        Assert.Equal(new ModStatus(ModName, NoManifest: false, [], ["notes.txt"], [], [], []), Status());
     }
 
     [Fact]

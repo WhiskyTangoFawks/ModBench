@@ -61,6 +61,7 @@ const lossOf = (status: ModStatus): string | undefined => {
     listed('files whose bytes differ from its manifest', status.differing),
     listed('files no line of its manifest names', status.namedByNoLine),
     listed('files its package does not hold', status.notInPackage),
+    listed('files its package holds with other bytes', status.otherBytes),
   ].filter((part) => part !== undefined);
   return parts.length === 0 ? undefined : parts.join('; ');
 };

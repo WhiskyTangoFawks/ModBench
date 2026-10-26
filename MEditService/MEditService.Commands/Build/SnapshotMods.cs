@@ -13,6 +13,6 @@ public sealed record ModByFolder(
     /// <summary>The mod's folder against its manifest, and its metadata against the manifest's (modlist-repository.md, Status).</summary>
     public ModStatus StatusIn(IModFolderRepository repository, string statCache) =>
         MetadataUnreadable is { } why
-            ? new(Name, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: false, $"its metadata could not be read: {why}"))
+            ? new(Name, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: false, $"its metadata could not be read: {why}"))
             : repository.Status(Folder, Name, MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache, Metadata, SourceFolder);
 }

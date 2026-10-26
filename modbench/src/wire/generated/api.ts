@@ -1529,6 +1529,7 @@ export interface components {
             namedByNoLine: string[];
             gone: string[];
             notInPackage: string[];
+            otherBytes: string[];
             unreadable?: components["schemas"]["ModUnreadable"] | null;
             statCacheNotWritten?: string | null;
             metadataDiffers: boolean;

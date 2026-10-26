@@ -22,10 +22,11 @@ public sealed class UpdateManifestHandlerTests
 
     private Manifest BuiltSourceMod()
     {
-        _folders.WithFile(Mod, "a.esp", "built").WithFile(Mod, "z.txt", "edited");
+        _folders.WithFile(Mod, "a.esp", "built").WithFile(Mod, "z.txt", "edited").WithFile(Mod, "y.txt", "edited");
         var built = new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [
             new ManifestFile("a.esp", new PackageEntry.Held()),
             new ManifestFile("z.txt", new PackageEntry.NotHeld()),
+            new ManifestFile("y.txt", new PackageEntry.OtherBytes()),
         ]);
         _folders.Manifests[Source] = built;
         _folders.KeptPackageHashes[Source] = new Dictionary<string, string> { ["a.esp"] = "built" };
@@ -318,7 +319,7 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task ASourceModAsItsBuildWroteIt_Lands_LeavingItsManifest_AndReportsEachFileNotInItsPackage()
+    public async Task ASourceModAsItsBuildWroteIt_Lands_LeavingItsManifest_AndReportsEachFileNotInItsPackage_ApartFromEachWithOtherBytes()
     {
         var built = BuiltSourceMod();
 
@@ -327,6 +328,7 @@ public sealed class UpdateManifestHandlerTests
         Assert.Same(built, _folders.Manifests[Source]);
         Assert.False(updated.ManifestWritten);
         Assert.Equal(["z.txt"], updated.NotInPackage);
+        Assert.Equal(["y.txt"], updated.OtherBytes);
     }
 
     [Theory]

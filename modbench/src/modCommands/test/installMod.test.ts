@@ -28,7 +28,7 @@ function install(
 }
 
 const statusOf = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false, ...over });
+  ({ mod: UPGRADED.name, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, ...over });
 
 const reading = (answer: readonly ModStatus[] | ReadFailed) => vi.fn<ReadModStatus>().mockResolvedValue(answer);
 
@@ -39,6 +39,7 @@ describe('installMod', () => {
       ['holds a file no line names', { namedByNoLine: ['stray.txt'] }, 'files no line of its manifest names: stray.txt'],
       ['has no manifest', { noManifest: true }, 'it has no manifest'],
       ['has a file its package does not hold', { notInPackage: ['c.dds'] }, 'files its package does not hold: c.dds'],
+      ['has a file its package holds with other bytes', { otherBytes: ['c.dds'] }, 'files its package holds with other bytes: c.dds'],
     ])('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, over, loss) => {
       const { result, calls } = await install(INSTALLATION_FILE, UPGRADED, {}, false, reading([statusOf(over)]));
 

@@ -126,7 +126,6 @@ internal static class ManifestText
         }
     }
 
-    // A flag is written only as its one value, and read only as that.
     private static bool FlagOf(int index, JsonElement line, string key, bool written)
     {
         if (!line.TryGetProperty(key, out var flag)) return false;
