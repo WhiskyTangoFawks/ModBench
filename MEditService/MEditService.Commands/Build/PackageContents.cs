@@ -69,7 +69,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
         FileBytes.InInstallationFile held when manifest.Package is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
         FileBytes.InGameFolder held => EntryOf(file.Path, held),
-        FileBytes.Built => (null, null),
+        FileBytes.Built or FileBytes.MadeByStep => (null, null),
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 

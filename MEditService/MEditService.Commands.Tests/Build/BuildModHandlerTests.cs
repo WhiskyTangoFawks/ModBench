@@ -180,6 +180,8 @@ public sealed class BuildModHandlerTests : IDisposable
         "its manifest names the output folder 'Other', not its folder 'Mod'.")]
     [InlineData("{\"output\": \"Mod\", \"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\", \"a.txt\"]}}", BuildRefusal.ArchiveFileNotAnAsset,
         "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source.")]
+    [InlineData("{\"output\": \"Mod\", \"steps\": [{\"task\": \"Optimise textures\"}]}", BuildRefusal.StepNotRun,
+        "its step 'Optimise textures' runs a VS Code task, which build cannot run.")]
     public async Task ABuildThatCannotMakeTheFolderItsManifestSays_RefusesTheMod_WritingNothing(
         string configuration, BuildRefusal refusal, string why)
     {

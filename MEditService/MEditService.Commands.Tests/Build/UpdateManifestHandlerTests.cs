@@ -180,6 +180,37 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AManifestsSteps_AreKeptAsWritten_AndAFileAStepMakesStaysSo_UnreportedAsAGap()
+    {
+        WithFiles([("textures/a.dds", "optimised"), ("textures/b.dds", "original")]);
+        _folders.Manifests[Mod] = new Manifest(null, [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep())])
+        {
+            Steps = [new ManifestStep("Optimise textures", ["textures/a.dds"]), new ManifestStep("Archive", [])],
+        };
+
+        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("textures/a.dds", "original"), ("textures/b.dds", "original"))));
+
+        Assert.Equal([("Optimise textures", "textures/a.dds"), ("Archive", "")], _folders.Manifests[Mod].Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.IsType<PackageEntry.MadeByStep>(FileOf(Mod, "textures/a.dds").Entry);
+        Assert.Empty(updated.OtherBytes);
+    }
+
+    [Fact]
+    public async Task AModWhoseManifestCannotBeRead_IsRefusedNamingWhere_ItsManifestLeftForMe_AndTheOthersLand()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
+        _folders.UnreadableManifests.Add(Mod);
+
+        var result = await Update([ModFrom("Mod"), ModFrom("Fine")]);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(("Mod", UpdateManifestRefusal.ManifestUnreadable), (refused.Item, refused.Refusal));
+        Assert.Equal("was not updated: its manifest cannot be read at line 1.", refused.Message);
+        Assert.False(_folders.Manifests.ContainsKey(Mod));
+        Assert.Equal(["Fine"], result.Applied.Select(l => l.Mod));
+    }
+
+    [Fact]
     public async Task AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
     {
         _folders.WithFile(Mod, "a.txt", "hello");

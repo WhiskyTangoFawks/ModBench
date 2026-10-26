@@ -14,6 +14,9 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
     /// <summary>Each archive a source mod's build packs (mods.md, Build, story 2).</summary>
     public IReadOnlyList<ManifestArchive> Archives { get; init; } = [];
 
+    /// <summary>The steps that build the folder, in the order they run (modlist-repository.md, The manifest, story 17).</summary>
+    public IReadOnlyList<ManifestStep> Steps { get; init; } = [];
+
     public static bool IsFolderName(string name) => IsPathInTheFolder(name) && !name.Contains('/', StringComparison.Ordinal);
 
     /// <summary>A forward-slash path that stays inside the folder.</summary>
@@ -25,6 +28,7 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
     {
         (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
         (_, PackageEntry.OtherBytes) => new FileBytes.OtherBytes(),
+        (_, PackageEntry.MadeByStep) => new FileBytes.MadeByStep(),
         (null, _) => new FileBytes.NoInstallationFile(),
         (ManifestPackage.InstallationFile installationFile, var entry) => new FileBytes.InInstallationFile(installationFile.Name, entry.PathOf(file.Path)),
         (ManifestPackage.SourceRepository, var entry) => new FileBytes.Built(entry.PathOf(file.Path)),
@@ -42,6 +46,9 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         _ => null,
     };
 }
+
+/// <summary>A step that runs the VS Code task labelled <paramref name="Task"/> with <paramref name="Args"/>.</summary>
+public sealed record ManifestStep(string Task, IReadOnlyList<string> Args);
 
 /// <summary>An archive to pack at <paramref name="Path"/> in the folder from the files of the build at <paramref name="Files"/>.</summary>
 public sealed record ManifestArchive(string Path, IReadOnlyList<string> Files);
@@ -84,6 +91,11 @@ public abstract record FileBytes
         internal OtherBytes() { }
     }
 
+    public sealed record MadeByStep : FileBytes
+    {
+        internal MadeByStep() { }
+    }
+
     public sealed record NoInstallationFile : FileBytes
     {
         internal NoInstallationFile() { }
@@ -114,6 +126,8 @@ public abstract record PackageEntry
 
     /// <summary>The package holds a file at the file's path, with other bytes.</summary>
     public sealed record OtherBytes : PackageEntry;
+
+    public sealed record MadeByStep : PackageEntry;
 
     internal static PackageEntry At(string filePath, string packagePath) =>
         string.Equals(filePath, packagePath, StringComparison.OrdinalIgnoreCase) ? new Held() : new HeldAt(packagePath);

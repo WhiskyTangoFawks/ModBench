@@ -47,6 +47,9 @@ public enum RestoreRefusal
 
     /// <summary>Its build refused it before writing.</summary>
     NotBuilt,
+
+    /// <summary>Its manifest holds a step, which runs a VS Code task that restore cannot run.</summary>
+    StepNotRun,
 }
 
 /// <summary>Why a mod was skipped. A NotFound mod names the installation file, the game files and the submodule it lacks, as a

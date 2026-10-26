@@ -62,7 +62,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             {
                 var fixedBy = manifest.FixedBy(line);
                 if (line.Entry is PackageEntry.OtherBytes) otherBytes.Add(line.Path);
-                else if (fixedBy is null) notInPackage.Add(line.Path);
+                else if (fixedBy is null && line.Entry is not PackageEntry.MadeByStep) notInPackage.Add(line.Path);
                 if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
                 else if (fixedBy is { } fixes && !HoldsWhatItIsFixedBy(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
             }
