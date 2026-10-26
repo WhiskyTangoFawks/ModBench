@@ -15,6 +15,7 @@ import { ModNode } from '../ModListProvider';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { recordingTasks } from '../../test/recordingTasks';
 
 beforeEach(() => {
   handlers.clear();
@@ -44,7 +45,7 @@ describe('modbench.mod.decompileAndCommit', () => {
       return Promise.resolve(answer);
     });
     return {
-      ...sourceCommands({ client, adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]) }),
+      ...sourceCommands({ client, adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks() }),
       answers: (next: DecompileAndCommitOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,
       progressListeners: () => progressListeners,

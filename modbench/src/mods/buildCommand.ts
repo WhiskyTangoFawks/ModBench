@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { isRefused, type BuildOutcome } from '../client';
+import { isRefused, type BuildOutcome, type BuildRefusalKind } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
-import type { Reporter } from '../ports/reporter';
+import type { ReportAction, Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { BuildProblems } from './buildProblems';
@@ -72,7 +72,8 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: Mo
 
 function reportBuildResult(reporter: Reporter, result: Built): void {
   if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
-  reportBuilt(reporter, result.outcome);
+  const lacksATask = result.outcome.refused.some((refused) => 'refusal' in refused && refused.refusal === NO_TASK);
+  reportBuilt(reporter, result.outcome, lacksATask ? OPEN_USER_TASKS : undefined);
   reportPartial(reporter, result.partial);
 }
 
@@ -80,9 +81,16 @@ function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
 
+const NO_TASK: BuildRefusalKind = 'NoTaskForTool';
+
+// mods.md, Build, story 14: a tool this machine has no task for is added as a user task.
+const OPEN_USER_TASKS: ReportAction = {
+  title: 'Open User Tasks', run: () => { void vscode.commands.executeCommand('workbench.action.tasks.openUserTasks'); },
+};
+
 // mods.md, Build, story 6, and common.md, Reporting: one notification when it lands, naming each
 // refused mod and plugin and why, and pointing at the Problems panel when it left diagnostics.
-function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
+function reportBuilt(reporter: Reporter, outcome: BuildOutcome, action: ReportAction | undefined): void {
   const compiled = outcome.landed.flatMap((built) => built.compiled);
   const refusedPlugins = outcome.landed.flatMap((built) => built.refused);
   const refusedArchives = outcome.landed.flatMap(({ mod, archivesRefused }) =>
@@ -98,7 +106,7 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
     reporter.selectionOutcome(`Could not build ${counts.join(' and ')}.${rest}`, {
       landed: outcome.landed.map((built) => built.mod),
       refused: [...outcome.refused, ...refusedPlugins.map(({ item, reason }) => ({ item: pluginRowName(item), reason })), ...refusedArchives],
-    }, (name) => name);
+    }, (name) => name, action);
     return;
   }
   const [only, ...more] = outcome.landed;

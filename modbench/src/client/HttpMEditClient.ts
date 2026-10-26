@@ -521,14 +521,15 @@ class HttpMEditClient implements MEditClient {
       verb: 'build', noun: 'mod', items: mods,
       op: (counted) => `build(${counted})`,
       post: () => this.apiClient.POST('/build', { body: { mods: [...mods], ...facts } }),
-      outcome: (answer) => selectionOutcome({
-        applied: answer.applied.map((m) => ({
+      outcome: (answer) => ({
+        landed: answer.applied.map((m) => ({
           mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused), archivesRefused: itemRefusals(m.archivesRefused), overwritten: m.overwritten,
+          steps: m.steps, made: m.made,
           ...(m.failure ? { failure: m.failure } : {}),
           ...(m.uncommitted ? { uncommitted: true as const } : {}),
           ...(m.unpushed ? { unpushed: true as const } : {}),
         })),
-        refused: answer.refused,
+        refused: answer.refused.map(({ item, message, refusal }) => ({ item, reason: message, refusal })),
       }),
     });
   }

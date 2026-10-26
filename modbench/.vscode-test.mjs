@@ -21,10 +21,32 @@ const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
 const gameFolder = path.join(runDir, 'game');
 mkdirSync(path.join(gameFolder, 'Data'), { recursive: true });
 
+// User tasks of both kinds, and workspace tasks, one sharing a user task's label. Each records its arguments and
+// MEDIT_PORT in its working folder, and exits with its last argument.
+const step = path.join(runDir, 'step.js');
+writeFileSync(step, "const args = process.argv.slice(2); require('fs').writeFileSync('ran.txt', `${args.join(' ')}\\n${process.env.MEDIT_PORT}`); process.exit(Number(args.at(-1)));");
+mkdirSync(path.join(runDir, 'user-data', 'User'), { recursive: true });
+writeFileSync(path.join(runDir, 'user-data', 'User', 'tasks.json'), JSON.stringify({
+  version: '2.0.0',
+  tasks: [
+    { label: 'Process step', type: 'process', command: process.execPath, args: [step] },
+    { label: 'Shell step', type: 'shell', command: process.execPath, args: [step] },
+    { label: 'Shell line step', type: 'shell', command: `${process.execPath} ${step} 3` },
+  ],
+}));
+const workspaceTasks = JSON.stringify({
+  version: '2.0.0',
+  tasks: [
+    { label: 'Process step', type: 'process', command: process.execPath, args: [step, 'workspace'] },
+    { label: 'Workspace step', type: 'process', command: process.execPath, args: [step] },
+  ],
+});
+
 const workspace = (name, fixture) => {
   const folder = path.join(runDir, name);
   if (fixture) cpSync(path.join(import.meta.dirname, fixture), folder, { recursive: true });
   mkdirSync(path.join(folder, '.vscode'), { recursive: true });
+  writeFileSync(path.join(folder, '.vscode', 'tasks.json'), workspaceTasks);
   writeFileSync(path.join(folder, '.vscode', 'settings.json'), JSON.stringify({
     'modbench.attachToBackendPort': port, 'modbench.mods.gameFolder': gameFolder, 'modbench.agent.port': agentPort,
   }));

@@ -1,10 +1,10 @@
 import { expect } from 'vitest';
 import type { AskQuestion } from '../ports/dialog';
-import { reportSelectionOutcome, type Reporter, type Severity } from '../ports/reporter';
+import { reportSelectionOutcome, type ReportAction, type Reporter, type Severity } from '../ports/reporter';
 import { present } from '../ports/present';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
-export interface RecordedReport { severity: Severity; message: string; detail?: string }
+export interface RecordedReport { severity: Severity; message: string; detail?: string; action?: ReportAction }
 
 interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown> }
 
@@ -22,7 +22,7 @@ export function recordingReporter(): RecordingReporter {
   const landings: string[] = [];
   const shownFailures: RecordedReport[] = [];
   const selectionOutcomeCalls: RecordedSelectionOutcomeCall[] = [];
-  const report: Reporter['report'] = (severity, message, detail) => { reports.push({ severity, message, detail }); };
+  const report: Reporter['report'] = (severity, message, detail, action) => { reports.push({ severity, message, detail, ...(action ? { action } : {}) }); };
   return {
     reports,
     landings,
@@ -31,9 +31,9 @@ export function recordingReporter(): RecordingReporter {
     report,
     landed: (message) => { landings.push(message); },
     shownOnSurface: (severity, message, detail) => { shownFailures.push({ severity, message, detail }); },
-    selectionOutcome: (message, outcome, nameOf) => {
+    selectionOutcome: (message, outcome, nameOf, action) => {
       selectionOutcomeCalls.push({ message, outcome });
-      reportSelectionOutcome(report, message, outcome, nameOf);
+      reportSelectionOutcome(report, message, outcome, nameOf, action);
     },
   };
 }

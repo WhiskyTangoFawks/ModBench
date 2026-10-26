@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import type { StepTasks } from '../steps';
+import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile } from '../../client';
 import type { SubmodulesCloned } from '../../client/MEditClient';
@@ -28,17 +30,17 @@ const loggedOutOfNexus = (): Nexus => nexusAnswering(answeringFrom({})).nexus;
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
-interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter> }
+interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks }
 
 function commandsOver(
   answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
-  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {} }: Wiring = {},
+  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks() }: Wiring = {},
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
     client, adapter: { ...adapter.adapter, ...adapterOver }, nexus, instanceRoot: '/instance',
-    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(),
+    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks,
   });
   return { commands, client, adapter, repositories };
 }
@@ -466,12 +468,12 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     });
   });
 
-  it('hands mEdit each mod with its folder and no installation file or submodule, its metadata files, a source mod\'s source folder, the stat cache\'s folder and what a build needs', async () => {
+  it('hands mEdit each mod with its folder and no installation file or submodule, its metadata files, a source mod\'s source folder, the stat cache\'s folder, what a build needs and each task this machine has', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
       metadata: new Map([['ModA', { version: '1.0', installationFile: { name: 'ModA-1.0.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }]]),
       downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]),
-    }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] }, readingOf({ ModB: '/source/Old ModB' }));
+    }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] }, readingOf({ ModB: '/source/Old ModB' }), { tasks: recordingTasks(['Zip']) });
     client.setCommandResult('restoreFromManifest', RESTORED);
 
     await commands.restoreFromManifest(['ModA', 'ModB']);
@@ -483,7 +485,9 @@ describe('modlistRepositoryCommands restore from manifest', () => {
           { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
           { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
         ],
-        { statCache: '/instance/stat-cache', exclusionMark: fakeInstanceAdapter().adapter.exclusionMark, archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER, asksWhatItLacks: true },
+        { statCache: '/instance/stat-cache', exclusionMark: fakeInstanceAdapter().adapter.exclusionMark, archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER, asksWhatItLacks: true,
+          tasks: ['Zip'],
+        },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);
@@ -841,6 +845,34 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(adapter.calls.filter(({ verb }) => verb === 'trashModFile')).toEqual([
       { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'trashModFile', mod: 'ModA', relativePath: 'meshes/b.nif' },
     ]);
+  });
+
+  it('runs the steps of a mod that landed in its folder, once its files no line names went to the trash', async () => {
+    const tasks = recordingTasks(['Zip', 'Archive']);
+    const order: string[] = [];
+    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), {
+      tasks: { ...tasks, whyStepsFailed: (steps, folder) => { order.push('ran its steps'); return tasks.whyStepsFailed(steps, folder); } },
+      adapterOver: { trashModFile: (_mod, path) => { order.push(`trashed ${path}`); return Promise.resolve(); } },
+    });
+    const steps = [{ task: 'Zip', args: ['a'] }, { task: 'Archive', args: [] }];
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'], steps })], refused: [], notFound: [] });
+
+    const outcome = await commands.restoreFromManifest(['ModA']);
+
+    expect(tasks.runs).toEqual([{ steps, folder: '/mods/ModA' }]);
+    expect(order).toEqual(['trashed mine.txt', 'ran its steps']);
+    expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModA' }], refused: [] });
+  });
+
+  it('answers a mod whose step failed as not finished, naming the step', async () => {
+    const tasks = recordingTasks(['Zip'], { '/mods/ModA': "step 'Zip' exited with code 1" });
+    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), { tasks });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', steps: [{ task: 'Zip', args: [] }] })], refused: [], notFound: [] });
+
+    expect(await commands.restoreFromManifest(['ModA'])).toEqual({
+      applied: true, landed: [],
+      refused: [{ item: 'ModA', reason: "was not finished: its step 'Zip' exited with code 1. Restoring it again finishes it." }],
+    });
   });
 
   it('answers a mod with a file the trash refused as not finished, naming the file and why', async () => {

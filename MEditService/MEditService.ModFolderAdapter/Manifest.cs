@@ -17,6 +17,9 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
     /// <summary>The steps that build the folder, in the order they run (modlist-repository.md, The manifest, story 17).</summary>
     public IReadOnlyList<ManifestStep> Steps { get; init; } = [];
 
+    /// <summary>The tools its steps run, each by its task's label (modlist-repository.md, The manifest, story 18).</summary>
+    public IReadOnlyList<ManifestTool> Tools { get; init; } = [];
+
     public static bool IsFolderName(string name) => IsPathInTheFolder(name) && !name.Contains('/', StringComparison.Ordinal);
 
     /// <summary>A forward-slash path that stays inside the folder.</summary>
@@ -49,6 +52,9 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
 
 /// <summary>A step that runs the VS Code task labelled <paramref name="Task"/> with <paramref name="Args"/>.</summary>
 public sealed record ManifestStep(string Task, IReadOnlyList<string> Args);
+
+/// <summary>The tool a step runs through the VS Code task labelled <paramref name="Task"/>, and where to get it.</summary>
+public sealed record ManifestTool(string Task, string Page);
 
 /// <summary>An archive to pack at <paramref name="Path"/> in the folder from the files of the build at <paramref name="Files"/>.</summary>
 public sealed record ManifestArchive(string Path, IReadOnlyList<string> Files);

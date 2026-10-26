@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a source mod, whose manifest is in its repository, from the submodule handed at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: its NotFound answers are not logged as skips. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a source mod, whose manifest is in its repository, from the submodule handed at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. A mod whose manifest names a tool the request names no task for is skipped; one that lands names the steps still to run, each a VS Code task. Progress is the restore-from-manifest-progress notification, which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: its NotFound answers are not logged as skips. */
         post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
@@ -228,7 +228,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin compiled, each archive packed, and its manifest last. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
+        /** @description Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin compiled, each archive packed, and its manifest last. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. A mod whose manifest holds steps is refused when the request names no task for one of its tools; otherwise it lands naming its steps, which each run a VS Code task, and the files it made, and a request handing those files back once the steps ran writes its manifest and nothing else. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -1054,9 +1054,10 @@ export interface components {
             metadataFiles: string[];
             version?: string | null;
             isSubmodule: boolean;
+            made?: string[] | null;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "StepNotRun";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool";
         BuildRefused: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
@@ -1067,6 +1068,7 @@ export interface components {
             exclusionMark: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             statCache: string;
+            tasks?: string[] | null;
         };
         BuildResult: {
             applied: components["schemas"]["ModBuilt"][];
@@ -1477,6 +1479,10 @@ export interface components {
             mod: string;
             metadata: components["schemas"]["ModMetadata"];
         };
+        ManifestStep: {
+            task: string;
+            args: string[];
+        };
         MetadataInstallationFile: {
             name: string;
             page?: string | null;
@@ -1490,6 +1496,8 @@ export interface components {
             failure?: string | null;
             uncommitted: boolean;
             unpushed: boolean;
+            steps: components["schemas"]["ManifestStep"][];
+            made: string[];
         };
         ModByFolder: {
             name: string;
@@ -1519,6 +1527,7 @@ export interface components {
             namedByNoLine: string[];
             statCacheNotWritten?: string | null;
             metadata: components["schemas"]["ModMetadata"];
+            steps: components["schemas"]["ManifestStep"][];
             uncommitted: boolean;
             leftDetached?: string | null;
         };
@@ -1854,13 +1863,14 @@ export interface components {
             gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;
             asksWhatItLacks: boolean;
+            tasks?: string[] | null;
         };
         RestoreFromManifestResult: {
             applied: components["schemas"]["ModRestored"][];
             refused: components["schemas"]["RestoreRefused"][];
         };
         /** @enum {string} */
-        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt" | "StepNotRun";
+        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt" | "NoTaskForTool";
         RestoreRefused: {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];

@@ -4,6 +4,7 @@ import {
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
+import type { StepTasks } from './steps';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
@@ -11,6 +12,7 @@ interface SourceCommandsDeps {
     'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
+  tasks: StepTasks;
 }
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
@@ -20,7 +22,7 @@ export const metadataUnreadable = (reason: string): string => `its metadata coul
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCommandsDeps) {
   const buildMod = async (mod: string, sourceFolder: string | undefined): Promise<BuildMod | ItemRefusal<string>> => {
     const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
     if (unsaved.length > 0) return unsavedRefusal(mod, unsaved);
@@ -37,6 +39,24 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
     };
   };
 
+  // mods.md, Build, story 1: a mod's steps run once mEdit made its folder, and mEdit writes its manifest once they ran.
+  const withManifestsOnceStepsRan = async (landed: BuildOutcome['landed'], sent: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome['landed']> => {
+    const failures = new Map<string, string>();
+    const stepsRan: BuildMod[] = [];
+    for (const built of landed) {
+      const mod = sent.find(({ name }) => name === built.mod);
+      if (built.steps.length === 0 || mod === undefined) continue;
+      const why = await tasks.whyStepsFailed(built.steps, mod.folder);
+      if (why === undefined) stepsRan.push({ ...mod, made: built.made });
+      else failures.set(built.mod, `The build stopped as its ${why}, so its manifest was not written.`);
+    }
+    if (stepsRan.length > 0) for (const [mod, failure] of manifestFailures(stepsRan, await client.build(stepsRan, facts))) failures.set(mod, failure);
+    return landed.map((built) => {
+      const failure = failures.get(built.mod);
+      return failure === undefined ? built : { ...built, failure };
+    });
+  };
+
   return {
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder or metadata
      *  the Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest with the release's archive variants. */
@@ -50,9 +70,13 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
         else sent.push(decided);
       }
       if (sent.length === 0) return { landed: [], refused };
-      const outcome = await client.build(
-        sent, { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder });
-      return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
+      const facts: BuildFacts = {
+        exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder,
+        tasks: [...await tasks.labels()],
+      };
+      const outcome = await client.build(sent, facts);
+      if (isRefused(outcome)) return outcome;
+      return { ...outcome, landed: await withManifestsOnceStepsRan(outcome.landed, sent, facts), refused: [...outcome.refused, ...refused] };
     },
 
     /** A mod whose name gives it no source folder is refused here, naming why, and mEdit decompiles and commits the rest. */
@@ -74,6 +98,14 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
 }
 
 export type SourceCommands = ReturnType<typeof sourceCommands>;
+
+function manifestFailures(stepsRan: readonly BuildMod[], written: BuildOutcome | WriteRefused): [string, string][] {
+  if (isRefused(written)) return stepsRan.map(({ name }) => [name, `Its manifest was not written: ${written.message}`]);
+  return [
+    ...written.landed.flatMap(({ mod, failure }): [string, string][] => (failure === undefined ? [] : [[mod, failure]])),
+    ...written.refused.map(({ item, reason }): [string, string] => [item, `Its manifest was not written, as the mod ${reason}`]),
+  ];
+}
 
 /** The release's archive variants, none when the table names none. Modbench packs a BA2 compressed, as the game's own are. */
 export function archiveVariants(gameRelease: string): BuildFacts['archives'] {

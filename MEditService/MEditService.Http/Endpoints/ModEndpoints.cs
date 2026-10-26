@@ -16,7 +16,9 @@ internal static class ModEndpoints
                 "Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin " +
                 "compiled, each archive packed, and its manifest last. A file the " +
                 "build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
-                "what failed when a read or write stopped it part way. " +
+                "what failed when a read or write stopped it part way. A mod whose manifest holds steps is refused when the request names " +
+                "no task for one of its tools; otherwise it lands naming its steps, which each run a VS Code task, and the files it made, " +
+                "and a request handing those files back once the steps ran writes its manifest and nothing else. " +
                 "Progress is the build-progress notification.")
             .Produces<BuildResult>()
             .ProducesProblem(400)
@@ -104,8 +106,8 @@ internal static class ModEndpoints
         return await EndpointMapping.Answered(
             "Build", logger,
             buildModHandler.BuildAsync(
-                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule))],
-                new InstanceToBuild(req.ExclusionMark, variants, req.StatCache)),
+                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule, mod.Made))],
+                new InstanceToBuild(req.ExclusionMark, variants, req.StatCache) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal) }),
             EndpointMapping.Refusal);
     }
 }
@@ -115,14 +117,16 @@ internal static class ModEndpoints
 internal sealed record SourceManifestRequest(
     string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
 
-/// <summary>The mods to build with the instance's facts (ADR-0013): the mod manager's exclusion mark, the game's
-/// archive variants, if any, and the stat cache's folder.</summary>
-internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache);
+/// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, the archive variants, if any,
+/// the stat cache's folder, and the label of each VS Code task this machine has.</summary>
+internal sealed record BuildRequest(
+    IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache, IReadOnlyList<string>? Tasks = null);
 
-/// <summary>A mod by name, the source folder whose manifest names it, its folder, its version, its metadata
-/// files, which its manifest does not name, and whether the Instance adapter makes its repository a submodule (ADR-0022).</summary>
+/// <summary>A mod, the source folder whose manifest names it, its folder, version and metadata files, and whether its
+/// repository is a submodule (ADR-0022). Made: the files its build answered it made, handed back once its steps ran.</summary>
 internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false);
+    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false,
+    IReadOnlyList<string>? Made = null);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)

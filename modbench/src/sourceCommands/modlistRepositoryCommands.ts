@@ -15,6 +15,7 @@ import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
+import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter,
   'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
@@ -28,6 +29,7 @@ interface ModlistRepositoryCommandsDeps {
   instanceRoot: string;
   hostGit: HostGit<unknown>;
   trash: MoveToTrash;
+  tasks: StepTasks;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -263,7 +265,10 @@ async function restoreFromManifest(
   const sourceMods = await deps.adapter.sourceMods();
   const mods = everyManifest ? withEverySourceMod(asked, sourceMods) : asked;
   const restored = await restoreFolders(deps, mods, sourceMods, options);
-  const { finished, unfinished } = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(restored.landed, sourceMods, cloned));
+  const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(restored.landed, sourceMods, cloned));
+  const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
+  const finished = stepped.finished;
+  const unfinished = [...trashed.unfinished, ...stepped.unfinished];
   if (restored.applied) {
     const refused = [...cloned.refused, ...restored.refused, ...unfinished];
     const pushRefusalNotWritten = await pushRefusalWrittenOrWhy(deps.adapter);
@@ -316,6 +321,31 @@ async function withFilesNoLineNamesTrashed(
   return { finished, unfinished };
 }
 
+// modlist-repository.md, The manifest, story 17: restore runs a mod's steps once its folder holds what its packages give.
+async function withRestoredStepsRun(
+  { adapter, tasks }: ModlistRepositoryCommandsDeps, landed: Restored, signal: AbortSignal | undefined,
+): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
+  const finished: Restored[number][] = [];
+  const unfinished: ItemRefusal<string>[] = [];
+  for (const mod of landed) {
+    const why = await whyNotStepped(adapter, tasks, mod, signal);
+    if (why === undefined) finished.push(mod);
+    else unfinished.push({ item: mod.mod, reason: `was not finished: ${why}. Restoring it again finishes it.` });
+  }
+  return { finished, unfinished };
+}
+
+async function whyNotStepped(
+  adapter: Adapter, tasks: StepTasks, { mod, steps }: Restored[number], signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  if (steps.length === 0) return undefined;
+  if (signal?.aborted) return 'the restore was cancelled before its steps ran';
+  const folder = await adapter.modFolderPath(mod);
+  if (folder === undefined) return 'its name gives it no folder for its steps to run in';
+  const failed = await tasks.whyStepsFailed(steps, folder);
+  return failed === undefined ? undefined : `its ${failed}`;
+}
+
 const heldByAdapter = ({ version, installationFile }: ManifestMetadata): ModMetadata =>
   ({ version: version ?? undefined, installationFile: installationFile ? { name: installationFile.name, page: installationFile.page ?? undefined } : undefined });
 
@@ -340,7 +370,7 @@ async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, p
 }
 
 async function restoreFolders(
-  { client, adapter, nexus }: ModlistRepositoryCommandsDeps, mods: readonly string[], sourceMods: SourceMods,
+  { client, adapter, nexus, tasks }: ModlistRepositoryCommandsDeps, mods: readonly string[], sourceMods: SourceMods,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
   const gameRelease = await adapter.gameRelease();
@@ -350,6 +380,7 @@ async function restoreFolders(
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
     statCache: adapter.statCacheFolder, exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []), asksWhatItLacks: true,
+    tasks: [...await tasks.labels()],
   };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);

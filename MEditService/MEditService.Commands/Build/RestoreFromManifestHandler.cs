@@ -53,9 +53,10 @@ public sealed class RestoreFromManifestHandler
 
         if (held is not { } manifest) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
         var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFile).Resolve();
-        if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
+        List<PackageContents.Lack> lacks = [.. resolved.Lacks];
+        if (ToolsWithoutTask.Why(manifest, instance.Tasks) is { } noTask) lacks.Add(new PackageContents.Lack.NoTask(noTask));
+        if (lacks.Count > 0) return Lacked(lacks);
         if (resolved.Built is { } submodule) return Lacked([new PackageContents.Lack.SubmoduleMissing(submodule)]);
-        if (StepsNotRun.Why(manifest, "restore") is { } notRun) return Skipped(RestoreRefusal.StepNotRun, notRun);
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;
@@ -88,7 +89,8 @@ public sealed class RestoreFromManifestHandler
         }
         var statCacheNotWritten = _repository.KeepInStatCache(
             read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
-        return ItemAnswer<RestoreSkip, ModRestored>.Landed(new ModRestored(mod.Name, [.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten, ModMetadata.Of(manifest)));
+        return ItemAnswer<RestoreSkip, ModRestored>.Landed(new ModRestored(
+            mod.Name, [.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten, ModMetadata.Of(manifest), manifest.Steps));
     }
 
     // modlist-repository.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
@@ -115,7 +117,7 @@ public sealed class RestoreFromManifestHandler
 
         var answer = await _build.BuildAsync(
             new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
-            new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache));
+            new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache) { Tasks = instance.Tasks });
         if (answer is ItemAnswer<BuildRefusal, ModBuildOutcome>.Refusing refusing)
             return ItemAnswer<RestoreSkip, ModRestored>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
         var outcome = ((ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote)answer).Outcome;
@@ -131,12 +133,12 @@ public sealed class RestoreFromManifestHandler
         try
         {
             var after = HashesIn(mod, metadataFiles, instance);
-            var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
+            var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere recorded its manifest.");
             return ItemAnswer<RestoreSkip, ModRestored>.Landed(new ModRestored(
                 mod.Name,
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                _repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted,
-                checkedOut.LeftDetached));
+                _repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Steps,
+                outcome.Uncommitted, checkedOut.LeftDetached));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -159,7 +161,8 @@ public sealed class RestoreFromManifestHandler
         var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
         var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Named).FirstOrDefault();
         var submodule = lacks.OfType<PackageContents.Lack.SubmoduleMissing>().Select(lack => lack.Name).FirstOrDefault();
-        if (gameFiles.Count == 0 && installationFile is null && submodule is null) return Skipped(RestoreRefusal.Lacking, why);
+        if (gameFiles.Count == 0 && installationFile is null && submodule is null)
+            return Skipped(lacks.All(lack => lack is PackageContents.Lack.NoTask) ? RestoreRefusal.NoTaskForTool : RestoreRefusal.Lacking, why);
         return Skipped(
             new RestoreSkip(RestoreRefusal.NotFound) { InstallationFileNotFound = installationFile, GameFilesNotFound = gameFiles, SubmoduleNotFound = submodule },
             why);

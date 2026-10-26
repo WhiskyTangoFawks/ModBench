@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file with a line for each part, each step in the order they run, and each file in
-/// alphabetical order, so a change to one file is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file with a line for each part, each step in the order they run, each tool, and each
+/// file in alphabetical order, so a changed file is one line in a diff.</summary>
 internal static class ManifestText
 {
     private const string OutputKey = "output";
@@ -25,6 +25,7 @@ internal static class ManifestText
             members.Add("\"archives\": {\n" + string.Join(",\n", archives) + "\n}");
         }
         if (manifest.Steps.Count > 0) members.Add("\"steps\": [\n" + string.Join(",\n", manifest.Steps.Select(step => Value(writer => StepLine(writer, step)))) + "\n]");
+        if (manifest.Tools.Count > 0) members.Add("\"tools\": [\n" + string.Join(",\n", manifest.Tools.Select(tool => Value(writer => ToolLine(writer, tool)))) + "\n]");
         var files = manifest.Files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
         members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
         return "{\n" + string.Join(",\n", members) + "\n}\n";
@@ -36,13 +37,14 @@ internal static class ManifestText
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "exclude", "archives", "steps", "files");
+            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "exclude", "archives", "steps", "tools", "files");
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
             List<ManifestStep> steps = root.TryGetProperty("steps", out var held) ? [.. held.EnumerateArray().Index().Select(entry => StepOf(entry.Index, entry.Item))] : [];
+            List<ManifestTool> tools = root.TryGetProperty("tools", out var named) ? [.. named.EnumerateArray().Index().Select(entry => ToolOf(entry.Index, entry.Item))] : [];
             if (steps.Count == 0 && files.FindIndex(file => file.Entry is PackageEntry.MadeByStep) is var madeByStep and >= 0)
                 throw Unreadable(madeByStep, "it says a step makes the file, and the manifest holds no step");
             var (package, version) = root.TryGetProperty("package", out var line) ? PackageOf(line) : (null, null);
-            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root), Steps = steps };
+            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root), Steps = steps, Tools = tools };
         }
         catch (JsonException e)
         {
@@ -124,6 +126,22 @@ internal static class ManifestText
         }
     }
 
+    private static ManifestTool ToolOf(int index, JsonElement line)
+    {
+        try
+        {
+            Known(line, $"its manifest's tool {index + 1}", "task", "page");
+            var (task, page) = (Text(line.GetProperty("task")), Text(line.GetProperty("page")));
+            if (string.IsNullOrWhiteSpace(task)) throw new InvalidDataException($"its manifest cannot be read at its tool {index + 1}: it names no task");
+            if (string.IsNullOrWhiteSpace(page)) throw new InvalidDataException($"its manifest cannot be read at its tool {index + 1}: it names no page");
+            return new ManifestTool(task, page);
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            throw new InvalidDataException($"its manifest cannot be read at its tool {index + 1}", e);
+        }
+    }
+
     private static ManifestFile FileOf(int index, JsonElement line)
     {
         try
@@ -196,6 +214,14 @@ internal static class ManifestText
             writer.WritePropertyName("args");
             Strings(writer, step.Args);
         }
+        writer.WriteEndObject();
+    }
+
+    private static void ToolLine(Utf8JsonWriter writer, ManifestTool tool)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("task", tool.Task);
+        writer.WriteString("page", tool.Page);
         writer.WriteEndObject();
     }
 

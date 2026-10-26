@@ -84,7 +84,8 @@ internal static class Wire
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
     internal static Task<HttpResponseMessage> Build(
-        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null, string? version = null) =>
+        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null, string? version = null,
+        string[]? tasks = null, IEnumerable<string>? made = null) =>
         client.PostAsJsonAsync("/build", new
         {
             mods = mods.Select(mod => new
@@ -94,10 +95,12 @@ internal static class Wire
                 folder = mod.Folder,
                 metadataFiles = new[] { "meta.ini" },
                 version,
+                made,
             }),
             exclusionMark = ".mohidden",
             archives,
             statCache,
+            tasks,
         });
 
     /// <summary>An edit as Modbench makes one: mEdit answers the changes the edit makes, and each move and then each

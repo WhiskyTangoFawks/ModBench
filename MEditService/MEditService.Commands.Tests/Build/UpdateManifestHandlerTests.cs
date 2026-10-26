@@ -180,18 +180,20 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AManifestsSteps_AreKeptAsWritten_AndEachFileAStepMakesStaysSo_ThereOrNot_UnreportedAsAGap()
+    public async Task AManifestsStepsAndTools_AreKeptAsWritten_AndEachFileAStepMakesStaysSo_ThereOrNot_UnreportedAsAGap()
     {
         WithFiles([("textures/a.dds", "optimised"), ("textures/b.dds", "original")]);
         ManifestFile[] madeByStep = [new("textures/a.dds", new PackageEntry.MadeByStep()), new("textures/c.dds", new PackageEntry.MadeByStep())];
         _folders.Manifests[Mod] = new Manifest(null, madeByStep)
         {
             Steps = [new ManifestStep("Optimise textures", ["textures/a.dds"]), new ManifestStep("Archive", [])],
+            Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser")],
         };
 
         var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("textures/a.dds", "original"), ("textures/b.dds", "original"))));
 
         Assert.Equal([("Optimise textures", "textures/a.dds"), ("Archive", "")], _folders.Manifests[Mod].Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.Equal([new ManifestTool("Optimise textures", "https://example.com/optimiser")], _folders.Manifests[Mod].Tools);
         Assert.Equal(madeByStep, _folders.Manifests[Mod].Files.Where(file => file.Entry is PackageEntry.MadeByStep).OrderBy(file => file.Path, StringComparer.Ordinal));
         Assert.Empty(updated.OtherBytes);
     }

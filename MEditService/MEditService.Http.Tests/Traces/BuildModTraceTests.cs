@@ -134,6 +134,30 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.False(File.Exists(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
+    [Fact]
+    public async Task BuildingAModWithAStep_AnswersTheStepAndTheFilesItMade_WhichARequestHandsBackOnceTheStepRan_ToWriteItsManifest()
+    {
+        await LoadedWithOneModFolderAndCompiledPlugin();
+        var source = Client.SourceFolderSentFor(Origin);
+        var output = Path.GetFileName(_builtFolder);
+        var manifestPath = Path.Combine(source, $"{output}.manifest.json");
+        File.WriteAllText(manifestPath, $"{{\"output\": \"{output}\", \"steps\": [{{\"task\": \"Zip\", \"args\": [\"a\"]}}], " +
+            "\"tools\": [{\"task\": \"Zip\", \"page\": \"https://example.com/zip\"}], \"files\": [{\"path\": \"made.zip\", \"madeByStep\": true}]}");
+
+        var built = Assert.Single((await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, tasks: ["Zip"]))).GetProperty("applied").EnumerateArray());
+
+        var step = Assert.Single(built.GetProperty("steps").EnumerateArray());
+        Assert.Equal(("Zip", "a"), (step.GetProperty("task").GetString(), Assert.Single(step.GetProperty("args").EnumerateArray()).GetString()));
+        var made = built.GetProperty("made").EnumerateArray().Select(path => path.GetString().Require()).ToList();
+        Assert.Contains(Plugin, made);
+        Assert.DoesNotContain(Plugin, File.ReadAllText(manifestPath), StringComparison.Ordinal);
+
+        Assert.Single((await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, tasks: ["Zip"], made: made))).GetProperty("applied").EnumerateArray());
+
+        Assert.Contains($"{{\"path\":\"{Plugin}\"}}", File.ReadAllText(manifestPath), StringComparison.Ordinal);
+        Assert.Contains("{\"path\":\"made.zip\",\"madeByStep\":true}", File.ReadAllText(manifestPath), StringComparison.Ordinal);
+    }
+
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
