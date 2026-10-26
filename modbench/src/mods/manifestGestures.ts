@@ -90,8 +90,7 @@ async function updateManifestForAgent(
   const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods));
   if (!result.applied) return { applied: false, refusal: result.refusal };
   const outcome = named(label, result);
-  const notHeld = outcome.landed.flatMap(({ mod, notInPackage }) => notInPackage.map((path) => `${mod}: its package does not hold ${path}`));
-  const otherBytes = outcome.landed.flatMap(({ mod, otherBytes: paths }) => paths.map((path) => `${mod}: its package holds ${path} with other bytes`));
+  const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: outcome.refused },
@@ -115,11 +114,17 @@ const counted = (count: number, one: string, many: string): string => `${count} 
 const statCacheNotWritten = (landed: readonly { mod: string; statCacheNotWritten?: string | null }[]): string[] =>
   landed.flatMap(({ mod, statCacheNotWritten: why }) => (why ? [`${mod}: the stat cache could not be written: ${why}`] : []));
 
-// modlist-repository.md, Update manifest, story 8: one line, the modlist's validation, with each refused mod and each
-// file its package does not hold, or holds with other bytes, in the Output.
+const gapsOf = (
+  landed: readonly { mod: string; notInPackage: readonly string[]; otherBytes: readonly string[] }[],
+  notHeldLine: (mod: string, path: string) => string, otherBytesLine: (mod: string, path: string) => string,
+) => ({
+  notHeld: landed.flatMap(({ mod, notInPackage }) => notInPackage.map((path) => notHeldLine(mod, path))),
+  otherBytes: landed.flatMap(({ mod, otherBytes }) => otherBytes.map((path) => otherBytesLine(mod, path))),
+});
+
+// modlist-repository.md, Update manifest, story 8
 function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
-  const notHeld = outcome.landed.flatMap(({ mod, notInPackage }) => notInPackage.map((path) => `${mod}: ${path}`));
-  const otherBytes = outcome.landed.flatMap(({ mod, otherBytes: paths }) => paths.map((path) => `${mod}: ${path} (other bytes)`));
+  const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `

@@ -8,7 +8,8 @@ public sealed record UpdateManifestResult(IReadOnlyList<ModUpdated> Applied, IRe
     : ISelectionAnswer<UpdateManifestRefused>;
 
 /// <summary>A mod whose manifest is as its folder says; ManifestWritten is false when it already was. NotInPackage names
-/// each file no package holds, OtherBytes each a package holds with other bytes.</summary>
+/// each file no package holds, OtherBytes each a package holds with other bytes.
+/// StatCacheNotWritten is why, or null.</summary>
 public sealed record ModUpdated(string Mod, bool ManifestWritten, IReadOnlyList<string> NotInPackage, IReadOnlyList<string> OtherBytes, string? StatCacheNotWritten);
 
 /// <summary>A mod whose manifest was left as it was: the typed refusal, and the message naming the way out.</summary>

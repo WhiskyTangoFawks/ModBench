@@ -452,6 +452,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
             Package,
             [
                 new ManifestFile("z.txt", new PackageEntry.NotHeld()),
+                new ManifestFile("y.esp", new PackageEntry.OtherBytes()),
                 ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
                 new ManifestFile("a.nif", new PackageEntry.Held()),
             ],
@@ -466,12 +467,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
             + "\"files\": [\n"
             + "{\"path\":\"a.nif\"},\n"
             + "{\"path\":\"b.nif\",\"packagePath\":\"Data/b.nif\"},\n"
+            + "{\"path\":\"y.esp\",\"otherBytes\":true},\n"
             + "{\"path\":\"z.txt\",\"inPackage\":false}\n"
             + "]\n"
             + "}\n",
             text);
         using var parsed = JsonDocument.Parse(text);
-        Assert.Equal(3, parsed.RootElement.GetProperty("files").GetArrayLength());
+        Assert.Equal(4, parsed.RootElement.GetProperty("files").GetArrayLength());
     }
 
     public static TheoryData<ManifestPackage, string> PackagesAndTheirLines => new()
@@ -560,14 +562,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.esp", new PackageEntry.OtherBytes())]),
     };
 
-    [Fact]
-    public void WriteManifest_WritesAFileItsPackageHoldsWithOtherBytes_AsOtherBytes()
-    {
-        _repository.WriteManifest(_root, "mod", new Manifest(Package, [new ManifestFile("a.esp", new PackageEntry.OtherBytes())]));
-
-        Assert.Contains("{\"path\":\"a.esp\",\"otherBytes\":true}", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
     [Theory]
     [MemberData(nameof(Manifests))]
     public void ReadManifest_ReadsWhatWriteManifestWrote(Manifest manifest)
@@ -596,6 +590,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\n\"files\": [\n{\"path\":\"a.txt\"}\n{\"path\":\"b.txt\"}\n]\n}\n", "line 4")]
     [InlineData("{\"files\": [{\"path\":\"a.txt\"},{\"path\":7}]}", "its file 2")]
     [InlineData("{\"files\": [{\"path\":\"a.txt\"},{\"path\":\"b.txt\",\"packagePath\":7}]}", "its file 2")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"otherBytes\":false}]}", "its file 1: its otherBytes is false")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":true}]}", "its file 1: its inPackage is true")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":false,\"otherBytes\":true}]}", "its file 1: it says both")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"otherBytes\":true,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":false,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
     [InlineData("{\"files\": []", "line")]
     [InlineData("{\"package\": {\"installationFile\":\"A.zip\"}, \"files\": []}", "cannot be read")]
     [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "holds 'remote'")]
