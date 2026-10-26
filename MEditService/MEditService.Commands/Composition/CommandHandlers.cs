@@ -169,7 +169,9 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<SourceModBuild>()));
 
-        services.AddSingleton(sp => new ChangeBuildConfigurationHandler(sp.GetRequiredService<ISourceAdapter>()));
+        services.AddSingleton(sp => new ChangeSourceManifestHandler(sp.GetRequiredService<IModFolderRepository>()));
+
+        services.AddSingleton(sp => new CloneSubmodulesHandler(sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),

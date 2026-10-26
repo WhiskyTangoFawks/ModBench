@@ -82,6 +82,41 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
     }
 
+    [Fact]
+    public async Task Init_CommitsAManifestNamingTheModsFolderAsItsOutput_InPlaceOfOneInTheModFolder()
+    {
+        WriteInModFolder($"{Origin}.manifest.json", "{\"files\": []}");
+
+        Assert.Single((await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []))).Applied);
+
+        Assert.Equal(
+            "{\n\"output\": \"FixtureMod\",\n\"files\": []\n}\n",
+            GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", $"main:{Origin}.manifest.json"));
+        Assert.False(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
+    }
+
+    [PosixFact]
+    public async Task Init_WhoseModFoldersManifestCannotBeRemoved_RefusesTheMod_LeavingNoRepositoryAndTheManifestInPlace()
+    {
+        WriteInModFolder($"{Origin}.manifest.json", "{\"files\": []}");
+        FileModes.Set(_mod.Folder, "555");
+        DecompileAndCommitResult result;
+        try
+        {
+            result = await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []));
+        }
+        finally
+        {
+            FileModes.Set(_mod.Folder, "755");
+        }
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(DecompileAndCommitRefusal.CommitFailed, refused.Refusal);
+        Assert.StartsWith($"'{Origin}' was not initialized: the manifest in its folder could not be removed: ", refused.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(SourceFolder, ".git")));
+        Assert.True(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
+    }
+
     [PosixFact]
     public async Task Init_OfAModWithAFileThatCannotBeRead_RefusesTheMod_LeavingNoRepository()
     {

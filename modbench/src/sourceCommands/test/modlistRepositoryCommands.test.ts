@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile } from '../../client';
+import type { SubmodulesCloned } from '../../client/MEditClient';
 import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
@@ -171,7 +172,7 @@ describe('modlistRepositoryCommands git init', () => {
 describe('modlistRepositoryCommands update manifest', () => {
   const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }], refused: [] };
 
-  it('hands mEdit each mod with its folder, its installation files, its metadata files and whether it is a source mod, and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with its folder, its installation files, its metadata files and a source mod\'s source folder, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
       metadata: new Map([['ModA', { version: '1.2.3' }]]),
@@ -184,8 +185,8 @@ describe('modlistRepositoryCommands update manifest', () => {
       method: 'updateManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFile: INSTALLED, metadataFiles: ['meta.ini'], isSourceMod: false, version: '1.2.3' },
-          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSourceMod: true },
+          { name: 'ModA', folder: '/mods/ModA', installationFile: INSTALLED, metadataFiles: ['meta.ini'], version: '1.2.3' },
+          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
         ],
         { statCache: '/instance/stat-cache', gameFolder: GAME_FOLDER },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
@@ -425,7 +426,47 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   const SUBMODULE_MISSING = "was skipped: its submodule 'Mod Source' is missing.";
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
 
-  it('hands mEdit each mod with its folder and no installation file or submodule, its metadata files, the stat cache\'s folder and what a build needs', async () => {
+  describe('from a fresh clone, whose submodules the source folder lacks', () => {
+    const PINNED = { folder: '/instance/source/Mod Source', pin: 'abc123', branch: 'main' };
+
+    function freshClone(cloned: () => Promise<SubmodulesCloned>) {
+      let clonedYet = false;
+      const sourceMods = () => Promise.resolve(sourceModsOf(clonedYet ? { ModS: PINNED.folder } : {}));
+      const wired = commandsOver({ uncloned: [{ name: 'Mod Source', ...PINNED }] }, new InMemoryMEditClient(), {}, readingOf(), { adapterOver: { sourceMods } });
+      wired.client.setCommandHandler('cloneSubmodules', () => { clonedYet = true; return cloned(); });
+      wired.client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModS', written: ['ModS.esp'] })], refused: [], notFound: [] });
+      return wired;
+    }
+
+    it('clones each first, then restores with every manifest the mod its manifest builds, which no folder holds yet', async () => {
+      const { commands, client } = freshClone(() => Promise.resolve({ applied: [{ folder: PINNED.folder }], refused: [] }));
+
+      const outcome = await commands.restoreFromManifest([], {}, true);
+
+      expect(client.calls.map(({ method }) => method)).toEqual(['cloneSubmodules', 'restoreFromManifest']);
+      expect(client.calls[0]?.args[0]).toEqual([PINNED]);
+      expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModS', sourceFolder: PINNED.folder }]);
+      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModS' }], refused: [] });
+    });
+
+    it('names a submodule it could not clone, or whose pin the instance repository lacks, and restores the rest', async () => {
+      const { commands } = freshClone(() => Promise.resolve({ applied: [], refused: [{ item: PINNED.folder, refusal: 'NotCloned', message: 'its remote holds no commit abc123' }] }));
+
+      const outcome = await commands.restoreFromManifest(['ModA'], {}, false);
+
+      expect(outcome).toMatchObject({ applied: true, refused: [{ item: 'Mod Source', reason: 'was not cloned: its remote holds no commit abc123.' }] });
+    });
+
+    it('carries why a cloned submodule was left off its branch to the mod it restored', async () => {
+      const { commands } = freshClone(() => Promise.resolve({ applied: [{ folder: PINNED.folder, leftDetached: "its branch 'main' is at def456" }], refused: [] }));
+
+      const outcome = await commands.restoreFromManifest([], {}, true);
+
+      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModS', leftDetached: "its branch 'main' is at def456" }] });
+    });
+  });
+
+  it('hands mEdit each mod with its folder and no installation file or submodule, its metadata files, a source mod\'s source folder, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
       metadata: new Map([['ModA', { version: '1.0', installationFile: { name: 'ModA-1.0.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }]]),
@@ -440,7 +481,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       args: [
         [
           { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
-          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'] },
+          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
         ],
         { statCache: '/instance/stat-cache', exclusionMark: fakeInstanceAdapter().adapter.exclusionMark, archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER, asksWhatItLacks: true },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
@@ -924,6 +965,15 @@ describe('modlistRepositoryCommands mod status', () => {
         }], '/instance/stat-cache'],
       }], STATUS,
     ]);
+  });
+
+  it('names a source mod\'s source folder, whose repository holds its manifest', async () => {
+    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({ ModA: '/source/Old ModA' }));
+    client.setQueryAnswer('getModStatus', STATUS);
+
+    await commands.modStatus(['ModA']);
+
+    expect(client.calls).toMatchObject([{ method: 'getModStatus', args: [[{ name: 'ModA', sourceFolder: '/source/Old ModA' }], '/instance/stat-cache'] }]);
   });
 
   it('says why a mod\'s metadata could not be read, and sends none of it', async () => {

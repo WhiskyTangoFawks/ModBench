@@ -149,6 +149,8 @@ export interface InstanceAnswers {
   hosts?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['sourceHost']>>>;
   /** What the instance repository holds of each submodule, by name. */
   pins?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['submodule']>>>;
+  /** Each submodule the source folder holds no repository for. */
+  uncloned?: Awaited<ReturnType<InstanceAdapter['unclonedSubmodules']>>;
   /** The reason a trashed downloaded file's metadata is left behind. */
   metadataLeftBehind?: string;
   /** A write that rejects with the message this returns for it, after it is recorded. */
@@ -334,6 +336,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
     sourceHost: (folder) => Promise.resolve(answers.hosts?.get(folder) ?? { kind: 'read', answer: { kind: 'noRemote' } }),
     submodule: (name) => Promise.resolve(answers.pins?.get(name) ?? { lacks: `no answer fixed for ${name}` }),
+    unclonedSubmodules: () => Promise.resolve(answers.uncloned ?? []),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),

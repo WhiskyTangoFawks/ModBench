@@ -50,12 +50,12 @@ public sealed class ModStatusPushTests : IDisposable
         if (entry.Level == LogLevel.Error) _errors.Add(entry);
     }
 
-    private void Put(params string[] mods) => Put([.. mods.Select(mod => new ModByFolder(mod, mod, ["meta.ini"]))]);
+    private void Put(params string[] mods) => Put([.. mods.Select(mod => new ModByFolder(mod, mod, ["meta.ini"], SourceFolder: null))]);
 
     private void Put(params ModByFolder[] mods) =>
         Assert.True(_handler.Put(_dataFolder, _instanceRoot, GameRelease.Fallout4, [], [], [], [], [], [], Language.English, new SnapshotMods(mods, "stat-cache")).Holds(out _, out _));
 
-    private static ModByFolder Holding(string mod, string version) => new(mod, mod, ["meta.ini"], new ModMetadata(version));
+    private static ModByFolder Holding(string mod, string version) => new(mod, mod, ["meta.ini"], SourceFolder: null, new ModMetadata(version));
 
     private IReadOnlyList<string> NextPush() =>
         _pushes.TryTake(out var mods, Patience) ? mods : throw new TimeoutException("no mod status was pushed");
@@ -132,7 +132,7 @@ public sealed class ModStatusPushTests : IDisposable
         Put(Holding("Mod", "1.0"));
         NextPush();
 
-        Put(new ModByFolder("Mod", "Mod", ["meta.ini"], MetadataUnreadable: "access denied"));
+        Put(new ModByFolder("Mod", "Mod", ["meta.ini"], SourceFolder: null, MetadataUnreadable: "access denied"));
 
         Assert.Equal(["Mod"], NextPush());
     }

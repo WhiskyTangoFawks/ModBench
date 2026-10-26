@@ -31,7 +31,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     [Fact]
     public void AnAssetThatCannotBeRead_RefusesTheInitNamingIt_LeavingNoRepositoryNoAssetsAndNoSource()
     {
-        var failure = TestAdapters.Source().Init(_modFolder, ModName, [PluginBaselines.OneRecordOf("A.esp")],
+        var failure = TestAdapters.Source().Init(_modFolder, SourceInits.ManifestOf(ModName), [PluginBaselines.OneRecordOf("A.esp")],
         [
             new Asset("textures/a.dds", () => new MemoryStream("a"u8.ToArray())),
             new Asset("textures/held.dds", () => throw new IOException("textures/held.dds is held by another process")),
@@ -49,7 +49,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
         File.WriteAllText(existing, "theirs");
 
-        TestAdapters.Source().Init(_modFolder, ModName, [PluginBaselines.OneRecordOf("A.esp")],
+        TestAdapters.Source().Init(_modFolder, SourceInits.ManifestOf(ModName), [PluginBaselines.OneRecordOf("A.esp")],
         [
             new Asset("a.txt", () => new MemoryStream("ours"u8.ToArray())),
             new Asset("b.txt", () => throw new IOException("b.txt is held by another process")),

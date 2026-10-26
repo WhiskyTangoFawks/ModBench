@@ -44,7 +44,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(handler(...args));
 }
 
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 const nothingToLose: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod)));
 const noManifest: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod, { noManifest: true })));
 

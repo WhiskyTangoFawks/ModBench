@@ -126,7 +126,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes: that one is refused when its folder differs from what the build wrote. A mod with no installation file names the game folder as its package when the game files the request hands hold each of its files with their bytes. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes in its repository: that one is refused when its folder differs from what the build wrote. A mod with no installation file names the game folder as its package when the game files the request hands hold each of its files with their bytes. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
         post: operations["UpdateManifest"];
         delete?: never;
         options?: never;
@@ -143,8 +143,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its submodule at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: its NotFound answers are not logged as skips. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a source mod, whose manifest is in its repository, from the submodule handed at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: its NotFound answers are not logged as skips. */
         post: operations["RestoreFromManifest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clone-submodules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Clones each source mod's submodule the source folder lacks at the commit the instance repository pins, on its branch when that branch is at the pin, so restore from manifest reads the manifest it holds. Each submodule is cloned, named with why its branch was left elsewhere, or named with why it was not cloned. */
+        post: operations["CloneSubmodules"];
         delete?: never;
         options?: never;
         head?: never;
@@ -211,7 +228,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each source mod's folder from its source as its build configuration says: the base from its installation files, its assets over it, each plugin compiled, each archive packed, and its manifest last. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
+        /** @description Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin compiled, each archive packed, and its manifest last. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -228,7 +245,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a build configuration naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
+        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a manifest naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
         post: operations["DecompileAndCommitMod"];
         delete?: never;
         options?: never;
@@ -236,7 +253,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/build-configuration": {
+    "/source-manifest": {
         parameters: {
             query?: never;
             header?: never;
@@ -245,8 +262,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes a source mod's build configuration in its working tree, keeping all else it says: the output folder's new name, and the paths in the mod folder its build excludes. Modbench writes the mod folder in the same gesture. */
-        post: operations["ChangeBuildConfiguration"];
+        /** @description Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's new name, which names the manifest, and the paths in the mod folder its build excludes. Modbench writes the mod folder in the same gesture. */
+        post: operations["ChangeSourceManifest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1030,12 +1047,6 @@ export interface components {
             /** Format: int32 */
             fileFlags: number;
         };
-        BuildConfigurationRequest: {
-            sourceFolder: string;
-            output?: string | null;
-            exclude?: string[] | null;
-            include?: string[] | null;
-        };
         BuildModRequest: {
             name: string;
             sourceFolder: string;
@@ -1093,6 +1104,15 @@ export interface components {
             fullName?: string | null;
             baseEditorId?: string | null;
             parseDiagnosis?: string | null;
+        };
+        /** @enum {string} */
+        CloneRefusal: "None" | "NotCloned";
+        CloneSubmodulesRequest: {
+            submodules: components["schemas"]["SubmoduleRequest"][];
+        };
+        CloneSubmodulesResult: {
+            applied: components["schemas"]["SubmoduleCloned"][];
+            refused: components["schemas"]["SubmoduleNotCloned"][];
         };
         CompareOverride: {
             formKey: string;
@@ -1475,6 +1495,7 @@ export interface components {
             name: string;
             folder: string;
             metadataFiles: string[];
+            sourceFolder?: string | null;
             metadata?: components["schemas"]["ModMetadata"] | null;
             metadataUnreadable?: string | null;
         };
@@ -1821,6 +1842,7 @@ export interface components {
                 [key: string]: string;
             } | null;
             unreadableInstallationFile?: string | null;
+            sourceFolder?: string | null;
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
@@ -1863,6 +1885,12 @@ export interface components {
             /** Format: int64 */
             sequence: number;
         };
+        SourceManifestRequest: {
+            sourceFolder: string;
+            output?: string | null;
+            exclude?: string[] | null;
+            include?: string[] | null;
+        };
         SourceMove: {
             from: string;
             to: string;
@@ -1877,6 +1905,15 @@ export interface components {
         StampedFile: {
             path: string;
             stamp: string;
+        };
+        SubmoduleCloned: {
+            folder: string;
+            leftDetached?: string | null;
+        };
+        SubmoduleNotCloned: {
+            item: string;
+            refusal: components["schemas"]["CloneRefusal"];
+            message: string;
         };
         SubmoduleRequest: {
             folder: string;
@@ -1895,7 +1932,7 @@ export interface components {
             folder: string;
             installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             metadataFiles: string[];
-            isSourceMod: boolean;
+            sourceFolder?: string | null;
             version?: string | null;
         };
         /** @enum {string} */
@@ -2328,6 +2365,39 @@ export interface operations {
             };
         };
     };
+    CloneSubmodules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneSubmodulesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloneSubmodulesResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     WhatRestoreDestroys: {
         parameters: {
             query?: never;
@@ -2525,7 +2595,7 @@ export interface operations {
             };
         };
     };
-    ChangeBuildConfiguration: {
+    ChangeSourceManifest: {
         parameters: {
             query?: never;
             header?: never;
@@ -2534,7 +2604,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BuildConfigurationRequest"];
+                "application/json": components["schemas"]["SourceManifestRequest"];
             };
         };
         responses: {

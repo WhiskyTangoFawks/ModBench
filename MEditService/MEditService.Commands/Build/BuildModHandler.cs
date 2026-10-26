@@ -7,7 +7,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>The Build gesture's handler (ADR-0014), the Build engine's way in. The mod is the item of the selection:
-/// its folder is written from its source as the build configuration says, or it is refused.</summary>
+/// its folder is written from its source as its manifest says, or it is refused.</summary>
 public sealed class BuildModHandler
 {
     private readonly SourceModBuild _build;

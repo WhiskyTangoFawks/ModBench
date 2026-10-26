@@ -67,6 +67,11 @@ internal static class TestEditService
     internal static UpdateManifestHandler UpdateManifestHandler(IModFolderRepository modFolders, INotificationPublisher notifications) =>
         Over(new LoadOrderHolder(), notifications: notifications, modFolders: modFolders).GetRequiredService<UpdateManifestHandler>();
 
+    internal static CloneSubmodulesHandler CloneSubmodulesHandler() => Over(new LoadOrderHolder()).GetRequiredService<CloneSubmodulesHandler>();
+
+    internal static ChangeSourceManifestHandler ChangeSourceManifestHandler(IModFolderRepository modFolders) =>
+        Over(new LoadOrderHolder(), modFolders: modFolders).GetRequiredService<ChangeSourceManifestHandler>();
+
     internal static RestoreFromManifestHandler RestoreHandler(
         LoadOrderHolder holder, INotificationPublisher notifications, ISourceAdapter source, IModFolderRepository modFolders) =>
         Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<RestoreFromManifestHandler>();

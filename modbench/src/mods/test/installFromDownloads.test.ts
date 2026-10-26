@@ -34,7 +34,7 @@ import type { ReadModStatus } from '../../client';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
 
-const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
+const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 const nothingToLose: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod)));
 const notInPackage: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod, { notInPackage: ['a.esp'] })));
 

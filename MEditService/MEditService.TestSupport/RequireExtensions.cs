@@ -38,6 +38,10 @@ public static class RequireExtensions
             ? value
             : throw new InvalidOperationException($"Expected the source adapter to answer here: {failure.Reason}");
 
+    /// <summary>The value a read answered; the reason it gives instead is a broken fixture.</summary>
+    public static T Value<T>(this Answer<T, string> answer) =>
+        answer.Holds(out var value, out var why) ? value : throw new InvalidOperationException($"Expected the read to answer here: {why}");
+
     /// <summary>The failure a source read or write answered, which the test asked for.</summary>
     public static SourceFailure Stopped<T>(this Answer<T, SourceFailure> answer) =>
         answer.Holds(out _, out var failure)

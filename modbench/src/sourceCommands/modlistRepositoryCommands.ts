@@ -19,10 +19,10 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 type Adapter = Pick<InstanceAdapter,
   'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
-  | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'nexusFileAt' | 'putDownloadedFile'>;
+  | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'getModStatus'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus'>;
   adapter: Adapter;
   nexus: Pick<Nexus, 'download'>;
   instanceRoot: string;
@@ -51,11 +51,12 @@ export type RestoreResult =
 export type WhatRestoreDestroys = { destroys: readonly ModRestoreDestroys[]; refused: readonly ItemRefusal<string>[] } | { refusal: string };
 
 export type RestoreStatus =
+  | { readonly phase: 'Cloning' }
   | { readonly phase: 'ReadingFiles'; readonly mod: string }
   | { readonly phase: 'Downloading'; readonly file: string }
   | ({ readonly phase: 'Restoring' } & ModlistProgress);
 
-type ReadMod = Omit<UpdateManifestMod, 'isSourceMod' | 'version'>;
+type ReadMod = Omit<UpdateManifestMod, 'version'>;
 
 type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
@@ -91,11 +92,18 @@ interface ReadMods {
   readonly notes: readonly ModNote[];
 }
 
+// A source mod's manifest is in its repository (modlist-repository.md, The manifest, story 1).
+const sourceFolderOf = (sourceMods: SourceMods, mod: string): { sourceFolder?: string } => {
+  const sourceFolder = sourceMods.folderOf(mod);
+  return sourceFolder === undefined ? {} : { sourceFolder };
+};
+
 async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModByFolder[]> {
+  const sourceMods = await adapter.sourceMods();
   const asked: ModByFolder[] = [];
   for (const mod of mods) {
     const folder = await adapter.modFolderPath(mod);
-    if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: [...adapter.metadataFilesInModFolder] });
+    if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: [...adapter.metadataFilesInModFolder], ...sourceFolderOf(sourceMods, mod) });
   }
   return asked;
 }
@@ -113,7 +121,7 @@ async function gameFilesOf(
 }
 
 async function readMod(
-  adapter: Adapter, mod: string, installationFileOf: InstallationFileOf, game: GameToHand | undefined,
+  adapter: Adapter, mod: string, installationFileOf: InstallationFileOf, game: GameToHand | undefined, sourceMods: SourceMods,
 ): Promise<{ read: ReadMod; gameFiles: readonly GameFile[]; notes: readonly string[] } | { refusal: string }> {
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
@@ -122,7 +130,7 @@ async function readMod(
   const taken = installed.answer === undefined ? await gameFilesOf(adapter, mod, game) : { gameFiles: [], notes: [] };
   if ('refusal' in taken) return taken;
   return {
-    read: { name: mod, folder, installationFile: wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder] },
+    read: { name: mod, folder, installationFile: wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder], ...sourceFolderOf(sourceMods, mod) },
     gameFiles: taken.gameFiles,
     notes: [
       ...taken.notes,
@@ -134,7 +142,7 @@ async function readMod(
 }
 
 async function readMods(
-  adapter: Adapter, mods: readonly string[], installationFileOf: InstallationFileOf, game: GameToHand | undefined,
+  adapter: Adapter, mods: readonly string[], installationFileOf: InstallationFileOf, game: GameToHand | undefined, sourceMods: SourceMods,
   { onProgress, signal }: ModlistCallOptions<{ phase: 'ReadingFiles'; mod: string }>,
 ): Promise<ReadMods> {
   const sent: ReadMod[] = [];
@@ -144,7 +152,7 @@ async function readMods(
   for (const mod of mods) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const read = await readMod(adapter, mod, installationFileOf, game);
+    const read = await readMod(adapter, mod, installationFileOf, game, sourceMods);
     if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
     sent.push(read.read);
     for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
@@ -212,14 +220,52 @@ type Restored = Extract<RestoreResult, { applied: true }>['landed'];
 
 type FoldersNotFinished = Extract<RestoreResult, { applied: false }> & { readonly landed: Restored };
 
+const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;
+
+interface Cloned { readonly refused: readonly ItemRefusal<string>[]; readonly leftDetached: ReadonlyMap<string, string> }
+
+// modlist-repository.md, Restore from manifest, story 3: a submodule the source folder lacks is cloned first, because the
+// manifest it holds is what names the mod it builds.
+async function submodulesCloned({ adapter, client }: ModlistRepositoryCommandsDeps, onProgress?: (status: RestoreStatus) => void): Promise<Cloned> {
+  const uncloned = await adapter.unclonedSubmodules();
+  const refused: ItemRefusal<string>[] = uncloned.flatMap((submodule) => ('lacks' in submodule ? [{ item: submodule.name, reason: notCloned(submodule.lacks) }] : []));
+  const toClone = uncloned.flatMap((submodule) => ('lacks' in submodule ? [] : [submodule]));
+  if (toClone.length === 0) return { refused, leftDetached: new Map() };
+  onProgress?.({ phase: 'Cloning' });
+  const cloned = await client.cloneSubmodules(toClone.map(({ folder, pin, branch }) => ({ folder, pin, ...(branch === undefined ? {} : { branch }) })));
+  if (isRefused(cloned)) return { refused: [...refused, ...toClone.map(({ name }) => ({ item: name, reason: notCloned(cloned.message) }))], leftDetached: new Map() };
+  const nameOf = new Map(toClone.map(({ name, folder }) => [folder, name]));
+  const leftDetached = new Map<string, string>();
+  for (const { item, message } of cloned.refused) refused.push({ item: nameOf.get(item) ?? item, reason: notCloned(message) });
+  for (const { folder, leftDetached: why } of cloned.applied) {
+    if (why) leftDetached.set(folder, why);
+  }
+  return { refused, leftDetached };
+}
+
+// modlist-repository.md, Every mod, story 1: every other manifest, a source mod's whose folder its build has not made included.
+const withEverySourceMod = (mods: readonly string[], sourceMods: SourceMods): string[] => {
+  const listed = new Set(mods.map((mod) => mod.toLowerCase()));
+  return [...mods, ...[...sourceMods.folders.keys()].filter((mod) => !listed.has(mod.toLowerCase()))];
+};
+
+const leftDetachedBy = (landed: Restored, sourceMods: SourceMods, cloned: Cloned): Restored =>
+  landed.map((mod) => {
+    const why = cloned.leftDetached.get(sourceMods.folderOf(mod.mod) ?? '');
+    return why === undefined || mod.leftDetached ? mod : { ...mod, leftDetached: why };
+  });
+
 async function restoreFromManifest(
-  deps: ModlistRepositoryCommandsDeps, mods: readonly string[], options: ModlistCallOptions<RestoreStatus>,
+  deps: ModlistRepositoryCommandsDeps, asked: readonly string[], options: ModlistCallOptions<RestoreStatus>, everyManifest: boolean,
 ): Promise<RestoreResult> {
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(deps.adapter);
-  const restored = await restoreFolders(deps, mods, options);
-  const { finished, unfinished } = await withFilesNoLineNamesTrashed(deps, restored.landed);
+  const cloned = await submodulesCloned(deps, options.onProgress);
+  const sourceMods = await deps.adapter.sourceMods();
+  const mods = everyManifest ? withEverySourceMod(asked, sourceMods) : asked;
+  const restored = await restoreFolders(deps, mods, sourceMods, options);
+  const { finished, unfinished } = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(restored.landed, sourceMods, cloned));
   if (restored.applied) {
-    const refused = [...restored.refused, ...unfinished];
+    const refused = [...cloned.refused, ...restored.refused, ...unfinished];
     const pushRefusalNotWritten = await pushRefusalWrittenOrWhy(deps.adapter);
     return {
       ...restored, landed: finished, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, restored)] : refused,
@@ -294,12 +340,12 @@ async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, p
 }
 
 async function restoreFolders(
-  { client, adapter, nexus }: ModlistRepositoryCommandsDeps, mods: readonly string[],
+  { client, adapter, nexus }: ModlistRepositoryCommandsDeps, mods: readonly string[], sourceMods: SourceMods,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
   const gameRelease = await adapter.gameRelease();
   const folder = await namedGameFolder(adapter, gameRelease);
-  const read = await readMods(adapter, mods, noneBeforeTheManifestNamesThem, undefined, { onProgress, signal });
+  const read = await readMods(adapter, mods, noneBeforeTheManifestNamesThem, undefined, sourceMods, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
@@ -446,14 +492,14 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     ): Promise<UpdateManifestResult> => {
       const sourceMods = await adapter.sourceMods();
       const game = await gameToHand(adapter, sourceMods);
-      const { sent, gameFiles, refused: unread, notes } = await readMods(adapter, mods, (mod) => adapter.installationFile(mod), game, { onProgress, signal });
+      const { sent, gameFiles, refused: unread, notes } = await readMods(adapter, mods, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
       const refused = [...unread];
       if (sent.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
         const metadata = await adapter.modMetadata(mod.name);
         if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
-        else versioned.push({ ...mod, isSourceMod: sourceMods.folderOf(mod.name) !== undefined, version: metadata.answer.version });
+        else versioned.push({ ...mod, version: metadata.answer.version });
       }
       if (versioned.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
       const outcome = await client.updateManifest(
@@ -492,9 +538,10 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       return { destroys: listing.destroys.filter(({ mod }) => !unrestorable.has(mod)), refused: [...listing.refused, ...skipped] };
     },
 
+    /** `everyManifest`: the mods are every mod, so a source mod whose folder its build has not made joins them. */
     restoreFromManifest: (
-      mods: readonly string[], options: ModlistCallOptions<RestoreStatus> = {},
-    ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options),
+      mods: readonly string[], options: ModlistCallOptions<RestoreStatus> = {}, everyManifest = false,
+    ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options, everyManifest),
 
     /** Each mod's folder against its manifest (modlist-repository.md, Status). */
     modStatus: async (mods: readonly string[]): Promise<readonly ModStatus[] | ReadFailed> => {

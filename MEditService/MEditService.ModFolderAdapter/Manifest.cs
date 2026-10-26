@@ -4,6 +4,23 @@ namespace MEditService.ModFolderAdapter;
 /// Instance adapter's text, kept as written (ADR-0013).</summary>
 public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
+    /// <summary>The name of the folder it builds, which a manifest outside that folder names, as a source mod's does
+    /// (modlist-repository.md, The manifest, story 20).</summary>
+    public string? Output { get; init; }
+
+    /// <summary>Each path in the folder a source mod's build writes under the mod manager's exclusion mark.</summary>
+    public IReadOnlyList<string> Exclude { get; init; } = [];
+
+    /// <summary>Each archive a source mod's build packs (mods.md, Build, story 2).</summary>
+    public IReadOnlyList<ManifestArchive> Archives { get; init; } = [];
+
+    public static bool IsFolderName(string name) => IsPathInTheFolder(name) && !name.Contains('/', StringComparison.Ordinal);
+
+    /// <summary>A forward-slash path that stays inside the folder.</summary>
+    public static bool IsPathInTheFolder(string path) =>
+        !path.Contains('\\', StringComparison.Ordinal) && !System.IO.Path.IsPathRooted(path)
+        && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."));
+
     public FileBytes BytesOf(ManifestFile file) => (Package, file.Entry) switch
     {
         (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
@@ -24,6 +41,9 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         _ => null,
     };
 }
+
+/// <summary>An archive to pack at <paramref name="Path"/> in the folder from the files of the build at <paramref name="Files"/>.</summary>
+public sealed record ManifestArchive(string Path, IReadOnlyList<string> Files);
 
 public abstract record ManifestPackage
 {

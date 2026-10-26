@@ -12,7 +12,7 @@ import { GIT_DIR, ownTempPrefix } from '../files';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import { anyCase, isBareName, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
 import { PLUGIN_EXTENSIONS } from '../../tables/pluginFile';
-import { BUILD_CONFIGURATION_FILE } from '../../wire/sourceMod';
+import { MANIFEST_SUFFIX } from '../../wire/sourceMod';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
@@ -23,7 +23,6 @@ const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
 const SUBMODULES_FILE = '.gitmodules';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
-const MANIFEST_GLOB = '*.manifest.json';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
@@ -94,7 +93,7 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
 /** A mod's manifest, in its folder, named for the mod. */
-export const manifestFileName = (modName: string): string => `${modName}${MANIFEST_GLOB.slice(1)}`;
+export const manifestFileName = (modName: string): string => `${modName}${MANIFEST_SUFFIX}`;
 export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, manifestFileName(modName));
 
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */
@@ -144,7 +143,7 @@ export const recordIndexDir = (instanceRoot: string): string => join(instanceRoo
 /** Whether `path` is where git's whitelist holds a manifest: a file of that name directly in a folder of `mods/`. */
 export function isManifestPath(instanceRoot: string, path: string): boolean {
   const [mods, , file, ...deeper] = relative(instanceRoot, path).split(sep);
-  return mods?.toLowerCase() === MODS && file?.toLowerCase().endsWith(MANIFEST_GLOB.slice(1)) === true && deeper.length === 0;
+  return mods?.toLowerCase() === MODS && file?.toLowerCase().endsWith(MANIFEST_SUFFIX) === true && deeper.length === 0;
 }
 
 /** The instance repository's ignore list file. */
@@ -155,9 +154,6 @@ export const submodulesFile = (instanceRoot: string): string => join(instanceRoo
 
 /** A source mod's path in the instance repository, which is its submodule's path. */
 export const sourceModPath = (folderName: string): string => `${SOURCE_MODS_FOLDER}/${folderName}`;
-
-/** The file in a source folder that says what its build makes (ADR-0007). */
-export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, BUILD_CONFIGURATION_FILE);
 
 /** A repository appearing at, or vanishing from, the instance root. */
 export const REPOSITORY_WATCH_GLOB = GIT_DIR;
@@ -214,7 +210,7 @@ export const whitelistIgnoreList = (publisherFileName: string | undefined): stri
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
-  ...heldInEachFolderOf(MODS, [MANIFEST_GLOB]),
+  ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),
 ].join('\n')}\n`;
 
 /** The mod manager's configuration as git's attributes match it. */

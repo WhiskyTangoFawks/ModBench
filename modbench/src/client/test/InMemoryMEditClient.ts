@@ -19,8 +19,8 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'updateManifest' | 'restoreFromManifest' | 'getCreateChanges' | 'getDeleteChanges'
-  | 'getCopyChanges' | 'decompile' | 'repairPreviews' | 'decompileAndRepair' | 'changeBuildConfiguration';
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'getCopyChanges' | 'decompile' | 'repairPreviews' | 'decompileAndRepair' | 'changeSourceManifest';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
 // write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
@@ -330,8 +330,12 @@ export class InMemoryMEditClient implements MEditClient {
   restoreFromManifest(...args: Parameters<MEditClient['restoreFromManifest']>): ReturnType<MEditClient['restoreFromManifest']> {
     return this.command('restoreFromManifest', args);
   }
-  changeBuildConfiguration(...args: Parameters<MEditClient['changeBuildConfiguration']>): ReturnType<MEditClient['changeBuildConfiguration']> {
-    return this.command('changeBuildConfiguration', args);
+
+  cloneSubmodules(...args: Parameters<MEditClient['cloneSubmodules']>): ReturnType<MEditClient['cloneSubmodules']> {
+    return this.command('cloneSubmodules', args);
+  }
+  changeSourceManifest(...args: Parameters<MEditClient['changeSourceManifest']>): ReturnType<MEditClient['changeSourceManifest']> {
+    return this.command('changeSourceManifest', args);
   }
 
   getPlugins(): ReturnType<MEditClient['getPlugins']> { return this.query('getPlugins', []); }

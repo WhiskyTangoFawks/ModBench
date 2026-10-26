@@ -13,12 +13,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private readonly ScratchDirectory _root = new("modfolder-adapter-");
     private readonly ScratchDirectory _statCache = new("stat-cache-");
+    private readonly ScratchDirectory _source = new("source-");
     private readonly ModFolderRepository _repository = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow().AddDays(1)));
 
     public void Dispose()
     {
         _root.Dispose();
         _statCache.Dispose();
+        _source.Dispose();
     }
 
     [Fact]
@@ -230,7 +232,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
             TimeProvider.System,
             FileSystemMatchingNames(fileSystemMatchesNames));
 
-        var status = repository.Status(_root, "mod", new HashSet<string>(), _statCache);
+        var status = repository.Status(_root, "mod", new HashSet<string>(), _statCache, held: null, sourceFolder: null);
 
         Assert.Equal(namedByNoLine, repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()).Contains("Meshes/A.nif"));
         Assert.Equal(namedByNoLine, status.NamedByNoLine.Contains("Meshes/A.nif"));
@@ -249,7 +251,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
             TimeProvider.System,
             FileSystemMatchingNames(fileSystemMatchesNames));
 
-        Assert.Equal(differing is null ? [] : [differing], repository.Status(_root, "mod", new HashSet<string>(), _statCache).Differing);
+        Assert.Equal(differing is null ? [] : [differing], repository.Status(_root, "mod", new HashSet<string>(), _statCache, held: null, sourceFolder: null).Differing);
     }
 
     [PosixFact]
@@ -338,7 +340,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         KeepAsRestored(ManifestedFromSource("Mod"));
         ManifestedFromSource(repository);
 
-        Assert.Equal(differs, Status().Differing.Contains("a.esp"));
+        Assert.Equal(differs, SourceModStatus().Differing.Contains("a.esp"));
     }
 
     [Fact]
@@ -373,9 +375,32 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("a.esp", "hello");
         ManifestedFromSource("Mod", isSubmodule);
 
-        var status = Status();
+        var status = SourceModStatus();
 
         Assert.Equal((noHost, 0), (status.NoHost, status.NotInPackage.Count));
+    }
+
+    [Fact]
+    public void ASourceModsStatus_ReadsTheManifestInItsRepository_NotOneInItsFolder()
+    {
+        Write("a.esp", "hello");
+        Write("notes.txt", "mine");
+        Manifested(Line("notes.txt", "Mod.zip"));
+        ManifestedFromSource("Mod");
+
+        var status = SourceModStatus();
+
+        Assert.False(status.NoManifest);
+        Assert.Equal(["notes.txt"], status.NamedByNoLine);
+    }
+
+    [Fact]
+    public void ASourceModWhoseRepositoryHoldsNoManifest_HasNoManifest()
+    {
+        Write("a.esp", "hello");
+        Manifested(Line("a.esp", "Mod.zip"));
+
+        Assert.True(SourceModStatus().NoManifest);
     }
 
     [Fact]
@@ -564,7 +589,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\"files\": [{\"path\":\"a.txt\"},{\"path\":\"b.txt\",\"packagePath\":7}]}", "its file 2")]
     [InlineData("{\"files\": []", "line")]
     [InlineData("{\"package\": {\"installationFile\":\"A.zip\"}, \"files\": []}", "cannot be read")]
-    [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "cannot be read")]
+    [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "holds 'remote'")]
     [InlineData("{\"package\": {\"version\": 7}, \"files\": []}", "cannot be read")]
     [InlineData("{}", "cannot be read")]
     public void ReadManifest_WithTextItCannotRead_RefusesNamingWhere(string text, string where)
@@ -687,17 +712,19 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private Manifest ManifestedFromSource(string repository, bool isSubmodule = true)
     {
-        var manifest = new Manifest(new ManifestPackage.SourceRepository(repository, isSubmodule), [new ManifestFile("a.esp", new PackageEntry.Held())]);
-        _repository.WriteManifest(_root, "mod", manifest);
+        var manifest = new Manifest(new ManifestPackage.SourceRepository(repository, isSubmodule), [new ManifestFile("a.esp", new PackageEntry.Held())]) { Output = "mod" };
+        _repository.WriteSourceManifest(_source, manifest);
         return manifest;
     }
+
+    private ModStatus SourceModStatus() => _repository.Status(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache, held: null, _source);
 
     private void KeepAsRestored(Manifest manifest) =>
         _repository.KeepInStatCache(
             _repository.Files(_root, "mod", new HashSet<string>(), _statCache), manifest,
             manifest.Files.ToDictionary(line => line.Path, _ => HashOfHello));
 
-    private ModStatus Status() => _repository.Status(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache);
+    private ModStatus Status() => _repository.Status(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache, held: null, sourceFolder: null);
 
     private FileStream HeldOpen(string relative) =>
         new(Path.Combine(_root, relative), FileMode.Open, FileAccess.Read, FileShare.None);

@@ -9,7 +9,7 @@ using SharpCompress.Common;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>One source mod's folder written from its source as its build configuration says, or the mod refused.</summary>
+/// <summary>One source mod's folder written from its source as its manifest says, or the mod refused.</summary>
 internal sealed class SourceModBuild
 {
     private readonly CompilePluginHandler _compile;
@@ -28,26 +28,28 @@ internal sealed class SourceModBuild
     {
         if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
         var loadOrder = _loadOrder.Require();
-        if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
-            return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
+        if (!_modFolders.ReadSourceManifest(mod.SourceFolder).Holds(out var held, out var why)) return Refused(BuildRefusal.SourceUnreadable, $"{why}.");
+        if (held is not { } configured) return Refused(BuildRefusal.SourceUnreadable, $"'{mod.SourceFolder}' holds no manifest.");
         var folderName = _modFolders.FolderName(mod.Folder);
-        if (!string.Equals(source.Output, folderName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(configured.Output, folderName, StringComparison.OrdinalIgnoreCase))
         {
             return Refused(BuildRefusal.OutputNotThisMod,
-                $"its build configuration names the output folder '{source.Output}', not its folder '{folderName}'.");
+                $"its manifest names the output folder '{configured.Output}', not its folder '{folderName}'.");
         }
+        if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
+            return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
 
         var plugins = Placed(loadOrder, mod, source.Plugins);
         var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
-        var notAnAsset = source.Archives.SelectMany(archive => archive.Files.Select(file => (Archive: archive.Path, File: file)))
+        var notAnAsset = configured.Archives.SelectMany(archive => archive.Files.Select(file => (Archive: archive.Path, File: file)))
             .FirstOrDefault(packed => !assets.ContainsKey(packed.File));
         if (notAnAsset.File is not null)
             return Refused(BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
-        var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExclusionMark);
+        var written = new FolderWrite(_modFolders, mod.Folder, configured.Exclude, instance.ExclusionMark);
 
-        var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var packed = configured.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
         try
         {
             foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path)))
@@ -67,15 +69,16 @@ internal sealed class SourceModBuild
         }
 
         var (landed, refused) = await CompileAsync(loadOrder, mod, plugins, written);
-        var archivesRefused = Pack(mod, source.Archives, assets, instance.Archives, written);
+        var archivesRefused = Pack(mod, configured.Archives, assets, instance.Archives, written);
 
         MadeFiles made = new();
         foreach (var asset in assets.Values.Where(asset => !packed.Contains(asset.Path))) made.Add(written.PathOf(asset.Path), vouched: true);
         foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made.Add(path, vouched);
-        foreach (var archive in source.Archives.Select(archive => archive.Path))
+        foreach (var archive in configured.Archives.Select(archive => archive.Path))
             made.Add(written.PathOf(archive), vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
-        var (manifest, failure) = WriteManifest(mod, instance, new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), made);
+        var (manifest, failure) = WriteManifest(
+            mod, instance, configured with { Package = new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule) }, made);
         return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
             landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest));
     }
@@ -97,15 +100,16 @@ internal sealed class SourceModBuild
         public bool IsVouchedFor(string path) => !_refused.Contains(path);
     }
 
-    // The manifest is written last (mods.md, Build, story 1), and names only the files the build made (story 3).
-    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, ManifestPackage.SourceRepository package, MadeFiles made)
+    // The manifest is written last, in the mod's repository (mods.md, Build, story 1), and names only the files the build
+    // made (story 3).
+    private (Manifest? Written, string? Failure) WriteManifest(ModToBuild mod, InstanceToBuild instance, Manifest configured, MadeFiles made)
     {
         try
         {
             var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var files = read.Files.Where(file => made.Contains(file.Path)).ToList();
-            var manifest = new Manifest(package, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], mod.Version);
-            _modFolders.WriteManifest(mod.Folder, mod.Name, manifest);
+            var manifest = configured with { Files = [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], Version = mod.Version };
+            _modFolders.WriteSourceManifest(mod.SourceFolder, manifest);
             // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
             _ = _modFolders.KeepInStatCache(
                 read, manifest, files.Where(file => made.IsVouchedFor(file.Path)).ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
@@ -189,7 +193,7 @@ internal sealed class SourceModBuild
             || !ExternalChangeCheck.MatchesLastWrite(repository, plugin.Key, _plugins.HashOf(plugin.Path)));
 
     private List<ItemRefused<string, ArchiveRefusal>> Pack(
-        ModToBuild mod, IReadOnlyList<ArchiveToPack> archives, Dictionary<string, Asset> assets, ArchiveVariants? variants, FolderWrite written)
+        ModToBuild mod, IReadOnlyList<ManifestArchive> archives, Dictionary<string, Asset> assets, ArchiveVariants? variants, FolderWrite written)
     {
         var packer = new ArchivePacker(_modFolders);
         List<ItemRefused<string, ArchiveRefusal>> refused = [];

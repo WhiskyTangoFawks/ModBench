@@ -559,7 +559,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
     const { mods, statCache } = landed(outcome);
     expect({ mods, statCache }).toEqual({
       mods: [
-        { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] },
+        { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'], sourceFolder: '/mo2/source/ModA' },
         { name: 'Weapons_separator', folder: '/mo2/mod-folders/Weapons_separator', metadataFiles: ['meta.ini'] },
       ],
       statCache: '/mo2/stat-cache',

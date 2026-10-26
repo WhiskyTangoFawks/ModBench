@@ -29,7 +29,8 @@ public enum DecompileAndCommitRefusal
     /// <summary>A file of the mod folder could not be read, so its assets are not known.</summary>
     ModFilesUnreadable,
 
-    /// <summary>The plugins passed their gate, and the file system or git refused the source folder's files or its one commit.</summary>
+    /// <summary>The plugins passed their gate, and the file system or git refused the source folder's files or its one commit,
+    /// or the removal of the manifest its mod folder held.</summary>
     CommitFailed,
 
     /// <summary>The mod's refused plugins differ in reason; the message names each plugin and why.</summary>

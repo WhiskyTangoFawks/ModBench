@@ -257,7 +257,7 @@ describe('the MO2 adapter\'s repository', () => {
     const ignored = [
       'mods/Mod A/Mod A.esp', 'mods/Mod A/textures/a.dds', 'mods/Mod A/readme.ini', 'mods/Mod A/Mod A.json', 'mods/Mod A/Mod A.manifest', 'mods/Mod A/.git/HEAD', 'mods/Mod A/meta.ini', 'mods/Mod B/meta.ini',
       'profiles/Default/saves/save.fos', 'profiles/Default/nested/modlist.txt', 'downloads/Mod.7z', 'downloads/Mod.7z.meta',
-      'source/Mod A/build.json', 'hash-index/hashes.jsonl', 'stat-cache/Mod A', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
+      'source/Mod A/Mod A.manifest.json', 'hash-index/hashes.jsonl', 'stat-cache/Mod A', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
     ];
     await Promise.all([...listed, ...ignored].map((path) => put(path)));
 
@@ -269,10 +269,10 @@ describe('the MO2 adapter\'s repository', () => {
 
   describe('a source mod with a remote is a submodule', () => {
     const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-    const SOURCE_BUILD = (output: string): string => JSON.stringify({ output });
+    const SOURCE_MANIFEST = (output: string): string => JSON.stringify({ output, files: [] });
 
     async function sourceMod(folder: string, output: string, remote?: string): Promise<string> {
-      await put(`source/${folder}/build.json`, SOURCE_BUILD(output));
+      await put(`source/${folder}/${output}.manifest.json`, SOURCE_MANIFEST(output));
       const path = join(root, 'source', folder);
       git(path, 'init', '--quiet', '--initial-branch=main');
       if (remote !== undefined) git(path, 'remote', 'add', 'origin', remote);
@@ -465,9 +465,9 @@ describe('the MO2 adapter\'s repository', () => {
       expect(await readFile(join(root, '.gitignore'), 'utf8')).not.toContain('NoDelete');
     });
 
-    it('keeps the entry and the line of a source mod whose build configuration it cannot read, and says which', async () => {
+    it('keeps the entry and the line of a source mod whose manifest it cannot read, and says which', async () => {
       const { adapter, folder } = await submoduleOfOne();
-      await writeFile(join(folder, 'build.json'), 'not json');
+      await writeFile(join(folder, 'Mod A.manifest.json'), 'not json');
 
       const report = await adapter.writeSubmodules();
 
@@ -851,6 +851,17 @@ describe('the MO2 adapter\'s submodules', () => {
     const adapter = await holding([]);
 
     expect(await adapter.submodule('Other')).toEqual({ lacks: `${join(root, '.gitmodules')} names no submodule 'Other'` });
+  });
+
+  it('names each submodule whose folder holds no repository as uncloned, with its pin or what the index lacks of it', async () => {
+    const pinned = await holding(['branch=main']);
+    expect(await pinned.unclonedSubmodules()).toEqual([{ name: 'Mod Source', folder: join(root, 'source', 'Mod Source'), pin: PIN, branch: 'main' }]);
+
+    runGit('rm', '--cached', '--quiet', 'source/Mod Source');
+    expect(await pinned.unclonedSubmodules()).toEqual([{ name: 'Mod Source', lacks: 'the instance repository pins no commit at source/Mod Source' }]);
+
+    await mkdir(join(root, 'source', 'Mod Source', '.git'), { recursive: true });
+    expect(await pinned.unclonedSubmodules()).toEqual([]);
   });
 });
 

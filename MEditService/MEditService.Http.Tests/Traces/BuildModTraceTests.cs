@@ -56,7 +56,7 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(Origin, built.GetProperty("mod").GetString());
-        Assert.Contains("\"version\":\"1.2.3\"", File.ReadAllText(Path.Combine(_builtFolder, $"{Origin}.manifest.json")), StringComparison.Ordinal);
+        Assert.Contains("\"version\":\"1.2.3\"", File.ReadAllText(Path.Combine(Client.SourceFolderSentFor(Origin), $"{Path.GetFileName(_builtFolder)}.manifest.json")), StringComparison.Ordinal);
         Assert.Empty(built.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             [SecondPlugin, Plugin],
@@ -102,7 +102,7 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task BuildingAModWhoseSourceHoldsNoBuildConfiguration_RefusesItByName_AndBuildsTheRest()
+    public async Task BuildingAModWhoseSourceHoldsNoManifest_RefusesItByName_AndBuildsTheRest()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
         var nonCompiledPluginFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
@@ -113,7 +113,7 @@ public sealed class BuildModTraceTests : HostedTests
         var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
         Assert.Equal(NonCompiledPluginOrigin, refused.GetProperty("item").GetString());
         Assert.Equal("SourceUnreadable", refused.GetProperty("refusal").GetString());
-        Assert.EndsWith("holds no build configuration.", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.EndsWith("holds no manifest.", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,7 +123,8 @@ public sealed class BuildModTraceTests : HostedTests
         var source = Client.SourceFolderSentFor(Origin);
         Directory.CreateDirectory(Path.Combine(source, "assets", "meshes"));
         File.WriteAllText(Path.Combine(source, "assets", "meshes", "a.nif"), "mesh");
-        File.WriteAllText(Path.Combine(source, "build.json"), $"{{\"output\": \"{Path.GetFileName(_builtFolder)}\", \"archives\": {{\"Main.ba2\": [\"meshes/a.nif\"]}}}}");
+        var output = Path.GetFileName(_builtFolder);
+        File.WriteAllText(Path.Combine(source, $"{output}.manifest.json"), $"{{\"output\": \"{output}\", \"archives\": {{\"Main.ba2\": [\"meshes/a.nif\"]}}, \"files\": []}}");
         var ba2 = new { ba2 = new { version = 1, compressed = true } };
 
         var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, new { general = ba2, textures = ba2 }));
