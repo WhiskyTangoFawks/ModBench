@@ -505,7 +505,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void WriteManifest_WritesALineForEachStep_InTheOrderTheyRun_AndSaysWhichFileAStepMakes()
+    public void AManifest_HasALineForEachStep_InTheOrderTheyRun_AndSaysWhichFileAStepMakes()
     {
         var manifest = new Manifest(Package, [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep()), new ManifestFile("a.nif", new PackageEntry.Held())])
         {
@@ -630,7 +630,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void ReadManifest_ReadsTheStepsWriteManifestWrote_InTheirOrder_AndTheFilesTheyMake()
+    public void AManifestsSteps_ReadBackInTheirOrder_WithTheFilesTheyMake()
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
         {

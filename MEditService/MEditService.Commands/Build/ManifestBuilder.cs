@@ -20,18 +20,14 @@ internal sealed class ManifestBuilder
         foreach (var entry in entries) _byPath.TryAdd(entry.Path, entry);
     }
 
-    /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make among them, kept as
-    /// written (ADR-0022).</summary>
+    /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make, kept as written
+    /// (ADR-0022).</summary>
     public Manifest Manifest(IReadOnlyList<HashedFile> files, string? version, Manifest? held)
     {
-        var madeByStep = held?.Files.Where(line => line.Entry is PackageEntry.MadeByStep).Select(line => line.Path).ToHashSet(StringComparer.Ordinal) ?? [];
-        var recorded = Recorded([.. files.Where(file => !madeByStep.Contains(file.Path))], version);
-        return (held ?? recorded) with
-        {
-            Package = recorded.Package,
-            Version = recorded.Version,
-            Files = [.. recorded.Files, .. files.Where(file => madeByStep.Contains(file.Path)).Select(file => new ManifestFile(file.Path, new PackageEntry.MadeByStep()))],
-        };
+        List<ManifestFile> madeByStep = [.. held?.Files.Where(line => line.Entry is PackageEntry.MadeByStep) ?? []];
+        var made = madeByStep.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        var recorded = Recorded([.. files.Where(file => !made.Contains(file.Path))], version);
+        return (held ?? recorded) with { Package = recorded.Package, Version = recorded.Version, Files = [.. recorded.Files, .. madeByStep] };
     }
 
     // The version rides the package line, so a mod with no package has none.

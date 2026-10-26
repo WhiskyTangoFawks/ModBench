@@ -125,9 +125,13 @@ internal sealed class FakeModFolders : IModFolderRepository
     /// <summary>The mod folders whose status says their metadata differs from their manifest.</summary>
     public HashSet<string> MetadataDiffering { get; } = [];
 
+    /// <summary>What reading each mod folder's manifest throws.</summary>
+    public Dictionary<string, Exception> ManifestReadThrows { get; } = [];
+
     public Manifest? ReadManifest(string modFolder, string modName)
     {
         if (UnreadableManifests.Contains(modFolder)) throw new InvalidDataException("its manifest cannot be read at line 1");
+        if (ManifestReadThrows.TryGetValue(modFolder, out var thrown)) throw thrown;
         return Manifests.GetValueOrDefault(modFolder);
     }
 

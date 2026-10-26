@@ -225,11 +225,16 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal("Other", Assert.Single(result.Applied).Mod);
     }
 
+    public static TheoryData<Func<InstallationFile, ModToRestore>, RestoreRefusal, string> StepsAndLacks => new()
+    {
+        { file => ModFrom(Mod, file), RestoreRefusal.StepNotRun, "its step 'Optimise textures' runs a VS Code task, which restore cannot run" },
+        { _ => ModFrom(Mod), RestoreRefusal.NotFound, "installation file 'Mod.zip' is missing" },
+    };
+
     [Theory]
-    [InlineData(true, RestoreRefusal.StepNotRun, "its step 'Optimise textures' runs a VS Code task, which restore cannot run")]
-    [InlineData(false, RestoreRefusal.NotFound, "installation file 'Mod.zip' is missing")]
+    [MemberData(nameof(StepsAndLacks))]
     public async Task AModWhoseManifestHoldsAStep_IsSkippedNamingIt_AfterWhatItLacks_WritesNothing_AndTheOthersLand(
-        bool installationFileHanded, RestoreRefusal refusal, string why)
+        Func<InstallationFile, ModToRestore> handed, RestoreRefusal refusal, string why)
     {
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"), ("a.dds", "a"));
         _folders.WithFile(Mod, "a.nif", "edited");
@@ -238,7 +243,7 @@ public sealed class RestoreFromManifestHandlerTests
             Steps = [new ManifestStep("Optimise textures", ["a.dds"])],
         };
 
-        var result = await Restore(installationFileHanded ? ModFrom(Mod, downloadedFile) : ModFrom(Mod), AnotherModThatLands());
+        var result = await Restore(handed(downloadedFile), AnotherModThatLands());
 
         var skipped = Assert.Single(result.Refused);
         Assert.Equal((refusal, $"was skipped: {why}."), (skipped.Refusal, skipped.Message));

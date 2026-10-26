@@ -36,7 +36,7 @@ internal sealed class SourceModBuild
             return Refused(BuildRefusal.OutputNotThisMod,
                 $"its manifest names the output folder '{configured.Output}', not its folder '{folderName}'.");
         }
-        if (configured.Steps is [var step, ..]) return Refused(BuildRefusal.StepNotRun, $"its step '{step.Task}' runs a VS Code task, which build cannot run.");
+        if (StepsNotRun.Why(configured, "build") is { } notRun) return Refused(BuildRefusal.StepNotRun, $"{notRun}.");
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
 

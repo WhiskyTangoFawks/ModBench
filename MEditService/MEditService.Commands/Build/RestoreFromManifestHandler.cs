@@ -55,7 +55,7 @@ public sealed class RestoreFromManifestHandler
         var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFile).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
         if (resolved.Built is { } submodule) return Lacked([new PackageContents.Lack.SubmoduleMissing(submodule)]);
-        if (manifest.Steps is [var step, ..]) return Skipped(RestoreRefusal.StepNotRun, $"its step '{step.Task}' runs a VS Code task, which restore cannot run");
+        if (StepsNotRun.Why(manifest, "restore") is { } notRun) return Skipped(RestoreRefusal.StepNotRun, notRun);
 
         IReadOnlyList<string> namedByNoLine;
         ModFolderFiles read;

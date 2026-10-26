@@ -45,7 +45,7 @@ public sealed class UpdateManifestHandler
         }
         catch (InvalidDataException e)
         {
-            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(UpdateManifestRefusal.ManifestUnreadable, $"was not updated: {e.Message.TrimEnd('.')}.");
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(UpdateManifestRefusal.ManifestUnreadable, $"was not updated: {e.Message}.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

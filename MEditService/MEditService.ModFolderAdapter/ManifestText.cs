@@ -18,10 +18,10 @@ internal static class ManifestText
         if (manifest.Output is { } output) members.Add($"\"{OutputKey}\": " + Value(writer => writer.WriteStringValue(output)));
         if (manifest.Package is not null) members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
         if (manifest.Exclude.Count > 0)
-            members.Add("\"exclude\": " + Value(writer => Paths(writer, manifest.Exclude.Order(StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal))));
+            members.Add("\"exclude\": " + Value(writer => Strings(writer, manifest.Exclude.Order(StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal))));
         if (manifest.Archives.Count > 0)
         {
-            var archives = manifest.Archives.Select(archive => Value(writer => writer.WriteStringValue(archive.Path)) + ": " + Value(writer => Paths(writer, archive.Files)));
+            var archives = manifest.Archives.Select(archive => Value(writer => writer.WriteStringValue(archive.Path)) + ": " + Value(writer => Strings(writer, archive.Files)));
             members.Add("\"archives\": {\n" + string.Join(",\n", archives) + "\n}");
         }
         if (manifest.Steps.Count > 0) members.Add("\"steps\": [\n" + string.Join(",\n", manifest.Steps.Select(step => Value(writer => StepLine(writer, step)))) + "\n]");
@@ -70,27 +70,27 @@ internal static class ManifestText
     }
 
     private static List<string> ExclusionsOf(JsonElement root) =>
-        root.TryGetProperty("exclude", out var paths) ? InTheFolder("exclude", PathsOf(paths)) : [];
+        root.TryGetProperty("exclude", out var paths) ? InTheFolder("exclude", StringsOf(paths)) : [];
 
     private static List<ManifestArchive> ArchivesOf(JsonElement root)
     {
         if (!root.TryGetProperty("archives", out var archives)) return [];
-        List<ManifestArchive> packed = [.. archives.EnumerateObject().Select(archive => new ManifestArchive(archive.Name, PathsOf(archive.Value)))];
+        List<ManifestArchive> packed = [.. archives.EnumerateObject().Select(archive => new ManifestArchive(archive.Name, StringsOf(archive.Value)))];
         InTheFolder("archives", [.. packed.Select(archive => archive.Path), .. packed.SelectMany(archive => archive.Files)]);
         return packed;
     }
 
-    private static List<string> PathsOf(JsonElement paths) => [.. paths.EnumerateArray().Select(Text)];
+    private static List<string> StringsOf(JsonElement strings) => [.. strings.EnumerateArray().Select(Text)];
 
     private static List<string> InTheFolder(string key, List<string> paths) =>
         paths.FirstOrDefault(path => !Manifest.IsPathInTheFolder(path)) is { } outside
             ? throw new InvalidDataException($"its manifest's '{key}' names '{outside}', which is not a path in the folder")
             : paths;
 
-    private static void Paths(Utf8JsonWriter writer, IEnumerable<string> paths)
+    private static void Strings(Utf8JsonWriter writer, IEnumerable<string> strings)
     {
         writer.WriteStartArray();
-        foreach (var path in paths) writer.WriteStringValue(path);
+        foreach (var text in strings) writer.WriteStringValue(text);
         writer.WriteEndArray();
     }
 
@@ -116,7 +116,7 @@ internal static class ManifestText
             Known(line, $"its manifest's step {index + 1}", "task", "args");
             var task = Text(line.GetProperty("task"));
             if (string.IsNullOrWhiteSpace(task)) throw new InvalidDataException($"its manifest cannot be read at its step {index + 1}: it names no task");
-            return new ManifestStep(task, line.TryGetProperty("args", out var args) ? PathsOf(args) : []);
+            return new ManifestStep(task, line.TryGetProperty("args", out var args) ? StringsOf(args) : []);
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
         {
@@ -194,7 +194,7 @@ internal static class ManifestText
         if (step.Args.Count > 0)
         {
             writer.WritePropertyName("args");
-            Paths(writer, step.Args);
+            Strings(writer, step.Args);
         }
         writer.WriteEndObject();
     }
