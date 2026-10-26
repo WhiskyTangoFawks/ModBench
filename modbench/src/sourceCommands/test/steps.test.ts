@@ -1,36 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import type { HostTasks, TaskOptions, TaskWord } from '../../ports/tasks';
+import type { HostTasks } from '../../ports/tasks';
 import { stepTasks } from '../steps';
 
-type Rebuilt =
-  | { readonly kind: 'process'; readonly process: string; readonly args: readonly string[]; readonly options: TaskOptions }
-  | { readonly kind: 'shell'; readonly command: TaskWord; readonly args: readonly TaskWord[]; readonly options: TaskOptions }
-  | { readonly kind: 'shellLine'; readonly commandLine: string; readonly options: TaskOptions };
+interface FakeTask { readonly label: string; readonly user: boolean; readonly kind: 'process' | 'shell' | 'custom'; readonly rebuilt?: Rebuilt }
 
-interface FakeTask { readonly label: string; readonly user: boolean; readonly execution: unknown; readonly rebuilt?: Rebuilt }
+interface Rebuilt { readonly as: 'process' | 'shell'; readonly args: readonly string[]; readonly cwd: string }
+
+type ProcessTask = FakeTask & { readonly kind: 'process' };
+type ShellTask = FakeTask & { readonly kind: 'shell' };
 
 type End = { readonly exitCode: number | undefined; readonly before?: true } | { readonly refused: string };
 
 function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Record<string, End>> = {}) {
-  const executed: { label: string; execution: Rebuilt | undefined }[] = [];
+  const executed: { label: string; rebuilt: Rebuilt | undefined }[] = [];
   const processEnds = new Set<(run: object, exitCode: number | undefined) => void>();
   const ends = new Set<(run: object) => void>();
   const listen = <L>(listeners: Set<L>, listener: L) => { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; };
-  const withRebuilt = (task: FakeTask, rebuilt: Rebuilt): FakeTask => ({ ...task, rebuilt });
   const finish = (run: object, exitCode: number | undefined) => {
     for (const listener of processEnds) listener(run, exitCode);
     for (const listener of ends) listener(run);
   };
-  const tasksHost: HostTasks<FakeTask, object> = {
+  const tasksHost: HostTasks<FakeTask, ProcessTask, ShellTask, object> = {
     fetch: () => Promise.resolve(tasks),
     labelOf: (task) => task.label,
     isUserTask: (task) => task.user,
-    executionOf: (task) => task.execution,
-    asProcess: (task, process, args, options) => withRebuilt(task, { kind: 'process', process, args, options }),
-    asShell: (task, command, args, options) => withRebuilt(task, { kind: 'shell', command, args, options }),
-    asShellLine: (task, commandLine, options) => withRebuilt(task, { kind: 'shellLine', commandLine, options }),
+    isProcessTask: (task): task is ProcessTask => task.kind === 'process',
+    isShellTask: (task): task is ShellTask => task.kind === 'shell',
+    withProcessArgs: (task, args, cwd) => ({ ...task, rebuilt: { as: 'process', args, cwd } }),
+    withShellArgs: (task, args, cwd) => ({ ...task, rebuilt: { as: 'shell', args, cwd } }),
     execute: (task) => {
-      executed.push({ label: task.label, execution: task.rebuilt });
+      executed.push({ label: task.label, rebuilt: task.rebuilt });
       const end = endOf[task.label] ?? { exitCode: 0 };
       if ('refused' in end) return Promise.reject(new Error(end.refused));
       const run = {};
@@ -44,35 +43,30 @@ function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Rec
   return { tasksHost, executed };
 }
 
-const PROCESS = { process: '/tools/cao', args: ['--quiet'], options: { cwd: '/elsewhere', env: { CAO: 'on', BAD: 7 } } };
-const userTask = (label: string, execution: unknown = PROCESS): FakeTask => ({ label, user: true, execution });
+const userTask = (label: string, kind: FakeTask['kind'] = 'process'): FakeTask => ({ label, user: true, kind });
 
 describe('stepTasks', () => {
   it('names only the user tasks, never a workspace task', async () => {
-    const { tasksHost } = hostEndingEachRunAsSaid([userTask('Optimise'), { label: 'Build', user: false, execution: PROCESS }]);
+    const { tasksHost } = hostEndingEachRunAsSaid([userTask('Optimise'), { label: 'Build', user: false, kind: 'process' }]);
 
     expect(await stepTasks(tasksHost).labels()).toEqual(['Optimise']);
   });
 
-  it.each<[string, unknown, Rebuilt]>([
-    ['a process task', PROCESS, { kind: 'process', process: '/tools/cao', args: ['--quiet', 'textures', 'a b'], options: { cwd: '/mods/Mod', env: { CAO: 'on' } } }],
-    ['a shell task', { command: 'cao', args: [{ value: 'x y', quoting: 1 }], options: { executable: '/bin/bash', shellArgs: ['-c'] } },
-      { kind: 'shell', command: 'cao', args: [{ value: 'x y', quoting: 1 }, 'textures', 'a b'], options: { cwd: '/mods/Mod', env: {}, executable: '/bin/bash', shellArgs: ['-c'] } }],
-    ['a shell command line', { commandLine: 'cao --quiet' }, { kind: 'shellLine', commandLine: 'cao --quiet "textures" "a b"', options: { cwd: '/mods/Mod', env: {} } }],
-  ])('runs %s in the folder the manifest builds, with the step\'s arguments after its own', async (_case, execution, expected) => {
-    const { tasksHost, executed } = hostEndingEachRunAsSaid([userTask('Optimise', execution)]);
+  it.each<[FakeTask['kind'] & ('process' | 'shell')]>([['process'], ['shell']])(
+    'runs a %s task in the folder the manifest builds, handing the host the step\'s arguments to follow its own', async (kind) => {
+      const { tasksHost, executed } = hostEndingEachRunAsSaid([userTask('Optimise', kind)]);
 
-    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args: ['textures', 'a b'] }], '/mods/Mod')).toBeUndefined();
+      expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args: ['textures', 'a b'] }], '/mods/Mod')).toBeUndefined();
 
-    expect(executed).toEqual([{ label: 'Optimise', execution: expected }]);
-  });
+      expect(executed).toEqual([{ label: 'Optimise', rebuilt: { as: kind, args: ['textures', 'a b'], cwd: '/mods/Mod' } }]);
+    });
 
   it.each<[string, readonly FakeTask[], Readonly<Record<string, End>>, string]>([
     ['exits with another code', [userTask('A'), userTask('B')], { A: { exitCode: 2 } }, "step 'A' exited with code 2"],
     ['ends with no exit code', [userTask('A'), userTask('B')], { A: { exitCode: undefined } }, "step 'A' did not run: its task 'A' ended with no exit code"],
     ['cannot start', [userTask('A'), userTask('B')], { A: { refused: 'no shell' } }, "step 'A' did not run: its task 'A' could not run: no shell"],
-    ['has only a workspace task', [{ label: 'A', user: false, execution: PROCESS }, userTask('B')], {}, "step 'A' did not run: this machine has no user task 'A'"],
-    ['takes no arguments', [userTask('A', {}), userTask('B')], {}, "step 'A' did not run: its task 'A' is no shell or process task, so it takes no arguments"],
+    ['has only a workspace task', [{ label: 'A', user: false, kind: 'process' }, userTask('B')], {}, "step 'A' did not run: this machine has no user task 'A'"],
+    ['takes no arguments', [userTask('A', 'custom'), userTask('B')], {}, "step 'A' did not run: its task 'A' is no shell or process task, so it takes no arguments"],
   ])('stops at a step whose task %s, naming why, and runs no step after it', async (_case, tasks, endOf, why) => {
     const { tasksHost, executed } = hostEndingEachRunAsSaid(tasks, endOf);
 

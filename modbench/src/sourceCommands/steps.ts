@@ -1,6 +1,6 @@
 import type { ManifestStep } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import type { HostTasks, TaskOptions, TaskWord } from '../ports/tasks';
+import type { HostTasks } from '../ports/tasks';
 
 /** A manifest's steps, each run as the VS Code user task its label names (mods.md, Build, story 14). */
 export interface StepTasks {
@@ -11,7 +11,7 @@ export interface StepTasks {
   readonly whyStepsFailed: (steps: readonly ManifestStep[], folder: string) => Promise<string | undefined>;
 }
 
-export function stepTasks<Task, Run>(host: HostTasks<Task, Run>): StepTasks {
+export function stepTasks<Task, P extends Task, S extends Task, Run>(host: HostTasks<Task, P, S, Run>): StepTasks {
   const userTasks = async (): Promise<Task[]> => (await host.fetch()).filter((task) => host.isUserTask(task));
   const run = async ({ task, args }: ManifestStep, folder: string): Promise<number | string> => {
     const found = (await userTasks()).find((held) => host.labelOf(held) === task);
@@ -35,42 +35,17 @@ export function stepTasks<Task, Run>(host: HostTasks<Task, Run>): StepTasks {
   };
 }
 
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
-
-const isWord = (value: unknown): value is TaskWord =>
-  typeof value === 'string' || (isRecord(value) && typeof value.value === 'string' && typeof value.quoting === 'number');
-
-const wordsOf = (value: unknown): TaskWord[] => (Array.isArray(value) ? value.filter(isWord) : []);
-
-const stringsOf = (value: unknown): string[] => (Array.isArray(value) ? value.filter((word) => typeof word === 'string') : []);
-
 // The task runs in the folder the manifest builds, with the step's arguments after its own.
-function optionsOf(held: unknown, cwd: string): TaskOptions {
-  const options = isRecord(held) ? held : {};
-  const env = isRecord(options.env) ? Object.fromEntries(Object.entries(options.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
-  return {
-    cwd, env,
-    ...(typeof options.executable === 'string' ? { executable: options.executable } : {}),
-    ...(Array.isArray(options.shellArgs) ? { shellArgs: stringsOf(options.shellArgs) } : {}),
-  };
-}
-
-function withStepArgs<Task>(host: HostTasks<Task, unknown>, task: Task, args: readonly string[], folder: string): Task | undefined {
-  const execution = host.executionOf(task);
-  if (!isRecord(execution)) return undefined;
-  const options = optionsOf(execution.options, folder);
-  if (typeof execution.process === 'string') return host.asProcess(task, execution.process, [...stringsOf(execution.args), ...args], options);
-  if (isWord(execution.command)) return host.asShell(task, execution.command, [...wordsOf(execution.args), ...args], options);
-  if (typeof execution.commandLine === 'string') {
-    return host.asShellLine(task, [execution.commandLine, ...args.map((arg) => `"${arg.replaceAll('"', ESCAPED_QUOTE)}"`)].join(' '), options);
-  }
+function withStepArgs<Task, P extends Task, S extends Task>(
+  host: HostTasks<Task, P, S, unknown>, task: Task, args: readonly string[], folder: string,
+): Task | undefined {
+  if (host.isProcessTask(task)) return host.withProcessArgs(task, args, folder);
+  if (host.isShellTask(task)) return host.withShellArgs(task, args, folder);
   return undefined;
 }
 
-const ESCAPED_QUOTE = String.raw`\"`;
-
 // An end can arrive before the host answers which run it started.
-function exitCodeOf<Task, Run>(host: HostTasks<Task, Run>, task: Task): Promise<number | undefined> {
+function exitCodeOf<Task, Run>(host: Pick<HostTasks<Task, Task, Task, Run>, 'execute' | 'onProcessEnd' | 'onEnd'>, task: Task): Promise<number | undefined> {
   return new Promise((resolve, reject) => {
     const started: { run?: Run } = {};
     const exitCodes = new Map<Run, number | undefined>();
