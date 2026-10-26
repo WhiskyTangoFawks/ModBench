@@ -9,7 +9,7 @@ public sealed record RestoreFromManifestResult(IReadOnlyList<ModRestored> Applie
     : ISelectionAnswer<RestoreRefused>;
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache
-/// did not keep the read, its manifest's metadata, what its rebuild left, and each of its steps, in order, still to run.</summary>
+/// did not keep the read, its metadata, what its rebuild left, and each step still to run.</summary>
 public sealed record ModRestored(
     string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata,
     IReadOnlyList<ManifestStep> Steps, bool Uncommitted = false, string? LeftDetached = null);

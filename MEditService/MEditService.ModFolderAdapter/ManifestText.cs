@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file with a line for each part, each step in the order they run, each tool, and each file in
-/// alphabetical order, so a change to one file is one line in a diff.</summary>
+/// <summary>A manifest as a JSON file with a line for each part, each step in the order they run, each tool, and each
+/// file in alphabetical order, so a changed file is one line in a diff.</summary>
 internal static class ManifestText
 {
     private const string OutputKey = "output";

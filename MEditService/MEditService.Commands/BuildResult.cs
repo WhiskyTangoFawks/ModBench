@@ -8,10 +8,8 @@ namespace MEditService.Commands;
 public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<BuildRefused> Refused)
     : ISelectionAnswer<BuildRefused>;
 
-/// <summary>A mod of the selection that built: the plugins that compiled, the plugins and archives refused, which
-/// stay as they were, each file it replaced that held other bytes, what stopped it part way, Uncommitted and Unpushed.
-/// Steps: each step still to run, in order, and Made: each file the build made, by forward-slash path, which a request hands
-/// back once the steps ran, for the build to write its manifest.</summary>
+/// <summary>A mod that built, with what it compiled, refused, replaced, and what stopped it. Steps: each still to run;
+/// Made: the files it made, which a request hands back once they ran, for its manifest.</summary>
 public sealed record ModBuilt(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
     IReadOnlyList<ArchiveRefused> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure, bool Uncommitted, bool Unpushed,
