@@ -82,6 +82,7 @@ export type RecordCopy = Omit<components['schemas']['RecordCopy'], 'documentText
 export interface ViewState {
   collapsedRows: string[];
   restoredRows: string[];
+  restoredColumns: ColumnKey[];
   collapsedColumns: ColumnKey[];
   focusedCell: { rowKey: string; plugin: ColumnKey | null } | null;
   scroll: { top: number; left: number };
@@ -102,6 +103,7 @@ export function isViewState(value: unknown): value is ViewState {
   return typeof value === 'object' && value !== null
     && 'collapsedRows' in value && isStringArray(value.collapsedRows)
     && 'restoredRows' in value && isStringArray(value.restoredRows)
+    && 'restoredColumns' in value && isStringArray(value.restoredColumns)
     && 'collapsedColumns' in value && isStringArray(value.collapsedColumns)
     && 'focusedCell' in value && isFocusedCell(value.focusedCell)
     && 'scroll' in value && isScroll(value.scroll);

@@ -3,7 +3,7 @@ import { compareOverride, compareResultFixture, diffNode, fieldMeta } from './te
 import { buildColumns } from './recordUtils';
 import { columnKey } from '../../src/wire/columnKey';
 import { recordRows, type RecordRow } from './recordRows';
-import { collapseRuns } from './noConflictRuns';
+import { collapseRuns, quietColumns } from './noConflictRuns';
 import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 
 const MASTER = columnKey({ name: 'Fallout4.esm', origin: 'Data/' });
@@ -107,5 +107,20 @@ describe('collapseRuns', () => {
     ], ['0', '1']);
 
     expect(collapsed(rows, [], true)).toEqual(['2 rows', 'C', '2 rows']);
+  });
+});
+
+describe('quietColumns', () => {
+  const keyOf = (plugin: string) => columnKey({ name: plugin, origin: 'Data/' });
+  const columnOf = (plugin: string, conflictThis: 'Master' | 'IdenticalToMaster' | 'Override' | undefined) =>
+    ({ key: keyOf(plugin), override: compareOverride({ formKey: '000001:Fallout4.esm', plugin, fields: [], conflictThis }) });
+  const columns = [columnOf('Fallout4.esm', 'Master'), columnOf('Same.esp', 'IdenticalToMaster'), columnOf('Edit.esp', 'Override'), columnOf('File.esp', 'IdenticalToMaster')];
+
+  it.each([
+    ['the columns identical to the master, but the master\'s and the file\'s', columns, false, keyOf('File.esp'), ['Same.esp']],
+    ['no column when several records are compared', columns, true, undefined, []],
+    ['no column with no cell of its own', [columnOf('Fallout4.esm', 'Master'), columnOf('Empty.esp', undefined)], false, undefined, []],
+  ] as const)('holds %s', (_name, given, severalRecords, fileColumn, held) => {
+    expect(quietColumns(given, { severalRecords, fileColumn })).toEqual(new Set(held.map(keyOf)));
   });
 });

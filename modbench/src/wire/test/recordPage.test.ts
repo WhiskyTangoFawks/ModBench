@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readRecordPageGlobals } from '../recordPage';
 
-const place = { collapsedRows: [], restoredRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+const place = { collapsedRows: [], restoredRows: [], restoredColumns: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
 describe('the globals a record page is given', () => {
   it('reads each as the host set it', () => {
@@ -21,6 +21,7 @@ describe('the globals a record page is given', () => {
     ['mEditColumns', [{ formKey: '000001:A.esp', plugin: 'A.esp' }]],
     ['mEditViewState', { collapsedRows: [] }],
     ['mEditViewState', { ...place, restoredRows: undefined }],
+    ['mEditViewState', { ...place, restoredColumns: undefined }],
     ['mEditViewState', { ...place, focusedCell: { plugin: null } }],
     ['mEditLoadError', { failed: 'exploded' }],
   ])('throws on %s of another shape', (name, value) => {
