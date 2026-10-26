@@ -6,6 +6,7 @@ vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeMod
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { handlers, showQuickPick, PluginRowStandIn } from './sourceGestureHarness';
 
+import * as vscode from 'vscode';
 import { registerBuildCommand } from '../buildCommand';
 import { BuildProblems } from '../buildProblems';
 import { ModNode } from '../ModListProvider';
@@ -36,7 +37,7 @@ describe('modbench.mod.build', () => {
   const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
-    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
+    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [], steps: [], made: [] });
   const builds: (readonly string[])[] = [];
   beforeEach(() => { builds.length = 0; });
 
@@ -111,6 +112,19 @@ describe('modbench.mod.build', () => {
     expect(reporter.landings).toEqual([]);
   });
 
+  it('offers Open User Tasks with a mod refused for a tool this machine has no task for, and opens them when clicked', async () => {
+    const { handler, reporter } = registered({
+      landed: [], refused: [{ item: 'ModA', reason: 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).' }], noTaskForATool: true,
+    });
+
+    await handler(modRow('ModA'));
+
+    const [report] = reporter.reports;
+    expect(report?.action?.title).toBe('Open User Tasks');
+    report?.action?.run();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.tasks.openUserTasks');
+  });
+
   it('names a plugin no mod provides before a mod source commands refuse', async () => {
     const { handler, reporter } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
     const rows = [modRow('ModA'), modRow('ModC'), row(LOOSE)];
@@ -123,7 +137,7 @@ describe('modbench.mod.build', () => {
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
     const { handler, reporter, diagnostics } = registered({
       landed: [{
-        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
+        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [], steps: [], made: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [{ formKey: '000800:MyPatch.esp', sourceRelativePath: 'Source/A.json', message: 'Race: points at nothing' }],
@@ -143,7 +157,7 @@ describe('modbench.mod.build', () => {
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {
     const { handler, reporter } = registered({
       landed: [{
-        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [],
+        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [], steps: [], made: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [

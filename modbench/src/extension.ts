@@ -34,6 +34,7 @@ import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyConte
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import { hostGit } from './hostGit';
+import { tasks } from './drivingLib/tasks';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
 import { queryInfoOver } from './downloadedFileCommands/queryInfo';
@@ -147,7 +148,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash });
+  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const modStatuses = own(new ModStatuses(client, readStatus, (line) => outputChannel.warn(`[modList] ${line}`)));
   const { modSync, pluginSync } = own(instanceSyncs({
@@ -175,7 +176,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),

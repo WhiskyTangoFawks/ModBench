@@ -8,6 +8,7 @@ textdocuments: @../../spec/architecture/target-architecture.modbench_repositorie
 textdocuments.label: Text documents
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
+tasks: "VS Code's tasks" {class: other}
 client: @../../spec/architecture/target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../../spec/architecture/target-architecture.medit_driving.http
@@ -35,18 +36,34 @@ sourcecommands -> textdocuments: "save: each mod's unsaved plugin source" {class
 textdocuments -> sourcecommands: "saved, or the file VS Code did not save" {class: compile}
 sourcecommands -> instanceadapter: "get: each mod's folder" {class: compile}
 instanceadapter -> sourcecommands: "each mod's folder" {class: compile}
-sourcecommands -> client: "build: each mod's folder" {class: compile}
+sourcecommands -> tasks: "get: each task's label" {class: outside}
+tasks -> sourcecommands: "each task's label" {class: outside}
+sourcecommands -> client: "build: each mod's folder · each task's label" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}
 source -> sourceadapter: "each mod's source at its commit" {class: compile}
 sourceadapter -> engine: "the source" {class: compile}
-engine."refused when the output folder is not the mod's"
+engine."refused when the output folder is not the mod's, or a tool has no task"
 engine -> commands: "compile-plugin, per plugin" {class: compile}
 engine -> modfolderadapter: "the mod's files · the manifest" {class: compile}
 modfolderadapter -> modfolder: "the folder · the manifest" {class: compile}
 engine -> http: "the outcome, per mod" {class: compile}
 http -> client: "the outcome, per mod" {class: compile}
 client -> sourcecommands: the outcome {class: compile}
+
+withsteps: "a mod whose manifest holds steps: the engine wrote no manifest, and named its steps and the files it made" {
+  sourcecommands -> tasks: "each step's task, with its arguments, in the mod's folder" {class: outside}
+  tasks -> sourcecommands: "its exit code" {class: outside}
+  sourcecommands -> client: "build: each mod's folder · the files it made" {class: compile}
+  client -> http: envelope {class: compile}
+  http -> engine: envelope {class: compile}
+  engine -> modfolderadapter: "the manifest" {class: compile}
+  modfolderadapter -> modfolder: "the manifest" {class: compile}
+  engine -> http: "the outcome, per mod" {class: compile}
+  http -> client: "the outcome, per mod" {class: compile}
+  client -> sourcecommands: the outcome {class: compile}
+}
+
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}

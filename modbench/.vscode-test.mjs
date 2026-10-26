@@ -21,6 +21,19 @@ const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
 const gameFolder = path.join(runDir, 'game');
 mkdirSync(path.join(gameFolder, 'Data'), { recursive: true });
 
+// A user task of each kind a user tasks.json holds, running a script that records its arguments in its working folder
+// and exits with the last of them.
+const step = path.join(runDir, 'step.js');
+writeFileSync(step, "const args = process.argv.slice(2); require('fs').writeFileSync('ran.txt', args.join(' ')); process.exit(Number(args.at(-1)));");
+mkdirSync(path.join(runDir, 'user-data', 'User'), { recursive: true });
+writeFileSync(path.join(runDir, 'user-data', 'User', 'tasks.json'), JSON.stringify({
+  version: '2.0.0',
+  tasks: [
+    { label: 'Process step', type: 'process', command: process.execPath, args: [step] },
+    { label: 'Shell step', type: 'shell', command: process.execPath, args: [step] },
+  ],
+}));
+
 const workspace = (name, fixture) => {
   const folder = path.join(runDir, name);
   if (fixture) cpSync(path.join(import.meta.dirname, fixture), folder, { recursive: true });

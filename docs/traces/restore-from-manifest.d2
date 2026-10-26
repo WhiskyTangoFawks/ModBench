@@ -8,6 +8,7 @@ instanceadapter: @../../spec/architecture/target-architecture.modbench_repositor
 instanceadapter.label: Instance adapter
 instance: @../../spec/architecture/target-architecture.modbench_data.instance
 instance.label: "Instance\nmods · downloaded files · the repository"
+tasks: "VS Code's tasks" {class: other}
 client: @../../spec/architecture/target-architecture.modbench_repositories.client
 client.label: mEdit client
 http: @../../spec/architecture/target-architecture.medit_driving.http
@@ -57,7 +58,9 @@ download: "an installation file the downloads folder lacks, whose page on Nexus 
   instanceadapter -> sourcecommands: "the package, hashed" {class: compile}
 }
 
-sourcecommands -> client: "restore: each mod's folder, package and pin" {class: compile}
+sourcecommands -> tasks: "get: each task's label" {class: outside}
+tasks -> sourcecommands: "each task's label" {class: outside}
+sourcecommands -> client: "restore: each mod's folder, package and pin · each task's label" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}
 modfolder -> modfolderadapter: "manifests · each mod's files · each package's files" {class: compile}
@@ -73,11 +76,13 @@ sourcemod: "a source mod with a remote" {
 
 engine -> modfolderadapter: "each file whose bytes differ" {class: compile}
 modfolderadapter -> modfolder: "the files" {class: compile}
-engine -> http: "the outcome, per mod · each file no line names · each mod's metadata" {class: compile}
-http -> client: "the outcome, per mod · each file no line names · each mod's metadata" {class: compile}
+engine -> http: "the outcome, per mod · each file no line names · each mod's metadata · its steps" {class: compile}
+http -> client: "the outcome, per mod · each file no line names · each mod's metadata · its steps" {class: compile}
 client -> sourcecommands: the outcome {class: compile}
 sourcecommands -> instanceadapter: "each file no line names · each mod's metadata · the push check" {class: compile}
 instanceadapter -> instance: "the trash · metadata · the push check" {class: compile}
+sourcecommands -> tasks: "each step's task, with its arguments, in the mod's folder" {class: outside}
+tasks -> sourcecommands: "its exit code" {class: outside}
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}

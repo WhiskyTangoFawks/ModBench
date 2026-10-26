@@ -71,6 +71,7 @@ import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { recordingTasks } from '../../test/recordingTasks';
 
 const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 
@@ -85,7 +86,7 @@ const otherDeps = () => ({
   extensionUri: Uri.file('/extension'), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   statuses: new ModStatuses(new InMemoryMEditClient(), () => Promise.resolve([]), () => undefined),
   sourceGestures: {
-    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]) }), rows: () => [],
+    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks() }), rows: () => [],
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
     registerRepositories: () => Promise.resolve(),
   },
