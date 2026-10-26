@@ -21,6 +21,8 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record SubmoduleMissing(string Name) : Lack($"its submodule '{Name}' is missing");
 
         internal sealed record NoHost() : Lack("its package has no host");
+
+        internal sealed record NoTask(string Why) : Lack(Why);
     }
 
     /// <summary>A file of the mod folder, by its path, and where its package holds its bytes.</summary>

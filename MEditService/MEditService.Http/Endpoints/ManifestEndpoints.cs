@@ -30,7 +30,8 @@ internal static class ManifestEndpoints
                 "the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for " +
                 "the extension's trash; it writes no other file. A " +
                 "mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is " +
-                "named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
+                "named not finished when a write failed part way. A mod whose manifest names a tool the request names no task for is " +
+                "skipped; one that lands names the steps still to run, each a VS Code task. Progress is the restore-from-manifest-progress notification, " +
                 "which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: " +
                 "its NotFound answers are not logged as skips.")
             .Produces<RestoreFromManifestResult>()
@@ -115,7 +116,8 @@ internal static class ManifestEndpoints
             [.. mods.Select(mod => new ModToRestore(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule(),
                 mod.UnreadableGameFiles, mod.UnreadableInstallationFile, mod.SourceFolder))],
-            new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
+            new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal) },
+            req.Gesture, running.Token);
 
         return EndpointMapping.Answered(
             "Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result,
@@ -216,11 +218,11 @@ internal sealed record UpdateManifestModRequest(
     string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder, string? Version)
     : IModRequest;
 
-/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). AsksWhatItLacks marks a request
-/// sent before the manifests' files are handed: its NotFound answers ask for them.</summary>
+/// <summary>The mods to restore, with the instance's facts (ADR-0013), each VS Code task this machine has among them.
+/// AsksWhatItLacks marks a request sent before the manifests' files are handed: its NotFound answers ask for them.</summary>
 internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
-    GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false);
+    GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false, IReadOnlyList<string>? Tasks = null);
 
 /// <summary>A mod, with the submodule its manifest names once a refusal names it, why the request could not read a game
 /// file, by path, or an installation file, by name, and a source mod's source folder.</summary>

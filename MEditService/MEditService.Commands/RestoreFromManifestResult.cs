@@ -9,10 +9,10 @@ public sealed record RestoreFromManifestResult(IReadOnlyList<ModRestored> Applie
     : ISelectionAnswer<RestoreRefused>;
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache
-/// did not keep the read, its manifest's metadata, and what its rebuild left.</summary>
+/// did not keep the read, its manifest's metadata, what its rebuild left, and each of its steps, in order, still to run.</summary>
 public sealed record ModRestored(
     string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata,
-    bool Uncommitted = false, string? LeftDetached = null);
+    IReadOnlyList<ManifestStep> Steps, bool Uncommitted = false, string? LeftDetached = null);
 
 /// <summary>A skipped mod. A NotFound mod names the installation file, as its manifest names it, the game files and the submodule
 /// it lacks, for a request to fetch and hand. A NotBuilt mod names its build's refusal.</summary>

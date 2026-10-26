@@ -505,11 +505,12 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AManifest_HasALineForEachStep_InTheOrderTheyRun_AndSaysWhichFileAStepMakes()
+    public void AManifest_HasALineForEachStep_InTheOrderTheyRun_ForEachTool_AndSaysWhichFileAStepMakes()
     {
         var manifest = new Manifest(Package, [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep()), new ManifestFile("a.nif", new PackageEntry.Held())])
         {
             Steps = [new ManifestStep("Optimise textures", ["--in", "textures"]), new ManifestStep("Archive", [])],
+            Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser"), new ManifestTool("Archive", "https://example.com/archive")],
         };
 
         _repository.WriteManifest(_root, "mod", manifest);
@@ -520,6 +521,10 @@ public sealed class ModFolderRepositoryTests : IDisposable
             + "\"steps\": [\n"
             + "{\"task\":\"Optimise textures\",\"args\":[\"--in\",\"textures\"]},\n"
             + "{\"task\":\"Archive\"}\n"
+            + "],\n"
+            + "\"tools\": [\n"
+            + "{\"task\":\"Optimise textures\",\"page\":\"https://example.com/optimiser\"},\n"
+            + "{\"task\":\"Archive\",\"page\":\"https://example.com/archive\"}\n"
             + "],\n"
             + "\"files\": [\n"
             + "{\"path\":\"a.nif\"},\n"
@@ -630,17 +635,19 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AManifestsSteps_ReadBackInTheirOrder_WithTheFilesTheyMake()
+    public void AManifestsSteps_ReadBackInTheirOrder_WithTheToolsAndTheFilesTheyMake()
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
         {
             Steps = [new ManifestStep("Zip", ["a", "b"]), new ManifestStep("Archive", [])],
+            Tools = [new ManifestTool("Zip", "https://example.com/zip")],
         });
 
         var read = _repository.ReadManifest(_root, "mod");
 
         Assert.NotNull(read);
         Assert.Equal([("Zip", "a|b"), ("Archive", "")], read.Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.Equal([new ManifestTool("Zip", "https://example.com/zip")], read.Tools);
         Assert.Equal([new ManifestFile("b.dds", new PackageEntry.MadeByStep())], read.Files);
     }
 
@@ -676,6 +683,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\"steps\": [{\"task\":\"\"}], \"files\": []}", "its manifest cannot be read at its step 1: it names no task")]
     [InlineData("{\"steps\": [{\"args\":[\"a\"]}], \"files\": []}", "its manifest cannot be read at its step 1")]
     [InlineData("{\"steps\": [{\"task\":\"Zip\",\"args\":[1]}], \"files\": []}", "its manifest cannot be read at its step 1")]
+    [InlineData("{\"tools\": [{\"page\":\"https://example.com\"}], \"files\": []}", "its manifest cannot be read at its tool 1")]
+    [InlineData("{\"tools\": [{\"task\":\"Zip\"}], \"files\": []}", "its manifest cannot be read at its tool 1")]
+    [InlineData("{\"tools\": [{\"task\":\"Zip\",\"page\":\" \"}], \"files\": []}", "its manifest cannot be read at its tool 1: it names no page")]
+    [InlineData("{\"tools\": [{\"task\":\"\",\"page\":\"https://example.com\"}], \"files\": []}", "its manifest cannot be read at its tool 1: it names no task")]
+    [InlineData("{\"tools\": [{\"task\":\"Zip\",\"page\":\"https://example.com\",\"path\":\"C:/zip.exe\"}], \"files\": []}", "its manifest's tool 1 holds 'path', which Modbench does not read")]
     public void ReadManifest_WithTextItCannotRead_RefusesNamingWhere(string text, string where)
     {
         Write("mod.manifest.json", text);

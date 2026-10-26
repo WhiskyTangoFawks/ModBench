@@ -12,7 +12,10 @@ public sealed record ModToRestore(
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder with the game files the request
 /// found for the manifests, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>
-public sealed record InstanceToRestore(string StatCache, string ExclusionMark, ArchiveVariants? Archives, GameFolder? GameFolder);
+public sealed record InstanceToRestore(string StatCache, string ExclusionMark, ArchiveVariants? Archives, GameFolder? GameFolder)
+{
+    public IReadOnlySet<string> Tasks { get; init; } = new HashSet<string>();
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RestoreRefusal
@@ -48,8 +51,8 @@ public enum RestoreRefusal
     /// <summary>Its build refused it before writing.</summary>
     NotBuilt,
 
-    /// <summary>Its manifest holds a step, which runs a VS Code task that restore cannot run.</summary>
-    StepNotRun,
+    /// <summary>This machine has no VS Code task for a tool its manifest's steps run (mods.md, Build, story 14).</summary>
+    NoTaskForTool,
 }
 
 /// <summary>Why a mod was skipped. A NotFound mod names the installation file, the game files and the submodule it lacks, as a

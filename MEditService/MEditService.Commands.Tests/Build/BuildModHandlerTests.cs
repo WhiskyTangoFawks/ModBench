@@ -180,8 +180,10 @@ public sealed class BuildModHandlerTests : IDisposable
         "its manifest names the output folder 'Other', not its folder 'Mod'.")]
     [InlineData("{\"output\": \"Mod\", \"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\", \"a.txt\"]}}", BuildRefusal.ArchiveFileNotAnAsset,
         "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source.")]
-    [InlineData("{\"output\": \"Mod\", \"steps\": [{\"task\": \"Optimise textures\"}]}", BuildRefusal.StepNotRun,
-        "its step 'Optimise textures' runs a VS Code task, which build cannot run.")]
+    [InlineData("{\"output\": \"Mod\", \"steps\": [{\"task\": \"Zip\"}], \"tools\": [{\"task\": \"Zip\", \"page\": \"https://example.com/zip\"}]}",
+        BuildRefusal.NoTaskForTool, "this machine has no task for its tool 'Zip' (https://example.com/zip).")]
+    [InlineData("{\"output\": \"Mod\", \"steps\": [{\"task\": \"Zip\"}, {\"task\": \"Pack\"}], \"tools\": [{\"task\": \"Pack\", \"page\": \"https://example.com/pack\"}]}",
+        BuildRefusal.NoTaskForTool, "this machine has no task for its tools 'Zip' and 'Pack' (https://example.com/pack).")]
     public async Task ABuildThatCannotMakeTheFolderItsManifestSays_RefusesTheMod_WritingNothing(
         string configuration, BuildRefusal refusal, string why)
     {
@@ -194,6 +196,37 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.StartsWith("was not built: ", refused.Message, StringComparison.Ordinal);
         Assert.EndsWith(why, refused.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task ABuildWithSteps_MakesTheFolder_AnswersItsStepsAndEachFileItMade_AndLeavesItsManifestUntilTheyRan()
+    {
+        WriteSourceText(WithAStep, ("meshes/c.nif", "c"), ("textures/a.dds", "a"));
+
+        var built = await Landed(WithItsTask);
+
+        Assert.Equal([("Optimise textures", "textures")], built.Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.Equal(["meshes/c.nif"], built.Made);
+        Assert.Equal([("meshes/c.nif", "c"), ("textures/a.dds", "a")], FilesIn(ModFolder));
+        Assert.Equal([new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep())], ManifestWritten().Require().Files);
+    }
+
+    [Fact]
+    public async Task OnceItsStepsRan_ItsBuildWritesItsManifest_EachFileItMadeThatTheFolderHolds_AndEachFileAStepMakes_AndNothingDiffers()
+    {
+        WriteSourceText(WithAStep, ("meshes/c.nif", "c"), ("meshes/d.nif", "d"));
+        var built = await Landed(WithItsTask);
+        File.Delete(Path.Combine(ModFolder, "meshes", "d.nif"));
+        WriteInFolder("textures/a.dds", "optimised");
+
+        Assert.Empty((await Build(WithItsTask, made: built.Made)).Refused);
+
+        Assert.Equal(
+            [new ManifestFile("meshes/c.nif", new PackageEntry.Held()), new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep())],
+            ManifestWritten().Require().Files);
+        Assert.Equal([("meshes/c.nif", "c"), ("textures/a.dds", "optimised")], FilesIn(ModFolder));
+        var status = Status();
+        Assert.Equal((0, 0, 0), (status.Differing.Count, status.NamedByNoLine.Count, status.Gone.Count));
     }
 
     [PosixFact]
@@ -332,11 +365,24 @@ public sealed class BuildModHandlerTests : IDisposable
         return Assert.Single(result.Applied);
     }
 
-    private async Task<BuildResult> Build(InstanceToBuild instance, bool isSubmodule = false)
+    private async Task<BuildResult> Build(InstanceToBuild instance, bool isSubmodule = false, IReadOnlyList<string>? made = null)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
         return (await TestEditService.BuildModHandler(_holder).BuildAsync(
-            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule)], instance)).Value();
+            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made)], instance)).Value();
+    }
+
+    private const string WithAStep =
+        "{\"output\": \"Mod\", \"steps\": [{\"task\": \"Optimise textures\", \"args\": [\"textures\"]}], "
+        + "\"tools\": [{\"task\": \"Optimise textures\", \"page\": \"https://example.com/optimiser\"}], "
+        + "\"files\": [{\"path\": \"textures/a.dds\", \"madeByStep\": true}]}";
+
+    private InstanceToBuild WithItsTask => _noArchives with { Tasks = new HashSet<string>(StringComparer.Ordinal) { "Optimise textures" } };
+
+    private void WriteSourceText(string manifest, params (string Path, string Text)[] assets)
+    {
+        Write(SourceFolder, $"{ModName}.manifest.json", Encoding.UTF8.GetBytes(manifest));
+        foreach (var (path, text) in assets) WriteAsset(path, Encoding.UTF8.GetBytes(text));
     }
 
     private void WriteSource(string configuration, params (string Path, string Text)[] assets)

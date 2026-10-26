@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
@@ -42,5 +43,6 @@ public sealed class BuildModHandler
         [.. built.Compiled.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
         [.. built.Refused.Select(refused => new CompileRefused(refused.Item, refused.Refusal, refused.Message))],
         [.. built.ArchivesRefused.Select(refused => new ArchiveRefused(refused.Item, refused.Refusal, refused.Message))],
-        built.Overwritten, built.Failure, built.Uncommitted, built.Unpushed);
+        built.Overwritten, built.Failure, built.Uncommitted, built.Unpushed, built.Steps,
+        built.Steps.Count == 0 ? [] : [.. built.Manifest?.Files.Where(line => line.Entry is not PackageEntry.MadeByStep).Select(line => line.Path) ?? []]);
 }

@@ -107,6 +107,29 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     private static IEnumerable<string?> Paths(JsonElement mod, string list) =>
         [.. mod.GetProperty(list).EnumerateArray().Select(path => path.GetString()).Order(StringComparer.Ordinal)];
 
+    [Theory]
+    [InlineData(true, "applied")]
+    [InlineData(false, "refused")]
+    public async Task AModWhoseManifestHoldsAStep_LandsNamingItWhenTheRequestNamesItsTask_AndIsSkippedWhenItDoesNot(bool namesTheTask, string answered)
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+        var manifestPath = Path.Combine(ModFolder, $"{Mod}.manifest.json");
+        var manifest = JsonNode.Parse(File.ReadAllText(manifestPath)).Require().AsObject();
+        manifest["steps"] = new JsonArray(new JsonObject { ["task"] = "Zip" });
+        manifest["tools"] = new JsonArray(new JsonObject { ["task"] = "Zip", ["page"] = "https://example.com/zip" });
+        File.WriteAllText(manifestPath, manifest.ToJsonString());
+        var request = Request("restore-from-manifest", "Mod.zip");
+        request["tasks"] = namesTheTask ? new JsonArray("Zip") : new JsonArray();
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var mod = Assert.Single(body.GetProperty(answered).EnumerateArray());
+        if (namesTheTask) Assert.Equal("Zip", Assert.Single(mod.GetProperty("steps").EnumerateArray()).GetProperty("task").GetString());
+        else Assert.Equal("NoTaskForTool", mod.GetProperty("refusal").GetString());
+    }
+
     [Fact]
     public async Task AModJustUpdated_RestoreDestroysNothing_AndRestoringItOpensNoFileTheUpdateRead_AndWritesNoFile()
     {

@@ -234,22 +234,36 @@ public sealed class RestoreASourceModTests : IDisposable
             (unfinished.Refusal, unfinished.Message));
     }
 
+    [Fact]
+    public async Task ASubmoduleWhoseManifestHoldsAStep_IsBuilt_AnsweringItsStepsToRun_AndItsManifestStaysAsItsCommitHoldsIt()
+    {
+        var stepped = Commit("{\"output\": \"Mod\", \"steps\": [{\"task\": \"Zip\"}], \"tools\": [{\"task\": \"Zip\", \"page\": \"https://example.com/zip\"}]}", "stepped");
+
+        var restored = Assert.Single((await Restore(stepped, tasks: new HashSet<string>(StringComparer.Ordinal) { "Zip" })).Applied);
+
+        Assert.Equal("stepped", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif")));
+        Assert.Equal(["Zip"], restored.Steps.Select(step => step.Task));
+        Assert.Empty(Git(SourceFolder, "status", "--porcelain"));
+    }
+
     private string CommitAtHead(string pin)
     {
         _submodule.Pin(pin);
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value().Commit;
     }
 
-    private Task<RestoreFromManifestResult> Restore(string? pin, string? branch = null, ISourceAdapter? source = null) =>
-        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source);
+    private Task<RestoreFromManifestResult> Restore(string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null) =>
+        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks);
 
     private Task<RestoreFromManifestResult> Restore(
-        string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null)
+        string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null,
+        IReadOnlySet<string>? tasks = null)
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
             [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder)],
-            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null), "restore", cancel);
+            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null) { Tasks = tasks ?? new HashSet<string>() },
+            "restore", cancel);
     }
 
     private string Commit(string manifest, string mesh)

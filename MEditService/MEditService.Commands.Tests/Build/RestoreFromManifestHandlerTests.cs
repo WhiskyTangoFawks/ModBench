@@ -225,23 +225,20 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal("Other", Assert.Single(result.Applied).Mod);
     }
 
-    public static TheoryData<Func<InstallationFile, ModToRestore>, RestoreRefusal, string> StepsAndLacks => new()
+    private const string NoTask = "this machine has no task for its tool 'Optimise textures' (https://example.com/optimiser)";
+
+    public static TheoryData<Func<InstallationFile, ModToRestore>, RestoreRefusal, string> ToolsAndLacks => new()
     {
-        { file => ModFrom(Mod, file), RestoreRefusal.StepNotRun, "its step 'Optimise textures' runs a VS Code task, which restore cannot run" },
-        { _ => ModFrom(Mod), RestoreRefusal.NotFound, "installation file 'Mod.zip' is missing" },
+        { file => ModFrom(Mod, file), RestoreRefusal.NoTaskForTool, NoTask },
+        { _ => ModFrom(Mod), RestoreRefusal.NotFound, $"installation file 'Mod.zip' is missing; {NoTask}" },
     };
 
     [Theory]
-    [MemberData(nameof(StepsAndLacks))]
-    public async Task AModWhoseManifestHoldsAStep_IsSkippedNamingIt_AfterWhatItLacks_WritesNothing_AndTheOthersLand(
+    [MemberData(nameof(ToolsAndLacks))]
+    public async Task AModWhoseToolThisMachineHasNoTaskFor_IsSkippedNamingTheToolAndItsPage_WithWhatElseItLacks_WritesNothing_AndTheOthersLand(
         Func<InstallationFile, ModToRestore> handed, RestoreRefusal refusal, string why)
     {
-        var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"), ("a.dds", "a"));
-        _folders.WithFile(Mod, "a.nif", "edited");
-        _folders.Manifests[Mod] = new Manifest(PackageOf(downloadedFile), [Line("a.nif", new PackageEntry.Held()), Line("a.dds", new PackageEntry.MadeByStep())])
-        {
-            Steps = [new ManifestStep("Optimise textures", ["a.dds"])],
-        };
+        var downloadedFile = Stepped();
 
         var result = await Restore(handed(downloadedFile), AnotherModThatLands());
 
@@ -249,6 +246,32 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal((refusal, $"was skipped: {why}."), (skipped.Refusal, skipped.Message));
         Assert.Empty(WrittenIn(Mod));
         Assert.Equal("Other", Assert.Single(result.Applied).Mod);
+    }
+
+    [Fact]
+    public async Task AModWhoseToolsThisMachineHasTasksFor_IsRestored_AnsweringItsStepsToRun_AndTheFileAStepMadeIsNamedByItsLine()
+    {
+        var downloadedFile = Stepped();
+        _folders.WithFile(Mod, "a.dds", "made by the step's last run");
+
+        var result = await RestoreIn(Instance() with { Tasks = new HashSet<string>(StringComparer.Ordinal) { "Optimise textures" } }, ModFrom(Mod, downloadedFile));
+
+        var restored = Assert.Single(result.Applied);
+        Assert.Equal("a", WrittenText(Mod, "a.nif"));
+        Assert.Equal([("Optimise textures", "a.dds")], restored.Steps.Select(step => (step.Task, string.Join('|', step.Args))));
+        Assert.Empty(restored.NamedByNoLine);
+    }
+
+    private InstallationFile Stepped()
+    {
+        var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"), ("a.dds", "a"));
+        _folders.WithFile(Mod, "a.nif", "edited");
+        _folders.Manifests[Mod] = new Manifest(PackageOf(downloadedFile), [Line("a.nif", new PackageEntry.Held()), Line("a.dds", new PackageEntry.MadeByStep())])
+        {
+            Steps = [new ManifestStep("Optimise textures", ["a.dds"])],
+            Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser")],
+        };
+        return downloadedFile;
     }
 
     [Fact]
