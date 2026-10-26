@@ -1542,6 +1542,7 @@ export interface components {
             mod: string;
             manifestWritten: boolean;
             notInPackage: string[];
+            otherBytes: string[];
             statCacheNotWritten?: string | null;
         };
         ModlistProgress: {

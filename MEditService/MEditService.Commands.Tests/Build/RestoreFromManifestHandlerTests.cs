@@ -198,6 +198,10 @@ public sealed class RestoreFromManifestHandlerTests
             RestoreRefusal.Lacking, "its package does not hold 'mine.txt'"
         },
         {
+            "other bytes in the package", [Line("mine.txt", new PackageEntry.OtherBytes())], file => ModFrom(Mod, file),
+            RestoreRefusal.Lacking, "its package holds 'mine.txt' with other bytes"
+        },
+        {
             "entry gone", [Line("gone.nif", new PackageEntry.Held())], file => ModFrom(Mod, file),
             RestoreRefusal.Lacking, "installation file 'Mod.zip' holds no 'gone.nif'"
         },

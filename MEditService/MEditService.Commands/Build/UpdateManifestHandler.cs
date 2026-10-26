@@ -76,9 +76,11 @@ public sealed class UpdateManifestHandler
         var statCacheNotWritten = _repository.KeepInStatCache(
             read, manifest, read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
         return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(
-            mod.Name, written, [.. manifest.Files.Where(file => file.Entry is PackageEntry.NotHeld).Select(file => file.Path).Order(StringComparer.Ordinal)],
-            statCacheNotWritten));
+            mod.Name, written, PathsWhere<PackageEntry.NotHeld>(manifest), PathsWhere<PackageEntry.OtherBytes>(manifest), statCacheNotWritten));
     }
+
+    private static string[] PathsWhere<TEntry>(Manifest manifest) where TEntry : PackageEntry =>
+        [.. manifest.Files.Where(file => file.Entry is TEntry).Select(file => file.Path).Order(StringComparer.Ordinal)];
 
     private bool NamesTheGameFolder(ModToUpdate mod)
     {
@@ -107,6 +109,6 @@ public sealed class UpdateManifestHandler
             return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
         }
-        return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(mod.Name, ManifestWritten: false, status.NotInPackage, status.StatCacheNotWritten));
+        return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(mod.Name, ManifestWritten: false, status.NotInPackage, [], status.StatCacheNotWritten));
     }
 }

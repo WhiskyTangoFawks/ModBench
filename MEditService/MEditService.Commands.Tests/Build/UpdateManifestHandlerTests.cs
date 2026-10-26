@@ -167,6 +167,18 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AFileThePackageHoldsAtItsPathWithOtherBytes_IsRecordedAsSuch_AndReportedApartFromOneNothingHolds()
+    {
+        WithFiles([("meshes/a.nif", "edited"), ("z.txt", "added")]);
+
+        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Base.zip", [("Meshes/A.nif", "original")])));
+
+        Assert.IsType<PackageEntry.OtherBytes>(FileOf(Mod, "meshes/a.nif").Entry);
+        Assert.Equal(["meshes/a.nif"], updated.OtherBytes);
+        Assert.Equal(["z.txt"], updated.NotInPackage);
+    }
+
+    [Fact]
     public async Task AModWhoseStatCacheCannotBeWritten_Lands_NamingWhy()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
@@ -180,7 +192,6 @@ public sealed class UpdateManifestHandlerTests
 
     public static TheoryData<(string Path, string Text)[], (string Path, string Hash)[], string> FilesNothingHolds() => new()
     {
-        { [("meshes/a.nif", "edited")], [("Meshes/A.nif", "original")], "meshes/a.nif" },
         { [("a.txt", "hellO"), ("b.txt", "hello")], [("other/a.txt", "hello"), ("b.txt", "hello")], "a.txt" },
     };
 

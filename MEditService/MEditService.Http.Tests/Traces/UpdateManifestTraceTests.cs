@@ -87,13 +87,14 @@ public sealed class UpdateManifestTraceTests : HostedTests
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var updated = Assert.Single(body.GetProperty("applied").EnumerateArray());
         Assert.Equal((Mod, true), (updated.GetProperty("mod").GetString(), updated.GetProperty("manifestWritten").GetBoolean()));
-        Assert.Equal(["edited.txt"], updated.GetProperty("notInPackage").EnumerateArray().Select(path => path.GetString()));
+        Assert.Empty(updated.GetProperty("notInPackage").EnumerateArray());
+        Assert.Equal(["edited.txt"], updated.GetProperty("otherBytes").EnumerateArray().Select(path => path.GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             "{\n"
             + $"\"package\": {{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{DownloadedMod.HashOfTheZip}\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"}},\n"
             + "\"files\": [\n"
-            + "{\"path\":\"edited.txt\",\"inPackage\":false},\n"
+            + "{\"path\":\"edited.txt\",\"otherBytes\":true},\n"
             + "{\"path\":\"kept.txt\"}\n"
             + "]\n"
             + "}\n",

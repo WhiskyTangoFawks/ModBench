@@ -109,16 +109,32 @@ internal static class ManifestText
     {
         try
         {
-            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage");
+            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage", "otherBytes");
             var path = Text(line.GetProperty("path"));
-            if (line.TryGetProperty("inPackage", out var held) && !held.GetBoolean()) return new ManifestFile(path, new PackageEntry.NotHeld());
-            return new ManifestFile(path, line.TryGetProperty("packagePath", out var packagePath) ? new PackageEntry.HeldAt(Text(packagePath)) : new PackageEntry.Held());
+            var notHeld = FlagOf(index, line, "inPackage", written: false);
+            var otherBytes = FlagOf(index, line, "otherBytes", written: true);
+            var movedTo = line.TryGetProperty("packagePath", out var packagePath) ? Text(packagePath) : null;
+            if (notHeld && otherBytes) throw Unreadable(index, "it says both that its package does not hold the file and that it holds it with other bytes");
+            if ((notHeld || otherBytes) && movedTo is not null) throw Unreadable(index, "it names a path in its package for a file its package does not hold with its bytes");
+            if (notHeld) return new ManifestFile(path, new PackageEntry.NotHeld());
+            if (otherBytes) return new ManifestFile(path, new PackageEntry.OtherBytes());
+            return new ManifestFile(path, movedTo is null ? new PackageEntry.Held() : new PackageEntry.HeldAt(movedTo));
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
         {
             throw new InvalidDataException($"its manifest cannot be read at its file {index + 1}", e);
         }
     }
+
+    // A flag is written only as its one value, and read only as that.
+    private static bool FlagOf(int index, JsonElement line, string key, bool written)
+    {
+        if (!line.TryGetProperty(key, out var flag)) return false;
+        if (flag.GetBoolean() != written) throw Unreadable(index, $"its {key} is {(written ? "false" : "true")}");
+        return true;
+    }
+
+    private static InvalidDataException Unreadable(int index, string why) => new($"its manifest cannot be read at its file {index + 1}: {why}");
 
     private static string Value(Action<Utf8JsonWriter> write)
     {
@@ -161,6 +177,9 @@ internal static class ManifestText
                 break;
             case PackageEntry.NotHeld:
                 writer.WriteBoolean("inPackage", false);
+                break;
+            case PackageEntry.OtherBytes:
+                writer.WriteBoolean("otherBytes", true);
                 break;
         }
         writer.WriteEndObject();

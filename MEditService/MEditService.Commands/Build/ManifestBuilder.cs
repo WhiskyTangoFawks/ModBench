@@ -41,7 +41,9 @@ internal sealed class ManifestBuilder
     private ManifestFile EntryOf(HashedFile file)
     {
         var holding = _byHash[file.Hash].ToList();
-        if (_package is null || holding.Count == 0) return new ManifestFile(file.Path, new PackageEntry.NotHeld());
+        if (_package is null) return new ManifestFile(file.Path, new PackageEntry.NotHeld());
+        if (holding.Count == 0)
+            return new ManifestFile(file.Path, _byPath.ContainsKey(file.Path) ? new PackageEntry.OtherBytes() : new PackageEntry.NotHeld());
         var entry = _byPath.TryGetValue(file.Path, out var samePath) && samePath.Hash == file.Hash ? samePath : holding[0];
         return ManifestFile.At(file.Path, new FileBytes.InInstallationFile(_package.Name, entry.Path));
     }
