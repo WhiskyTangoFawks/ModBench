@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type BuildOutcome } from '../client';
+import { isRefused, type BuildOutcome, type BuildRefusalKind } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -26,7 +26,7 @@ export interface BuildDeps {
   pluginsView: string;
 }
 
-type Built = GestureResult<BuildOutcome['landed'][number], string> & Pick<BuildOutcome, 'noTaskForATool'>;
+type Built = GestureResult<BuildOutcome['landed'][number], string>;
 
 /** commands.md, `build`: the mods of Mods rows, plugin rows, a column header, the palette's
  *  selection, or the palette's pick of every source mod, built from the working tree. */
@@ -64,7 +64,6 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: Mo
     }
     return {
       applied: true,
-      ...(outcome.noTaskForATool ? { noTaskForATool: true } : {}),
       outcome: { landed: outcome.landed, refused: [...refusedRows, ...outcome.refused] },
       partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome), ...refusedInMods(outcome)],
     };
@@ -73,13 +72,16 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: Mo
 
 function reportBuildResult(reporter: Reporter, result: Built): void {
   if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
-  reportBuilt(reporter, result.outcome, result.noTaskForATool ? OPEN_USER_TASKS : undefined);
+  const lacksATask = result.outcome.refused.some((refused) => 'refusal' in refused && refused.refusal === NO_TASK);
+  reportBuilt(reporter, result.outcome, lacksATask ? OPEN_USER_TASKS : undefined);
   reportPartial(reporter, result.partial);
 }
 
 function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
+
+const NO_TASK: BuildRefusalKind = 'NoTaskForTool';
 
 // mods.md, Build, story 14: a tool this machine has no task for is added as a user task.
 const OPEN_USER_TASKS: ReportAction = {

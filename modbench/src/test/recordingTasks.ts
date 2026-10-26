@@ -1,17 +1,20 @@
-import type { Tasks } from '../ports/tasks';
+import type { ManifestStep } from '../client';
+import type { StepTasks } from '../sourceCommands/steps';
 
-interface TaskRun { readonly label: string; readonly args: readonly string[]; readonly folder: string }
+interface StepsRun { readonly steps: readonly ManifestStep[]; readonly folder: string }
 
-/** The tasks port, second adapter: this machine has the tasks labelled, each run exits with the code or reason given
- *  for its label, 0 by default, and each run is recorded in order. */
-export function recordingTasks(labels: readonly string[] = [], ends: Readonly<Record<string, number | string>> = {}): Tasks & { readonly runs: TaskRun[] } {
-  const runs: TaskRun[] = [];
+/** A machine whose user tasks are those labelled: each folder's steps are recorded, and fail as `failures` says by
+ *  folder, or exit with code 0. */
+export function recordingTasks(
+  labels: readonly string[] = [], failures: Readonly<Record<string, string>> = {},
+): StepTasks & { readonly runs: StepsRun[] } {
+  const runs: StepsRun[] = [];
   return {
     runs,
     labels: () => Promise.resolve(labels),
-    run: (label, args, folder) => {
-      runs.push({ label, args, folder });
-      return Promise.resolve(ends[label] ?? 0);
+    whyStepsFailed: (steps, folder) => {
+      runs.push({ steps, folder });
+      return Promise.resolve(failures[folder]);
     },
   };
 }

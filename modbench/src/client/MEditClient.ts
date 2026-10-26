@@ -183,12 +183,14 @@ type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRef
   unpushed?: true;
 };
 
+/** Why mEdit refused a mod's build (ADR-0019). */
+export type BuildRefusalKind = components['schemas']['BuildRefusal'];
+
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
- *  refused as a mod with its reason, and whether a mod was refused for a tool this machine has no task for. */
+ *  refused as a mod with its reason, and mEdit's kind of refusal when mEdit refused it. */
 export interface BuildOutcome {
   landed: readonly BuiltMod[];
-  refused: readonly ItemRefusal<string>[];
-  noTaskForATool?: true;
+  refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind })[];
 }
 
 /** A step of a manifest: the VS Code task it runs, by label, and the arguments it hands the task. */

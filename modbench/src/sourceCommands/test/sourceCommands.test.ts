@@ -96,32 +96,36 @@ describe('sourceCommands build, of a mod with steps', () => {
     return client;
   }
 
-  it('runs each step in order in the mod\'s folder, then hands mEdit the files its build made, so mEdit writes its manifest last', async () => {
+  it('runs the mod\'s steps in its folder, then hands mEdit the files its build made, so mEdit writes its manifest last', async () => {
     const client = mEdit();
     const tasks = recordingTasks(['Optimise textures', 'Archive']);
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks }).build(['ModA']);
 
-    expect(tasks.runs).toEqual([
-      { label: 'Optimise textures', args: ['textures'], folder: '/mods/ModA' }, { label: 'Archive', args: [], folder: '/mods/ModA' },
-    ]);
+    expect(tasks.runs).toEqual([{ steps: STEPS, folder: '/mods/ModA' }]);
     expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }], [{ name: 'ModA', made: ['a.nif'] }]]);
     expect(outcome).toEqual({ landed: [builtWithSteps], refused: [] });
   });
 
-  it.each<[string, number | string, string]>([
-    ['exits with another code', 2, 'The build stopped as its step \'Optimise textures\' exited with code 2, so its manifest was not written.'],
-    ['does not run', 'this machine has no task \'Optimise textures\'',
-      'The build stopped as its step \'Optimise textures\' did not run: this machine has no task \'Optimise textures\', so its manifest was not written.'],
-  ])('names a step that %s, runs no step after it, and has no manifest written', async (_case, end, failure) => {
-    const client = mEdit();
-    const tasks = recordingTasks(['Optimise textures', 'Archive'], { 'Optimise textures': end });
+  it('names a mod whose step failed, has no manifest written for it, and has the next mod\'s written', async () => {
+    const client = new InMemoryMEditClient();
+    const written: string[][] = [];
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
+      if (mods.some((mod) => mod.made)) written.push(mods.map((mod) => mod.name));
+      return Promise.resolve({ landed: mods.map((mod) => ({ ...builtWithSteps, mod: mod.name, ...(mod.made ? { steps: [], made: [] } : {}) })), refused: [] });
+    });
+    const tasks = recordingTasks([], { '/mods/ModA': 'step \'Optimise textures\' exited with code 2' });
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks }).build(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks }).build(['ModA', 'ModB']);
 
-    expect(tasks.runs.map((run) => run.label)).toEqual(['Optimise textures']);
-    expect(client.calls).toHaveLength(1);
-    expect(outcome).toEqual({ landed: [{ ...builtWithSteps, failure }], refused: [] });
+    expect(written).toEqual([['ModB']]);
+    expect(outcome).toEqual({
+      landed: [
+        { ...builtWithSteps, failure: 'The build stopped as its step \'Optimise textures\' exited with code 2, so its manifest was not written.' },
+        { ...builtWithSteps, mod: 'ModB' },
+      ],
+      refused: [],
+    });
   });
 
   it('names a mod whose manifest mEdit could not write once its steps ran', async () => {

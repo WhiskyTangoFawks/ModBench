@@ -114,7 +114,7 @@ describe('modbench.mod.build', () => {
 
   it('offers Open User Tasks with a mod refused for a tool this machine has no task for, and opens them when clicked', async () => {
     const { handler, reporter } = registered({
-      landed: [], refused: [{ item: 'ModA', reason: 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).' }], noTaskForATool: true,
+      landed: [], refused: [{ item: 'ModA', reason: 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).', refusal: 'NoTaskForTool' }],
     });
 
     await handler(modRow('ModA'));

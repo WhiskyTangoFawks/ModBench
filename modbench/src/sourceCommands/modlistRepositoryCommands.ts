@@ -9,14 +9,13 @@ import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { HostGit } from '../ports/repository';
 import type { MoveToTrash } from '../ports/trash';
-import type { Tasks } from '../ports/tasks';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
-import { whyStepsFailed } from './steps';
+import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter,
   'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
@@ -30,7 +29,7 @@ interface ModlistRepositoryCommandsDeps {
   instanceRoot: string;
   hostGit: HostGit<unknown>;
   trash: MoveToTrash;
-  tasks: Tasks;
+  tasks: StepTasks;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -267,7 +266,7 @@ async function restoreFromManifest(
   const mods = everyManifest ? withEverySourceMod(asked, sourceMods) : asked;
   const restored = await restoreFolders(deps, mods, sourceMods, options);
   const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(restored.landed, sourceMods, cloned));
-  const stepped = await withStepsRun(deps, trashed.finished, options.signal);
+  const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
   const finished = stepped.finished;
   const unfinished = [...trashed.unfinished, ...stepped.unfinished];
   if (restored.applied) {
@@ -323,7 +322,7 @@ async function withFilesNoLineNamesTrashed(
 }
 
 // modlist-repository.md, The manifest, story 17: restore runs a mod's steps once its folder holds what its packages give.
-async function withStepsRun(
+async function withRestoredStepsRun(
   { adapter, tasks }: ModlistRepositoryCommandsDeps, landed: Restored, signal: AbortSignal | undefined,
 ): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
   const finished: Restored[number][] = [];
@@ -337,17 +336,17 @@ async function withStepsRun(
 }
 
 async function whyNotStepped(
-  adapter: Adapter, tasks: Tasks, { mod, steps }: Restored[number], signal: AbortSignal | undefined,
+  adapter: Adapter, tasks: StepTasks, { mod, steps }: Restored[number], signal: AbortSignal | undefined,
 ): Promise<string | undefined> {
   if (steps.length === 0) return undefined;
   if (signal?.aborted) return 'the restore was cancelled before its steps ran';
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return 'its name gives it no folder for its steps to run in';
-  const failed = await whyStepsFailed(tasks, steps, folder);
+  const failed = await tasks.whyStepsFailed(steps, folder);
   return failed === undefined ? undefined : `its ${failed}`;
 }
 
-const heldByAdapter =({ version, installationFile }: ManifestMetadata): ModMetadata =>
+const heldByAdapter = ({ version, installationFile }: ManifestMetadata): ModMetadata =>
   ({ version: version ?? undefined, installationFile: installationFile ? { name: installationFile.name, page: installationFile.page ?? undefined } : undefined });
 
 async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: ManifestMetadata): Promise<string | undefined> {

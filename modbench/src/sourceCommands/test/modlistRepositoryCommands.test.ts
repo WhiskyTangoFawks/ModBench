@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Tasks } from '../../ports/tasks';
+import type { StepTasks } from '../steps';
 import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile } from '../../client';
@@ -30,7 +30,7 @@ const loggedOutOfNexus = (): Nexus => nexusAnswering(answeringFrom({})).nexus;
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
-interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: Tasks }
+interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks }
 
 function commandsOver(
   answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
@@ -847,11 +847,11 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     ]);
   });
 
-  it('runs each step of a mod that landed, in order, in its folder, once its files no line names went to the trash', async () => {
+  it('runs the steps of a mod that landed in its folder, once its files no line names went to the trash', async () => {
     const tasks = recordingTasks(['Zip', 'Archive']);
     const order: string[] = [];
     const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), {
-      tasks: { ...tasks, run: (...args) => { order.push(`ran ${args[0]}`); return tasks.run(...args); } },
+      tasks: { ...tasks, whyStepsFailed: (steps, folder) => { order.push('ran its steps'); return tasks.whyStepsFailed(steps, folder); } },
       adapterOver: { trashModFile: (_mod, path) => { order.push(`trashed ${path}`); return Promise.resolve(); } },
     });
     const steps = [{ task: 'Zip', args: ['a'] }, { task: 'Archive', args: [] }];
@@ -859,23 +859,20 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA']);
 
-    expect(tasks.runs).toEqual([{ label: 'Zip', args: ['a'], folder: '/mods/ModA' }, { label: 'Archive', args: [], folder: '/mods/ModA' }]);
-    expect(order).toEqual(['trashed mine.txt', 'ran Zip', 'ran Archive']);
+    expect(tasks.runs).toEqual([{ steps, folder: '/mods/ModA' }]);
+    expect(order).toEqual(['trashed mine.txt', 'ran its steps']);
     expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModA' }], refused: [] });
   });
 
-  it('answers a mod whose step exits with another code as not finished, naming the step, and runs no step after it', async () => {
-    const tasks = recordingTasks(['Zip', 'Archive'], { Zip: 1 });
+  it('answers a mod whose step failed as not finished, naming the step', async () => {
+    const tasks = recordingTasks(['Zip'], { '/mods/ModA': "step 'Zip' exited with code 1" });
     const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), { tasks });
-    client.setCommandResult('restoreFromManifest', {
-      landed: [restoredMod({ mod: 'ModA', steps: [{ task: 'Zip', args: [] }, { task: 'Archive', args: [] }] })], refused: [], notFound: [],
-    });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', steps: [{ task: 'Zip', args: [] }] })], refused: [], notFound: [] });
 
     expect(await commands.restoreFromManifest(['ModA'])).toEqual({
       applied: true, landed: [],
       refused: [{ item: 'ModA', reason: "was not finished: its step 'Zip' exited with code 1. Restoring it again finishes it." }],
     });
-    expect(tasks.runs.map(({ label }) => label)).toEqual(['Zip']);
   });
 
   it('answers a mod with a file the trash refused as not finished, naming the file and why', async () => {

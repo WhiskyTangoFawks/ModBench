@@ -74,13 +74,13 @@ describe('the outcome of a gesture over a selection', () => {
     ['runs its action when the button is clicked', 'Open User Tasks', 1],
     ['runs nothing when the toast is dismissed', undefined, 0],
   ])('offers its action as the toast\'s button, and %s', async (_case, clicked, runs) => {
-    showErrorMessage.mockResolvedValue(clicked);
+    const shown = Promise.resolve(clicked);
+    showErrorMessage.mockReturnValue(shown);
     const run = vi.fn();
     const outcome: SelectionOutcome<string> = { landed: [], refused: [{ item: 'Mod', reason: 'no task' }] };
 
     const { toasts } = heard('build', (r) => { r.selectionOutcome('Could not build 1 of 1 mods.', outcome, (mod) => mod, { title: 'Open User Tasks', run }); });
-    await vi.waitFor(() => { expect(showErrorMessage).toHaveBeenCalled(); });
-    await Promise.resolve();
+    await shown;
 
     expect(toasts.error).toEqual(['Could not build 1 of 1 mods. — "Mod" (no task)', 'Open User Tasks']);
     expect(run).toHaveBeenCalledTimes(runs);
