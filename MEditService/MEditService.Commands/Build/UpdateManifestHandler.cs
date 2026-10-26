@@ -109,6 +109,6 @@ public sealed class UpdateManifestHandler
             return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
         }
-        return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(mod.Name, ManifestWritten: false, status.NotInPackage, [], status.StatCacheNotWritten));
+        return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(mod.Name, ManifestWritten: false, status.NotInPackage, status.OtherBytes, status.StatCacheNotWritten));
     }
 }

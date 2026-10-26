@@ -302,7 +302,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root, "mod"));
         Assert.Empty(read.Files);
         Assert.Null(read.Package);
-        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], []), Status());
+        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], [], []), Status());
     }
 
     [Fact]
@@ -313,7 +313,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         var status = Status();
 
-        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], ["a.nif"], []), status);
+        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], ["a.nif"], [], []), status);
     }
 
     [Theory]
@@ -367,6 +367,22 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(status.Differing);
     }
 
+    [Fact]
+    public void AFileItsPackageHoldsWithOtherBytes_IsInItsOwnList_NotInThePackageList_AndDoesNotDiffer()
+    {
+        Write("a.nif", "edited");
+        Write("b.nif", "added");
+        _repository.WriteManifest(_root, "mod", new Manifest(
+            new ManifestPackage.InstallationFile("Mod.zip", 7, "#Mod.zip"),
+            [new ManifestFile("a.nif", new PackageEntry.OtherBytes()), new ManifestFile("b.nif", new PackageEntry.NotHeld())]));
+
+        var status = Status();
+
+        Assert.Equal(["b.nif"], status.NotInPackage);
+        Assert.Equal(["a.nif"], status.OtherBytes);
+        Assert.Empty(status.Differing);
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -408,7 +424,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("mine.txt", "mine");
 
-        Assert.Equal(new ModStatus("mod", NoManifest: true, [], [], [], []), Status());
+        Assert.Equal(new ModStatus("mod", NoManifest: true, [], [], [], [], []), Status());
     }
 
     [Fact]
@@ -421,7 +437,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.True(status.Unreadable?.Manifest);
         Assert.Contains("line 1", status.Unreadable?.Why, StringComparison.Ordinal);
-        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], []), status with { Unreadable = null });
+        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], [], []), status with { Unreadable = null });
     }
 
     [Fact]
