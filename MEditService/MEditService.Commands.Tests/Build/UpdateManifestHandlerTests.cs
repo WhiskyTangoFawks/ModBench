@@ -196,6 +196,25 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AManifestsOutputExclusionsAndArchives_AreKeptAsWritten()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+        _folders.Manifests[Mod] = new Manifest(null, [])
+        {
+            Output = "Stock Game",
+            Exclude = ["docs/readme.txt"],
+            Archives = [new ManifestArchive("Mod - Main.ba2", ["meshes/a.nif"])],
+        };
+
+        await Landed(ModFrom("Mod"));
+
+        var kept = _folders.Manifests[Mod];
+        Assert.Equal("Stock Game", kept.Output);
+        Assert.Equal(["docs/readme.txt"], kept.Exclude);
+        Assert.Equal([("Mod - Main.ba2", "meshes/a.nif")], kept.Archives.Select(archive => (archive.Path, string.Join('|', archive.Files))));
+    }
+
+    [Fact]
     public async Task AModWhoseManifestCannotBeRead_IsRefusedNamingWhere_ItsManifestLeftForMe_AndTheOthersLand()
     {
         _folders.WithFile(Mod, "a.txt", "hello").WithFile("mods/Fine", "a.txt", "hello");
