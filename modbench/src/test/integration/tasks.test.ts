@@ -9,10 +9,11 @@ import { hostTasks } from '../../tasks';
 
 const TEST_PORT = present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run');
 
-const RUNS: readonly { label: string; args: string[]; ran: string }[] = [
-  { label: 'Process step', args: ['textures', '3'], ran: 'textures 3' },
-  { label: 'Shell step', args: ['textures', '3'], ran: 'textures 3' },
-  { label: 'Shell line step', args: [], ran: '3' },
+// PowerShell, the shell a Windows task runs in, answers 1 for any native command that exits non-zero.
+const RUNS: readonly { label: string; args: string[]; ran: string; code: number }[] = [
+  { label: 'Process step', args: ['textures', '3'], ran: 'textures 3', code: 3 },
+  { label: 'Shell step', args: ['textures', '1'], ran: 'textures 1', code: 1 },
+  { label: 'Shell line step', args: [], ran: '1', code: 1 },
 ];
 
 describe('a step\'s user task, as .vscode-test.mjs writes it: a script that records its arguments and MEDIT_PORT in its folder and exits with the last', () => {
@@ -34,6 +35,6 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
       return [why, readFileSync(path.join(folder, 'ran.txt'), 'utf8')];
     }));
 
-    assert.deepStrictEqual(ran, RUNS.map(({ label, ran: recorded }) => [`step '${label}' exited with code 3`, `${recorded}\n${TEST_PORT}`]));
+    assert.deepStrictEqual(ran, RUNS.map(({ label, ran: recorded, code }) => [`step '${label}' exited with code ${code}`, `${recorded}\n${TEST_PORT}`]));
   });
 });
