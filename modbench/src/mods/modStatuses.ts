@@ -100,11 +100,14 @@ function stateOf(status: ModStatus): string | undefined {
   return differs(status) ? 'differs' : undefined;
 }
 
+const countedFiles = (files: readonly string[], phrase: string): string | undefined =>
+  files.length > 0 ? `${counted(files.length, 'file', 'files')} its package ${phrase}` : undefined;
+
 /** What a mod row's description says of its status (mods.md, A row, Mod). */
 export function statusDescription(status: ModStatus): string | undefined {
   const state = stateOf(status);
-  const notHeld = status.notInPackage.length > 0 ? `${counted(status.notInPackage.length, 'file', 'files')} its package does not hold` : undefined;
-  const otherBytes = status.otherBytes.length > 0 ? `${counted(status.otherBytes.length, 'file', 'files')} its package holds with other bytes` : undefined;
+  const notHeld = countedFiles(status.notInPackage, 'does not hold');
+  const otherBytes = countedFiles(status.otherBytes, 'holds with other bytes');
   const noHost = status.noHost ? 'its package has no host' : undefined;
   return [state, notHeld, otherBytes, noHost].filter((part) => part !== undefined).join(' · ') || undefined;
 }
