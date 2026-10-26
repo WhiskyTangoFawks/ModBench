@@ -2,12 +2,17 @@ import { describe, it, expect } from 'vitest';
 import type { HostTasks } from '../../ports/tasks';
 import { stepTasks } from '../steps';
 
-interface FakeTask { readonly label: string; readonly user: boolean; readonly kind: 'process' | 'shell' | 'custom'; readonly rebuilt?: Rebuilt }
+interface FakeTask {
+  readonly label: string; readonly user: boolean; readonly kind: 'process' | 'shell' | 'shellLine' | 'custom'; readonly quote?: string; readonly rebuilt?: Rebuilt;
+}
 
-interface Rebuilt { readonly as: 'process' | 'shell'; readonly args: readonly string[]; readonly cwd: string }
+type Rebuilt =
+  | { readonly as: 'process' | 'shell'; readonly args: readonly string[]; readonly cwd: string }
+  | { readonly as: 'shellLine'; readonly words: string; readonly cwd: string };
 
 type ProcessTask = FakeTask & { readonly kind: 'process' };
 type ShellTask = FakeTask & { readonly kind: 'shell' };
+type ShellLineTask = FakeTask & { readonly kind: 'shellLine' };
 
 type End = { readonly exitCode: number | undefined; readonly before?: true } | { readonly refused: string };
 
@@ -20,14 +25,17 @@ function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Rec
     for (const listener of processEnds) listener(run, exitCode);
     for (const listener of ends) listener(run);
   };
-  const tasksHost: HostTasks<FakeTask, ProcessTask, ShellTask, object> = {
+  const tasksHost: HostTasks<FakeTask, ProcessTask, ShellTask, ShellLineTask, object> = {
     fetch: () => Promise.resolve(tasks),
     labelOf: (task) => task.label,
     isUserTask: (task) => task.user,
     isProcessTask: (task): task is ProcessTask => task.kind === 'process',
-    isShellTask: (task): task is ShellTask => task.kind === 'shell',
+    isShellTask: (task): task is ShellTask | ShellLineTask => task.kind === 'shell' || task.kind === 'shellLine',
+    isShellLineTask: (task): task is ShellLineTask => task.kind === 'shellLine',
+    strongQuoteOf: (task) => task.quote,
     withProcessArgs: (task, args, cwd) => ({ ...task, rebuilt: { as: 'process', args, cwd } }),
     withShellArgs: (task, args, cwd) => ({ ...task, rebuilt: { as: 'shell', args, cwd } }),
+    withShellLineArgs: (task, words, cwd) => ({ ...task, rebuilt: { as: 'shellLine', words, cwd } }),
     execute: (task) => {
       executed.push({ label: task.label, rebuilt: task.rebuilt });
       const end = endOf[task.label] ?? { exitCode: 0 };
@@ -43,7 +51,7 @@ function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Rec
   return { tasksHost, executed };
 }
 
-const userTask = (label: string, kind: FakeTask['kind'] = 'process'): FakeTask => ({ label, user: true, kind });
+const userTask = (label: string, kind: FakeTask['kind'] = 'process', quote?: string): FakeTask => ({ label, user: true, kind, ...(quote === undefined ? {} : { quote }) });
 
 describe('stepTasks', () => {
   it('names only the user tasks, never a workspace task', async () => {
@@ -52,14 +60,18 @@ describe('stepTasks', () => {
     expect(await stepTasks(tasksHost).labels()).toEqual(['Optimise']);
   });
 
-  it.each<[FakeTask['kind'] & ('process' | 'shell')]>([['process'], ['shell']])(
-    'runs a %s task in the folder the manifest builds, handing the host the step\'s arguments to follow its own', async (kind) => {
-      const { tasksHost, executed } = hostEndingEachRunAsSaid([userTask('Optimise', kind)]);
+  it.each<[string, FakeTask, Rebuilt]>([
+    ['a process task, its arguments', userTask('Optimise', 'process'), { as: 'process', args: ['textures', 'a b'], cwd: '/mods/Mod' }],
+    ['a shell task, its arguments', userTask('Optimise', 'shell'), { as: 'shell', args: ['textures', 'a b'], cwd: '/mods/Mod' }],
+    ['a command line, its words in the task\'s own quote', userTask('Optimise', 'shellLine', '"'), { as: 'shellLine', words: '"textures" "a b"', cwd: '/mods/Mod' }],
+    ['a command line naming no quote, its words in single quotes', userTask('Optimise', 'shellLine'), { as: 'shellLine', words: "'textures' 'a b'", cwd: '/mods/Mod' }],
+  ])('runs %s, in the folder the manifest builds, handing the host the step\'s arguments to follow its own', async (_case, task, rebuilt) => {
+    const { tasksHost, executed } = hostEndingEachRunAsSaid([task]);
 
-      expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args: ['textures', 'a b'] }], '/mods/Mod')).toBeUndefined();
+    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args: ['textures', 'a b'] }], '/mods/Mod')).toBeUndefined();
 
-      expect(executed).toEqual([{ label: 'Optimise', rebuilt: { as: kind, args: ['textures', 'a b'], cwd: '/mods/Mod' } }]);
-    });
+    expect(executed).toEqual([{ label: 'Optimise', rebuilt }]);
+  });
 
   it.each<[string, readonly FakeTask[], Readonly<Record<string, End>>, string]>([
     ['exits with another code', [userTask('A'), userTask('B')], { A: { exitCode: 2 } }, "step 'A' exited with code 2"],

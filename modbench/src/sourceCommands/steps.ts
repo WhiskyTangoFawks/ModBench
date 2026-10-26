@@ -11,7 +11,7 @@ export interface StepTasks {
   readonly whyStepsFailed: (steps: readonly ManifestStep[], folder: string) => Promise<string | undefined>;
 }
 
-export function stepTasks<Task, P extends Task, S extends Task, Run>(host: HostTasks<Task, P, S, Run>): StepTasks {
+export function stepTasks<Task, P extends Task, C extends Task, L extends Task, Run>(host: HostTasks<Task, P, C, L, Run>): StepTasks {
   const userTasks = async (): Promise<Task[]> => (await host.fetch()).filter((task) => host.isUserTask(task));
   const run = async ({ task, args }: ManifestStep, folder: string): Promise<number | string> => {
     const found = (await userTasks()).find((held) => host.labelOf(held) === task);
@@ -36,16 +36,21 @@ export function stepTasks<Task, P extends Task, S extends Task, Run>(host: HostT
 }
 
 // The task runs in the folder the manifest builds, with the step's arguments after its own.
-function withStepArgs<Task, P extends Task, S extends Task>(
-  host: HostTasks<Task, P, S, unknown>, task: Task, args: readonly string[], folder: string,
+function withStepArgs<Task, P extends Task, C extends Task, L extends Task>(
+  host: HostTasks<Task, P, C, L, unknown>, task: Task, args: readonly string[], folder: string,
 ): Task | undefined {
   if (host.isProcessTask(task)) return host.withProcessArgs(task, args, folder);
-  if (host.isShellTask(task)) return host.withShellArgs(task, args, folder);
-  return undefined;
+  if (!host.isShellTask(task)) return undefined;
+  if (!host.isShellLineTask(task)) return host.withShellArgs(task, args, folder);
+  const quote = host.strongQuoteOf(task) ?? DEFAULT_STRONG_QUOTE;
+  return host.withShellLineArgs(task, args.map((arg) => `${quote}${arg}${quote}`).join(' '), folder);
 }
 
+// VS Code quotes a word in whole with a single quote in bash and PowerShell, its default shells.
+const DEFAULT_STRONG_QUOTE = "'";
+
 // An end can arrive before the host answers which run it started.
-function exitCodeOf<Task, Run>(host: Pick<HostTasks<Task, Task, Task, Run>, 'execute' | 'onProcessEnd' | 'onEnd'>, task: Task): Promise<number | undefined> {
+function exitCodeOf<Task, Run>(host: Pick<HostTasks<Task, Task, Task, Task, Run>, 'execute' | 'onProcessEnd' | 'onEnd'>, task: Task): Promise<number | undefined> {
   return new Promise((resolve, reject) => {
     const started: { run?: Run } = {};
     const exitCodes = new Map<Run, number | undefined>();

@@ -9,7 +9,7 @@ import { hostTasks } from '../../tasks';
 
 const TEST_PORT = present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run');
 
-const USER_TASKS = ['Process step', 'Shell step'];
+const USER_TASKS = ['Process step', 'Shell step', 'Shell line step'];
 
 describe('a step\'s user task, as .vscode-test.mjs writes it: a script that records its arguments and MEDIT_PORT in its folder and exits with the last', () => {
   const tasks = stepTasks(hostTasks);
@@ -19,7 +19,7 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
   it('is among the labels of this machine\'s user tasks, and a workspace task is not', async () => {
     const labels = await tasks.labels();
 
-    assert.deepStrictEqual([...USER_TASKS, 'Workspace step'].map((label) => labels.includes(label)), [true, true, false], `the labels were ${labels.join(', ')}`);
+    assert.deepStrictEqual([...USER_TASKS, 'Workspace step'].map((label) => labels.includes(label)), [true, true, true, false], `the labels were ${labels.join(', ')}`);
   });
 
   it('runs each kind of user task, never the workspace task of its label, in the folder with the step\'s arguments after its own and medit\'s port, and answers its exit code', async () => {
