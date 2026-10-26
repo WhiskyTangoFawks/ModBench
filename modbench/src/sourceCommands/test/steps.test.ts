@@ -3,12 +3,12 @@ import type { HostTasks } from '../../ports/tasks';
 import { stepTasks } from '../steps';
 
 interface FakeTask {
-  readonly label: string; readonly user: boolean; readonly kind: 'process' | 'shell' | 'shellLine' | 'custom'; readonly quote?: string; readonly rebuilt?: Rebuilt;
+  readonly label: string; readonly user: boolean; readonly kind: 'process' | 'shell' | 'shellLine' | 'custom'; readonly rebuilt?: Rebuilt;
 }
 
 type Rebuilt =
   | { readonly as: 'process' | 'shell'; readonly args: readonly string[]; readonly cwd: string }
-  | { readonly as: 'shellLine'; readonly words: string; readonly cwd: string };
+  | { readonly as: 'shellLine'; readonly cwd: string };
 
 type ProcessTask = FakeTask & { readonly kind: 'process' };
 type ShellTask = FakeTask & { readonly kind: 'shell' };
@@ -32,10 +32,9 @@ function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Rec
     isProcessTask: (task): task is ProcessTask => task.kind === 'process',
     isShellTask: (task): task is ShellTask | ShellLineTask => task.kind === 'shell' || task.kind === 'shellLine',
     isShellLineTask: (task): task is ShellLineTask => task.kind === 'shellLine',
-    strongQuoteOf: (task) => task.quote,
     withProcessArgs: (task, args, cwd) => ({ ...task, rebuilt: { as: 'process', args, cwd } }),
     withShellArgs: (task, args, cwd) => ({ ...task, rebuilt: { as: 'shell', args, cwd } }),
-    withShellLineArgs: (task, words, cwd) => ({ ...task, rebuilt: { as: 'shellLine', words, cwd } }),
+    withShellLine: (task, cwd) => ({ ...task, rebuilt: { as: 'shellLine', cwd } }),
     execute: (task) => {
       executed.push({ label: task.label, rebuilt: task.rebuilt });
       const end = endOf[task.label] ?? { exitCode: 0 };
@@ -51,7 +50,7 @@ function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Rec
   return { tasksHost, executed };
 }
 
-const userTask = (label: string, kind: FakeTask['kind'] = 'process', quote?: string): FakeTask => ({ label, user: true, kind, ...(quote === undefined ? {} : { quote }) });
+const userTask = (label: string, kind: FakeTask['kind'] = 'process'): FakeTask => ({ label, user: true, kind });
 
 describe('stepTasks', () => {
   it('names only the user tasks, never a workspace task', async () => {
@@ -60,15 +59,14 @@ describe('stepTasks', () => {
     expect(await stepTasks(tasksHost).labels()).toEqual(['Optimise']);
   });
 
-  it.each<[string, FakeTask, Rebuilt]>([
-    ['a process task, its arguments', userTask('Optimise', 'process'), { as: 'process', args: ['textures', 'a b'], cwd: '/mods/Mod' }],
-    ['a shell task, its arguments', userTask('Optimise', 'shell'), { as: 'shell', args: ['textures', 'a b'], cwd: '/mods/Mod' }],
-    ['a command line, its words in the task\'s own quote', userTask('Optimise', 'shellLine', '"'), { as: 'shellLine', words: '"textures" "a b"', cwd: '/mods/Mod' }],
-    ['a command line naming no quote, its words in single quotes', userTask('Optimise', 'shellLine'), { as: 'shellLine', words: "'textures' 'a b'", cwd: '/mods/Mod' }],
-  ])('runs %s, in the folder the manifest builds, handing the host the step\'s arguments to follow its own', async (_case, task, rebuilt) => {
+  it.each<[string, FakeTask, string[], Rebuilt]>([
+    ['a process task, its arguments after its own', userTask('Optimise', 'process'), ['textures', 'a b'], { as: 'process', args: ['textures', 'a b'], cwd: '/mods/Mod' }],
+    ['a shell task, its arguments after its own', userTask('Optimise', 'shell'), ['textures', 'a b'], { as: 'shell', args: ['textures', 'a b'], cwd: '/mods/Mod' }],
+    ['a command line, for a step with no arguments', userTask('Optimise', 'shellLine'), [], { as: 'shellLine', cwd: '/mods/Mod' }],
+  ])('runs %s, in the folder the manifest builds', async (_case, task, args, rebuilt) => {
     const { tasksHost, executed } = hostEndingEachRunAsSaid([task]);
 
-    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args: ['textures', 'a b'] }], '/mods/Mod')).toBeUndefined();
+    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args }], '/mods/Mod')).toBeUndefined();
 
     expect(executed).toEqual([{ label: 'Optimise', rebuilt }]);
   });
@@ -85,6 +83,19 @@ describe('stepTasks', () => {
     expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'A', args: [] }, { task: 'B', args: [] }], '/mods/Mod')).toBe(why);
 
     expect(executed.map(({ label }) => label)).not.toContain('B');
+  });
+
+  it.each<[string, string[]]>([
+    ['a plain word', ['textures']],
+    ['a word holding a quote twice', ["Bob's", "Al's"]],
+    ['a word shaped to run as shell code', ["x'; rm -rf ~; '"]],
+  ])('refuses a step with arguments on a command line, %s included, running nothing, as no quoting can be known for it', async (_case, args) => {
+    const { tasksHost, executed } = hostEndingEachRunAsSaid([userTask('A', 'shellLine')]);
+
+    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'A', args }], '/mods/Mod'))
+      .toBe('step \'A\' did not run: its task \'A\' is one command line, which takes no arguments: give the task an "args" list, which VS Code quotes');
+
+    expect(executed).toEqual([]);
   });
 
   it('reads an exit code that arrives before the host answers which run it started', async () => {

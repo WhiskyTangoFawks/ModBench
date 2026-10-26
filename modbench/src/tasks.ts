@@ -15,8 +15,6 @@ function rebuilt(task: vscode.Task, execution: vscode.ProcessExecution | vscode.
   });
 }
 
-const quotingOf = (options: vscode.ShellExecutionOptions): vscode.ShellQuotingOptions => ({ ...options.shellQuoting });
-
 export const hostTasks: HostTasks<vscode.Task, ProcessTask, ShellCommandTask, ShellLineTask, vscode.TaskExecution> = {
   fetch: () => vscode.tasks.fetchTasks(),
   labelOf: (task) => task.name,
@@ -26,13 +24,11 @@ export const hostTasks: HostTasks<vscode.Task, ProcessTask, ShellCommandTask, Sh
   isShellTask: (task): task is ShellCommandTask | ShellLineTask => task.execution instanceof vscode.ShellExecution,
   // VS Code fetches a tasks.json shell task with no args as a command line, and one with args as a command and its args.
   isShellLineTask: (task): task is ShellLineTask => task.execution.commandLine !== undefined,
-  strongQuoteOf: (task) => quotingOf({ ...task.execution.options }).strong,
   withProcessArgs: (task, args, cwd) => rebuilt(
     task, new vscode.ProcessExecution(task.execution.process, [...task.execution.args, ...args], { ...task.execution.options, cwd })),
   withShellArgs: (task, args, cwd) => rebuilt(
     task, new vscode.ShellExecution(task.execution.command, [...task.execution.args, ...args], { ...task.execution.options, cwd })),
-  withShellLineArgs: (task, words, cwd) => rebuilt(
-    task, new vscode.ShellExecution(`${task.execution.commandLine} ${words}`, { ...task.execution.options, cwd })),
+  withShellLine: (task, cwd) => rebuilt(task, new vscode.ShellExecution(task.execution.commandLine, { ...task.execution.options, cwd })),
   execute: (task) => vscode.tasks.executeTask(task),
   onProcessEnd: (listener) => vscode.tasks.onDidEndTaskProcess((event) => { listener(event.execution, event.exitCode); }),
   onEnd: (listener) => vscode.tasks.onDidEndTask((event) => { listener(event.execution); }),

@@ -37,25 +37,18 @@ const lineTask = (commandLine: string, options: vscode.ShellExecutionOptions) =>
 
 describe('hostTasks', () => {
   it.each<[string, () => vscode.Task, object]>([
-    ['a process task, keeping its environment',
+    ['a process task, the step\'s arguments after its own, keeping its environment',
       () => hostTasks.withProcessArgs(userTask(new vscode.ProcessExecution('/tools/cao', ['--quiet'], { cwd: '/elsewhere', env: { CAO: 'on' } })), ['textures'], '/mods/Mod'),
       { process: '/tools/cao', args: ['--quiet', 'textures'], options: { cwd: '/mods/Mod', env: { CAO: 'on' } } }],
-    ['a shell task, keeping its shell and its quoting',
+    ['a shell task, the step\'s arguments after its own, keeping its shell and its quoting',
       () => hostTasks.withShellArgs(shellTask('cao', ['--quiet'], { executable: '/bin/bash', shellQuoting: { strong: '\'' } }), ['textures'], '/mods/Mod'),
       { command: 'cao', args: ['--quiet', 'textures'], options: { cwd: '/mods/Mod', executable: '/bin/bash', shellQuoting: { strong: '\'' } } }],
-    ['a command line, keeping its shell and its quoting',
-      () => hostTasks.withShellLineArgs(lineTask('wine cao.exe -r', { executable: '/bin/bash', shellQuoting: { strong: '"' } }), '"textures"', '/mods/Mod'),
-      { commandLine: 'wine cao.exe -r "textures"', options: { cwd: '/mods/Mod', executable: '/bin/bash', shellQuoting: { strong: '"' } } }],
-  ])('rebuilds %s, with every setting of the task, the step\'s arguments after its own, in the folder', (_case, rebuild, execution) => {
+    ['a command line, keeping its shell',
+      () => hostTasks.withShellLine(lineTask('wine cao.exe -r', { executable: '/bin/bash', env: { WINEPREFIX: '/wine' } }), '/mods/Mod'),
+      { commandLine: 'wine cao.exe -r', options: { cwd: '/mods/Mod', executable: '/bin/bash', env: { WINEPREFIX: '/wine' } } }],
+  ])('rebuilds %s, with every setting of the task, in the folder', (_case, rebuild, execution) => {
     expect(rebuild()).toMatchObject({
       definition: { type: 'shell' }, scope: vscode.TaskScope.Workspace, name: 'Optimise', source: 'Workspace', problemMatchers: ['$cao'], ...SETTINGS, execution,
     });
-  });
-
-  it.each<[string, vscode.ShellExecutionOptions, string | undefined]>([
-    ['names the quote its options give', { shellQuoting: { strong: '"' } }, '"'],
-    ['names none when its options give none', {}, undefined],
-  ])('a command line %s', (_case, options, quote) => {
-    expect(hostTasks.strongQuoteOf(lineTask('cao', options))).toBe(quote);
   });
 });

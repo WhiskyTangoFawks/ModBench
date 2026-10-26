@@ -16,9 +16,9 @@ export function stepTasks<Task, P extends Task, C extends Task, L extends Task, 
   const run = async ({ task, args }: ManifestStep, folder: string): Promise<number | string> => {
     const found = (await userTasks()).find((held) => host.labelOf(held) === task);
     if (found === undefined) return `this machine has no user task '${task}'`;
-    const withArgs = withStepArgs(host, found, args, folder);
-    if (withArgs === undefined) return `its task '${task}' is no shell or process task, so it takes no arguments`;
-    return await exitCodeOf(host, withArgs) ?? `its task '${task}' ended with no exit code`;
+    const withArgs = withStepArgs(host, found, task, args, folder);
+    if (typeof withArgs === 'string') return withArgs;
+    return await exitCodeOf(host, withArgs.task) ?? `its task '${task}' ended with no exit code`;
   };
   const ended = (step: ManifestStep, folder: string): Promise<number | string> =>
     run(step, folder).catch((err: unknown) => `its task '${step.task}' could not run: ${errorMessage(err)}`);
@@ -35,19 +35,16 @@ export function stepTasks<Task, P extends Task, C extends Task, L extends Task, 
   };
 }
 
-// The task runs in the folder the manifest builds, with the step's arguments after its own.
+// VS Code quotes a process's or a command's arguments; a user task names no quoting for its command line.
 function withStepArgs<Task, P extends Task, C extends Task, L extends Task>(
-  host: HostTasks<Task, P, C, L, unknown>, task: Task, args: readonly string[], folder: string,
-): Task | undefined {
-  if (host.isProcessTask(task)) return host.withProcessArgs(task, args, folder);
-  if (!host.isShellTask(task)) return undefined;
-  if (!host.isShellLineTask(task)) return host.withShellArgs(task, args, folder);
-  const quote = host.strongQuoteOf(task) ?? DEFAULT_STRONG_QUOTE;
-  return host.withShellLineArgs(task, args.map((arg) => `${quote}${arg}${quote}`).join(' '), folder);
+  host: HostTasks<Task, P, C, L, unknown>, task: Task, label: string, args: readonly string[], folder: string,
+): { task: Task } | string {
+  if (host.isProcessTask(task)) return { task: host.withProcessArgs(task, args, folder) };
+  if (!host.isShellTask(task)) return `its task '${label}' is no shell or process task, so it takes no arguments`;
+  if (!host.isShellLineTask(task)) return { task: host.withShellArgs(task, args, folder) };
+  if (args.length > 0) return `its task '${label}' is one command line, which takes no arguments: give the task an "args" list, which VS Code quotes`;
+  return { task: host.withShellLine(task, folder) };
 }
-
-// VS Code quotes a word in whole with a single quote in bash and PowerShell, its default shells.
-const DEFAULT_STRONG_QUOTE = "'";
 
 // An end can arrive before the host answers which run it started.
 function exitCodeOf<Task, Run>(host: Pick<HostTasks<Task, Task, Task, Task, Run>, 'execute' | 'onProcessEnd' | 'onEnd'>, task: Task): Promise<number | undefined> {

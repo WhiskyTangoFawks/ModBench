@@ -6,14 +6,13 @@ export interface HostTasks<Task, ProcessTask extends Task, ShellCommandTask exte
   readonly isUserTask: (task: Task) => boolean;
   readonly isProcessTask: (task: Task) => task is ProcessTask;
   readonly isShellTask: (task: Task) => task is ShellCommandTask | ShellLineTask;
-  /** A shell task written as one command line, which takes its arguments as text. */
+  /** A shell task written as one command line, which VS Code hands to its shell as text. */
   readonly isShellLineTask: (task: ShellCommandTask | ShellLineTask) => task is ShellLineTask;
-  /** The quote the task's shell quotes a word in whole with, when the task names one. */
-  readonly strongQuoteOf: (task: ShellLineTask) => string | undefined;
   /** The task with every setting it holds, its arguments followed by `args`, running in `cwd`. */
   readonly withProcessArgs: (task: ProcessTask, args: readonly string[], cwd: string) => Task;
   readonly withShellArgs: (task: ShellCommandTask, args: readonly string[], cwd: string) => Task;
-  readonly withShellLineArgs: (task: ShellLineTask, words: string, cwd: string) => Task;
+  /** The task with every setting it holds, running in `cwd`. */
+  readonly withShellLine: (task: ShellLineTask, cwd: string) => Task;
   readonly execute: (task: Task) => PromiseLike<Run>;
   readonly onProcessEnd: (listener: (run: Run, exitCode: number | undefined) => void) => { dispose(): void };
   readonly onEnd: (listener: (run: Run) => void) => { dispose(): void };

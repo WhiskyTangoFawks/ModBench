@@ -31,7 +31,7 @@ writeFileSync(path.join(runDir, 'user-data', 'User', 'tasks.json'), JSON.stringi
   tasks: [
     { label: 'Process step', type: 'process', command: process.execPath, args: [step] },
     { label: 'Shell step', type: 'shell', command: process.execPath, args: [step] },
-    { label: 'Shell line step', type: 'shell', command: `${process.execPath} ${step}` },
+    { label: 'Shell line step', type: 'shell', command: `${process.execPath} ${step} 3` },
   ],
 }));
 const workspaceTasks = JSON.stringify({
