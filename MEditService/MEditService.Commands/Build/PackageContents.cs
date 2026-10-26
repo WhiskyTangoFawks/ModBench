@@ -65,6 +65,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     private (PackagedFile?, Lack?) EntryOf(ManifestFile file) => manifest.BytesOf(file) switch
     {
         FileBytes.NotHeld => (null, new Lack($"its package does not hold '{file.Path}'")),
+        FileBytes.OtherBytes => (null, new Lack($"its package holds '{file.Path}' with other bytes")),
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
         FileBytes.InInstallationFile held when manifest.Package is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
         FileBytes.InGameFolder held => EntryOf(file.Path, held),

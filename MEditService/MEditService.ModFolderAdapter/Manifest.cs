@@ -24,6 +24,7 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
     public FileBytes BytesOf(ManifestFile file) => (Package, file.Entry) switch
     {
         (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
+        (_, PackageEntry.OtherBytes) => new FileBytes.OtherBytes(),
         (null, _) => new FileBytes.NoInstallationFile(),
         (ManifestPackage.InstallationFile installationFile, var entry) => new FileBytes.InInstallationFile(installationFile.Name, entry.PathOf(file.Path)),
         (ManifestPackage.SourceRepository, var entry) => new FileBytes.Built(entry.PathOf(file.Path)),
@@ -77,6 +78,12 @@ public abstract record FileBytes
         internal NotHeld() { }
     }
 
+    /// <summary>The package holds a file at the line's path, with other bytes.</summary>
+    public sealed record OtherBytes : FileBytes
+    {
+        internal OtherBytes() { }
+    }
+
     public sealed record NoInstallationFile : FileBytes
     {
         internal NoInstallationFile() { }
@@ -104,6 +111,9 @@ public abstract record PackageEntry
     }
 
     public sealed record NotHeld : PackageEntry;
+
+    /// <summary>The package holds a file at the file's path, with other bytes.</summary>
+    public sealed record OtherBytes : PackageEntry;
 
     internal static PackageEntry At(string filePath, string packagePath) =>
         string.Equals(filePath, packagePath, StringComparison.OrdinalIgnoreCase) ? new Held() : new HeldAt(packagePath);

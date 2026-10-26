@@ -109,9 +109,10 @@ internal static class ManifestText
     {
         try
         {
-            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage");
+            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage", "otherBytes");
             var path = Text(line.GetProperty("path"));
             if (line.TryGetProperty("inPackage", out var held) && !held.GetBoolean()) return new ManifestFile(path, new PackageEntry.NotHeld());
+            if (line.TryGetProperty("otherBytes", out var edited) && edited.GetBoolean()) return new ManifestFile(path, new PackageEntry.OtherBytes());
             return new ManifestFile(path, line.TryGetProperty("packagePath", out var packagePath) ? new PackageEntry.HeldAt(Text(packagePath)) : new PackageEntry.Held());
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
@@ -161,6 +162,9 @@ internal static class ManifestText
                 break;
             case PackageEntry.NotHeld:
                 writer.WriteBoolean("inPackage", false);
+                break;
+            case PackageEntry.OtherBytes:
+                writer.WriteBoolean("otherBytes", true);
                 break;
         }
         writer.WriteEndObject();

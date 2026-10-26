@@ -27,6 +27,7 @@ public sealed class ManifestLineBytesTests
     public static TheoryData<string, Manifest, PackageEntry, Type> NamingNoBytes => new()
     {
         { "a line its package does not hold", Installed, new PackageEntry.NotHeld(), typeof(FileBytes.NotHeld) },
+        { "a line its package holds with other bytes", Installed, new PackageEntry.OtherBytes(), typeof(FileBytes.OtherBytes) },
         { "a line held by a manifest with no package", new Manifest(null, []), new PackageEntry.Held(), typeof(FileBytes.NoInstallationFile) },
     };
 

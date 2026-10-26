@@ -170,7 +170,7 @@ describe('modlistRepositoryCommands git init', () => {
 });
 
 describe('modlistRepositoryCommands update manifest', () => {
-  const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }], refused: [] };
+  const UPDATED = { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] };
 
   it('hands mEdit each mod with its folder, its installation files, its metadata files and a source mod\'s source folder, and the stat cache\'s folder', async () => {
     const { commands, client } = commandsOver({
@@ -264,7 +264,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
   it('refuses a mod whose metadata cannot be read, naming why, and updates the rest', async () => {
     const { commands, client } = commandsOver({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
-    client.setCommandResult('updateManifest', { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [] }], refused: [] });
+    client.setCommandResult('updateManifest', { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] });
 
     const outcome = await commands.updateManifest(['ModA', 'ModB']);
 

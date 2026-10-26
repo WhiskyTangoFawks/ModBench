@@ -284,11 +284,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'updateManifest', verb: (c) => c.updateManifest([modToUpdate('ModA'), modToUpdate('ModC')], updateFacts),
       answer: {
-        applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }],
+        applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
         refused: [{ item: 'ModC', refusal: 'InstallationFileMissing', message: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
       },
       reads: {
-        landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }],
+        landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
         refused: [{ item: 'ModC', reason: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
       },
       path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts, gesture: expect.any(String) as unknown } },
@@ -1053,7 +1053,7 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
         await answered;
         seen.aborted = req.signal.aborted;
         if (req.signal.aborted) throw new DOMException('This operation was aborted', 'AbortError');
-        return jsonResponse(200, { applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], written: [] }], refused: [] });
+        return jsonResponse(200, { applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [], written: [] }], refused: [] });
       }],
     ]), { log });
     await client.start();
