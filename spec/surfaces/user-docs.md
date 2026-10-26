@@ -37,6 +37,7 @@ As a user, I want:
 As a user, I want:
 
 1. A page for each job that needs more than a walkthrough step to explain, such as connecting my agent or writing a script, that I read on GitHub as a web page.
+2. A page that sets up a deployment folder on Linux: its game added to Steam as a non-Steam game, run by Proton, launched once so Steam makes its prefix. Cites: deployment-hardlink.md, plugins.txt, story 4
 
 ## Deferred
 

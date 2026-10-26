@@ -194,6 +194,16 @@ A game folder that is Wabbajack's Stock Game: one outside Steam's management.
 
 Avoid: game copy, vanilla folder
 
+# Deployment
+A load order written where the game reads it: the mod order's winning files into a folder the user picks, and the plugin order into the game's `plugins.txt`.
+
+Avoid: install (that puts a mod into the instance)
+
+# Deployment folder
+The folder the user picks for a deployment's files.
+
+Avoid: deploy folder, output folder, staging folder (that is Vortex's mod store)
+
 # Package
 What a folder is made from: an installation file, the game folder, or a source mod's repository at a commit.
 

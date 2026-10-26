@@ -45,7 +45,7 @@ As a user, I want:
 1. My agent to read my profiles, my mod order, my plugin order, what is enabled, my downloaded files, and each mod's status against its manifest. Cites: toolbox.md; mods.md; plugins.md; downloads.md; modlist-repository.md, Status
 2. My agent to read each file order conflict: which mod wins each file, and which files each mod loses, as the Mods view and the conflict table show me. Cites: mods.md, The tree, story 8; mods-conflicts.md
 3. My agent never to switch my profile. The profile is the context I work in.
-4. My agent never to deploy.
+4. My agent never to deploy, purge or move to Overwrite. Deployment writes outside the instance, where my game runs.
 
 ## Gestures
 

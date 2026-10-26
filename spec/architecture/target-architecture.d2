@@ -46,7 +46,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   modcommands: "mod commands\nowns: changes to mods and separators, their files,\nand the mod order" {class: core}
   sourcecommands: "source commands\nowns: changes to source mods and the modlist repository" {class: core}
   plugincommands: "plugin commands\nowns: changes to plugins and the plugin order\nhides: the plugin-order rules" {class: core}
-  instancecommands: "instance commands\nowns: changes to the instance as a whole and its profiles" {class: core}
+  instancecommands: "instance commands\nowns: changes to the instance as a whole, its profiles\nand its deployment" {class: core}
   downloadedfilecommands: "downloaded file commands\nowns: changes to the downloaded files" {class: core}
 }
 
@@ -94,6 +94,7 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
   textdocuments: "Text documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
   client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {class: repositories}
   nexus: "Nexus\nowns: Modbench's one reach to Nexus\nhides: the API" {class: repositories}
+  deployment: "Deployment\nowns: a load order deployed where the game reads it\nhides: the deployment type, and where each platform's game\nreads plugins.txt" {class: repositories}
 }
 
 medit_data: "MEDIT · Systems of record" {
@@ -107,6 +108,7 @@ modbench_data: "MODBENCH · Systems of record; mEdit is the left column and alwa
   class: band; grid-rows: 1
   instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe manifests · the repository · the source folder ·\nthe publisher's configuration" {class: sor}
   gamedata: "Game folder\nthe game's own plugins and files" {class: sor}
+  deployed: "Deployment\nthe deployment folder · the plugins.txt the game reads ·\nwhat other programs write there" {class: sor}
   tools: "Other tools\nthe mod manager, the user, the game — at any time" {class: other}
   medit: "mEdit\nthe left column" {class: driving}
   nexus: "Nexus\nthe mods and files it hosts" {class: other}

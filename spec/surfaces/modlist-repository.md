@@ -132,7 +132,7 @@ What I expect to need and choose not to build yet, each with why.
 4. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
 5. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
 6. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
-7. An external tool that needs the load order, such as xEdit, run by a step. It reads the game's data folder, so it waits for Modbench to deploy the load order there.
+7. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
 8. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
 9. Restore's refusals and skips in the Problems panel, on the manifest each comes from, as a build's failures are. The Output already names each one.
 10. Restore as a VS Code build task. Its menus already reach it.

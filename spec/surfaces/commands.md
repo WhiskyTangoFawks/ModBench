@@ -91,6 +91,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Agent | - | - | [agent.md](agent.md) |
 | Scripts | Apply Script | - | [scripts.md](scripts.md) |
 | Modlist repository | - | - | [modlist-repository.md](modlist-repository.md) |
+| Deployment: hardlink | - | - | [deployment-hardlink.md](deployment-hardlink.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
@@ -129,6 +130,8 @@ What every list view does to whatever it shows, whatever the object. common.md s
 | open settings | reads | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
 | log in / log out | writes | `modbench.instance.logIn`, `modbench.instance.logOut` | - | key | MO2 settings, Nexus tab, Enter API Key Manually | Keep my Nexus API key, or forget it. Every gesture that asks Nexus uses it. | none |
 | refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the record index, then re-read the instance from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the record index. | load-instance |
+| deploy / purge | writes | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Deploy the active profile's load order to the deployment folder, or remove what deploy wrote there, as the deployment type's surface says ([deployment-hardlink.md](deployment-hardlink.md)). | - |
+| move to Overwrite | writes | `modbench.instance.moveToOverwrite` | files in the deployment folder that deploy does not manage | - | none | Move each file into Overwrite at its path, so the next deploy links it back. | - |
 
 ## Profile
 

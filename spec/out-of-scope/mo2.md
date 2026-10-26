@@ -8,7 +8,7 @@ What MO2 does: [the surface audit](../../docs/research/mo2-surface-audit.md).
 
 | Reason | Why | Gestures | Examples |
 |---|---|---|---|
-| VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 27 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch an instance |
+| VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 28 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch an instance |
 | Manual file management | The operation is a compound file operation. VS Code's file tab and Explorer do it, and Modbench does not abstract the file system away. | 11 | Rename a profile; Remove a profile; Transfer saves |
 | An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). | 2 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
 | Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
@@ -60,6 +60,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Tools menu | Toolbar: Tools | VS Code provides it |
 | Endorse MO2, notifications, update, help | Toolbar | VS Code provides it |
 | Create a desktop or start-menu shortcut for an executable | Run box: Shortcut | VS Code provides it |
+| Run an executable, and the list of executables | Run box: Run; Toolbar: Executables (Ctrl+E) | VS Code provides it |
 
 ### Profile
 
