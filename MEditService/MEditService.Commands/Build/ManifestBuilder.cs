@@ -24,10 +24,14 @@ internal sealed class ManifestBuilder
     /// (ADR-0022).</summary>
     public Manifest Manifest(IReadOnlyList<HashedFile> files, string? version, Manifest? held)
     {
-        List<ManifestFile> madeByStep = [.. held?.Files.Where(line => line.Entry is PackageEntry.MadeByStep) ?? []];
-        var made = madeByStep.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
-        var recorded = Recorded([.. files.Where(file => !made.Contains(file.Path))], version);
-        return (held ?? recorded) with { Package = recorded.Package, Version = recorded.Version, Files = [.. recorded.Files, .. madeByStep] };
+        var madeByStep = held?.Files.Where(line => line.Entry is PackageEntry.MadeByStep).Select(line => line.Path).ToHashSet(StringComparer.Ordinal) ?? [];
+        var recorded = Recorded([.. files.Where(file => !madeByStep.Contains(file.Path))], version);
+        return (held ?? recorded) with
+        {
+            Package = recorded.Package,
+            Version = recorded.Version,
+            Files = [.. recorded.Files, .. madeByStep.Select(path => new ManifestFile(path, new PackageEntry.MadeByStep()))],
+        };
     }
 
     // The version rides the package line, so a mod with no package has none.
