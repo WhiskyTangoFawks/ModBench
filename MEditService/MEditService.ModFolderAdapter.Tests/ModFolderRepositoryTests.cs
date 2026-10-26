@@ -372,9 +372,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("a.nif", "edited");
         Write("b.nif", "added");
-        _repository.WriteManifest(_root, "mod", new Manifest(
-            new ManifestPackage.InstallationFile("Mod.zip", 7, "#Mod.zip"),
-            [new ManifestFile("a.nif", new PackageEntry.OtherBytes()), new ManifestFile("b.nif", new PackageEntry.NotHeld())]));
+        Manifested(new ManifestFile("a.nif", new PackageEntry.OtherBytes()), new ManifestFile("b.nif", new PackageEntry.NotHeld()));
 
         var status = Status();
 
@@ -723,13 +721,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private static (string Path, string InstallationFile) Line(string path, string installationFile) => (path, installationFile);
 
-    private Manifest Manifested((string Path, string InstallationFile) line) => Manifested(line.InstallationFile, new ManifestFile(line.Path, new PackageEntry.Held()));
+    private Manifest Manifested((string Path, string InstallationFile) line) => Manifested(line.InstallationFile, [new ManifestFile(line.Path, new PackageEntry.Held())]);
 
-    private Manifest Manifested(ManifestFile line) => Manifested("Mod.zip", line);
+    private Manifest Manifested(params ManifestFile[] lines) => Manifested("Mod.zip", lines);
 
-    private Manifest Manifested(string installationFile, ManifestFile line)
+    private Manifest Manifested(string installationFile, ManifestFile[] lines)
     {
-        var manifest = new Manifest(new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile), [line]);
+        var manifest = new Manifest(new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile), lines);
         _repository.WriteManifest(_root, "mod", manifest);
         return manifest;
     }
