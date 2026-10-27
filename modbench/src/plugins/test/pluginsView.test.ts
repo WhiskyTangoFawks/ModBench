@@ -240,6 +240,23 @@ describe('the Plugins view\'s selection for a key', () => {
   });
 });
 
+describe('the Plugins view\'s selection relates to its masters (plugins.md, The highlight, story 4)', () => {
+  it('names the row of each master mEdit read from the selected plugin', async () => {
+    const client = clientHoldingNothing();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Dep.esp', origin: 'SomeMod', masters: ['Base.esm'] })]);
+    const { plugins, rows } = pluginsView(instanceValueFixture({
+      plugins: ['Dep.esp', 'Base.esm'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })),
+      gameFolder: FOUND,
+    }), { client });
+    const [dep] = await rows();
+    client.emit(rowsChanged);
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
+    await settle();
+
+    expect(plugins.relatesRows.related([present(dep, 'the Dep.esp row')]).plugins).toEqual([{ name: 'Base.esm', origin: 'SomeMod' }]);
+  });
+});
+
 const APPLIED_STATUS: LoadOrderProgress = {
   totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };

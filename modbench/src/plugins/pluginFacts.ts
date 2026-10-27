@@ -49,6 +49,7 @@ interface PluginRead {
   readOnly: boolean;
   compiledPlugin: boolean;
   sourceUnreadable: UnreadableSource | undefined;
+  masters: readonly string[];
   missingMasters?: string[];
   lateMasters?: string[];
   parseFailure: boolean;
@@ -166,7 +167,7 @@ export class PluginFacts {
       reads.set(p, {
         readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
-        missingMasters: p.missingMasters ?? this.reads.get(p)?.missingMasters,
+        masters: p.masters, missingMasters: p.missingMasters ?? this.reads.get(p)?.missingMasters,
         lateMasters: p.lateMasters ?? this.reads.get(p)?.lateMasters,
       });
       matches.set(p, p.hasMatchingRecords);
@@ -276,6 +277,11 @@ export class PluginFacts {
       changedOutside(this.changed.has(address)),
       malformed(this.diagnosisTexts.get(address) ?? []),
     ].filter((s): s is PluginStatus => s !== undefined);
+  }
+
+  /** The file names of the plugin's masters; none until mEdit has read it. */
+  mastersOf(address: PluginAddress): readonly string[] {
+    return this.reads.get(address)?.masters ?? [];
   }
 
   /** The red or yellow icon of the first status; none when the plugin has none. */
