@@ -136,6 +136,7 @@ internal static class SubFieldReflection
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
             Default: nullable ? null : leaf.Default,
             HoldsAlpha: leaf.HoldsAlpha,
+            IsPlacedRotation: game.Annotations.IsPlacedRotation(prop),
             IndexWhen: leaf.IndexWhen);
     }
 }
