@@ -78,6 +78,9 @@ public sealed record SchemaAnnotations(
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
     // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
+    // The placed reference's rotation: xEdit's wbVec3PosRot, whose rotation reads in degrees where
+    // Mutagen holds radians. No type marks it, and a member named Rotation is not always one.
+    HashSet<(string TypeName, string MemberName)> PlacedRotations,
     // Plugin header members the document never spells but one flag of a flags member says: the ESL
     // flag. Flag names the backing enum's member.
     Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
@@ -243,6 +246,7 @@ public sealed record SchemaAnnotations(
     internal bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
     internal string? RefusedShapeReason(Type shape) => RefusedShapes.GetValueOrDefault(ShapeName(shape));
     internal bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
+    internal bool IsPlacedRotation(PropertyInfo prop) => PlacedRotations.Contains(Key(prop));
     internal IReadOnlyDictionary<string, string>? EnumLabelsFor(PropertyInfo prop) =>
         EnumMemberLabels.GetValueOrDefault(Key(prop));
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
@@ -559,6 +563,7 @@ public sealed record SchemaAnnotations(
             .. UnresolvedMembers(typesByName, nameof(KnownDefects), KnownDefects.Select(d => (d.TypeName, d.MemberName))),
             .. UnresolvedMembers(typesByName, nameof(PermittedNullFormLinks), PermittedNullFormLinks),
             .. UnresolvedPermittedNullLinks(typesByName),
+            .. UnresolvedMembers(typesByName, nameof(PlacedRotations), PlacedRotations),
             .. UnresolvedMembers(typesByName, nameof(SiblingsInUse), SiblingsInUse.Keys),
             .. UnresolvedSiblingRelations(typesByName),
             .. UnresolvedMembers(typesByName, nameof(KeyedArrays), KeyedArrays.Keys),

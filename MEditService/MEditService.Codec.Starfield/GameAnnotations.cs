@@ -47,6 +47,8 @@ internal static class GameAnnotations
             ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],
+            // xEdit's wbVec3PosRot: the Data of REFR, ACHR and the projectile placements.
+            PlacedRotations: [("IPlacedObjectGetter", "Rotation"), ("IPlacedNpcGetter", "Rotation"), ("IAPlacedTrapGetter", "Rotation")],
             SyntheticFlagMembers: new()
             {
                 [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Light"),
