@@ -183,10 +183,10 @@ describe('RecordPanel — a reference leaf under a field with a dangling sibling
   }
 
   it.each([
-    ['an array-element', 'array-element', validType, '000019:Fallout4.esm', 'SomeKeyword [000019:Fallout4.esm]'],
-    ['an array-element wrong-type', 'array-element', wrongType, '00001A:Fallout4.esm', 'SomeNpc [00001A:Fallout4.esm]'],
-    ['a struct-child', 'struct-child', validType, '000019:Fallout4.esm', 'SomeKeyword [000019:Fallout4.esm]'],
-    ['a struct-child wrong-type', 'struct-child', wrongType, '00001A:Fallout4.esm', 'SomeNpc [00001A:Fallout4.esm]'],
+    ['an array-element', 'array-element', validType, '000019:Fallout4.esm', 'SomeKeyword'],
+    ['an array-element wrong-type', 'array-element', wrongType, '00001A:Fallout4.esm', 'SomeNpc'],
+    ['a struct-child', 'struct-child', validType, '000019:Fallout4.esm', 'SomeKeyword'],
+    ['a struct-child wrong-type', 'struct-child', wrongType, '00001A:Fallout4.esm', 'SomeNpc'],
   ] as const)('%s that resolves offers go to record despite the parent field checkError', async (_what, kind, resolution, value, label) => {
     await renderLeaf(kind, resolution, value);
     const menu = contextOf(required(screen.getByText(label).closest('td'), 'the reference cell'));
