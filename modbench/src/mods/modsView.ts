@@ -7,6 +7,8 @@ import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
+import type { RelatesRows } from '../drivingLib/highlightFollowsFocus';
+import { pluginsHeld } from './pluginsHeld';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
@@ -81,6 +83,7 @@ interface ModsView extends vscode.Disposable {
   view: vscode.TreeView<ModlistNode>;
   nameFilter: NameFilter;
   copyValue: CopyValueAdapter;
+  relatesRows: RelatesRows;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -167,6 +170,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   );
   return {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
+    relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection) }) },
     dispose: () => { disposable.dispose(); },
   };
 }

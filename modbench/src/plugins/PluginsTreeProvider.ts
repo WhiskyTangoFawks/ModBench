@@ -11,7 +11,7 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginPlace, type PluginProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
@@ -115,6 +115,7 @@ export class PluginsTreeProvider
   private cache?: { rows: PluginListNode[] };
   private lastBuildHadNoRows = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
+  private highlighted: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
     this.instance = options.instance;
@@ -375,11 +376,28 @@ export class PluginsTreeProvider
     const base = this.captureOriginalDecoration(element);
     element.description = base.description;
     element.iconPath = base.iconPath;
+    element.label = this.labelOf(element);
 
     // ImplicitMasterNode keeps its constructor's decoration untouched: the locked row's tooltip is
     // the reference tool's one sentence alone (plugins.md, A plugin the game loads with no line).
     if (element.kind === 'plugin') this.decoratePlugin(element);
     return element;
+  }
+
+  // plugins.md, The highlight: the label is marked whole, as the find marks a match.
+  private labelOf(row: PluginListNode): vscode.TreeItemLabel | string {
+    const label = pluginFileOf(row);
+    return this.highlighted.has(exactPluginAddressKey(addressOfRow(row))) ? { label, highlights: [[0, label.length]] } : label;
+  }
+
+  /** Marks the labels of these plugins' rows, and only theirs. */
+  highlight(plugins: readonly PluginAddress[]): void {
+    const before = this.highlighted;
+    this.highlighted = new Set(plugins.map(exactPluginAddressKey));
+    for (const row of this.builtRows()) {
+      const key = exactPluginAddressKey(addressOfRow(row));
+      if (before.has(key) !== this.highlighted.has(key)) this._onDidChangeTreeData.fire(row);
+    }
   }
 
   // plugins.md, The tree, stories 4 and 7: a disabled plugin's records are not the game's to load,

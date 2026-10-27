@@ -1672,3 +1672,57 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     expect(callCount(h.client, 'getCellChildRecords')).toBe(0);
   });
 });
+
+describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', () => {
+  const highlightsOf = async (tree: PluginsTreeProvider) =>
+    (await tree.getChildren()).map((row) => {
+      const item = tree.getTreeItem(row);
+      return typeof item.label === 'object' ? item.label.highlights : undefined;
+    });
+
+  it('marks the whole label of each plugin it is handed, and no other', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'Bee.esp', line: 1 })]);
+
+    tree.highlight([{ name: 'Bee.esp', origin: 'SomeMod' }]);
+
+    expect(await highlightsOf(tree)).toEqual([undefined, [[0, 7]]]);
+  });
+
+  it('matches by name and origin, so a plugin of the same name from another origin stays unmarked', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', origin: 'One' })]);
+
+    tree.highlight([{ name: 'A.esp', origin: 'Other' }]);
+
+    expect(await highlightsOf(tree)).toEqual([undefined]);
+  });
+
+  it('clears the mark when handed none', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp' })]);
+    tree.highlight([{ name: 'A.esp', origin: 'SomeMod' }]);
+
+    tree.highlight([]);
+
+    expect(await highlightsOf(tree)).toEqual([undefined]);
+  });
+
+  it('keeps the row in place, with its id', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp' })]);
+    const idsOf = async () => (await tree.getChildren()).map((row) => row.id);
+    const before = await idsOf();
+
+    tree.highlight([{ name: 'A.esp', origin: 'SomeMod' }]);
+
+    expect(await idsOf()).toEqual(before);
+  });
+
+  it('tells the tree which rows changed, and only those', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'Bee.esp', line: 1 })]);
+    const changed: unknown[] = [];
+    tree.onDidChangeTreeData((row) => { changed.push(row); });
+    await tree.getChildren();
+
+    tree.highlight([{ name: 'Bee.esp', origin: 'SomeMod' }]);
+
+    expect(expectInstancesOf(changed, PluginNode).map((row) => row.plugin.name)).toEqual(['Bee.esp']);
+  });
+});
