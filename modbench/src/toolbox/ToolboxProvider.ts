@@ -6,8 +6,8 @@ import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
 
 export interface DeploymentFolderSetting {
-  /** The folder's path and its name, or `undefined` while the setting names none. */
-  value(): { path: string; name: string } | undefined;
+  /** The folder's path and its name; both are empty while the setting names none. */
+  value(): { path: string; name: string };
   changed(listener: () => void): vscode.Disposable;
 }
 
@@ -75,8 +75,8 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
 function deploymentRow(folder: ReturnType<DeploymentFolderSetting['value']>): vscode.TreeItem {
   const row = new vscode.TreeItem('Deployment');
   row.iconPath = new vscode.ThemeIcon('rocket');
-  row.description = folder?.name ?? 'no deployment folder';
-  row.tooltip = folder?.path;
+  row.description = folder.path ? folder.name : 'no deployment folder';
+  row.tooltip = folder.path || undefined;
   row.command = { command: 'modbench.settings.openDeploymentFolderHere', title: 'Open Deployment Folder Setting' };
   return row;
 }

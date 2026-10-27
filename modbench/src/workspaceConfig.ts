@@ -20,8 +20,8 @@ const DEPLOYMENT_FOLDER_SETTING_KEY = 'deployment.folder';
 
 export const deploymentFolderSetting: DeploymentFolderSetting = {
   value: () => {
-    const path = meditConfig().get<string>(DEPLOYMENT_FOLDER_SETTING_KEY);
-    return path ? { path, name: basename(path) } : undefined;
+    const path = meditConfig().get<string>(DEPLOYMENT_FOLDER_SETTING_KEY, '');
+    return { path, name: basename(path) };
   },
   changed: (listener) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${DEPLOYMENT_FOLDER_SETTING_KEY}`, listener),
 };

@@ -24,7 +24,7 @@ class FakeDeploymentFolder {
 
   constructor(public current?: string) {}
 
-  value = () => (this.current ? { path: this.current, name: this.current.split('/').pop() ?? '' } : undefined);
+  value = () => ({ path: this.current ?? '', name: this.current?.split('/').pop() ?? '' });
 
   changed = (listener: () => void) => { this.listeners.push(listener); return { dispose: () => undefined }; };
 
