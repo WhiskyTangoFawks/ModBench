@@ -139,7 +139,7 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
 
   constructor(
     private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
-    private readonly open: OpenRows,
+    private readonly openRows: OpenRows,
     private readonly carriersOf: (value: InstanceValue) => C,
   ) {
     this.subscriptions = [
@@ -147,7 +147,7 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
         this.current = carriersOf(value);
         this.refresh();
       }),
-      open.onDidChange(() => { this.refresh(); }),
+      openRows.onDidChange(() => { this.refresh(); }),
     ];
   }
 
@@ -162,7 +162,7 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
   }
 
   protected isOpen(key: string): boolean {
-    return this.open.has(key);
+    return this.openRows.has(key);
   }
 
   private refresh(): void {
