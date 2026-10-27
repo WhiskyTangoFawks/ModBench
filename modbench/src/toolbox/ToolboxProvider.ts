@@ -7,7 +7,7 @@ import { instanceMessages, type InstanceValue, type ProgramVersion, type Instanc
 
 export interface DeploymentFolderSetting {
   /** What VS Code holds of the setting. Only the workspace's value is an instance's deployment folder: a user-level value is every instance's. */
-  inspect(): { workspaceValue?: string } | undefined;
+  inspect(): { workspaceValue?: string; globalValue?: string } | undefined;
   nameOf(path: string): string;
   changed(listener: () => void): vscode.Disposable;
 }
