@@ -187,6 +187,75 @@ describe('a row\'s parent, which VS Code\'s reveal walks up through getParent an
   });
 });
 
+describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, story 11)', () => {
+  const marked = (row: ModlistNode, provider: ModListProvider): boolean => {
+    const item = provider.getTreeItem(row);
+    return typeof item.label === 'object' && item.label.highlights?.[0]?.[1] === labelOf(row).length;
+  };
+  const allMarked = async (provider: ModListProvider) => {
+    const roots = await provider.getChildren();
+    const separators = roots.filter((row): row is SeparatorNode => row instanceof SeparatorNode);
+    const held = (await Promise.all(separators.map((row) => provider.getChildren(row)))).flat();
+    return [...roots, ...held].filter((row) => marked(row, provider)).map(labelOf);
+  };
+  const scene = () => makeProvider([mod('Held'), mod('Other'), sep('Section'), mod('Loose')]);
+
+  it('marks the whole label of each mod it is handed and of Overwrite, and no other', async () => {
+    const provider = scene();
+
+    provider.highlight([{ kind: 'mod', name: 'Loose' }, { kind: 'runtimeOutput' }]);
+
+    expect(await allMarked(provider)).toEqual(['Loose', 'Overwrite']);
+  });
+
+  it('clears the mark when handed none', async () => {
+    const provider = scene();
+    provider.highlight([{ kind: 'mod', name: 'Loose' }]);
+
+    provider.highlight([]);
+
+    expect(await allMarked(provider)).toEqual([]);
+  });
+
+  it('marks a collapsed separator that holds a marked mod', async () => {
+    const provider = scene();
+
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+
+    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+  });
+
+  it('leaves an open separator unmarked, and marks it again once it closes', async () => {
+    const provider = scene();
+    const section = expectInstanceOf((await provider.getChildren()).find((row) => row instanceof SeparatorNode && labelOf(row) === 'Section'), SeparatorNode);
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+
+    provider.openedRow(section);
+    expect(await allMarked(provider)).toEqual(['Held']);
+    provider.closedRow(section);
+    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+  });
+
+  it('refreshes only the rows whose mark changed', () => {
+    const provider = scene();
+    const fired: ModlistNode[] = [];
+    provider.onDidChangeTreeData((row) => { if (row) fired.push(row); });
+
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+
+    expect(fired.map(labelOf).sort()).toEqual(['Held', 'Section']);
+  });
+
+  it('keeps the resourceUri the row\'s colour decoration hangs on', async () => {
+    const provider = scene();
+    const before = (await provider.getChildren())[0]?.resourceUri?.toString();
+
+    provider.highlight([{ kind: 'mod', name: 'Loose' }]);
+
+    expect((await provider.getChildren())[0]?.resourceUri?.toString()).toBe(before);
+  });
+});
+
 describe('the row for an origin, which Go to mod reveals', () => {
   const modOf = (name: string) => ({ kind: 'mod', name }) as const;
 

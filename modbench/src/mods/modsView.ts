@@ -7,7 +7,7 @@ import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { RelatesRows } from '../drivingLib/highlightFollowsFocus';
+import type { DrawsHighlight, RelatesRows } from '../drivingLib/highlightFollowsFocus';
 import { pluginsHeld } from './pluginsHeld';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
@@ -19,7 +19,7 @@ import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { publisherKeyContext, registerPublisherTagCommands } from './publisherTagCommands';
 import { onModCheckboxChanged } from './modCheckboxHandler';
-import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
+import { ModListProvider, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import type { ModStatuses } from './modStatuses';
 import { registerModDecorations } from './modDecorations';
 import { registerModInstallCommands } from './installCommands';
@@ -84,6 +84,7 @@ interface ModsView extends vscode.Disposable {
   nameFilter: NameFilter;
   copyValue: CopyValueAdapter;
   relatesRows: RelatesRows;
+  drawsHighlight: DrawsHighlight;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -134,6 +135,8 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     provider.onDidChangeTreeData(expand),
     view.onDidChangeVisibility(expand),
     view.onDidChangeCheckboxState(onModCheckboxChanged),
+    view.onDidExpandElement(({ element }) => { if (element instanceof SeparatorNode) provider.openedRow(element); }),
+    view.onDidCollapseElement(({ element }) => { if (element instanceof SeparatorNode) provider.closedRow(element); }),
     ...registerModDecorations(instance, vscode.workspace, view),
     new PublisherProblems(vscode.languages.createDiagnosticCollection('modbench-publisher'), instance),
     ...registerModContextCommands({
@@ -170,7 +173,8 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   );
   return {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
-    relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection) }) },
+    relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
+    drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
     dispose: () => { disposable.dispose(); },
   };
 }

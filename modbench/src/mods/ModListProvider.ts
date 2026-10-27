@@ -171,6 +171,9 @@ export class ModListProvider
   private filterLower = '';
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
+  private highlighted: readonly FileOrigin[] = [];
+  private readonly open = new Set<string>();
+  private marks: ReadonlySet<string> | undefined;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -203,6 +206,7 @@ export class ModListProvider
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.modGroups = undefined;
+    this.marks = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -284,7 +288,61 @@ export class ModListProvider
 
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
+    if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) {
+      const label = element instanceof ModNode ? element.mod.name : element instanceof SeparatorNode ? element.separator.name : OVERWRITE_LABEL;
+      element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
+    }
     return element;
+  }
+
+  /** Marks the labels of the rows for these origins, and of each collapsed separator that holds one (mods.md, The tree, story 11). */
+  highlight(origins: readonly FileOrigin[]): void {
+    this.remark(() => { this.highlighted = origins; });
+  }
+
+  openedRow(row: SeparatorNode): void {
+    this.remark(() => { this.open.add(row.separator.name); });
+  }
+
+  closedRow(row: SeparatorNode): void {
+    this.remark(() => { this.open.delete(row.separator.name); });
+  }
+
+  private remark(change: () => void): void {
+    const before = this.marked();
+    change();
+    this.marks = undefined;
+    const after = this.marked();
+    for (const id of new Set([...before, ...after])) {
+      if (before.has(id) !== after.has(id)) this.fireRow(id);
+    }
+  }
+
+  private fireRow(id: string): void {
+    const row = id === 'runtimeOutput' ? this.overwriteNode()
+      : id.startsWith('mod:') ? this.rowFor(modOrigin(id.slice('mod:'.length)))
+        : this.separatorRowNamed(id.slice('separator:'.length));
+    if (row) this._onDidChangeTreeData.fire(row);
+  }
+
+  private separatorRowNamed(name: string): SeparatorNode | undefined {
+    const group = this.loadedModGroups().groups.find((g) => g.separator.name === name);
+    return group && this.groupRow(group);
+  }
+
+  private marked(): ReadonlySet<string> {
+    this.marks ??= this.markedRows();
+    return this.marks;
+  }
+
+  private markedRows(): ReadonlySet<string> {
+    const mods = new Set(this.highlighted.flatMap((origin) => (origin.kind === 'mod' ? [origin.name] : [])));
+    const ids = new Set([...mods].map((name) => rowIdentity('mod', name)));
+    if (this.highlighted.some((origin) => origin.kind === 'runtimeOutput')) ids.add('runtimeOutput');
+    for (const { separator, mods: held } of this.loadedModGroups().groups) {
+      if (!this.open.has(separator.name) && held.some((m) => mods.has(m.name))) ids.add(rowIdentity('separator', separator.name));
+    }
+    return ids;
   }
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
