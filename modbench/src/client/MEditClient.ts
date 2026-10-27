@@ -186,9 +186,8 @@ type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRef
 /** Why mEdit refused a mod's build (ADR-0019). */
 export type BuildRefusalKind = components['schemas']['BuildRefusal'];
 
-/** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
- *  refused as a mod with its reason, and mEdit's kind of refusal when mEdit refused it, and the installation files its
- *  manifest names that the call did not hand. */
+/** Build's answer: each mod built, with the plugins it compiled and refused, or refused with its reason, mEdit's kind
+ *  of refusal, and the installation files its manifest names that the call did not hand. */
 export interface BuildOutcome {
   landed: readonly BuiltMod[];
   refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind; readonly installationFilesNotFound?: readonly ManifestInstallationFile[] })[];

@@ -8,7 +8,7 @@ type Downloading = {
   readonly nexus: Pick<Nexus, 'download'>;
 };
 
-/** With no Nexus, a file the downloads folder lacks stays unhanded. */
+// With no Nexus, a file the downloads folder lacks stays unhanded.
 type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
 
 export const wireFile = (file: InstallationFile | undefined): UpdateManifestMod['installationFile'] =>

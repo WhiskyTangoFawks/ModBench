@@ -5,8 +5,7 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to build: the source folder holding its manifest, its folder, version and metadata files. Made: the
-/// files its build answered it made, once its steps ran, so the build writes its manifest and nothing else.
-/// InstallationFiles: those its manifest names, as the downloads folder holds them.</summary>
+/// files its build answered it made, once its steps ran. InstallationFiles: those its manifest names.</summary>
 public sealed record ModToBuild(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule,
     IReadOnlyList<string>? Made = null)

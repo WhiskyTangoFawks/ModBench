@@ -23,6 +23,9 @@ public interface IModFolderRepository
 
     Stream OpenFile(string modFolder, string path);
 
+    /// <summary>Scratch storage for bytes a build reads more than once, removed when disposed.</summary>
+    IScratchFiles CreateScratchFiles();
+
     bool InstallationFileExists(string path);
 
     /// <summary>The name of the installation file at <paramref name="path"/>, without its folder.</summary>

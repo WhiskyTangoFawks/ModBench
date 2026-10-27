@@ -20,6 +20,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         return new([.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))]) { StatCache = cache };
     }
 
+    public IScratchFiles CreateScratchFiles() => new ScratchFiles();
+
     public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes)
     {
         if (read.StatCache is not { } cache) return null;

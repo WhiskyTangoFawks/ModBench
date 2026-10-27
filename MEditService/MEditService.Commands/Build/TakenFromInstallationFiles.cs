@@ -4,11 +4,11 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>The files a source mod's manifest takes from the installation files it names, extracted to temporary files
+/// <summary>The files a source mod's manifest takes from the installation files it names, extracted to scratch files
 /// the build reads as assets (modlist-repository.md, The manifest, story 7).</summary>
 internal sealed class TakenFromInstallationFiles(IModFolderRepository repository, string modFolder) : IDisposable
 {
-    private readonly Lazy<DirectoryInfo> _temporary = new(() => Directory.CreateTempSubdirectory("medit-installation-file-"));
+    private readonly IScratchFiles _scratch = repository.CreateScratchFiles();
     private readonly List<(ManifestFile Line, PackageEntry.FromInstallationFile From, InstallationFile File)> _taken = [];
 
     /// <summary>Null when every installation file the manifest names is handed with the bytes it pins and holds each entry a
@@ -51,16 +51,12 @@ internal sealed class TakenFromInstallationFiles(IModFolderRepository repository
             var wanted = fromOne.ToLookup(taken => taken.From.PathIn(taken.Line.Path), taken => taken.Line.Path, StringComparer.OrdinalIgnoreCase);
             rebuild.Extract(fromOne.Key, wanted.Select(group => group.Key), (entry, content) =>
             {
-                var temporary = Path.Combine(_temporary.Value.FullName, Path.GetRandomFileName());
-                using (var to = File.Create(temporary)) content.CopyTo(to);
-                foreach (var path in wanted[entry]) extracted.Add(new Asset(path, () => File.OpenRead(temporary)));
+                var stored = _scratch.Store(content);
+                foreach (var path in wanted[entry]) extracted.Add(new Asset(path, stored));
             });
         }
         return extracted;
     }
 
-    public void Dispose()
-    {
-        if (_temporary.IsValueCreated) _temporary.Value.Delete(recursive: true);
-    }
+    public void Dispose() => _scratch.Dispose();
 }
