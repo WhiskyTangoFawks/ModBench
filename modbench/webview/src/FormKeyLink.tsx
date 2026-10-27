@@ -7,26 +7,26 @@ import type { FormKeyResolution } from './types';
 // behaves exactly like a genuinely unresolved reference: raw FormKey label.
 const UNRESOLVED: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// "EditorID [FormKey]" when the record is named, the bare FormKey when it isn't. Exported so
-// the Ctrl+C copy path produces exactly what the link displays — a cell must never show one
-// string and hand over another.
+// "EditorID [FormKey]" when the record is named, the bare FormKey when it isn't: what Ctrl+C
+// copies, what the picker is seeded with, and what the link's tooltip holds.
 export function formKeyLabel(value: string, resolution?: Pick<FormKeyResolution, 'editorId'>): string {
   return recordLabel(resolution?.editorId, value);
 }
 
-// The label is the composite, never the bare EditorID: a FormKey is the identity and the EditorID
-// is decoration, and it is the format the picker's own items use, so a reference reads back as it
-// was chosen.
-export function FormKeyLink({ value, onClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
+export function FormKeyLink({ value, onClick, openTrigger, resolution = UNRESOLVED, checkError }: Readonly<{
   value: string;
   onClick?: () => void;
   openTrigger?: boolean;
   resolution?: FormKeyResolution;
+  checkError?: string | null;
 }>) {
-  const label = formKeyLabel(value, resolution);
+  const composite = formKeyLabel(value, resolution);
+  const label = resolution.editorId || value;
+  const title = checkError ? `${composite}\n${checkError}` : composite;
 
   return (
     <button
+      title={title}
       data-open-trigger={openTrigger || undefined}
       onClick={e => { if (!e.ctrlKey && !e.metaKey) onClick?.(); }}
       style={{

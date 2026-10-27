@@ -25,9 +25,9 @@ export function FormKeyCell({ value, meta, onCommit, checkError, resolution }: F
   function openPicker() {
     if (picking.current) return;
     picking.current = true;
-    // Seeded with the composite this cell displays, not the bare FormKey — the picker's native
-    // input is where a mutable cell's value is selected and copied. The picker normalizes a
-    // composite back to its reference before searching.
+    // Seeded with the composite, not the bare FormKey — the picker's native input is where a
+    // mutable cell's value is selected and copied. The picker normalizes a composite back to its
+    // reference before searching.
     void pickFormKey(fk ? formKeyLabel(fk, resolution) : '', meta.validFormKeyTypes)
       .then(picked => { if (picked && picked !== fk) onCommit?.(picked); })
       .finally(() => { picking.current = false; });
@@ -59,6 +59,7 @@ export function FormKeyCell({ value, meta, onCommit, checkError, resolution }: F
         onClick={onPlainClick}
         openTrigger={editable}
         resolution={resolution}
+        checkError={checkError}
       />
     );
   }
