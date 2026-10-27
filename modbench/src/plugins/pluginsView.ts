@@ -7,6 +7,7 @@ import { joinSyncMessages, reportSyncFailures, type SyncChannel, type SyncFailur
 import type { LastModStatuses, PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import type { DrawsHighlight } from '../drivingLib/highlightFollowsFocus';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
@@ -72,6 +73,7 @@ export interface PluginsView extends vscode.Disposable {
   loadOrderPut: SyncFailureReport;
   copyValue: CopyValueAdapter;
   progress: PluginsViewProgress;
+  drawsHighlight: DrawsHighlight;
   narrator: ReconcileNarrator;
 }
 
@@ -152,6 +154,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,
+    drawsHighlight: { highlight: (related) => { tree.highlight(related.plugins); } },
     dispose: () => { disposable.dispose(); },
   };
 }
