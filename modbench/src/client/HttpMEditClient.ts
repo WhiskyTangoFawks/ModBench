@@ -65,8 +65,8 @@ function selectionOutcome<L, R>(
   return { landed: answer.applied, refused: itemRefusals(answer.refused) };
 }
 
-function manifestInstallationFile(file: components['schemas']['InstallationFile'] | null | undefined): ManifestInstallationFile | undefined {
-  return file ? { name: file.name, hash: file.hash, ...(file.page ? { page: file.page } : {}) } : undefined;
+function manifestInstallationFile(file: components['schemas']['InstallationFile']): ManifestInstallationFile {
+  return { name: file.name, hash: file.hash, ...(file.page ? { page: file.page } : {}) };
 }
 
 function appliedWithRefusals<A, R>(
@@ -529,7 +529,8 @@ class HttpMEditClient implements MEditClient {
           ...(m.uncommitted ? { uncommitted: true as const } : {}),
           ...(m.unpushed ? { unpushed: true as const } : {}),
         })),
-        refused: answer.refused.map(({ item, message, refusal }) => ({ item, reason: message, refusal })),
+        refused: answer.refused.map(({ item, message, refusal, installationFilesNotFound }) =>
+          ({ item, reason: message, refusal, installationFilesNotFound: installationFilesNotFound.map(manifestInstallationFile) })),
       }),
     });
   }
@@ -597,7 +598,7 @@ class HttpMEditClient implements MEditClient {
         ...selectionOutcome(answer),
         notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
           .map((refused) => ({
-            mod: refused.item, installationFile: manifestInstallationFile(refused.installationFileNotFound), gameFiles: refused.gameFilesNotFound,
+            mod: refused.item, installationFiles: refused.installationFilesNotFound.map(manifestInstallationFile), gameFiles: refused.gameFilesNotFound,
             submodule: refused.submoduleNotFound ?? undefined,
           })),
       }),

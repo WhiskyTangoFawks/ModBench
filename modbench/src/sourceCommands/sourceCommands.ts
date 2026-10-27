@@ -4,12 +4,13 @@ import {
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
+import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
   adapter: Pick<InstanceAdapter,
-    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
+    'downloadedFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -57,6 +58,29 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     });
   };
 
+  // modlist-repository.md, Restore from manifest, story 3: the manifest names the installation files, so mEdit asks for the
+  // ones the downloads folder holds once it has read it.
+  const withInstallationFiles = async (outcome: BuildOutcome, sent: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused> => {
+    const asking = outcome.refused.filter(({ installationFilesNotFound }) => (installationFilesNotFound?.length ?? 0) > 0);
+    if (asking.length === 0) return outcome;
+    const downloaded = await namedDownloadedFiles({ adapter }, asking.map(({ installationFilesNotFound }) => ({ installationFiles: installationFilesNotFound ?? [] })), {});
+    const again = asking.flatMap(({ item, installationFilesNotFound }) => {
+      const mod = sent.find(({ name }) => name === item);
+      return mod === undefined ? [] : [{ ...mod, installationFiles: (installationFilesNotFound ?? []).flatMap(({ name }) => wireFile(downloaded.handed(name)) ?? []) }];
+    });
+    const second = await client.build(again, facts);
+    if (isRefused(second)) return second;
+    const unreadable = (item: string): string => (asking.find((ask) => ask.item === item)?.installationFilesNotFound ?? [])
+      .flatMap(({ name }) => downloaded.unreadable(name) ?? []).map((why) => ` Its installation file could not be read: ${why}.`).join('');
+    return {
+      landed: [...outcome.landed, ...second.landed],
+      refused: [
+        ...outcome.refused.filter((refused) => !asking.includes(refused)),
+        ...second.refused.map((refused) => ({ ...refused, reason: refused.reason + unreadable(refused.item) })),
+      ],
+    };
+  };
+
   return {
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder or metadata
      *  the Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest with the release's archive variants. */
@@ -74,7 +98,9 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
         exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder,
         tasks: [...await tasks.labels()],
       };
-      const outcome = await client.build(sent, facts);
+      const first = await client.build(sent, facts);
+      if (isRefused(first)) return first;
+      const outcome = await withInstallationFiles(first, sent, facts);
       if (isRefused(outcome)) return outcome;
       return { ...outcome, landed: await withManifestsOnceStepsRan(outcome.landed, sent, facts), refused: [...outcome.refused, ...refused] };
     },

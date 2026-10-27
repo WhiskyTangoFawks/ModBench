@@ -497,7 +497,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const { commands, client } = commandsOver({ gameFiles: new Map([['meshes/a.nif', { path: 'Meshes/A.nif', hash: '#a' }]]) });
     client.setCommandHandler('restoreFromManifest', (_mods, facts) => Promise.resolve(facts.gameFolder?.files.length
       ? RESTORED
-      : { landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['meshes/a.nif'] }] }));
+      : { landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', installationFiles: [], gameFiles: ['meshes/a.nif'] }] }));
 
     const outcome = await commands.restoreFromManifest(['ModA']);
 
@@ -514,7 +514,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     });
     client.setCommandResult('restoreFromManifest', {
       landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }],
-      notFound: [{ mod: 'ModA', gameFiles: ['textures/a.dds', 'NotInGame.txt'] }, { mod: 'ModB', gameFiles: ['meshes/b.nif'] }],
+      notFound: [{ mod: 'ModA', installationFiles: [], gameFiles: ['textures/a.dds', 'NotInGame.txt'] }, { mod: 'ModB', installationFiles: [], gameFiles: ['meshes/b.nif'] }],
     });
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
@@ -528,7 +528,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('hands mEdit that the game folder was not found as why each game file of a skipped mod could not be read', async () => {
     const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, GAME_FOLDER_NOT_FOUND));
     client.setCommandResult('restoreFromManifest', {
-      landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['a.nif', 'b.nif'] }],
+      landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', installationFiles: [], gameFiles: ['a.nif', 'b.nif'] }],
     });
 
     await commands.restoreFromManifest(['ModA']);
@@ -540,7 +540,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const pinned = { folder: '/instance/source/Mod Source', pin: 'abc123', branch: 'main' };
     const { commands, client } = commandsOver({ pins: new Map([['Mod Source', pinned]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.submodule === undefined
-      ? { landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', submodule: 'Mod Source', gameFiles: [] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [], submodule: 'Mod Source', gameFiles: [] }] }
       : RESTORED));
 
     const outcome = await commands.restoreFromManifest(['ModA']);
@@ -549,10 +549,26 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 
+  it('sends a source mod again with the downloaded files its manifest names once its submodule is handed, and answers all three sends as one', async () => {
+    const pinned = { folder: '/instance/source/Mod Source', pin: 'abc123', branch: 'main' };
+    const { commands, client } = commandsOver({ pins: new Map([['Mod Source', pinned]]), downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
+    client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(
+      mods[0]?.submodule === undefined
+        ? { landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [], submodule: 'Mod Source', gameFiles: [] }] }
+        : (mods[0].installationFiles ?? []).length === 0
+          ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [{ name: 'ModA-1.0.7z', hash: 'H' }], gameFiles: [] }] }
+          : RESTORED));
+
+    const outcome = await commands.restoreFromManifest(['ModA']);
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{}], [{ submodule: pinned }], [{ submodule: pinned, installationFiles: [{ path: INSTALLED.path }] }]]);
+    expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
+  });
+
   it('says why beside a mod still skipped for a submodule the instance repository holds no pin for', async () => {
     const { commands, client } = commandsOver({ pins: new Map([['Mod Source', { lacks: 'the instance repository pins no commit at source/Mod Source' }]]) });
     client.setCommandResult('restoreFromManifest', {
-      landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', submodule: 'Mod Source', gameFiles: [] }],
+      landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [], submodule: 'Mod Source', gameFiles: [] }],
     });
 
     const outcome = await commands.restoreFromManifest(['ModA']);
@@ -622,7 +638,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('sends a mod skipped for an installation file the call did not hand again, with the downloaded file of that name, and answers both sends as one', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
-      ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [{ name: 'ModA-1.0.7z', hash: 'H' }], gameFiles: [] }] }
       : RESTORED));
 
     const outcome = await commands.restoreFromManifest(['ModA']);
@@ -634,7 +650,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('hands mEdit why an installation file the Instance adapter could not read could not be read', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
     client.setCommandResult('restoreFromManifest', {
-      landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }],
+      landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [{ name: 'ModA-1.0.7z', hash: 'H' }], gameFiles: [] }],
     });
 
     await commands.restoreFromManifest(['ModA']);
@@ -646,7 +662,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const LACKED: ManifestInstallationFile = { name: 'ModA-1.0.7z', hash: 'the bytes', page: FILE_78.page };
     const lackedUntilHanded = (client: InMemoryMEditClient, installationFile = LACKED): void => {
       client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
-        ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile, gameFiles: [] }] }
+        ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFiles: [installationFile], gameFiles: [] }] }
         : RESTORED));
     };
 
@@ -725,7 +741,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       const { commands, client } = commandsWired({ nexus });
       client.setCommandResult('restoreFromManifest', {
         landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }, { item: 'ModB', reason: "was skipped: installation file 'ModB.7z' is missing." }],
-        notFound: [{ mod: 'ModA', installationFile: LACKED, gameFiles: [] }, { mod: 'ModB', installationFile: { ...LACKED, name: 'ModB.7z' }, gameFiles: [] }],
+        notFound: [{ mod: 'ModA', installationFiles: [LACKED], gameFiles: [] }, { mod: 'ModB', installationFiles: [{ ...LACKED, name: 'ModB.7z' }], gameFiles: [] }],
       });
 
       const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], { onProgress: (status) => { if (status.phase === 'Downloading') cancel.abort(); }, signal: cancel.signal });
@@ -742,7 +758,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const { commands, client } = commandsOver();
     client.setCommandHandler('restoreFromManifest', () => {
       cancel.abort();
-      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] });
+      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', installationFiles: [{ name: 'ModA-1.0.7z', hash: 'H' }], gameFiles: [] }] });
     });
 
     await commands.restoreFromManifest(['ModA'], { signal: cancel.signal });
@@ -757,7 +773,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       cancel.abort();
       return Promise.resolve({
         landed: RESTORED.landed, refused: [{ item: 'ModB', reason: "was skipped: installation file 'ModB.7z' is missing." }],
-        notFound: [{ mod: 'ModB', installationFile: { name: 'ModB.7z', hash: 'H' }, gameFiles: [] }],
+        notFound: [{ mod: 'ModB', installationFiles: [{ name: 'ModB.7z', hash: 'H' }], gameFiles: [] }],
       });
     });
 
@@ -790,7 +806,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('answers the refusal of a cancel during the second send beside what both sends restored', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
-      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] }
+      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', installationFiles: [{ name: 'ModA-1.0.7z', hash: 'H' }], gameFiles: [] }] }
       : { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
 
     expect(await commands.restoreFromManifest(['ModA'])).toMatchObject({ cancelRefusal: 'Could not cancel — not running.' });
@@ -825,7 +841,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('trashes the files no line names of each mod the first call landed when the second call fails, and names the second call\'s mods', async () => {
     const { commands, client, adapter } = commandsOver({ downloadedFiles: new Map([['ModB.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
-      ? { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [{ mod: 'ModB', installationFile: { name: 'ModB.7z', hash: 'H' }, gameFiles: [] }] }
+      ? { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [{ mod: 'ModB', installationFiles: [{ name: 'ModB.7z', hash: 'H' }], gameFiles: [] }] }
       : { refused: true as const, message: 'Could not restore 1 mod — mEdit stopped.' }));
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
@@ -901,7 +917,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const { commands, client, adapter } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     const metadata = { version: '2.0' };
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
-      ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: "its package does not hold 'b.nif'" }], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: "its package does not hold 'b.nif'" }], notFound: [{ mod: 'ModA', installationFiles: [{ name: 'ModA-1.0.7z', hash: 'H' }], gameFiles: [] }] }
       : { landed: [restoredMod({ mod: 'ModA', metadata })], refused: [], notFound: [] }));
 
     await commands.restoreFromManifest(['ModA', 'ModB']);

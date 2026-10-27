@@ -1,12 +1,18 @@
-import type { ManifestInstallationFile, NotFound } from '../client';
+import type { ManifestInstallationFile, NotFound, UpdateManifestMod } from '../client';
 import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
 
-interface Deps {
+type Downloading = {
   readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'nexusFileAt' | 'putDownloadedFile'>;
   readonly nexus: Pick<Nexus, 'download'>;
-}
+};
+
+/** With no Nexus, a file the downloads folder lacks stays unhanded. */
+type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
+
+export const wireFile = (file: InstallationFile | undefined): UpdateManifestMod['installationFile'] =>
+  (file === undefined ? undefined : { path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] });
 
 interface Found {
   readonly read: FileRead<InstallationFile | undefined>;
@@ -16,7 +22,7 @@ interface Found {
 const notDownloaded = (reason: string): string => `it could not be downloaded from Nexus: ${reason.replace(/\.$/, '')}`;
 
 // modlist-repository.md, Restore from manifest, story 10: Nexus's file, put only when it is the one the manifest names.
-async function downloadedOrWhy({ adapter, nexus }: Deps, { name, hash, page }: ManifestInstallationFile): Promise<string | undefined> {
+async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, page }: ManifestInstallationFile): Promise<string | undefined> {
   const at = page === undefined ? undefined : adapter.nexusFileAt(page);
   if (at?.fileId === undefined) return 'its manifest names no file on Nexus to download it from';
   const fetched = await nexus.download({ game: at.game, modID: at.modId, fileID: at.fileId });
@@ -32,20 +38,24 @@ async function downloadedOrWhy({ adapter, nexus }: Deps, { name, hash, page }: M
   }
 }
 
-/** The installation files the mods `notFound` lacks, by name in the downloads folder, each one it lacks downloaded first. */
+/** The installation files the mods `notFound` lack, by name in the downloads folder, each one they lack downloaded first. */
 export async function namedDownloadedFiles(
-  deps: Deps, notFound: readonly NotFound[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
+  deps: Deps, notFound: readonly Pick<NotFound, 'installationFiles'>[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
 ): Promise<{
   handed: (name: string | undefined) => InstallationFile | undefined;
   unreadable: (name: string | undefined) => string | undefined;
   /** Why the installation file of `name`, which the downloads folder lacks, was not downloaded. */
   notDownloaded: (name: string | undefined) => string | undefined;
 }> {
-  const lacked = new Map(notFound.flatMap(({ installationFile }) => (installationFile === undefined ? [] : [[installationFile.name, installationFile] as const])));
+  const lacked = new Map(notFound.flatMap(({ installationFiles }) => installationFiles.map((file) => [file.name, file] as const)));
   const found = new Map<string, Found>();
   for (const [name, file] of lacked) {
     const read = await deps.adapter.downloadedFile(name);
     if (read.kind === 'unreadable' || read.answer !== undefined || signal?.aborted) {
+      found.set(name, { read });
+      continue;
+    }
+    if (deps.nexus === undefined) {
       found.set(name, { read });
       continue;
     }

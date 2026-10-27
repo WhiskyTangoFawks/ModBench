@@ -59,6 +59,29 @@ describe('sourceCommands build', () => {
     });
   });
 
+  it('hands mEdit again a mod it refused for installation files its manifest names, with the downloaded files of those names', async () => {
+    const client = new InMemoryMEditClient();
+    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [] };
+    client.setCommandHandler('build', (mods) => Promise.resolve((mods[0]?.installationFiles ?? []).length === 0
+      ? { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] }
+      : BUILT));
+    const adapter = fakeAdapter({ downloadedFiles: new Map([['Pack.7z', { kind: 'read', answer: pack }]]) });
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }], [{ name: 'ModA', installationFiles: [{ path: '/downloads/Pack.7z', hash: 'H' }] }]]);
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
+  });
+
+  it('keeps the refusal of a mod whose installation file the downloads folder lacks, once mEdit is asked again', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] });
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect(outcome).toMatchObject({ landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.' }] });
+  });
+
   it('hands mEdit no archive variant for a release the table names none for', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
