@@ -20,8 +20,8 @@ export interface DrawsHighlight {
 }
 
 /** One highlight answers one selection, the focused view's (mo2.md, Divergences, 18): a view
- *  with no `RelatesRows` hands none, so the selection it leaves in another view drives nothing.
- *  `changes` recomputes it when the rows the selection stands for change. */
+ *  with no `RelatesRows` hands none, so a selection left in another view drives nothing.
+ *  `changes` recomputes it when the rows change. */
 export function highlightFollowingFocus(
   focused: FocusedView, relating: ReadonlyMap<string, RelatesRows>, drawing: readonly DrawsHighlight[],
   changes: (listener: () => void) => vscode.Disposable,
