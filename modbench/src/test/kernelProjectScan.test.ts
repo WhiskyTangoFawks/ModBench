@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { posix, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { BOXES, BOXES_BY_BAND, DRIVING_BOXES } from '../../eslint-rules/boxes.mjs';
+import { BOXES, BOXES_BY_BAND, DRAWN_AHEAD_OF_CODE, DRIVING_BOXES, boxesByBand } from '../../eslint-rules/boxes.mjs';
 import { parseProject } from './boxes';
 
 const join = (...segments: string[]): string => posix.join(...segments);
@@ -49,6 +50,22 @@ const VSCODE_BOXES = [...DRIVING_BOXES, 'textDocuments'];
 describe('one composite project per box', () => {
   it('reads a real body of boxes off the zoom-out', () => {
     expect(BOXES.length).toBeGreaterThan(10);
+  });
+
+  describe('against a copy of the drawing', () => {
+    const drawing = readFileSync(join(MODBENCH, '..', 'spec', 'architecture', 'target-architecture.d2'), 'utf8');
+
+    it('names a box the drawing has no project for', () => {
+      expect(() => boxesByBand(drawing.replace(/^ {2}plugins: "/m, '  pluginss: "'))).toThrow(/neither src/);
+    });
+
+    it('refuses a box drawn ahead of code that is not listed', () => {
+      expect(() => boxesByBand(drawing.replace(/^ {2}deployment: "/m, '  deploymnt: "'))).toThrow(/neither src/);
+    });
+
+    it('lists only boxes the drawing draws', () => {
+      expect(DRAWN_AHEAD_OF_CODE.filter((id) => !new RegExp(`^ {2}${id}: "`, 'm').test(drawing))).toEqual([]);
+    });
   });
 
   it.each(BOXES)('%s is composite', (box) => {
