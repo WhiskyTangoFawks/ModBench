@@ -4,6 +4,7 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { ToolboxProvider } from '../ToolboxProvider';
+import { NO_DEPLOYMENT_FOLDER } from '../../test/noDeploymentFolder';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -18,7 +19,7 @@ const LINE =
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
-  new ToolboxProvider({ instance, channel: { warn: (line) => lines.push(line) } });
+  new ToolboxProvider({ instance, channel: { warn: (line) => lines.push(line) }, deploymentFolder: NO_DEPLOYMENT_FOLDER });
   return lines;
 }
 

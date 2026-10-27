@@ -34,6 +34,8 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
     }),
     vscode.commands.registerCommand('modbench.settings.open', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${extensionId}`)),
+    vscode.commands.registerCommand('modbench.settings.openDeploymentFolderHere', () =>
+      vscode.commands.executeCommand('workbench.action.openSettings', 'modbench.deployment.folder')),
   ];
 }
 

@@ -39,6 +39,7 @@ import type { PluginsViewProgress } from './pluginRowCommands';
 import type { RecordCreateDeps } from './createRecordCommand';
 import type { ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
+import { mastersOfPlugins } from './mastersOfPlugins';
 import { modsOfPlugins } from './modsOfPlugins';
 
 export interface PluginsViewDeps {
@@ -156,7 +157,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,
-    relatesRows: { related: (selection) => ({ plugins: [], origins: modsOfPlugins(instance.value, selection) }) },
+    relatesRows: { related: (selection) => ({ plugins: mastersOfPlugins(instance.value, tree.facts.rows, selection), origins: modsOfPlugins(instance.value, selection) }) },
     drawsHighlight: { highlight: (related) => { tree.highlight(related.plugins); } },
     dispose: () => { disposable.dispose(); },
   };

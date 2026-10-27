@@ -5,8 +5,15 @@ import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
 
+export interface DeploymentFolderSetting {
+  /** What VS Code holds of the setting. Only the workspace's value is an instance's deployment folder: a user-level value is every instance's. */
+  inspect(): { workspaceValue?: string; globalValue?: string } | undefined;
+  nameOf(path: string): string;
+  changed(listener: () => void): vscode.Disposable;
+}
+
 type ToolboxDeps =
-  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'> }
+  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentFolderSetting }
   | { instance: undefined };
 
 const versionText = (version: ProgramVersion): string => {
@@ -66,6 +73,16 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
+function deploymentRow(setting: DeploymentFolderSetting): vscode.TreeItem {
+  const row = new vscode.TreeItem('Deployment');
+  row.iconPath = new vscode.ThemeIcon('rocket');
+  const folder = setting.inspect()?.workspaceValue;
+  row.description = folder ? setting.nameOf(folder) : 'no deployment folder';
+  row.tooltip = folder || undefined;
+  row.command = { command: 'modbench.settings.openDeploymentFolderHere', title: 'Open Deployment Folder Setting' };
+  return row;
+}
+
 /** A readout of the instance itself, one fact per row, read from the instance value alone
  *  (ADR-0015). */
 export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
@@ -82,6 +99,7 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     this.subscriptions = deps.instance
       ? [
         deps.instance.subscribe(changed), deps.instance.onReadFailure(changed),
+        deps.deploymentFolder.changed(changed),
         logOncePerFailure(deps.instance, gameFolderNotFoundLine, (line) => deps.channel.warn(line)),
       ]
       : [];
@@ -107,11 +125,11 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
-    const { instance } = this.deps;
-    if (element || !instance) return [];
+    if (element || !this.deps.instance) return [];
+    const { instance, deploymentFolder } = this.deps;
     if (instance.sequence === 0) {
       return instance.readFailure === undefined ? [] : [new ErrorNode(instance.readFailure)];
     }
-    return [gameRow(instance.value), profileRow(instance.value), modlistRow(instance.value)];
+    return [gameRow(instance.value), profileRow(instance.value), modlistRow(instance.value), deploymentRow(deploymentFolder)];
   }
 }
