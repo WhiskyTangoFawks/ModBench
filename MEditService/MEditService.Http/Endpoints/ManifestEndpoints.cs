@@ -228,7 +228,7 @@ internal sealed record RestoreFromManifestRequest(
     GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false, IReadOnlyList<string>? Tasks = null);
 
 /// <summary>A mod, with the submodule its manifest names once a refusal names it, why the request could not read a game
-/// file or an installation file, a source mod's source folder, and the installation files that manifest names.</summary>
+/// or installation file, its source folder, and the installation files a source mod's manifest names.</summary>
 internal sealed record RestoreFromManifestModRequest(
     string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule,
     IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null, string? SourceFolder = null,
