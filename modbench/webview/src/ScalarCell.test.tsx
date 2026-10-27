@@ -67,6 +67,30 @@ describe('ScalarCell — a colour cell shows a swatch of the colour beside its t
   });
 });
 
+describe('ScalarCell — a placed reference rotation shows its degrees beside the radians', () => {
+  const rotation = meta({ type: 'vector', isPlacedRotation: true });
+
+  it('reads the radians as they are, then the degrees', () => {
+    render(<ScalarCell value="3.1415927, 0, 1.5707964" meta={rotation} />);
+
+    expect(screen.getByText('3.1415927, 0, 1.5707964')).toBeInTheDocument();
+    expect(screen.getByText('(180°, 0°, 90°)')).toBeInTheDocument();
+  });
+
+  it('shows no degrees for a vector the schema does not mark', () => {
+    render(<ScalarCell value="3.1415927, 0, 1.5707964" meta={meta({ type: 'vector' })} />);
+
+    expect(screen.queryByText(/°/)).toBeNull();
+  });
+
+  it('edits the radians', () => {
+    render(<ScalarCell value="1, 2, 3" meta={rotation} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('1, 2, 3'));
+
+    expect(screen.getByRole('textbox')).toHaveValue('1, 2, 3');
+  });
+});
+
 describe('ScalarCell — a column with nowhere to write', () => {
   it('renders as plain text when no commit target was supplied, the ordinary state for every caller outside the field grid', () => {
     render(<ScalarCell value="before" meta={meta()} />);
