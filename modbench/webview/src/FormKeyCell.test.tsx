@@ -102,7 +102,7 @@ describe('FormKeyCell — editable column, whose plain click opens the native Qu
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  it('seeds the picker with the composite label the cell displays, as the picker\'s input is a mutable column\'s only surface for copying it', () => {
+  it('seeds the picker with the composite EditorID [FormKey], as the picker\'s input is a mutable column\'s only surface for copying it', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace'));
