@@ -1,6 +1,6 @@
 import React, { useContext, useRef, useState } from 'react';
 import { EditorMounted } from './cellEditor';
-import { displayValue, modelValue, pastedValue } from './modelValue';
+import { colourOf, displayValue, modelValue, pastedValue } from './modelValue';
 import { pickEnumValue } from './nativeBridge';
 import { mono, fg } from './gridStyles';
 import type { EnumChoice } from '../../src/wire/messages';
@@ -29,9 +29,27 @@ function ScalarText({ value, meta, displayOverride }: {
   value: unknown; meta: FieldMetadata; displayOverride?: string;
 }) {
   if (displayOverride != null) return <span>{displayOverride}</span>;
-  return value == null
-    ? <span style={{ opacity: 0.35 }}>—</span>
-    : <span>{displayValue(value, meta)}</span>;
+  if (value == null) return <span style={{ opacity: 0.35 }}>—</span>;
+  const reading = displayValue(value, meta);
+  const colour = meta.type === 'color' ? colourOf(reading) : null;
+  return colour === null ? <span>{reading}</span> : <span><Swatch colour={colour} />{reading}</span>;
+}
+
+function Swatch({ colour }: { colour: string }) {
+  return (
+    <span
+      data-testid="colour-swatch"
+      style={{
+        display: 'inline-block',
+        width: '1em',
+        height: '1em',
+        marginRight: '0.5em',
+        verticalAlign: 'text-bottom',
+        border: '1px solid var(--vscode-contrastBorder, #888)',
+        backgroundColor: colour,
+      }}
+    />
+  );
 }
 
 /** A click focuses a cell (editor.md, The focused cell, story 1); no left click reaches the
