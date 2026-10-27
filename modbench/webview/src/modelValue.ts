@@ -24,10 +24,10 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
         return JSON.stringify(value);
       case 'bool':
         return value === true ? 'True' : 'False';
-      case 'string':
-      case 'float':
       case 'color':
         return colorReading(toStr(value), meta.holdsAlpha);
+      case 'string':
+      case 'float':
       case 'enum':
       case 'hex':
       case 'vector':
@@ -45,6 +45,16 @@ function colorReading(text: string, holdsAlpha: boolean): string {
   if (hex === undefined) return text;
   const argb = hex.length === 6 ? `FF${hex}` : hex;
   return `#${holdsAlpha ? argb : argb.slice(2)}`;
+}
+
+/** The CSS colour of a colour reading, or null where the reading is not a colour. */
+export function colourOf(reading: string): string | null {
+  const hex = /^#([0-9A-F]{6}|[0-9A-F]{8})$/.exec(reading)?.[1];
+  if (hex === undefined) return null;
+  const argb = hex.length === 6 ? `FF${hex}` : hex;
+  const byte = (i: number) => parseInt(argb.slice(i, i + 2), 16);
+  const [a, r, g, b] = [byte(0), byte(2), byte(4), byte(6)];
+  return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a / 255})`;
 }
 
 const memberOf = (value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
