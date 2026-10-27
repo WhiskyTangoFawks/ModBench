@@ -52,7 +52,7 @@ public sealed class RestoreFromManifestHandler
         }
 
         if (held is not { } manifest) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
-        var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFile).Resolve();
+        var resolved = new PackageContents(_repository, manifest, mod.InstallationFiles, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFiles).Resolve();
         List<PackageContents.Lack> lacks = [.. resolved.Lacks];
         if (ToolsWithoutTask.Why(manifest, instance.Tasks) is { } noTask) lacks.Add(new PackageContents.Lack.NoTask(noTask));
         if (lacks.Count > 0) return Lacked(lacks);
@@ -116,7 +116,10 @@ public sealed class RestoreFromManifestHandler
         }
 
         var answer = await _build.BuildAsync(
-            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true) { InstallationFiles = mod.InstallationFiles },
+            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true)
+            {
+                InstallationFiles = mod.InstallationFiles, UnreadableInstallationFiles = mod.UnreadableInstallationFiles,
+            },
             new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache) { Tasks = instance.Tasks });
         if (answer is ItemAnswer<BuildStop, ModBuildOutcome>.Refusing refusing)
             return ItemAnswer<RestoreSkip, ModRestored>.Refused(Skip(refusing.Refusal), refusing.Message);
@@ -168,7 +171,6 @@ public sealed class RestoreFromManifestHandler
             why);
     }
 
-    // A build that lacks installation files its manifest names asks for them, as a restore lacking its own does.
     private static RestoreSkip Skip(BuildStop stop) => stop.InstallationFilesNotFound.Count > 0
         ? new RestoreSkip(RestoreRefusal.NotFound, stop.Kind) { InstallationFilesNotFound = stop.InstallationFilesNotFound }
         : new RestoreSkip(RestoreRefusal.NotBuilt, stop.Kind);

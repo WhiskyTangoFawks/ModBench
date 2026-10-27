@@ -92,19 +92,6 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public IScratchFiles CreateScratchFiles() => new ScratchFiles();
 
-    private sealed class ScratchFiles : IScratchFiles
-    {
-        public Func<Stream> Store(Stream content)
-        {
-            using var kept = new MemoryStream();
-            content.CopyTo(kept);
-            var bytes = kept.ToArray();
-            return () => new MemoryStream(bytes);
-        }
-
-        public void Dispose() => GC.KeepAlive(this);
-    }
-
     public bool InstallationFileExists(string path) => _files.ContainsKey((string.Empty, path)) || _streams.ContainsKey((string.Empty, path));
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];

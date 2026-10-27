@@ -35,7 +35,7 @@ public sealed class SourceManifestTests : IDisposable
         Assert.Equal(
             "{\n"
             + "\"output\": \"The Mod\",\n"
-            + "\"package\": {\"submodule\":\"Mod\",\"version\":\"1.0\"},\n"
+            + "\"packages\": [\n{\"submodule\":\"Mod\",\"version\":\"1.0\"}\n],\n"
             + "\"exclude\": [\"a.esp\",\"docs\"],\n"
             + "\"archives\": {\n"
             + "\"Mod - Main.ba2\": [\"meshes/a.nif\",\"meshes/b.nif\"],\n"
@@ -68,7 +68,7 @@ public sealed class SourceManifestTests : IDisposable
     [Fact]
     public void ASourceModsManifestNamingNoFile_IsItsOutputAndAnEmptyFileList()
     {
-        _repository.WriteSourceManifest(_source, new Manifest(null, []) { Output = "Mod" });
+        _repository.WriteSourceManifest(_source, new Manifest([], []) { Output = "Mod" });
 
         Assert.Equal("{\n\"output\": \"Mod\",\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_source, "Mod.manifest.json")));
     }
@@ -86,7 +86,7 @@ public sealed class SourceManifestTests : IDisposable
     [Fact]
     public void ARepositoryHoldingTwoManifests_IsUnreadable_NamingBoth()
     {
-        _repository.WriteSourceManifest(_source, new Manifest(null, []) { Output = "A" });
+        _repository.WriteSourceManifest(_source, new Manifest([], []) { Output = "A" });
         File.Copy(Path.Combine(_source, "A.manifest.json"), Path.Combine(_source, "B.manifest.json"));
 
         Assert.Equal("its repository holds two manifests, 'A.manifest.json' and 'B.manifest.json'", Why());
@@ -113,7 +113,7 @@ public sealed class SourceManifestTests : IDisposable
 
     [Theory]
     [InlineData("{\"output\": \"A\", \"deltas\": [], \"files\": []}", "its manifest holds 'deltas', which Modbench does not read")]
-    [InlineData("{\"output\": \"A\", \"package\": {\"repository\": \"A\", \"remote\": \"x\"}, \"files\": []}", "its manifest's package holds 'remote', which Modbench does not read")]
+    [InlineData("{\"output\": \"A\", \"packages\": [{\"repository\": \"A\", \"remote\": \"x\"}], \"files\": []}", "its manifest's package 1 holds 'remote', which Modbench does not read")]
     [InlineData("{\"output\": \"A\", \"files\": [{\"path\": \"a.esp\"}, {\"path\": \"b.esp\", \"hash\": \"x\"}]}", "its manifest's file 2 holds 'hash', which Modbench does not read")]
     [InlineData("{\"output\": \"A\", \"steps\": [{\"task\": \"Zip\", \"env\": {}}], \"files\": []}", "its manifest's step 1 holds 'env', which Modbench does not read")]
     public void AManifestHoldingAKeyModbenchDoesNotRead_IsUnreadable_NamingIt_SoNoWriteDropsIt(string text, string why)

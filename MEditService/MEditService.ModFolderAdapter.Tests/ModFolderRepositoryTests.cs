@@ -284,7 +284,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void AManifest_IsNamedForTheMod_WithTheJsonSuffix()
     {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, []));
+        _repository.WriteManifest(_root, "mod", new Manifest([], []));
 
         Assert.Equal(["mod.manifest.json"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
@@ -293,7 +293,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AManifestThatNamesNothing_IsWritten_ReadBack_AndAgreesWithAFolderOfItsMetadataAlone()
     {
         Write("meta.ini", "[General]");
-        var nothing = new Manifest(null, []);
+        var nothing = new Manifest([], []);
 
         var written = _repository.WriteManifest(_root, "mod", nothing);
         var writtenAgain = _repository.WriteManifest(_root, "mod", nothing);
@@ -491,7 +491,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var text = File.ReadAllText(Path.Combine(_root, "mod.manifest.json"));
         Assert.Equal(
             "{\n"
-            + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"},\n"
+            + "\"packages\": [\n{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"}\n],\n"
             + "\"files\": [\n"
             + "{\"path\":\"a.nif\"},\n"
             + "{\"path\":\"b.nif\",\"packagePath\":\"Data/b.nif\"},\n"
@@ -517,7 +517,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.Equal(
             "{\n"
-            + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"},\n"
+            + "\"packages\": [\n{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"}\n],\n"
             + "\"steps\": [\n"
             + "{\"task\":\"Optimise textures\",\"args\":[\"--in\",\"textures\"]},\n"
             + "{\"task\":\"Archive\"}\n"
@@ -535,47 +535,66 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void ASourceManifest_NamesEachInstallationFileItsBuildReads_AndEachFileItTakesFromOne_AndReadsThemBack()
+    public void ASourceManifest_NamesEachPackageOnce_AndAFileNamesItsPackageOnlyWhenItIsNotTheFirst_AndReadsThemBack()
     {
         var manifest = new Manifest(
-            new ManifestPackage.SourceRepository("Mod", IsSubmodule: true),
-            [new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.FromInstallationFile("Zed.7z")),
-                new ManifestFile("c.nif", new PackageEntry.FromInstallationFile("Alpha.zip", "meshes/c.nif"))])
+            [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), new ManifestPackage.InstallationFile("Zed.7z", 7, "ZZZZ"),
+                new ManifestPackage.InstallationFile("Alpha.zip", 5, "AAAA", "https://www.nexusmods.com/fallout4/mods/1")],
+            [new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.Held(), "Zed.7z"),
+                new ManifestFile("c.nif", new PackageEntry.NotHeld(), "Alpha.zip"), new ManifestFile("d.nif", new PackageEntry.OtherBytes(), "Alpha.zip"),
+                new ManifestFile("e.nif", ManifestFile.At("e.nif", new FileBytes.InInstallationFile("Alpha.zip", "meshes/e.nif")).Entry, "Alpha.zip"),
+                new ManifestFile("f.nif", new PackageEntry.Held(), "Mod")])
         {
             Output = "mod",
-            InstallationFiles = [new ManifestPackage.InstallationFile("Zed.7z", 7, "ZZZZ"), new ManifestPackage.InstallationFile("Alpha.zip", 5, "AAAA", "https://www.nexusmods.com/fallout4/mods/1")],
         };
 
         _repository.WriteSourceManifest(_root, manifest);
 
         Assert.Equal(
-            "{\n\"output\": \"mod\",\n\"package\": {\"submodule\":\"Mod\"},\n"
-            + "\"installationFiles\": [\n"
-            + "{\"installationFile\":\"Alpha.zip\",\"size\":5,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"},\n"
-            + "{\"installationFile\":\"Zed.7z\",\"size\":7,\"hash\":\"ZZZZ\"}\n"
+            "{\n\"output\": \"mod\",\n\"packages\": [\n"
+            + "{\"submodule\":\"Mod\"},\n"
+            + "{\"installationFile\":\"Zed.7z\",\"size\":7,\"hash\":\"ZZZZ\"},\n"
+            + "{\"installationFile\":\"Alpha.zip\",\"size\":5,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"}\n"
             + "],\n"
             + "\"files\": [\n"
             + "{\"path\":\"a.nif\"},\n"
-            + "{\"path\":\"b.nif\",\"installationFile\":\"Zed.7z\"},\n"
-            + "{\"path\":\"c.nif\",\"installationFile\":\"Alpha.zip\",\"packagePath\":\"meshes/c.nif\"}\n"
+            + "{\"path\":\"b.nif\",\"package\":\"Zed.7z\"},\n"
+            + "{\"path\":\"c.nif\",\"package\":\"Alpha.zip\",\"inPackage\":false},\n"
+            + "{\"path\":\"d.nif\",\"package\":\"Alpha.zip\",\"otherBytes\":true},\n"
+            + "{\"path\":\"e.nif\",\"package\":\"Alpha.zip\",\"packagePath\":\"meshes/e.nif\"},\n"
+            + "{\"path\":\"f.nif\"}\n"
             + "]\n"
             + "}\n",
             File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
         Assert.True(_repository.ReadSourceManifest(_root).Holds(out var held, out _));
         var read = held.Require();
-        Assert.Equal(manifest.Files, read.Files);
-        Assert.Equal(manifest.InstallationFiles, read.InstallationFiles.OrderByDescending(file => file.Name));
+        Assert.Equal(manifest.Packages, read.Packages);
+        Assert.Equal(
+            [manifest.Files[0], manifest.Files[1], manifest.Files[2], manifest.Files[3], manifest.Files[4], manifest.Files[5] with { Package = null }],
+            read.Files);
+    }
+
+    [Theory]
+    [InlineData("PACK1", false)]
+    [InlineData("PACK2", true)]
+    public void AFileTakenFromAnInstallationFile_Differs_UnlessItHoldsTheBytesThatFilesHashFixed_NotTheFirstPackages(string pinned, bool differs)
+    {
+        Write("b.nif", "hello");
+        var taken = new ManifestFile("b.nif", new PackageEntry.Held(), "Zed.7z");
+        KeepAsRestored(TakingFromZed("PACK1", taken));
+        TakingFromZed(pinned, taken);
+
+        Assert.Equal(differs, SourceModStatus().Differing.Contains("b.nif"));
     }
 
     [Fact]
-    public void ALineTakenFromAnInstallationFile_IsFixedByThatFilesHash_NotByThePackage()
+    public void AFileAnArchiveOfTheManifestPacks_IsNotGone_ThoughNoLooseCopyIsThere()
     {
-        var manifest = new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [new ManifestFile("b.nif", new PackageEntry.FromInstallationFile("Zed.7z"))])
-        {
-            InstallationFiles = [new ManifestPackage.InstallationFile("Zed.7z", 7, "ZZZZ")],
-        };
+        var packed = new ManifestFile("b.nif", new PackageEntry.Held(), "Zed.7z");
+        var manifest = TakingFromZed("PACK1", packed) with { Archives = [new ManifestArchive("Mod - Main.ba2", ["b.nif"])] };
+        _repository.WriteSourceManifest(_source, manifest);
 
-        Assert.Equal(new FileBytes.InInstallationFile("Zed.7z", "b.nif"), manifest.BytesOf(manifest.Files[0]));
+        Assert.Empty(SourceModStatus().Gone);
     }
 
     public static TheoryData<ManifestPackage, string> PackagesAndTheirLines => new()
@@ -591,7 +610,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         _repository.WriteManifest(_root, "mod", new Manifest(package, [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
-        Assert.Contains("\"package\": " + line, File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
+        Assert.Contains("\"packages\": [\n" + line + "\n]", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
     [Theory]
@@ -599,7 +618,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("1.2.3")]
     public void WriteManifest_OfAModWithNoPackageAndNoFiles_WritesAnEmptyFileList_BecauseTheVersionBelongsToThePackage(string? version)
     {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, [], version));
+        _repository.WriteManifest(_root, "mod", new Manifest([], [], version));
 
         Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
@@ -607,7 +626,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
     {
-        var manifest = new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
+        var manifest = new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
         _repository.WriteManifest(_root, "mod", manifest);
         var path = Path.Combine(_root, "mod.manifest.json");
         File.SetLastWriteTimeUtc(path, LongAgo);
@@ -620,7 +639,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteManifest_WritesNoByteOrderMark_AndKeepsANonAsciiNameReadable()
     {
-        var manifest = new Manifest(null, [new ManifestFile("meshes/café.nif", new PackageEntry.NotHeld())]);
+        var manifest = new Manifest([], [new ManifestFile("meshes/café.nif", new PackageEntry.NotHeld())]);
 
         _repository.WriteManifest(_root, "mod", manifest);
 
@@ -632,7 +651,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteManifest_OrdersFilesAlphabetically_NotCapitalsFirst()
     {
-        var manifest = new Manifest(null, [
+        var manifest = new Manifest([], [
             new ManifestFile("Textures/x.dds", new PackageEntry.Held()),
             new ManifestFile("meshes/b.nif", new PackageEntry.Held()),
             new ManifestFile("Meshes/a.nif", new PackageEntry.Held()),
@@ -660,7 +679,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
         new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: false), [new ManifestFile("d.esp", new PackageEntry.Held())]),
         new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
-        new Manifest(null, []),
+        new Manifest([], []),
         new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.esp", new PackageEntry.OtherBytes())]),
     };
 
@@ -681,7 +700,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void AManifestsSteps_ReadBackInTheirOrder_WithTheToolsAndTheFilesTheyMake()
     {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
+        _repository.WriteManifest(_root, "mod", new Manifest([], [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
         {
             Steps = [new ManifestStep("Zip", ["a", "b"]), new ManifestStep("Archive", [])],
             Tools = [new ManifestTool("Zip", "https://example.com/zip")],
@@ -714,14 +733,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":false,\"otherBytes\":true}]}", "its file 1: it says both")]
     [InlineData("{\"files\": [{\"path\":\"a.txt\",\"otherBytes\":true,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
     [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":false,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
-    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"installationFile\":\"A.zip\"}]}", "its file 1: it takes from an installation file the manifest does not name")]
-    [InlineData("{\"installationFiles\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\"}], \"files\": [{\"path\":\"a.txt\",\"installationFile\":\"A.zip\",\"otherBytes\":true}]}", "its file 1: it names an installation file")]
-    [InlineData("{\"installationFiles\": [{\"installationFile\":\"A.zip\"}], \"files\": []}", "its manifest cannot be read at its installation file 1")]
-    [InlineData("{\"installationFiles\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\",\"path\":\"C:/A.zip\"}], \"files\": []}", "its manifest's installation file 1 holds 'path'")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"package\":\"A.zip\"}]}", "its file 1: it names a package the manifest does not name")]
+    [InlineData("{\"packages\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\"}], \"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"package\":\"A.zip\",\"madeByStep\":true}]}", "its file 1: it names a package for a file a step makes")]
+    [InlineData("{\"packages\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\"}, {\"installationFile\":\"A.zip\",\"size\":2,\"hash\":\"G\"}], \"files\": []}", "names the package 'A.zip' twice")]
+    [InlineData("{\"packages\": [{\"submodule\":\"Mod\"}, {\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\",\"version\":\"2\"}], \"files\": []}", "its manifest's package 2 holds a version")]
+    [InlineData("{\"packages\": [{\"installationFile\":\"A.zip\"}], \"files\": []}", "its manifest cannot be read at its package 1")]
+    [InlineData("{\"packages\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\",\"path\":\"C:/A.zip\"}], \"files\": []}", "its manifest's package 1 holds 'path'")]
     [InlineData("{\"files\": []", "line")]
-    [InlineData("{\"package\": {\"installationFile\":\"A.zip\"}, \"files\": []}", "cannot be read")]
-    [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "holds 'remote'")]
-    [InlineData("{\"package\": {\"version\": 7}, \"files\": []}", "cannot be read")]
+    [InlineData("{\"packages\": [{\"remote\":\"https://example.com/mod.git\"}], \"files\": []}", "holds 'remote'")]
+    [InlineData("{\"packages\": [{\"version\": 7}], \"files\": []}", "cannot be read")]
     [InlineData("{}", "cannot be read")]
     [InlineData("{\"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"madeByStep\":false}]}", "its file 1: its madeByStep is false")]
     [InlineData("{\"steps\": [{\"task\":\"Zip\"}], \"files\": [{\"path\":\"a.txt\",\"madeByStep\":true,\"otherBytes\":true}]}", "its file 1: it says both")]
@@ -830,7 +850,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_root));
     }
 
-    private static readonly Manifest NoLines = new(null, []);
+    private static readonly Manifest NoLines = new([], []);
 
     private static readonly Dictionary<string, string> NoHashes = [];
 
@@ -857,6 +877,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private Manifest ManifestedFromSource(string repository, bool isSubmodule = true)
     {
         var manifest = new Manifest(new ManifestPackage.SourceRepository(repository, isSubmodule), [new ManifestFile("a.esp", new PackageEntry.Held())]) { Output = "mod" };
+        _repository.WriteSourceManifest(_source, manifest);
+        return manifest;
+    }
+
+    private Manifest TakingFromZed(string hash, ManifestFile taken)
+    {
+        var manifest = new Manifest(
+            [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), new ManifestPackage.InstallationFile("Zed.7z", 7, hash)], [taken]) { Output = "mod" };
         _repository.WriteSourceManifest(_source, manifest);
         return manifest;
     }

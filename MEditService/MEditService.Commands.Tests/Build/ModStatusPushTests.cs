@@ -60,7 +60,7 @@ public sealed class ModStatusPushTests : IDisposable
     private IReadOnlyList<string> NextPush() =>
         _pushes.TryTake(out var mods, Patience) ? mods : throw new TimeoutException("no mod status was pushed");
 
-    private void Manifested(string mod) => _folders.WithFile(mod, "a.nif", "a").Manifests[mod] = new Manifest(null, [new ManifestFile("a.nif", new PackageEntry.NotHeld())]);
+    private void Manifested(string mod) => _folders.WithFile(mod, "a.nif", "a").Manifests[mod] = new Manifest([], [new ManifestFile("a.nif", new PackageEntry.NotHeld())]);
 
     [Fact]
     public void TheFirstSnapshot_PushesEveryMod()

@@ -67,35 +67,24 @@ public sealed class RestoreASourceModTests : IDisposable
         Assert.Equal(["meshes/c.nif.excluded"], _folders.ReadSourceManifest(SourceFolder).Value().Require().Files.Select(file => file.Path));
     }
 
-    private const string TakingFromAPack =
-        "{\"output\": \"Mod\", \"installationFiles\": [{\"installationFile\":\"Pack.zip\",\"size\":1,\"hash\":\"HASH\"}], "
-        + "\"files\": [{\"path\":\"textures/a.dds\",\"installationFile\":\"Pack.zip\"}]}";
-
     [Fact]
     public async Task ASourceModWhoseManifestNamesAnInstallationFileTheRequestDidNotHand_IsNotFound_NamingIt_ThenBuildsFromItOnceHanded()
     {
-        var pinned = _submodule.Commit(("Mod.manifest.json", TakingFromAPack), ("assets/textures/a.dds", "placeholder"));
-        var pack = Path.Combine(_root, "downloads", "Pack.zip");
-        Directory.CreateDirectory(Path.Combine(_root, "downloads"));
-        using (var zip = System.IO.Compression.ZipFile.Open(pack, System.IO.Compression.ZipArchiveMode.Create))
-        {
-            using var writer = new StreamWriter(zip.CreateEntry("textures/a.dds").Open());
-            writer.Write("from the pack");
-        }
+        var pinned = _submodule.Commit(("Mod.manifest.json", DownloadedZip.TakingFromAPack), ("assets/textures/a.dds", "placeholder"));
+        var pack = DownloadedZip.WritePack(Path.Combine(_root, "downloads"), ("textures/a.dds", "from the pack"), ("Data/c.nif", "moved"));
 
         var skipped = Assert.Single((await Restore(pinned)).Refused);
         Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
         Assert.Equal("Pack.zip", Assert.Single(skipped.InstallationFilesNotFound).Name);
 
-        var handed = new InstallationFile(pack, null, 1, "HASH", [new HashedEntry("textures/a.dds", "x")]);
-        Assert.Single((await Restore(pinned, installationFiles: [handed])).Applied);
+        Assert.Single((await Restore(pinned, installationFiles: [pack])).Applied);
         Assert.Equal("from the pack", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));
     }
 
     [Fact]
     public async Task AManifestNamingASubmodule_WhoseRequestHandsNone_IsNotFound_NamingIt()
     {
-        CommitAtHead(Commit("{\"output\": \"Mod\", \"package\": {\"submodule\": \"Mod\"}}", "c"));
+        CommitAtHead(Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\"}]}", "c"));
 
         var skipped = Assert.Single((await Restore(pin: null)).Refused);
 
@@ -121,7 +110,7 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task TheRebuild_WritesAManifestNamingTheSubmodule_WithTheVersionItsManifestHeld()
     {
-        var versioned = Commit("{\"output\": \"Mod\", \"package\": {\"submodule\": \"Mod\", \"version\": \"1.2.3\"}}", "c");
+        var versioned = Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\", \"version\": \"1.2.3\"}]}", "c");
 
         await Restore(versioned);
 
@@ -287,7 +276,7 @@ public sealed class RestoreASourceModTests : IDisposable
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder) { InstallationFiles = installationFiles ?? [] }],
+            [new ModToRestore(ModName, ModFolder, installationFiles ?? [], ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFiles: null, SourceFolder)],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null) { Tasks = tasks ?? new HashSet<string>() },
             "restore", cancel);
     }

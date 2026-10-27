@@ -344,62 +344,98 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AFileTheManifestTakesFromAnInstallationFile_ReplacesTheSourcesPlaceholder_AndItsLineKeepsSayingSo()
+    public async Task AFileTheManifestTakesFromAnInstallationFile_ReplacesTheSourcesPlaceholder_AndItsLineKeepsNamingItsPackage()
     {
-        WriteSourceText(TakingFromAPack, ("textures/a.dds", "placeholder"));
-        var pack = Downloaded("Pack.zip", ("textures/a.dds", "from the pack"), ("Data/c.nif", "moved"));
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
 
-        await Landed(_noArchives, installationFiles: [pack]);
+        await Landed(_noArchives, installationFiles: [Pack(("textures/a.dds", "from the pack"), ("Data/c.nif", "moved"))]);
 
         Assert.Equal([("meshes/c.nif", "moved"), ("textures/a.dds", "from the pack")], FilesIn(ModFolder));
         var manifest = ManifestWritten().Require();
         Assert.Equal(
-            [new ManifestFile("meshes/c.nif", new PackageEntry.FromInstallationFile("Pack.zip", "Data/c.nif")), new ManifestFile("textures/a.dds", new PackageEntry.FromInstallationFile("Pack.zip"))],
+            [new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: false), new ManifestPackage.InstallationFile(DownloadedZip.PackName, 1, DownloadedZip.PackHash)],
+            manifest.Packages);
+        Assert.Equal(
+            [new ManifestFile("meshes/c.nif", ManifestFile.At("meshes/c.nif", new FileBytes.InInstallationFile(DownloadedZip.PackName, "Data/c.nif")).Entry, DownloadedZip.PackName),
+                new ManifestFile("textures/a.dds", new PackageEntry.Held(), DownloadedZip.PackName)],
             manifest.Files.OrderBy(file => file.Path, StringComparer.Ordinal));
-        Assert.Equal("Pack.zip", Assert.Single(manifest.InstallationFiles).Name);
         Assert.Empty(Status().Differing);
+        Assert.Empty(Status().Gone);
     }
 
     [Fact]
-    public async Task AnArchive_PacksAFileTakenFromAnInstallationFile_AndLeavesNoLooseCopy()
+    public async Task AnArchive_PacksAFileTakenFromAnInstallationFile_LeavingNoLooseCopy_ThoughItsLineStays_AndTheModIsNotGone()
     {
-        WriteSourceText(
-            TakingFromAPack.Replace("\"files\"", "\"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\"]}, \"files\""));
-        var pack = Downloaded("Pack.zip", ("textures/a.dds", "a"), ("Data/c.nif", "moved"));
+        WriteSourceText(DownloadedZip.TakingFromAPack.Replace("\"files\"", "\"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\"]}, \"files\""));
         var variants = new ArchiveVariants(new Ba2Variant(1, Ba2Contents.General, Compressed: false), new Ba2Variant(1, Ba2Contents.Textures, Compressed: false));
 
-        var built = await Landed(new InstanceToBuild(ExclusionMark, variants, StatCache), installationFiles: [pack]);
+        var built = await Landed(new InstanceToBuild(ExclusionMark, variants, StatCache), installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "moved"))]);
 
         Assert.Empty(built.ArchivesRefused);
         Assert.Equal(["Mod - Main.ba2", "textures/a.dds"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Contains("meshes/c.nif", ManifestWritten().Require().Files.Select(file => file.Path));
+        Assert.Empty(Status().Gone);
+    }
+
+    [Fact]
+    public async Task ATakenFileTheExclusionMarkRenames_IsRecordedUnderItsFolderName_WhereItsPackageHoldsItUnmarked()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack.Replace("\"files\"", "\"exclude\": [\"textures/a.dds\"], \"files\""));
+
+        await Landed(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "moved"))]);
+
+        Assert.Equal(["meshes/c.nif", "textures/a.dds.excluded"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Equal(
+            ManifestFile.At("textures/a.dds.excluded", new FileBytes.InInstallationFile(DownloadedZip.PackName, "textures/a.dds")) with { Package = DownloadedZip.PackName },
+            ManifestWritten().Require().Files.Single(file => file.Path.StartsWith("textures", StringComparison.Ordinal)));
+        Assert.Empty(Status().Gone);
+        Assert.Empty(Status().Differing);
     }
 
     [Fact]
     public async Task AnInstallationFileTheRequestDidNotHand_RefusesTheMod_NamingItForTheRequestToFind_AndWritesNothing()
     {
-        WriteSourceText(TakingFromAPack, ("textures/a.dds", "placeholder"));
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
 
         var refused = Assert.Single((await Build(_noArchives)).Refused);
 
         Assert.Equal(BuildRefusal.InstallationFileLacking, refused.Refusal);
-        Assert.Equal("Pack.zip", Assert.Single(refused.InstallationFilesNotFound).Name);
+        Assert.Equal(DownloadedZip.PackName, Assert.Single(refused.InstallationFilesNotFound).Name);
         Assert.Contains("installation file 'Pack.zip' is missing", refused.Message, StringComparison.Ordinal);
         Assert.False(Directory.Exists(ModFolder));
     }
 
     [Fact]
-    public async Task AnInstallationFileWithOtherBytes_OrWithoutAnEntryALineTakes_RefusesTheMod_NamingWhy()
+    public async Task AnInstallationFileWithOtherBytes_RefusesTheMod_AndIsNotAskedForAgain()
     {
-        WriteSourceText(TakingFromAPack, ("textures/a.dds", "placeholder"));
-        var other = Downloaded("Pack.zip", ("textures/a.dds", "a"), ("Data/c.nif", "c")) with { Hash = "OTHER" };
-        var lacksAnEntry = Downloaded("Pack.zip", ("textures/a.dds", "a"));
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
 
-        var otherBytes = Assert.Single((await Build(_noArchives, installationFiles: [other])).Refused);
-        var noEntry = Assert.Single((await Build(_noArchives, installationFiles: [lacksAnEntry])).Refused);
+        var refused = Assert.Single((await Build(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "c")) with { Hash = "OTHER" }])).Refused);
 
-        Assert.Equal((BuildRefusal.InstallationFileLacking, "was not built: installation file 'Pack.zip' has other bytes."), (otherBytes.Refusal, otherBytes.Message));
-        Assert.Equal("was not built: installation file 'Pack.zip' holds no 'Data/c.nif'.", noEntry.Message);
-        Assert.Empty(otherBytes.InstallationFilesNotFound);
+        Assert.Equal((BuildRefusal.InstallationFileLacking, "was not built: installation file 'Pack.zip' has other bytes."), (refused.Refusal, refused.Message));
+        Assert.Empty(refused.InstallationFilesNotFound);
+    }
+
+    [Fact]
+    public async Task AnInstallationFileWithoutAnEntryALineTakes_RefusesTheMod_NamingTheEntry()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+
+        var refused = Assert.Single((await Build(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"))])).Refused);
+
+        Assert.Equal("was not built: installation file 'Pack.zip' holds no 'Data/c.nif'.", refused.Message);
+    }
+
+    [Fact]
+    public async Task AnInstallationFileTheRequestCouldNotRead_RefusesTheMod_NamingWhy_AndIsNotAskedForAgain()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+        var unreadable = new Dictionary<string, string> { [DownloadedZip.PackName] = "EACCES" };
+
+        var refused = Assert.Single((await Build(_noArchives, unreadableInstallationFiles: unreadable)).Refused);
+
+        Assert.Equal("was not built: installation file 'Pack.zip' could not be read: EACCES.", refused.Message);
+        Assert.Empty(refused.InstallationFilesNotFound);
     }
 
     private async Task InitializedWithALocalizedPlugin()
@@ -425,31 +461,15 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     private async Task<BuildResult> Build(
-        InstanceToBuild instance, bool isSubmodule = false, IReadOnlyList<string>? made = null, IReadOnlyList<InstallationFile>? installationFiles = null)
+        InstanceToBuild instance, bool isSubmodule = false, IReadOnlyList<string>? made = null, IReadOnlyList<InstallationFile>? installationFiles = null,
+        IReadOnlyDictionary<string, string>? unreadableInstallationFiles = null)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
         return (await TestEditService.BuildModHandler(_holder).BuildAsync(
-            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made) { InstallationFiles = installationFiles ?? [] }], instance)).Value();
+            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made) { InstallationFiles = installationFiles ?? [], UnreadableInstallationFiles = unreadableInstallationFiles }], instance)).Value();
     }
 
-    private InstallationFile Downloaded(string name, params (string Path, string Text)[] entries)
-    {
-        var path = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "downloads")).FullName, name);
-        File.Delete(path);
-        using (var archive = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create))
-        {
-            foreach (var (entryPath, text) in entries)
-            {
-                using var writer = new StreamWriter(archive.CreateEntry(entryPath).Open());
-                writer.Write(text);
-            }
-        }
-        return new InstallationFile(path, Page: null, new FileInfo(path).Length, "HASH", [.. entries.Select(entry => new HashedEntry(entry.Path, entry.Text))]);
-    }
-
-    private const string TakingFromAPack =
-        "{\"output\": \"Mod\", \"installationFiles\": [{\"installationFile\":\"Pack.zip\",\"size\":1,\"hash\":\"HASH\"}], "
-        + "\"files\": [{\"path\":\"textures/a.dds\",\"installationFile\":\"Pack.zip\"}, {\"path\":\"meshes/c.nif\",\"installationFile\":\"Pack.zip\",\"packagePath\":\"Data/c.nif\"}]}";
+    private InstallationFile Pack(params (string Path, string Text)[] entries) => DownloadedZip.WritePack(Path.Combine(_root, "downloads"), entries);
 
     private const string WithAStep =
         "{\"output\": \"Mod\", \"steps\": [{\"task\": \"Optimise textures\", \"args\": [\"textures\"]}], "

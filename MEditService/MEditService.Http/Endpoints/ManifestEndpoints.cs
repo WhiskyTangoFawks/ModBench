@@ -114,11 +114,8 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
-                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule(),
-                mod.UnreadableGameFiles, mod.UnreadableInstallationFile, mod.SourceFolder)
-            {
-                InstallationFiles = [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())],
-            })],
+                mod.Name, mod.Folder, HandedBy(mod),
+                mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule(), mod.UnreadableGameFiles, mod.UnreadableInstallationFiles, mod.SourceFolder))],
             new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal) },
             req.Gesture, running.Token);
 
@@ -126,6 +123,9 @@ internal static class ManifestEndpoints
             "Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result,
             refusal => !req.AsksWhatItLacks || refusal != RestoreRefusal.NotFound);
     }
+
+    private static List<InstallationFile> HandedBy(RestoreFromManifestModRequest mod) =>
+        [.. (mod.InstallationFile is { } one ? [one] : Array.Empty<InstallationFileRequest>()).Concat(mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())];
 
     internal static IResult CloneSubmodules(CloneSubmodulesRequest req, CloneSubmodulesHandler handler, ILoggerFactory loggerFactory, CancellationToken aborted) =>
         req.Submodules is { Count: > 0 } submodules && submodules.All(submodule => submodule is { IsWhole: true })
@@ -231,7 +231,7 @@ internal sealed record RestoreFromManifestRequest(
 /// or installation file, its source folder, and the installation files a source mod's manifest names.</summary>
 internal sealed record RestoreFromManifestModRequest(
     string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule,
-    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null, string? SourceFolder = null,
+    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, IReadOnlyDictionary<string, string>? UnreadableInstallationFiles = null, string? SourceFolder = null,
     IReadOnlyList<InstallationFileRequest>? InstallationFiles = null)
     : IModRequest;
 

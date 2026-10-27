@@ -3,8 +3,8 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>Each manifest line's entry in the mod's one package, with the hash that fixes its bytes, and what the package lacks.</summary>
-internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, InstallationFile? installationFile, GameFolder? gameFolder,
-    IReadOnlyDictionary<string, string>? unreadableGameFiles = null, string? unreadableInstallationFile = null)
+internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, IReadOnlyList<InstallationFile> installationFiles, GameFolder? gameFolder,
+    IReadOnlyDictionary<string, string>? unreadableGameFiles = null, IReadOnlyDictionary<string, string>? unreadableInstallationFiles = null)
 {
     private readonly Dictionary<string, string> _unreadableGameFiles = new(unreadableGameFiles ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
 
@@ -40,13 +40,16 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
-    private (Handed? Handed, Lack? Lack)? _package;
+    private readonly Dictionary<string, (Handed? Handed, Lack? Lack)> _packages = [];
 
     public Resolved Resolve()
     {
         List<PackagedFile> sourced = [];
         List<Lack> lacks = [];
-        if (manifest.Package is ManifestPackage.InstallationFile named && Package(named).Lack is { } missing) lacks.Add(missing);
+        foreach (var named in manifest.Packages.OfType<ManifestPackage.InstallationFile>())
+        {
+            if (Package(named).Lack is { } missing) lacks.Add(missing);
+        }
         if (manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false }) lacks.Add(new Lack.NoHost());
         foreach (var file in manifest.Files)
         {
@@ -60,7 +63,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     }
 
     private static Lack? PinnedLack(ManifestPackage.GameFolder pinned, IReadOnlyList<PackagedFile> taken) =>
-        FileHash.OfFilesTaken(taken.Select(file => new HashedFile(file.Path, file.Hash))) == pinned.Hash
+        FileHash.OfFilesTaken(taken.OfType<PackagedFile.InGameFolder>().Select(file => new HashedFile(file.Path, file.Hash))) == pinned.Hash
             ? null
             : new Lack($"the files it takes from the game folder '{pinned.Name}' have other bytes");
 
@@ -69,9 +72,9 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         FileBytes.NotHeld => (null, new Lack($"its package does not hold '{file.Path}'")),
         FileBytes.OtherBytes => (null, new Lack($"its package holds '{file.Path}' with other bytes")),
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
-        FileBytes.InInstallationFile held when manifest.Package is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
+        FileBytes.InInstallationFile held when manifest.PackageOf(file) is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
         FileBytes.InGameFolder held => EntryOf(file.Path, held),
-        FileBytes.Built or FileBytes.MadeByStep or FileBytes.InInstallationFile => (null, null),
+        FileBytes.Built or FileBytes.MadeByStep => (null, null),
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 
@@ -92,11 +95,15 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     private Lack GameFileLack(string path) =>
         _unreadableGameFiles.TryGetValue(path, out var why) ? new Lack.GameFileUnreadable(path, why) : new Lack.GameFileMissing(path);
 
-    private (Handed? Handed, Lack? Lack) Package(ManifestPackage.InstallationFile named) => _package ??= Find(named);
+    private (Handed? Handed, Lack? Lack) Package(ManifestPackage.InstallationFile named)
+    {
+        if (!_packages.TryGetValue(named.Name, out var found)) _packages[named.Name] = found = Find(named);
+        return found;
+    }
 
     private (Handed?, Lack?) Find(ManifestPackage.InstallationFile named)
     {
-        var (handed, lack) = new HandedInstallationFiles(repository, installationFile is null ? [] : [installationFile]).Of(named, unreadableInstallationFile);
+        var (handed, lack) = new HandedInstallationFiles(repository, installationFiles).Of(named, unreadableInstallationFiles);
         if (handed is null) return (null, lack);
         Dictionary<string, HashedEntry> entries = new(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in handed.Entries) entries.TryAdd(entry.Path, entry);

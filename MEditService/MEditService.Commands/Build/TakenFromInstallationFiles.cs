@@ -9,28 +9,28 @@ namespace MEditService.Commands.Build;
 internal sealed class TakenFromInstallationFiles(IModFolderRepository repository, string modFolder) : IDisposable
 {
     private readonly IScratchFiles _scratch = repository.CreateScratchFiles();
-    private readonly List<(ManifestFile Line, PackageEntry.FromInstallationFile From, InstallationFile File)> _taken = [];
+    private readonly List<(string Path, string EntryPath, InstallationFile File)> _taken = [];
 
     /// <summary>Null when every installation file the manifest names is handed with the bytes it pins and holds each entry a
     /// line takes; otherwise the build's refusal, naming the files the request has not handed.</summary>
-    public ItemAnswer<BuildStop, ModBuildOutcome>? Lacking(Manifest manifest, IReadOnlyList<InstallationFile> handed)
+    public ItemAnswer<BuildStop, ModBuildOutcome>? Lacking(
+        Manifest manifest, IReadOnlyList<InstallationFile> handed, IReadOnlyDictionary<string, string>? unreadable)
     {
         var checking = new HandedInstallationFiles(repository, handed);
         Dictionary<string, InstallationFile> files = [];
         List<PackageContents.Lack> lacks = [];
-        foreach (var named in manifest.InstallationFiles)
+        foreach (var named in manifest.Packages.OfType<ManifestPackage.InstallationFile>())
         {
-            var (file, lack) = checking.Of(named);
+            var (file, lack) = checking.Of(named, unreadable);
             if (file is not null) files[named.Name] = file;
             if (lack is not null) lacks.Add(lack);
         }
         foreach (var line in manifest.Files)
         {
-            if (line.Entry is not PackageEntry.FromInstallationFile from || !files.TryGetValue(from.Name, out var file)) continue;
-            var inside = from.PathIn(line.Path);
-            if (!file.Entries.Any(entry => string.Equals(entry.Path, inside, StringComparison.OrdinalIgnoreCase)))
-                lacks.Add(new PackageContents.Lack($"installation file '{from.Name}' holds no '{inside}'"));
-            else _taken.Add((line, from, file));
+            if (manifest.BytesOf(line) is not FileBytes.InInstallationFile held || !files.TryGetValue(held.Name, out var file)) continue;
+            if (!file.Entries.Any(entry => string.Equals(entry.Path, held.Path, StringComparison.OrdinalIgnoreCase)))
+                lacks.Add(new PackageContents.Lack($"installation file '{held.Name}' holds no '{held.Path}'"));
+            else _taken.Add((line.Path, held.Path, file));
         }
         if (lacks.Count == 0) return null;
         return ItemAnswer<BuildStop, ModBuildOutcome>.Refused(
@@ -48,7 +48,7 @@ internal sealed class TakenFromInstallationFiles(IModFolderRepository repository
         var rebuild = new ModRebuild(repository, modFolder);
         foreach (var fromOne in _taken.GroupBy(taken => taken.File))
         {
-            var wanted = fromOne.ToLookup(taken => taken.From.PathIn(taken.Line.Path), taken => taken.Line.Path, StringComparer.OrdinalIgnoreCase);
+            var wanted = fromOne.ToLookup(taken => taken.EntryPath, taken => taken.Path, StringComparer.OrdinalIgnoreCase);
             rebuild.Extract(fromOne.Key, wanted.Select(group => group.Key), (entry, content) =>
             {
                 var stored = _scratch.Store(content);

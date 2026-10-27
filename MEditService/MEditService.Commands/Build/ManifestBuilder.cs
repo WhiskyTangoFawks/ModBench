@@ -28,7 +28,7 @@ internal sealed class ManifestBuilder
         var recorded = Recorded([.. files.Where(file => !madeByStep.Contains(file.Path))], version);
         return (held ?? recorded) with
         {
-            Package = recorded.Package,
+            Packages = recorded.Packages,
             Version = recorded.Version,
             Files = [.. recorded.Files, .. madeByStep.Select(path => new ManifestFile(path, new PackageEntry.MadeByStep()))],
         };
@@ -39,7 +39,7 @@ internal sealed class ManifestBuilder
     {
         if (FromGameFolder(files) is { } gameFolder)
             return new(gameFolder, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version);
-        if (_package is null) return new(null, [.. files.Select(EntryOf)]);
+        if (_package is null) return new([], [.. files.Select(EntryOf)]);
         return new(_package, [.. files.Select(EntryOf)], version);
     }
 
