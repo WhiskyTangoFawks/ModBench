@@ -722,9 +722,9 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('posts nothing when a FormKey link is Ctrl+clicked: go to record is the menu\'s', async () => {
     renderPanel(fkCompareResult, { plugins: fkPlugins });
-    await waitFor(() => screen.getByText('HumanRace [00013918:Fallout4.esm]'));
+    await waitFor(() => screen.getByText('HumanRace'));
     vi.mocked(vscode.postMessage).mockClear();
-    fireEvent.click(screen.getByText('HumanRace [00013918:Fallout4.esm]'), { ctrlKey: true });
+    fireEvent.click(screen.getByText('HumanRace'), { ctrlKey: true });
     expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'openRecord' }));
   });
 

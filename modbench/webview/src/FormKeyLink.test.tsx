@@ -8,15 +8,25 @@ import type { FormKeyResolution } from './types';
 
 const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 
-describe('FormKeyLink — label is the composite "EditorID [FormKey]", never the EditorID alone, so the format a reference is chosen in and read back in agree', () => {
-  it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
+describe('FormKeyLink — the cell reads the EditorID, with the composite in its tooltip', () => {
+  it('renders the EditorID as its label, and the composite EditorID [FormKey] as its tooltip, when resolved', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
-    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
+    expect(screen.getByText('DogmeatRace')).toHaveAttribute('title', 'DogmeatRace [000019:Fallout4.esm]');
+  });
+
+  it('renders the FormKey when the record has no EditorID', () => {
+    render(<FormKeyLink value="000019:Fallout4.esm" resolution={{ ...validType, editorId: null }} />);
+    expect(screen.getByText('000019:Fallout4.esm')).toHaveAttribute('title', '000019:Fallout4.esm');
+  });
+
+  it('holds the warning reason in its tooltip beside the composite', () => {
+    render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} checkError="wrong type" />);
+    expect(screen.getByText('DogmeatRace')).toHaveAttribute('title', 'DogmeatRace [000019:Fallout4.esm]\nwrong type');
   });
 
   it('cuts a label too wide for its column with an ellipsis of its own, as a td\'s ellipsis never clips inside a button\'s text and a flex item\'s min-width: auto would cancel it (happy-dom has no layout: only the declaration is checked)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
-    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style).toMatchObject({
+    expect(screen.getByText('DogmeatRace').style).toMatchObject({
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', minWidth: '0',
     });
   });
@@ -26,19 +36,19 @@ describe('FormKeyLink — clicks, where go to record is the context menu\'s and 
   it('a plain click is the caller\'s', () => {
     const onClick = vi.fn();
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onClick={onClick} />);
-    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    fireEvent.click(screen.getByText('DogmeatRace'));
     expect(onClick).toHaveBeenCalledOnce();
   });
 
   it('a Ctrl+click is nobody\'s', () => {
     const onClick = vi.fn();
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onClick={onClick} />);
-    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'), { ctrlKey: true });
+    fireEvent.click(screen.getByText('DogmeatRace'), { ctrlKey: true });
     expect(onClick).not.toHaveBeenCalled();
   });
 
   it('sets no cursor of its own', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
-    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style.cursor).toBe('');
+    expect(screen.getByText('DogmeatRace').style.cursor).toBe('');
   });
 });

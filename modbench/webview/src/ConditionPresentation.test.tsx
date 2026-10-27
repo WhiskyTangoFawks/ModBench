@@ -453,7 +453,7 @@ describe('a type-varying member takes its cell from each column\'s own leaf: Com
     const comparisonValueRow = required(comparisonValueLabelCell.closest('tr'), "the 'ComparisonValue' row");
     const cells = comparisonValueRow.querySelectorAll('td');
     expect(required(cells[1], "the 'ComparisonValue' row's second cell").textContent).toBe('2.5');
-    expect(required(cells[2], "the 'ComparisonValue' row's third cell").textContent).toBe('MyGlobal [00000ABC:MyMod.esp]');
+    expect(required(cells[2], "the 'ComparisonValue' row's third cell").textContent).toBe('MyGlobal');
   });
 });
 
