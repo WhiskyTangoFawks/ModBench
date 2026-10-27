@@ -58,27 +58,20 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     });
   };
 
-  // modlist-repository.md, Restore from manifest, story 3: the manifest names the installation files, so mEdit asks for the
-  // ones the downloads folder holds once it has read it.
   const withInstallationFiles = async (outcome: BuildOutcome, sent: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused> => {
     const asking = outcome.refused.filter(({ installationFilesNotFound }) => (installationFilesNotFound?.length ?? 0) > 0);
     if (asking.length === 0) return outcome;
     const downloaded = await namedDownloadedFiles({ adapter }, asking.map(({ installationFilesNotFound }) => ({ installationFiles: installationFilesNotFound ?? [] })), {});
     const again = asking.flatMap(({ item, installationFilesNotFound }) => {
       const mod = sent.find(({ name }) => name === item);
-      return mod === undefined ? [] : [{ ...mod, installationFiles: (installationFilesNotFound ?? []).flatMap(({ name }) => wireFile(downloaded.handed(name)) ?? []) }];
+      return mod === undefined ? [] : [{
+        ...mod, installationFiles: (installationFilesNotFound ?? []).flatMap(({ name }) => wireFile(downloaded.handed(name)) ?? []),
+        unreadableInstallationFiles: downloaded.unreadableAmong(installationFilesNotFound ?? []),
+      }];
     });
     const second = await client.build(again, facts);
     if (isRefused(second)) return second;
-    const unreadable = (item: string): string => (asking.find((ask) => ask.item === item)?.installationFilesNotFound ?? [])
-      .flatMap(({ name }) => downloaded.unreadable(name) ?? []).map((why) => ` Its installation file could not be read: ${why}.`).join('');
-    return {
-      landed: [...outcome.landed, ...second.landed],
-      refused: [
-        ...outcome.refused.filter((refused) => !asking.includes(refused)),
-        ...second.refused.map((refused) => ({ ...refused, reason: refused.reason + unreadable(refused.item) })),
-      ],
-    };
+    return { landed: [...outcome.landed, ...second.landed], refused: [...outcome.refused.filter((refused) => !asking.includes(refused)), ...second.refused] };
   };
 
   return {

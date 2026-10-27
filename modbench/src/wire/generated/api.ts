@@ -1056,6 +1056,9 @@ export interface components {
             isSubmodule: boolean;
             made?: string[] | null;
             installationFiles?: components["schemas"]["InstallationFileRequest"][] | null;
+            unreadableInstallationFiles?: {
+                [key: string]: string;
+            } | null;
         };
         /** @enum {string} */
         BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool" | "InstallationFileLacking";
@@ -1855,7 +1858,9 @@ export interface components {
             unreadableGameFiles?: {
                 [key: string]: string;
             } | null;
-            unreadableInstallationFile?: string | null;
+            unreadableInstallationFiles?: {
+                [key: string]: string;
+            } | null;
             sourceFolder?: string | null;
             installationFiles?: components["schemas"]["InstallationFileRequest"][] | null;
         };

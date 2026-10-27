@@ -82,6 +82,16 @@ describe('sourceCommands build', () => {
     expect(outcome).toMatchObject({ landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.' }] });
   });
 
+  it('hands mEdit why an installation file its manifest names could not be read, by name', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] });
+    const adapter = fakeAdapter({ downloadedFiles: new Map([['Pack.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
+
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', installationFiles: [], unreadableInstallationFiles: { 'Pack.7z': 'EACCES' } }]);
+  });
+
   it('hands mEdit no archive variant for a release the table names none for', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);

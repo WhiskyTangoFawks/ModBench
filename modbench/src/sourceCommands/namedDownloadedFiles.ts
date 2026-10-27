@@ -8,7 +8,6 @@ type Downloading = {
   readonly nexus: Pick<Nexus, 'download'>;
 };
 
-// With no Nexus, a file the downloads folder lacks stays unhanded.
 type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
 
 export const wireFile = (file: InstallationFile | undefined): UpdateManifestMod['installationFile'] =>
@@ -44,6 +43,8 @@ export async function namedDownloadedFiles(
 ): Promise<{
   handed: (name: string | undefined) => InstallationFile | undefined;
   unreadable: (name: string | undefined) => string | undefined;
+  /** Why each of `files` that the downloads folder holds could not be read, by name. */
+  unreadableAmong: (files: readonly ManifestInstallationFile[]) => Record<string, string>;
   /** Why the installation file of `name`, which the downloads folder lacks, was not downloaded. */
   notDownloaded: (name: string | undefined) => string | undefined;
 }> {
@@ -73,6 +74,10 @@ export async function namedDownloadedFiles(
       const read = readOf(name)?.read;
       return read?.kind === 'unreadable' ? read.reason : undefined;
     },
+    unreadableAmong: (files) => Object.fromEntries(files.flatMap(({ name }) => {
+      const read = readOf(name)?.read;
+      return read?.kind === 'unreadable' ? [[name, read.reason]] : [];
+    })),
     notDownloaded: (name) => readOf(name)?.notDownloaded,
   };
 }

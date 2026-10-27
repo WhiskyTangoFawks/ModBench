@@ -394,11 +394,10 @@ async function restoreFolders(
   const submodules = await namedSubmodules(adapter, first.notFound);
   const again = sent.flatMap((mod) => {
     const notFound = retried.get(mod.name);
-    const [firstFile] = notFound?.installationFiles ?? [];
     return notFound === undefined
       ? [] : [{
-        ...mod, installationFile: wireFile(downloaded.handed(firstFile?.name)), submodule: submodules.handed(notFound.submodule),
-        unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFile: downloaded.unreadable(firstFile?.name),
+        ...mod, installationFiles: notFound.installationFiles.flatMap((file) => wireFile(downloaded.handed(file.name)) ?? []), submodule: submodules.handed(notFound.submodule),
+        unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFiles: downloaded.unreadableAmong(notFound.installationFiles),
       }];
   });
   const builtFromSource = new Set(again.filter((mod) => mod.submodule !== undefined).map((mod) => mod.name));
@@ -416,16 +415,21 @@ async function restoreFolders(
     client,
     again.flatMap((mod) => {
       const notFound = needing.get(mod.name);
-      return notFound === undefined ? [] : [{ ...mod, installationFiles: notFound.installationFiles.flatMap((file) => wireFile(fetched.handed(file.name)) ?? []) }];
+      return notFound === undefined ? [] : [{
+        ...mod, installationFiles: notFound.installationFiles.flatMap((file) => wireFile(fetched.handed(file.name)) ?? []),
+        unreadableInstallationFiles: fetched.unreadableAmong(notFound.installationFiles),
+      }];
     }),
     { ...secondFacts, asksWhatItLacks: false }, restoring);
   if (third !== undefined && !third.applied) return { ...third, landed: [...first.landed, ...second.landed] };
 
-  const unreadFor = new Map(second.notFound.filter((notFound) => !needing.has(notFound.mod) || third === undefined).concat(third?.notFound ?? []).map(({ mod, submodule, installationFiles }) => {
+  const answeredAgain = new Set(third === undefined ? [] : needing.keys());
+  const stillLacking = [...second.notFound.filter(({ mod }) => !answeredAgain.has(mod)), ...(third?.notFound ?? [])];
+  const unreadFor = new Map(stillLacking.map(({ mod, submodule, installationFiles }) => {
     const whyNot = installationFiles.flatMap(({ name }) => [downloaded.notDownloaded(name), fetched?.notDownloaded(name)].filter((why) => why !== undefined));
     return [mod, submodules.unread(submodule) + whyNot.map(sentence).join('')];
   }));
-  const refusedAgain = [...second.refused.filter((refused) => third === undefined || !needing.has(refused.item)), ...(third?.refused ?? [])];
+  const refusedAgain = [...second.refused.filter(({ item }) => !answeredAgain.has(item)), ...(third?.refused ?? [])];
   return {
     applied: true,
     landed: [...first.landed, ...second.landed, ...(third?.landed ?? [])],
