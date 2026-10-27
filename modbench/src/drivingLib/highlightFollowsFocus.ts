@@ -2,7 +2,6 @@ import type * as vscode from 'vscode';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { FocusedView } from './focusedView';
 
-/** The rows of each view that a selection relates to (plugins.md, The highlight). */
 interface RelatedRows {
   readonly plugins: readonly PluginAddress[];
 }
