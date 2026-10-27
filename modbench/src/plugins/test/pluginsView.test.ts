@@ -276,8 +276,11 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
 
     plugins.drawsHighlight.highlight({ plugins: [{ name: 'B.esp', origin: 'SomeMod' }], origins: [] });
 
-    const items = await Promise.all((await rows()).map((row) => provider().getTreeItem(row)));
-    const marked = items.flatMap(({ label }) => (typeof label === 'object' && label.highlights !== undefined ? [label.label] : []));
+    const marked: string[] = [];
+    for (const row of await rows()) {
+      const { label } = await provider().getTreeItem(row);
+      if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
+    }
     expect(marked).toEqual(['B.esp']);
   });
 });

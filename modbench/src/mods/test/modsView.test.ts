@@ -470,8 +470,11 @@ describe('the Mods view\'s selection and the highlight (plugins.md, The highligh
 
     drawsHighlight.highlight({ plugins: [], origins: [{ kind: 'mod', name: 'Beta' }] });
 
-    const items = await Promise.all((await shownRows()).map((row) => treeViews.view('modbench.modList').treeDataProvider.getTreeItem(row)));
-    const marked = items.flatMap(({ label }) => (typeof label === 'object' && label.highlights !== undefined ? [label.label] : []));
+    const marked: string[] = [];
+    for (const row of await shownRows()) {
+      const { label } = await treeViews.view('modbench.modList').treeDataProvider.getTreeItem(row);
+      if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
+    }
     expect(marked).toEqual(['Beta']);
   });
 });
