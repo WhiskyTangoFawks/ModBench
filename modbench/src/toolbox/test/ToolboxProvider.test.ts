@@ -19,17 +19,35 @@ const VALUE = instanceValueFixture({
 
 const SILENT = { warn: () => undefined };
 
-function rowsOf(instance: FakeInstance) {
-  return new ToolboxProvider({ instance, channel: SILENT }).getChildren();
+class FakeDeploymentFolder {
+  private readonly listeners: (() => void)[] = [];
+
+  constructor(public current?: string) {}
+
+  value = () => (this.current ? { path: this.current, name: this.current.split('/').pop() ?? '' } : undefined);
+
+  changed = (listener: () => void) => { this.listeners.push(listener); return { dispose: () => undefined }; };
+
+  set(folder: string | undefined): void {
+    this.current = folder;
+    this.listeners.forEach((listener) => listener());
+  }
 }
 
-function row(instance: FakeInstance, label: string) {
-  return present(rowsOf(instance).find((r) => r.label === label), `the ${label} row`);
+const providerOf = (instance: FakeInstance, deploymentFolder = new FakeDeploymentFolder()) =>
+  new ToolboxProvider({ instance, channel: SILENT, deploymentFolder });
+
+function rowsOf(instance: FakeInstance) {
+  return providerOf(instance).getChildren();
+}
+
+function row(instance: FakeInstance, label: string, deploymentFolder?: FakeDeploymentFolder) {
+  return present(providerOf(instance, deploymentFolder).getChildren().find((r) => r.label === label), `the ${label} row`);
 }
 
 describe('the Toolbox view, given an instance value', () => {
-  it('shows a Game row, then a Profile row, then a Modlist row, and nothing else', () => {
-    expect(rowsOf(new FakeInstance(VALUE)).map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
+  it('shows a Game row, then Profile, Modlist and Deployment rows, and nothing else', () => {
+    expect(rowsOf(new FakeInstance(VALUE)).map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist', 'Deployment']);
   });
 
   it('reads the game as MO2 names it, and no click', () => {
@@ -81,13 +99,42 @@ describe('the Toolbox view, given an instance value', () => {
       .toEqual([description, new ThemeIcon('source-control'), undefined, 'modlist', undefined]);
   });
 
+  describe('the Deployment row', () => {
+    const DEPLOYMENT = '/games/deployments/fo4-survival';
+
+    it('reads the deployment folder\'s name and names the folder in its tooltip, and a click opens the setting', () => {
+      const deployment = row(new FakeInstance(VALUE), 'Deployment', new FakeDeploymentFolder(DEPLOYMENT));
+
+      expect([deployment.description, deployment.iconPath, deployment.tooltip, deployment.command?.command])
+        .toEqual(['fo4-survival', new ThemeIcon('rocket'), DEPLOYMENT, 'modbench.settings.openDeploymentFolderHere']);
+    });
+
+    it.each([undefined, ''])('reads "no deployment folder" while the setting holds %j, and a click still opens the setting', (setting) => {
+      const deployment = row(new FakeInstance(VALUE), 'Deployment', new FakeDeploymentFolder(setting));
+
+      expect([deployment.description, deployment.tooltip, deployment.command?.command])
+        .toEqual(['no deployment folder', undefined, 'modbench.settings.openDeploymentFolderHere']);
+    });
+
+    it('follows the setting', () => {
+      const setting = new FakeDeploymentFolder();
+      const provider = providerOf(new FakeInstance(VALUE), setting);
+      const fired: unknown[] = [];
+      provider.onDidChangeTreeData((e) => fired.push(e));
+
+      setting.set(DEPLOYMENT);
+
+      expect([fired, provider.getChildren().find((r) => r.label === 'Deployment')?.description]).toEqual([[undefined], 'fo4-survival']);
+    });
+  });
+
   it('marks the Profile row as the profile, which the Profile menu\'s `viewItem` clause keys on, so its menu offers switch', () => {
     expect(row(new FakeInstance(VALUE), 'Profile').contextValue).toBe('profile');
   });
 
   it('follows a landed value', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -101,13 +148,13 @@ describe('the Toolbox view, given an instance value', () => {
 describe('the Toolbox view, given a later read that fails', () => {
   it('keeps its rows, says it shows the last good read, and clears the line once a read lands', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
     instance.fail('EACCES modlist.txt');
 
-    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
+    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist', 'Deployment']);
     expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt');
     expect(fired).toHaveLength(1);
     instance.publish(VALUE);
@@ -116,7 +163,7 @@ describe('the Toolbox view, given a later read that fails', () => {
 
   it('says nothing of a last good read while the first read has failed: the error row is the message', () => {
     const instance = new FakeInstance(VALUE, 0);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
 
     instance.fail('ENOENT modlist.txt');
 
@@ -127,7 +174,7 @@ describe('the Toolbox view, given a later read that fails', () => {
 describe('the Toolbox view, while a gesture says its phase', () => {
   it('shows the gesture\'s message over the last good read\'s, announces the change, and gives the line back', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
     instance.fail('EACCES modlist.txt');
@@ -167,7 +214,7 @@ describe('the Toolbox view, given the game folder not found', () => {
 
   it('clears the warning on the next value with the game folder found', () => {
     const instance = new FakeInstance(NOT_FOUND);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
 
     instance.publish(VALUE);
 
@@ -189,7 +236,7 @@ describe('the Toolbox view\'s states', () => {
 
   it('shows one error row in place of its rows when the first read fails, and rows once a read lands', () => {
     const instance = new FakeInstance(VALUE, 0);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -203,12 +250,12 @@ describe('the Toolbox view\'s states', () => {
 
     instance.publish(VALUE);
 
-    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
+    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist', 'Deployment']);
   });
 
   it('stops following the instance once disposed', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance, channel: SILENT });
+    const provider = providerOf(instance);
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 

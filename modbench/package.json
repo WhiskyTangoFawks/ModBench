@@ -169,6 +169,12 @@
           "default": 47200,
           "description": "The port Modbench serves your agent's MCP server on, at http://127.0.0.1:<port>/mcp. Set another for a workspace so two windows each have their own."
         },
+        "modbench.deployment.folder": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "The folder Deploy writes the active profile's load order into, as hardlinks. Set it for each instance, on the same volume as the instance."
+        },
         "modbench.mods.gameFolder": {
           "type": "string",
           "default": "",
@@ -432,6 +438,11 @@
       {
         "command": "modbench.settings.open",
         "title": "Open Settings",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.settings.openDeploymentFolderHere",
+        "title": "Open Deployment Folder Setting",
         "category": "Modbench"
       },
       {
@@ -820,6 +831,10 @@
         {
           "command": "modbench.copyValue",
           "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "modbench.settings.openDeploymentFolderHere",
+          "when": "false"
         },
         {
           "command": "modbench.record.openPinned",

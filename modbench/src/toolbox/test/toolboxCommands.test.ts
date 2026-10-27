@@ -69,6 +69,16 @@ describe('Open settings', () => {
   });
 });
 
+describe('Open the deployment folder setting', () => {
+  it('opens VS Code\'s Settings at the deployment folder\'s setting', async () => {
+    const { run } = register();
+
+    await run('modbench.settings.openDeploymentFolderHere');
+
+    expect(executeCommand).toHaveBeenCalledWith('workbench.action.openSettings', 'modbench.deployment.folder');
+  });
+});
+
 interface ProfileItem { label: string; description?: string }
 
 async function switchProfileChoosing(choice: string, over: Partial<ToolboxCommandDeps> = {}) {

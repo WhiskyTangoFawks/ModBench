@@ -1,5 +1,7 @@
+import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import type { GameFolderSetting } from './instanceAdapter/instanceAdapter';
+import type { DeploymentFolderSetting } from './toolbox/ToolboxProvider';
 import { onSettingChange } from './drivingLib/setting';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
@@ -12,6 +14,16 @@ export const gameFolderSetting: GameFolderSetting = {
   id: `modbench.${GAME_FOLDER_SETTING_KEY}`,
   value: () => meditConfig().get<string>(GAME_FOLDER_SETTING_KEY),
   changed: (listener) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${GAME_FOLDER_SETTING_KEY}`, listener),
+};
+
+const DEPLOYMENT_FOLDER_SETTING_KEY = 'deployment.folder';
+
+export const deploymentFolderSetting: DeploymentFolderSetting = {
+  value: () => {
+    const path = meditConfig().get<string>(DEPLOYMENT_FOLDER_SETTING_KEY);
+    return path ? { path, name: basename(path) } : undefined;
+  },
+  changed: (listener) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${DEPLOYMENT_FOLDER_SETTING_KEY}`, listener),
 };
 
 const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
