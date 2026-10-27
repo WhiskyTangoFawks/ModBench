@@ -37,6 +37,36 @@ describe('ScalarCell — typed text is taken as pasted text is', () => {
   });
 });
 
+describe('ScalarCell — a colour cell shows a swatch of the colour beside its text', () => {
+  it('draws the swatch in the colour the text names, with its alpha', () => {
+    render(<ScalarCell value="80FF8000" meta={meta({ type: 'color', holdsAlpha: true })} />);
+
+    expect(screen.getByText('#80FF8000')).toBeInTheDocument();
+    expect(screen.getByTestId('colour-swatch')).toHaveStyle({ backgroundColor: 'rgba(255, 128, 0, 0.5019607843137255)' });
+  });
+
+  it('draws an opaque colour that holds no alpha', () => {
+    render(<ScalarCell value="#FF8000" meta={meta({ type: 'color', holdsAlpha: false })} />);
+
+    expect(screen.getByText('#FF8000')).toBeInTheDocument();
+    expect(screen.getByTestId('colour-swatch')).toHaveStyle({ backgroundColor: 'rgb(255, 128, 0)' });
+  });
+
+  it('draws no swatch for a value that is not a colour, nor for a string that looks like one', () => {
+    const { rerender } = render(<ScalarCell value="not a colour" meta={meta({ type: 'color' })} />);
+    expect(screen.queryByTestId('colour-swatch')).toBeNull();
+
+    rerender(<ScalarCell value="#FF8000" meta={meta({ type: 'string' })} />);
+    expect(screen.queryByTestId('colour-swatch')).toBeNull();
+  });
+
+  it('leaves a float that happens to have six digits as it is', () => {
+    render(<ScalarCell value={123456} meta={meta({ type: 'float' })} />);
+
+    expect(screen.getByText('123456')).toBeInTheDocument();
+  });
+});
+
 describe('ScalarCell — a column with nowhere to write', () => {
   it('renders as plain text when no commit target was supplied, the ordinary state for every caller outside the field grid', () => {
     render(<ScalarCell value="before" meta={meta()} />);
