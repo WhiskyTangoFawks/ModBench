@@ -26,7 +26,7 @@ As a user, I want:
 | True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` |
 | Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | VS Code's quick pick of the names, opened on the current one | the name |
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
-| Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record of an active plugin; `—` for no reference | the record picker, below | `EditorID [FormKey]` |
+| Reference | the EditorID, or the FormKey when it resolves to no record of an active plugin, or to one with no EditorID; `—` for no reference; `EditorID [FormKey]` in its tooltip | the record picker, below | `EditorID [FormKey]` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text |
 | Colour | `#AARRGGBB`, or `#RRGGBB` for a colour that holds no alpha, as mEdit gives it | a text box | the text |
 | Vector | `x, y, z`, as mEdit gives it | a text box | the text |

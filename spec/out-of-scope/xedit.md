@@ -32,7 +32,7 @@ Gestures Modbench does differently.
 | 7 | ConflictPriority table | None, but for the version stamps: Version Control Info 1, Form Version and Version Control Info 2 show, and take part in no conflict. Mutagen abstracts away the other raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
 | 8 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
 | 9 | Change FormID | Editing the FormID field changes the record's FormKey only. A script updates the records that reference it. | Change FormID also updates every loaded record that references it | Ruling: updating the references is a compound action, so it is a script. |
-| 10 | Reference text | `EditorID [FormKey]` | `EditorID "Full Name" [SIG:FormID]` | Ruling: the FormKey is the record's identity, and a FormID changes with the load order. |
+| 10 | Reference text | The EditorID; `EditorID [FormKey]` where Modbench names the identity | `EditorID "Full Name" [SIG:FormID]` | Ruling: a user reads a reference by its EditorID. The identity is the FormKey, since a FormID changes with the load order. |
 | 11 | No reference | `—` | `NULL - Null Reference [00000000]` | Ruling. |
 | 12 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
 | 13 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
