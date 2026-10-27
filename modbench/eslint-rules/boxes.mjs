@@ -1,6 +1,5 @@
 // The boxes are the Modbench column of spec/architecture/target-architecture.d2. A band's lib is a box
-// the zoom-out does not draw; it counts where its folder is. A box in DRAWN_AHEAD_OF_CODE has no project yet;
-// the entry goes when its project arrives.
+// the zoom-out does not draw. A box in DRAWN_AHEAD_OF_CODE has no project yet; its entry goes with its arrival.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 
