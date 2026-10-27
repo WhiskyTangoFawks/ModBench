@@ -73,11 +73,11 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-function deploymentRow({ inspect, nameOf }: DeploymentFolderSetting): vscode.TreeItem {
+function deploymentRow(setting: DeploymentFolderSetting): vscode.TreeItem {
   const row = new vscode.TreeItem('Deployment');
   row.iconPath = new vscode.ThemeIcon('rocket');
-  const folder = inspect()?.workspaceValue;
-  row.description = folder ? nameOf(folder) : 'no deployment folder';
+  const folder = setting.inspect()?.workspaceValue;
+  row.description = folder ? setting.nameOf(folder) : 'no deployment folder';
   row.tooltip = folder || undefined;
   row.command = { command: 'modbench.settings.openDeploymentFolderHere', title: 'Open Deployment Folder Setting' };
   return row;
