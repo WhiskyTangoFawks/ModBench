@@ -80,6 +80,16 @@ describe('the MO2 adapter\'s repository', () => {
       expect([written, await ignoreList()]).toEqual([after, before]);
     });
 
+    it('keeps the workspace settings file out of the repository, so the deployment folder is in no commit', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await put('.vscode/settings.json', '{}');
+
+      await adapter.writeIgnoreList();
+
+      expect(runGit('check-ignore', '.vscode/settings.json').trim()).toBe('.vscode/settings.json');
+    });
+
     it('takes back only its own lines, keeping a line another program added after them', async () => {
       const adapter = await instance();
       await put('.gitignore', 'mine\n');

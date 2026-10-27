@@ -38,7 +38,7 @@ interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
 interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
-interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; }
+interface SettingEntry { description?: string; type?: unknown; default?: unknown; enum?: unknown; scope?: unknown; }
 interface ColorEntry { id: string; }
 interface CustomEditorEntry { viewType: string; }
 interface WalkthroughStep { id: string; title: string; description: string; media: { markdown: string }; completionEvents: string[]; }
@@ -188,6 +188,7 @@ const paletteOffers = (command: string, context: Context): boolean =>
   present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
     .filter((e) => e.command === command).some((e) => holds(e.when, context));
 
+const OPEN_DEPLOYMENT_FOLDER_SETTING = 'modbench.settings.openDeploymentFolderHere';
 const OPEN_PINNED = 'modbench.record.openPinned';
 const REFERENCED_BY = 'modbench.record.referencedBy';
 
@@ -352,6 +353,11 @@ describe('package.json Toolbox view', () => {
     expect(toolboxTitle(true)).toEqual([
       ['modbench.instance.refresh', 'navigation'], ['modbench.settings.open', 'settings'], ['modbench.instance.logOut', 'settings'],
     ]);
+  });
+
+  it('declares the deployment folder as a setting a workspace holds, which no commit holds (deployment-hardlink.md, The deployment folder, story 1)', () => {
+    const setting = present(pkg.contributes.configuration.properties['modbench.deployment.folder'], 'the deployment folder setting');
+    expect(setting.scope).toBe('machine-overridable');
   });
 
   it('offers switch, and only switch, on the Profile row\'s menu', () => {
@@ -1319,7 +1325,7 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
