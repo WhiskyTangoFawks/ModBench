@@ -19,7 +19,7 @@ export interface DrawsHighlight {
   highlight(related: RelatedRows): void;
 }
 
-/** One highlight answers one selection, the focused view's (mo2.md, Divergences, 18): a view
+/** One highlight answers one selection, the focused view's (Divergences, row 18): a view
  *  with no `RelatesRows` hands none, so a selection left in another view drives nothing.
  *  `changes` recomputes it when the rows change. */
 export function highlightFollowingFocus(

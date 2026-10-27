@@ -1707,12 +1707,12 @@ describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', ()
 
   it('keeps the row in place, with its id', async () => {
     const { tree } = makeTree([plugin({ name: 'A.esp' })]);
-    const [before] = await tree.getChildren();
-    const id = before!.id;
+    const idsOf = async () => (await tree.getChildren()).map((row) => row.id);
+    const before = await idsOf();
 
     tree.highlight([{ name: 'A.esp', origin: 'SomeMod' }]);
 
-    expect((await tree.getChildren())[0]!.id).toBe(id);
+    expect(await idsOf()).toEqual(before);
   });
 
   it('tells the tree which rows changed, and only those', async () => {
@@ -1723,6 +1723,6 @@ describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', ()
 
     tree.highlight([{ name: 'Bee.esp', origin: 'SomeMod' }]);
 
-    expect(changed.map((row) => (row as PluginNode).plugin.name)).toEqual(['Bee.esp']);
+    expect(expectInstancesOf(changed, PluginNode).map((row) => row.plugin.name)).toEqual(['Bee.esp']);
   });
 });

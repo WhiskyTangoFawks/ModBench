@@ -73,10 +73,12 @@ describe('the plugins a Mods selection holds', () => {
   it('a separator holds what its enabled mods hold, whether its row is open or collapsed', () => {
     const value = scene([mod('Off', false), mod('On'), sep('S'), mod('Elsewhere')], { Off: ['Off.esp'], On: ['On.esp'], Elsewhere: ['E.esp'] },
       [plugin('On.esp', 'On'), plugin('E.esp', 'Elsewhere')]);
-    const separator = value.modGroups.groups[0]!;
+    const [group] = value.modGroups.groups;
+    if (group === undefined) throw new Error('the scene holds a separator');
+    const { separator } = group;
 
     for (const shown of ['all', 'matching'] as const) {
-      expect(addresses(pluginsHeld(value, [new SeparatorNode(separator.separator, [], shown)]))).toEqual(['On.esp@On']);
+      expect(addresses(pluginsHeld(value, [new SeparatorNode(separator, [], shown)]))).toEqual(['On.esp@On']);
     }
   });
 
