@@ -257,6 +257,33 @@ describe('the Plugins view\'s selection relates to its masters (plugins.md, The 
   });
 });
 
+describe('the Plugins view\'s selection and the highlight (plugins.md, The highlight, stories 3 and 6)', () => {
+  const value = () => instanceValueFixture({
+    mods: [{ kind: 'mod', name: 'SomeMod', enabled: true }],
+    plugins: ['A.esp', 'B.esp'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })),
+    gameFolder: FOUND,
+  });
+
+  it('relates a selected plugin to the mod it comes from', async () => {
+    const { plugins, rows } = pluginsView(value());
+    const [a] = await rows();
+
+    expect(plugins.relatesRows.related([present(a, 'the A.esp row')]).origins).toEqual([{ kind: 'mod', name: 'SomeMod' }]);
+  });
+
+  it('marks the label of the plugin rows it is handed', async () => {
+    const { plugins, rows, provider } = pluginsView(value());
+
+    plugins.drawsHighlight.highlight({ plugins: [{ name: 'B.esp', origin: 'SomeMod' }], origins: [] });
+
+    const marked = (await rows()).flatMap((row) => {
+      const { label } = provider().getTreeItem(row);
+      return typeof label === 'object' && label.highlights !== undefined ? [label.label] : [];
+    });
+    expect(marked).toEqual(['B.esp']);
+  });
+});
+
 const APPLIED_STATUS: LoadOrderProgress = {
   totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };

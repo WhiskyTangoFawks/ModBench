@@ -449,3 +449,31 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
       'the failed status read');
   });
 });
+
+describe('the Mods view\'s selection and the highlight (plugins.md, The highlight; mods.md, The tree, story 11)', () => {
+  const held = instanceValueFixture({
+    mods: [mod('Alpha'), mod('Beta')],
+    plugins: [{ name: 'A.esp', path: '/Alpha/A.esp', origin: 'Alpha', line: 0, enabled: true, winning: true }],
+    filesByMod: new Map([['Alpha', [file('Alpha', 'A.esp')]]]),
+  });
+  const view = () => createModsView({ ...otherDeps(), instance: new FakeInstance(held), log: () => undefined, ...noSync() });
+
+  it('relates a selected mod to the plugin rows it holds, and to no mod row', async () => {
+    const { relatesRows } = view();
+    const alpha = (await shownRows()).find((row) => rowLabelOf(row) === 'Alpha');
+
+    expect(relatesRows.related([present(alpha, 'the Alpha row')])).toEqual({ plugins: [{ name: 'A.esp', origin: 'Alpha' }], origins: [] });
+  });
+
+  it('marks the label of the mod rows it is handed the origins of', async () => {
+    const { drawsHighlight } = view();
+
+    drawsHighlight.highlight({ plugins: [], origins: [{ kind: 'mod', name: 'Beta' }] });
+
+    const marked = (await shownRows()).flatMap((row) => {
+      const { label } = treeViews.view('modbench.modList').treeDataProvider.getTreeItem(row);
+      return typeof label === 'object' && label.highlights !== undefined ? [label.label] : [];
+    });
+    expect(marked).toEqual(['Beta']);
+  });
+});
