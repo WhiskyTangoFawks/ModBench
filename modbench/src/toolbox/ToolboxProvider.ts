@@ -6,8 +6,9 @@ import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
 
 export interface DeploymentFolderSetting {
-  /** The folder's path and its name; both are empty while the setting names none. */
-  value(): { path: string; name: string };
+  /** What VS Code holds of the setting. Only the workspace's value is an instance's deployment folder: a user-level value is every instance's. */
+  inspect(): { workspaceValue?: string } | undefined;
+  nameOf(path: string): string;
   changed(listener: () => void): vscode.Disposable;
 }
 
@@ -72,11 +73,12 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-function deploymentRow(folder: ReturnType<DeploymentFolderSetting['value']>): vscode.TreeItem {
+function deploymentRow({ inspect, nameOf }: DeploymentFolderSetting): vscode.TreeItem {
   const row = new vscode.TreeItem('Deployment');
   row.iconPath = new vscode.ThemeIcon('rocket');
-  row.description = folder.path ? folder.name : 'no deployment folder';
-  row.tooltip = folder.path || undefined;
+  const folder = inspect()?.workspaceValue;
+  row.description = folder ? nameOf(folder) : 'no deployment folder';
+  row.tooltip = folder || undefined;
   row.command = { command: 'modbench.settings.openDeploymentFolderHere', title: 'Open Deployment Folder Setting' };
   return row;
 }
@@ -128,6 +130,6 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     if (instance.sequence === 0) {
       return instance.readFailure === undefined ? [] : [new ErrorNode(instance.readFailure)];
     }
-    return [gameRow(instance.value), profileRow(instance.value), modlistRow(instance.value), deploymentRow(deploymentFolder.value())];
+    return [gameRow(instance.value), profileRow(instance.value), modlistRow(instance.value), deploymentRow(deploymentFolder)];
   }
 }

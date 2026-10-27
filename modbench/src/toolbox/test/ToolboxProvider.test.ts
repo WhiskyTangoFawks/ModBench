@@ -24,7 +24,9 @@ class FakeDeploymentFolder {
 
   constructor(public current?: string) {}
 
-  value = () => ({ path: this.current ?? '', name: this.current?.split('/').pop() ?? '' });
+  inspect = (): { workspaceValue?: string; globalValue?: string } => ({ workspaceValue: this.current });
+
+  nameOf = (path: string) => path.split('/').pop() ?? '';
 
   changed = (listener: () => void) => { this.listeners.push(listener); return { dispose: () => undefined }; };
 
@@ -114,6 +116,14 @@ describe('the Toolbox view, given an instance value', () => {
 
       expect([deployment.description, deployment.tooltip, deployment.command?.command])
         .toEqual(['no deployment folder', undefined, 'modbench.settings.openDeploymentFolderHere']);
+    });
+
+    it('reads "no deployment folder" while only the user holds a value, which every instance would share', () => {
+      const userLevel = { inspect: () => ({ globalValue: DEPLOYMENT }), nameOf: () => 'fo4-survival', changed: () => ({ dispose: () => undefined }) };
+      const deployment = present(new ToolboxProvider({ instance: new FakeInstance(VALUE), channel: SILENT, deploymentFolder: userLevel })
+        .getChildren().find((r) => r.label === 'Deployment'), 'the Deployment row');
+
+      expect([deployment.description, deployment.tooltip]).toEqual(['no deployment folder', undefined]);
     });
 
     it('follows the setting', () => {
