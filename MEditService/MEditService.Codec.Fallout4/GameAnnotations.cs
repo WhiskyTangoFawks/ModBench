@@ -57,6 +57,8 @@ internal static class GameAnnotations
             ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
+            // xEdit's wbVec3PosRot: the Data of REFR, ACHR and the projectile placements.
+            PlacedRotations: [("IPlacedObjectGetter", "Rotation"), ("IPlacedNpcGetter", "Rotation"), ("IAPlacedTrapGetter", "Rotation")],
             SyntheticFlagMembers: new()
             {
                 [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Small"),

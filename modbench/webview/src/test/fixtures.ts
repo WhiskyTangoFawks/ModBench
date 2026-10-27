@@ -17,7 +17,7 @@ export const fieldMeta = (
 ): FieldMetadata => ({
   isArray: false, validFormKeyTypes: [], enumMembers: [],
   allowsNull: false, isDiscriminator: false, isRecordHeaderMember: false, isRecordFormKey: false, ignoredInConflicts: false,
-  isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, ...m,
+  isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, isPlacedRotation: false, ...m,
 });
 
 /** A diff node with every required wire member at its neutral value. `NoConflict` paints no row

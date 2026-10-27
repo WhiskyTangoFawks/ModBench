@@ -5,7 +5,7 @@ import type { FieldMetadata } from '../messages';
 const target: FieldMetadata = {
   name: 'Target', type: 'formKey', isArray: false, validFormKeyTypes: ['REFR'], enumMembers: [], allowsNull: true,
   isDiscriminator: false, isRecordHeaderMember: false, isRecordFormKey: false, ignoredInConflicts: false,
-  isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, indexWhen: ['UseAliases', 'UsePackageData'],
+  isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, isPlacedRotation: false, indexWhen: ['UseAliases', 'UsePackageData'],
 };
 
 describe('shapeUnderOwner', () => {

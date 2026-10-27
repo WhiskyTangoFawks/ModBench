@@ -1,6 +1,6 @@
 import React, { useContext, useRef, useState } from 'react';
 import { EditorMounted } from './cellEditor';
-import { colourOf, displayValue, modelValue, pastedValue } from './modelValue';
+import { colourOf, degreesOf, displayValue, modelValue, pastedValue } from './modelValue';
 import { pickEnumValue } from './nativeBridge';
 import { mono, fg } from './gridStyles';
 import type { EnumChoice } from '../../src/wire/messages';
@@ -32,7 +32,9 @@ function ScalarText({ value, meta, displayOverride }: {
   if (value == null) return <span style={{ opacity: 0.35 }}>—</span>;
   const reading = displayValue(value, meta);
   const colour = meta.type === 'color' ? colourOf(reading) : null;
-  return colour === null ? <span>{reading}</span> : <span><Swatch colour={colour} />{reading}</span>;
+  if (colour !== null) return <span><Swatch colour={colour} />{reading}</span>;
+  const degrees = meta.isPlacedRotation ? degreesOf(reading) : null;
+  return degrees === null ? <span>{reading}</span> : <span>{reading} <span>{degrees}</span></span>;
 }
 
 function Swatch({ colour }: { colour: string }) {

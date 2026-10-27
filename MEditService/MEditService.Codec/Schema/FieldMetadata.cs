@@ -82,6 +82,10 @@ public record FieldMetadata(
     // A colour whose binary form holds an alpha, which it reads with (editor-fields.md, By type).
     bool HoldsAlpha = false,
 
+    // A placed reference's rotation, which Mutagen holds in radians and xEdit reads in degrees
+    // (xedit.md, divergence 39).
+    bool IsPlacedRotation = false,
+
     // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
     IReadOnlyList<string>? IndexWhen = null,

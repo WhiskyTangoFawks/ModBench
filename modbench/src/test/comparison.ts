@@ -11,7 +11,7 @@ export interface Copy { plugin: string; origin?: string; isWinner: boolean; edit
 export const fieldOf = (shape: Partial<FieldMetadata> & Pick<FieldMetadata, 'name' | 'type'>, value?: unknown): Field => ({
   metadata: {
     isArray: false, validFormKeyTypes: [], enumMembers: [], allowsNull: false, isDiscriminator: false, isRecordHeaderMember: false,
-    isRecordFormKey: false, ignoredInConflicts: false, isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, ...shape,
+    isRecordFormKey: false, ignoredInConflicts: false, isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, isPlacedRotation: false, ...shape,
   },
   value,
 });

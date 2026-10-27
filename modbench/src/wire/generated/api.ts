@@ -1375,6 +1375,7 @@ export interface components {
             isVersionControlInfo1: boolean;
             isEditorId: boolean;
             holdsAlpha: boolean;
+            isPlacedRotation: boolean;
             indexWhen?: string[] | null;
         };
         FieldValue: {

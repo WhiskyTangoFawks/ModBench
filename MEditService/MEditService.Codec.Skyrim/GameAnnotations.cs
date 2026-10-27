@@ -51,6 +51,8 @@ internal static class GameAnnotations
             ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],
+            // xEdit's wbVec3PosRot: which Mutagen's Placement holds here.
+            PlacedRotations: [("IPlacementGetter", "Rotation")],
             SyntheticFlagMembers: new()
             {
                 [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Small"),

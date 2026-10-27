@@ -182,3 +182,11 @@ export function pastedValue(text: string, meta: FieldMetadata): unknown {
     default: return text;
   }
 }
+
+/** The degrees of a rotation's radians reading "x, y, z", or null where the reading is not three numbers. */
+export function degreesOf(reading: string): string | null {
+  const parts = reading.split(',').map(part => Number(part.trim()));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const degrees = parts.map(radians => Number(((radians * 180) / Math.PI).toFixed(4)));
+  return `(${degrees.map(d => `${d}°`).join(', ')})`;
+}
