@@ -14,6 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { FolderNode } from '../modFiles';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
@@ -22,6 +23,8 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 import { mod } from './indexedValue';
+
+const providerAt = (instance: FakeInstance) => new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 
 const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, markedExcluded: false, includedPath: relativePath });
 
@@ -46,7 +49,7 @@ function providerOver(
     foldersByMod: new Map(Object.entries(filesByMod).map(([name, files]) => [name, folders.byMod?.[name] ?? foldersHoldingFiles(files)])),
     overwriteFolders: folders.overwrite ?? foldersHoldingFiles(overwriteFiles),
   });
-  return new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(value) });
+  return providerAt(new FakeInstance(value));
 }
 
 const labelOf = (row: ModlistNode): string => (typeof row.label === 'string' ? row.label : row.label?.label ?? '');
@@ -265,7 +268,7 @@ describe('a row\'s context, which the publisher tag items of the menus read (mod
       paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M']]), sourceDirs: new Map() },
     });
     const publisherConfiguration = { kind: 'read', covering: () => [], listed: (path: string) => (LISTED.has(path) ? [INCLUDE] : []), pathProblems: [] } as const;
-    return new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance({ ...value, publisherTags: [INCLUDE], publisherConfiguration }) });
+    return providerAt(new FakeInstance({ ...value, publisherTags: [INCLUDE], publisherConfiguration }));
   };
   const contextOf = async (provider: ModListProvider, parent: ModlistNode): Promise<Record<string, string | undefined>> =>
     Object.fromEntries((await provider.getChildren(parent)).map((child) => [labelOf(child), child.contextValue]));
@@ -310,7 +313,7 @@ describe('a file or folder row\'s identity is its mod or Overwrite, and the path
     const valueHolding = (enabled: boolean, files: OriginFile[]) =>
       instanceValueFixture({ mods: [mod('A', enabled)], filesByMod: new Map([['A', files]]), foldersByMod: new Map([['A', foldersHoldingFiles(files)]]) });
     const instance = new FakeInstance(valueHolding(true, [file('x/a.dds')]));
-    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
+    const provider = providerAt(instance);
     const idsNow = async () => {
       const modRow = await rootOf(provider, ModNode, 'A');
       const folder = await childNamed(provider, modRow, 'x');
@@ -499,7 +502,7 @@ describe('a file row\'s context, which the File menu\'s go to mod and compare fi
       filesByMod: new Map([['High', [file('a.dds')]], ['Low', [file('a.dds')]]]),
       overwriteFiles: [file('a.dds')],
     });
-    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(value) });
+    const provider = providerAt(new FakeInstance(value));
     const row = rowOfMod === 'Overwrite' ? await rootOf(provider, OverwriteNode, 'Overwrite') : await rootOf(provider, ModNode, rowOfMod);
     return (await provider.getChildren(row)).map((child) => child.contextValue);
   };

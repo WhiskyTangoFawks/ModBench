@@ -14,6 +14,7 @@ import {
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
+import type { OpenRows } from './openRows';
 import { countsInBadge, differingFiles, lackedLine, separatorDescription, statusDescription, type ModStatuses } from './modStatuses';
 import type { ModStatus } from '../client';
 import { blankIcon } from '../drivingLib/blankIcon';
@@ -33,6 +34,8 @@ interface ModListProviderOptions {
   instance: InstanceView;
   /** Each mod's status against its manifest, which mEdit answers. */
   statuses: Pick<ModStatuses, 'of' | 'onDidChange'>;
+  /** The rows the view shows open. */
+  open: OpenRows;
 }
 
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
@@ -172,14 +175,15 @@ export class ModListProvider
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
   private highlighted: readonly FileOrigin[] = [];
-  private readonly open = new Set<string>();
   private marks: ReadonlySet<string> | undefined;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
   private readonly statusSubscription: vscode.Disposable;
+  private readonly openSubscription: vscode.Disposable;
   private readonly statuses: ModListProviderOptions['statuses'];
+  private readonly open: OpenRows;
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
@@ -192,13 +196,19 @@ export class ModListProvider
     });
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
     this.statuses = options.statuses;
+    this.open = options.open;
     this.statusSubscription = options.statuses.onDidChange(() => this.render());
+    this.openSubscription = options.open.onDidChange(() => {
+      const before = this.marks;
+      if (before) this.fireChangedMarks(before);
+    });
   }
 
   dispose(): void {
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
     this.statusSubscription.dispose();
+    this.openSubscription.dispose();
     this.firstRead.dispose();
   }
 
@@ -297,20 +307,12 @@ export class ModListProvider
 
   /** Marks the labels of the rows for these origins, and of each collapsed separator that holds one (mods.md, The tree, story 11). */
   highlight(origins: readonly FileOrigin[]): void {
-    this.remark(() => { this.highlighted = origins; });
-  }
-
-  openedRow(row: SeparatorNode): void {
-    this.remark(() => { this.open.add(row.separator.name); });
-  }
-
-  closedRow(row: SeparatorNode): void {
-    this.remark(() => { this.open.delete(row.separator.name); });
-  }
-
-  private remark(change: () => void): void {
     const before = this.marked();
-    change();
+    this.highlighted = origins;
+    this.fireChangedMarks(before);
+  }
+
+  private fireChangedMarks(before: ReadonlySet<string>): void {
     this.marks = undefined;
     const after = this.marked();
     for (const id of new Set([...before, ...after])) {
@@ -340,7 +342,7 @@ export class ModListProvider
     const ids = new Set([...mods].map((name) => rowIdentity('mod', name)));
     if (this.highlighted.some((origin) => origin.kind === 'runtimeOutput')) ids.add('runtimeOutput');
     for (const { separator, mods: held } of this.loadedModGroups().groups) {
-      if (!this.open.has(separator.name) && held.some((m) => mods.has(m.name))) ids.add(rowIdentity('separator', separator.name));
+      if (!this.open.has(separatorRowUri(separator.name).toString()) && held.some((m) => mods.has(m.name))) ids.add(rowIdentity('separator', separator.name));
     }
     return ids;
   }

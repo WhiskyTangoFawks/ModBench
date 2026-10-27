@@ -18,6 +18,8 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { OpenRows } from '../openRows';
+import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
 import { ErrorNode } from '../../drivingLib/errorNode';
@@ -47,7 +49,10 @@ const SEQUENCE_NOT_READ_YET = 0;
 const makeProvider = (
   mods: ModlistEntry[],
   extra: Partial<{ instance: FakeInstance }> = {},
-) => new ModListProvider({ statuses: NO_MOD_STATUSES, instance: extra.instance ?? new FakeInstance(valueOf(mods)) });
+) => {
+  const instance = extra.instance ?? new FakeInstance(valueOf(mods));
+  return new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+};
 
 const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = ():ModlistEntry[] => [
   mod('Late Tweak'),
@@ -198,7 +203,13 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
     const held = (await Promise.all(separators.map((row) => provider.getChildren(row)))).flat();
     return [...roots, ...held].filter((row) => marked(row, provider)).map(labelOf);
   };
-  const scene = () => makeProvider([mod('Held'), mod('Other'), sep('Section'), mod('Loose')]);
+  const entries = (): ModlistEntry[] => [mod('Held'), mod('Other'), sep('Section'), mod('Loose')];
+  const openScene = () => {
+    const instance = new FakeInstance(valueOf(entries()));
+    const open = new OpenRows(instance);
+    return { instance, open, provider: new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open }) };
+  };
+  const scene = () => openScene().provider;
 
   it('marks the whole label of each mod it is handed and of Overwrite, and no other', async () => {
     const provider = scene();
@@ -226,13 +237,23 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
   });
 
   it('leaves an open separator unmarked, and marks it again once it closes', async () => {
-    const provider = scene();
-    const section = expectInstanceOf((await provider.getChildren()).find((row) => row instanceof SeparatorNode && labelOf(row) === 'Section'), SeparatorNode);
+    const { provider, open } = openScene();
     provider.highlight([{ kind: 'mod', name: 'Held' }]);
 
-    provider.openedRow(section);
+    open.expandedRow(separatorRowUri('Section'));
     expect(await allMarked(provider)).toEqual(['Held']);
-    provider.closedRow(section);
+    open.collapsedRow(separatorRowUri('Section'));
+    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+  });
+
+  it('marks a separator made again under the name of one that was open and removed', async () => {
+    const { provider, open, instance } = openScene();
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+    open.expandedRow(separatorRowUri('Section'));
+
+    instance.publish(valueOf([mod('Held'), mod('Other'), mod('Loose')]));
+    instance.publish(valueOf(entries()));
+
     expect(await allMarked(provider)).toEqual(['Section', 'Held']);
   });
 
@@ -420,7 +441,7 @@ describe('the Mods tree\'s rows', () => {
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
-    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
+    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 
     const pending = provider.getChildren();
     instance.publish(valueOf([mod('A'), mod('B')]));

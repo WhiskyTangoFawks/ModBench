@@ -5,7 +5,6 @@ import type { FocusedView } from './focusedView';
 
 interface RelatedRows {
   readonly plugins: readonly PluginAddress[];
-  /** The mods and Overwrite. */
   readonly origins: readonly FileOrigin[];
 }
 

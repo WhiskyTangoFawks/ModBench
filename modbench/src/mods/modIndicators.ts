@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, outranksACopy, winsPath } from '../instanceLoader/fileConflictIndex';
 import { onSettingChange } from '../drivingLib/setting';
+import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.
@@ -134,34 +135,24 @@ export class IndicatorDecorationProvider implements vscode.FileDecorationProvide
 export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
   abstract readonly providers: readonly IndicatorDecorationProvider[];
   private current: C | undefined;
-  private readonly expanded = new Set<string>();
-  private readonly subscription: vscode.Disposable;
+  private readonly subscriptions: vscode.Disposable[];
 
   constructor(
     private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
+    private readonly open: OpenRows,
     private readonly carriersOf: (value: InstanceValue) => C,
-    opens: (carriers: C, key: string) => boolean,
   ) {
-    this.subscription = instance.subscribe((value) => {
-      const carriers = carriersOf(value);
-      this.current = carriers;
-      for (const key of this.expanded) if (!opens(carriers, key)) this.expanded.delete(key);
-      this.refresh();
-    });
-  }
-
-  expandedRow(uri: vscode.Uri): void {
-    this.expanded.add(uri.toString());
-    this.refresh();
-  }
-
-  collapsedRow(uri: vscode.Uri): void {
-    this.expanded.delete(uri.toString());
-    this.refresh();
+    this.subscriptions = [
+      instance.subscribe((value) => {
+        this.current = carriersOf(value);
+        this.refresh();
+      }),
+      open.onDidChange(() => { this.refresh(); }),
+    ];
   }
 
   dispose(): void {
-    this.subscription.dispose();
+    for (const subscription of this.subscriptions) subscription.dispose();
     for (const provider of this.providers) provider.dispose();
   }
 
@@ -171,7 +162,7 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
   }
 
   protected isOpen(key: string): boolean {
-    return this.expanded.has(key);
+    return this.open.has(key);
   }
 
   private refresh(): void {
@@ -182,8 +173,8 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
 export class ModIndicatorDecorations extends OpenableRowDecorations<Carriers> {
   readonly providers: readonly IndicatorDecorationProvider[];
 
-  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
-    super(instance, carriersOf, (carriers, key) => carriers.separators.has(key));
+  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, open: OpenRows, settings: WorkspaceSettings) {
+    super(instance, open, carriersOf);
     const carried = (uri: vscode.Uri) => {
       const carriers = this.carriers();
       const key = uri.toString();
