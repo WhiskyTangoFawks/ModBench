@@ -4,7 +4,7 @@ xEdit has 25 years of refinement against this exact problem domain, and essentia
 
 ## Consequences
 
-- xEdit is the baseline, not the ceiling. An addition xEdit never had is opt-in behind its own affordance. The default stays xEdit's, no xEdit gesture or meaning is redefined to reach it, and where it overlaps xEdit's ground it takes xEdit's word.
+- xEdit is the baseline, not the ceiling.
 
 ## Alternatives rejected
 

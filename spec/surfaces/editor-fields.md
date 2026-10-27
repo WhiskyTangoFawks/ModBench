@@ -28,12 +28,12 @@ As a user, I want:
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
 | Reference | the EditorID, or the FormKey when it resolves to no record of an active plugin, or to one with no EditorID; `—` for no reference; `EditorID [FormKey]` in its tooltip | the record picker, below | `EditorID [FormKey]` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text |
-| Colour | `#AARRGGBB`, or `#RRGGBB` for a colour that holds no alpha, as mEdit gives it | a text box | the text |
-| Vector | `x, y, z`, as mEdit gives it | a text box | the text |
+| Colour | `#AARRGGBB`, or `#RRGGBB` for a colour that holds no alpha, as mEdit gives it; a swatch of the colour beside it | a text box | the text |
+| Vector | `x, y, z`, as mEdit gives it; a placed reference's rotation, which mEdit's schema marks, also in degrees beside it | a text box | `x, y, z` |
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON |
 | Array | collapsed, its reading, below; expanded, its elements | none: its elements edit | the whole value, as JSON |
 
-Cites: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11 and 12; mEdit's answer; Never silently wrong
+Cites: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11, 12, 38 and 39; mEdit's answer; Never silently wrong
 
 A struct or array row pastes, and takes a drop, of a whole value copied from the same field. Cites: xEdit
 
