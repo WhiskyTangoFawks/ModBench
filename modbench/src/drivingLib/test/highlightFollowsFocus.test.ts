@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createFocusedView } from '../focusedView';
-import { highlightFollowingFocus, type RelatedRows } from '../highlightFollowsFocus';
+import { highlightFollowingFocus, type DrawsHighlight } from '../highlightFollowsFocus';
 import { FakeTreeView } from './nameFilterViewHarness';
 
+type RelatedRows = Parameters<DrawsHighlight['highlight']>[0];
 const HELD: RelatedRows = { plugins: [{ name: 'A.esp', origin: 'A' }] };
 
 function harness() {
