@@ -1,12 +1,14 @@
 import type * as vscode from 'vscode';
+import type { FileOrigin } from '../instanceLoader/instance';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { FocusedView } from './focusedView';
 
 interface RelatedRows {
   readonly plugins: readonly PluginAddress[];
+  readonly origins: readonly FileOrigin[];
 }
 
-const NONE: RelatedRows = { plugins: [] };
+const NONE: RelatedRows = { plugins: [], origins: [] };
 
 /** A view that says which rows its selection relates to. */
 export interface RelatesRows {

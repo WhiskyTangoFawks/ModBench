@@ -18,6 +18,8 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { OpenRows } from '../openRows';
+import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { modArgumentOf } from '../../drivingLib/argument';
 import { ErrorNode } from '../../drivingLib/errorNode';
@@ -47,7 +49,10 @@ const SEQUENCE_NOT_READ_YET = 0;
 const makeProvider = (
   mods: ModlistEntry[],
   extra: Partial<{ instance: FakeInstance }> = {},
-) => new ModListProvider({ statuses: NO_MOD_STATUSES, instance: extra.instance ?? new FakeInstance(valueOf(mods)) });
+) => {
+  const instance = extra.instance ?? new FakeInstance(valueOf(mods));
+  return new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+};
 
 const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = ():ModlistEntry[] => [
   mod('Late Tweak'),
@@ -184,6 +189,91 @@ describe('a row\'s parent, which VS Code\'s reveal walks up through getParent an
 
     expect(provider.getParent(present(earlyFix, 'Early Fix'))?.id).toBe(lateSection.id);
     expect(roots.map((n) => provider.getParent(n))).toEqual(roots.map(() => undefined));
+  });
+});
+
+describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, story 11)', () => {
+  const marked = (row: ModlistNode, provider: ModListProvider): boolean => {
+    const item = provider.getTreeItem(row);
+    return typeof item.label === 'object' && item.label.highlights?.[0]?.[1] === labelOf(row).length;
+  };
+  const allMarked = async (provider: ModListProvider) => {
+    const roots = await provider.getChildren();
+    const separators = roots.filter((row): row is SeparatorNode => row instanceof SeparatorNode);
+    const held = (await Promise.all(separators.map((row) => provider.getChildren(row)))).flat();
+    return [...roots, ...held].filter((row) => marked(row, provider)).map(labelOf);
+  };
+  const entries = (): ModlistEntry[] => [mod('Held'), mod('Other'), sep('Section'), mod('Loose')];
+  const openScene = () => {
+    const instance = new FakeInstance(valueOf(entries()));
+    const open = new OpenRows(instance);
+    return { instance, open, provider: new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open }) };
+  };
+  const scene = () => openScene().provider;
+
+  it('marks the whole label of each mod it is handed and of Overwrite, and no other', async () => {
+    const provider = scene();
+
+    provider.highlight([{ kind: 'mod', name: 'Loose' }, { kind: 'runtimeOutput' }]);
+
+    expect(await allMarked(provider)).toEqual(['Loose', 'Overwrite']);
+  });
+
+  it('clears the mark when handed none', async () => {
+    const provider = scene();
+    provider.highlight([{ kind: 'mod', name: 'Loose' }]);
+
+    provider.highlight([]);
+
+    expect(await allMarked(provider)).toEqual([]);
+  });
+
+  it('marks a collapsed separator that holds a marked mod', async () => {
+    const provider = scene();
+
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+
+    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+  });
+
+  it('leaves an open separator unmarked, and marks it again once it closes', async () => {
+    const { provider, open } = openScene();
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+
+    open.expandedRow(separatorRowUri('Section'));
+    expect(await allMarked(provider)).toEqual(['Held']);
+    open.collapsedRow(separatorRowUri('Section'));
+    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+  });
+
+  it('marks a separator made again under the name of one that was open and removed', async () => {
+    const { provider, open, instance } = openScene();
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+    open.expandedRow(separatorRowUri('Section'));
+
+    instance.publish(valueOf([mod('Held'), mod('Other'), mod('Loose')]));
+    instance.publish(valueOf(entries()));
+
+    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+  });
+
+  it('refreshes only the rows whose mark changed', () => {
+    const provider = scene();
+    const fired: ModlistNode[] = [];
+    provider.onDidChangeTreeData((row) => { if (row) fired.push(row); });
+
+    provider.highlight([{ kind: 'mod', name: 'Held' }]);
+
+    expect(fired.map(labelOf).sort()).toEqual(['Held', 'Section']);
+  });
+
+  it('keeps the resourceUri the row\'s colour decoration hangs on', async () => {
+    const provider = scene();
+    const before = (await provider.getChildren())[0]?.resourceUri?.toString();
+
+    provider.highlight([{ kind: 'mod', name: 'Loose' }]);
+
+    expect((await provider.getChildren())[0]?.resourceUri?.toString()).toBe(before);
   });
 });
 
@@ -351,7 +441,7 @@ describe('the Mods tree\'s rows', () => {
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
-    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
+    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 
     const pending = provider.getChildren();
     instance.publish(valueOf([mod('A'), mod('B')]));

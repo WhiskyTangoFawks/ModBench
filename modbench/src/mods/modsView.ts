@@ -7,7 +7,7 @@ import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { RelatesRows } from '../drivingLib/highlightFollowsFocus';
+import type { DrawsHighlight, RelatesRows } from '../drivingLib/highlightFollowsFocus';
 import { pluginsHeld } from './pluginsHeld';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
@@ -22,6 +22,7 @@ import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import type { ModStatuses } from './modStatuses';
 import { registerModDecorations } from './modDecorations';
+import { OpenRows } from './openRows';
 import { registerModInstallCommands } from './installCommands';
 import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
@@ -84,6 +85,7 @@ interface ModsView extends vscode.Disposable {
   nameFilter: NameFilter;
   copyValue: CopyValueAdapter;
   relatesRows: RelatesRows;
+  drawsHighlight: DrawsHighlight;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -92,7 +94,8 @@ interface ModsView extends vscode.Disposable {
 export function createModsView(deps: ModsViewDeps): ModsView {
   const { instance, commands, log, modSync, reporterFor, ask, trash, statuses } = deps;
   const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // modlist-repository.md, Status, story 1
-  const provider = new ModListProvider({ instance, statuses });
+  const open = new OpenRows(instance);
+  const provider = new ModListProvider({ instance, statuses, open });
   const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {
     treeDataProvider: provider,
     canSelectMany: true,
@@ -134,7 +137,9 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     provider.onDidChangeTreeData(expand),
     view.onDidChangeVisibility(expand),
     view.onDidChangeCheckboxState(onModCheckboxChanged),
-    ...registerModDecorations(instance, vscode.workspace, view),
+    view.onDidExpandElement(({ element }) => { if (element.resourceUri) open.expandedRow(element.resourceUri); }),
+    view.onDidCollapseElement(({ element }) => { if (element.resourceUri) open.collapsedRow(element.resourceUri); }),
+    ...registerModDecorations(instance, open, vscode.workspace),
     new PublisherProblems(vscode.languages.createDiagnosticCollection('modbench-publisher'), instance),
     ...registerModContextCommands({
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
@@ -167,10 +172,12 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     nameFilter,
     view,
     provider,
+    open,
   );
   return {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
-    relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection) }) },
+    relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
+    drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
     dispose: () => { disposable.dispose(); },
   };
 }

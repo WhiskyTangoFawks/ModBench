@@ -11,6 +11,7 @@ import type { ModStatus } from '../../client';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { status } from '../../test/modStatusFixture';
 import { ModListProvider, type ModlistNode } from '../ModListProvider';
+import { OpenRows } from '../openRows';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
@@ -29,7 +30,8 @@ function providerOver(statuses: readonly ModStatus[], holdsRepository = true, ov
     foldersByMod: new Map([['ModA', [folder('mods/ModA', 'meshes')]]]),
     ...over,
   });
-  const provider = new ModListProvider({ instance: new FakeInstance(value), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
+  const instance = new FakeInstance(value);
+  const provider = new ModListProvider({ instance, open: new OpenRows(instance), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
   return { provider, byMod, changed };
 }
 

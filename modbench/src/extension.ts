@@ -202,7 +202,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
   own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloadsView));
   own(highlightFollowingFocus(
-    deps.focusedView, new Map([[MODS_KEY_ARGS.view, mods.relatesRows]]), [plugins.drawsHighlight], (listener) => instance.subscribe(listener)));
+    deps.focusedView, new Map([[MODS_KEY_ARGS.view, mods.relatesRows], [PLUGINS_KEY_ARGS.view, plugins.relatesRows]]),
+    [plugins.drawsHighlight, mods.drawsHighlight], (listener) => instance.subscribe(listener)));
   ownAll(own, registerNameFilterCommands(
     () => deps.focusedView.id(),
     new Map([
