@@ -50,7 +50,7 @@ describe('FormKeyCell — a read-only column opens nothing, leaving copy to Ctrl
         checkError="dangling reference" resolution={validType}
       />,
     );
-    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    fireEvent.click(screen.getByText('DogmeatRace'));
     expect(screen.getByRole('img', { name: 'warning' })).toHaveAttribute('title', 'dangling reference');
   });
 });
@@ -105,7 +105,7 @@ describe('FormKeyCell — editable column, whose plain click opens the native Qu
   it('seeds the picker with the composite label the cell displays, as the picker\'s input is a mutable column\'s only surface for copying it', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} onCommit={vi.fn()} resolution={validType} />);
-    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    fireEvent.click(screen.getByText('DogmeatRace'));
     expect(pickFormKey).toHaveBeenCalledWith('DogmeatRace [000019:Fallout4.esm]', ['race']);
   });
 
