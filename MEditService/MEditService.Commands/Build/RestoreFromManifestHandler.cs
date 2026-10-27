@@ -118,7 +118,8 @@ public sealed class RestoreFromManifestHandler
         var answer = await _build.BuildAsync(
             new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true)
             {
-                InstallationFiles = mod.InstallationFiles, UnreadableInstallationFiles = mod.UnreadableInstallationFiles,
+                InstallationFiles = mod.InstallationFiles,
+                UnreadableInstallationFiles = mod.UnreadableInstallationFiles,
             },
             new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache) { Tasks = instance.Tasks });
         if (answer is ItemAnswer<BuildStop, ModBuildOutcome>.Refusing refusing)

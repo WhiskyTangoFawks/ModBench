@@ -1,8 +1,7 @@
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>What a mod's manifest says: its packages, each named once with its pin, and each file's place in its package. A
-/// file names its package only when it is not the first. The package's hash is the Instance adapter's text, kept as
-/// written (ADR-0013).</summary>
+/// <summary>What a mod's manifest says: its packages, each named once with its pin, and each file's place in its package.
+/// A file names its package only when it is not the first. A package's hash is kept as written (ADR-0013).</summary>
 public sealed record Manifest(IReadOnlyList<ManifestPackage> Packages, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
     public Manifest(ManifestPackage? package, IReadOnlyList<ManifestFile> files, string? version = null)

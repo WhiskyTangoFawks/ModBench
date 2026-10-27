@@ -4,8 +4,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to restore, with the installation files the request found for what its manifest names, why it could not
-/// read its game files, by game path, or an installation file, by name, and a source mod's source folder.</summary>
+/// <summary>A mod to restore, with the installation files the request found, why it could not read game files or
+/// installation files, and a source mod's source folder.</summary>
 public sealed record ModToRestore(
     string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, Submodule? Submodule,
     IReadOnlyDictionary<string, string>? UnreadableGameFiles, IReadOnlyDictionary<string, string>? UnreadableInstallationFiles, string? SourceFolder);

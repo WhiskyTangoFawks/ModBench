@@ -884,7 +884,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private Manifest TakingFromZed(string hash, ManifestFile taken)
     {
         var manifest = new Manifest(
-            [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), new ManifestPackage.InstallationFile("Zed.7z", 7, hash)], [taken]) { Output = "mod" };
+            [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), new ManifestPackage.InstallationFile("Zed.7z", 7, hash)], [taken])
+        { Output = "mod" };
         _repository.WriteSourceManifest(_source, manifest);
         return manifest;
     }
