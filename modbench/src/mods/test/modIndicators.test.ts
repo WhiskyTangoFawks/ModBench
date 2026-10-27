@@ -14,6 +14,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';
+import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
@@ -21,8 +22,13 @@ import { file, indexedValueOf, mod } from './indexedValue';
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 const carriedBy = (value: InstanceValue, name: string): ModIndicator[] =>
-  decorationsOn(new ModIndicatorDecorations(new FakeInstance(value), settingsOf(allOn).settings), modRowUri(name))
+  decorationsOn(decoratedOver(new FakeInstance(value), settingsOf(allOn).settings), modRowUri(name))
     .flatMap((decoration, at) => (decoration === undefined ? [] : [present(MOD_INDICATORS[at], 'an indicator').id]));
+
+const decoratedOver = (instance: FakeInstance, settings: ReturnType<typeof settingsOf>['settings']) => {
+  const open = new OpenRows(instance);
+  return Object.assign(new ModIndicatorDecorations(instance, open, settings), { open });
+};
 
 type Listings = Parameters<typeof indexedValueOf>[1];
 
@@ -82,7 +88,7 @@ const allOn = Object.fromEntries(MOD_INDICATORS
   .flatMap(({ id }) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));
 
 async function rowUriOf(instance: FakeInstance, name: string): Promise<vscode.Uri> {
-  const rows = new ModListProvider({ statuses: NO_MOD_STATUSES, instance });
+  const rows = new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
   const row = (await rows.getChildren()).find((node) => node instanceof ModNode && node.mod.name === name);
   return present(row?.resourceUri, `${name}'s row URI`);
 }
@@ -102,7 +108,7 @@ const middleOfThree = () => indexedValueOf([mod('High'), mod('Middle'), mod('Low
 describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mod; Indicators)', () => {
   it('carries a badge and a colour for each indicator that holds, its tooltip the indicator\'s name', async () => {
     const instance = new FakeInstance(await middleOfThree());
-    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
+    const decorations = decoratedOver(instance, settingsOf(allOn).settings);
 
     expect(decorationsOn(decorations, await rowUriOf(instance, 'Middle'))).toEqual([
       { badge: '\u2295', color: new ThemeColor('modbench.modOverwritesLooseFiles'), tooltip: 'Overwrites loose files' },
@@ -115,7 +121,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
 
   it('carries only the parts its settings switch on, and nothing for an indicator with both off', async () => {
     const instance = new FakeInstance(await middleOfThree());
-    const decorations = new ModIndicatorDecorations(instance, settingsOf({
+    const decorations = decoratedOver(instance, settingsOf({
       [indicatorSetting('overwritesLooseFiles', 'badge')]: true,
       [indicatorSetting('overwrittenLooseFiles', 'colour')]: true,
     }).settings);
@@ -130,14 +136,14 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
   });
 
   it('decorates no mod\'s folder where the Explorer shows it', async () => {
-    const decorations = new ModIndicatorDecorations(new FakeInstance(await middleOfThree()), settingsOf(allOn).settings);
+    const decorations = decoratedOver(new FakeInstance(await middleOfThree()), settingsOf(allOn).settings);
 
     expect(decorationsOn(decorations, vscode.Uri.file('/instance/Middle'))).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 
   it('asks VS Code to decorate again on each new instance value, and answers from that value', async () => {
     const instance = new FakeInstance(await middleOfThree());
-    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
+    const decorations = decoratedOver(instance, settingsOf(allOn).settings);
     const uri = await rowUriOf(instance, 'Low');
     const fired = decorations.providers.map((provider) => {
       const listener = vi.fn();
@@ -154,7 +160,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
 
   it('asks VS Code to decorate again only for the indicator whose setting changed', async () => {
     const { settings, changed } = settingsOf(allOn);
-    const decorations = new ModIndicatorDecorations(new FakeInstance(await middleOfThree()), settings);
+    const decorations = decoratedOver(new FakeInstance(await middleOfThree()), settings);
     const fired = decorations.providers.map((provider) => {
       const listener = vi.fn();
       provider.onDidChangeFileDecorations(listener);
@@ -184,7 +190,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
   const nothing = [undefined, undefined, undefined, undefined, undefined];
 
   it('carries the indicators of the mods beneath it as a mod row carries its own', async () => {
-    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
+    const decorations = decoratedOver(await collapsedInstance(), settingsOf(allOn).settings);
 
     expect(decorationsOn(decorations, section)).toEqual([
       { badge: '⊕', color: new ThemeColor('modbench.modOverwritesLooseFiles'), tooltip: 'Overwrites loose files' },
@@ -196,7 +202,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
   });
 
   it('carries only the parts its settings switch on', async () => {
-    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf({
+    const decorations = decoratedOver(await collapsedInstance(), settingsOf({
       [indicatorSetting('overwritesLooseFiles', 'badge')]: true,
     }).settings);
 
@@ -206,19 +212,19 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
   });
 
   it('carries none when no mod beneath holds one', async () => {
-    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
+    const decorations = decoratedOver(await collapsedInstance(), settingsOf(allOn).settings);
 
     expect(decorationsOn(decorations, separatorRowUri('Quiet'))).toEqual(nothing);
   });
 
   it('carries none while it is expanded, and again once it collapses', async () => {
-    const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
+    const decorations = decoratedOver(await collapsedInstance(), settingsOf(allOn).settings);
     const fired = vi.fn();
     decorations.providers[0]?.onDidChangeFileDecorations(fired);
 
-    decorations.expandedRow(section);
+    decorations.open.expandedRow(section);
     const expanded = decorationsOn(decorations, section);
-    decorations.collapsedRow(section);
+    decorations.open.collapsedRow(section);
 
     expect(expanded).toEqual(nothing);
     expect(decorationsOn(decorations, section)[0]).toEqual(OVERWRITES);
@@ -227,17 +233,17 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 
   it('leaves an open mod row its own indicators', async () => {
     const instance = await collapsedInstance();
-    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
+    const decorations = decoratedOver(instance, settingsOf(allOn).settings);
 
-    decorations.expandedRow(modRowUri('Middle'));
+    decorations.open.expandedRow(modRowUri('Middle'));
 
     expect(decorationsOn(decorations, modRowUri('Middle'))[0]).toEqual(OVERWRITES);
   });
 
   it('forgets a separator that left the list, so one added later under its name starts collapsed', async () => {
     const instance = await collapsedInstance();
-    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
-    decorations.expandedRow(section);
+    const decorations = decoratedOver(instance, settingsOf(allOn).settings);
+    decorations.open.expandedRow(section);
 
     instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
     instance.publish(await groupedMiddleOfThree());
@@ -247,8 +253,8 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 
   it('forgets a separator emptied while open, so one refilled starts collapsed', async () => {
     const instance = await collapsedInstance();
-    const decorations = new ModIndicatorDecorations(instance, settingsOf(allOn).settings);
-    decorations.expandedRow(section);
+    const decorations = decoratedOver(instance, settingsOf(allOn).settings);
+    decorations.open.expandedRow(section);
 
     instance.publish(await indexedValueOf([separator('Section')], {}));
     instance.publish(await groupedMiddleOfThree());
@@ -259,7 +265,8 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 
 describe('a separator row (mods.md, A row, Separator)', () => {
   it('has the URI its indicators are drawn on, and no icon from the file icon theme', async () => {
-    const row = (await new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(await groupedMiddleOfThree()) }).getChildren())
+    const groupedInstance = new FakeInstance(await groupedMiddleOfThree());
+    const row = (await new ModListProvider({ statuses: NO_MOD_STATUSES, instance: groupedInstance, open: new OpenRows(groupedInstance) }).getChildren())
       .find((node) => node instanceof SeparatorNode && node.separator.name === 'Section');
 
     expect(row?.resourceUri?.toString()).toBe(separatorRowUri('Section').toString());

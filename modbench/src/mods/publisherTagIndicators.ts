@@ -8,6 +8,7 @@ import { fileRowUri } from './modFiles';
 import {
   IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorRowUri,
 } from './modIndicators';
+import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 // A row's own publisher tags, and those of the rows beneath it, which it carries while collapsed (common.md, A view, story 11).
@@ -18,7 +19,6 @@ interface Carried {
 
 interface Carriers {
   readonly rows: ReadonlyMap<string, Carried>;
-  readonly openable: ReadonlySet<string>;
 }
 
 const foldersAbove = (relativePath: string): string[] => {
@@ -28,7 +28,6 @@ const foldersAbove = (relativePath: string): string[] => {
 
 class CarriersRead implements Carriers {
   readonly rows = new Map<string, Carried>();
-  readonly openable = new Set<string>();
 
   constructor(readonly covering: Covering) {}
 
@@ -46,14 +45,12 @@ class CarriersRead implements Carriers {
     for (const [entry, tags] of own) {
       const key = fileRowUri(origin, entry.relativePath).toString();
       this.carry(key, tags, beneath.get(entry.relativePath));
-      if (beneath.has(entry.relativePath)) this.openable.add(key);
     }
     return inOrigin;
   }
 
   carryOpenableRow(key: string, own: Iterable<PublisherTag>, beneath: Iterable<PublisherTag>): Set<PublisherTag> {
     this.carry(key, own, beneath);
-    this.openable.add(key);
     return new Set([...own, ...beneath]);
   }
 
@@ -92,8 +89,8 @@ function carriersOf(value: InstanceValue): Carriers {
 export class PublisherTagDecorations extends OpenableRowDecorations<Carriers> {
   readonly providers: readonly IndicatorDecorationProvider[];
 
-  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
-    super(instance, carriersOf, (carriers, key) => carriers.openable.has(key));
+  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, open: OpenRows, settings: WorkspaceSettings) {
+    super(instance, open, carriersOf);
     const carries = (tag: PublisherTag) => (uri: vscode.Uri): boolean => {
       const key = uri.toString();
       const carried = this.carriers().rows.get(key);

@@ -21,6 +21,7 @@ vi.mock('vscode', () => ({
   Uri,
 }));
 
+import { OpenRows } from '../mods/openRows';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MANIFEST } from './scanSource';
 import { NO_MOD_STATUSES } from './noModStatuses';
@@ -1299,7 +1300,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) === '3_create')
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
-    const shown = present(new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(instanceValueFixture({ mods: [] })) }).viewMessage(), 'the empty list\'s message');
+    const instance = new FakeInstance(instanceValueFixture({ mods: [] }));
+    const shown = present(new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) }).viewMessage(), 'the empty list\'s message');
     expect(overflowTitles.filter((title) => !shown.includes(title))).toEqual([]);
     expect(shown).toContain('overflow');
   });

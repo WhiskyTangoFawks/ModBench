@@ -4,7 +4,7 @@ import { highlightFollowingFocus, type DrawsHighlight } from '../highlightFollow
 import { FakeTreeView } from './nameFilterViewHarness';
 
 type RelatedRows = Parameters<DrawsHighlight['highlight']>[0];
-const HELD: RelatedRows = { plugins: [{ name: 'A.esp', origin: 'A' }] };
+const HELD: RelatedRows = { plugins: [{ name: 'A.esp', origin: 'A' }], origins: [{ kind: 'mod', name: 'A' }] };
 
 function harness() {
   const focused = createFocusedView();
@@ -15,7 +15,7 @@ function harness() {
   const drawn: RelatedRows[] = [];
   const changed = new Set<() => void>();
   highlightFollowingFocus(
-    focused, new Map([['mods', { related: (selection) => (selection.length > 0 ? HELD : { plugins: [] }) }]]),
+    focused, new Map([['mods', { related: (selection) => (selection.length > 0 ? HELD : { plugins: [], origins: [] }) }]]),
     [{ highlight: (related) => { drawn.push(related); } }],
     (listener) => { changed.add(listener); return { dispose: () => { changed.delete(listener); } }; },
   );
@@ -38,7 +38,7 @@ describe('the highlight follows the view last selected in', () => {
     plugins.selectRows(['a plugin']);
 
     expect(mods.selection).toEqual(['a mod']);
-    expect(drawn.at(-1)).toEqual({ plugins: [] });
+    expect(drawn.at(-1)).toEqual({ plugins: [], origins: [] });
   });
 
   it('hands the selection again when the rows it stands for change', () => {
