@@ -22,8 +22,10 @@ public sealed record ArchiveRefused(string Item, ArchiveRefusal Refusal, string 
 }
 
 /// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming the
-/// way out.</summary>
-public sealed record BuildRefused(string Item, BuildRefusal Refusal, string Message) : IItemRefused<BuildRefusal>
+/// way out. InstallationFilesNotFound: those its manifest names that the request did not hand, for it to find and hand.</summary>
+public sealed record BuildRefused(
+    string Item, BuildRefusal Refusal, string Message, IReadOnlyList<ManifestPackage.InstallationFile> InstallationFilesNotFound)
+    : IItemRefused<BuildRefusal>
 {
     object IItemRefused<BuildRefusal>.Item => Item;
 }

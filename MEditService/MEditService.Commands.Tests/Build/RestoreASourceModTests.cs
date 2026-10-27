@@ -67,6 +67,31 @@ public sealed class RestoreASourceModTests : IDisposable
         Assert.Equal(["meshes/c.nif.excluded"], _folders.ReadSourceManifest(SourceFolder).Value().Require().Files.Select(file => file.Path));
     }
 
+    private const string TakingFromAPack =
+        "{\"output\": \"Mod\", \"installationFiles\": [{\"installationFile\":\"Pack.zip\",\"size\":1,\"hash\":\"HASH\"}], "
+        + "\"files\": [{\"path\":\"textures/a.dds\",\"installationFile\":\"Pack.zip\"}]}";
+
+    [Fact]
+    public async Task ASourceModWhoseManifestNamesAnInstallationFileTheRequestDidNotHand_IsNotFound_NamingIt_ThenBuildsFromItOnceHanded()
+    {
+        var pinned = _submodule.Commit(("Mod.manifest.json", TakingFromAPack), ("assets/textures/a.dds", "placeholder"));
+        var pack = Path.Combine(_root, "downloads", "Pack.zip");
+        Directory.CreateDirectory(Path.Combine(_root, "downloads"));
+        using (var zip = System.IO.Compression.ZipFile.Open(pack, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var writer = new StreamWriter(zip.CreateEntry("textures/a.dds").Open());
+            writer.Write("from the pack");
+        }
+
+        var skipped = Assert.Single((await Restore(pinned)).Refused);
+        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
+        Assert.Equal("Pack.zip", Assert.Single(skipped.InstallationFilesNotFound).Name);
+
+        var handed = new InstallationFile(pack, null, 1, "HASH", [new HashedEntry("textures/a.dds", "x")]);
+        Assert.Single((await Restore(pinned, installationFiles: [handed])).Applied);
+        Assert.Equal("from the pack", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));
+    }
+
     [Fact]
     public async Task AManifestNamingASubmodule_WhoseRequestHandsNone_IsNotFound_NamingIt()
     {
@@ -252,16 +277,17 @@ public sealed class RestoreASourceModTests : IDisposable
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value().Commit;
     }
 
-    private Task<RestoreFromManifestResult> Restore(string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null) =>
-        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks);
+    private Task<RestoreFromManifestResult> Restore(
+        string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null) =>
+        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks, installationFiles);
 
     private Task<RestoreFromManifestResult> Restore(
         string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null,
-        IReadOnlySet<string>? tasks = null)
+        IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null)
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder)],
+            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder) { InstallationFiles = installationFiles ?? [] }],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null) { Tasks = tasks ?? new HashSet<string>() },
             "restore", cancel);
     }

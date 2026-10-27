@@ -71,7 +71,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
         FileBytes.InInstallationFile held when manifest.Package is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
         FileBytes.InGameFolder held => EntryOf(file.Path, held),
-        FileBytes.Built or FileBytes.MadeByStep => (null, null),
+        FileBytes.Built or FileBytes.MadeByStep or FileBytes.InInstallationFile => (null, null),
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 
@@ -96,13 +96,8 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
 
     private (Handed?, Lack?) Find(ManifestPackage.InstallationFile named)
     {
-        var handed = installationFile is not null && repository.InstallationFileName(installationFile.Path) == named.Name ? installationFile : null;
-        if (handed is null)
-        {
-            return (null, unreadableInstallationFile is { } why ? new Lack.InstallationFileUnreadable(named.Name, why) : new Lack.InstallationFileMissing(named));
-        }
-        if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{named.Name}' is not in the downloads folder"));
-        if (named.Hash != handed.Hash) return (null, new Lack($"installation file '{named.Name}' has other bytes"));
+        var (handed, lack) = new HandedInstallationFiles(repository, installationFile is null ? [] : [installationFile]).Of(named, unreadableInstallationFile);
+        if (handed is null) return (null, lack);
         Dictionary<string, HashedEntry> entries = new(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in handed.Entries) entries.TryAdd(entry.Path, entry);
         return (new Handed(handed, entries), null);

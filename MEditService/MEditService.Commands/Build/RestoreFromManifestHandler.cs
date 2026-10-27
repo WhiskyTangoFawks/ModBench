@@ -27,7 +27,7 @@ public sealed class RestoreFromManifestHandler
         return restored.ToResult(
             landed => landed.Outcome,
             refused => new RestoreRefused(
-                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFileNotFound, refused.Refusal.GameFilesNotFound,
+                refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFilesNotFound, refused.Refusal.GameFilesNotFound,
                 refused.Refusal.Build, refused.Refusal.SubmoduleNotFound),
             (applied, refused) => new RestoreFromManifestResult(applied, refused));
     }
@@ -116,11 +116,11 @@ public sealed class RestoreFromManifestHandler
         }
 
         var answer = await _build.BuildAsync(
-            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
+            new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true) { InstallationFiles = mod.InstallationFiles },
             new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache) { Tasks = instance.Tasks });
-        if (answer is ItemAnswer<BuildRefusal, ModBuildOutcome>.Refusing refusing)
-            return ItemAnswer<RestoreSkip, ModRestored>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
-        var outcome = ((ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote)answer).Outcome;
+        if (answer is ItemAnswer<BuildStop, ModBuildOutcome>.Refusing refusing)
+            return ItemAnswer<RestoreSkip, ModRestored>.Refused(Skip(refusing.Refusal), refusing.Message);
+        var outcome = ((ItemAnswer<BuildStop, ModBuildOutcome>.Wrote)answer).Outcome;
         List<string> leftAsItWas = [.. outcome.Refused.Select(plugin => plugin.Message), .. outcome.ArchivesRefused.Select(archive => archive.Message)];
         if (outcome.Failure is { } stopped) leftAsItWas.Insert(0, stopped);
         if (leftAsItWas.Count > 0)
@@ -159,14 +159,19 @@ public sealed class RestoreFromManifestHandler
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
         if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
         var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
-        var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Named).FirstOrDefault();
+        var installationFiles = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Named).ToList();
         var submodule = lacks.OfType<PackageContents.Lack.SubmoduleMissing>().Select(lack => lack.Name).FirstOrDefault();
-        if (gameFiles.Count == 0 && installationFile is null && submodule is null)
+        if (gameFiles.Count == 0 && installationFiles.Count == 0 && submodule is null)
             return Skipped(lacks.All(lack => lack is PackageContents.Lack.NoTask) ? RestoreRefusal.NoTaskForTool : RestoreRefusal.Lacking, why);
         return Skipped(
-            new RestoreSkip(RestoreRefusal.NotFound) { InstallationFileNotFound = installationFile, GameFilesNotFound = gameFiles, SubmoduleNotFound = submodule },
+            new RestoreSkip(RestoreRefusal.NotFound) { InstallationFilesNotFound = installationFiles, GameFilesNotFound = gameFiles, SubmoduleNotFound = submodule },
             why);
     }
+
+    // A build that lacks installation files its manifest names asks for them, as a restore lacking its own does.
+    private static RestoreSkip Skip(BuildStop stop) => stop.InstallationFilesNotFound.Count > 0
+        ? new RestoreSkip(RestoreRefusal.NotFound, stop.Kind) { InstallationFilesNotFound = stop.InstallationFilesNotFound }
+        : new RestoreSkip(RestoreRefusal.NotBuilt, stop.Kind);
 
     private static ItemAnswer<RestoreSkip, ModRestored> Skipped(RestoreRefusal refusal, string why) =>
         Skipped(new RestoreSkip(refusal), why);

@@ -534,6 +534,50 @@ public sealed class ModFolderRepositoryTests : IDisposable
             File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
+    [Fact]
+    public void ASourceManifest_NamesEachInstallationFileItsBuildReads_AndEachFileItTakesFromOne_AndReadsThemBack()
+    {
+        var manifest = new Manifest(
+            new ManifestPackage.SourceRepository("Mod", IsSubmodule: true),
+            [new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.FromInstallationFile("Zed.7z")),
+                new ManifestFile("c.nif", new PackageEntry.FromInstallationFile("Alpha.zip", "meshes/c.nif"))])
+        {
+            Output = "mod",
+            InstallationFiles = [new ManifestPackage.InstallationFile("Zed.7z", 7, "ZZZZ"), new ManifestPackage.InstallationFile("Alpha.zip", 5, "AAAA", "https://www.nexusmods.com/fallout4/mods/1")],
+        };
+
+        _repository.WriteSourceManifest(_root, manifest);
+
+        Assert.Equal(
+            "{\n\"output\": \"mod\",\n\"package\": {\"submodule\":\"Mod\"},\n"
+            + "\"installationFiles\": [\n"
+            + "{\"installationFile\":\"Alpha.zip\",\"size\":5,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"},\n"
+            + "{\"installationFile\":\"Zed.7z\",\"size\":7,\"hash\":\"ZZZZ\"}\n"
+            + "],\n"
+            + "\"files\": [\n"
+            + "{\"path\":\"a.nif\"},\n"
+            + "{\"path\":\"b.nif\",\"installationFile\":\"Zed.7z\"},\n"
+            + "{\"path\":\"c.nif\",\"installationFile\":\"Alpha.zip\",\"packagePath\":\"meshes/c.nif\"}\n"
+            + "]\n"
+            + "}\n",
+            File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
+        Assert.True(_repository.ReadSourceManifest(_root).Holds(out var held, out _));
+        var read = held.Require();
+        Assert.Equal(manifest.Files, read.Files);
+        Assert.Equal(manifest.InstallationFiles, read.InstallationFiles.OrderByDescending(file => file.Name));
+    }
+
+    [Fact]
+    public void ALineTakenFromAnInstallationFile_IsFixedByThatFilesHash_NotByThePackage()
+    {
+        var manifest = new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [new ManifestFile("b.nif", new PackageEntry.FromInstallationFile("Zed.7z"))])
+        {
+            InstallationFiles = [new ManifestPackage.InstallationFile("Zed.7z", 7, "ZZZZ")],
+        };
+
+        Assert.Equal(new FileBytes.InInstallationFile("Zed.7z", "b.nif"), manifest.BytesOf(manifest.Files[0]));
+    }
+
     public static TheoryData<ManifestPackage, string> PackagesAndTheirLines => new()
     {
         { new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), "{\"submodule\":\"Mod\",\"version\":\"2\"}" },
@@ -670,6 +714,10 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":false,\"otherBytes\":true}]}", "its file 1: it says both")]
     [InlineData("{\"files\": [{\"path\":\"a.txt\",\"otherBytes\":true,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
     [InlineData("{\"files\": [{\"path\":\"a.txt\",\"inPackage\":false,\"packagePath\":\"b.txt\"}]}", "its file 1: it names a path")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\",\"installationFile\":\"A.zip\"}]}", "its file 1: it takes from an installation file the manifest does not name")]
+    [InlineData("{\"installationFiles\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\"}], \"files\": [{\"path\":\"a.txt\",\"installationFile\":\"A.zip\",\"otherBytes\":true}]}", "its file 1: it names an installation file")]
+    [InlineData("{\"installationFiles\": [{\"installationFile\":\"A.zip\"}], \"files\": []}", "its manifest cannot be read at its installation file 1")]
+    [InlineData("{\"installationFiles\": [{\"installationFile\":\"A.zip\",\"size\":1,\"hash\":\"H\",\"path\":\"C:/A.zip\"}], \"files\": []}", "its manifest's installation file 1 holds 'path'")]
     [InlineData("{\"files\": []", "line")]
     [InlineData("{\"package\": {\"installationFile\":\"A.zip\"}, \"files\": []}", "cannot be read")]
     [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "holds 'remote'")]

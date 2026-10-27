@@ -14,6 +14,9 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
     /// <summary>Each archive a source mod's build packs (mods.md, Build, story 2).</summary>
     public IReadOnlyList<ManifestArchive> Archives { get; init; } = [];
 
+    /// <summary>The installation files a source mod's build reads, each by what pins it (modlist-repository.md, The manifest, story 7).</summary>
+    public IReadOnlyList<ManifestPackage.InstallationFile> InstallationFiles { get; init; } = [];
+
     /// <summary>The steps that build the folder, in the order they run (modlist-repository.md, The manifest, story 17).</summary>
     public IReadOnlyList<ManifestStep> Steps { get; init; } = [];
 
@@ -32,6 +35,7 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
         (_, PackageEntry.OtherBytes) => new FileBytes.OtherBytes(),
         (_, PackageEntry.MadeByStep) => new FileBytes.MadeByStep(),
+        (_, PackageEntry.FromInstallationFile from) => new FileBytes.InInstallationFile(from.Name, from.PathOf(file.Path)),
         (null, _) => new FileBytes.NoInstallationFile(),
         (ManifestPackage.InstallationFile installationFile, var entry) => new FileBytes.InInstallationFile(installationFile.Name, entry.PathOf(file.Path)),
         (ManifestPackage.SourceRepository, var entry) => new FileBytes.Built(entry.PathOf(file.Path)),
@@ -39,11 +43,14 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 
+    private ManifestPackage.InstallationFile? InstallationFileNamed(string name) =>
+        Package is ManifestPackage.InstallationFile { } package && package.Name == name ? package : InstallationFiles.FirstOrDefault(file => file.Name == name);
+
     /// <summary>The hash, or the repository whose last build wrote it, that fixes <paramref name="file"/>'s bytes, and its
     /// path in the package. Null when the line names no bytes.</summary>
     internal (string Package, string Path)? FixedBy(ManifestFile file) => (BytesOf(file), Package) switch
     {
-        (FileBytes.InInstallationFile held, ManifestPackage.InstallationFile installationFile) => (installationFile.Hash, held.Path),
+        (FileBytes.InInstallationFile held, _) when InstallationFileNamed(held.Name) is { } installationFile => (installationFile.Hash, held.Path),
         (FileBytes.Built built, ManifestPackage.SourceRepository repository) => (repository.Name, built.Path),
         (FileBytes.InGameFolder taken, ManifestPackage.GameFolder gameFolder) => (gameFolder.Hash, taken.Path),
         _ => null,
@@ -126,6 +133,15 @@ public abstract record PackageEntry
     internal sealed record HeldAt(string Path) : PackageEntry
     {
         internal override string PathOf(string filePath) => Path;
+    }
+
+    /// <summary>A source mod's build takes the file from the installation file named <paramref name="Name"/>, at
+    /// <paramref name="PackagePath"/> when that differs from the file's own path.</summary>
+    public sealed record FromInstallationFile(string Name, string? PackagePath = null) : PackageEntry
+    {
+        internal override string PathOf(string filePath) => PathIn(filePath);
+
+        public string PathIn(string filePath) => PackagePath ?? filePath;
     }
 
     public sealed record NotHeld : PackageEntry;

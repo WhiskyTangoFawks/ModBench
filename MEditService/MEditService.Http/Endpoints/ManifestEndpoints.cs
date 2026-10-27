@@ -115,7 +115,10 @@ internal static class ManifestEndpoints
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule(),
-                mod.UnreadableGameFiles, mod.UnreadableInstallationFile, mod.SourceFolder))],
+                mod.UnreadableGameFiles, mod.UnreadableInstallationFile, mod.SourceFolder)
+            {
+                InstallationFiles = [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())],
+            })],
             new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal) },
             req.Gesture, running.Token);
 
@@ -143,7 +146,7 @@ internal static class ManifestEndpoints
             {
                 refused.Add(new RestoreRefused(
                     status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
-                    $"was skipped: {unreadable.Why}.", null, []));
+                    $"was skipped: {unreadable.Why}.", [], []));
                 continue;
             }
             var overwritesMetadata = status.ManifestMetadata is { } says && mod.Metadata?.IsOverwrittenBy(says) == true;
@@ -225,10 +228,11 @@ internal sealed record RestoreFromManifestRequest(
     GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false, IReadOnlyList<string>? Tasks = null);
 
 /// <summary>A mod, with the submodule its manifest names once a refusal names it, why the request could not read a game
-/// file, by path, or an installation file, by name, and a source mod's source folder.</summary>
+/// file, by path, or an installation file, by name, a source mod's source folder, and the installation files its manifest names.</summary>
 internal sealed record RestoreFromManifestModRequest(
     string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule,
-    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null, string? SourceFolder = null)
+    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null, string? SourceFolder = null,
+    IReadOnlyList<InstallationFileRequest>? InstallationFiles = null)
     : IModRequest;
 
 /// <summary>A submodule as the Instance adapter reads the instance repository (ADR-0013): the folder git checks it out in, the

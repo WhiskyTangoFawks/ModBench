@@ -295,7 +295,7 @@ public sealed class RestoreFromManifestHandlerTests
         var skipped = Assert.Single((await Restore(ModFrom(Mod))).Refused);
 
         Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
-        Assert.Equal(named, skipped.InstallationFileNotFound);
+        Assert.Equal(named, Assert.Single(skipped.InstallationFilesNotFound));
     }
 
     [Fact]

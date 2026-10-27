@@ -17,6 +17,11 @@ internal static class ManifestText
         List<string> members = [];
         if (manifest.Output is { } output) members.Add($"\"{OutputKey}\": " + Value(writer => writer.WriteStringValue(output)));
         if (manifest.Package is not null) members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
+        if (manifest.InstallationFiles.Count > 0)
+        {
+            var named = manifest.InstallationFiles.OrderBy(file => file.Name, StringComparer.Ordinal).Select(file => Value(writer => InstallationFileLine(writer, file)));
+            members.Add("\"installationFiles\": [\n" + string.Join(",\n", named) + "\n]");
+        }
         if (manifest.Exclude.Count > 0)
             members.Add("\"exclude\": " + Value(writer => Strings(writer, manifest.Exclude.Order(StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal))));
         if (manifest.Archives.Count > 0)
@@ -37,14 +42,18 @@ internal static class ManifestText
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "exclude", "archives", "steps", "tools", "files");
+            var root = Known(parsed.RootElement, "its manifest", OutputKey, "package", "installationFiles", "exclude", "archives", "steps", "tools", "files");
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
             List<ManifestStep> steps = root.TryGetProperty("steps", out var held) ? [.. held.EnumerateArray().Index().Select(entry => StepOf(entry.Index, entry.Item))] : [];
             List<ManifestTool> tools = root.TryGetProperty("tools", out var named) ? [.. named.EnumerateArray().Index().Select(entry => ToolOf(entry.Index, entry.Item))] : [];
+            List<ManifestPackage.InstallationFile> installationFiles = root.TryGetProperty("installationFiles", out var pinned)
+                ? [.. pinned.EnumerateArray().Index().Select(entry => InstallationFileOf(entry.Index, entry.Item))] : [];
+            if (files.FindIndex(file => file.Entry is PackageEntry.FromInstallationFile from && installationFiles.All(pin => pin.Name != from.Name)) is var unnamed and >= 0)
+                throw Unreadable(unnamed, "it takes from an installation file the manifest does not name");
             if (steps.Count == 0 && files.FindIndex(file => file.Entry is PackageEntry.MadeByStep) is var madeByStep and >= 0)
                 throw Unreadable(madeByStep, "it says a step makes the file, and the manifest holds no step");
             var (package, version) = root.TryGetProperty("package", out var line) ? PackageOf(line) : (null, null);
-            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root), Steps = steps, Tools = tools };
+            return new Manifest(package, files, version) { Output = OutputOf(root), Exclude = ExclusionsOf(root), Archives = ArchivesOf(root), InstallationFiles = installationFiles, Steps = steps, Tools = tools };
         }
         catch (JsonException e)
         {
@@ -100,15 +109,27 @@ internal static class ManifestText
     {
         Known(line, "its manifest's package", "installationFile", "size", "hash", "page", "gameFolder", "submodule", "repository", "version");
         var version = line.TryGetProperty("version", out var held) ? Text(held) : null;
-        if (line.TryGetProperty("installationFile", out var name))
-        {
-            return (new ManifestPackage.InstallationFile(
-                Text(name), line.GetProperty("size").GetInt64(), Text(line.GetProperty("hash")),
-                line.TryGetProperty("page", out var page) ? Text(page) : null), version);
-        }
+        if (line.TryGetProperty("installationFile", out _)) return (InstallationFileIn(line), version);
         if (line.TryGetProperty("gameFolder", out var game)) return (new ManifestPackage.GameFolder(Text(game), Text(line.GetProperty("hash"))), version);
         if (line.TryGetProperty("submodule", out var submodule)) return (new ManifestPackage.SourceRepository(Text(submodule), IsSubmodule: true), version);
         return (new ManifestPackage.SourceRepository(Text(line.GetProperty("repository")), IsSubmodule: false), version);
+    }
+
+    private static ManifestPackage.InstallationFile InstallationFileIn(JsonElement line) =>
+        new(Text(line.GetProperty("installationFile")), line.GetProperty("size").GetInt64(), Text(line.GetProperty("hash")),
+            line.TryGetProperty("page", out var page) ? Text(page) : null);
+
+    private static ManifestPackage.InstallationFile InstallationFileOf(int index, JsonElement line)
+    {
+        try
+        {
+            Known(line, $"its manifest's installation file {index + 1}", "installationFile", "size", "hash", "page");
+            return InstallationFileIn(line);
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            throw new InvalidDataException($"its manifest cannot be read at its installation file {index + 1}", e);
+        }
     }
 
     private static ManifestStep StepOf(int index, JsonElement line)
@@ -146,7 +167,7 @@ internal static class ManifestText
     {
         try
         {
-            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "inPackage", "otherBytes", "madeByStep");
+            Known(line, $"its manifest's file {index + 1}", "path", "packagePath", "installationFile", "inPackage", "otherBytes", "madeByStep");
             var path = Text(line.GetProperty("path"));
             var says = new (bool Set, string Says, PackageEntry Entry)[]
             {
@@ -155,9 +176,12 @@ internal static class ManifestText
                 (FlagOf(index, line, "madeByStep", written: true), "a step makes it", new PackageEntry.MadeByStep()),
             }.Where(flag => flag.Set).ToList();
             var movedTo = line.TryGetProperty("packagePath", out var packagePath) ? Text(packagePath) : null;
+            var takenFrom = line.TryGetProperty("installationFile", out var from) ? Text(from) : null;
+            if (takenFrom is not null && says.Count > 0) throw Unreadable(index, "it names an installation file for a file its package does not hold with its bytes");
             if (says is [var one, var other, ..]) throw Unreadable(index, $"it says both that {one.Says} and that {other.Says}");
             if (says.Count > 0 && movedTo is not null) throw Unreadable(index, "it names a path in its package for a file its package does not hold with its bytes");
             if (says is [var only]) return new ManifestFile(path, only.Entry);
+            if (takenFrom is not null) return new ManifestFile(path, new PackageEntry.FromInstallationFile(takenFrom, movedTo));
             return new ManifestFile(path, movedTo is null ? new PackageEntry.Held() : new PackageEntry.HeldAt(movedTo));
         }
         catch (Exception e) when (e is InvalidOperationException or FormatException or KeyNotFoundException)
@@ -188,10 +212,7 @@ internal static class ManifestText
         switch (package)
         {
             case ManifestPackage.InstallationFile installationFile:
-                writer.WriteString("installationFile", installationFile.Name);
-                writer.WriteNumber("size", installationFile.Size);
-                writer.WriteString("hash", installationFile.Hash);
-                if (installationFile.Page is { } page) writer.WriteString("page", page);
+                InstallationFileMembers(writer, installationFile);
                 break;
             case ManifestPackage.GameFolder gameFolder:
                 writer.WriteString("gameFolder", gameFolder.Name);
@@ -203,6 +224,21 @@ internal static class ManifestText
         }
         if (version is not null) writer.WriteString("version", version);
         writer.WriteEndObject();
+    }
+
+    private static void InstallationFileLine(Utf8JsonWriter writer, ManifestPackage.InstallationFile installationFile)
+    {
+        writer.WriteStartObject();
+        InstallationFileMembers(writer, installationFile);
+        writer.WriteEndObject();
+    }
+
+    private static void InstallationFileMembers(Utf8JsonWriter writer, ManifestPackage.InstallationFile installationFile)
+    {
+        writer.WriteString("installationFile", installationFile.Name);
+        writer.WriteNumber("size", installationFile.Size);
+        writer.WriteString("hash", installationFile.Hash);
+        if (installationFile.Page is { } page) writer.WriteString("page", page);
     }
 
     private static void StepLine(Utf8JsonWriter writer, ManifestStep step)
@@ -231,6 +267,10 @@ internal static class ManifestText
         writer.WriteString("path", file.Path);
         switch (file.Entry)
         {
+            case PackageEntry.FromInstallationFile from:
+                writer.WriteString("installationFile", from.Name);
+                if (from.PackagePath is { } at) writer.WriteString("packagePath", at);
+                break;
             case PackageEntry.HeldAt moved:
                 writer.WriteString("packagePath", moved.Path);
                 break;
