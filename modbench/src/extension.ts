@@ -7,6 +7,7 @@ import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
+import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
@@ -200,6 +201,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
   own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
   own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloadsView));
+  own(highlightFollowingFocus(
+    deps.focusedView, new Map([[MODS_KEY_ARGS.view, mods.relatesRows]]), [plugins.drawsHighlight], (listener) => instance.subscribe(listener)));
   ownAll(own, registerNameFilterCommands(
     () => deps.focusedView.id(),
     new Map([
