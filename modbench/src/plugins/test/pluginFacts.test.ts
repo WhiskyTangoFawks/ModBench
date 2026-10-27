@@ -522,3 +522,16 @@ describe('placeOf — where a plugin lives, from the instance value', () => {
     expect(placeOf(origin, { modOfOrigin, listedSourceMods })).toBe(place);
   });
 });
+
+describe('PluginFacts — a plugin\'s masters (plugins.md, The highlight, story 4)', () => {
+  it('are the file names mEdit read from the plugin', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ masters: ['Fallout4.esm', 'B.esm'] })], []);
+
+    expect(facts.mastersOf(A)).toEqual(['Fallout4.esm', 'B.esm']);
+  });
+
+  it('are none for a plugin mEdit has not read', () => {
+    expect(new PluginFacts().mastersOf(A)).toEqual([]);
+  });
+});

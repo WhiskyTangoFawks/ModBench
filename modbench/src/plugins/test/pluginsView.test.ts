@@ -240,6 +240,51 @@ describe('the Plugins view\'s selection for a key', () => {
   });
 });
 
+describe('the Plugins view\'s selection relates to its masters (plugins.md, The highlight, story 4)', () => {
+  it('names the row of each master mEdit read from the selected plugin', async () => {
+    const client = clientHoldingNothing();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Dep.esp', origin: 'SomeMod', masters: ['Base.esm'] })]);
+    const { plugins, rows } = pluginsView(instanceValueFixture({
+      plugins: ['Dep.esp', 'Base.esm'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })),
+      gameFolder: FOUND,
+    }), { client });
+    const [dep] = await rows();
+    client.emit(rowsChanged);
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
+    await settle();
+
+    expect(plugins.relatesRows.related([present(dep, 'the Dep.esp row')]).plugins).toEqual([{ name: 'Base.esm', origin: 'SomeMod' }]);
+  });
+});
+
+describe('the Plugins view\'s selection and the highlight (plugins.md, The highlight, stories 3 and 6)', () => {
+  const value = () => instanceValueFixture({
+    mods: [{ kind: 'mod', name: 'SomeMod', enabled: true }],
+    plugins: ['A.esp', 'B.esp'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })),
+    gameFolder: FOUND,
+  });
+
+  it('relates a selected plugin to the mod it comes from', async () => {
+    const { plugins, rows } = pluginsView(value());
+    const [a] = await rows();
+
+    expect(plugins.relatesRows.related([present(a, 'the A.esp row')]).origins).toEqual([{ kind: 'mod', name: 'SomeMod' }]);
+  });
+
+  it('marks the label of the plugin rows it is handed', async () => {
+    const { plugins, rows, provider } = pluginsView(value());
+
+    plugins.drawsHighlight.highlight({ plugins: [{ name: 'B.esp', origin: 'SomeMod' }], origins: [] });
+
+    const marked: string[] = [];
+    for (const row of await rows()) {
+      const { label } = await provider().getTreeItem(row);
+      if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
+    }
+    expect(marked).toEqual(['B.esp']);
+  });
+});
+
 const APPLIED_STATUS: LoadOrderProgress = {
   totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
