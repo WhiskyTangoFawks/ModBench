@@ -1,7 +1,7 @@
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What a mod's manifest says: its packages, each named once with its pin, and each file's place in its package.
-/// A file names its package only when it is not the first. A package's hash is kept as written (ADR-0013).</summary>
+/// A file names its package only when it is not the first (ADR-0013).</summary>
 public sealed record Manifest(IReadOnlyList<ManifestPackage> Packages, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
     public Manifest(ManifestPackage? package, IReadOnlyList<ManifestFile> files, string? version = null)
@@ -35,7 +35,7 @@ public sealed record Manifest(IReadOnlyList<ManifestPackage> Packages, IReadOnly
         !path.Contains('\\', StringComparison.Ordinal) && !System.IO.Path.IsPathRooted(path)
         && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."));
 
-    public static string NameOf(ManifestPackage package) => package switch
+    internal static string NameOf(ManifestPackage package) => package switch
     {
         ManifestPackage.InstallationFile installationFile => installationFile.Name,
         ManifestPackage.SourceRepository repository => repository.Name,
@@ -159,7 +159,4 @@ public abstract record PackageEntry
         string.Equals(filePath, packagePath, StringComparison.OrdinalIgnoreCase) ? new Held() : new HeldAt(packagePath);
 
     internal virtual string PathOf(string filePath) => filePath;
-
-    /// <summary>The path of the file in its package, which differs from <paramref name="filePath"/> when the line moves it.</summary>
-    public string PathIn(string filePath) => PathOf(filePath);
 }

@@ -7,7 +7,7 @@ public sealed class ScratchFilesTests
     [Fact]
     public void AStoredContent_IsReadAgainFromItsStart_EachTimeItIsOpened()
     {
-        using var scratch = new ScratchFiles();
+        using var scratch = new ModFolderRepository(TimeProvider.System).CreateScratchFiles();
 
         var stored = scratch.Store(new MemoryStream(Encoding.UTF8.GetBytes("hello")));
 
@@ -17,7 +17,7 @@ public sealed class ScratchFilesTests
     [Fact]
     public void ADisposedScratch_HoldsNoContent()
     {
-        var scratch = new ScratchFiles();
+        var scratch = new ModFolderRepository(TimeProvider.System).CreateScratchFiles();
         var stored = scratch.Store(new MemoryStream(Encoding.UTF8.GetBytes("hello")));
 
         scratch.Dispose();

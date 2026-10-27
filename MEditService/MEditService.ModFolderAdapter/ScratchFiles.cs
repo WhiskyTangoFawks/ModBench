@@ -1,6 +1,6 @@
 namespace MEditService.ModFolderAdapter;
 
-public sealed class ScratchFiles : IScratchFiles
+internal sealed class ScratchFiles : IScratchFiles
 {
     private readonly Lazy<DirectoryInfo> _folder = new(() => Directory.CreateTempSubdirectory("medit-scratch-"));
 
