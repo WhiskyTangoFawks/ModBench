@@ -7,7 +7,7 @@ import { joinSyncMessages, reportSyncFailures, type SyncChannel, type SyncFailur
 import type { LastModStatuses, PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import type { DrawsHighlight } from '../drivingLib/highlightFollowsFocus';
+import type { DrawsHighlight, RelatesRows } from '../drivingLib/highlightFollowsFocus';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
@@ -39,6 +39,7 @@ import type { PluginsViewProgress } from './pluginRowCommands';
 import type { RecordCreateDeps } from './createRecordCommand';
 import type { ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
+import { modsOfPlugins } from './modsOfPlugins';
 
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
@@ -73,6 +74,7 @@ export interface PluginsView extends vscode.Disposable {
   loadOrderPut: SyncFailureReport;
   copyValue: CopyValueAdapter;
   progress: PluginsViewProgress;
+  relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
   narrator: ReconcileNarrator;
 }
@@ -154,6 +156,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,
+    relatesRows: { related: (selection) => ({ plugins: [], origins: modsOfPlugins(instance.value, selection) }) },
     drawsHighlight: { highlight: (related) => { tree.highlight(related.plugins); } },
     dispose: () => { disposable.dispose(); },
   };

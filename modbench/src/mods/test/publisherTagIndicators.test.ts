@@ -16,6 +16,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { fileRowUri } from '../modFiles';
 import { indicatorSetting, modRowUri, overwriteRowUri, separatorRowUri } from '../modIndicators';
 import { PublisherTagDecorations } from '../publisherTagIndicators';
+import { OpenRows } from '../openRows';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 
 const tag = (badge: string, marksPaths = true): PublisherTag => ({ name: `${badge} tag`, badge, marksPaths });
@@ -58,14 +59,14 @@ const settingsOf = (on: Partial<Record<string, boolean>>) => {
 };
 const BADGES_ON = { [indicatorSetting('publisherTag', 'badge')]: true };
 
-const decorationsOver = (instance: FakeInstance, on: Partial<Record<string, boolean>> = BADGES_ON) =>
-  new PublisherTagDecorations(instance, settingsOf(on).settings);
+const decorationsOver = (instance: FakeInstance, on: Partial<Record<string, boolean>> = BADGES_ON, open = new OpenRows(instance)) =>
+  Object.assign(new PublisherTagDecorations(instance, open, settingsOf(on).settings), { open });
 
-const badgesOn = (decorations: PublisherTagDecorations, uri: vscode.Uri): string[] =>
+const badgesOn = (decorations: ReturnType<typeof decorationsOver>, uri: vscode.Uri): string[] =>
   decorations.providers.flatMap((provider) => provider.provideFileDecoration(uri)?.badge ?? []);
 
-const expanded = (decorations: PublisherTagDecorations, ...uris: vscode.Uri[]): PublisherTagDecorations => {
-  for (const uri of uris) decorations.expandedRow(uri);
+const expanded = (decorations: ReturnType<typeof decorationsOver>, ...uris: vscode.Uri[]): ReturnType<typeof decorationsOver> => {
+  for (const uri of uris) decorations.open.expandedRow(uri);
   return decorations;
 };
 
@@ -146,7 +147,7 @@ describe('a collapsed row\'s publisher tags (common.md, A view, story 11)', () =
   it('a row collapsed again carries the rows beneath it again', async () => {
     const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), modRowUri('A'));
 
-    decorations.collapsedRow(modRowUri('A'));
+    decorations.open.collapsedRow(modRowUri('A'));
 
     expect(badgesOn(decorations, modRowUri('A'))).toEqual(['IN', 'IG', 'AE']);
   });
