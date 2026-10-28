@@ -18,6 +18,15 @@ describe('the folders restore refuses', () => {
     ]);
   });
 
+  it('resolves the instance folder and each folder once, however many it compares', async () => {
+    const resolved: string[] = [];
+    const folders = new Map(Array.from({ length: 20 }, (_, at) => [`M${at}`, `/instance/mods/M${at}`] as const));
+
+    await foldersRefused('/instance', folders, [...folders.keys()], (path) => { resolved.push(path); return Promise.resolve(path); });
+
+    expect(resolved.sort()).toEqual(['/instance', ...folders.values()].sort());
+  });
+
   it('refuses a folder beside the instance folder whose name starts as the instance folder\'s does', async () => {
     expect(await foldersRefused('/instance', new Map([['A', '/instance-two/A']]), ['A'])).toEqual([
       { item: 'A', reason: "was skipped: its folder '/instance-two/A' is outside the instance folder." },
