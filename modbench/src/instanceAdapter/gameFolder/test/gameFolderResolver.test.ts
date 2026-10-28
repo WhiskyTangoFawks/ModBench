@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, posix } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import {
-  gameFolderResolver, normalizeGamePath, type GameDetectors, type ManagerGamePath,
+  gameFolderResolver, normalizeGamePath, steamInstallResolver, type GameDetectors, type ManagerGamePath,
 } from '../gameFolderResolver';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { documentsFolder } from '../documentsFolder';
@@ -273,5 +273,27 @@ describe('the game folder resolver', () => {
 
     expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
+  });
+});
+
+describe('the Steam install', () => {
+  it('is the game Steam holds, whatever folder the setting names', async () => {
+    const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
+
+    const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
+
+    expect(install).toEqual({ kind: 'found', root: dirname('/steam/Fallout 4/Data'), dataFolder: '/steam/Fallout 4/Data' });
+  });
+
+  it('is none when Steam holds no such game', async () => {
+    expect(await steamInstallResolver(NO_DETECTORS)(RELEASE_WITH_STEAM_FACTS)).toBeUndefined();
+  });
+
+  it('is none, asking Steam nothing, for a game Modbench has no Steam entry for', async () => {
+    let asked = false;
+    const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => { asked = true; return Promise.resolve(null); } };
+
+    expect(await steamInstallResolver(detectors)('NoSuchRelease')).toBeUndefined();
+    expect(asked).toBe(false);
   });
 });

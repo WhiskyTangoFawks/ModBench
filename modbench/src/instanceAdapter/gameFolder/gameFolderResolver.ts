@@ -9,7 +9,7 @@ import { documentsFolder } from './documentsFolder';
 import { factsOf } from '../files';
 import { present } from '../../ports/present';
 import { errorMessage } from '../../ports/errorMessage';
-import type { GameFolder, GameFolderLook, GameFolderSetting } from '../instanceAdapter';
+import type { FoundGameFolder, GameFolder, GameFolderLook, GameFolderSetting } from '../instanceAdapter';
 
 // What the mod manager says about where the game is, read by the manager from its own configuration.
 export interface ManagerGamePath {
@@ -23,6 +23,8 @@ export interface ManagerGamePath {
 /** Answers where the game is for one generation of the manager's configuration — the Instance's own
  *  read, so a resolution can never come from a different generation than the value it lands in. */
 export type GameFolderResolver = (managed: ManagerGamePath) => Promise<GameFolder>;
+
+export type SteamInstallResolver = (release: string | undefined) => Promise<FoundGameFolder | undefined>;
 
 type DetectWinePrefix = () => Promise<string | null>;
 
@@ -126,6 +128,19 @@ async function managerGamePath(managed: ManagerGamePath, detectors: GameDetector
   return (await hasDataFolder(root)) ? { found: root } : noDataFolder(place, root);
 }
 
+async function steamInstall(facts: GameAutodetect, detectors: GameDetectors): Promise<FoundGameFolder | undefined> {
+  const detected = await detectors.paths(facts);
+  return detected ? { kind: 'found', root: dirname(detected.dataFolder), dataFolder: detected.dataFolder } : undefined;
+}
+
+/** The game's install in Steam's library, wherever the game folder is. */
+export function steamInstallResolver(detectors: GameDetectors = STEAM): SteamInstallResolver {
+  return async (release) => {
+    const facts = autodetectFacts(release);
+    return facts ? steamInstall(facts, detectors) : undefined;
+  };
+}
+
 /** The setting, then the manager's game path, then autodetect. A folder the setting or the manager
  *  names that has no Data folder refuses to fall through: the user chose that folder. */
 export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDetectors = STEAM): GameFolderResolver {
@@ -153,8 +168,8 @@ export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDe
       return notFound();
     }
     // Last, because a detection reads Steam's library file and runs `reg query` on Windows.
-    const detected = await detectors.paths(facts);
-    if (detected) return { kind: 'found', root: dirname(detected.dataFolder), dataFolder: detected.dataFolder };
+    const detected = await steamInstall(facts, detectors);
+    if (detected) return detected;
     looked.push({ place: STEAM_PLACE, answer: 'the game is in no Steam library' });
     return notFound();
   };
