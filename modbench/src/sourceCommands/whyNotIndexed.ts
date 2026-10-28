@@ -1,4 +1,4 @@
-import type { LoadOrderStatus, MEditClient } from '../client';
+import type { LoadOrderProgress, MEditClient } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
@@ -19,7 +19,7 @@ export async function whyNotIndexed({ client, adapter, loadOrderWaitMs = LOAD_OR
   const held = enabled ? reading.modFiles.get(mod) : undefined;
   const wanted = (held?.files ?? []).filter((file) => !file.excluded && isPluginAtRoot(file.relativePath))
     .map((file) => ({ name: file.relativePath, origin: held?.origin ?? mod }));
-  const missingFrom = (status: LoadOrderStatus | undefined): string[] => wanted
+  const missingFrom = (status: LoadOrderProgress | undefined): string[] => wanted
     .filter(({ name, origin }) => !(status?.indexedPlugins ?? []).some((indexed) => indexed.origin === origin && indexed.name.toLowerCase() === name.toLowerCase()))
     .map(({ name }) => name);
 

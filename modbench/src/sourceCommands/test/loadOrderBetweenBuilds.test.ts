@@ -3,16 +3,16 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
-import type { BuildMod, LoadOrderStatus } from '../../client';
+import type { BuildMod, LoadOrderProgress } from '../../client';
 
 const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
 const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [] });
 const savedAll = () => Promise.resolve([]);
 
-const statusHolding = (...indexed: readonly { name: string; origin: string }[]): LoadOrderStatus =>
+const statusHolding = (...indexed: readonly { name: string; origin: string }[]): LoadOrderProgress =>
   ({ totalPlugins: indexed.length, activePlugins: indexed.length, indexedPlugins: [...indexed], conflictsComputed: true, failures: [], version: 1, holdsNone: false });
-const hear = (client: InMemoryMEditClient, status: LoadOrderStatus): void => { client.emit({ kind: 'load-order-status', loadOrderStatus: status }); };
+const hear = (client: InMemoryMEditClient, status: LoadOrderProgress): void => { client.emit({ kind: 'load-order-status', loadOrderStatus: status }); };
 
 const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const client = new InMemoryMEditClient();
@@ -21,7 +21,7 @@ const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const built = (waitMs = 1_000) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), loadOrderWaitMs: waitMs }).build(['ModA', 'ModB']);
   return { client, built };
 };
-const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.map((call) => (call.args[0] as readonly BuildMod[])[0]?.name);
+const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.map(({ args }) => (args[0] as readonly { name: string }[])[0]?.name);
 const pause = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 10); });
 
 describe('sourceCommands build, between mods', () => {
@@ -65,8 +65,8 @@ describe('sourceCommands build, between mods', () => {
 
     expect(builtMods(client)).toEqual(['ModB']);
     expect(outcome).toMatchObject({
-      landed: [{ mod: 'ModB', failure: expect.stringContaining('B.esp') as string }],
-      refused: [{ item: 'ModA', reason: expect.stringMatching(/^was not built: .*B\.esp/) as string }],
+      landed: [{ mod: 'ModB', failure: expect.stringContaining('B.esp') as unknown }],
+      refused: [{ item: 'ModA', reason: expect.stringMatching(/^was not built: .*B\.esp/) as unknown }],
     });
   });
 });
