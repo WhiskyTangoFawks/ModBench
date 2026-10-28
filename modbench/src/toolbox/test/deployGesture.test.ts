@@ -26,12 +26,13 @@ import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult }
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
+const NOTHING_DEPLOYED = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true } as const;
 
 const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
 
-const NOT_PURGED: PurgeResult = { applied: true, wrote: false, restored: undefined, left: [], leftAside: [] };
+const NOT_PURGED: PurgeResult = { applied: true, wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
-function deployAnswering(result: DeployResult, sequence = 1, moved: MoveToOverwriteResult = NOT_MOVED, purged: PurgeResult = NOT_PURGED) {
+function deployAnswering(result: DeployResult, { sequence = 1, moved = NOT_MOVED, purged = NOT_PURGED }: { sequence?: number; moved?: MoveToOverwriteResult; purged?: PurgeResult } = {}) {
   const reporter = recordingReporter();
   const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
@@ -62,7 +63,7 @@ describe('Deploy', () => {
   });
 
   it('deploys no load order while the instance has not been read', async () => {
-    const { deploy, run } = deployAnswering({ applied: false, refusal: 'The instance has not been read.' }, 0);
+    const { deploy, run } = deployAnswering({ applied: false, refusal: 'The instance has not been read.' }, { sequence: 0 });
 
     await run();
 
@@ -159,10 +160,9 @@ describe('Deploy', () => {
 });
 
 describe('Move to Overwrite', () => {
-  const NOTHING = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true } as const;
 
   it('moves the files it is given under the Toolbox\'s progress, and says nothing', async () => {
-    const { reporter, moveToOverwrite, runMove } = deployAnswering(NOTHING, 1, { applied: true, wrote: true, left: [] });
+    const { reporter, moveToOverwrite, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, left: [] } });
 
     await runMove(['Data/a.esp']);
 
@@ -172,7 +172,7 @@ describe('Move to Overwrite', () => {
   });
 
   it('reports a refusal at error, saying why', async () => {
-    const { reporter, runMove } = deployAnswering(NOTHING, 1, { applied: false, refusal: '"a.esp" is already in Overwrite.' });
+    const { reporter, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: false, refusal: '"a.esp" is already in Overwrite.' } });
 
     await runMove(['Data/a.esp']);
 
@@ -180,7 +180,7 @@ describe('Move to Overwrite', () => {
   });
 
   it('warns of each file it left in the deployment folder', async () => {
-    const { reporter, runMove } = deployAnswering(NOTHING, 1, { applied: true, wrote: true, left: ['Data/.hidden'] });
+    const { reporter, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, left: ['Data/.hidden'] } });
 
     await runMove(['Data/.hidden', 'Data/a.esp']);
 
@@ -188,7 +188,7 @@ describe('Move to Overwrite', () => {
   });
 
   it('asks for the files deploy does not manage now when none are named, as from the command palette', async () => {
-    const { moveToOverwrite, runMove } = deployAnswering(NOTHING);
+    const { moveToOverwrite, runMove } = deployAnswering(NOTHING_DEPLOYED);
 
     await runMove();
 
@@ -197,10 +197,8 @@ describe('Move to Overwrite', () => {
 });
 
 describe('Purge', () => {
-  const DEPLOYED: DeployResult = { applied: false, refusal: 'unused' };
-
   it('purges under the Toolbox\'s progress, reads again, and says nothing', async () => {
-    const { reporter, purge, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: '/local/plugins.txt', left: [], leftAside: [] });
+    const { reporter, purge, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { applied: true, wrote: true, restored: '/local/plugins.txt', leftRenamed: [], unmanaged: [], unfinished: [] } });
 
     await runPurge();
 
@@ -208,7 +206,7 @@ describe('Purge', () => {
   });
 
   it('reports a refused purge at error, saying why', async () => {
-    const { reporter, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' });
+    const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' } });
 
     await runPurge();
 
@@ -216,18 +214,31 @@ describe('Purge', () => {
   });
 
   it('warns of each plugins.txt deploy renamed that it left, naming it', async () => {
-    const { reporter, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: undefined, left: ['/local/plugins.txt.modbench_renamed'], leftAside: [] });
+    const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { applied: true, wrote: true, restored: undefined, leftRenamed: ['/local/plugins.txt.modbench_renamed'], unmanaged: [], unfinished: [] } });
 
     await runPurge();
 
     expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Purge left each plugins.txt deploy renamed, which is yours to put back:', detail: '/local/plugins.txt.modbench_renamed' }]);
   });
 
-  it('warns of each file it set aside and could not remove', async () => {
-    const { reporter, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: undefined, left: [], leftAside: ['Data/a.esp (EBUSY)'] });
+  it('warns of each thing it landed without finishing', async () => {
+    const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { applied: true, wrote: true, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: ['Data/a.esp (EBUSY)'] } });
 
     await runPurge();
 
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Purge landed, and could not remove each file it set aside:', detail: 'Data/a.esp (EBUSY)' }]);
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Purge landed, and could not finish:', detail: 'Data/a.esp (EBUSY)' }]);
+  });
+});
+
+describe('Purge, when files remain', () => {
+  it('names each file it left in the Output, and warns of how many', async () => {
+    const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { applied: true, wrote: true, restored: undefined, leftRenamed: [], unmanaged: ['Data/a.ini', 'game.exe'], unfinished: [] } });
+
+    await runPurge();
+
+    expect([reporter.shownFailures, reporter.reports]).toEqual([
+      [{ severity: 'warning', message: 'The deployment folder holds files purge did not remove:', detail: 'Data/a.ini, game.exe' }],
+      [{ severity: 'warning', message: 'The deployment folder holds 2 files purge did not remove, each named in the Output.', detail: undefined }],
+    ]);
   });
 });

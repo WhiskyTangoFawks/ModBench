@@ -53,11 +53,15 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
       reporter.report('error', 'Could not purge.', result.refusal);
       return;
     }
-    if (result.left.length > 0) {
-      reporter.report('warning', 'Purge left each plugins.txt deploy renamed, which is yours to put back:', result.left.join(', '));
+    if (result.unmanaged.length > 0) {
+      reporter.shownOnSurface('warning', 'The deployment folder holds files purge did not remove:', result.unmanaged.join(', '));
+      reporter.report('warning', `The deployment folder holds ${result.unmanaged.length} files purge did not remove, each named in the Output.`);
     }
-    if (result.leftAside.length > 0) {
-      reporter.report('warning', 'Purge landed, and could not remove each file it set aside:', result.leftAside.join(', '));
+    if (result.leftRenamed.length > 0) {
+      reporter.report('warning', 'Purge left each plugins.txt deploy renamed, which is yours to put back:', result.leftRenamed.join(', '));
+    }
+    if (result.unfinished.length > 0) {
+      reporter.report('warning', 'Purge landed, and could not finish:', result.unfinished.join(', '));
     }
   };
   // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.

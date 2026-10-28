@@ -55,7 +55,7 @@ let order: PluginOrder;
 
 const deploy = (files: readonly FileTheGameGets[], to = folder) => hardlinkDeployment(storage, place).deploy(to, files, order);
 const purge = (to = folder) => hardlinkDeployment(storage, place).purge(to);
-const NOTHING = { wrote: false, restored: undefined, left: [], leftAside: [] };
+const NOTHING = { wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
 const inode = async (path: string): Promise<bigint> => (await lstat(path, { bigint: true })).ino;
 
@@ -359,6 +359,7 @@ describe('a deploy killed part way through its changes', () => {
   const recording = async (...files: { winner: string }[]) =>
     recordIn(join(storage, 'deployment.json')).write(folder, {
       files: await Promise.all(files.map(async ({ winner }) => ({ path: 'Data/a.esp', ino: String(await inode(winner)) }))),
+      folders: [],
     });
 
   async function killedAfterLinkingANewPath() {
@@ -854,6 +855,15 @@ describe('purge', () => {
     expect([purged, await listing()]).toEqual([{ ...NOTHING, wrote: true }, []]);
   });
 
+  it('leaves a folder that existed before deploy, however empty', async () => {
+    await mkdir(join(folder, 'Data', 'meshes'), { recursive: true });
+    await deploy([await modFile('Mod', 'meshes/a.nif'), await modFile('Mod', 'textures/b.dds')]);
+
+    await purge();
+
+    expect(await listing()).toEqual(['Data', 'Data/meshes']);
+  });
+
   it('leaves a folder that holds a file deploy did not write', async () => {
     await deploy([await modFile('Mod', 'meshes/a.nif')]);
     await writeFile(join(folder, 'Data', 'meshes', 'mine.ini'), 'mine');
@@ -863,15 +873,26 @@ describe('purge', () => {
     expect(await listing()).toEqual(['Data', 'Data/meshes', 'Data/meshes/mine.ini']);
   });
 
-  it('leaves a file another program replaced, and removes the rest', async () => {
+  it('leaves a file another program replaced, and removes the rest, naming each file it left', async () => {
     const kept = await modFile('Mod', 'a.ini');
     await deploy([kept, await modFile('Mod', 'b.esp')]);
     await rm(join(folder, 'Data', 'a.ini'));
     await writeFile(join(folder, 'Data', 'a.ini'), 'program');
 
+    const purged = await purge();
+
+    expect([purged.unmanaged, await listing(), await readFile(join(folder, 'Data', 'a.ini'), 'utf8')]).toEqual([['Data/a.ini'], ['Data', 'Data/a.ini'], 'program']);
+  });
+
+  it('removes a folder deploy made once it is empty, when a later purge finds it so', async () => {
+    await deploy([await modFile('Mod', 'meshes/a.nif')]);
+    await writeFile(join(folder, 'Data', 'meshes', 'mine.ini'), 'mine');
+    await purge();
+    await rm(join(folder, 'Data', 'meshes', 'mine.ini'));
+
     await purge();
 
-    expect([await listing(), await readFile(join(folder, 'Data', 'a.ini'), 'utf8')]).toEqual([['Data', 'Data/a.ini'], 'program']);
+    expect(await listing()).toEqual([]);
   });
 
   it('leaves the files in the instance', async () => {
@@ -944,11 +965,63 @@ describe('purge', () => {
       await writeFile(join(game, 'plugins.txt'), 'mine');
       await deploy([await modFile('Mod', 'a.esp')]);
       const written = await readFile(join(game, 'plugins.txt'), 'utf8');
+      const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
       busy.unlinks.push(join(folder, 'Data', 'a.esp'));
 
       await expect(purge()).rejects.toThrow();
 
-      expect([(await readdir(game)).sort(), await readFile(join(game, 'plugins.txt'), 'utf8')]).toEqual([['plugins.txt', 'plugins.txt.modbench_renamed'], written]);
+      expect([(await readdir(game)).sort(), await readFile(join(game, 'plugins.txt'), 'utf8'), await recordIn(join(storage, 'deployment.json')).of(folder)])
+        .toEqual([['plugins.txt', 'plugins.txt.modbench_renamed'], written, recorded]);
+    });
+  });
+
+  describe('killed', () => {
+    let game: string;
+    let plugins: string;
+    const recordFile = (): string => join(storage, 'deployment.json');
+
+    beforeEach(async () => {
+      game = join(root, 'local', 'Fallout4');
+      plugins = join(game, 'plugins.txt');
+      place = () => Promise.resolve({ folder: game });
+      order = { release: 'Fallout4', entries: [{ name: 'A.esp', enabled: true }] };
+      await mkdir(game, { recursive: true });
+    });
+
+    const contentsOfGame = async (): Promise<string[]> => Promise.all((await readdir(game)).sort().map((name) => readFile(join(game, name), 'utf8')));
+
+    it('after it put the user\'s plugins.txt back, leaves that file to the next deploy, which does not take it for its own', async () => {
+      await writeFile(plugins, 'mine');
+      await deploy([]);
+      const written = join(root, 'written');
+      await link(plugins, written);
+      let recordWhenPutBack = '';
+      busy.onLink = (to) => {
+        if (to === plugins) recordWhenPutBack = readFileSync(recordFile(), 'utf8');
+      };
+      await purge();
+      busy.onLink = undefined;
+      await writeFile(recordFile(), recordWhenPutBack);
+      await link(written, `${plugins}.modbench_aside_9_0`);
+
+      await deploy([]);
+
+      expect(await contentsOfGame()).toContain('mine');
+    });
+
+    it('after a deploy renamed plugins.txt and before its record landed, puts the renamed file back', async () => {
+      await writeFile(plugins, 'mine');
+      let recordWhenRenamed = '';
+      busy.onLink = (to) => {
+        if (to === `${plugins}.modbench_renamed`) recordWhenRenamed = readFileSync(recordFile(), 'utf8');
+      };
+      await deploy([]);
+      busy.onLink = undefined;
+      await writeFile(recordFile(), recordWhenRenamed);
+
+      const purged = await purge();
+
+      expect([purged.restored, await readdir(game), await readFile(plugins, 'utf8')]).toEqual([`${plugins}.modbench_renamed`, ['plugins.txt'], 'mine']);
     });
   });
 
@@ -974,6 +1047,14 @@ describe('purge', () => {
       expect([purged, await readdir(game)]).toEqual([{ ...NOTHING, wrote: true }, []]);
     });
 
+    it('puts back the user\'s file, and says so, when it cannot move the file it set aside back either', async () => {
+      await writeFile(plugins, 'mine');
+      await deploy([]);
+      busy.links.push(plugins);
+
+      await expect(purge()).rejects.toThrow(/EBUSY.*could not put back.*left as .*modbench_aside/s);
+    });
+
     it('is replaced by the file deploy renamed', async () => {
       await writeFile(plugins, 'mine');
       await deploy([]);
@@ -993,7 +1074,7 @@ describe('purge', () => {
 
       const purged = await purge();
 
-      expect([purged.restored, purged.left, await text(plugins), await text(renamedFile())])
+      expect([purged.restored, purged.leftRenamed, await text(plugins), await text(renamedFile())])
         .toEqual([renamedFile(1), [renamedFile()], 'second', 'first']);
     });
 
@@ -1009,7 +1090,7 @@ describe('purge', () => {
 
       const purged = await purge();
 
-      expect([purged.restored, purged.left, await text(plugins)]).toEqual([renamedFile(), [], 'first']);
+      expect([purged.restored, purged.leftRenamed, await text(plugins)]).toEqual([renamedFile(), [], 'first']);
     });
 
     it('leaves a plugins.txt that deploy did not write, and each file it renamed', async () => {
@@ -1020,7 +1101,7 @@ describe('purge', () => {
 
       const purged = await purge();
 
-      expect([purged.restored, purged.left, await text(plugins), await text(renamedFile())]).toEqual([undefined, [renamedFile()], 'other program', 'mine']);
+      expect([purged.restored, purged.leftRenamed, await text(plugins), await text(renamedFile())]).toEqual([undefined, [renamedFile()], 'other program', 'mine']);
     });
 
     it('is removed when a deploy of another instance wrote it', async () => {

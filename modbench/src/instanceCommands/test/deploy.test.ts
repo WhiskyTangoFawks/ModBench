@@ -13,7 +13,7 @@ function settingHolding(held: { workspaceValue?: string; globalValue?: string } 
   return { id: SETTING_ID, inspect: () => held };
 }
 
-const PURGED: Purged = { wrote: true, restored: '/local/plugins.txt', left: ['/local/plugins.txt.modbench_renamed'], leftAside: [] };
+const PURGED: Purged = { wrote: true, restored: '/local/plugins.txt', leftRenamed: ['/local/plugins.txt.modbench_renamed'], unmanaged: [], unfinished: [] };
 
 function deploymentAnswering(answer: () => Promise<Deployed>) {
   const purgedFrom: string[] = [];

@@ -134,16 +134,16 @@ export async function removeFolders(from: string, upTo: string): Promise<void> {
   }
 }
 
-/** Removes each folder from `from` up to, not including, `upTo` that holds nothing, and stops at one that holds something. */
-export async function removeEmptyFolders(from: string, upTo: string): Promise<void> {
-  for (let folder = from; folder !== upTo; folder = dirname(folder)) {
-    try {
-      await rmdir(folder);
-    } catch (err) {
-      const code = errnoCode(err);
-      if (code === 'ENOTEMPTY' || code === 'EEXIST') return;
-      if (!missing(err)) throw err;
-    }
+/** Removes the folder when it holds nothing, and answers whether it is gone. */
+export async function removedIfEmpty(path: string): Promise<boolean> {
+  try {
+    await rmdir(path);
+    return true;
+  } catch (err) {
+    if (missing(err)) return true;
+    const code = errnoCode(err);
+    if (code === 'ENOTEMPTY' || code === 'EEXIST') return false;
+    throw err;
   }
 }
 
@@ -164,7 +164,7 @@ const removedAside = (folder: string, asides: readonly string[]): Promise<string
 
 /** Makes every change and `steps`, then `land`s them, and answers each file it set aside and could not remove;
  *  or, when one fails, undoes the rest and throws why, naming each change it could not undo. */
-export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>): Promise<string[]> {
+export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>, gesture: 'Deploy' | 'Purge'): Promise<string[]> {
   const undos: Undo[] = [];
   const asides: string[] = [];
   try {
@@ -185,7 +185,7 @@ export async function changeAll(folder: string, { removals, relinks, links }: Ch
     await land();
   } catch (err) {
     const left = await undoAll(undos);
-    throw new Error(left.length === 0 ? errorMessage(err) : `${errorMessage(err)}. Deploy could not undo: ${left.join('; ')}`);
+    throw new Error(left.length === 0 ? errorMessage(err) : `${errorMessage(err)}. ${gesture} could not undo: ${left.join('; ')}`);
   }
   return removedAside(folder, asides);
 }
