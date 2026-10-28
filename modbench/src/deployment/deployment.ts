@@ -67,7 +67,7 @@ export function overwritePathOf(path: string): string | undefined {
   const [first = '', ...below] = path.split('/');
   if (path.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'))) return undefined;
   const inOverwrite = fold(first) === 'data' && below.length > 0 ? below.join('/') : `Root/${path}`;
-  return inOverwrite;
+  return deployedPath(inOverwrite) === undefined ? undefined : inOverwrite;
 }
 
 async function volumeOf(path: string): Promise<string> {
