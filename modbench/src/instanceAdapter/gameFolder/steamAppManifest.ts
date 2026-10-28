@@ -30,14 +30,29 @@ function parseMap(tokens: readonly string[], from: number): { map: VdfMap; next:
 
 const asMap = (value: string | VdfMap | undefined): VdfMap => (typeof value === 'object' ? value : {});
 
-/** The depots the app manifest of `appId` in the Steam library's `steamapps` folder records as installed, each with the ID Steam
- *  gives its version; none when Steam holds no app manifest for it. */
-export async function installedDepots(steamapps: string, appId: string): Promise<SteamDepot[]> {
-  const text = await readOrAbsent(() => readFile(join(steamapps, `appmanifest_${appId}.acf`), 'utf-8'), '');
+/** The depots Steam records as installed, each with the ID Steam gives its version, and why the app manifest gave less than that. */
+export interface InstalledDepots {
+  readonly depots: SteamDepot[];
+  readonly problems: string[];
+}
+
+/** The depots the app manifest of `appId` in the Steam library's `steamapps` folder records as installed; none, and no problem,
+ *  when Steam holds no app manifest for it. */
+export async function installedDepots(steamapps: string, appId: string): Promise<InstalledDepots> {
+  const file = `appmanifest_${appId}.acf`;
+  const text = await readOrAbsent(() => readFile(join(steamapps, file), 'utf-8'), undefined);
+  if (text === undefined) return { depots: [], problems: [] };
   const tokens = [...text.matchAll(TOKEN)].map((match) => match[1] ?? match[2] ?? '');
-  const depots = asMap(asMap(parseMap(tokens, 0).map.AppState).InstalledDepots);
-  return Object.entries(depots).flatMap(([id, depot]) => {
+  const appState = asMap(parseMap(tokens, 0).map.AppState);
+  if (Object.keys(appState).length === 0) return { depots: [], problems: [`${file} is not an app manifest Modbench reads`] };
+  const recorded = Object.entries(asMap(appState.InstalledDepots));
+  if (recorded.length === 0) return { depots: [], problems: [`${file} records no installed depot`] };
+  const depots: SteamDepot[] = [];
+  const problems: string[] = [];
+  for (const [id, depot] of recorded) {
     const version = asMap(depot).manifest;
-    return typeof version === 'string' ? [{ id, version }] : [];
-  }).sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
+    if (typeof version === 'string') depots.push({ id, version });
+    else problems.push(`${file} records no version of depot ${id}`);
+  }
+  return { depots: depots.sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true })), problems };
 }

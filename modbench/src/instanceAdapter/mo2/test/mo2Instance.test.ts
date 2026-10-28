@@ -123,7 +123,7 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
           const adapter = managerOver(root, { gameFolderSettingValue: game, detectors });
 
-          expect(await adapter.steamInstall()).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data', depots: [] });
+          expect(await adapter.steamInstall()).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] });
           expect(await adapter.gameFolder()).toMatchObject({ root: game });
         } finally {
           await rm(game, { recursive: true, force: true });

@@ -197,7 +197,7 @@ internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, string? Gesture, IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
 
 /// <summary>The game folder by the game's name and Data folder, with the game files a mod's files may be, none
-/// when not found. Elsewhere is the Steam install when it is another place (ADR-0013). Depots: those it records.</summary>
+/// when not found. Elsewhere is the Steam install when another place (ADR-0013).</summary>
 internal sealed record GameFolderRequest(
     string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null, IReadOnlyList<GameDepotRequest>? Depots = null)
 {

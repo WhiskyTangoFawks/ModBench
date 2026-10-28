@@ -74,7 +74,10 @@ interface NamedGameFolder {
   readonly depots?: WireDepots;
   readonly steamDataFolder?: string;
   readonly steamDepots?: WireDepots;
+  readonly depotProblems: readonly string[];
 }
+
+const depotProblemsOf = (game: GameToHand): readonly string[] => (typeof game.folder === 'string' ? [] : game.folder.depotProblems);
 
 const withDepots = (key: 'depots' | 'steamDepots', depots: WireDepots): Partial<NamedGameFolder> => (depots.length === 0 ? {} : { [key]: depots });
 
@@ -95,9 +98,11 @@ async function namedGameFolder(adapter: Adapter, gameRelease: string): Promise<N
   const gameFolder = await adapter.gameFolder();
   if (gameFolder.kind !== 'found') return 'the game folder was not found';
   const steam = await adapter.steamInstall();
-  if (steam === undefined) return { name: gameRelease, dataFolder: gameFolder.dataFolder };
-  if (steam.dataFolder === gameFolder.dataFolder) return { name: gameRelease, dataFolder: gameFolder.dataFolder, ...withDepots('depots', steam.depots) };
-  return { name: gameRelease, dataFolder: gameFolder.dataFolder, steamDataFolder: steam.dataFolder, ...withDepots('steamDepots', steam.depots) };
+  const named = { name: gameRelease, dataFolder: gameFolder.dataFolder };
+  if (steam === undefined) return { ...named, depotProblems: [] };
+  const { depotProblems } = steam;
+  if (steam.dataFolder === gameFolder.dataFolder) return { ...named, depotProblems, ...withDepots('depots', steam.depots) };
+  return { ...named, depotProblems, steamDataFolder: steam.dataFolder, ...withDepots('steamDepots', steam.depots) };
 }
 
 const placesOf = (folder: NamedGameFolder): { place: keyof HeldGameFiles; dataFolder: string }[] => [
@@ -111,11 +116,11 @@ async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<Gam
 
 const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles): RestoreFacts['gameFolder'] => {
   if (typeof folder === 'string') return undefined;
-  const { steamDataFolder, steamDepots, depots, ...named } = folder;
+  const { name, dataFolder, steamDataFolder, steamDepots, depots } = folder;
   const elsewhere = steamDataFolder === undefined || held.steam.length === 0
     ? {}
     : { elsewhere: [{ dataFolder: steamDataFolder, files: [...held.steam], ...steamDepots === undefined ? {} : { depots: [...steamDepots] } }] };
-  return { ...named, files: [...held.game], ...depots === undefined ? {} : { depots: [...depots] }, ...elsewhere };
+  return { name, dataFolder, files: [...held.game], ...depots === undefined ? {} : { depots: [...depots] }, ...elsewhere };
 };
 
 interface ReadMods {
@@ -713,7 +718,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const submodules = await submodulesWritten(adapter);
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
-        repositoryNotes: [...downloaded.notes, ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
+        repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
       };
     },
 

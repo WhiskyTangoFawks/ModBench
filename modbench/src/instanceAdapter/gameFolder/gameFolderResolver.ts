@@ -140,7 +140,8 @@ export function steamInstallResolver(detectors: GameDetectors = STEAM): SteamIns
     const facts = autodetectFacts(release);
     const install = facts ? await steamInstall(facts, detectors) : undefined;
     if (facts === undefined || install === undefined) return undefined;
-    return { ...install, depots: await installedDepots(dirname(dirname(install.root)), facts.steamAppId) };
+    const { depots, problems } = await installedDepots(dirname(dirname(install.root)), facts.steamAppId);
+    return { ...install, depots, depotProblems: problems };
   };
 }
 

@@ -1326,6 +1326,16 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(sent).not.toHaveProperty('gameFolder.depots');
   });
 
+  it('notes on the update why the Steam install\'s app manifest gave fewer depots than it holds', async () => {
+    const depotProblems = ['appmanifest_377160.acf records no installed depot'];
+    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/B.nif', '#b']]), depotProblems } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModB']);
+
+    expect(outcome).toMatchObject({ applied: true, repositoryNotes: depotProblems });
+  });
+
   it('hands update manifest the depots on the game folder when the game folder is the Steam install', async () => {
     const depots = [{ id: '377162', version: '2222' }];
     const { commands, client } = commandsOver({ steam: { ...steamHolding([]), install: FOUND, depots } });

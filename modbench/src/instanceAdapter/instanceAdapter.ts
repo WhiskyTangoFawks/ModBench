@@ -56,8 +56,8 @@ export type GameFolder =
 
 export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
 
-/** The game's install in Steam's library, with the depots Steam records as installed. */
-export type SteamInstall = FoundGameFolder & { readonly depots: readonly SteamDepot[] };
+/** The game's install in Steam's library, with the depots Steam records as installed and why its app manifest gave less. */
+export type SteamInstall = FoundGameFolder & { readonly depots: readonly SteamDepot[]; readonly depotProblems: readonly string[] };
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {

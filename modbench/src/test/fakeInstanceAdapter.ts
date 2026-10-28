@@ -134,6 +134,7 @@ export interface InstanceAnswers {
     install: FoundGameFolder;
     /** The depots Steam records as installed; none when absent. */
     depots?: readonly SteamDepot[];
+    depotProblems?: readonly string[];
     gameFiles?: ReadonlyMap<string, GameFile>;
     unreadableGameFiles?: ReadonlyMap<string, string>;
     gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
@@ -316,7 +317,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
     gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
-    steamInstall: () => Promise.resolve(answers.steam === undefined ? undefined : { ...answers.steam.install, depots: answers.steam.depots ?? [] }),
+    steamInstall: () => Promise.resolve(answers.steam === undefined ? undefined : { ...answers.steam.install, depots: answers.steam.depots ?? [], depotProblems: answers.steam.depotProblems ?? [] }),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
