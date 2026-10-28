@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { DeployCommands } from '../instanceCommands/deploy';
+import type { DeployCommands, DeployResult } from '../instanceCommands/deploy';
+import { AgentCall } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
+import { deployFailures, deployWarnings, unmanagedWarning } from './deployProblems';
+import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface DeployGestureDeps {
@@ -15,36 +18,22 @@ const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
 
 // deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
 export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
-  const deploy = async (): Promise<void> => {
+  const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
+    if (reportsItself) return result;
     if (!result.applied) {
       reporter.report('error', 'Could not deploy.', result.refusal);
-      return;
+      return result;
     }
-    if (result.leftOut.length > 0) {
-      reporter.report('warning', 'Deploy left out each file whose path holds a file it did not write:',
-        result.leftOut.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
+    const unmanaged = unmanagedWarning(result);
+    if (unmanaged !== undefined) {
+      reporter.shownOnSurface('warning', unmanaged.message, unmanaged.detail);
+      reporter.report('warning', `The deployment folder holds ${result.unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
+        result.canMoveToOverwrite ? { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, result.unmanaged) } : undefined);
     }
-    if (result.unmanaged.length > 0) {
-      const { unmanaged } = result;
-      reporter.shownOnSurface('warning', 'The deployment folder holds files deploy does not manage:', unmanaged.join(', '));
-      reporter.report('warning', `The deployment folder holds ${unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
-        result.canMoveToOverwrite ? { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, unmanaged) } : undefined);
-    }
-    if (result.lost.length > 0) {
-      reporter.report('warning', 'Deploy left out each file whose path another file the game gets wins:',
-        result.lost.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
-    }
-    if (result.pluginsTxt.kind === 'notWritten') {
-      reporter.report('warning', 'Deploy wrote no plugins.txt:', result.pluginsTxt.why);
-    }
-    if (result.pluginsTxt.kind !== 'notWritten' && result.pluginsTxt.renamed.length > 0) {
-      reporter.report('warning', 'Deploy renamed each plugins.txt it did not write, so the game reads the plugin order of this load order:', result.pluginsTxt.renamed.join(', '));
-    }
-    if (result.leftAside.length > 0) {
-      reporter.report('warning', 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:', result.leftAside.join(', '));
-    }
+    for (const { message, detail } of [...deployFailures(result), ...deployWarnings(result)]) reporter.report('warning', message, detail);
+    return result;
   };
   // deployment-hardlink.md, Purge, story 2: purge asks nothing.
   const purge = async (): Promise<void> => {
@@ -66,7 +55,8 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
   };
   // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
   return [
-    vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy)),
+    registerDeployTask(reporter),
+    vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
     vscode.commands.registerCommand('modbench.instance.purge', () => runWritingGesture(TOOLBOX_VIEW, instance, purge)),
     registerMoveToOverwriteCommand({ commands, instance, reporter }),
   ];

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { handlers, registerCommand, executeCommand } = vi.hoisted(() => {
-  const handlers = new Map<string, (...args: unknown[]) => Promise<void>>();
+  const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
   return {
     handlers,
-    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void>) => {
+    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<unknown>) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
@@ -14,10 +14,12 @@ const { handlers, registerCommand, executeCommand } = vi.hoisted(() => {
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return { commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress } };
+  const { taskModule } = await import('../../test/taskDouble');
+  return { ...taskModule(), commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress } };
 });
 
 import { progressSteps } from '../../test/recordedProgress';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerDeployCommands } from '../deployGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -60,6 +62,26 @@ describe('Deploy', () => {
     expect([deploy.mock.calls, progressSteps, reporter.reports, reporter.landings]).toEqual([
       [[{ files: value.files, plugins: value.plugins, gameName: value.gameName }]], ['progress opens on modbench.toolbox', 'deploy', 'read again', 'progress closes'], [], [],
     ]);
+  });
+
+  it('answers its result, and reports it as the view\'s own call', async () => {
+    const result = { ...NOTHING_DEPLOYED, leftOut: [{ path: 'Data/a.esp', winner: '/m/A/a.esp' }] };
+    const { reporter, run } = deployAnswering(result);
+
+    expect([await run(), reporter.reports.length]).toEqual([result, 1]);
+  });
+
+  it('answers its result to an agent call and reports nothing, as the caller reports it', async () => {
+    const result = { ...NOTHING_DEPLOYED, unmanaged: ['Data/a.ini'], lost: [{ path: 'Data/x.ini', winner: '/m/B/x.ini' }] };
+    const { reporter, run } = deployAnswering(result);
+
+    expect([await run(new AgentCall([], {})), reporter.reports, reporter.shownFailures]).toEqual([result, [], []]);
+  });
+
+  it('answers a refusal to an agent call, and reports nothing', async () => {
+    const { reporter, run } = deployAnswering({ applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' });
+
+    expect([await run(new AgentCall([], {})), reporter.reports]).toEqual([{ applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' }, []]);
   });
 
   it('deploys no load order while the instance has not been read', async () => {
