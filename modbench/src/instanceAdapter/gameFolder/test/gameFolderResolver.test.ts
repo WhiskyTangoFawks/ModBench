@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import {
@@ -7,6 +7,7 @@ import {
 } from '../gameFolderResolver';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { documentsFolder } from '../documentsFolder';
+import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import { fixedGameFolderSetting, GAME_FOLDER_SETTING_ID } from '../../../test/gameFolderSetting';
 
 const noDetectPrefix = () => Promise.resolve(null);
@@ -290,12 +291,12 @@ describe('the Steam install', () => {
     try {
       const dataFolder = join(library, 'steamapps', 'common', 'Fallout 4', 'Data');
       await mkdir(dataFolder, { recursive: true });
-      await writeFile(join(library, 'steamapps', 'appmanifest_377160.acf'), '"AppState"\n{\n"InstalledDepots"\n{\n"377162"\n{\n"manifest" "2222"\n}\n}\n}\n');
+      await writeAppManifestOfDepot(library);
       const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder }) };
 
       const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
 
-      expect(install?.depots).toEqual([{ id: '377162', version: '2222' }]);
+      expect(install?.depots).toEqual([INSTALLED_DEPOT]);
     } finally {
       await rm(library, { recursive: true, force: true });
     }

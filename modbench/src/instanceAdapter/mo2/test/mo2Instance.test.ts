@@ -52,6 +52,7 @@ import { ownTempPrefix } from '../../files';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
 import { adapterOver, contextOver, managerOver, sourceOver } from '../../../test/mo2/adapterOver';
+import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
@@ -137,16 +138,27 @@ describe('the MO2 Instance adapter', () => {
         try {
           const game = join(library, 'steamapps', 'common', 'Fallout 4');
           await mkdir(join(game, 'Data'), { recursive: true });
-          await writeFile(join(library, 'steamapps', 'appmanifest_377160.acf'), '"AppState"\n{\n"InstalledDepots"\n{\n"377162"\n{\n"manifest" "2222"\n}\n}\n}\n');
+          await writeAppManifestOfDepot(library);
           await symlink(library, linked);
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { dataFolder: join(game, 'Data'), depots: [{ id: '377162', version: '2222' }], depotProblems: [] },
+            { dataFolder: join(game, 'Data'), depots: [INSTALLED_DEPOT], depotProblems: [] },
           ]);
         } finally {
           await rm(linked, { force: true });
           await rm(library, { recursive: true, force: true });
+        }
+      });
+
+      it('answers the game folder alone, with no depots, when Steam holds no such game', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
+        try {
+          await mkdir(join(game, 'Data'));
+
+          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ dataFolder: join(game, 'Data'), depots: [], depotProblems: [] }]);
+        } finally {
+          await rm(game, { recursive: true, force: true });
         }
       });
 

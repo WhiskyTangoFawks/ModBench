@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, GamePlace, OtherManifest, SourceMods, SteamDepot } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, GamePlace, OtherManifest, SourceMods, Depot } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -20,7 +20,7 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter, 'foldersRefused' |
-  'reading' | 'gameFolder' | 'gamePlaces' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'indexedDownloadedFiles' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'otherManifests' | 'writeOtherManifestLines' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'reading' | 'gamePlaces' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'indexedDownloadedFiles' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'otherManifests' | 'writeOtherManifestLines' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashFileIn' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
@@ -74,9 +74,9 @@ interface NamedGameFolder {
 const depotProblemsOf = (game: GameToHand, mods: readonly ReadMod[]): readonly string[] =>
   (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.places.flatMap((place) => place.depotProblems));
 
-type HeldGameFiles = readonly (readonly GameFile[])[];
+type HeldGameFiles = ReadonlyMap<GamePlace, readonly GameFile[]>;
 
-const NONE_HELD: HeldGameFiles = [];
+const NONE_HELD: HeldGameFiles = new Map();
 
 interface GameToHand {
   readonly takes: (mod: string) => boolean;
@@ -94,17 +94,17 @@ async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<Gam
   return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined && modFolders?.find((entry) => entry.modName === mod)?.kind !== 'separator' };
 }
 
-const wireDepots = (depots: readonly SteamDepot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
+const wireDepots = (depots: readonly Depot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
 
 // Only update manifest reads the depots; restore's manifest names them.
 const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): RestoreFacts['gameFolder'] => {
   if (typeof folder === 'string') return undefined;
   const { name, places: [first, ...others] } = folder;
-  const elsewhere = others.flatMap((place, at) => {
-    const files = held[at + 1] ?? [];
+  const elsewhere = others.flatMap((place) => {
+    const files = held.get(place) ?? [];
     return files.length === 0 ? [] : [{ dataFolder: place.dataFolder, files: [...files], ...wireDepots(place.depots, withDepots) }];
   });
-  return { name, dataFolder: first.dataFolder, files: [...held[0] ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
+  return { name, dataFolder: first.dataFolder, files: [...held.get(first) ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
 };
 
 const takesFromTheGame = (mod: ReadMod): boolean => (mod.gameFolder?.files.length ?? 0) > 0 || (mod.gameFolder?.elsewhere?.length ?? 0) > 0;
@@ -155,20 +155,19 @@ async function gameFilesOf(
   if (typeof game.folder === 'string') {
     return { gameFiles: NONE_HELD, notes: installed ? [] : [`${game.folder}, so its manifest cannot name the game folder as its package`] };
   }
-  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(({ dataFolder }) => adapter.gameFilesTakenBy(dataFolder, folder)));
+  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(async (place) => ({ place, taken: await adapter.gameFilesTakenBy(place.dataFolder, folder) })));
   if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
-  if (inGame.kind === 'unreadable') {
-    return installed ? { gameFiles: NONE_HELD, notes: [`the game files its files may be could not be read: ${inGame.reason}`] } : { refusal: inGame.reason };
+  if (inGame.taken.kind === 'unreadable') {
+    return installed ? { gameFiles: NONE_HELD, notes: [`the game files its files may be could not be read: ${inGame.taken.reason}`] } : { refusal: inGame.taken.reason };
   }
-  const held: (readonly GameFile[])[] = [inGame.answer.gameFiles];
-  const notes = new Set(inGame.answer.notes);
-  for (const [at, inOther] of inOthers.entries()) {
-    if (inOther.kind === 'unreadable') {
-      notes.add(`the game files in ${game.folder.places[at + 1]?.dataFolder ?? ''} could not be read: ${inOther.reason}`);
-      held.push([]);
+  const held = new Map([[inGame.place, inGame.taken.answer.gameFiles]]);
+  const notes = new Set(inGame.taken.answer.notes);
+  for (const { place, taken } of inOthers) {
+    if (taken.kind === 'unreadable') {
+      notes.add(`the game files in ${place.dataFolder} could not be read: ${taken.reason}`);
     } else {
-      held.push(inOther.answer.gameFiles);
-      for (const note of inOther.answer.notes) notes.add(note);
+      held.set(place, taken.answer.gameFiles);
+      for (const note of taken.answer.notes) notes.add(note);
     }
   }
   return { gameFiles: held, notes: [...notes] };
@@ -239,7 +238,7 @@ const sentence = (reason: string): string => ` ${reason.charAt(0).toUpperCase()}
 async function namedGameFiles(
   adapter: Adapter, folder: NamedGameFolder | string, notFound: readonly NotFound[],
 ): Promise<{ found: HeldGameFiles; unreadable: (mod: string) => Record<string, string> }> {
-  const found = typeof folder === 'string' ? [] : folder.places.map(() => new Map<string, GameFile>());
+  const found = new Map<GamePlace, Map<string, GameFile>>();
   const unreadable = new Map<string, Record<string, string>>();
   for (const { mod, gameFiles } of notFound) {
     if (gameFiles.length === 0) continue;
@@ -248,14 +247,16 @@ async function namedGameFiles(
       continue;
     }
     const reasons: Record<string, string> = {};
-    for (const [at, { dataFolder }] of folder.places.entries()) {
-      const read = await adapter.gameFiles(dataFolder, gameFiles);
+    for (const place of folder.places) {
+      const read = await adapter.gameFiles(place.dataFolder, gameFiles);
       Object.assign(reasons, read.unreadable, reasons);
-      for (const file of read.files) found[at]?.set(file.path.toLowerCase(), file);
+      const foundHere = found.get(place) ?? new Map<string, GameFile>();
+      for (const file of read.files) foundHere.set(file.path.toLowerCase(), file);
+      found.set(place, foundHere);
     }
     unreadable.set(mod, reasons);
   }
-  return { found: found.map((files) => [...files.values()]), unreadable: (mod) => unreadable.get(mod) ?? {} };
+  return { found: new Map([...found].map(([place, files]) => [place, [...files.values()]])), unreadable: (mod) => unreadable.get(mod) ?? {} };
 }
 
 // modlist-repository.md, Restore from manifest, story 3: git checks each submodule out at the commit the repository pins.
