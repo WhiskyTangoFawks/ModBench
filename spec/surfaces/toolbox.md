@@ -60,7 +60,7 @@ As a user, I want:
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. No refresh when another Modbench window has the instance open (common, States, story 10).
+1. A refresh refused because another window holds the record index to say "This instance is open in another Modbench window. Close it, then refresh.", and to name the instance. Modbench cannot name the other window. Cites: catalog `refresh`; Never silently wrong; ADR-0003
 2. A failed refresh to say why.
 
 ## Test seam
