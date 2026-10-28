@@ -30,8 +30,8 @@ describe('sourceCommands build', () => {
     const ba2 = { ba2: { version: 1, compressed: true } };
     const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache', tasks: ['Optimise textures'] };
     expect(client.calls).toEqual([
-      { method: 'build', args: [[{ name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true }], facts] },
-      { method: 'build', args: [[{ name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false }], facts] },
+      { method: 'build', args: [[{ name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true }], facts] },
+      { method: 'build', args: [[{ name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/instance/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false }], facts] },
     ]);
   });
 
@@ -164,7 +164,7 @@ describe('sourceCommands build, in mod order', () => {
 
     await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: logging }).build(['ModA', 'ModB']);
 
-    expect(log).toEqual(['build ModB', 'steps /mods/ModB', 'manifest ModB', 'build ModA', 'steps /mods/ModA', 'manifest ModA']);
+    expect(log).toEqual(['build ModB', 'steps /instance/mods/ModB', 'manifest ModB', 'build ModA', 'steps /instance/mods/ModA', 'manifest ModA']);
   });
 });
 
@@ -185,7 +185,7 @@ describe('sourceCommands build, of a mod with steps', () => {
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks }).build(['ModA']);
 
-    expect(tasks.runs).toEqual([{ steps: STEPS, folder: '/mods/ModA' }]);
+    expect(tasks.runs).toEqual([{ steps: STEPS, folder: '/instance/mods/ModA' }]);
     expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }], [{ name: 'ModA', made: ['a.nif'] }]]);
     expect(outcome).toEqual({ landed: [builtWithSteps], refused: [] });
   });
@@ -197,7 +197,7 @@ describe('sourceCommands build, of a mod with steps', () => {
       if (mods.some((mod) => mod.made)) written.push(mods.map((mod) => mod.name));
       return Promise.resolve({ landed: mods.map((mod) => ({ ...builtWithSteps, mod: mod.name, ...(mod.made ? { steps: [], made: [] } : {}) })), refused: [] });
     });
-    const tasks = recordingTasks([], { '/mods/ModA': 'step \'Optimise textures\' exited with code 2' });
+    const tasks = recordingTasks([], { '/instance/mods/ModA': 'step \'Optimise textures\' exited with code 2' });
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks }).build(['ModA', 'ModB']);
 

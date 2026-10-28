@@ -2,6 +2,7 @@
 // instance keeps what.
 
 import { basename, dirname } from 'node:path';
+import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../downloadedFileContents/installationFileNames';
 import { effectiveModId } from './codecs/nexusFileName';
@@ -15,7 +16,7 @@ import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationCl
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
-import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolders } from '../instanceAdapter';
+import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders } from '../instanceAdapter';
 import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
@@ -136,9 +137,16 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
   };
 }
 
+const indexedListings = new WeakMap<readonly ModFolder[], ModFolders>();
+const indexed = (listing: readonly ModFolder[]): ModFolders => {
+  const held = indexedListings.get(listing) ?? modFoldersOf(listing);
+  indexedListings.set(listing, held);
+  return held;
+};
+
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceMods'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceMods'> {
   const { instanceRoot } = context;
   const reads: ReturnType<typeof mo2Reads> = {
     profiles: () => source.profiles(ignoreSkippedLink),
@@ -158,7 +166,8 @@ export function mo2Reads(
     }),
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
     sourceMods: () => source.sourceMods(),
-    modFolderPath: (name) => modFolderNamed(context, name, 'list'),
+    modFolderPath: (name, among) => modFolderNamed(context, name, among === undefined ? 'list' : indexed(among)),
+    foldersRefused: (folders, asked) => foldersRefused(instanceRoot, folders, asked),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
     entryKey,
     fileStamp: (path) => readOrReason(() => stampOf(path)),

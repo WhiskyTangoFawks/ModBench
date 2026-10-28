@@ -1915,7 +1915,7 @@ export interface components {
             refused: components["schemas"]["RestoreRefused"][];
         };
         /** @enum {string} */
-        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt" | "NoTaskForTool";
+        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "OutputNotThisFolder" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt" | "NoTaskForTool";
         RestoreRefused: {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];

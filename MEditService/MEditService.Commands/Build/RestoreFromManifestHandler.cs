@@ -52,6 +52,9 @@ public sealed class RestoreFromManifestHandler
         }
 
         if (held is not { } manifest) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
+        var folderName = _repository.FolderName(mod.Folder);
+        if (mod.SourceFolder is null && manifest.Output is { } output && !string.Equals(output, folderName, StringComparison.OrdinalIgnoreCase))
+            return Skipped(RestoreRefusal.OutputNotThisFolder, $"its manifest names the output folder '{output}', not its folder '{folderName}'");
         var resolved = new PackageContents(_repository, manifest, mod.InstallationFiles, instance.GameFolder, mod.UnreadableGameFiles, mod.UnreadableInstallationFiles).Resolve();
         List<PackageContents.Lack> lacks = [.. resolved.Lacks];
         if (ToolsWithoutTask.Why(manifest, instance.Tasks) is { } noTask) lacks.Add(new PackageContents.Lack.NoTask(noTask));

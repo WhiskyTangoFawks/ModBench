@@ -490,8 +490,8 @@ describe('markFiles', () => {
   const SOURCE = '/instance/source/Harder VATS';
   const OTHER = '/instance/source/ENBoost';
   const MOD_FILES = new Map(['Harder VATS', 'ENBoost'].map((name) => [name, {
-    origin: name, folder: `/mods/${name}`, folders: [], notes: [],
-    files: ['a.dds', 'b.dds', 'c.dds', 'bad.dds', 'Textures/a.dds', `Textures/b.dds${MARK}`].map((path) => fileIn(`/mods/${name}`, path)),
+    origin: name, folder: `/instance/mods/${name}`, folders: [], notes: [],
+    files: ['a.dds', 'b.dds', 'c.dds', 'bad.dds', 'Textures/a.dds', `Textures/b.dds${MARK}`].map((path) => fileIn(`/instance/mods/${name}`, path)),
   }]));
   const SOURCES = { ...sourceMods(new Map([['Harder VATS', SOURCE]])), modFiles: MOD_FILES };
   const TWO_SOURCES = { ...sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]])), modFiles: MOD_FILES };
@@ -656,11 +656,11 @@ describe('changePublisherTag (publishing.md, Publisher tags, story 2)', () => {
     const result = await commands.changePublisherTag('add', 'Include', rows);
 
     expect(result).toEqual({ applied: true, outcome: { landed: rows, refused: [] } });
-    expect(fake.calls).toEqual([changeCall('add', 'Include', ['/mods/ENBoost', fileInFolder('/mods/Harder VATS', 'Textures/a.dds')])]);
+    expect(fake.calls).toEqual([changeCall('add', 'Include', ['/instance/mods/ENBoost', fileInFolder('/instance/mods/Harder VATS', 'Textures/a.dds')])]);
   });
 
   it('refuses a row the publisher refuses, by its row, and lands the rest', async () => {
-    const { commands } = publisherOver({ outsideInstance: new Set(['/mods/ENBoost']) });
+    const { commands } = publisherOver({ outsideInstance: new Set(['/instance/mods/ENBoost']) });
     const refusedRow = modRow('ENBoost');
     const landedRow = modRow('Harder VATS');
 
@@ -679,7 +679,7 @@ describe('changePublisherTag (publishing.md, Publisher tags, story 2)', () => {
 
     expect(result).toEqual({ applied: true, outcome: { landed: [modRow('ENBoost')], refused: [{ item: file, reason: 'Always Enabled marks mods only.' }] } });
     expect(inOverwrite).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: overwritten, reason: 'Overwrite is not a mod.' }] } });
-    expect(fake.calls).toEqual([changeCall('add', 'Always Enabled', ['/mods/ENBoost'])]);
+    expect(fake.calls).toEqual([changeCall('add', 'Always Enabled', ['/instance/mods/ENBoost'])]);
   });
 
   it('refuses the whole selection, naming it, for a tag the publisher does not declare, and when the publisher rejects', async () => {
@@ -871,7 +871,7 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
 
     expect(fake.calls).toEqual([
       { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
-      follow({ from: '/mods/Harder VATS', to: '/mods/Harder VATS 2' }),
+      follow({ from: '/instance/mods/Harder VATS', to: '/instance/mods/Harder VATS 2' }),
       { verb: 'keepOutOfPublisher' },
       expect.objectContaining({ verb: 'changeModOrder' }),
     ]);
@@ -925,7 +925,7 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
 
     await commands.uninstallMods(['Harder VATS', 'ENBoost', 'No Such Mod'], NO_TRASH);
 
-    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow({ from: '/mods/Harder VATS' }, { from: '/mods/ENBoost' })]);
+    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow({ from: '/instance/mods/Harder VATS' }, { from: '/instance/mods/ENBoost' })]);
     expect(verbs(fake.calls).indexOf('followModFolders')).toBeGreaterThan(verbs(fake.calls).lastIndexOf('trashEntryFolder'));
   });
 

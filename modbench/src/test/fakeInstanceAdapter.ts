@@ -14,18 +14,19 @@ import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
   return new Map(mods.flatMap((entry) => (entry.kind === 'mod'
-    ? [[entry.name, { origin: entry.name, folder: `/mods/${entry.name}`, files: [], folders: [], notes: [] }] as const]
+    ? [[entry.name, { origin: entry.name, folder: `/instance/mods/${entry.name}`, files: [], folders: [], notes: [] }] as const]
     : [])));
 }
 
 /** The source mods whose repositories write the named output folders, and the outputs that repositories build no mod name, by folder. */
-export const sourceModsOf = (folders: Record<string, string>, notes: string[] = [], uncloned: readonly string[] = [], claims: Record<string, string> = {}): SourceMods => {
+export const sourceModsOf = (folders: Record<string, string>, notes: string[] = [], uncloned: readonly string[] = [], claims: Record<string, string> = {}, shared: Record<string, readonly string[]> = {}): SourceMods => {
   const folderOf = (name: string): string | undefined => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1];
   return {
     folders: new Map(Object.entries(folders)),
     folderOf,
     builds: (name) => folderOf(name) !== undefined || uncloned.some((output) => output.toLowerCase() === name.toLowerCase()),
     claimedOutput: (folder) => Object.entries(folders).find(([, built]) => built === folder)?.[0] ?? claims[folder],
+    buildersOf: (name) => Object.entries(shared).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1] ?? [],
     notes,
   };
 };
@@ -207,7 +208,7 @@ const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${e
 export function modFoldersOf(...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
   return foldersHolding(entries.map((entry) => {
     const ref = typeof entry === 'string' ? { kind: 'mod' as const, name: entry } : entry;
-    return { kind: ref.kind, name: ref.name, path: `/mods/${ref.name}`, modName: ref.modName ?? ref.name };
+    return { kind: ref.kind, name: ref.name, path: `/instance/mods/${ref.name}`, modName: ref.modName ?? ref.name };
   }));
 }
 
@@ -215,7 +216,7 @@ const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
   ({ all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) });
 
 function folderBeside(folders: ModFolders | undefined, name: string): string {
-  const held = folders?.all[0]?.path ?? '/mods/';
+  const held = folders?.all[0]?.path ?? '/instance/mods/';
   return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
 }
 
@@ -245,7 +246,7 @@ export function pluginFilesHeld(...held: readonly { readonly origin: FileOrigin;
   const namesIn = (wanted: FileOrigin): string[] => held.filter((one) => sameOrigin(one.origin, wanted)).map((one) => one.name);
   const mods = [...new Set(held.flatMap((one) => (one.origin.kind === 'mod' ? [one.origin.name] : [])))];
   return {
-    modFiles: new Map(mods.map((name) => [name, originsFiles(name, `/mods/${name}`, namesIn({ kind: 'mod', name }))])),
+    modFiles: new Map(mods.map((name) => [name, originsFiles(name, `/instance/mods/${name}`, namesIn({ kind: 'mod', name }))])),
     runtimeOutput: originsFiles('overwrite', '/overwrite', namesIn({ kind: 'runtimeOutput' })),
   };
 }
@@ -334,6 +335,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     publisherConfigurationRefusal: () => Promise.resolve(answers.unreadablePublisher),
     followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
     modFolderPath: (mod) => Promise.resolve(isBareName(mod) ? foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod) : undefined),
+    foldersRefused: () => Promise.resolve([]),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
@@ -377,7 +379,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),
-    otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [] }),
+    otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),

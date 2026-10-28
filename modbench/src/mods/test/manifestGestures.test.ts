@@ -187,7 +187,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
       notification.cancel();
       signal = options?.signal;
-      return Promise.resolve({ applied: false, refusal: 'Could not restore 2 mods — mEdit stopped.', unfinished: ['ModB'] });
+      return Promise.resolve({ applied: false, refusal: 'Could not restore 2 mods — mEdit stopped.', unfinished: ['ModB'], refused: [] });
     });
     const { reporter, run } = register();
 
@@ -603,8 +603,22 @@ describe('A separator in a report or an outcome', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"${NAMED}" (was skipped: it has no manifest.)` }]);
   });
 
+  it('restore from manifest names each mod it refused beside the mods mEdit did not finish', async () => {
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: ['ModB'], refused: [{ item: 'ModA', reason: 'was skipped: its folder is outside the instance folder.' }],
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModB'), [modRow('ModB')]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not restore 1 mod — mEdit stopped.',
+      detail: 'Not finished: "ModB". Restoring again finishes them.\n"ModA" (was skipped: its folder is outside the instance folder.)',
+    }]);
+  });
+
   it('restore from manifest names it as a separator among the mods not finished', async () => {
-    restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: [WIRE] });
+    restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: [WIRE], refused: [] });
     const { reporter, run } = register();
 
     await run(RESTORE, separatorRow('Weapons'));
@@ -738,11 +752,22 @@ describe('An agent call', () => {
 
     it('answers a restore that stopped as a refusal naming the mods not finished', async () => {
       whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
-      restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', unfinished: ['ModA'] });
+      restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', unfinished: ['ModA'], refused: [] });
       const { run } = register();
 
       expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
         .toEqual({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', detail: 'Not finished: "ModA". Restoring again finishes them.' });
+    });
+
+    it('answers a restore that stopped with the mods it refused', async () => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
+      restoreFromManifest.mockResolvedValueOnce({
+        applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', unfinished: [], refused: [{ item: 'ModB', reason: 'was skipped: its folder is outside the instance folder.' }],
+      });
+      const { run } = register();
+
+      expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
+        .toEqual({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', detail: '"ModB" (was skipped: its folder is outside the instance folder.)' });
     });
 
     it('answers a refusal when mEdit could not say what the restore destroys', async () => {

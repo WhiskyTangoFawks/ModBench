@@ -152,7 +152,7 @@ describe('create empty mod', () => {
     registerCreateEmptyModCommand(commandsOver([...mods, mod('New Mod')]).commands, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to create "New Mod".', detail: 'The folder "/mods/New Mod" is in the way' }]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to create "New Mod".', detail: 'The folder "/instance/mods/New Mod" is in the way' }]);
   });
 });
 
@@ -263,7 +263,7 @@ describe('uninstall over the selection', () => {
     register(commands);
     await invoke('modbench.mod.uninstall', modA, [modA, modB]);
 
-    expect(trash.mock.calls).toEqual([['/mods/Mod A'], ['/mods/Mod B']]);
+    expect(trash.mock.calls).toEqual([['/instance/mods/Mod A'], ['/instance/mods/Mod B']]);
     expect(fake.calls).toEqual([
       trashed('mod', 'Mod A'), { verb: 'trashSourceFolder', mod: 'Mod A' }, trashed('mod', 'Mod B'), { verb: 'trashSourceFolder', mod: 'Mod B' },
       modOrderChange({ kind: 'dropMod', mod: 'Mod A' }, { kind: 'dropMod', mod: 'Mod B' }),
@@ -335,7 +335,7 @@ describe('delete separator: the whole selection of separators, asked once', () =
     registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
     await invoke('modbench.separator.delete', groupB, [groupA, groupB]);
 
-    expect(trash.mock.calls).toEqual([['/mods/Group A'], ['/mods/Group B']]);
+    expect(trash.mock.calls).toEqual([['/instance/mods/Group A'], ['/instance/mods/Group B']]);
     expect(fake.calls).toEqual([
       trashed('separator', 'Group A'), trashed('separator', 'Group B'),
       modOrderChange({ kind: 'dropSeparator', separator: 'Group A' }, { kind: 'dropSeparator', separator: 'Group B' }),
@@ -1329,7 +1329,7 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
   const included = new FileNode(modRow, { kind: 'mod', name: 'M' }, file('mods/M', 'a.dds'), 'a.dds');
   const gone = new FileNode(modRow, { kind: 'mod', name: 'M' }, file('mods/M', 'c.dds'), 'c.dds');
   const trash = (path: string): Promise<void> =>
-    (['/mods/Mod C', '/mods/Group B'].includes(path) ? Promise.reject(new Error('trash unavailable')) : Promise.resolve());
+    (['/instance/mods/Mod C', '/instance/mods/Group B'].includes(path) ? Promise.reject(new Error('trash unavailable')) : Promise.resolve());
   const pickPlace = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => items.find((i) => i.label === label)));
   const over = (answers: InstanceAnswers) => commandsOver(mods, answers, filesOfM([included.file])).commands;
 

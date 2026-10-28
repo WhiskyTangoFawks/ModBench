@@ -25,7 +25,7 @@ const mod = (name: string, enabled = true, meta: Partial<Mod> = {}): Mod => ({ k
 const separator = (name: string): Separator => ({ kind: 'separator', name, enabled: false });
 
 const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
-  ({ origin: name, folder: `/mods/${name}`, files: relativePaths.map((path) => fileIn(`/mods/${name}`, path)), folders: [], notes: [] });
+  ({ origin: name, folder: `/instance/mods/${name}`, files: relativePaths.map((path) => fileIn(`/instance/mods/${name}`, path)), folders: [], notes: [] });
 
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
@@ -232,7 +232,7 @@ describe('Instance — the value', () => {
   });
 
   it('names the mod a note on its files belongs to', async () => {
-    const note = 'broken link "/mods/A/x.dds", skipped';
+    const note = 'broken link "/instance/mods/A/x.dds", skipped';
     const { instance, logs } = loader({ mods: [mod('A')], modFiles: new Map([['A', { ...filesOfMod('A', 'a.dds'), notes: [note] }]]) });
 
     await instance.refresh();
@@ -241,7 +241,7 @@ describe('Instance — the value', () => {
   });
 
   it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files and folders, a disabled mod\'s too', async () => {
-    const folder = { relativePath: 'textures', path: '/mods/Harder VATS/textures', excluded: false };
+    const folder = { relativePath: 'textures', path: '/instance/mods/Harder VATS/textures', excluded: false };
     const { instance } = loader({
       mods: [mod(NONO), mod(PATCH), mod('Harder VATS', false)],
       modFiles: new Map([
@@ -254,7 +254,7 @@ describe('Instance — the value', () => {
     await instance.refresh();
 
     const entry = instance.value.files.get('textures/shared.dds');
-    expect(entry?.winner).toBe(`/mods/${NONO}/textures/shared.dds`);
+    expect(entry?.winner).toBe(`/instance/mods/${NONO}/textures/shared.dds`);
     expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: PATCH }]);
     expect(instance.value.filesByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures/shared.dds']);
     expect(instance.value.foldersByMod.get('Harder VATS')).toEqual([folder]);
@@ -275,10 +275,10 @@ describe('Instance — the value', () => {
     await instance.refresh();
 
     expect(instance.value.plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: `/mods/${NONO}/NonAsciiRetexture.esp`, origin: NONO, line: 0, enabled: true, winning: true },
+      { name: 'NonAsciiRetexture.esp', path: `/instance/mods/${NONO}/NonAsciiRetexture.esp`, origin: NONO, line: 0, enabled: true, winning: true },
       { name: 'Unofficial Fallout 4 Patch.esp', path: join('/game/Data', 'Unofficial Fallout 4 Patch.esp'), origin: 'Data/', line: 1, enabled: true, winning: true },
-      { name: 'NonAsciiRetexture - Addon.esl', path: `/mods/${NONO}/NonAsciiRetexture - Addon.esl`, origin: NONO, line: null, enabled: false, winning: true },
-      { name: 'Harder VATS.esp', path: '/mods/Harder VATS/Harder VATS.esp', origin: 'Harder VATS', line: null, enabled: false, winning: false },
+      { name: 'NonAsciiRetexture - Addon.esl', path: `/instance/mods/${NONO}/NonAsciiRetexture - Addon.esl`, origin: NONO, line: null, enabled: false, winning: true },
+      { name: 'Harder VATS.esp', path: '/instance/mods/Harder VATS/Harder VATS.esp', origin: 'Harder VATS', line: null, enabled: false, winning: false },
     ]);
   });
 });
@@ -661,7 +661,7 @@ describe('Instance — game folder and the archives the game loads', () => {
   });
 
   it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
-    const stringsFile = '/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
+    const stringsFile = '/instance/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
     let changedNs = 1n;
     const { instance } = loader({
       ...GAME_FOUND,
@@ -712,7 +712,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     const { paths } = instance.value;
     expect(paths.overwriteDir).toBe('/overwrite');
     expect(paths.downloadsDir).toBe('/downloads');
-    expect(paths.modDirs).toEqual(new Map([['compiledPlugin', '/mods/CompiledPlugin']]));
+    expect(paths.modDirs).toEqual(new Map([['compiledPlugin', '/instance/mods/CompiledPlugin']]));
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
@@ -845,7 +845,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
       dataFolder: '/game/Data',
       plugins: [{
         name: 'DLCCoast.esm',
-        provider: { kind: 'Mod', mod: 'Consumer', folder: '/mods/Consumer', sourceFolder: '/source/Consumer Source' },
+        provider: { kind: 'Mod', mod: 'Consumer', folder: '/instance/mods/Consumer', sourceFolder: '/source/Consumer Source' },
       }],
       loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
       active: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],

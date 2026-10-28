@@ -83,6 +83,7 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
   const root = sourceRootDir(instanceRoot);
   const byKey = new Map<string, { output: string; folder: string }>();
   const claims = new Map<string, string>();
+  const builders = new Map<string, string[]>();
   const notes: string[] = [];
   for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink), [])).sort()) {
     const folder = join(root, name);
@@ -95,7 +96,10 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
     }
     const holder = byKey.get(modNameKey(built.output));
     if (holder === undefined) byKey.set(modNameKey(built.output), { output: built.output, folder });
-    else notes.push(`${folder} is not a source mod: ${holder.folder} builds "${holder.output}" too.`);
+    else {
+      notes.push(`${folder} is not a source mod: ${holder.folder} builds "${holder.output}" too.`);
+      builders.set(modNameKey(built.output), [...builders.get(modNameKey(built.output)) ?? [holder.folder], folder]);
+    }
   }
   const uncloned = await unclonedOutputs(instanceRoot, notes);
   return {
@@ -103,6 +107,7 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
     folders: new Map([...byKey.values()].map(({ output, folder }) => [output, folder])),
     folderOf: (mod) => byKey.get(modNameKey(mod))?.folder,
     claimedOutput: (folder) => claims.get(folder),
+    buildersOf: (mod) => builders.get(modNameKey(mod)) ?? [],
     notes,
   };
 }
