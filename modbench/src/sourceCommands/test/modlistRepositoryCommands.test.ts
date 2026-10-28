@@ -876,6 +876,23 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     ]);
   });
 
+  describe('in mod order', () => {
+    const winningFirst = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
+
+    it('hands mEdit the mods from the losing end of mod order, the winning mod last, and runs their steps in that order', async () => {
+      const tasks = recordingTasks(['Zip']);
+      const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf(), mods: [...winningFirst] }, { tasks });
+      const steps = [{ task: 'Zip', args: [] }];
+      client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', steps }), restoredMod({ mod: 'ModB', steps })], refused: [], notFound: [] });
+
+      const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
+
+      expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModB', 'ModA']);
+      expect(tasks.runs.map(({ folder }) => folder)).toEqual(['/mods/ModB', '/mods/ModA']);
+      expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+    });
+  });
+
   it('runs the steps of a mod that landed in its folder, once its files no line names went to the trash', async () => {
     const tasks = recordingTasks(['Zip', 'Archive']);
     const order: string[] = [];

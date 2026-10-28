@@ -4,13 +4,14 @@ import {
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
+import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
   adapter: Pick<InstanceAdapter,
-    'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
+    'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -79,23 +80,23 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
      *  the Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest with the release's archive variants. */
     build: async (mods: readonly string[]): Promise<BuildOutcome | WriteRefused> => {
       const sourceMods = await adapter.sourceMods();
-      const sent: BuildMod[] = [];
-      const refused: ItemRefusal<string>[] = [];
-      for (const mod of mods) {
-        const decided = await buildMod(mod, sourceMods.folderOf(mod));
-        if ('reason' in decided) refused.push(decided);
-        else sent.push(decided);
-      }
-      if (sent.length === 0) return { landed: [], refused };
       const facts: BuildFacts = {
         exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder,
         tasks: [...await tasks.labels()],
       };
-      const first = await client.build(sent, facts);
-      if (isRefused(first)) return first;
-      const outcome = await withInstallationFiles(first, sent, facts);
-      if (isRefused(outcome)) return outcome;
-      return { ...outcome, landed: await withManifestsOnceStepsRan(outcome.landed, sent, facts), refused: [...outcome.refused, ...refused] };
+      const landed: BuildOutcome['landed'][number][] = [];
+      const refused: ItemRefusal<string>[] = [];
+      for (const mod of await inModOrder(adapter, mods)) {
+        const decided = await buildMod(mod, sourceMods.folderOf(mod));
+        if ('reason' in decided) { refused.push(decided); continue; }
+        const first = await client.build([decided], facts);
+        if (isRefused(first)) return first;
+        const outcome = await withInstallationFiles(first, [decided], facts);
+        if (isRefused(outcome)) return outcome;
+        landed.push(...await withManifestsOnceStepsRan(outcome.landed, [decided], facts));
+        refused.push(...outcome.refused);
+      }
+      return { landed, refused };
     },
 
     /** A mod whose name gives it no source folder, or whose installation file or metadata cannot be read, is refused here, naming why, and mEdit decompiles and commits the rest. */

@@ -11,6 +11,7 @@ import type { HostGit } from '../ports/repository';
 import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import { inModOrder } from './inModOrder';
 import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
@@ -18,7 +19,7 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter,
-  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'gameFolder' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
@@ -260,9 +261,11 @@ async function restoreFromManifest(
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(deps.adapter);
   const cloned = await submodulesCloned(deps, options.onProgress);
   const sourceMods = await deps.adapter.sourceMods();
-  const mods = everyManifest ? withEverySourceMod(asked, sourceMods) : asked;
+  const mods = await inModOrder(deps.adapter, everyManifest ? withEverySourceMod(asked, sourceMods) : asked);
   const restored = await restoreFolders(deps, mods, sourceMods, options);
-  const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(restored.landed, sourceMods, cloned));
+  const landedInOrder = (await inModOrder(deps.adapter, restored.landed.map(({ mod }) => mod)))
+    .flatMap((name) => restored.landed.filter(({ mod }) => mod === name));
+  const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(landedInOrder, sourceMods, cloned));
   const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
   const finished = stepped.finished;
   const unfinished = [...trashed.unfinished, ...stepped.unfinished];

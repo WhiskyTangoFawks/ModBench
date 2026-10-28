@@ -28,13 +28,11 @@ describe('sourceCommands build', () => {
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(['Optimise textures']) }).build(['ModA', 'ModB']);
 
     const ba2 = { ba2: { version: 1, compressed: true } };
-    expect(client.calls).toEqual([{
-      method: 'build',
-      args: [[
-        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true },
-        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false },
-      ], { exclusionMark: EXCLUSION_MARK, archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache', tasks: ['Optimise textures'] }],
-    }]);
+    const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache', tasks: ['Optimise textures'] };
+    expect(client.calls).toEqual([
+      { method: 'build', args: [[{ name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true }], facts] },
+      { method: 'build', args: [[{ name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false }], facts] },
+    ]);
   });
 
   it('saves each mod\'s source folder, and refuses a mod whose file VS Code leaves unsaved, naming the file, while the rest build', async () => {
@@ -52,8 +50,7 @@ describe('sourceCommands build', () => {
 
     expect(saved).toEqual(['/instance/source/ModA', '/instance/source/Old ModB']);
     expect(predicates).toEqual([isPluginSourcePath, isPluginSourcePath]);
-    expect(client.calls).toHaveLength(1);
-    expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModA' }]);
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }]]);
     expect(outcome).toMatchObject({
       refused: [{ item: 'ModB', reason: 'VS Code did not save its plugin source: /instance/source/Old ModB/plugin-source/B.esp/Cell.json' }],
     });
@@ -115,6 +112,37 @@ describe('sourceCommands build', () => {
 
     expect(client.calls).toMatchObject([{ args: [[{ name: sent }], expect.anything()] }]);
     expect(outcome).toEqual({ ...BUILT, refused: [{ item, reason }] });
+  });
+});
+
+describe('sourceCommands build, in mod order', () => {
+  const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'separator', name: 'Group', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
+  const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], sourceMods: sourceModsOf(SOURCES) })).adapter;
+
+  it('builds the mods from the losing end of mod order, the winning mod last, whatever order they were asked in', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => ({ ...BUILT.landed[0], mod: mod.name })), refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModB' }], [{ name: 'ModA' }]]);
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+  });
+
+  it('runs a mod\'s steps and has its manifest written before the next mod builds', async () => {
+    const steps = [{ task: 'Patch', args: [] }];
+    const log: string[] = [];
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
+      log.push(`${mods[0]?.made ? 'manifest' : 'build'} ${mods[0]?.name}`);
+      return Promise.resolve({ landed: [{ ...BUILT.landed[0], mod: mods[0]?.name ?? '', steps: mods[0]?.made ? [] : steps, made: [] }], refused: [] });
+    });
+    const tasks = recordingTasks(['Patch']);
+    const logging = { ...tasks, whyStepsFailed: (ran: typeof steps, folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
+
+    await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: logging }).build(['ModA', 'ModB']);
+
+    expect(log).toEqual(['build ModB', 'steps /mods/ModB', 'manifest ModB', 'build ModA', 'steps /mods/ModA', 'manifest ModA']);
   });
 });
 
