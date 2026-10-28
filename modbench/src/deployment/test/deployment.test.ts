@@ -14,10 +14,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     link: (from: string, to: string) => (busy.onLink?.(to), busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
     readdir: (...args: Parameters<typeof actual.readdir>) =>
       (typeof args[0] === 'string' && busy.readdirs.includes(args[0]) ? Promise.reject(ebusy('scandir', args[0])) : actual.readdir(...args)),
-    lstat: async (...args: Parameters<typeof actual.lstat>) => {
-      const stats = await actual.lstat(...args);
-      const reused = busy.inodes.get(String(args[0]));
-      return reused === undefined ? stats : new Proxy(stats, { get: (target, key) => (key === 'ino' ? reused : Reflect.get(target, key) as unknown) });
+    lstat: async (path: string, options: { bigint: true }) => {
+      const stats = await actual.lstat(path, options);
+      const reused = busy.inodes.get(path);
+      return reused === undefined
+        ? stats
+        : new Proxy(stats, { get: (target, key) => (key === 'ino' ? reused : key === 'birthtimeNs' ? target.birthtimeNs + 1n : Reflect.get(target, key) as unknown) });
     },
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
@@ -764,6 +766,7 @@ describe('plugins.txt', () => {
     const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
     expect(recorded.pluginsTxt).toMatchObject({ path: plugins, renamed: [`${plugins}.modbench_renamed`] });
+    expect(recorded.pluginsTxt?.fileId).toMatch(new RegExp(`^${await inode(plugins)}:\\d+$`));
   });
 });
 
