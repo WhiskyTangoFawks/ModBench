@@ -641,6 +641,8 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded files of the downloads folder the hash index already holds, with their entries. It hashes and extracts nothing, so a file never hashed is absent. */
+  indexedDownloadedFiles(): Promise<FileRead<readonly InstallationFile[]>>;
   /** The file on Nexus a page names, or its mod alone; undefined when it is no Nexus page. */
   nexusFileAt(page: string): NexusPage | undefined;
   /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */

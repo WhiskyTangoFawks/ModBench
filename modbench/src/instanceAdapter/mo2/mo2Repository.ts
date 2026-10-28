@@ -128,6 +128,12 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
   return separator + whitelist.replaceAll('\n', lineEnding);
 }
 
+// A folder that holds a copy of the game folder holds the game's files below a folder of its own, such as Data/.
+const pathsBelowFolders = (path: string): string[] => {
+  const segments = path.split('/');
+  return segments.map((_, skipped) => segments.slice(skipped).join('/'));
+};
+
 export function mo2Repository(
   context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined,
 ): Mo2Repository {
@@ -195,7 +201,7 @@ export function mo2Repository(
 
     async gameFilesTakenBy(dataFolder, mod) {
       const { files, notes } = await originFilesIn(context, { kind: 'mod', name: mod }, false, 'list');
-      const taken = await gameFiles(dataFolder, files.map((file) => file.relativePath));
+      const taken = await gameFiles(dataFolder, [...new Set(files.flatMap((file) => pathsBelowFolders(file.relativePath)))]);
       const [reason] = Object.values(taken.unreadable);
       return reason === undefined ? { kind: 'read', answer: { gameFiles: taken.files, notes } } : { kind: 'unreadable', reason };
     },

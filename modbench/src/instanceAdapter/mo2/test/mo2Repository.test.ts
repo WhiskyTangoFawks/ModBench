@@ -1095,6 +1095,7 @@ describe('the MO2 adapter\'s submodules', () => {
 
 describe('the MO2 adapter\'s game files', () => {
   const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
+  const HASH_OF_BBBB = 'M5WSec/sW34=';
   const HASH_OF_CCCC = 'rYontyeqpd8=';
 
   it('hands the game file at each path of a mod\'s files, named as the game folder names it, and none for a path the game folder lacks', async () => {
@@ -1170,6 +1171,21 @@ describe('the MO2 adapter\'s game files', () => {
     const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Mod');
 
     expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'a.nif', hash: HASH_OF_AAAA }], notes: [] } });
+  });
+
+  it('hands the game file a mod\'s file may be at any depth below its folder, as a copy of the game folder holds it', async () => {
+    const adapter = await instance();
+    await put('game/Data/Textures/a.dds', 'aaaa');
+    await put('game/Data/b.esm', 'bbbb');
+    await put('mods/Stock/Data/Textures/a.dds', 'aaaa');
+    await put('mods/Stock/Data/b.esm', 'zzzz');
+    await put('mods/Stock/Fallout4.exe', 'exe');
+
+    const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Stock');
+
+    expect(taken).toMatchObject({ kind: 'read', answer: { notes: [] } });
+    const gameFiles = taken.kind === 'read' ? [...taken.answer.gameFiles].sort((a, b) => a.path.localeCompare(b.path)) : [];
+    expect(gameFiles).toEqual([{ path: 'b.esm', hash: HASH_OF_BBBB }, { path: 'Textures/a.dds', hash: HASH_OF_AAAA }]);
   });
 });
 

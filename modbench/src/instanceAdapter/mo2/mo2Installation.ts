@@ -102,8 +102,8 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 }
 
 export function mo2Installation(
-  context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+  context: Mo2Context, { downloadedFileHash, indexedDownloadedFiles }: Pick<HashIndex, 'downloadedFileHash' | 'indexedDownloadedFiles'>,
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'indexedDownloadedFiles' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -155,6 +155,11 @@ export function mo2Installation(
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
+
+    indexedDownloadedFiles: () => readOrReason(async () => {
+      const downloadsDir = await currentDownloadsDir(context);
+      return (await indexedDownloadedFiles()).filter(({ path }) => dirname(path) === downloadsDir);
+    }),
 
     nexusFileAt: parseNexusPage,
 

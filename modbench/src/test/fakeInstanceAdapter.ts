@@ -116,6 +116,8 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloadedFiles?: ReadonlyMap<string, FileRead<InstallationFile>>;
+  /** What the hash index holds of the downloaded files; none when not said. */
+  indexedDownloadedFiles?: FileRead<readonly InstallationFile[]>;
   /** Why each downloaded file cannot be queried, by name. */
   unreadableQueries?: ReadonlyMap<string, string>;
   /** What each downloaded file's query holds beyond its MD5 and the game, by name. */
@@ -331,6 +333,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
+    indexedDownloadedFiles: () => Promise.resolve(answers.indexedDownloadedFiles ?? { kind: 'read', answer: [] }),
     nexusFileAt: parseNexusPage,
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);

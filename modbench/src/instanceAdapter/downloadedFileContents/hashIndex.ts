@@ -76,6 +76,8 @@ export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
   /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the hash index. */
   downloadedFileHash(path: string): Promise<FileRead<HashedDownloadedFile>>;
+  /** The downloaded files the index holds at the stamp each was hashed at, with their entries. It hashes and extracts nothing. */
+  indexedDownloadedFiles(): Promise<readonly (HashedDownloadedFile & { readonly path: string })[]>;
 }
 
 export function hashIndex(folder: string, installationFileReader: InstallationFileReader): HashIndex {
@@ -145,9 +147,21 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     return read.kind === 'read' ? { kind: 'read', answer: { size: read.answer.size, hash: read.answer.hash } } : read;
   };
 
+  async function indexedDownloadedFiles(): Promise<(HashedDownloadedFile & { readonly path: string })[]> {
+    await load();
+    const listed = await Promise.all([...kept.downloadedFile].map(async ([path, known]) => {
+      const stamped = await readOrReason(() => stampOf(path));
+      if (stamped.kind === 'unreadable' || !sameStamp(known.stamp, stamped.answer)) return [];
+      const read = await known.hashed;
+      return read.kind === 'read' && kept.downloadedFile.get(path) === known ? [{ path, ...read.answer }] : [];
+    }));
+    return listed.flat();
+  }
+
   return {
     originFileHash: (path) => hashAlone('origin', path),
     gameFileHash: (path) => hashAlone('game', path),
     downloadedFileHash: (path) => hashOf('downloadedFile', path),
+    indexedDownloadedFiles,
   };
 }

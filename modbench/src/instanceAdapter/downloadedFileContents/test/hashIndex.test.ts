@@ -248,4 +248,40 @@ describe('the sizes and hashes of the record index', () => {
 
     expect(mostAtOnce).toBe(1);
   });
+
+  describe('the downloaded files it holds', () => {
+    it('lists the downloaded files hashed so far with their entries, from the record index of an earlier session, extracting none', async () => {
+      clockAnHourPastEveryWrite();
+      const path = await fileHolding('Mod.7z', 'archive');
+      await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFileHash(path);
+      const next = counting(fakeInstallationFileReader(ENTRIES));
+
+      const held = await hashIndex(folder, next).indexedDownloadedFiles();
+
+      expect(held).toEqual([{
+        path, size: 7, hash: '7R3YJUWF5oA=', entries: [{ path: 'a.esp', hash: '+rJPuyOy4u8=' }, { path: 'textures/b.dds', hash: 'uXAXn9wLC0k=' }],
+      }]);
+      expect(next.extracted).toEqual([]);
+    });
+
+    it('omits a downloaded file whose stamp is no longer the one it was hashed at, and one that is gone', async () => {
+      clockAnHourPastEveryWrite();
+      const changed = await fileHolding('Changed.7z', 'archive');
+      const gone = await fileHolding('Gone.7z', 'archive');
+      const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+      await Promise.all([index.downloadedFileHash(changed), index.downloadedFileHash(gone)]);
+      await appendFile(changed, 'more');
+      await rm(gone);
+
+      expect(await index.indexedDownloadedFiles()).toEqual([]);
+    });
+
+    it('lists neither a game file nor an origin file', async () => {
+      clockAnHourPastEveryWrite();
+      const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+      await Promise.all([index.gameFileHash(await fileHolding('Game.esm', 'aaaa')), index.originFileHash(await fileHolding('copy.dds', 'bbbb'))]);
+
+      expect(await index.indexedDownloadedFiles()).toEqual([]);
+    });
+  });
 });

@@ -2074,6 +2074,33 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
+    describe('the downloaded files the hash index holds', () => {
+      afterEach(() => { vi.useRealTimers(); });
+
+      it('lists a downloaded file once it is hashed, and none before', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        const before = await manager.indexedDownloadedFiles();
+        await manager.downloadedFile(DOWNLOADED_FILE);
+
+        const after = await manager.indexedDownloadedFiles();
+
+        expect([before, after]).toEqual([
+          { kind: 'read', answer: [] },
+          { kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }] },
+        ]);
+      });
+
+      it('lists none of the files indexed in a folder other than the downloads folder the settings name', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await manager.downloadedFile(DOWNLOADED_FILE);
+        await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
+
+        expect(await manager.indexedDownloadedFiles()).toEqual({ kind: 'read', answer: [] });
+      });
+    });
+
     it.each([
       ['a file\'s page', 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78', { game: 'fallout4', modId: '7', fileId: '78' }],
       ['a mod\'s page, which names no file', 'https://www.nexusmods.com/fallout4/mods/7', { game: 'fallout4', modId: '7', fileId: undefined }],
