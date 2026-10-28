@@ -11,6 +11,9 @@ export interface Link extends Written {
   readonly source: string;
 }
 
+/** A change outside the deployment folder: it makes itself and answers how to undo itself, or undoes what it did and throws. */
+export type Step = () => Promise<Undo>;
+
 export interface Changes {
   readonly removals: readonly Written[];
   readonly relinks: readonly Link[];
@@ -22,7 +25,7 @@ interface Undo {
   readonly run: () => Promise<void>;
 }
 
-const ASIDE = '.modbench_aside_';
+export const ASIDE = '.modbench_aside_';
 
 const missing = (err: unknown): boolean => {
   const code = errnoCode(err);
@@ -49,16 +52,54 @@ async function moved(from: string, to: string): Promise<void> {
   }
 }
 
-async function setAside(at: string): Promise<string> {
+/** Links `from` at the first of the names, counting from 0, that no file holds, and answers it. */
+export async function linkedFree(from: string, nameAt: (n: number) => string): Promise<string> {
   for (let n = 0; ; n++) {
-    const aside = `${at}${ASIDE}${process.pid}_${n}`;
+    const to = nameAt(n);
     try {
-      await moved(at, aside);
-      return aside;
+      await link(from, to);
+      return to;
     } catch (err) {
       if (errnoCode(err) !== 'EEXIST') throw err;
     }
   }
+}
+
+async function setAside(at: string): Promise<string> {
+  const aside = await linkedFree(at, (n) => `${at}${ASIDE}${process.pid}_${n}`);
+  try {
+    await unlink(at);
+  } catch (err) {
+    await unlink(aside);
+    throw err;
+  }
+  return aside;
+}
+
+export const unlinkedIfThere = (path: string): Promise<void> =>
+  unlink(path).catch((err: unknown) => {
+    if (!missing(err)) throw err;
+  });
+
+/** The names in a folder; none when it is not there. */
+export function namesIn(folder: string): Promise<string[]> {
+  return readdir(folder).catch((err: unknown) => {
+    if (missing(err)) return [];
+    throw err;
+  });
+}
+
+/** Unlinks each path, and answers `describe` of each it could not, with why. */
+export async function removedAll(paths: readonly string[], describe: (path: string) => string = (path) => path): Promise<string[]> {
+  const left: string[] = [];
+  for (const path of paths) {
+    try {
+      await unlink(path);
+    } catch (err) {
+      left.push(`${describe(path)} (${errorMessage(err)})`);
+    }
+  }
+  return left;
 }
 
 /** Puts back, or removes, each file a deploy set aside from a path the record names, this deploy's
@@ -68,10 +109,7 @@ export function recoveryIn() {
   const asidesIn = (folder: string): Promise<string[]> => {
     const known = names.get(folder);
     if (known !== undefined) return known;
-    const read = readdir(folder).then((all) => all.filter((name) => name.includes(ASIDE)), (err: unknown) => {
-      if (missing(err)) return [];
-      throw err;
-    });
+    const read = namesIn(folder).then((all) => all.filter((name) => name.includes(ASIDE)));
     names.set(folder, read);
     return read;
   };
@@ -89,7 +127,7 @@ export function recoveryIn() {
   };
 }
 
-async function removeFolders(from: string, upTo: string): Promise<void> {
+export async function removeFolders(from: string, upTo: string): Promise<void> {
   for (let folder = from; ; folder = dirname(folder)) {
     await rmdir(folder);
     if (folder === upTo) return;
@@ -108,22 +146,12 @@ async function undoAll(undos: readonly Undo[]): Promise<string[]> {
   return left;
 }
 
-async function removedAside(folder: string, asides: readonly string[]): Promise<string[]> {
-  const left: string[] = [];
-  for (const aside of asides) {
-    try {
-      await unlink(aside);
-    } catch (err) {
-      left.push(`${relative(folder, aside).split(sep).join('/')} (${errorMessage(err)})`);
-    }
-  }
-  return left;
-}
+const removedAside = (folder: string, asides: readonly string[]): Promise<string[]> =>
+  removedAll(asides, (aside) => relative(folder, aside).split(sep).join('/'));
 
-/** Makes every change, then `land`s them, and answers each file it set aside and could not remove;
- *  or, when a change or the landing fails, undoes the rest and throws why, naming each change it could
- *  not undo. */
-export async function changeAll(folder: string, { removals, relinks, links }: Changes, land: () => Promise<void>): Promise<string[]> {
+/** Makes every change and `steps`, then `land`s them, and answers each file it set aside and could not remove;
+ *  or, when one fails, undoes the rest and throws why, naming each change it could not undo. */
+export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>): Promise<string[]> {
   const undos: Undo[] = [];
   const asides: string[] = [];
   try {
@@ -140,6 +168,7 @@ export async function changeAll(folder: string, { removals, relinks, links }: Ch
       await link(source, at);
       undos.push({ left: `${path}, which deploy linked`, run: () => unlink(at) });
     }
+    for (const step of steps) undos.push(await step());
     await land();
   } catch (err) {
     const left = await undoAll(undos);

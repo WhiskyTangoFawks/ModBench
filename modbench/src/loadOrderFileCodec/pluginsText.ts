@@ -45,6 +45,10 @@ export function parsePlugins(text: string): PluginEntry[] {
   return entries;
 }
 
+/** The text of a plugins.txt holding exactly these entries. */
+export const pluginsTextOf = (entries: readonly PluginEntry[]): string =>
+  entries.map(({ name, enabled }) => `${enabled ? '*' : ''}${name}\r\n`).join('');
+
 const entryLineAt = (lines: readonly string[], pluginName: string): number =>
   lines.findIndex((l) => isEntryLine(l) && pluginNameOf(l) === pluginName);
 
