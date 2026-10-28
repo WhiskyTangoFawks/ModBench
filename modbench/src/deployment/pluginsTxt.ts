@@ -1,8 +1,8 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import { ASIDE, fileIdAt, linkedFree, namesIn, removeFolders, removedAll, unlinkedIfThere, type Step } from './changes';
+import { ASIDE, fileIdAt, linkedFree, moved, namesIn, removeFolders, removedAll, setAside, unlinkedIfThere, type Step } from './changes';
 import type { WrittenPluginsTxt } from './record';
 
 const RENAMED = '.modbench_renamed';
@@ -134,5 +134,57 @@ export async function pluginsTxtChange(folder: string, order: string, previous: 
     written: () => recordedAs(write.ino(), renamedNow()),
     renamed: () => [...recovered, ...renamedNow()],
     settle: write.settle,
+  };
+}
+
+export interface PluginsTxtPurge {
+  /** Absent when purge changes nothing there. */
+  readonly step: Step | undefined;
+  /** The file the step puts back. */
+  readonly restored: string | undefined;
+  /** Each file deploy renamed that is still there and that purge leaves. */
+  readonly left: readonly string[];
+  /** Removes the file the step set aside and what a killed deploy left; once the purge has landed. */
+  settle(): Promise<string[]>;
+}
+
+// A plugins.txt that is not deploy's stays, with each file deploy renamed (ADR-0003).
+export async function pluginsTxtPurge(previous: WrittenPluginsTxt): Promise<PluginsTxtPurge> {
+  const path = previous.path;
+  const present = await fileIdAt(path);
+  const marked = present !== undefined && (await readFile(path, 'utf8')).startsWith(MARK);
+  const { stale, recovered, placedUnrecorded } = await leftoversOf(dirname(path), present, previous);
+  const isDeploys = present !== undefined && (marked || previous.ino === present || placedUnrecorded);
+  const there: string[] = [];
+  for (const name of new Set([...previous.renamed, ...recovered])) if (await fileIdAt(name) !== undefined) there.push(name);
+  const back = present === undefined || isDeploys ? there.at(-1) : undefined;
+  let aside: string | undefined;
+  const step: Step = async () => {
+    if (isDeploys) aside = await setAside(path);
+    try {
+      if (back !== undefined) await moved(back, path);
+    } catch (err) {
+      if (aside !== undefined) {
+        try {
+          await moved(aside, path);
+        } catch (undoErr) {
+          throw new Error(`${errorMessage(err)}. Purge could not put back ${path}, which it left as ${aside}: ${errorMessage(undoErr)}`);
+        }
+      }
+      throw err;
+    }
+    return {
+      left: `${path}, which purge removed`,
+      run: async () => {
+        if (back !== undefined) await moved(path, back);
+        if (aside !== undefined) await moved(aside, path);
+      },
+    };
+  };
+  return {
+    step: isDeploys || back !== undefined ? step : undefined,
+    restored: back,
+    left: there.filter((name) => name !== back),
+    settle: () => removedAll(aside === undefined ? stale : [...stale, aside]),
   };
 }

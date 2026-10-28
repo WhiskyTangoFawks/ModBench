@@ -18,8 +18,10 @@ export interface WrittenPluginsTxt {
   readonly renamed: readonly string[];
 }
 
-interface Recorded {
+export interface Recorded {
   readonly files: readonly Written[];
+  /** Each folder deploy made, below the deployment folder, `/`-separated. */
+  readonly folders: readonly string[];
   readonly pluginsTxt?: WrittenPluginsTxt;
 }
 
@@ -33,6 +35,7 @@ const isWrittenPluginsTxt = (entry: unknown): entry is WrittenPluginsTxt =>
 
 const isRecorded = (entry: unknown): entry is Recorded =>
   typeof entry === 'object' && entry !== null && 'files' in entry && Array.isArray(entry.files) && entry.files.every(isWritten) &&
+  'folders' in entry && Array.isArray(entry.folders) && entry.folders.every((name) => typeof name === 'string') &&
   (!('pluginsTxt' in entry) || isWrittenPluginsTxt(entry.pluginsTxt));
 
 function parsed(text: string, file: string): ByFolder {
@@ -65,7 +68,7 @@ const keyOf = (folder: string): string => (process.platform === 'win32' ? resolv
 export function recordIn(file: string): DeploymentRecord {
   return {
     async of(folder) {
-      return (await readRecord(file))[keyOf(folder)] ?? { files: [] };
+      return (await readRecord(file))[keyOf(folder)] ?? { files: [], folders: [] };
     },
     async write(folder, recorded) {
       const record = { ...(await readRecord(file)), [keyOf(folder)]: recorded };

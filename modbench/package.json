@@ -452,6 +452,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.purge",
+        "title": "Purge",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.instance.moveToOverwrite",
         "title": "Move to Overwrite",
         "category": "Modbench"
@@ -1124,6 +1129,10 @@
           "when": "modbench.folder == instance"
         },
         {
+          "command": "modbench.instance.purge",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.instance.moveToOverwrite",
           "when": "modbench.folder == instance"
         },
@@ -1373,6 +1382,11 @@
           "command": "modbench.instance.deploy",
           "when": "view == modbench.toolbox && viewItem == deployment",
           "group": "modbench@1"
+        },
+        {
+          "command": "modbench.instance.purge",
+          "when": "view == modbench.toolbox && viewItem == deployment",
+          "group": "modbench@2"
         },
         {
           "command": "modbench.record.openPinned",
