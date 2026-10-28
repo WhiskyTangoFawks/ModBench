@@ -83,12 +83,19 @@ internal sealed class ModInit(
         }
 
         setPhase(DecompileAndCommitPhase.ReadingFiles);
+        Manifest manifest;
         List<Asset> assets;
         try
         {
-            assets = AssetsOf(mod, toCommit, provided, loadOrder.GameRelease);
+            var held = modFolders.ReadManifest(mod.Folder, mod.Name);
+            if (held?.Packages.OfType<ManifestPackage.GameFolder>().FirstOrDefault() is { } gameFolder)
+            {
+                return Refused(DecompileAndCommitRefusal.ManifestNamesGameFolder,
+                    $"'{mod.Name}' was not initialized: its manifest names the game folder '{gameFolder.Name}' as a package, and a source mod's build reads only installation files, so its files would become assets in git.");
+            }
+            (manifest, assets) = ContentsOf(held, mod, toCommit, provided, loadOrder.GameRelease);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             return Refused(DecompileAndCommitRefusal.ModFilesUnreadable,
                 $"'{mod.Name}' was not initialized: a file of its folder could not be read: {ex.Message}");
@@ -107,7 +114,7 @@ internal sealed class ModInit(
             return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: the manifest in its folder could not be removed: {ex.Message}");
         }
 
-        if (Commit(mod, toCommit.SourceFolder, verified, assets, repair) is { } failure)
+        if (Commit(toCommit.SourceFolder, verified, manifest, assets, repair) is { } failure)
         {
             logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", mod.Name, failure.Reason);
             return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}{PutBack(mod.Folder, removed)}");
@@ -137,25 +144,35 @@ internal sealed class ModInit(
     private static ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>> Refused(DecompileAndCommitRefusal refusal, string message) =>
         ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
 
-    // The assets are every file of the mod but what compile writes for its plugins, a build output, and the mod
-    // manager's own files (plugins.md, Decompile and commit, story 2).
-    private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
+    // plugins.md, Decompile and commit, story 2: the installation file, a step and compile each make files; the rest are assets.
+    // The manifest is in the form a build writes.
+    private (Manifest Manifest, List<Asset> Assets) ContentsOf(
+        Manifest? held, PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
     {
         var all = modFolders.Files(mod.Folder, mod.Name, toCommit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
         var paths = all.Select(file => file.Path).ToList();
         var compiled = provided.SelectMany(plugin => plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
-        return
-        [
-            .. all
-                .Where(file => !compiled.Contains(file.Path))
-                .Select(file => new Asset(file.Path, () => modFolders.OpenFile(mod.Folder, file.Path))),
-        ];
+        var installationFile = toCommit.InstallationFile is { } named ? (modFolders.InstallationFileName(named.Path), named) : ((string, InstallationFile)?)null;
+        var recorded = new ManifestBuilder(installationFile, gameFolder: null).Manifest([.. all.Where(file => !compiled.Contains(file.Path))], toCommit.Version, held);
+        var taken = recorded.Files.Select(line => recorded.BytesOf(line) is FileBytes.InInstallationFile yielded ? line with { Package = yielded.Name } : null).OfType<ManifestFile>().ToList();
+        var madeByStep = recorded.Files.Where(line => line.Entry is PackageEntry.MadeByStep).ToList();
+        var notTheBuilds = taken.Concat(madeByStep).Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        var made = all.Where(file => !notTheBuilds.Contains(file.Path)).ToList();
+        var repository = new ManifestPackage.SourceRepository(modFolders.FolderName(toCommit.SourceFolder), IsSubmodule: false);
+        var manifest = recorded with
+        {
+            Packages = [repository, .. recorded.Packages],
+            Files = [.. made.Select(file => new ManifestFile(file.Path, new PackageEntry.Held())), .. taken, .. madeByStep],
+            Output = modFolders.FolderName(mod.Folder),
+            Version = toCommit.Version,
+        };
+        return (manifest, [.. made.Where(file => !compiled.Contains(file.Path)).Select(file => new Asset(file.Path, () => modFolders.OpenFile(mod.Folder, file.Path)))]);
     }
 
     // The adapter writes nothing when any of it fails (plugins.md, Decompile and commit, story 5).
     private SourceFailure? Commit(
-        PluginProvider.FromMod mod, string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, List<Asset> assets,
-        RepairedInInit? repair)
+        string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, Manifest manifest,
+        List<Asset> assets, RepairedInInit? repair)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -163,7 +180,7 @@ internal sealed class ModInit(
                 sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, modFolders.SpellSourceManifest(new Manifest([], []) { Output = modFolders.FolderName(mod.Folder) }),
+        return source.Init(sourceFolder, modFolders.SpellSourceManifest(manifest),
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Key, v.Source.BinarySha256)))], assets,
             repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
     }

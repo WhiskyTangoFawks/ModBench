@@ -1,6 +1,7 @@
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -89,10 +90,113 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
 
         Assert.Single((await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []))).Applied);
 
-        Assert.Equal(
-            "{\n\"output\": \"FixtureMod\",\n\"files\": []\n}\n",
-            GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", $"main:{Origin}.manifest.json"));
+        Assert.StartsWith(
+            "{\n\"output\": \"FixtureMod\",",
+            GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", $"main:{Origin}.manifest.json"), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
+    }
+
+    [Fact]
+    public async Task Init_OfAModWithAnInstallationFile_CommitsAsAssetsOnlyTheFilesItDoesNotYield_AndItsManifestNamesTheFileAndWhatItYields()
+    {
+        WriteInModFolder("textures/a.dds", "from the pack");
+        WriteInModFolder("Scripts/Quest.pex", "mine");
+        var installationFile = PackHolding(("textures/a.dds", "from the pack"));
+
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], installationFile));
+
+        Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
+        var manifest = CommittedManifest();
+        Assert.Equal(Origin, manifest.Output);
+        Assert.Equal(
+            [new ManifestPackage.SourceRepository(Origin, IsSubmodule: false),
+             new ManifestPackage.InstallationFile(DownloadedZip.PackName, installationFile.Size, installationFile.Hash)],
+            manifest.Packages);
+        Assert.Equal(
+            [new ManifestFile("Fixture.esp", new PackageEntry.Held()), new ManifestFile("Scripts/Quest.pex", new PackageEntry.Held()),
+             new ManifestFile("textures/a.dds", new PackageEntry.Held(), DownloadedZip.PackName)],
+            manifest.Files);
+    }
+
+    [Fact]
+    public async Task Init_OfAFileTheInstallationFileHoldsWithOtherBytes_CommitsItAsAnAsset()
+    {
+        WriteInModFolder("textures/a.dds", "edited");
+        var installationFile = PackHolding(("textures/a.dds", "from the pack"));
+
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], installationFile));
+
+        Assert.Equal(["assets/textures/a.dds"], CommittedAssets());
+        Assert.DoesNotContain(CommittedManifest().Files, file => file.Package is not null);
+    }
+
+    [Fact]
+    public async Task Init_OfAModWhoseManifestHoldsSteps_CarriesThemAndTheFilesTheyMake_AndTheVersionTheMetadataSays()
+    {
+        WriteInModFolder("textures/a.dds", "from the pack");
+        WriteInModFolder("textures/made.dds", "made");
+        WriteInModFolder(
+            $"{Origin}.manifest.json",
+            "{\"packages\": [{\"installationFile\":\"Pack.zip\",\"size\":1,\"hash\":\"HASH\",\"version\":\"1.0\"}], "
+            + "\"steps\": [{\"task\": \"make\", \"args\": [\"x\"]}], \"files\": [{\"path\": \"textures/made.dds\", \"madeByStep\": true}]}");
+
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], PackHolding(("textures/a.dds", "from the pack")), "2.0"));
+
+        var manifest = CommittedManifest();
+        var step = Assert.Single(manifest.Steps);
+        Assert.Equal("make", step.Task);
+        Assert.Equal(["x"], step.Args);
+        Assert.Equal(
+            [new ManifestFile("Fixture.esp", new PackageEntry.Held()), new ManifestFile("textures/a.dds", new PackageEntry.Held(), DownloadedZip.PackName),
+             new ManifestFile("textures/made.dds", new PackageEntry.MadeByStep())],
+            manifest.Files);
+        Assert.Equal("2.0", manifest.Version);
+        Assert.Empty(CommittedAssets());
+    }
+
+    [Fact]
+    public async Task Init_ThenABuild_LeavesTheManifestsTextUnchanged()
+    {
+        WriteInModFolder("textures/a.dds", "from the pack");
+        WriteInModFolder("Scripts/Quest.pex", "mine");
+        var installationFile = PackHolding(("textures/a.dds", "from the pack"));
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], installationFile, "1.0"));
+        var manifestFile = Path.Combine(SourceFolder, $"{Origin}.manifest.json");
+        var written = File.ReadAllText(manifestFile);
+
+        var built = await TestEditService.BuildModHandler(_holder).BuildAsync(
+            [new ModToBuild(Origin, SourceFolder, _mod.Folder, [], "1.0", IsSubmodule: false) { InstallationFiles = [installationFile] }],
+            new InstanceToBuild(".excluded", Archives: null, Path.Combine(_instanceRoot, "stat-cache")));
+
+        Assert.Single(built.Value().Applied);
+        Assert.Equal(written, File.ReadAllText(manifestFile));
+    }
+
+    [Fact]
+    public async Task Init_OfAModWhoseManifestNamesTheGameFolder_RefusesTheMod_NamingIt_LeavingNoRepositoryAndTheManifestInPlace()
+    {
+        WriteInModFolder("textures/a.dds", "from the game");
+        WriteInModFolder(
+            $"{Origin}.manifest.json", "{\"packages\": [{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAAAAAAAAA=\"}], \"files\": [{\"path\": \"textures/a.dds\"}]}");
+
+        var refused = Assert.Single((await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []))).Refused);
+
+        Assert.Equal(DecompileAndCommitRefusal.ManifestNamesGameFolder, refused.Refusal);
+        Assert.Contains("'Fallout 4'", refused.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(SourceFolder));
+        Assert.True(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
+    }
+
+    [Fact]
+    public async Task Init_OfAModWhoseManifestCannotBeRead_RefusesTheMod_LeavingNoRepositoryAndTheManifestInPlace()
+    {
+        WriteInModFolder($"{Origin}.manifest.json", "not a manifest");
+
+        var refused = Assert.Single((await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []))).Refused);
+
+        Assert.Equal(DecompileAndCommitRefusal.ModFilesUnreadable, refused.Refusal);
+        Assert.False(Directory.Exists(SourceFolder));
+        Assert.True(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
     }
 
     [PosixFact]
@@ -137,6 +241,25 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
             FileModes.Set(held, "600");
         }
     }
+
+    private InstallationFile PackHolding(params (string Path, string Text)[] entries)
+    {
+        var downloaded = DownloadedZip.WritePack(Path.Combine(_instanceRoot, "downloads"), entries);
+        var pack = Directory.CreateDirectory(Path.Combine(_instanceRoot, "unpacked")).FullName;
+        foreach (var (path, text) in entries)
+        {
+            var file = Path.Combine(pack, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
+            File.WriteAllText(file, text);
+        }
+        var hashes = new ModFolderRepository(TimeProvider.System).Files(pack, "", new HashSet<string>(), null).Files.ToDictionary(file => file.Path, file => file.Hash);
+        return downloaded with { Entries = [.. entries.Select(entry => new HashedEntry(entry.Path, hashes[entry.Path]))] };
+    }
+
+    private Manifest CommittedManifest() =>
+        new ModFolderRepository(TimeProvider.System).ReadSourceManifest(SourceFolder).Holds(out var manifest, out var why) && manifest is not null
+            ? manifest
+            : throw new InvalidOperationException(why);
 
     private async Task<DecompileAndCommitResult> InitWith(ModToDecompileAndCommit mod)
     {
