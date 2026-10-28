@@ -1183,9 +1183,10 @@ describe('the MO2 adapter\'s game files', () => {
 
     const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), join(root, 'mods', 'Stock'));
 
-    expect(taken).toMatchObject({ kind: 'read', answer: { notes: [] } });
-    const gameFiles = taken.kind === 'read' ? [...taken.answer.gameFiles].sort((a, b) => a.path.localeCompare(b.path)) : [];
-    expect(gameFiles).toEqual([{ path: 'b.esm', hash: HASH_OF_BBBB }, { path: 'Textures/a.dds', hash: HASH_OF_AAAA }]);
+    expect(taken).toEqual({
+      kind: 'read',
+      answer: { notes: [], gameFiles: expect.arrayContaining([{ path: 'Textures/a.dds', hash: HASH_OF_AAAA }, { path: 'b.esm', hash: HASH_OF_BBBB }]) as unknown },
+    });
   });
 });
 

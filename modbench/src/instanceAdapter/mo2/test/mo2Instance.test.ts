@@ -2074,7 +2074,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    describe('the downloaded files the hash index holds', () => {
+    describe('the downloaded files already hashed', () => {
       afterEach(() => { vi.useRealTimers(); });
 
       it('lists a downloaded file once it is hashed, and none before', async () => {
@@ -2086,8 +2086,8 @@ describe('the MO2 Instance adapter', () => {
         const after = await manager.indexedDownloadedFiles();
 
         expect([before, after]).toEqual([
-          { kind: 'read', answer: [] },
-          { kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }] },
+          { files: [], notes: [] },
+          { files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }], notes: [] },
         ]);
       });
 
@@ -2099,7 +2099,29 @@ describe('the MO2 Instance adapter', () => {
 
         const listed = await manager.indexedDownloadedFiles();
 
-        expect(listed).toMatchObject({ kind: 'read', answer: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
+        expect(listed).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
+      });
+
+      it('costs a listed file its page alone, saying why, when its metadata cannot be read', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await manager.downloadedFile(DOWNLOADED_FILE);
+        await rm(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
+        await mkdir(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
+
+        const listed = await manager.indexedDownloadedFiles();
+
+        expect(listed).toMatchObject({
+          files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: undefined, hash: 'yMPjZVarjmw=' }],
+          notes: [expect.stringContaining(`the page of ${DOWNLOADED_FILE} could not be read`) as unknown],
+        });
+      });
+
+      it('lists none, saying why, when the downloads folder cannot be resolved', async () => {
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await rm(join(root, INI));
+
+        expect(await manager.indexedDownloadedFiles()).toMatchObject({ files: [], notes: [expect.stringContaining('the downloads folder could not be read') as unknown] });
       });
 
       it('lists none of the files indexed in a folder other than the downloads folder the settings name', async () => {
@@ -2108,7 +2130,7 @@ describe('the MO2 Instance adapter', () => {
         await manager.downloadedFile(DOWNLOADED_FILE);
         await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
 
-        expect(await manager.indexedDownloadedFiles()).toEqual({ kind: 'read', answer: [] });
+        expect(await manager.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
       });
     });
 

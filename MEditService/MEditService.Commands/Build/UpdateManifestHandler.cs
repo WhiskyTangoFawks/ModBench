@@ -17,16 +17,17 @@ public sealed class UpdateManifestHandler
     public async Task<UpdateManifestResult> UpdateManifestAsync(
         IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture, CancellationToken cancel)
     {
+        var downloadedFiles = DownloadedFile.Of(instance.DownloadedFiles.Select(NamedByItsFile));
         var updated = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new UpdateManifestProgressNotification(progress)),
-            (mod, _) => Task.FromResult(UpdateMod(mod, instance)), gesture, cancel);
+            (mod, _) => Task.FromResult(UpdateMod(mod, instance, downloadedFiles)), gesture, cancel);
         return updated.ToResult(
             landed => landed.Outcome,
             refused => new UpdateManifestRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new UpdateManifestResult(applied, refused));
     }
 
-    private ItemAnswer<UpdateManifestRefusal, ModUpdated> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
+    private ItemAnswer<UpdateManifestRefusal, ModUpdated> UpdateMod(ModToUpdate mod, InstanceToUpdate instance, IReadOnlyList<DownloadedFile> downloadedFiles)
     {
         if (mod.SourceFolder is { } sourceFolder) return LeftToItsBuild(mod, sourceFolder, instance);
 
@@ -65,7 +66,7 @@ public sealed class UpdateManifestHandler
         {
             read = _repository.Files(mod.Folder, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             manifest = new ManifestBuilder(
-                    installationFile is null ? null : NamedByItsFile(installationFile), mod.GameFolder, instance.DownloadedFiles.Select(NamedByItsFile))
+                    installationFile is null ? null : NamedByItsFile(installationFile), mod.GameFolder, downloadedFiles)
                 .Manifest(read.Files, mod.Version, held);
         }
         catch (DirectoryNotFoundException)

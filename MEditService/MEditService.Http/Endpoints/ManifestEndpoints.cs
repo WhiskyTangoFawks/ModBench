@@ -192,11 +192,11 @@ internal static class ManifestEndpoints
 }
 
 /// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013): the stat cache's folder, outside every
-/// mod folder, and the downloaded files the hash index holds. Gesture names it to a cancel.</summary>
+/// mod folder, and the downloaded files already hashed. Gesture names it to a cancel.</summary>
 internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, string? Gesture, IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
 
-/// <summary>The game folder by the game's name and Data folder, with the game files at the paths of the mods' files, none
+/// <summary>The game folder by the game's name and Data folder, with the game files a mod's files may be, none
 /// when not found. Elsewhere is the Steam install when it is another place (ADR-0013).</summary>
 internal sealed record GameFolderRequest(string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null)
 {

@@ -513,25 +513,43 @@ public sealed class UpdateManifestHandlerTests
             manifest.Files);
     }
 
-    [Fact]
-    public async Task AFileTheGameFolderHoldsWithTheSameBytesAtAnotherPath_IsTheEntryAtThatPath()
+    private sealed class EntriesCountingReads(IReadOnlyList<HashedEntry> entries) : IReadOnlyList<HashedEntry>
     {
-        _folders.WithFile(Mod, "Data/a.nif", "a");
+        public int Reads { get; private set; }
 
-        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a")));
+        public int Count => entries.Count;
 
-        Assert.Equal([GameFolderPackageTaking(("Data/a.nif", "a"))], manifest.Packages);
-        Assert.Equal([ManifestFile.In("Fallout 4", "Data/a.nif", "a.nif") with { Package = null }], manifest.Files);
+        public HashedEntry this[int index] => entries[index];
+
+        public IEnumerator<HashedEntry> GetEnumerator()
+        {
+            Reads++;
+            return entries.GetEnumerator();
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     [Fact]
-    public async Task AFileTheGameFolderHoldsTwiceWithTheSameBytes_IsTheEntryAtItsOwnPath()
+    public async Task TheDownloadedFilesOfARequest_AreReadOnce_WhateverTheNumberOfMods()
     {
-        _folders.WithFile(Mod, "a.nif", "h");
+        var entries = new EntriesCountingReads([new HashedEntry("a.txt", "a")]);
+        var downloaded = DownloadedFile("dl/Z.zip", ("a.txt", "a")) with { Entries = entries };
+        _folders.WithFile("mods/A", "a.txt", "a").WithFile("mods/B", "a.txt", "a").WithFile("mods/C", "a.txt", "a");
 
-        var manifest = await UpdatedWith(GameFolderHolding(("other/b.nif", "h"), ("a.nif", "h")));
+        await Update([ModFrom("A"), ModFrom("B"), ModFrom("C")], downloadedFiles: [downloaded]);
 
-        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held())], manifest.Files);
+        Assert.Equal(1, entries.Reads);
+    }
+
+    [Fact]
+    public async Task AFileBelowDataTheGameFolderHoldsWithOtherBytes_IsRecordedAsSuch()
+    {
+        _folders.WithFile(Mod, "Data/Fallout4.esm", "edited").WithFile(Mod, "a.nif", "a");
+
+        var manifest = await UpdatedWith(GameFolderHolding(("Fallout4.esm", "original"), ("a.nif", "a")));
+
+        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("Data/Fallout4.esm", new PackageEntry.OtherBytes())], manifest.Files);
     }
 
     [Fact]

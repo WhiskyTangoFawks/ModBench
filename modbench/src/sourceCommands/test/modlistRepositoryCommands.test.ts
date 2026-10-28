@@ -324,8 +324,8 @@ describe('modlistRepositoryCommands update manifest', () => {
     ]);
   });
 
-  it('hands mEdit the downloaded files the hash index holds, with their entries, once for the whole call', async () => {
-    const { commands, client } = commandsOver({ indexedDownloadedFiles: { kind: 'read', answer: [INSTALLED, { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' }] } });
+  it('hands mEdit the downloaded files already hashed, with their entries, once for the whole call', async () => {
+    const { commands, client } = commandsOver({ indexedDownloadedFiles: { files: [INSTALLED, { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' }], notes: [] } });
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModA', 'ModB']);
@@ -336,14 +336,27 @@ describe('modlistRepositoryCommands update manifest', () => {
     });
   });
 
-  it('refuses the whole call, naming why, when the downloaded files the hash index holds cannot be listed', async () => {
-    const { commands, client } = commandsOver({ indexedDownloadedFiles: { kind: 'unreadable', reason: 'the downloads folder cannot be resolved' } });
+  it('updates every mod and reports why a downloaded file could not be read', async () => {
+    const { commands, client } = commandsOver({ indexedDownloadedFiles: { files: [], notes: ['/downloads/Bad.7z could not be read: EIO'] } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA', 'ModB']);
+
+    expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModA', 'ModB']);
+    expect(outcome).toMatchObject({ applied: true, repositoryNotes: ['/downloads/Bad.7z could not be read: EIO'] });
+  });
+
+  it('updates a mod whose installation file yields its bytes though its game files cannot be read, noting why', async () => {
+    const { commands, client } = commandsOver({
+      installations: new Map([['ModA', recording(INSTALLED)]]),
+      gameFilesTaken: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]),
+    });
+    client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([outcome, client.calls]).toEqual([
-      { applied: false, refusal: 'Could not read the downloaded files the hash index holds: the downloads folder cannot be resolved' }, [],
-    ]);
+    expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModA']);
+    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModA', note: expect.stringContaining('EACCES') as unknown }] });
   });
 
   it('names a mod with no installation file when the game folder was not found, and sends it no game folder', async () => {

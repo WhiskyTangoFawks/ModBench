@@ -158,7 +158,9 @@ async function gameFilesOf(
   }
   const [inGame, inSteam] = await Promise.all(placesOf(game.folder).map(({ dataFolder }) => adapter.gameFilesTakenBy(dataFolder, folder)));
   if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
-  if (inGame.kind === 'unreadable') return { refusal: inGame.reason };
+  if (inGame.kind === 'unreadable') {
+    return installed ? { gameFiles: NONE_HELD, notes: [`the game files its files may be could not be read: ${inGame.reason}`] } : { refusal: inGame.reason };
+  }
   if (inSteam === undefined) return { gameFiles: { game: inGame.answer.gameFiles, steam: [] }, notes: inGame.answer.notes };
   if (inSteam.kind === 'unreadable') {
     return { gameFiles: { game: inGame.answer.gameFiles, steam: [] }, notes: [...inGame.answer.notes, `the Steam install could not be read: ${inSteam.reason}`] };
@@ -695,16 +697,15 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       }
       if (versioned.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
       const downloaded = await adapter.indexedDownloadedFiles();
-      if (downloaded.kind === 'unreadable') return { applied: false, refusal: `Could not read the downloaded files the hash index holds: ${downloaded.reason}` };
       const outcome = await client.updateManifest(
         versioned,
-        { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.answer.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },
+        { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.files.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },
         { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
       const submodules = await submodulesWritten(adapter);
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
-        repositoryNotes: [...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
+        repositoryNotes: [...downloaded.notes, ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
       };
     },
 

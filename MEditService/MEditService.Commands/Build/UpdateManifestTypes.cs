@@ -12,7 +12,7 @@ public sealed record ModToUpdate(
 /// Instance adapter knows it (ADR-0013).</summary>
 public sealed record GameFile(string Path, string Hash);
 
-/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files at the paths of the mods' files.</summary>
+/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files a mod's files may be.</summary>
 public sealed record GameFolderPlace(string DataFolder, IReadOnlyList<GameFile> Files);
 
 /// <summary>The game folder as the Instance adapter hands it. Elsewhere: the game's other places, tried in order
@@ -22,7 +22,7 @@ public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<Ga
     internal IEnumerable<GameFolder> Places() => [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files))];
 }
 
-/// <summary>The instance's facts beyond its mods: the stat cache's folder and the downloaded files the hash index holds.</summary>
+/// <summary>The instance's facts beyond its mods: the stat cache's folder and the downloaded files already hashed.</summary>
 public sealed record InstanceToUpdate(string StatCache, IReadOnlyList<InstallationFile> DownloadedFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

@@ -258,9 +258,10 @@ describe('the sizes and hashes of the record index', () => {
 
       const held = await hashIndex(folder, next).indexedDownloadedFiles();
 
-      expect(held).toEqual([{
-        path, size: 7, hash: '7R3YJUWF5oA=', entries: [{ path: 'a.esp', hash: '+rJPuyOy4u8=' }, { path: 'textures/b.dds', hash: 'uXAXn9wLC0k=' }],
-      }]);
+      expect(held).toEqual({
+        files: [{ path, size: 7, hash: '7R3YJUWF5oA=', entries: [{ path: 'a.esp', hash: '+rJPuyOy4u8=' }, { path: 'textures/b.dds', hash: 'uXAXn9wLC0k=' }] }],
+        notes: [],
+      });
       expect(next.extracted).toEqual([]);
     });
 
@@ -273,7 +274,7 @@ describe('the sizes and hashes of the record index', () => {
       await appendFile(changed, 'more');
       await rm(gone);
 
-      expect(await index.indexedDownloadedFiles()).toEqual([]);
+      expect(await index.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
     });
 
     it('lists neither a game file nor an origin file', async () => {
@@ -281,7 +282,15 @@ describe('the sizes and hashes of the record index', () => {
       const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
       await Promise.all([index.gameFileHash(await fileHolding('Game.esm', 'aaaa')), index.originFileHash(await fileHolding('copy.dds', 'bbbb'))]);
 
-      expect(await index.indexedDownloadedFiles()).toEqual([]);
+      expect(await index.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
+    });
+
+    it('says why when the index cannot be read, rather than listing none as though it held none', async () => {
+      await mkdir(join(folder, 'hashes.jsonl'), { recursive: true });
+
+      const held = await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).indexedDownloadedFiles();
+
+      expect(held).toMatchObject({ files: [], notes: [expect.stringMatching(/could not be read.*EISDIR/) as unknown] });
     });
   });
 });
