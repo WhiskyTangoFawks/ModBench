@@ -14,7 +14,7 @@ export interface FileTheGameGets {
 }
 
 /** A file the game gets that deploy left out, as an earlier one lands at its path below the folder. */
-export interface Lost {
+interface Lost {
   readonly path: string;
   readonly winner: string;
 }
