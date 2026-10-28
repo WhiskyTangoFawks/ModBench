@@ -189,9 +189,8 @@ internal static class ManifestEndpoints
 
 }
 
-/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). StatCache is the stat cache's folder,
-/// outside every mod folder. DownloadedFiles are the downloaded files the hash index holds, which a file its mod's installation
-/// file lacks is looked for in. Gesture names it to a cancel and in its progress.</summary>
+/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013): the stat cache's folder, outside every
+/// mod folder, and the downloaded files the hash index holds. Gesture names it to a cancel.</summary>
 internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, GameFolderRequest? GameFolder, string? Gesture,
     IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
