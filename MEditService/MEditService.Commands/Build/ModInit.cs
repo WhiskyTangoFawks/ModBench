@@ -144,8 +144,8 @@ internal sealed class ModInit(
     private static ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>> Refused(DecompileAndCommitRefusal refusal, string message) =>
         ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
 
-    // plugins.md, Decompile and commit, story 2: the installation file yields what it holds with its bytes, a step makes what the
-    // manifest says, and compile writes the plugins; the rest are assets. The manifest is in the form a build writes.
+    // plugins.md, Decompile and commit, story 2: the installation file, a step and compile each make files; the rest are assets.
+    // The manifest is in the form a build writes.
     private (Manifest Manifest, List<Asset> Assets) ContentsOf(
         Manifest? held, PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
     {
