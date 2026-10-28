@@ -304,6 +304,28 @@ public sealed class ReconcileDoorTests
         Assert.Equal(0, opens.OpenedTotal);
     }
 
+    [ForeignIndexHolderFact]
+    public void ARefreshAfterTheOtherWindowCloses_TakesTheRecordIndex_AndClearsTheRefusal()
+    {
+        using var data = new PluginFixtureBuilder("takeover-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
+        var earlierHolder = new LoadOrderHolder();
+        using (var earlier = Indexes.Open(earlierHolder))
+            earlier.Reconcile(earlierHolder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        using var otherWindow = ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
+        Assert.Contains("Close that window, then refresh.", index.Status.Message, StringComparison.Ordinal);
+
+        otherWindow.Dispose();
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refresh's ready status");
+        Assert.Null(index.Status.Message);
+        Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
+    }
+
     [Fact]
     public async Task ASupersededReconcile_NeverEscapes_AndTheSurvivorAnswersReadyForItsOwnVersion()
     {

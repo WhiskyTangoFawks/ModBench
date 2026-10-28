@@ -112,7 +112,7 @@ internal sealed class Store : IDisposable
         catch (Exception ex) when (IsAnotherWriter(ex))
         {
             _logger.LogWarning(ex, "The record index at {Path} is held by another window", _databasePath);
-            return $"This instance's record index is open in another Modbench window ({_databasePath}). Close mEdit there first, or open a different instance here.";
+            return $"This instance's record index is open in another Modbench window ({_databasePath}). Close that window, then refresh.";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
