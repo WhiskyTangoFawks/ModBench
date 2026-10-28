@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { DeployCommands, DeployResult } from '../instanceCommands/deploy';
+import { AgentCall } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
-import { UNMANAGED_MESSAGE, deployProblems } from './deployProblems';
+import { deployFailures, deployWarnings, unmanagedWarning } from './deployProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
@@ -17,20 +18,22 @@ const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
 
 // deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
 export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
-  const deploy = async (): Promise<DeployResult> => {
+  // A task or an agent is answered the result and reports it itself.
+  const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
+    if (reportsItself) return result;
     if (!result.applied) {
       reporter.report('error', 'Could not deploy.', result.refusal);
       return result;
     }
-    if (result.unmanaged.length > 0) {
-      const { unmanaged } = result;
-      reporter.shownOnSurface('warning', UNMANAGED_MESSAGE, unmanaged.join(', '));
-      reporter.report('warning', `The deployment folder holds ${unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
-        result.canMoveToOverwrite ? { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, unmanaged) } : undefined);
+    const unmanaged = unmanagedWarning(result);
+    if (unmanaged !== undefined) {
+      reporter.shownOnSurface('warning', unmanaged.message, unmanaged.detail);
+      reporter.report('warning', `The deployment folder holds ${result.unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
+        result.canMoveToOverwrite ? { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, result.unmanaged) } : undefined);
     }
-    for (const { message, detail } of deployProblems(result)) reporter.report('warning', message, detail);
+    for (const { message, detail } of [...deployFailures(result), ...deployWarnings(result)]) reporter.report('warning', message, detail);
     return result;
   };
   // deployment-hardlink.md, Purge, story 2: purge asks nothing.
@@ -54,7 +57,7 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
   // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
   return [
     registerDeployTask(reporter),
-    vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy)),
+    vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
     vscode.commands.registerCommand('modbench.instance.purge', () => runWritingGesture(TOOLBOX_VIEW, instance, purge)),
     registerMoveToOverwriteCommand({ commands, instance, reporter }),
   ];

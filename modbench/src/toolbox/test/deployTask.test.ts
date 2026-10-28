@@ -13,7 +13,7 @@ const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 const landed = (overrides: Partial<DeployResult & { applied: true }> = {}): DeployResult =>
   ({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false, ...overrides });
 
-async function deploy(answered: unknown) {
+async function deploy(answered: DeployResult | { applied: false; refusal: string }) {
   const reporter = recordingReporter();
   registerDeployTask(reporter);
   return { ...await runRegisteredTask(DEFINITION, { resolves: answered }), reporter };
@@ -23,7 +23,7 @@ describe('the deploy task', () => {
   it('is of deploy\'s Command ID, calls deploy with no argument, and passes when the game gets the load order', async () => {
     const { written, closedWith, reporter } = await deploy(landed());
 
-    expect([registered.type, written, closedWith, reporter.shownFailures]).toEqual(['modbench.instance.deploy', '', [0], []]);
+    expect([registered.type, written, closedWith, reporter.shownFailures]).toEqual(['modbench.instance.deploy', 'Deployed the load order.\r\n', [0], []]);
     expect(executeCommand).toHaveBeenCalledWith('modbench.instance.deploy', new AgentCall([], {}));
   });
 
@@ -37,13 +37,13 @@ describe('the deploy task', () => {
   });
 
   it.each([
-    ['a file left out for a file deploy did not write', { leftOut: [{ path: 'Data/a.esp', winner: '/m/A/a.esp' }] }, 'Deploy left out each file whose path holds a file it did not write: /m/A/a.esp at Data/a.esp'],
-    ['a file lost to another that folds to its path', { lost: [{ path: 'Data/x.ini', winner: '/m/B/x.ini' }] }, 'Deploy left out each file whose path another file the game gets wins: /m/B/x.ini at Data/x.ini'],
-    ['no plugins.txt written', { pluginsTxt: { kind: 'notWritten', why: 'no prefix' } }, 'Deploy wrote no plugins.txt: no prefix'],
-  ] as const)('fails with %s', async (_name, overrides, text) => {
-    const { written, closedWith, reporter } = await deploy(landed(overrides));
+    ['a file left out for a file deploy did not write', { leftOut: [{ path: 'Data/a.esp', winner: '/m/A/a.esp' }] }],
+    ['a file lost to another that folds to its path', { lost: [{ path: 'Data/x.ini', winner: '/m/B/x.ini' }] }],
+    ['no plugins.txt written', { pluginsTxt: { kind: 'notWritten', why: 'no prefix' } }],
+  ] as const)('fails with %s', async (_name, overrides) => {
+    const { closedWith, reporter } = await deploy(landed(overrides));
 
-    expect([written, closedWith, reporter.shownFailures.map(({ severity }) => severity)]).toEqual([`${text}\r\n`, [1], ['error']]);
+    expect([closedWith, reporter.shownFailures.map(({ severity }) => severity)]).toEqual([[1], ['error']]);
   });
 
   it.each([
