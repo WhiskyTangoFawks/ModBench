@@ -5,14 +5,28 @@ import { realpath, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
-import { changeAll, fileIdAt, recoveryIn, type Link } from './changes';
-import { recordIn, type DeploymentRecord, type Written } from './record';
+import { pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
+import { changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
+import { pluginsTxtChange } from './pluginsTxt';
+import type { PluginsTxtPlace } from './pluginsTxtPlace';
+import { recordIn, type DeploymentRecord, type Written, type WrittenPluginsTxt } from './record';
 
 /** A file the game gets: its path in the mod, `/`-separated, and the copy that wins it. */
 export interface FileTheGameGets {
   readonly relativePath: string;
   readonly winner: string;
 }
+
+/** The plugin order the game reads, for the release of the game it is for. */
+export interface PluginOrder {
+  readonly release: string | undefined;
+  readonly entries: readonly PluginEntry[];
+}
+
+// `renamed` names each file deploy found where the game reads plugins.txt and renamed, one a killed deploy renamed included.
+type PluginsTxtDeployed =
+  | { readonly kind: 'written' | 'unchanged'; readonly renamed: readonly string[] }
+  | { readonly kind: 'notWritten'; readonly why: string };
 
 interface Lost {
   readonly path: string;
@@ -26,12 +40,13 @@ export interface Deployed {
   readonly leftOut: readonly string[];
   readonly lost: readonly Lost[];
   readonly leftAside: readonly string[];
+  readonly pluginsTxt: PluginsTxtDeployed;
 }
 
 export interface Deployment {
   /** `files` in the order their winners win: of two that land at one path, the earlier wins it.
    *  When it cannot deploy, it throws why, and has written nothing or names what it left changed. */
-  deploy(folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed>;
+  deploy(folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder): Promise<Deployed>;
 }
 
 // A mod's Root folder holds what the game reads from beside its program; the rest is Data's.
@@ -123,30 +138,61 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
 
 const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
 
-async function deployTo(record: DeploymentRecord, folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed> {
+interface PluginsPart {
+  readonly steps: Step[];
+  readonly recordChanged: boolean;
+  recordAfter(): WrittenPluginsTxt | undefined;
+  settle(): Promise<string[]>;
+  deployed(): PluginsTxtDeployed;
+}
+
+async function pluginsPartOf(place: PluginsTxtPlace, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
+  const where = place(release);
+  if ('why' in where) {
+    return { steps: [], recordChanged: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
+  }
+  const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
+  return {
+    steps: change.step === undefined ? [] : [change.step],
+    recordChanged: change.recordChanged,
+    recordAfter: () => change.written(),
+    settle: () => change.settle(),
+    deployed: () => ({ kind: change.step === undefined ? 'unchanged' : 'written', renamed: change.renamed() }),
+  };
+}
+
+async function deployTo(
+  record: DeploymentRecord, place: PluginsTxtPlace, folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder,
+): Promise<Deployed> {
   const { wanted, lost } = await linksOnTheFolderVolume(folder, files);
-  const written = await record.of(folder);
-  const owned = await stillWritten(folder, written);
+  const recorded = await record.of(folder);
+  const owned = await stillWritten(folder, recorded.files);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
-  if (links.length + relinks.length + removals.length === 0) {
-    if (after.length !== written.length) await record.write(folder, after);
-    return { wrote: false, leftOut, lost, leftAside: [] };
+  const part = await pluginsPartOf(place, plugins, recorded.pluginsTxt);
+  const recordWith = (files: readonly Written[]): Promise<void> => {
+    const pluginsTxt = part.recordAfter();
+    return record.write(folder, { files, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
+  };
+  if (links.length + relinks.length + removals.length === 0 && !part.steps.length) {
+    if (after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
+    return { wrote: false, leftOut, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
   }
   // The record keeps each file set aside, so the next deploy removes one this deploy could not.
   const setAside = [...removals, ...relinks].map(asWritten);
-  const leftAside = await changeAll(folder, { removals, relinks, links }, () => record.write(folder, [...after, ...setAside]));
-  return { wrote: true, leftOut, lost, leftAside };
+  const leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith([...after, ...setAside]));
+  leftAside.push(...await part.settle());
+  return { wrote: true, leftOut, lost, leftAside, pluginsTxt: part.deployed() };
 }
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of
  *  the instance's own that no deployment folder holds. */
-export function hardlinkDeployment(storage: string): Deployment {
+export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Deployment {
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {
-    deploy(folder, files) {
-      const run = last.then(() => deployTo(record, folder, files));
+    deploy(folder, files, plugins) {
+      const run = last.then(() => deployTo(record, place, folder, files, plugins));
       last = run.catch(() => undefined);
       return run;
     },
