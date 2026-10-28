@@ -38,7 +38,7 @@ describe('modbench.mod.build', () => {
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [], steps: [], made: [] });
-  const builds: (readonly string[])[] = [];
+  const builds: (readonly string[] | 'every source')[] = [];
   beforeEach(() => { builds.length = 0; });
 
   const row = (plugin: { name: string; origin: string }) => new PluginRowStandIn(plugin);
@@ -49,9 +49,9 @@ describe('modbench.mod.build', () => {
     const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
       commands: {
-        build: (mods) => {
+        build: (mods, everySource) => {
           progressSteps.push('build');
-          builds.push(mods);
+          builds.push(everySource === true ? 'every source' : mods);
           return Promise.resolve(outcome);
         },
       },
@@ -302,12 +302,12 @@ describe('modbench.mod.build', () => {
       expect([...diagnostics]).toEqual([]);
     });
 
-    it('with no mods named, builds every source in the source folder without the pick', async () => {
+    it('with no mods named, asks source commands for every source, read when it builds, without the pick', async () => {
       const { handler } = registered({ landed: [built('ModA'), built('ModB'), built('ModS')], refused: [] });
 
-      await handler(new AgentCall([], {}));
+      await handler(calling());
 
-      expect(builds).toEqual([SOURCE_MODS]);
+      expect(builds).toEqual(['every source']);
       expect(showQuickPick).not.toHaveBeenCalled();
     });
 
