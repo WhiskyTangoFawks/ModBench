@@ -11,6 +11,7 @@ import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
+import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -627,6 +628,8 @@ export interface InstanceAdapter {
   /** Lists each file Modbench keeps in the instance in the publisher's ignore list, leaving every other entry as written.
    *  Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
   keepOutOfPublisher(): Promise<() => Promise<void>>;
+  /** The file the Python tooling reads its environment from; reads empty when there is none yet. */
+  readonly scriptEnvironmentFile: ScriptEnvironmentFile;
 
   // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
