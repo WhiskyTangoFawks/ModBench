@@ -501,8 +501,8 @@ describe('markFiles', () => {
   const UNREACHABLE = { refused: true, message: 'Could not change the manifest — mEdit could not be reached.', unreachable: true } as const;
 
   it.each([
-    ['Excluded', 'Textures/a.dds', { exclude: ['Textures/a.dds'] }],
-    ['Included', `Textures/b.dds${MARK}`, { include: ['Textures/b.dds'] }],
+    ['Excluded', 'Textures/a.dds', { exclude: ['Textures/a.dds'], exclusionMark: MARK }],
+    ['Included', `Textures/b.dds${MARK}`, { include: ['Textures/b.dds'], exclusionMark: MARK }],
   ] as const)('marks a file %s, and the manifest\'s exclusion with it', async (mark, relativePath, change) => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeSourceManifest', { changed: true });
@@ -526,7 +526,7 @@ describe('markFiles', () => {
 
     const outcome = await commands.markFiles(files, 'Excluded');
 
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'b.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'b.dds'], exclusionMark: MARK }]]);
     expect(markedWhenAsked).toBe(0);
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: files.map((item) => ({ item, reason: 'it holds no manifest' })) } });
     expect(fake.calls).toEqual([]);
@@ -570,7 +570,7 @@ describe('markFiles', () => {
 
     const outcome = await commands.markFiles(files, 'Excluded');
 
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [OTHER, { exclude: ['c.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'], exclusionMark: MARK }], [OTHER, { exclude: ['c.dds'], exclusionMark: MARK }], [SOURCE, { include: ['a.dds'], exclusionMark: MARK }]]);
     expect(outcome).toEqual({
       applied: false,
       refusal: `${UNREACHABLE.message} The manifest in "${SOURCE}" could not be put back: ${UNREACHABLE.message}`,
@@ -601,7 +601,7 @@ describe('markFiles', () => {
     const outcome = await commands.markFiles([marked, gone], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [marked], refused: [{ item: gone, reason: '"gone.dds" is gone from disk.' }] } });
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'], exclusionMark: MARK }]]);
   });
 
   it('takes back the exclusion of a file the adapter refuses, with the adapter\'s reason', async () => {
@@ -612,7 +612,7 @@ describe('markFiles', () => {
     const outcome = await commands.markFiles([file], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: file, reason: 'permission denied' }] } });
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'], exclusionMark: MARK }], [SOURCE, { include: ['a.dds'], exclusionMark: MARK }]]);
   });
 
   it('refuses a file the adapter cannot read, leaving it out of the configuration, and lands the rest', async () => {
@@ -624,7 +624,7 @@ describe('markFiles', () => {
     const outcome = await commands.markFiles([unread, marked], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [marked], refused: [{ item: unread, reason: 'permission denied' }] } });
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'], exclusionMark: MARK }]]);
   });
 
   it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {

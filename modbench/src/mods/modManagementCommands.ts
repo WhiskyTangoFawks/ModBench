@@ -164,7 +164,7 @@ async function confirmUninstall(names: readonly string[], sourceMods: readonly s
 
 interface ModContextDeps {
   commands: ModCommands;
-  instance: Pick<Instance, 'value' | 'refresh'>;
+  instance: Pick<Instance, 'value' | 'refresh' | 'quiet'>;
   viewSelection: () => readonly ModlistNode[];
   reporter: Reporter;
   ask: AskQuestion;
@@ -213,7 +213,7 @@ export function registerModContextCommands(
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
-      const result = await commands.renameMod(oldName, newName);
+      const result = await instance.quiet(() => commands.renameMod(oldName, newName));
       if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
       if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
       return {

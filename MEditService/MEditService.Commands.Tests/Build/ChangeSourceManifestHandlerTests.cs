@@ -50,6 +50,57 @@ public sealed class ChangeSourceManifestHandlerTests : IDisposable
         Assert.Equal(after, _folders.ReadSourceManifest(_source).Value()?.Exclude);
     }
 
+    private static readonly ManifestPackage.InstallationFile Pack = new("Pack-1.0.zip", 10, "hash");
+
+    private (string Path, string PackagePath) TakenFileLine()
+    {
+        var manifest = _folders.ReadSourceManifest(_source).Value();
+        var line = Assert.Single(manifest?.Files ?? []);
+        return (line.Path, Assert.IsType<FileBytes.InInstallationFile>(manifest?.BytesOf(line)).Path);
+    }
+
+    [Theory]
+    [InlineData("textures/a.txt", "textures/a.txt.excluded")]
+    [InlineData("textures", "textures.excluded/a.txt")]
+    public void AnExclusion_MovesTheLineOfATakenFile_ToWhereTheFolderNowHoldsIt(string excluded, string lineAt)
+    {
+        _folders.WriteSourceManifest(_source, new Manifest([Pack], [ManifestFile.At("textures/a.txt", new FileBytes.InInstallationFile(Pack.Name, "textures/a.txt"))]) { Output = "Old Name" });
+
+        Assert.Equal(new SourceManifestChangeResult(), _handler.Change(_source, new SourceManifestChange(null, [excluded], [], ".excluded")));
+
+        var line = TakenFileLine();
+        Assert.Equal((lineAt, "textures/a.txt"), line);
+    }
+
+    [Fact]
+    public void AnInclusion_MovesTheLineOfATakenFileBack_ToItsOwnPath()
+    {
+        _folders.WriteSourceManifest(_source, new Manifest([Pack], [ManifestFile.At("textures/a.txt.excluded", new FileBytes.InInstallationFile(Pack.Name, "textures/a.txt"))])
+        {
+            Output = "Old Name",
+            Exclude = ["textures/a.txt"],
+        });
+
+        Assert.Equal(new SourceManifestChangeResult(), _handler.Change(_source, new SourceManifestChange(null, [], ["textures/a.txt"], ".excluded")));
+
+        var line = TakenFileLine();
+        Assert.Equal(("textures/a.txt", "textures/a.txt"), line);
+    }
+
+    [Fact]
+    public void AnExclusionAndAnInclusion_MoveTheLineOfABuiltFile_WithTheFolder()
+    {
+        var built = new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: false)], [new ManifestFile("textures/a.dds", new PackageEntry.Held())]) { Output = "Old Name" };
+        _folders.WriteSourceManifest(_source, built);
+
+        _handler.Change(_source, new SourceManifestChange(null, ["textures/a.dds"], [], ".excluded"));
+        var excluded = _folders.ReadSourceManifest(_source).Value()?.Files.Select(line => line.Path).Single();
+        _handler.Change(_source, new SourceManifestChange(null, [], ["textures/a.dds"], ".excluded"));
+        var included = _folders.ReadSourceManifest(_source).Value()?.Files.Select(line => line.Path).Single();
+
+        Assert.Equal(("textures/a.dds.excluded", "textures/a.dds"), (excluded, included));
+    }
+
     [Fact]
     public void ARepositoryWithNoManifest_IsRefusedAsUnreadable_AndGetsNone()
     {
