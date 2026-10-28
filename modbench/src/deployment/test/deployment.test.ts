@@ -12,8 +12,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...actual,
     link: (from: string, to: string) => (busy.onLink?.(to), busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
-    readdir: (path: Parameters<typeof actual.readdir>[0], options?: Parameters<typeof actual.readdir>[1]) =>
-      (typeof path === 'string' && busy.readdirs.includes(path) ? Promise.reject(ebusy('scandir', path)) : actual.readdir(path, options as never)),
+    readdir: (...args: Parameters<typeof actual.readdir>) =>
+      (typeof args[0] === 'string' && busy.readdirs.includes(args[0]) ? Promise.reject(ebusy('scandir', args[0])) : actual.readdir(...args)),
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
