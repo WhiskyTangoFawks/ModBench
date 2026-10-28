@@ -535,6 +535,8 @@ export interface InstanceReading extends InstanceGame {
   readonly gameFolder: GameFolder;
   readonly programVersions: ProgramVersions;
   readonly dataFolderPlugins: DataFolderPlugins;
+  /** The links in the listings of the game folder, which Modbench ignores: a link is a deployed file. */
+  readonly gameFolderLinks: number;
   readonly creationClubList: readonly string[];
   /** The archives the INIs list, in load order. */
   readonly archiveList: readonly string[];

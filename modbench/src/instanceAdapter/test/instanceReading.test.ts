@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
 import { sourceOver } from '../../test/mo2/adapterOver';
 import { readInstance, readPluginsProvided, type ReadingSource } from '../instanceReading';
+import type { GameFolder } from '../instanceAdapter';
 import { settleWaitArmed } from '../../test/eventually';
 
 const INI = 'ModOrganizer.ini';
@@ -52,6 +53,16 @@ describe('the instance assembled from a manager\'s reading', () => {
     const { linkNotes } = await readInstance(skipping);
 
     expect(linkNotes).toEqual(['/inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels']);
+  });
+
+  it('counts each link the game folder\'s listings ignored once, whichever listing met it', async () => {
+    const meeting = {
+      ...source,
+      gameFolderPlugins: (gameFolder: GameFolder, ignored: (path: string) => void) => { ignored('/game/Data/a.esp'); ignored('/game/Data/b.esp'); return source.gameFolderPlugins(gameFolder, ignored); },
+      gameFolderArchives: (gameFolder: GameFolder, release: string | undefined, ignored: (path: string) => void) => { ignored('/game/Data/b.esp'); return source.gameFolderArchives(gameFolder, release, ignored); },
+    };
+
+    expect((await readInstance(meeting)).gameFolderLinks).toBe(2);
   });
 
   it('reads the settings once, so one reading holds one generation of the ini', async () => {

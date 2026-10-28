@@ -102,6 +102,8 @@ export interface InstanceValue {
    *  none answered. */
   readonly gameFolder: GameFolder;
   readonly programVersions: ProgramVersions;
+  /** How many links the listings of the game folder ignored. */
+  readonly gameFolderLinks: number;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
@@ -241,6 +243,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
   programVersions: { kind: 'unresolved' },
+  gameFolderLinks: 0,
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
@@ -519,6 +522,7 @@ export class Instance implements Subscription {
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
       programVersions,
+      gameFolderLinks: reading.gameFolderLinks,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot

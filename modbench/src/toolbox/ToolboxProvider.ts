@@ -28,19 +28,22 @@ const versionText = (version: ProgramVersion): string => {
 const gameVersionText = (version: ProgramVersion): string =>
   (version.kind === 'notFound' ? `${version.program} not found` : versionText(version));
 
-function foundTooltip(root: string, programVersions: InstanceValue['programVersions']): string {
-  return programVersions.kind === 'found'
-    ? [root, `Game: ${gameVersionText(programVersions.game)}`, `Script extender: ${versionText(programVersions.extender)}`].join('\n')
-    : [root, 'Modbench knows no program of this game'].join('\n');
+const linksText = (count: number): string => `${count} ${count === 1 ? 'link' : 'links'}, which Modbench ignores`;
+
+function foundTooltip(root: string, { programVersions, gameFolderLinks }: InstanceValue): string {
+  const versions = programVersions.kind === 'found'
+    ? [`Game: ${gameVersionText(programVersions.game)}`, `Script extender: ${versionText(programVersions.extender)}`]
+    : ['Modbench knows no program of this game'];
+  return [root, ...versions, ...(gameFolderLinks > 0 ? [linksText(gameFolderLinks)] : [])].join('\n');
 }
 
 function gameRow(value: InstanceValue): vscode.TreeItem {
-  const { gameName, gameFolder, programVersions } = value;
+  const { gameName, gameFolder } = value;
   const row = new vscode.TreeItem('Game');
   if (gameFolder.kind === 'found') {
     row.description = gameName;
     row.iconPath = new vscode.ThemeIcon('game');
-    row.tooltip = foundTooltip(gameFolder.root, programVersions);
+    row.tooltip = foundTooltip(gameFolder.root, value);
     return row;
   }
   // common.md, States, story 5: the name stays, and the warning rides beside it.
