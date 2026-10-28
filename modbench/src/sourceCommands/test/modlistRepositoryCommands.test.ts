@@ -935,17 +935,20 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     it('hands mEdit the next mod once the record index holds the plugins of the one restored', async () => {
       const { commands, client, sent } = restoringWith(1_000);
+      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
 
       const outcome = commands.restoreFromManifest(['ModA', 'ModB']);
       await new Promise((resolve) => { setTimeout(resolve, 10); });
       expect(sent).toEqual(['ModB']);
+      client.setQueryAnswer('isPluginIndexedAsOnDisk', true);
       client.emit(loadOrderStatusEventFixture({ indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }] }));
 
       expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
     });
 
     it('answers a mod whose plugin never reaches the record index as not finished, and the mods after it as not finished', async () => {
-      const { commands, sent } = restoringWith(20);
+      const { commands, client, sent } = restoringWith(20);
+      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
 
       const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 

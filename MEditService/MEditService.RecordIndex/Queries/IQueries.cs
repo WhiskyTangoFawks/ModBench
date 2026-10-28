@@ -41,6 +41,8 @@ public interface IQueries
 
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
+    // Whether its rows were built from the file now on disk (ADR-0003); false for a plugin the record index holds no rows for.
+    Answer<bool, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems();
 
     // Answered in every state, "no load order yet" included (ADR-0013).

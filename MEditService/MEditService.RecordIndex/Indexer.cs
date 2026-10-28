@@ -196,6 +196,17 @@ internal sealed class Indexer : IDisposable
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
     }
 
+    /// <summary>Asked of the file now on disk, not the last snapshot (ADR-0003); a plugin nothing on disk backs is as it was read.</summary>
+    public bool IndexedAsOnDisk(PluginAddress key)
+    {
+        var scope = RequireScope();
+        lock (_lock)
+        {
+            if (!_indexed.Exists(held => PluginAddress.Comparer.Equals(held, key))) return false;
+        }
+        return scope.Store.IndexedFile(key) is not { } claim || scope.Store.FileContentHash(claim.FilePath) == claim.ContentHash;
+    }
+
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
     {
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }

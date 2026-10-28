@@ -10,7 +10,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'loadOrderStatus' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'isPluginIndexedAsOnDisk' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */

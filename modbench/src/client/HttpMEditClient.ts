@@ -696,6 +696,12 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails, { timed: true });
   }
 
+  isPluginIndexedAsOnDisk({ name: plugin, origin }: PluginAddress): Promise<boolean | ReadFailed> {
+    return this.read(`isPluginIndexedAsOnDisk(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/indexed-as-on-disk', {
+      params: { path: { plugin }, query: { origin } }, signal,
+    }), (data) => data ?? NO_ANSWER);
+  }
+
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed> {
     return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', { signal }), noBodyFails, { timed: true });
   }

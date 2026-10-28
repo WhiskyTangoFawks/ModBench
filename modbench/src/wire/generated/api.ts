@@ -372,6 +372,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/indexed-as-on-disk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Whether the record index's rows for the plugin were built from the file now on disk; false when the file changed since, or the record index holds no rows for it. */
+        get: operations["GetPluginIndexedAsOnDisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/record-types": {
         parameters: {
             query?: never;
@@ -2872,6 +2889,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginDependants"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginIndexedAsOnDisk: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": boolean;
                 };
             };
             /** @description Bad Request */

@@ -25,7 +25,7 @@ type Adapter = Pick<InstanceAdapter,
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'loadOrderStatus' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'isPluginIndexedAsOnDisk' | 'onLoadOrderStatus'>;
   adapter: Adapter;
   nexus: Pick<Nexus, 'download'>;
   instanceRoot: string;
