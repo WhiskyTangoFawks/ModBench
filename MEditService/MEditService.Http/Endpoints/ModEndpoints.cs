@@ -1,5 +1,6 @@
 using MEditService.Commands;
 using MEditService.Commands.Build;
+using MEditService.ModFolderAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -30,7 +31,7 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the files no installation file yields as its assets, and a manifest naming " +
+                "plugin it provides, the files its installation file does not yield with their bytes as its assets, and a manifest naming " +
                 "its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
             .Produces<DecompileAndCommitResult>()
             .ProducesProblem(400)
@@ -64,10 +65,14 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("Every mod needs a name and a source folder.");
         }
+        if (mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().Any(file => !file.IsWhole || !FileHash.IsHash(file.Hash) || file.Entries.Any(entry => !FileHash.IsHash(entry.Hash))))
+        {
+            return EndpointMapping.BadRequest("Every installation file needs a path, a size, a hash and its entries, each with a path and a hash, all xxHash64 as Wabbajack writes it: eight bytes in base64.");
+        }
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
-            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
+            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? [], mod.InstallationFile?.ToInstallationFile(), mod.Version))]),
             EndpointMapping.Refusal);
     }
 
@@ -159,6 +164,7 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 /// <summary>The mods to decompile and commit (ADR-0013).</summary>
 internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
 
-/// <summary>A mod by name, the folder its repository goes in, and the mod manager's own files in its folder, by
-/// forward-slash path, which no build makes.</summary>
-internal sealed record DecompileAndCommitModRequest(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
+/// <summary>A mod by name, the folder its repository goes in, the mod manager's own files in its folder, by
+/// forward-slash path, which no build makes, its installation file and its version as its metadata says.</summary>
+internal sealed record DecompileAndCommitModRequest(
+    string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles, InstallationFileRequest? InstallationFile = null, string? Version = null);

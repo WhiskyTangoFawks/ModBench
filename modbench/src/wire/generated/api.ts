@@ -245,7 +245,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a manifest naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
+        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files its installation file does not yield with their bytes as its assets, and a manifest naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
         post: operations["DecompileAndCommitMod"];
         delete?: never;
         options?: never;
@@ -1248,11 +1248,13 @@ export interface components {
             name: string;
             sourceFolder: string;
             metadataFiles: string[];
+            installationFile?: components["schemas"]["InstallationFileRequest"] | null;
+            version?: string | null;
         };
         /** @enum {string} */
         DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
         /** @enum {string} */
-        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "ManifestNamesGameFolder" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         DecompileAndCommitRefused: {
             item: string;
             refusal: components["schemas"]["DecompileAndCommitRefusal"];
