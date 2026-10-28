@@ -12,7 +12,7 @@ async function shortcutsUnder(steamRoot: string): Promise<Shortcut[]> {
   const users = join(steamRoot, 'userdata');
   const found: Shortcut[] = [];
   for (const user of await readOrAbsent(() => readdir(users, { withFileTypes: true }), [])) {
-    if (user.isDirectory()) found.push(...await shortcutsAt(join(users, user.name, 'config', 'shortcuts.vdf')));
+    if (user.isDirectory() || user.isSymbolicLink()) found.push(...await shortcutsAt(join(users, user.name, 'config', 'shortcuts.vdf')));
   }
   return found;
 }
