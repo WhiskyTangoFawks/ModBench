@@ -3,7 +3,7 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
 /** How long a built mod's plugins have to reach the record index. mEdit indexes a large plugin in seconds. */
-export const LOAD_ORDER_WAIT_MS = 120_000;
+const LOAD_ORDER_WAIT_MS = 120_000;
 
 interface Deps {
   client: Pick<MEditClient, 'loadOrderStatus' | 'onLoadOrderStatus'>;
