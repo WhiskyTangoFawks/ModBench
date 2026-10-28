@@ -20,7 +20,7 @@ export interface Changes {
   readonly links: readonly Link[];
 }
 
-export interface Undo {
+interface Undo {
   readonly left: string;
   readonly run: () => Promise<void>;
 }

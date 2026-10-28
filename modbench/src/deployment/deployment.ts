@@ -24,7 +24,7 @@ export interface PluginOrder {
 }
 
 /** `renamedTo` names the file deploy found where the game reads plugins.txt and renamed. */
-export type PluginsTxtDeployed =
+type PluginsTxtDeployed =
   | { readonly kind: 'written'; readonly renamedTo?: string }
   | { readonly kind: 'unchanged' }
   | { readonly kind: 'notWritten'; readonly why: string };

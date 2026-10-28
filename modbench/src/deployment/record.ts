@@ -19,7 +19,7 @@ export interface WrittenPluginsTxt {
 }
 
 /** What deploy wrote for one deployment folder. */
-export interface Recorded {
+interface Recorded {
   readonly files: readonly Written[];
   readonly pluginsTxt?: WrittenPluginsTxt;
 }

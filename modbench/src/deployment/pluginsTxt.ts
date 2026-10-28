@@ -18,13 +18,13 @@ interface Settles {
   settle(): Promise<string[]>;
 }
 
-export interface UnchangedPluginsTxt extends Settles {
+interface UnchangedPluginsTxt extends Settles {
   readonly kind: 'unchanged';
   /** The file a killed deploy wrote and never recorded, which is deploy's. */
   readonly adopted?: WrittenPluginsTxt;
 }
 
-export interface WritePluginsTxt extends Settles {
+interface WritePluginsTxt extends Settles {
   readonly kind: 'write';
   readonly step: Step;
   /** What the step wrote, once it has. */
