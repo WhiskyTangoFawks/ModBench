@@ -39,26 +39,27 @@ const WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD: InstanceAnswers = {
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
-interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks}
+interface Wiring { instanceRoot?: string; nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks}
 
 function commandsOver(
   answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
-  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks() }: Wiring = {},
+  { instanceRoot = '/', nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks() }: Wiring = {},
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
-    client, adapter: { ...adapter.adapter, ...adapterOver }, nexus, instanceRoot: '/instance',
+    client, adapter: { ...adapter.adapter, ...adapterOver }, nexus, instanceRoot,
     hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks,
   });
   return { commands, client, adapter, repositories };
 }
 
 const commandsWired = (wiring: Wiring, answers: InstanceAnswers = {}) => commandsOver(answers, new InMemoryMEditClient(), {}, readingOf(), wiring);
+const instanceOver = (answers: InstanceAnswers = {}) => commandsWired({ instanceRoot: '/instance' }, answers);
 
 describe('modlistRepositoryCommands git init', () => {
   it('writes the ignore list, makes the instance folder a repository, then makes it refuse a push of a pin its remote lacks and hold paths by path tokens', async () => {
-    const { commands, adapter, repositories } = commandsOver();
+    const { commands, adapter, repositories } = instanceOver();
 
     const result = await commands.gitInit();
 
@@ -68,13 +69,13 @@ describe('modlistRepositoryCommands git init', () => {
   });
 
   it('names why a path token stays in the working tree beside the repository it made', async () => {
-    const { commands } = commandsOver({ pathTokenLeft: 'ModOrganizer.ini still holds a path token' });
+    const { commands } = instanceOver({ pathTokenLeft: 'ModOrganizer.ini still holds a path token' });
 
     expect(await commands.gitInit()).toEqual({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
   });
 
   it('takes back the repository, the ignore list and the publisher\'s ignore list entries it made when the path tokens could not be written, naming why', async () => {
-    const { commands, adapter } = commandsOver({ refusals: refusing('writePathTokens', 'could not lock config file .git/config') });
+    const { commands, adapter } = instanceOver({ refusals: refusing('writePathTokens', 'could not lock config file .git/config') });
 
     expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: 'could not lock config file .git/config' },
@@ -84,7 +85,7 @@ describe('modlistRepositoryCommands git init', () => {
 
   describe('on an instance folder that holds a repository', () => {
     it('adds the ignore list, the push check and the path tokens, and makes no repository', async () => {
-      const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true });
+      const { commands, adapter, repositories } = instanceOver({ repositoryOnDisk: true });
 
       const result = await commands.gitInit();
 
@@ -94,7 +95,7 @@ describe('modlistRepositoryCommands git init', () => {
     });
 
     it('keeps another pre-push hook, names why the push check is not written, and still writes the path tokens', async () => {
-      const { commands, adapter } = commandsOver({
+      const { commands, adapter } = instanceOver({
         repositoryOnDisk: true, refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push already exists'),
       });
 
@@ -105,7 +106,7 @@ describe('modlistRepositoryCommands git init', () => {
     });
 
     it('takes back the push check and the ignore list it added, and not the repository, when the path tokens could not be written', async () => {
-      const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
+      const { commands, adapter, repositories } = instanceOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
 
       expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
         { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens', 'takeBackKeepOutOfPublisher', 'takeBackPushRefusal', 'takeBackIgnoreList'],
@@ -114,7 +115,7 @@ describe('modlistRepositoryCommands git init', () => {
   });
 
   it('takes back everything before the publisher\'s ignore list when it could not be written', async () => {
-    const { commands, repositories, adapter } = commandsOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json cannot be written') });
+    const { commands, repositories, adapter } = instanceOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json cannot be written') });
 
     expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: 'compiler_settings.json cannot be written' }, ['uri:/instance'],
@@ -123,19 +124,19 @@ describe('modlistRepositoryCommands git init', () => {
   });
 
   it('refuses before it writes anything when the publisher\'s configuration cannot be read, naming why', async () => {
-    const { commands, repositories, adapter } = commandsOver({ unreadablePublisher: 'compiler_settings.json is not JSON' });
+    const { commands, repositories, adapter } = instanceOver({ unreadablePublisher: 'compiler_settings.json is not JSON' });
 
     expect([await commands.gitInit(), repositories, adapter.calls]).toEqual([{ applied: false, refusal: 'compiler_settings.json is not JSON' }, [], [{ verb: 'checkPushRefusalFree' }]]);
   });
 
   it('makes no repository when the ignore list could not be written, and says why', async () => {
-    const { commands, repositories } = commandsOver({ refusals: refusing('writeIgnoreList', '/instance/.gitignore already exists') });
+    const { commands, repositories } = instanceOver({ refusals: refusing('writeIgnoreList', '/instance/.gitignore already exists') });
 
     expect([await commands.gitInit(), repositories]).toEqual([{ applied: false, refusal: '/instance/.gitignore already exists' }, []]);
   });
 
   it('refuses before it writes anything when the push refusal has no free place, naming why', async () => {
-    const { commands, adapter, repositories } = commandsOver({ refusals: refusing('checkPushRefusalFree', '/instance/.git/hooks/pre-push already exists') });
+    const { commands, adapter, repositories } = instanceOver({ refusals: refusing('checkPushRefusalFree', '/instance/.git/hooks/pre-push already exists') });
 
     expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' }, [], ['checkPushRefusalFree'],
@@ -143,7 +144,7 @@ describe('modlistRepositoryCommands git init', () => {
   });
 
   it('takes back the repository and the ignore list it made when the push refusal could not be written, naming why', async () => {
-    const { commands, adapter, repositories } = commandsOver({ refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push already exists') });
+    const { commands, adapter, repositories } = instanceOver({ refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push already exists') });
 
     expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' },
@@ -152,7 +153,7 @@ describe('modlistRepositoryCommands git init', () => {
   });
 
   it('names the repository that remains when it could not be taken back', async () => {
-    const { commands } = commandsOver({
+    const { commands } = instanceOver({
       refusals: (call) => ({ refuseUnpublishedPins: 'a hook is there', removeRepository: 'read-only folder' })[call.verb as string],
     });
 
@@ -898,6 +899,49 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect([sentNames(client), outcome]).toEqual([
       [['ModB']], { applied: true, landed: [restoredMod({ mod: 'ModB' })], refused: [{ item: 'ModA', reason: 'its name gives it no folder' }] },
     ]);
+  });
+
+  describe('a folder outside the instance, shared or nested', () => {
+    const foldersOf = (folders: Record<string, string>): Partial<InstanceAdapter> =>
+      ({ modFolderPath: (mod) => Promise.resolve(folders[mod]) });
+    const restoreWith = async (folders: Record<string, string>, others: OtherManifest[] = []) => {
+      const { commands, client } = commandsWired({ instanceRoot: '/instance', adapterOver: foldersOf(folders) });
+      client.setCommandHandler('restoreFromManifest', (mods) =>
+        Promise.resolve({ landed: sentNamesOf(mods).map((mod) => restoredMod({ mod })), refused: [], notFound: [] }));
+      const outcome = await commands.restoreFromManifest(Object.keys(folders), {}, true, others);
+      return { sent: sentNames(client), refused: outcome.applied ? outcome.refused : [] };
+    };
+
+    it('refuses a mod whose folder is outside the instance folder, naming it, and restores the rest', async () => {
+      expect(await restoreWith({ ModA: '/elsewhere/ModA', ModB: '/instance/mods/ModB' })).toEqual({
+        sent: [['ModB']], refused: [{ item: 'ModA', reason: "its folder '/elsewhere/ModA' is outside the instance folder" }],
+      });
+    });
+
+    it('refuses two manifests that build one folder, each naming the other, and restores the rest', async () => {
+      expect(await restoreWith({ ModA: '/instance/mods/Same', ModB: '/instance/mods/same', ModC: '/instance/mods/ModC' })).toEqual({
+        sent: [['ModC']],
+        refused: [{ item: 'ModA', reason: "its folder is also built by 'ModB'" }, { item: 'ModB', reason: "its folder is also built by 'ModA'" }],
+      });
+    });
+
+    it("refuses a manifest whose folder is inside another's and the manifest whose folder holds it", async () => {
+      expect(await restoreWith({ ModA: '/instance/Stock Game/Data/ModA', ModB: '/instance/mods/ModB' }, [STOCK_GAME])).toEqual({
+        sent: [['ModB']],
+        refused: [
+          { item: 'ModA', reason: "its folder is inside the folder of 'Stock Game/'" },
+          { item: 'Stock Game/', reason: "its folder holds the folder of 'ModA'" },
+        ],
+      });
+    });
+
+    it('asks what restore destroys of none of them', async () => {
+      const { commands, client } = commandsWired({ instanceRoot: '/instance', adapterOver: foldersOf({ ModA: '/elsewhere/ModA' }) });
+
+      expect([await commands.whatRestoreDestroys(['ModA']), client.calls]).toEqual([
+        { destroys: [], refused: [{ item: 'ModA', reason: "was skipped: its folder '/elsewhere/ModA' is outside the instance folder." }] }, [],
+      ]);
+    });
   });
 
   it('names every mod of a call that failed part way as not finished, since none had its files no line names trashed', async () => {

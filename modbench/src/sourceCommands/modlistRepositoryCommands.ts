@@ -2,6 +2,7 @@ import {
   isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type ModRestoreDestroys, type NotFound, type ManifestMetadata,
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
+import { refusedFolders } from './refusedFolders';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, OtherManifest, SourceMods, SteamDepot } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
@@ -357,6 +358,18 @@ async function restoreChunk(
 const notFinishedAfter = (why: string) => (item: string): ItemRefusal<string> =>
   ({ item, reason: `was not finished: ${why.replace(/\.$/, '')}. Restoring it again finishes it.` });
 
+async function withoutRefusedFolders(
+  { instanceRoot }: ModlistRepositoryCommandsDeps, names: readonly string[], folders: Folders,
+): Promise<{ allowed: string[]; refused: ItemRefusal<string>[] }> {
+  const folderOf = new Map<string, string>();
+  for (const name of names) {
+    const folder = await folders.of(name);
+    if (folder !== undefined) folderOf.set(name, folder);
+  }
+  const why = refusedFolders(instanceRoot, folderOf);
+  return { allowed: names.filter((name) => !why.has(name)), refused: [...why].map(([item, reason]) => ({ item, reason })) };
+}
+
 async function restoreFromManifest(
   deps: ModlistRepositoryCommandsDeps, asked: readonly string[], options: ModlistCallOptions<RestoreStatus>, everyManifest: boolean, others: readonly OtherManifest[],
 ): Promise<RestoreResult> {
@@ -364,13 +377,14 @@ async function restoreFromManifest(
   const cloned = await submodulesCloned(deps, options.onProgress);
   const sourceMods = await deps.adapter.sourceMods();
   const folders = foldersOf(deps.adapter, others);
-  const mods = await inModOrder(deps.adapter, namesOf(everyManifest ? withEverySourceMod(asked, sourceMods) : asked, others));
+  const ordered = await inModOrder(deps.adapter, namesOf(everyManifest ? withEverySourceMod(asked, sourceMods) : asked, others));
+  const { allowed: mods, refused: refusedFolder } = await withoutRefusedFolders(deps, ordered, folders);
   const place = new Map(mods.map((mod, at) => [mod, at]));
   const rank = (mod: string): number => place.get(mod) ?? 0;
   const chunks = chunksOf(mods, (mod) => sourceMods.folderOf(mod) !== undefined);
 
   const landed: Restored[number][] = [];
-  const refused: ItemRefusal<string>[] = [...cloned.refused];
+  const refused: ItemRefusal<string>[] = [...cloned.refused, ...refusedFolder];
   let cancelRefusal: string | undefined;
   const pending: string[] = [];
   const notIndexed = new Map<string, string>();
@@ -727,8 +741,9 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     whatRestoreDestroys: async (mods: readonly string[], others: readonly OtherManifest[] = []): Promise<WhatRestoreDestroys> => {
       const folders = foldersOf(adapter, others);
       const asked: ModByFolder[] = [];
-      const skipped: ItemRefusal<string>[] = [];
-      for (const folder of await byFolder(adapter, namesOf(mods, others), folders)) {
+      const { allowed, refused } = await withoutRefusedFolders(deps, namesOf(mods, others), folders);
+      const skipped: ItemRefusal<string>[] = refused.map(({ item, reason }) => ({ item, reason: `was skipped: ${reason}.` }));
+      for (const folder of await byFolder(adapter, allowed, folders)) {
         if (!folders.isMod(folder.name)) { asked.push(folder); continue; }
         const held = await adapter.modMetadata(folder.name);
         if (held.kind === 'unreadable') skipped.push({ item: folder.name, reason: `was skipped: ${metadataUnreadable(held.reason)}.` });
