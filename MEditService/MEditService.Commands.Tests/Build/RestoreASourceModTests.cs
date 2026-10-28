@@ -108,6 +108,35 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
+    public async Task ASourceModWithNoHost_WhoseInstallationFileTheRequestDidNotHand_IsNotFound_NamingIt_ThenSkippedForNoHostAloneOnceHanded()
+    {
+        Directory.CreateDirectory(SourceFolder);
+        File.WriteAllText(
+            Path.Combine(SourceFolder, "Mod.manifest.json"),
+            "{\"output\": \"Mod\", \"packages\": [{\"repository\": \"Mod\"}, {\"installationFile\":\"Pack.zip\",\"size\":1,\"hash\":\"HASH\"}], "
+            + "\"files\": [{\"path\":\"textures/a.dds\"}]}");
+        var pack = DownloadedZip.WritePack(Path.Combine(_root, "downloads"), ("textures/a.dds", "from the pack"));
+
+        var asked = Assert.Single((await Restore(pin: null)).Refused);
+        Assert.Equal(RestoreRefusal.NotFound, asked.Refusal);
+        Assert.Equal("Pack.zip", Assert.Single(asked.InstallationFilesNotFound).Name);
+
+        var skipped = Assert.Single((await Restore(pin: null, installationFiles: [pack])).Refused);
+        Assert.Equal((RestoreRefusal.NoHost, "was skipped: its package has no host."), (skipped.Refusal, skipped.Message));
+    }
+
+    [Fact]
+    public async Task ASourceModWhoseFolderIsNotMadeYet_IsBuiltIntoIt()
+    {
+        Directory.Delete(ModFolder, recursive: true);
+
+        var restored = Assert.Single((await Restore(_first)).Applied);
+
+        Assert.Equal(["meshes/c.nif"], restored.Written);
+        Assert.Equal("first", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif")));
+    }
+
+    [Fact]
     public async Task TheRebuild_WritesAManifestNamingTheSubmodule_WithTheVersionItsManifestHeld()
     {
         var versioned = Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\", \"version\": \"1.2.3\"}]}", "c");
