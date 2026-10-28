@@ -32,7 +32,6 @@ interface ModlistRepositoryCommandsDeps {
   hostGit: HostGit<unknown>;
   trash: MoveToTrash;
   tasks: StepTasks;
-  loadOrderWaitMs?: number;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -277,8 +276,7 @@ async function restoreChunk(
   const landed = [...restored.landed].sort((a, b) => rank(a.mod) - rank(b.mod));
   const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(landed, sourceMods, cloned));
   const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
-  const indexed = await withPluginsIndexed(deps, stepped.finished);
-  return { restored, finished: indexed.finished, unfinished: [...trashed.unfinished, ...stepped.unfinished, ...indexed.unfinished], notIndexed: indexed.unfinished };
+  return { restored, finished: stepped.finished, unfinished: [...trashed.unfinished, ...stepped.unfinished] };
 }
 
 const notFinishedAfter = (why: string) => (item: string): ItemRefusal<string> =>
@@ -298,18 +296,24 @@ async function restoreFromManifest(
   const landed: Restored[number][] = [];
   const refused: ItemRefusal<string>[] = [...cloned.refused];
   let cancelRefusal: string | undefined;
+  const pending: string[] = [];
+  const notIndexed = new Map<string, string>();
   for (const [at, chunk] of chunks.entries()) {
     if (options.signal?.aborted) break;
-    const { restored, finished, unfinished, notIndexed } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
+    // mods.md, Build, story 11: a source mod's script reads the plugins of the mods restored before it in the load order.
+    if (sourceMods.folderOf(chunk[0] ?? '') !== undefined) {
+      for (const mod of pending.splice(0)) {
+        const why = await whyNotIndexed(deps, mod, options.signal);
+        if (why !== undefined) notIndexed.set(mod, why);
+      }
+    }
+    const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
     landed.push(...finished);
     if (restored.applied) {
       refused.push(...restored.refused, ...unfinished);
       cancelRefusal = restored.cancelRefusal ?? cancelRefusal;
-      const waited = notIndexed[0];
-      if (waited === undefined) continue;
-      const why = waited.reason.replace(/^was not finished: /, '').replace(/\. Restoring it again finishes it\.$/, '');
-      refused.push(...chunks.slice(at + 1).flat().map(notFinishedAfter(why)));
-      break;
+      pending.push(...finished.map(({ mod }) => mod));
+      continue;
     }
     const later = chunks.slice(at + 1).flat();
     const unfinishedNames = [...restored.unfinished, ...unfinished.map(({ item }) => item), ...later];
@@ -318,9 +322,10 @@ async function restoreFromManifest(
     break;
   }
   const pushRefusalNotWritten = await pushRefusalWrittenOrWhy(deps.adapter);
-  const answered = { landed, refused };
+  refused.push(...[...notIndexed].map(([item, why]) => ({ item, reason: `was restored, but ${why}` })));
+  const answered = { landed: landed.filter(({ mod }) => !notIndexed.has(mod)), refused };
   return {
-    applied: true, landed, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, answered)] : refused,
+    applied: true, landed: answered.landed, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, answered)] : refused,
     ...(cancelRefusal === undefined ? {} : { cancelRefusal }),
     ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
     ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),
@@ -366,21 +371,6 @@ async function withFilesNoLineNamesTrashed(
   }
   return { finished, unfinished };
 }
-
-// mods.md, Build, story 11: the next mod's script reads these plugins in the load order, so the first that does not reach the
-// record index in time stops the restore there.
-async function withPluginsIndexed(
-  { client, adapter, loadOrderWaitMs }: ModlistRepositoryCommandsDeps, landed: Restored,
-): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
-  for (const [at, { mod }] of landed.entries()) {
-    const why = await whyNotIndexed({ client, adapter, loadOrderWaitMs }, mod);
-    if (why !== undefined) return { finished: landed.slice(0, at), unfinished: landed.slice(at).map((left) => notFinishedAfterIndexing(left.mod, mod, why)) };
-  }
-  return { finished: landed, unfinished: [] };
-}
-
-const notFinishedAfterIndexing = (item: string, waited: string, why: string): ItemRefusal<string> =>
-  ({ item, reason: `was not finished: ${item === waited ? 'its' : `${waited}'s`} ${why}. Restoring it again finishes it.` });
 
 // modlist-repository.md, The manifest, story 17: restore runs a mod's steps once its folder holds what its packages give.
 async function withRestoredStepsRun(

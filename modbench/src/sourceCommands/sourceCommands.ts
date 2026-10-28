@@ -16,7 +16,6 @@ interface SourceCommandsDeps {
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
-  loadOrderWaitMs?: number;
 }
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
@@ -26,7 +25,7 @@ export const metadataUnreadable = (reason: string): string => `its metadata coul
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter, saveUnsaved, tasks, loadOrderWaitMs }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCommandsDeps) {
   const buildMod = async (mod: string, sourceFolder: string | undefined): Promise<BuildMod | ItemRefusal<string>> => {
     const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
     if (unsaved.length > 0) return unsavedRefusal(mod, unsaved);
@@ -93,26 +92,30 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, loadOrderW
         exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder,
         tasks: [...await tasks.labels()],
       };
-      const landed: BuildOutcome['landed'][number][] = [];
+      let landed: BuildOutcome['landed'][number][] = [];
       const refused: ItemRefusal<string>[] = [];
       const ordered = await inModOrder(adapter, mods);
+      let previous: string | undefined;
       for (const [at, mod] of ordered.entries()) {
         const decided = await buildMod(mod, sourceMods.folderOf(mod));
         if ('reason' in decided) { refused.push(decided); continue; }
+        // mods.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
+        const why = previous === undefined ? undefined : await whyNotIndexed({ client, adapter }, previous);
+        if (previous !== undefined && why !== undefined) {
+          const waited = previous;
+          landed = landed.map((built) => (built.mod === waited ? { ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` } : built));
+          refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${waited}'s ${why}` })));
+          break;
+        }
         const outcome = await builtWhole(decided, facts);
         if (isRefused(outcome)) {
           if (landed.length === 0 && refused.length === 0) return outcome;
           refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${outcome.message}` })));
           break;
         }
+        landed.push(...outcome.landed);
         refused.push(...outcome.refused);
-        // mods.md, Build, story 11: the next mod's script reads this mod's plugins in the load order.
-        const why = outcome.landed.length === 0 ? undefined : await whyNotIndexed({ client, adapter, loadOrderWaitMs }, mod);
-        landed.push(...(why === undefined ? outcome.landed : outcome.landed.map((built) => ({ ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` }))));
-        if (why !== undefined) {
-          refused.push(...ordered.slice(at + 1).map((item) => ({ item, reason: `was not built: ${mod}'s ${why}` })));
-          break;
-        }
+        previous = outcome.landed.length === 0 ? undefined : mod;
       }
       return { landed, refused };
     },

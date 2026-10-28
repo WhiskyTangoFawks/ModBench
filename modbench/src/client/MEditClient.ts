@@ -358,7 +358,6 @@ export interface MEditClient {
   getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not opened would read as no dependant.
   getPluginDependants(plugin: PluginAddress): Promise<PluginDependants | ReadFailed>;
-  /** Whether mEdit's rows for the plugin were built from the file now on disk (ADR-0003); false for a plugin it holds no rows for. */
   isPluginIndexedAsOnDisk(plugin: PluginAddress): Promise<boolean | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed>;

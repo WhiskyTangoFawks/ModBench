@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
@@ -11,68 +11,70 @@ const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name
 const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [] });
 const savedAll = () => Promise.resolve([]);
 
-const indexedAsOnDisk = (client: InMemoryMEditClient, as: boolean): void => {
-  client.setQueryAnswer('isPluginIndexedAsOnDisk', as);
-  client.emit(loadOrderStatusEventFixture({ indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }] }));
-};
-
 const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const client = new InMemoryMEditClient();
   client.setCommandHandler('build', (sent: readonly BuildMod[]) => Promise.resolve({ landed: sent.map(({ name }) => builtOf(name)), refused: [] }));
   const adapter = fakeInstanceAdapter(readingFixture({ mods: [...ORDER], sourceMods: sourceModsOf(SOURCES), ...mods })).adapter;
-  const built = (waitMs = 1_000) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), loadOrderWaitMs: waitMs }).build(['ModA', 'ModB']);
+  const built = (mods: readonly string[] = ['ModA', 'ModB']) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(mods);
   return { client, built };
 };
 const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.filter((call) => call.method === 'build').map((call) => JSON.stringify(call.args[0]).match(/"name":"(\w+)"/)?.[1]);
-const pause = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 10); });
+const askedOfMEdit = (client: InMemoryMEditClient): unknown[] => client.calls.filter((call) => call.method === 'isPluginIndexedAsOnDisk').map((call) => call.args[0]);
 
 describe('sourceCommands build, between mods', () => {
   const modBHoldsPlugin = pluginFilesHeld({ origin: { kind: 'mod', name: 'ModB' }, name: 'B.esp' });
-  const bInTheIndex = { name: 'B.esp', origin: 'ModB' };
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
 
   it('builds the next mod once mEdit holds the plugins the built mod\'s folder gives the load order as they are on disk', async () => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
     client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
 
     const outcome = built();
-    await pause();
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(builtMods(client)).toEqual(['ModB']);
-    indexedAsOnDisk(client, true);
+    client.setQueryAnswer('isPluginIndexedAsOnDisk', true);
+    client.emit(loadOrderStatusEventFixture());
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
-    expect(client.calls.filter((call) => call.method === 'isPluginIndexedAsOnDisk').map((call) => call.args[0])).toContainEqual(bInTheIndex);
+    expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' });
   });
 
-  it('waits for a rerun plugin of a name the record index already holds, as the file it read before', async () => {
-    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
-    client.emit(loadOrderStatusEventFixture({ indexedPlugins: [bInTheIndex] }));
-    client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
-
-    const outcome = await built(20);
-
-    expect(builtMods(client)).toEqual(['ModB']);
-    expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA' }] });
-  });
-
-  it('builds the next mod at once when mEdit already holds the plugins as on disk, and when the built mod gives none', async () => {
-    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+  it.each<[string, ReturnType<typeof pluginFilesHeld>, boolean]>([
+    ['mEdit already holds the plugins as on disk', modBHoldsPlugin, true],
+    ['the built mod gives no plugin', pluginFilesHeld(), false],
+  ])('builds the next mod at once when %s', async (_case, mods, asked) => {
+    const { client, built } = buildingModBThenModA(mods);
     client.setQueryAnswer('isPluginIndexedAsOnDisk', true);
-    expect(await built()).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
 
-    const none = buildingModBThenModA(pluginFilesHeld());
-    expect(await none.built()).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+    expect(await built()).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+    expect(askedOfMEdit(client).length > 0).toBe(asked);
   });
 
-  it('lands a mod whose plugin never reaches the record index as on disk, naming it, and refuses the mods after it', async () => {
+  it('asks nothing after the last mod, whether it is one of several or alone', async () => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
     client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
 
-    const outcome = await built(20);
+    const alone = await built(['ModB']);
+
+    expect(askedOfMEdit(client)).toEqual([]);
+    expect(alone).toEqual({ landed: [builtOf('ModB')], refused: [] });
+  });
+
+  it.each<[string, boolean | { failed: 'refused'; refusal: string }, string]>([
+    ['never reaches the record index as on disk', false, 'plugin B.esp did not reach the record index within 120 seconds'],
+    ['mEdit cannot say', { failed: 'refused', refusal: 'mEdit cannot say.' }, 'mEdit cannot say.'],
+  ])('lands a mod whose plugin %s, naming why, and refuses the mods after it', async (_case, answer, why) => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+    client.setQueryAnswer('isPluginIndexedAsOnDisk', answer);
+
+    const outcome = built();
+    await vi.advanceTimersByTimeAsync(121_000);
 
     expect(builtMods(client)).toEqual(['ModB']);
-    expect(outcome).toMatchObject({
-      landed: [{ mod: 'ModB', failure: expect.stringContaining('B.esp') as unknown }],
-      refused: [{ item: 'ModA', reason: expect.stringMatching(/^was not built: .*B\.esp/) as unknown }],
+    expect(await outcome).toMatchObject({
+      landed: [{ mod: 'ModB', failure: expect.stringContaining(why) as unknown }],
+      refused: [{ item: 'ModA', reason: expect.stringContaining(`was not built: ModB's plugin B.esp`) as unknown }],
     });
   });
 });

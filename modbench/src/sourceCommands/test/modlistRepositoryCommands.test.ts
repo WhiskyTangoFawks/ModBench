@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { StepTasks } from '../steps';
 import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -31,17 +31,17 @@ const loggedOutOfNexus = (): Nexus => nexusAnswering(answeringFrom({})).nexus;
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
-interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks; loadOrderWaitMs?: number }
+interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks}
 
 function commandsOver(
   answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
-  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks(), loadOrderWaitMs }: Wiring = {},
+  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks() }: Wiring = {},
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
     client, adapter: { ...adapter.adapter, ...adapterOver }, nexus, instanceRoot: '/instance',
-    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks, loadOrderWaitMs,
+    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks,
   });
   return { commands, client, adapter, repositories };
 }
@@ -921,42 +921,68 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   describe('between mods', () => {
-    const order = ['ModA', 'ModB'].map((name) => ({ kind: 'mod', name, enabled: true }) as const);
-    const modBPlugin = { origin: { kind: 'mod', name: 'ModB' }, name: 'B.esp' } as const;
-    const restoringWith = (loadOrderWaitMs: number) => {
-      const wired = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf({ ModA: '/source/ModA', ModB: '/source/ModB' }), mods: [...order], ...pluginFilesHeld(modBPlugin) }, { loadOrderWaitMs });
+    const order = ['ModA', 'ModB', 'ModC'].map((name) => ({ kind: 'mod', name, enabled: true }) as const);
+    const modCPlugin = { origin: { kind: 'mod', name: 'ModC' }, name: 'C.esp' } as const;
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+    const restoring = () => {
+      const wired = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf({ ModA: '/source/ModA', ModC: '/source/ModC' }), mods: [...order], ...pluginFilesHeld(modCPlugin) });
       const sent: string[] = [];
       wired.client.setCommandHandler('restoreFromManifest', (mods) => {
         sent.push(...sentNamesOf(mods));
         return Promise.resolve({ landed: sentNamesOf(mods).map((mod) => restoredMod({ mod })), refused: [], notFound: [] });
       });
-      return { ...wired, sent };
+      return { ...wired, sent, asked: () => wired.client.calls.filter((call) => call.method === 'isPluginIndexedAsOnDisk').map((call) => call.args[0]) };
     };
 
-    it('hands mEdit the next mod once the record index holds the plugins of the one restored', async () => {
-      const { commands, client, sent } = restoringWith(1_000);
+    it('hands mEdit the next source mod once the record index holds the plugins of the mod restored before it', async () => {
+      const { commands, client, sent } = restoring();
       client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
 
-      const outcome = commands.restoreFromManifest(['ModA', 'ModB']);
-      await new Promise((resolve) => { setTimeout(resolve, 10); });
-      expect(sent).toEqual(['ModB']);
+      const outcome = commands.restoreFromManifest(['ModA', 'ModC']);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(sent).toEqual(['ModC']);
       client.setQueryAnswer('isPluginIndexedAsOnDisk', true);
-      client.emit(loadOrderStatusEventFixture({ indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }] }));
+      client.emit(loadOrderStatusEventFixture());
 
-      expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+      expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModC' }, { mod: 'ModA' }] });
     });
 
-    it('answers a mod whose plugin never reaches the record index as not finished, and the mods after it as not finished', async () => {
-      const { commands, client, sent } = restoringWith(20);
+    it('answers a mod whose plugin never reaches the record index with the reason, and restores the rest', async () => {
+      const { commands, client, sent } = restoring();
       client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
 
-      const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
+      const outcome = commands.restoreFromManifest(['ModA', 'ModB', 'ModC']);
+      await vi.advanceTimersByTimeAsync(121_000);
 
-      expect(sent).toEqual(['ModB']);
-      expect(outcome).toMatchObject({
-        applied: true, landed: [],
-        refused: [{ item: 'ModB', reason: expect.stringMatching(/^was not finished: .*B\.esp/) as unknown }, { item: 'ModA', reason: expect.stringMatching(/^was not finished: .*B\.esp/) as unknown }],
+      expect(sent).toEqual(['ModC', 'ModB', 'ModA']);
+      expect(await outcome).toMatchObject({
+        applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }],
+        refused: [{ item: 'ModC', reason: 'was restored, but plugin C.esp did not reach the record index within 120 seconds' }],
       });
+    });
+
+    it('waits for no mod after the last, or before a mod that is not a source mod', async () => {
+      const { commands, client, asked } = restoring();
+      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
+
+      const outcome = await commands.restoreFromManifest(['ModB', 'ModC']);
+
+      expect(asked()).toEqual([]);
+      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModC' }, { mod: 'ModB' }], refused: [] });
+    });
+
+    it('stops waiting when the restore is cancelled, and names the mods it did not finish', async () => {
+      const { commands, client } = restoring();
+      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
+      const cancel = new AbortController();
+
+      const outcome = commands.restoreFromManifest(['ModA', 'ModC'], { signal: cancel.signal });
+      await vi.advanceTimersByTimeAsync(1_000);
+      cancel.abort();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModC' }], refused: [{ item: 'ModA', reason: expect.stringContaining('cancelled') as unknown }] });
     });
   });
 

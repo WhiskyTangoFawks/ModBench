@@ -61,8 +61,9 @@ internal static class PluginEndpoints
             .WithName("GetPluginIndexedAsOnDisk")
             .WithTags(Tag)
             .WithDescription(
-                "Whether the record index's rows for the plugin were built from the file now on disk; " +
-                "false when the file changed since, or the record index holds no rows for it.")
+                "Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003). " +
+                "False when the file changed since, or the record index holds no rows for it; true when no file " +
+                "claim backs the rows, as for a compiled plugin read from its source.")
             .Produces<bool>()
             .ProducesProblem(400)
             .ProducesProblem(503);
