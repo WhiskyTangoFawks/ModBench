@@ -302,6 +302,15 @@ describe('modbench.mod.build', () => {
       expect([...diagnostics]).toEqual([]);
     });
 
+    it('with no mods named, builds every source in the source folder without the pick', async () => {
+      const { handler } = registered({ landed: [built('ModA'), built('ModB'), built('ModS')], refused: [] });
+
+      await handler(new AgentCall([], {}));
+
+      expect(builds).toEqual([SOURCE_MODS]);
+      expect(showQuickPick).not.toHaveBeenCalled();
+    });
+
     it('sends every named mod to source commands, and answers the refusal they name', async () => {
       const { handler } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
 

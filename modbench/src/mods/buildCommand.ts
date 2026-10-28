@@ -39,7 +39,9 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
       const mods = await pickSourceMods(deps.sourceModNames());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view };
     },
-    fromAgent: ({ argument }) => givenByAgent(argument),
+    fromAgent: ({ argument }) => (argument.length === 0
+      ? { mods: [...deps.sourceModNames()], refusedRows: [], invokedFrom: MODS_KEY_ARGS.view }
+      : givenByAgent(argument)),
     run: (given) => buildMods(deps, given),
     report: (result) => reportBuildResult(deps.reporter, result),
   };
