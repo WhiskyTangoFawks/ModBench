@@ -193,9 +193,8 @@ internal static class ManifestEndpoints
 internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, GameFolderRequest? GameFolder, string? Gesture);
 
-/// <summary>The game folder by the game's name and its Data folder, with the game files at the paths of the mods' files, none
-/// when the Instance adapter did not find it. Elsewhere lists the other places that hold game files, the Steam install
-/// when it is not the game folder (ADR-0013).</summary>
+/// <summary>The game folder by the game's name and Data folder, with the game files at the paths of the mods' files, none
+/// when not found. Elsewhere is the Steam install when it is another place (ADR-0013).</summary>
 internal sealed record GameFolderRequest(string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null)
 {
     internal bool IsWhole =>
