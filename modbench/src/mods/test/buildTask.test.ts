@@ -5,7 +5,7 @@ vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule
 import { executeCommand, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { BuildOutcome } from '../../client';
-import { AgentCall, type PartialFailure } from '../../drivingLib/agentGesture';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerBuildTask } from '../buildTask';
 
 type Landed = BuildOutcome['landed'][number];
@@ -37,10 +37,7 @@ describe('the build task', () => {
   });
 
   it('passes when the build only warned, and writes the warning to the terminal and the Output', async () => {
-    const warning: PartialFailure = { message: 'Build overwrote 1 file that differed.', detail: '"a.txt (ModA)"', severity: 'warning' };
-    const answered = { applied: true, outcome: { landed: [landed({ overwritten: ['a.txt'] })], refused: [] }, partial: [warning] };
-
-    const { written, closedWith, reporter } = await build(DEFINITION, answered);
+    const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ overwritten: ['a.txt'] })], refused: [] }));
 
     expect([written, closedWith, reporter.shownFailures]).toEqual([
       'Build overwrote 1 file that differed. "a.txt (ModA)"\r\nBuilt "ModA".\r\n', [0],
