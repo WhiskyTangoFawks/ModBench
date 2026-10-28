@@ -129,11 +129,10 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
       expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*EISDIR/);
     });
 
-    it('is none, and says why, when a plain file sits in userdata; Windows reports a path under a file as missing, so no user holds a shortcut', async () => {
+    it('is none, and says why, when a plain file sits in userdata, which is not a Steam user', async () => {
       await mkdir(join(steam, 'userdata'), { recursive: true });
       await writeFile(join(steam, 'userdata', 'stray'), 'x');
-      const reason = process.platform === 'win32' ? /^no non-Steam game/ : /^Steam cannot be read: .*ENOTDIR/;
-      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(reason);
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^no non-Steam game/);
     });
 
     it('is none, and says why, when libraryfolders.vdf is not a file', async () => {
