@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, OtherManifest, SourceMods, SteamDepot } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, OtherManifest, SourceMods, SteamDepot } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -138,9 +138,9 @@ interface Folders {
   readonly isMod: (name: string) => boolean;
 }
 
-function foldersOf(adapter: Adapter, others: readonly OtherManifest[]): Folders {
+function foldersOf(adapter: Adapter, others: readonly OtherManifest[], among?: readonly ModFolder[]): Folders {
   const other = new Map(others.map(({ name, folder }) => [name, folder]));
-  return { of: (name) => (other.has(name) ? Promise.resolve(other.get(name)) : adapter.modFolderPath(name)), isMod: (name) => !other.has(name) };
+  return { of: (name) => (other.has(name) ? Promise.resolve(other.get(name)) : adapter.modFolderPath(name, among)), isMod: (name) => !other.has(name) };
 }
 
 const namesOf = (mods: readonly string[], others: readonly OtherManifest[]): string[] => [...mods, ...others.map(({ name }) => name)];
@@ -359,23 +359,29 @@ const notFinishedAfter = (why: string) => (item: string): ItemRefusal<string> =>
 
 // modlist-repository.md, Restore from manifest, stories 13 and 14: a folder is compared with every manifest's, not only the
 // selection's, and two repositories that build one mod refuse the mod.
-async function refusedBeforeRestoring(
+async function foldersCompared(
   adapter: Adapter, names: readonly string[], others: readonly OtherManifest[], sourceMods: SourceMods,
-): Promise<ItemRefusal<string>[]> {
-  const found = (await otherManifestsOf(adapter)).others;
-  const every = foldersOf(adapter, [...others, ...found.filter(({ name }) => !others.some((asked) => asked.name === name))]);
-  const { mods } = await adapter.modOrder();
-  const folderOf = new Map<string, string>();
-  const known = [...mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])), ...sourceMods.folders.keys(), ...found.map(({ name }) => name), ...names];
-  for (const name of known) {
-    const folder = await every.of(name);
-    if (folder !== undefined) folderOf.set(name, folder);
+): Promise<{ folders: Folders; refused: ItemRefusal<string>[]; notSearched: readonly ItemRefusal<string>[] }> {
+  const search = await otherManifestsOf(adapter);
+  const every = [...others, ...search.others.filter(({ name }) => !others.some((asked) => asked.name === name))];
+  const { mods, modFolders } = await adapter.modOrder();
+  const folders = foldersOf(adapter, every, modFolders);
+  const otherNames = new Set(every.map(({ name }) => name));
+  const byKey = new Map<string, string>();
+  for (const name of [...names, ...mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])), ...sourceMods.folders.keys(), ...otherNames]) {
+    const key = otherNames.has(name) ? name : adapter.entryKey({ kind: 'mod', name });
+    if (!byKey.has(key)) byKey.set(key, name);
   }
+  const folderOf = new Map<string, string>();
+  await Promise.all([...byKey.values()].map(async (name) => {
+    const folder = await folders.of(name);
+    if (folder !== undefined) folderOf.set(name, folder);
+  }));
   const shared = names.flatMap((item) => {
     const builders = sourceMods.buildersOf(item);
     return builders.length === 0 ? [] : [{ item, reason: `was skipped: the repositories ${builders.map((builder) => `'${builder}'`).join(' and ')} both build it.` }];
   });
-  return [...await adapter.foldersRefused(folderOf, names), ...shared];
+  return { folders, refused: [...await adapter.foldersRefused(folderOf, names), ...shared], notSearched: search.refused };
 }
 
 async function restoreFromManifest(
@@ -384,9 +390,8 @@ async function restoreFromManifest(
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(deps.adapter);
   const cloned = await submodulesCloned(deps, options.onProgress);
   const sourceMods = await deps.adapter.sourceMods();
-  const folders = foldersOf(deps.adapter, others);
   const ordered = await inModOrder(deps.adapter, namesOf(everyManifest ? withEverySourceMod(asked, sourceMods) : asked, others));
-  const refusedFolder = await refusedBeforeRestoring(deps.adapter, ordered, others, sourceMods);
+  const { folders, refused: refusedFolder, notSearched } = await foldersCompared(deps.adapter, ordered, others, sourceMods);
   const refusedNames = new Set(refusedFolder.map(({ item }) => item));
   const mods = ordered.filter((mod) => !refusedNames.has(mod));
   const place = new Map(mods.map((mod, at) => [mod, at]));
@@ -394,7 +399,7 @@ async function restoreFromManifest(
   const chunks = chunksOf(mods, (mod) => sourceMods.folderOf(mod) !== undefined);
 
   const landed: Restored[number][] = [];
-  const refused: ItemRefusal<string>[] = [...cloned.refused, ...refusedFolder];
+  const refused: ItemRefusal<string>[] = [...cloned.refused, ...refusedFolder, ...everyManifest ? [] : notSearched];
   let cancelRefusal: string | undefined;
   const pending: string[] = [];
   const notIndexed = new Map<string, string>();
@@ -749,10 +754,9 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
 
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */
     whatRestoreDestroys: async (mods: readonly string[], others: readonly OtherManifest[] = []): Promise<WhatRestoreDestroys> => {
-      const folders = foldersOf(adapter, others);
       const asked: ModByFolder[] = [];
       const names = namesOf(mods, others);
-      const refusedFolder = await refusedBeforeRestoring(adapter, names, others, await adapter.sourceMods());
+      const { folders, refused: refusedFolder } = await foldersCompared(adapter, names, others, await adapter.sourceMods());
       const refusedNames = new Set(refusedFolder.map(({ item }) => item));
       const skipped: ItemRefusal<string>[] = [...refusedFolder];
       for (const folder of await byFolder(adapter, names.filter((name) => !refusedNames.has(name)), folders)) {

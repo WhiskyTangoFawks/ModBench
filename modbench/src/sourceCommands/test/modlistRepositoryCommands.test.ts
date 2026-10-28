@@ -906,7 +906,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const REAL_FOLDER_CHECK: Partial<InstanceAdapter> = { foldersRefused: (folders, asked) => foldersRefused('/instance', folders, asked) };
     const SHARED_OUTPUT = { ModA: ['/source/A', '/source/B'] };
 
-    it.each<[string, { folders: Record<string, string>; found?: OtherManifest[]; shared?: Record<string, readonly string[]>; asked?: string[] }, string[], { item: string; reason: string }[]]>([
+    it.each<[string, { folders: Record<string, string>; found?: OtherManifest[]; shared?: Record<string, readonly string[]>; sources?: Record<string, string>; asked?: string[] }, string[], { item: string; reason: string }[]]>([
       ['a folder outside the instance folder', { folders: { ModA: '/elsewhere/ModA', ModB: '/instance/mods/ModB' } }, ['ModB'], [{ item: 'ModA', reason: OUTSIDE }]],
       ['one folder built by two manifests', { folders: { ModA: '/instance/mods/Same', ModB: '/instance/mods/Same', ModC: '/instance/mods/ModC' } }, ['ModC'], [
         { item: 'ModA', reason: "was skipped: its folder is also built by 'ModB'." }, { item: 'ModB', reason: "was skipped: its folder is also built by 'ModA'." },
@@ -920,9 +920,10 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       ['one output built by two repositories', { folders: { ModA: '/instance/mods/ModA', ModB: '/instance/mods/ModB' }, shared: SHARED_OUTPUT }, ['ModB'], [
         { item: 'ModA', reason: "was skipped: the repositories '/source/A' and '/source/B' both build it." },
       ]],
-    ])('refuses %s and restores the rest', async (_name, { folders, found = [], shared = {}, asked }, sent, refused) => {
+      ['nothing of a source mod whose manifest spells its output as its folder does not', { folders: { Foo: '/instance/mods/Foo', foo: '/instance/mods/Foo' }, sources: { foo: '/source/foo' }, asked: ['Foo'] }, ['Foo'], []],
+    ])('refuses %s and restores the rest', async (_name, { folders, found = [], shared = {}, sources = {}, asked }, sent, refused) => {
       const { commands, client } = commandsOver(
-        { otherManifests: found }, new InMemoryMEditClient(), {}, { ...readingOf(), sourceMods: sourceModsOf({}, [], [], {}, shared) },
+        { otherManifests: found }, new InMemoryMEditClient(), {}, { ...readingOf(), sourceMods: sourceModsOf(sources, [], [], {}, shared) },
         { adapterOver: { ...REAL_FOLDER_CHECK, modFolderPath: (mod) => Promise.resolve(folders[mod]) } },
       );
       client.setCommandHandler('restoreFromManifest', (mods) =>
@@ -931,6 +932,27 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       const outcome = await commands.restoreFromManifest(asked ?? Object.keys(folders), {}, asked === undefined, asked === undefined ? found : []);
 
       expect({ sent: sentNames(client), refused: outcome.refused }).toEqual({ sent: sent.length === 0 ? [] : [sent], refused });
+    });
+
+    it('resolves every folder from the one listing of the mod folders it holds', async () => {
+      const among: unknown[] = [];
+      const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, FOUND, modFoldersOf('ModA', 'ModB')), {
+        adapterOver: { modFolderPath: (mod, listing) => { among.push(listing); return Promise.resolve(`/instance/mods/${mod}`); } },
+      });
+      client.setCommandHandler('restoreFromManifest', () => Promise.resolve({ landed: [], refused: [], notFound: [] }));
+
+      await commands.restoreFromManifest(['ModA', 'ModB']);
+
+      expect([among.length > 0, new Set(among).size, among.includes(undefined)]).toEqual([true, 1, false]);
+    });
+
+    it('names a search for other manifests that failed, beside the mods of a selection', async () => {
+      const { commands, client } = commandsOver({ unreadReads: { otherManifests: 'download_directory "%X%" could not be resolved' } });
+      client.setCommandHandler('restoreFromManifest', () => Promise.resolve({ landed: [], refused: [], notFound: [] }));
+
+      const outcome = await commands.restoreFromManifest(['ModA']);
+
+      expect(outcome.refused).toEqual([{ item: 'every other manifest', reason: 'was not searched for: download_directory "%X%" could not be resolved' }]);
     });
 
     it('carries the refusals through a restore whose first call mEdit failed', async () => {
