@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { StepTasks } from '../steps';
 import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { ManifestInstallationFile } from '../../client';
+import type { ManifestInstallationFile, ManifestStep } from '../../client';
 import type { SubmodulesCloned } from '../../client/MEditClient';
 import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
@@ -876,7 +876,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     function restoring(sources: Record<string, string>) {
       const log: string[] = [];
       const tasks = recordingTasks(['Zip']);
-      const logging = { ...tasks, whyStepsFailed: (ran: typeof steps, folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
+      const logging = { ...tasks, whyStepsFailed: (ran: readonly ManifestStep[], folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
       const wired = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf(sources), mods: [...winningFirst] }, { tasks: logging });
       wired.client.setCommandHandler('restoreFromManifest', (mods) => {
         const names = sentNamesOf(mods);
@@ -915,7 +915,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
       const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: expect.stringContaining('mEdit stopped') }] });
+      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: expect.stringContaining('mEdit stopped') as unknown }] });
     });
   });
 

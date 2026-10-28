@@ -255,8 +255,8 @@ const leftDetachedBy = (landed: Restored, sourceMods: SourceMods, cloned: Cloned
     return why === undefined || mod.leftDetached ? mod : { ...mod, leftDetached: why };
   });
 
-// mods.md, Build, story 12: a source mod is built whole, its steps included, before the next mod in mod order. The mods
-// that are not source mods are only written from their packages, so a run of them between source mods is one send.
+// mods.md, Build, story 12: a source mod is built whole, its steps included, before the next mod in mod order.
+// A run of mods that are not source mods is one send, as they are only written from their packages.
 function chunksOf(mods: readonly string[], isSource: (mod: string) => boolean): string[][] {
   const chunks: string[][] = [];
   for (const mod of mods) {
