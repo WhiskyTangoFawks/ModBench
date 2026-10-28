@@ -1,6 +1,7 @@
 // commands.md: "A failed gesture writes nothing." Each change deploy makes in the deployment folder is
 // undone when a later one fails, and a file it removes is set aside until the deploy lands.
 
+import type { BigIntStats } from 'node:fs';
 import { link, lstat, mkdir, readdir, rmdir, unlink } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { errnoCode } from '../ports/errno';
@@ -32,9 +33,12 @@ const missing = (err: unknown): boolean => {
   return code === 'ENOENT' || code === 'ENOTDIR';
 };
 
+/** A file system hands a removed file's inode to the next file made, so the birth time tells the two apart. */
+export const fileIdOf = ({ ino, birthtimeNs }: BigIntStats): string => `${ino}:${birthtimeNs}`;
+
 export async function fileIdAt(path: string): Promise<string | undefined> {
   try {
-    return String((await lstat(path, { bigint: true })).ino);
+    return fileIdOf(await lstat(path, { bigint: true }));
   } catch (err) {
     if (missing(err)) return undefined;
     throw err;
@@ -113,14 +117,14 @@ export function recoveryIn() {
     names.set(folder, read);
     return read;
   };
-  return async (at: string, { ino }: Written): Promise<string | undefined> => {
+  return async (at: string, { fileId }: Written): Promise<string | undefined> => {
     let id = await fileIdAt(at);
     for (const name of await asidesIn(dirname(at))) {
       const aside = join(dirname(at), name);
-      if (!name.startsWith(`${basename(at)}${ASIDE}`) || await fileIdAt(aside) !== ino) continue;
+      if (!name.startsWith(`${basename(at)}${ASIDE}`) || await fileIdAt(aside) !== fileId) continue;
       if (id === undefined) {
         await moved(aside, at);
-        id = ino;
+        id = fileId;
       } else await unlink(aside);
     }
     return id;
