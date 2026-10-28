@@ -7,7 +7,6 @@ import { registerAgentGesture, reportPartial, type AgentGesture, type GestureRes
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import type { ReportAction, Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
-import { MODS_KEY_ARGS } from './gestureEntry';
 import type { BuildProblems } from './buildProblems';
 import { pluginRowName } from '../wire/pluginAddress';
 import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
@@ -28,18 +27,17 @@ export interface BuildDeps {
 
 type Built = GestureResult<BuildOutcome['landed'][number], string>;
 
-/** commands.md, `build`: the mods of Mods rows, plugin rows, a column header, the palette's
- *  selection, or the palette's pick of every source mod, built from the working tree. */
+/** commands.md, `build`: the mods a row, the selection or the palette's pick names, and from an agent call naming none, every source. */
 export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
-  const gesture: AgentGesture<unknown, ModsGiven, Built> = {
+  const gesture: AgentGesture<unknown, BuildGiven, Built> = {
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const named = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
-      if (named) return { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView) };
+      if (named) return { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView), everySource: false };
       const mods = await pickSourceMods(deps.sourceModNames());
-      return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view };
+      return mods === undefined ? undefined : { ...givenByAgent([]), mods, everySource: false };
     },
-    fromAgent: ({ argument }) => givenByAgent(argument),
+    fromAgent: ({ argument }) => ({ ...givenByAgent(argument), everySource: argument.length === 0 }),
     run: (given) => buildMods(deps, given),
     report: (result) => reportBuildResult(deps.reporter, result),
   };
@@ -53,11 +51,16 @@ async function pickSourceMods(sourceModNames: Iterable<string>): Promise<string[
   return picked?.map((item) => item.label);
 }
 
-async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
+interface BuildGiven extends ModsGiven {
+  /** Source commands read the source folder when it builds, so a repository cloned since the last refresh is built. */
+  readonly everySource: boolean;
+}
+
+async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource }: BuildGiven): Promise<Built> {
   const { commands, instance } = deps;
-  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: refusedRows } };
+  if (mods.length === 0 && !everySource) return { applied: true, outcome: { landed: [], refused: refusedRows } };
   return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
-    const outcome = await commands.build(mods);
+    const outcome = await commands.build(mods, everySource);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
