@@ -1,6 +1,5 @@
 import { join } from 'node:path';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { isWithin } from '../ports/pathWithin';
 import { overwritePathOf, type Deployed, type Deployment, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import { refuse } from '../coreLib/refuse';
@@ -30,18 +29,13 @@ function pluginOrderOf({ plugins, gameName }: LoadOrderToDeploy): PluginOrder {
   return { release: gameReleaseForGame(gameName), entries: [...byLine].sort(([a], [b]) => a - b).map(([, entry]) => entry) };
 }
 
-type Adapter = Pick<InstanceAdapter, 'moveIntoOverwrite' | 'gameFolder'>;
+type Adapter = Pick<InstanceAdapter, 'moveIntoOverwrite' | 'gameFolderOverlapping'>;
 
 /** `canMoveToOverwrite` is false when the deployment folder overlaps the game folder, whose files are not Overwrite's. */
 export type DeployResult = CommandResult<Deployed & { canMoveToOverwrite: boolean }>;
 
-async function overlapsGameFolder(adapter: Pick<InstanceAdapter, 'gameFolder'>, folder: string): Promise<string | undefined> {
-  const game = await adapter.gameFolder();
-  return game.kind === 'found' && (await isWithin(folder, game.root) || await isWithin(game.root, folder)) ? game.root : undefined;
-}
-
 async function deploy(
-  { deployment, adapter }: { deployment: Deployment; adapter: Pick<InstanceAdapter, 'gameFolder'> },
+  { deployment, adapter }: { deployment: Deployment; adapter: Pick<InstanceAdapter, 'gameFolderOverlapping'> },
   setting: DeploymentFolderSetting, load: LoadOrderToDeploy | undefined,
 ): Promise<DeployResult> {
   const folder = deploymentFolderOf(setting);
@@ -49,7 +43,7 @@ async function deploy(
   if (load === undefined) return { applied: false, refusal: 'The instance has not been read.' };
   try {
     const deployed = await deployment.deploy(folder, load.files, pluginOrderOf(load));
-    return { applied: true, ...deployed, canMoveToOverwrite: deployed.unmanaged.length > 0 && await overlapsGameFolder(adapter, folder) === undefined };
+    return { applied: true, ...deployed, canMoveToOverwrite: deployed.unmanaged.length > 0 && await adapter.gameFolderOverlapping(folder) === undefined };
   } catch (err) {
     return refuse(err);
   }
@@ -64,7 +58,7 @@ async function moveToOverwrite(
   const folder = deploymentFolderOf(setting);
   if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
   try {
-    const game = await overlapsGameFolder(adapter, folder);
+    const game = await adapter.gameFolderOverlapping(folder);
     if (game !== undefined) {
       return { applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder ${game}: moving the game's own files out of it would break the game.` };
     }

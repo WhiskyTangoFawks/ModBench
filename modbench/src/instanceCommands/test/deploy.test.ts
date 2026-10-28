@@ -3,7 +3,7 @@ import type { Deployed, Deployment, FileTheGameGets, PluginOrder } from '../../d
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { deployCommands, type DeploymentFolderSetting, type LoadOrderToDeploy } from '../deploy';
 
-const NOT_IN_GAME = { gameFolder: () => Promise.resolve({ kind: 'found' as const, root: '/games/Fallout4', dataFolder: '/games/Fallout4/Data' }) };
+const NOT_IN_GAME = { gameFolderOverlapping: (folder: string) => Promise.resolve(folder.startsWith('/games/Fallout4') || folder === '/games' ? '/games/Fallout4' : undefined) };
 const NO_MOVES = { moveIntoOverwrite: () => Promise.resolve(undefined), ...NOT_IN_GAME };
 const SETTING_ID = 'modbench.deployment.folder';
 const FILES: FileTheGameGets[] = [{ relativePath: 'a.esp', winner: '/instance/mods/Mod/a.esp' }];

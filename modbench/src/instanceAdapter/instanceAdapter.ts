@@ -590,6 +590,8 @@ export interface InstanceAdapter {
   gameFolder(): Promise<GameFolder>;
   /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
   steamInstall(): Promise<FoundGameFolder | undefined>;
+  /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
+  gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */
   nonSteamPrefix(folder: string): Promise<NonSteamPrefix>;
   /** Every profile's name. */

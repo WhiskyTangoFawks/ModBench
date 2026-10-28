@@ -7,6 +7,7 @@ import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -302,6 +303,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     activeProfile: () => Promise.resolve(current.profile),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
+    gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
     steamInstall: () => Promise.resolve(answers.steam?.install),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
