@@ -4,10 +4,9 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
+import { deploymentFolderOf, type DeploymentFolderSetting as DeployingFolderSetting } from '../instanceCommands/deploy';
 
-export interface DeploymentFolderSetting {
-  /** What VS Code holds of the setting. Only the workspace's value is an instance's deployment folder: a user-level value is every instance's. */
-  inspect(): { workspaceValue?: string; globalValue?: string } | undefined;
+export interface DeploymentFolderSetting extends DeployingFolderSetting {
   nameOf(path: string): string;
   changed(listener: () => void): vscode.Disposable;
 }
@@ -76,9 +75,10 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
 function deploymentRow(setting: DeploymentFolderSetting): vscode.TreeItem {
   const row = new vscode.TreeItem('Deployment');
   row.iconPath = new vscode.ThemeIcon('rocket');
-  const folder = setting.inspect()?.workspaceValue;
-  row.description = folder ? setting.nameOf(folder) : 'no deployment folder';
-  row.tooltip = folder || undefined;
+  const folder = deploymentFolderOf(setting);
+  row.description = folder === undefined ? 'no deployment folder' : setting.nameOf(folder);
+  row.tooltip = folder;
+  row.contextValue = 'deployment';
   row.command = { command: 'modbench.settings.openDeploymentFolderHere', title: 'Open Deployment Folder Setting' };
   return row;
 }

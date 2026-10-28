@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as http from 'http';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -555,6 +555,38 @@ describe('Mod sync', () => {
     writeFileSync(modlistPath, '+Gone Mod\r\n');
 
     await waitFor('mod sync to drop the line', () => !readFileSync(modlistPath, 'utf8').includes('Gone Mod'));
+  });
+});
+
+describe('Deploy', () => {
+  const modDir = path.join(root, 'mods', 'Deployed Mod');
+  const deploymentFolder = path.join(root, '..', 'deployment');
+  const deployed = path.join(deploymentFolder, 'Data', 'textures', 'deployed.dds');
+  let original = '';
+
+  before(async () => {
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(path.join(modDir, 'textures'), { recursive: true });
+    writeFileSync(path.join(modDir, 'textures', 'deployed.dds'), '');
+    writeFileSync(modlistPath, '+Deployed Mod\r\n');
+    mkdirSync(deploymentFolder);
+    await vscode.workspace.getConfiguration('modbench').update('deployment.folder', deploymentFolder, vscode.ConfigurationTarget.Workspace);
+  });
+
+  after(async () => {
+    await vscode.workspace.getConfiguration('modbench').update('deployment.folder', undefined, vscode.ConfigurationTarget.Workspace);
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
+    rmSync(deploymentFolder, { recursive: true, force: true });
+  });
+
+  it('links each file the game gets into the deployment folder\'s Data', async () => {
+    await waitFor('deploy to link the enabled mod\'s file', async () => {
+      await vscode.commands.executeCommand('modbench.instance.deploy');
+      return existsSync(deployed);
+    });
+
+    assert.strictEqual(statSync(deployed).ino, statSync(path.join(modDir, 'textures', 'deployed.dds')).ino);
   });
 });
 

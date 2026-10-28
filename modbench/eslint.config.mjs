@@ -38,7 +38,7 @@ const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 
 const FS_IMPORT = {
     group: ['node:fs', 'node:fs/*', 'fs', 'fs/*'],
-    message: 'The Instance adapter is the one reader and writer of the instance; every other box reaches a file through it.',
+    message: 'The Instance adapter is the one reader and writer of the instance, and Deployment of a deployment folder; every other box reaches a file through one of them.',
 };
 const PATH_IMPORT = {
     group: ['node:path', 'node:path/*', 'path', 'path/*'],
@@ -92,8 +92,8 @@ const REPORTER_IMPORT = {
     message: 'The Instance leaves a read failure in its value for a subscriber to render; it raises no notification.',
 };
 
-/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, constructs?: boolean, extra?: object[], clientSeam?: boolean, byteReads?: boolean }} where */
-function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, constructs = false, extra = [], clientSeam = true, byteReads = true }) {
+/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, files?: boolean, constructs?: boolean, extra?: object[], clientSeam?: boolean, byteReads?: boolean }} where */
+function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, files = inAdapter, constructs = false, extra = [], clientSeam = true, byteReads = true }) {
     return ['error', {
         paths: [
             ...(vscode ? [VSCODE_IMPORT] : []),
@@ -102,7 +102,8 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
         ],
         patterns: [
             ...(clientSeam ? [CLIENT_SEAM_IMPORT] : []),
-            ...(inAdapter ? [] : [FS_IMPORT, adapterInternalsImport(constructs)]),
+            ...(files ? [] : [FS_IMPORT]),
+            ...(inAdapter ? [] : [adapterInternalsImport(constructs)]),
             ...(path ? [PATH_IMPORT] : []), ...(packages ? [PACKAGE_IMPORT] : []), ...(client ? [CLIENT_IMPORT] : []), ...extra,
         ],
     }];
@@ -234,6 +235,7 @@ export default defineConfig(
                 path: PATHLESS_BOXES.includes(box),
                 client: box === 'toolbox',
                 inAdapter: box === 'instanceAdapter',
+                files: box === 'instanceAdapter' || box === 'deployment',
                 clientSeam: box !== 'client',
             }),
         },

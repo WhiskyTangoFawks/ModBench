@@ -9,6 +9,7 @@
   },
   "references": [
     { "path": "../client" },
+    { "path": "../deployment" },
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },

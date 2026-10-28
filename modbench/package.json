@@ -446,6 +446,12 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.deploy",
+        "title": "Deploy",
+        "icon": "$(rocket)",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.instance.logIn",
         "title": "Log In Instance to Nexus",
         "category": "Modbench"
@@ -1109,6 +1115,10 @@
           "when": "modbench.folder == instance"
         },
         {
+          "command": "modbench.instance.deploy",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.settings.open",
           "when": "modbench.folder == instance"
         },
@@ -1344,6 +1354,16 @@
           "command": "modbench.mod.restoreFromManifest",
           "when": "view == modbench.toolbox && viewItem == modlist && modbench.modlist.hasRepository",
           "group": "modbench@2"
+        },
+        {
+          "command": "modbench.instance.deploy",
+          "when": "view == modbench.toolbox && viewItem == deployment",
+          "group": "inline"
+        },
+        {
+          "command": "modbench.instance.deploy",
+          "when": "view == modbench.toolbox && viewItem == deployment",
+          "group": "modbench@1"
         },
         {
           "command": "modbench.record.openPinned",

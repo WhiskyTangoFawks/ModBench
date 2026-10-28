@@ -366,6 +366,13 @@ describe('package.json Toolbox view', () => {
 
     expect(profileMenu.map((e) => e.command)).toEqual(['modbench.profile.switch']);
   });
+
+  it('offers deploy inline on the Deployment row, and deploy on its menu', () => {
+    const deploymentMenu = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => holds(e.when, { view: 'modbench.toolbox', viewItem: 'deployment' }));
+
+    expect(deploymentMenu.map((e) => [e.command, e.group])).toEqual([['modbench.instance.deploy', 'inline'], ['modbench.instance.deploy', 'modbench@1']]);
+  });
 });
 
 describe('package.json New Plugin / record filter reachable from the merged tree', () => {
