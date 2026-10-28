@@ -895,7 +895,7 @@ describe('the path in Overwrite that the next deploy links back to a path below 
 });
 
 describe('purge', () => {
-  const listing = async () => (await readdir(folder, { recursive: true })).sort();
+  const listing = async () => (await readdir(folder, { recursive: true })).map((path) => path.split(sep).join('/')).sort();
 
   it('removes each file deploy wrote, and the folders deploy made that it empties', async () => {
     await deploy([await modFile('Mod', 'meshes/a.nif'), await modFile('Mod', 'b.esp')]);

@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import { ASIDE, fileIdAt, linkedFree, moved, namesIn, removeFolders, removedAll, setAside, unlinkedIfThere, type Step } from './changes';
+import { ASIDE, fileIdAt, linkedFree, madeFolder, moved, namesIn, removeFolders, removedAll, setAside, unlinkedIfThere, type Step } from './changes';
 import type { WrittenPluginsTxt } from './record';
 
 const RENAMED = '.modbench_renamed';
@@ -44,7 +44,7 @@ function writing(folder: string, text: string, backup: Backup, stale: readonly s
   let kept: string | undefined;
   let fileId = '';
   const step: Step = async () => {
-    const created = await mkdir(folder, { recursive: true });
+    const created = await madeFolder(folder);
     const temp = `${path}${NEW}${process.pid}`;
     let placed = false;
     const restore = async (): Promise<void> => {

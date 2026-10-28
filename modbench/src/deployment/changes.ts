@@ -131,6 +131,12 @@ export function recoveryIn() {
   };
 }
 
+/** Makes the folder and answers the first one it made, if any. Windows answers that path with a `\\?\` prefix the other paths lack. */
+export async function madeFolder(path: string): Promise<string | undefined> {
+  const created = await mkdir(path, { recursive: true });
+  return created?.replace(/^\\\\\?\\/, '');
+}
+
 export async function removeFolders(from: string, upTo: string): Promise<void> {
   for (let folder = from; ; folder = dirname(folder)) {
     await rmdir(folder);
@@ -180,7 +186,7 @@ export async function changeAll(folder: string, { removals, relinks, links }: Ch
     }
     for (const { path, source } of [...relinks, ...links]) {
       const at = join(folder, path);
-      const created = await mkdir(dirname(at), { recursive: true });
+      const created = await madeFolder(dirname(at));
       if (created !== undefined) undos.push({ left: `${relative(folder, created)}, a folder deploy made`, run: () => removeFolders(dirname(at), created) });
       await link(source, at);
       undos.push({ left: `${path}, which deploy linked`, run: () => unlink(at) });

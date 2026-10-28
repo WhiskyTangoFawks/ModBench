@@ -121,7 +121,7 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
     ])('is none, and says why, when shortcuts.vdf is %s', async (_case, damage, reason) => {
       await shortcutsOf('1', [{ appid: APP_ID, exe: exe() }]);
       await writeFile(shortcutsPath(), damage(shortcutsFile([{ appid: APP_ID, exe: exe() }])));
-      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(new RegExp(`^Steam cannot be read: ${shortcutsPath()}: .*${reason.source}`));
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(new RegExp(`^Steam cannot be read: ${shortcutsPath().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: .*${reason.source}`));
     });
 
     it('is none, and says why, when shortcuts.vdf is not a file', async () => {
@@ -129,10 +129,11 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
       expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*EISDIR/);
     });
 
-    it('is none, and says why, when a plain file sits in userdata', async () => {
+    it('is none, and says why, when a plain file sits in userdata; Windows reports a path under a file as missing, so no user holds a shortcut', async () => {
       await mkdir(join(steam, 'userdata'), { recursive: true });
       await writeFile(join(steam, 'userdata', 'stray'), 'x');
-      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*ENOTDIR/);
+      const reason = process.platform === 'win32' ? /^no non-Steam game/ : /^Steam cannot be read: .*ENOTDIR/;
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(reason);
     });
 
     it('is none, and says why, when libraryfolders.vdf is not a file', async () => {
