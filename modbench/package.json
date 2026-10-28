@@ -150,6 +150,19 @@
         "priority": "default"
       }
     ],
+    "taskDefinitions": [
+      {
+        "type": "modbench.mod.build",
+        "required": [],
+        "properties": {
+          "mods": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The mods to build. Leave out to build every source mod."
+          }
+        }
+      }
+    ],
     "configuration": {
       "title": "Modbench",
       "properties": {

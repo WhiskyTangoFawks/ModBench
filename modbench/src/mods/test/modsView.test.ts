@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
   },
   decorationProviders: [] as vscode.FileDecorationProvider[],
   picked: [] as string[][],
+  taskTypes: [] as string[],
 }));
 
 vi.mock('vscode', () => ({
@@ -26,6 +27,7 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range,
   languages: { createDiagnosticCollection: (name: string) => { const collection = new FakeDiagnosticCollection(); diagnosticCollections.set(name, collection); return collection; } },
+  tasks: { registerTaskProvider: (type: string) => { h.taskTypes.push(type); return { dispose: () => undefined }; } },
   workspace: {
     ...fakeVscodeModule().workspace,
     getConfiguration: () => ({ get: () => undefined }),
@@ -205,6 +207,12 @@ describe('the Mods view registers its own gestures', () => {
     const value = instanceValueFixture({ sourceMods: new Set(['Source']) });
     createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
     expect(h.state.contextKeys.get('modbench.mod.anySource')).toBe(true);
+  });
+
+  it('offers build as a task, for a chain', () => {
+    h.taskTypes.length = 0;
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+    expect(h.taskTypes).toEqual(['modbench.mod.build']);
   });
 
   it('hears its copy value in the Mods view\'s key', () => {
