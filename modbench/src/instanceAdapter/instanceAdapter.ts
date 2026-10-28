@@ -368,7 +368,7 @@ interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly o
 export interface OtherManifest { readonly name: string; readonly folder: string }
 
 /** A manifest the search refuses because its folder holds, or sits inside, another manifest's, by its path in the instance ending in `/`. */
-export interface NestedManifest { readonly name: string; readonly reason: string }
+interface NestedManifest { readonly name: string; readonly reason: string }
 
 /** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
 export interface UnsearchedFolder { readonly name: string; readonly reason: string }
