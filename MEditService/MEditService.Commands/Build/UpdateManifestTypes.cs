@@ -2,8 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to update the manifest of, with its installation file, its version, its metadata files, which no line
-/// names, a source mod's source folder, and the game folder with the game files it may take from, none when not found.</summary>
+/// <summary>A mod to update the manifest of, with its installation file, version, metadata files, which no line names, source
+/// folder if a source mod, and the game files it may take from, none when no game folder exists.</summary>
 public sealed record ModToUpdate(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder,
     string? Version, GameFolder? GameFolder = null);
