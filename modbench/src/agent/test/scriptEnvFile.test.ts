@@ -119,6 +119,15 @@ describe('the file the Python tooling reads to reach mEdit', () => {
     expect(failures).toEqual([expect.stringContaining('EACCES')]);
   });
 
+  it('hears nothing of a window with no instance file to write', () => {
+    const client = new FakeClient();
+
+    reachMEditFromEnvFile({ client, scriptsPath: SCRIPTS, envFile: undefined, fail: () => undefined }).dispose();
+    client.port(41000);
+
+    expect(held).toBeUndefined();
+  });
+
   it('writes nothing once disposed', async () => {
     const { client, window } = await holding(41000);
     window.dispose();

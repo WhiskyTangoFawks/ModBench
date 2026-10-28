@@ -8,10 +8,12 @@ const LINE = /^\s*(?:export\s+)?(\w+)\s*=\s*(.*?)\s*$/;
 export function reachMEditFromEnvFile(options: {
   client: Pick<MEditClient, 'onPort' | 'onLoadOrderStatus' | 'loadOrderStatus'>;
   scriptsPath: string;
-  envFile: { read(): Promise<string>; write(text: string): Promise<void> };
+  /** Absent for a window with no instance. */
+  envFile: undefined | { read(): Promise<string>; write(text: string): Promise<void> };
   fail: (message: string) => void;
 }): { dispose(): void } {
   const { client, scriptsPath, envFile, fail } = options;
+  if (envFile === undefined) return { dispose: () => undefined };
   let port: number | undefined;
   let writing = Promise.resolve();
   const write = () => {

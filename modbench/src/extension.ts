@@ -333,10 +333,10 @@ function start(context: vscode.ExtensionContext): void {
     agentServer,
     offerToVsCodeChat(agentServer),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, scriptsPath),
-    ...opened.scriptEnvironmentFile === undefined ? [] : [reachMEditFromEnvFile({
+    reachMEditFromEnvFile({
       client: meditClient, scriptsPath, envFile: opened.scriptEnvironmentFile,
       fail: (message) => { reporterFor('scriptEnvironment').report('error', message); },
-    })],
+    }),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
