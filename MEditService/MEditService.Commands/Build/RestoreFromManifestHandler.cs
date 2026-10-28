@@ -39,7 +39,7 @@ public sealed class RestoreFromManifestHandler
         Manifest? held;
         try
         {
-            if (mod.SourceFolder is null) held = _repository.ReadManifest(mod.Folder, mod.Name);
+            if (mod.SourceFolder is null) held = _repository.ReadManifest(mod.Folder);
             else if (!_repository.ReadSourceManifest(mod.SourceFolder).Holds(out held, out var why)) return Skipped(RestoreRefusal.ManifestUnreadable, why);
         }
         catch (InvalidDataException e)
@@ -63,8 +63,8 @@ public sealed class RestoreFromManifestHandler
         try
         {
             var metadataFiles = mod.MetadataFiles.ToHashSet(StringComparer.Ordinal);
-            namedByNoLine = _repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles);
-            read = _repository.Files(mod.Folder, mod.Name, metadataFiles.Union(namedByNoLine).ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            namedByNoLine = _repository.NamedByNoLine(mod.Folder, manifest, metadataFiles);
+            read = _repository.Files(mod.Folder, metadataFiles.Union(namedByNoLine).ToHashSet(StringComparer.Ordinal), instance.StatCache);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -141,7 +141,7 @@ public sealed class RestoreFromManifestHandler
             return ItemAnswer<RestoreSkip, ModRestored>.Landed(new ModRestored(
                 mod.Name,
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
-                _repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Steps,
+                _repository.NamedByNoLine(mod.Folder, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Steps,
                 outcome.Uncommitted, checkedOut.LeftDetached));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -156,7 +156,7 @@ public sealed class RestoreFromManifestHandler
         _repository.ReadSourceManifest(sourceFolder).Holds(out var manifest, out _) ? manifest?.Version : null;
 
     private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
-        _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        _repository.Files(mod.Folder, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
     private Dictionary<string, string> HashesBeforeTheBuild(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance)
     {

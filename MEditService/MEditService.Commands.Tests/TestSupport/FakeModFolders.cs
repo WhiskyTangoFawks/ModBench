@@ -43,7 +43,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public void Without(string folder, string path) => _files.Remove((folder, path));
 
-    public ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
+    public ModFolderFiles Files(string modFolder, IReadOnlySet<string> leftOut, string? statCache)
     {
         if (!_folders.Contains(modFolder)) throw new DirectoryNotFoundException(modFolder);
         var files = _files.Where(f => f.Key.Folder == modFolder && !leftOut.Contains(f.Key.Path)).ToList();
@@ -61,7 +61,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
     }
 
-    public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
+    public IReadOnlyList<string> NamedByNoLine(string modFolder, Manifest manifest, IReadOnlySet<string> leftOut)
     {
         var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
         return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
@@ -81,7 +81,7 @@ internal sealed class FakeModFolders : IModFolderRepository
             modName, NoManifest: false,
             [.. there[true].Where(line => line.Entry is not (PackageEntry.NotHeld or PackageEntry.OtherBytes)
                 && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(_files[(modFolder, line.Path)])).Select(line => line.Path)],
-            NamedByNoLine(modFolder, modName, manifest, leftOut),
+            NamedByNoLine(modFolder, manifest, leftOut),
             [.. there[false].Select(line => line.Path)],
             [.. manifest.Files.Where(line => line.Entry is PackageEntry.NotHeld).Select(line => line.Path)],
             [.. manifest.Files.Where(line => line.Entry is PackageEntry.OtherBytes).Select(line => line.Path)],
@@ -130,7 +130,7 @@ internal sealed class FakeModFolders : IModFolderRepository
     /// <summary>What reading each mod folder's manifest throws.</summary>
     public Dictionary<string, Exception> ManifestReadThrows { get; } = [];
 
-    public Manifest? ReadManifest(string modFolder, string modName)
+    public Manifest? ReadManifest(string modFolder)
     {
         if (UnreadableManifests.Contains(modFolder)) throw new InvalidDataException("its manifest cannot be read at line 1");
         if (ManifestReadThrows.TryGetValue(modFolder, out var thrown)) throw thrown;
@@ -149,7 +149,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         return replaced;
     }
 
-    public bool WriteManifest(string modFolder, string modName, Manifest manifest)
+    public bool WriteManifest(string modFolder, Manifest manifest)
     {
         if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");
         var text = string.Join('\n', manifest.Files.Select(f => f.ToString()).Prepend(manifest.Package?.ToString()));
@@ -159,17 +159,17 @@ internal sealed class FakeModFolders : IModFolderRepository
         return true;
     }
 
-    public SpelledManifest? RemoveManifest(string modFolder, string modName, string sourceFolder)
+    public SpelledManifest? RemoveManifest(string modFolder, string sourceFolder)
     {
         if (modFolder == sourceFolder || !Manifests.Remove(modFolder)) return null;
         _manifests.Remove(modFolder, out var text);
-        return new SpelledManifest($"{modName}.manifest.json", Encoding.UTF8.GetBytes(text ?? ""));
+        return new SpelledManifest($"{FolderName(modFolder)}.manifest.json", Encoding.UTF8.GetBytes(text ?? ""));
     }
 
     public Answer<Manifest?, string> ReadSourceManifest(string sourceFolder) =>
         UnreadableManifests.Contains(sourceFolder) ? "its manifest cannot be read at line 1" : Manifests.GetValueOrDefault(sourceFolder);
 
-    public bool WriteSourceManifest(string sourceFolder, Manifest manifest) => WriteManifest(sourceFolder, string.Empty, manifest);
+    public bool WriteSourceManifest(string sourceFolder, Manifest manifest) => WriteManifest(sourceFolder, manifest);
 
     public SpelledManifest SpellSourceManifest(Manifest manifest) =>
         new($"{manifest.Output}.manifest.json", Encoding.UTF8.GetBytes($"{{\"output\": \"{manifest.Output}\", \"files\": []}}"));

@@ -252,7 +252,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
             File.WriteAllText(file, text);
         }
-        var hashes = new ModFolderRepository(TimeProvider.System).Files(pack, "", new HashSet<string>(), null).Files.ToDictionary(file => file.Path, file => file.Hash);
+        var hashes = new ModFolderRepository(TimeProvider.System).Files(pack, new HashSet<string>(), null).Files.ToDictionary(file => file.Path, file => file.Hash);
         return downloaded with { Entries = [.. entries.Select(entry => new HashedEntry(entry.Path, hashes[entry.Path]))] };
     }
 

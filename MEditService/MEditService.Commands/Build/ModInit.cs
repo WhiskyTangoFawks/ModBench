@@ -87,7 +87,7 @@ internal sealed class ModInit(
         List<Asset> assets;
         try
         {
-            var held = modFolders.ReadManifest(mod.Folder, mod.Name);
+            var held = modFolders.ReadManifest(mod.Folder);
             if (held?.Packages.OfType<ManifestPackage.GameFolder>().FirstOrDefault() is { } gameFolder)
             {
                 return Refused(DecompileAndCommitRefusal.ManifestNamesGameFolder,
@@ -107,7 +107,7 @@ internal sealed class ModInit(
         SpelledManifest? removed;
         try
         {
-            removed = modFolders.RemoveManifest(mod.Folder, mod.Name, toCommit.SourceFolder);
+            removed = modFolders.RemoveManifest(mod.Folder, toCommit.SourceFolder);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -149,7 +149,7 @@ internal sealed class ModInit(
     private (Manifest Manifest, List<Asset> Assets) ContentsOf(
         Manifest? held, PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
     {
-        var all = modFolders.Files(mod.Folder, mod.Name, toCommit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
+        var all = modFolders.Files(mod.Folder, toCommit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
         var paths = all.Select(file => file.Path).ToList();
         var compiled = provided.SelectMany(plugin => plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
         var installationFile = toCommit.InstallationFile is { } named ? (modFolders.InstallationFileName(named.Path), named) : ((string, InstallationFile)?)null;

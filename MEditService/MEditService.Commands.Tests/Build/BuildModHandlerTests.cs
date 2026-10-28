@@ -80,7 +80,7 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(["meshes/c.nif"], manifest.Exclude);
         Assert.Equal(["Mod - Main.ba2"], manifest.Archives.Select(archive => archive.Path));
         Assert.Equal(["meshes/c.nif.excluded"], manifest.Files.Select(file => file.Path));
-        Assert.Null(new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName));
+        Assert.Null(new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder));
     }
 
     [Theory]

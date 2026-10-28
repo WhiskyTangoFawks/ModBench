@@ -41,7 +41,7 @@ public sealed class UpdateManifestHandler
         Manifest? held;
         try
         {
-            held = _repository.ReadManifest(mod.Folder, mod.Name);
+            held = _repository.ReadManifest(mod.Folder);
         }
         catch (InvalidDataException e)
         {
@@ -63,7 +63,7 @@ public sealed class UpdateManifestHandler
         ModFolderFiles read;
         try
         {
-            read = _repository.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            read = _repository.Files(mod.Folder, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             manifest = new ManifestBuilder(installationFile is null ? null : (_repository.InstallationFileName(installationFile.Path), installationFile), instance.GameFolder)
                 .Manifest(read.Files, mod.Version, held);
         }
@@ -80,7 +80,7 @@ public sealed class UpdateManifestHandler
         bool written;
         try
         {
-            written = _repository.WriteManifest(mod.Folder, mod.Name, manifest);
+            written = _repository.WriteManifest(mod.Folder, manifest);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

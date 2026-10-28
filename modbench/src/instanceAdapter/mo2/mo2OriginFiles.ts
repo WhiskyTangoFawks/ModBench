@@ -8,7 +8,7 @@ import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteD
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashModFile' | 'exclusionMark'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashFileIn' | 'exclusionMark'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -57,11 +57,10 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       });
     },
 
-    async trashModFile(mod, relativePath, trash) {
-      const folder = await originFolder(context, { kind: 'mod', name: mod }, 'list');
+    async trashFileIn(folder, relativePath, trash) {
       const file = fileUnder(folder, relativePath);
-      const notAFile = new Error(`Not a file of mod "${mod}": "${relativePath}"`);
-      if (folder === undefined || file === undefined) throw notAFile;
+      const notAFile = new Error(`Not a file of "${folder}": "${relativePath}"`);
+      if (file === undefined) throw notAFile;
       const real = await realPathIfThere(file);
       if (real === undefined) return;
       const inFolder = relative(await realPathIfThere(folder) ?? folder, real);

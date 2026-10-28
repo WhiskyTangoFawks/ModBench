@@ -11,14 +11,17 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private static readonly DateTime LongAgo = new(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    private readonly ScratchDirectory _root = new("modfolder-adapter-");
+    private readonly ScratchDirectory _scratch = new("modfolder-adapter-");
     private readonly ScratchDirectory _statCache = new("stat-cache-");
     private readonly ScratchDirectory _source = new("source-");
     private readonly ModFolderRepository _repository = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow().AddDays(1)));
+    private readonly string _root;
+
+    public ModFolderRepositoryTests() => _root = Directory.CreateDirectory(Path.Combine(_scratch, "mod")).FullName;
 
     public void Dispose()
     {
-        _root.Dispose();
+        _scratch.Dispose();
         _statCache.Dispose();
         _source.Dispose();
     }
@@ -29,7 +32,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("readme.txt", "abc");
         Write(Path.Combine("meshes", "deep", "a.nif"), "hello");
 
-        var files = _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).Files.OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
+        var files = _repository.Files(_root, new HashSet<string>(), statCache: null).Files.OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
 
         Assert.Equal(["meshes/deep/a.nif", "readme.txt"], files.Select(f => f.Path));
         Assert.Equal(HashOfHello, files[0].Hash);
@@ -53,9 +56,9 @@ public sealed class ModFolderRepositoryTests : IDisposable
         TempLeftover.DeadWriters(_root);
         Write(Path.Combine(".medit_tmp_1_dir", "mod.esp"), "half");
 
-        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).Files.Select(f => f.Path));
+        Assert.Equal(["a.txt"], _repository.Files(_root, new HashSet<string>(), statCache: null).Files.Select(f => f.Path));
         Assert.Equal(["a.txt"], _repository.FilePaths(_root));
-        Assert.Equal(["a.txt"], _repository.NamedByNoLine(_root, "mod", NoLines, new HashSet<string>()));
+        Assert.Equal(["a.txt"], _repository.NamedByNoLine(_root, NoLines, new HashSet<string>()));
     }
 
     public static TheoryData<string, Func<string, string>, bool> Leftovers => new()
@@ -136,7 +139,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("a.txt", "hello");
         var unsettled = new ModFolderRepository(new FakeTimeProvider(File.GetLastWriteTimeUtc(Path.Combine(_root, "a.txt"))));
-        unsettled.KeepInStatCache(unsettled.Files(_root, "mod", new HashSet<string>(), _statCache), NoLines, NoHashes);
+        unsettled.KeepInStatCache(unsettled.Files(_root, new HashSet<string>(), _statCache), NoLines, NoHashes);
         using var held = HeldOpen("a.txt");
 
         Assert.Throws<IOException>(Files);
@@ -149,6 +152,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AStatCacheThatCannotBeRead_VouchesForNoFile(string text)
     {
         Write("a.txt", "hello");
+        _repository.KeepInStatCache(_repository.Files(_root, new HashSet<string>(), _statCache), NoLines, NoHashes);
         StatCacheSays(text);
         using var held = HeldOpen("a.txt");
 
@@ -162,20 +166,23 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var taken = Path.Combine(_statCache, "taken");
         File.WriteAllText(taken, "a file where the stat cache's folder would be");
 
-        var read = _repository.Files(_root, "mod", new HashSet<string>(), taken);
+        var read = _repository.Files(_root, new HashSet<string>(), taken);
 
         Assert.Equal(HashOfHello, Assert.Single(read.Files).Hash);
         Assert.Contains(taken, _repository.KeepInStatCache(read, NoLines, NoHashes), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AModWhoseNameHoldsASlash_KeepsItsStatCacheByItsFolderName()
+    public void TwoFoldersOfOneName_KeepTheirStatCachesApart()
     {
         Write("a.txt", "hello");
-        _repository.KeepInStatCache(_repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache), NoLines, NoHashes);
+        var other = Directory.CreateDirectory(Path.Combine(_scratch, "plugins", "mod")).FullName;
+        File.WriteAllText(Path.Combine(other, "a.txt"), "other bytes");
+        _repository.KeepInStatCache(_repository.Files(_root, new HashSet<string>(), _statCache), NoLines, NoHashes);
+        _repository.KeepInStatCache(_repository.Files(other, new HashSet<string>(), _statCache), NoLines, NoHashes);
         using var held = HeldOpen("a.txt");
 
-        Assert.Equal(HashOfHello, Assert.Single(_repository.Files(_root, "Mods/Mod", new HashSet<string>(), _statCache).Files).Hash);
+        Assert.Equal(HashOfHello, Assert.Single(_repository.Files(_root, new HashSet<string>(), _statCache).Files).Hash);
     }
 
     [Fact]
@@ -234,7 +241,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         var status = repository.Status(_root, "mod", new HashSet<string>(), _statCache, held: null, sourceFolder: null);
 
-        Assert.Equal(namedByNoLine, repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()).Contains("Meshes/A.nif"));
+        Assert.Equal(namedByNoLine, repository.NamedByNoLine(_root, manifest, new HashSet<string>()).Contains("Meshes/A.nif"));
         Assert.Equal(namedByNoLine, status.NamedByNoLine.Contains("Meshes/A.nif"));
         Assert.Equal(namedByNoLine, status.Gone.Contains("meshes/a.nif"));
     }
@@ -278,15 +285,46 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("A.nif", "hello");
         var manifest = Manifested(Line("a.nif", "Mod.zip"));
 
-        Assert.Equal(["A.nif"], _repository.NamedByNoLine(_root, "mod", manifest, new HashSet<string>()));
+        Assert.Equal(["A.nif"], _repository.NamedByNoLine(_root, manifest, new HashSet<string>()));
     }
 
     [Fact]
-    public void AManifest_IsNamedForTheMod_WithTheJsonSuffix()
+    public void AManifest_IsNamedForTheFolderItBuilds_AndIsNoFileOfIt()
     {
-        _repository.WriteManifest(_root, "mod", new Manifest([], []));
+        var folder = Directory.CreateDirectory(Path.Combine(_root, "plugins", "rootbuilder")).FullName;
+        File.WriteAllText(Path.Combine(folder, "a.txt"), "hello");
 
-        Assert.Equal(["mod.manifest.json"], Directory.GetFiles(_root).Select(Path.GetFileName));
+        _repository.WriteManifest(folder, new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
+
+        Assert.Equal(["a.txt", "rootbuilder.manifest.json"], Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal(["a.txt"], _repository.Files(folder, new HashSet<string>(), statCache: null).Files.Select(file => file.Path));
+        Assert.Single(Assert.IsType<Manifest>(_repository.ReadManifest(folder)).Files);
+    }
+
+    [Fact]
+    public void AManifestNamedForItsFolderInAnotherCase_IsItsManifest_WrittenUnderItsOwnName_AndIsNoFileOfIt()
+    {
+        Write("a.txt", "hello");
+        Write("MOD.manifest.json", "{\n\"files\": []\n}\n");
+
+        var held = _repository.ReadManifest(_root);
+        _repository.WriteManifest(_root, new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
+
+        Assert.NotNull(held);
+        Assert.Equal(["MOD.manifest.json", "a.txt"], Directory.GetFiles(_root).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal(["a.txt"], _repository.Files(_root, new HashSet<string>(), statCache: null).Files.Select(file => file.Path));
+        Assert.Single(Assert.IsType<Manifest>(_repository.ReadManifest(_root)).Files);
+    }
+
+    [PosixFact]
+    public void OnAFileSystemThatTellsCaseApart_TwoManifestsWhoseNamesDifferInCaseAlone_AreRefusedNamingBoth()
+    {
+        Write("mod.manifest.json", "{\n\"files\": []\n}\n");
+        Write("MOD.manifest.json", "{\n\"files\": []\n}\n");
+
+        var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root));
+
+        Assert.Equal("its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'", refused.Message);
     }
 
     [Fact]
@@ -295,11 +333,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("meta.ini", "[General]");
         var nothing = new Manifest([], []);
 
-        var written = _repository.WriteManifest(_root, "mod", nothing);
-        var writtenAgain = _repository.WriteManifest(_root, "mod", nothing);
+        var written = _repository.WriteManifest(_root, nothing);
+        var writtenAgain = _repository.WriteManifest(_root, nothing);
 
         Assert.Equal([true, false, true], [written, writtenAgain, File.Exists(Path.Combine(_root, "mod.manifest.json"))]);
-        var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root, "mod"));
+        var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root));
         Assert.Empty(read.Files);
         Assert.Null(read.Package);
         Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], [], []), Status());
@@ -386,7 +424,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("made.dds", "whatever the step wrote");
         ManifestFile[] madeByStep = [new("made.dds", new PackageEntry.MadeByStep()), new("lacked.dds", new PackageEntry.MadeByStep())];
-        _repository.WriteManifest(_root, "mod", new Manifest([Package], madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
+        _repository.WriteManifest(_root, new Manifest([Package], madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
 
         var status = Status();
 
@@ -468,7 +506,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Write("meta.ini", "abc");
         Write("mod.manifest.json", "{}\n");
 
-        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, statCache: null).Files.Select(f => f.Path));
+        Assert.Equal(["a.txt"], _repository.Files(_root, new HashSet<string> { "meta.ini" }, statCache: null).Files.Select(f => f.Path));
     }
 
     private static readonly ManifestPackage.InstallationFile Package = new("Mod.7z", 100, "AAAA", "https://www.nexusmods.com/fallout4/mods/1");
@@ -486,7 +524,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
             ],
             "1.2.3");
 
-        Assert.True(_repository.WriteManifest(_root, "mod", manifest));
+        Assert.True(_repository.WriteManifest(_root, manifest));
 
         var text = File.ReadAllText(Path.Combine(_root, "mod.manifest.json"));
         Assert.Equal(
@@ -513,7 +551,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
             Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser"), new ManifestTool("Archive", "https://example.com/archive")],
         };
 
-        _repository.WriteManifest(_root, "mod", manifest);
+        _repository.WriteManifest(_root, manifest);
 
         Assert.Equal(
             "{\n"
@@ -608,7 +646,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [MemberData(nameof(PackagesAndTheirLines))]
     public void WriteManifest_NamesTheModsPackageByItsKind_WithTheVersion(ManifestPackage package, string line)
     {
-        _repository.WriteManifest(_root, "mod", new Manifest([package], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
+        _repository.WriteManifest(_root, new Manifest([package], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
         Assert.Contains("\"packages\": [\n" + line + "\n]", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
@@ -618,7 +656,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("1.2.3")]
     public void WriteManifest_OfAModWithNoPackageAndNoFiles_WritesAnEmptyFileList_BecauseTheVersionBelongsToThePackage(string? version)
     {
-        _repository.WriteManifest(_root, "mod", new Manifest([], [], version));
+        _repository.WriteManifest(_root, new Manifest([], [], version));
 
         Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
@@ -627,11 +665,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
     {
         var manifest = new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
-        _repository.WriteManifest(_root, "mod", manifest);
+        _repository.WriteManifest(_root, manifest);
         var path = Path.Combine(_root, "mod.manifest.json");
         File.SetLastWriteTimeUtc(path, LongAgo);
 
-        Assert.False(_repository.WriteManifest(_root, "mod", manifest));
+        Assert.False(_repository.WriteManifest(_root, manifest));
 
         Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(path));
     }
@@ -641,7 +679,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         var manifest = new Manifest([], [new ManifestFile("meshes/café.nif", new PackageEntry.NotHeld())]);
 
-        _repository.WriteManifest(_root, "mod", manifest);
+        _repository.WriteManifest(_root, manifest);
 
         var bytes = File.ReadAllBytes(Path.Combine(_root, "mod.manifest.json"));
         Assert.Equal((byte)'{', bytes[0]);
@@ -658,11 +696,11 @@ public sealed class ModFolderRepositoryTests : IDisposable
             new ManifestFile("meshes/a.nif", new PackageEntry.Held()),
         ]);
 
-        _repository.WriteManifest(_root, "mod", manifest);
+        _repository.WriteManifest(_root, manifest);
 
         Assert.Equal(
             ["Meshes/a.nif", "meshes/a.nif", "meshes/b.nif", "Textures/x.dds"],
-            _repository.ReadManifest(_root, "mod")?.Files.Select(file => file.Path));
+            _repository.ReadManifest(_root)?.Files.Select(file => file.Path));
     }
 
     public static TheoryData<Manifest> Manifests => new()
@@ -687,9 +725,9 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [MemberData(nameof(Manifests))]
     public void ReadManifest_ReadsWhatWriteManifestWrote(Manifest manifest)
     {
-        _repository.WriteManifest(_root, "mod", manifest);
+        _repository.WriteManifest(_root, manifest);
 
-        var read = _repository.ReadManifest(_root, "mod");
+        var read = _repository.ReadManifest(_root);
 
         Assert.NotNull(read);
         Assert.Equal(manifest.Package, read.Package);
@@ -700,13 +738,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void AManifestsSteps_ReadBackInTheirOrder_WithTheToolsAndTheFilesTheyMake()
     {
-        _repository.WriteManifest(_root, "mod", new Manifest([], [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
+        _repository.WriteManifest(_root, new Manifest([], [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
         {
             Steps = [new ManifestStep("Zip", ["a", "b"]), new ManifestStep("Archive", [])],
             Tools = [new ManifestTool("Zip", "https://example.com/zip")],
         });
 
-        var read = _repository.ReadManifest(_root, "mod");
+        var read = _repository.ReadManifest(_root);
 
         Assert.NotNull(read);
         Assert.Equal([("Zip", "a|b"), ("Archive", "")], read.Steps.Select(step => (step.Task, string.Join('|', step.Args))));
@@ -719,8 +757,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("a.txt", "abc");
 
-        Assert.Null(_repository.ReadManifest(_root, "mod"));
-        Assert.Null(_repository.ReadManifest(Path.Combine(_root, "absent"), "mod"));
+        Assert.Null(_repository.ReadManifest(_root));
+        Assert.Null(_repository.ReadManifest(Path.Combine(_root, "absent")));
     }
 
     [Theory]
@@ -760,7 +798,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("mod.manifest.json", text);
 
-        var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root, "mod"));
+        var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root));
 
         Assert.Contains(where, refused.Message, StringComparison.Ordinal);
     }
@@ -856,7 +894,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private IReadOnlyList<HashedFile> Files()
     {
-        var read = _repository.Files(_root, "mod", new HashSet<string>(), _statCache);
+        var read = _repository.Files(_root, new HashSet<string>(), _statCache);
         _repository.KeepInStatCache(read, NoLines, NoHashes);
         return read.Files;
     }
@@ -870,7 +908,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private Manifest Manifested(string installationFile, ManifestFile[] lines)
     {
         var manifest = new Manifest([new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile)], lines);
-        _repository.WriteManifest(_root, "mod", manifest);
+        _repository.WriteManifest(_root, manifest);
         return manifest;
     }
 
@@ -894,7 +932,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private void KeepAsRestored(Manifest manifest) =>
         _repository.KeepInStatCache(
-            _repository.Files(_root, "mod", new HashSet<string>(), _statCache), manifest,
+            _repository.Files(_root, new HashSet<string>(), _statCache), manifest,
             manifest.Files.ToDictionary(line => line.Path, _ => HashOfHello));
 
     private ModStatus Status() => _repository.Status(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache, held: null, sourceFolder: null);
@@ -904,7 +942,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private sealed record CachedEntry(long Size, long Modified, long Changed, string Hash);
 
-    private string StatCacheFile => Path.Combine(_statCache, Path.GetFileName(_root.Path));
+    private string StatCacheFile => Assert.Single(Directory.GetFiles(_statCache));
 
     private sealed record CachedFiles(Dictionary<string, CachedEntry> Files);
 

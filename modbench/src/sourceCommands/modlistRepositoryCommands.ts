@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, SourceMods } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -20,9 +20,9 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'gameFolder' | 'steamInstall' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'reading' | 'gameFolder' | 'steamInstall' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'otherManifests' | 'writeOtherManifestLines' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
-  | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
+  | 'statCacheFolder' | 'trashFileIn' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
   client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -117,18 +117,35 @@ interface ReadMods {
   readonly notes: readonly ModNote[];
 }
 
+// modlist-repository.md, The manifest, story 20: another manifest builds the folder it sits in, which is no mod, so the mod
+// manager holds nothing of it: no metadata, no installation file and no game files it takes.
+interface Folders {
+  /** The folder `name` builds; undefined when its name gives it none. */
+  readonly of: (name: string) => Promise<string | undefined>;
+  readonly isMod: (name: string) => boolean;
+}
+
+function foldersOf(adapter: Adapter, others: readonly OtherManifest[]): Folders {
+  const other = new Map(others.map(({ name, folder }) => [name, folder]));
+  return { of: (name) => (other.has(name) ? Promise.resolve(other.get(name)) : adapter.modFolderPath(name)), isMod: (name) => !other.has(name) };
+}
+
+const namesOf = (mods: readonly string[], others: readonly OtherManifest[]): string[] => [...mods, ...others.map(({ name }) => name)];
+
 // A source mod's manifest is in its repository (modlist-repository.md, The manifest, story 1).
 const sourceFolderOf = (sourceMods: SourceMods, mod: string): { sourceFolder?: string } => {
   const sourceFolder = sourceMods.folderOf(mod);
   return sourceFolder === undefined ? {} : { sourceFolder };
 };
 
-async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModByFolder[]> {
+const metadataFilesOf = (adapter: Adapter, folders: Folders, name: string): string[] => (folders.isMod(name) ? [...adapter.metadataFilesInModFolder] : []);
+
+async function byFolder(adapter: Adapter, mods: readonly string[], folders: Folders): Promise<ModByFolder[]> {
   const sourceMods = await adapter.sourceMods();
   const asked: ModByFolder[] = [];
   for (const mod of mods) {
-    const folder = await adapter.modFolderPath(mod);
-    if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: [...adapter.metadataFilesInModFolder], ...sourceFolderOf(sourceMods, mod) });
+    const folder = await folders.of(mod);
+    if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: metadataFilesOf(adapter, folders, mod), ...sourceFolderOf(sourceMods, mod) });
   }
   return asked;
 }
@@ -149,10 +166,11 @@ async function gameFilesOf(
 }
 
 async function readMod(
-  adapter: Adapter, mod: string, installationFileOf: InstallationFileOf, game: GameToHand | undefined, sourceMods: SourceMods,
+  adapter: Adapter, mod: string, folders: Folders, installationFileOf: InstallationFileOf, game: GameToHand | undefined, sourceMods: SourceMods,
 ): Promise<{ read: ReadMod; gameFiles: HeldGameFiles; notes: readonly string[] } | { refusal: string }> {
-  const folder = await adapter.modFolderPath(mod);
+  const folder = await folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
+  if (!folders.isMod(mod)) return { read: { name: mod, folder, metadataFiles: [] }, gameFiles: NONE_HELD, notes: [] };
   const installed = await installationFileOf(mod);
   if (installed.kind === 'unreadable') return { refusal: installed.reason };
   const taken = installed.answer === undefined ? await gameFilesOf(adapter, mod, game) : { gameFiles: NONE_HELD, notes: [] };
@@ -170,7 +188,7 @@ async function readMod(
 }
 
 async function readMods(
-  adapter: Adapter, mods: readonly string[], installationFileOf: InstallationFileOf, game: GameToHand | undefined, sourceMods: SourceMods,
+  adapter: Adapter, mods: readonly string[], folders: Folders, installationFileOf: InstallationFileOf, game: GameToHand | undefined, sourceMods: SourceMods,
   { onProgress, signal }: ModlistCallOptions<{ phase: 'ReadingFiles'; mod: string }>,
 ): Promise<ReadMods> {
   const sent: ReadMod[] = [];
@@ -180,7 +198,7 @@ async function readMods(
   for (const mod of mods) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const read = await readMod(adapter, mod, installationFileOf, game, sourceMods);
+    const read = await readMod(adapter, mod, folders, installationFileOf, game, sourceMods);
     if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
     sent.push(read.read);
     for (const place of ['game', 'steam'] as const) for (const file of read.gameFiles[place]) gameFiles[place].set(file.path.toLowerCase(), file);
@@ -302,13 +320,13 @@ function chunksOf(mods: readonly string[], isSource: (mod: string) => boolean): 
 }
 
 async function restoreChunk(
-  deps: ModlistRepositoryCommandsDeps, chunk: readonly string[], rank: (mod: string) => number, sourceMods: SourceMods, cloned: Cloned,
+  deps: ModlistRepositoryCommandsDeps, chunk: readonly string[], rank: (mod: string) => number, sourceMods: SourceMods, cloned: Cloned, folders: Folders,
   options: ModlistCallOptions<RestoreStatus>,
 ) {
-  const restored = await restoreFolders(deps, chunk, sourceMods, options);
+  const restored = await restoreFolders(deps, chunk, folders, sourceMods, options);
   const landed = [...restored.landed].sort((a, b) => rank(a.mod) - rank(b.mod));
-  const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(landed, sourceMods, cloned));
-  const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
+  const trashed = await withFilesNoLineNamesTrashed(deps, folders, leftDetachedBy(landed, sourceMods, cloned));
+  const stepped = await withRestoredStepsRun(deps, folders, trashed.finished, options.signal);
   return { restored, finished: stepped.finished, unfinished: [...trashed.unfinished, ...stepped.unfinished] };
 }
 
@@ -316,12 +334,13 @@ const notFinishedAfter = (why: string) => (item: string): ItemRefusal<string> =>
   ({ item, reason: `was not finished: ${why.replace(/\.$/, '')}. Restoring it again finishes it.` });
 
 async function restoreFromManifest(
-  deps: ModlistRepositoryCommandsDeps, asked: readonly string[], options: ModlistCallOptions<RestoreStatus>, everyManifest: boolean,
+  deps: ModlistRepositoryCommandsDeps, asked: readonly string[], options: ModlistCallOptions<RestoreStatus>, everyManifest: boolean, others: readonly OtherManifest[],
 ): Promise<RestoreResult> {
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(deps.adapter);
   const cloned = await submodulesCloned(deps, options.onProgress);
   const sourceMods = await deps.adapter.sourceMods();
-  const mods = await inModOrder(deps.adapter, everyManifest ? withEverySourceMod(asked, sourceMods) : asked);
+  const folders = foldersOf(deps.adapter, others);
+  const mods = await inModOrder(deps.adapter, namesOf(everyManifest ? withEverySourceMod(asked, sourceMods) : asked, others));
   const place = new Map(mods.map((mod, at) => [mod, at]));
   const rank = (mod: string): number => place.get(mod) ?? 0;
   const chunks = chunksOf(mods, (mod) => sourceMods.folderOf(mod) !== undefined);
@@ -337,7 +356,7 @@ async function restoreFromManifest(
     if (sourceMods.folderOf(chunk[0] ?? '') !== undefined) {
       for (const [mod, why] of await whyNotIndexed(deps, pending.splice(0), options.signal)) notIndexed.set(mod, why);
     }
-    const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
+    const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, folders, options);
     landed.push(...finished);
     if (restored.applied) {
       refused.push(...restored.refused, ...unfinished);
@@ -390,12 +409,13 @@ function cancelledBefore(mods: readonly string[], { landed, refused }: Pick<Extr
 }
 
 async function withFilesNoLineNamesTrashed(
-  { adapter, trash }: ModlistRepositoryCommandsDeps, landed: Restored,
+  { adapter, trash }: ModlistRepositoryCommandsDeps, folders: Folders, landed: Restored,
 ): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
   const finished: Restored[number][] = [];
   const unfinished: ItemRefusal<string>[] = [];
   for (const mod of landed) {
-    const why = await trashedOrWhy(adapter, trash, mod.mod, mod.namedByNoLine) ?? await metadataWrittenOrWhy(adapter, mod.mod, mod.metadata);
+    const why = await trashedOrWhy(adapter, trash, await folders.of(mod.mod), mod.namedByNoLine)
+      ?? (folders.isMod(mod.mod) ? await metadataWrittenOrWhy(adapter, mod.mod, mod.metadata) : undefined);
     if (why === undefined) finished.push(mod);
     else unfinished.push({ item: mod.mod, reason: `was not finished: ${why}. Restoring it again finishes it.` });
   }
@@ -404,12 +424,12 @@ async function withFilesNoLineNamesTrashed(
 
 // modlist-repository.md, The manifest, story 17: restore runs a mod's steps once its folder holds what its packages give.
 async function withRestoredStepsRun(
-  { adapter, tasks }: ModlistRepositoryCommandsDeps, landed: Restored, signal: AbortSignal | undefined,
+  { tasks }: ModlistRepositoryCommandsDeps, folders: Folders, landed: Restored, signal: AbortSignal | undefined,
 ): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
   const finished: Restored[number][] = [];
   const unfinished: ItemRefusal<string>[] = [];
   for (const mod of landed) {
-    const why = await whyNotStepped(adapter, tasks, mod, signal);
+    const why = await whyNotStepped(folders, tasks, mod, signal);
     if (why === undefined) finished.push(mod);
     else unfinished.push({ item: mod.mod, reason: `was not finished: ${why}. Restoring it again finishes it.` });
   }
@@ -417,11 +437,11 @@ async function withRestoredStepsRun(
 }
 
 async function whyNotStepped(
-  adapter: Adapter, tasks: StepTasks, { mod, steps }: Restored[number], signal: AbortSignal | undefined,
+  folders: Folders, tasks: StepTasks, { mod, steps }: Restored[number], signal: AbortSignal | undefined,
 ): Promise<string | undefined> {
   if (steps.length === 0) return undefined;
   if (signal?.aborted) return 'the restore was cancelled before its steps ran';
-  const folder = await adapter.modFolderPath(mod);
+  const folder = await folders.of(mod);
   if (folder === undefined) return 'its name gives it no folder for its steps to run in';
   const failed = await tasks.whyStepsFailed(steps, folder);
   return failed === undefined ? undefined : `its ${failed}`;
@@ -439,10 +459,12 @@ async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Man
   return undefined;
 }
 
-async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, paths: readonly string[]): Promise<string | undefined> {
+async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, folder: string | undefined, paths: readonly string[]): Promise<string | undefined> {
+  if (paths.length === 0) return undefined;
+  if (folder === undefined) return 'its name gives it no folder';
   for (const path of paths) {
     try {
-      await adapter.trashModFile(mod, path, trash);
+      await adapter.trashFileIn(folder, path, trash);
     } catch (err) {
       return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
     }
@@ -451,12 +473,12 @@ async function trashedOrWhy(adapter: Adapter, trash: MoveToTrash, mod: string, p
 }
 
 async function restoreFolders(
-  { client, adapter, nexus, tasks }: ModlistRepositoryCommandsDeps, mods: readonly string[], sourceMods: SourceMods,
+  { client, adapter, nexus, tasks }: ModlistRepositoryCommandsDeps, mods: readonly string[], folders: Folders, sourceMods: SourceMods,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
   const gameRelease = await adapter.gameRelease();
   const folder = await namedGameFolder(adapter, gameRelease);
-  const read = await readMods(adapter, mods, noneBeforeTheManifestNamesThem, undefined, sourceMods, { onProgress, signal });
+  const read = await readMods(adapter, mods, folders, noneBeforeTheManifestNamesThem, undefined, sourceMods, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
@@ -551,6 +573,29 @@ async function keptOutOfPublisher(adapter: Adapter): Promise<readonly string[]> 
   }
 }
 
+/** Every other manifest (modlist-repository.md, Every mod, story 1), and each folder the search could not read, or the
+ *  search itself, refused on its own (story 4). */
+export interface OtherManifests { readonly others: readonly OtherManifest[]; readonly refused: readonly ItemRefusal<string>[] }
+
+async function otherManifestsOf(adapter: Adapter): Promise<OtherManifests> {
+  try {
+    const { manifests, unsearched } = await adapter.otherManifests();
+    return { others: manifests, refused: unsearched.map(({ name, reason }) => ({ item: name, reason: `was not searched for a manifest: ${reason}` })) };
+  } catch (err) {
+    return { others: [], refused: [{ item: 'every other manifest', reason: `was not searched for: ${errorMessage(err)}` }] };
+  }
+}
+
+// modlist-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
+async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly string[]> {
+  try {
+    await adapter.writeOtherManifestLines();
+    return [];
+  } catch (err) {
+    return [errorMessage(err)];
+  }
+}
+
 async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
   try {
     const { notes, other } = await adapter.writeSubmodules();
@@ -624,15 +669,18 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     /** A mod whose folder or installation files the Instance adapter cannot answer is refused here, naming why, and mEdit
      *  updates the rest. */
     updateManifest: async (
-      mods: readonly string[], { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {},
+      mods: readonly string[], { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {}, others: readonly OtherManifest[] = [],
     ): Promise<UpdateManifestResult> => {
       const sourceMods = await adapter.sourceMods();
       const game = await gameToHand(adapter, sourceMods);
-      const { sent, gameFiles, refused: unread, notes } = await readMods(adapter, mods, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
+      const folders = foldersOf(adapter, others);
+      const { sent, gameFiles, refused: unread, notes } = await readMods(
+        adapter, namesOf(mods, others), folders, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
       const refused = [...unread];
       if (sent.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
+        if (!folders.isMod(mod.name)) { versioned.push(mod); continue; }
         const metadata = await adapter.modMetadata(mod.name);
         if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
         else versioned.push({ ...mod, version: metadata.answer.version });
@@ -649,16 +697,17 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const submodules = await submodulesWritten(adapter);
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
-        repositoryNotes: [...submodules.repositoryNotes, ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
+        repositoryNotes: [...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
       };
     },
 
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */
-    whatRestoreDestroys: async (mods: readonly string[]): Promise<WhatRestoreDestroys> => {
-      const folders = await byFolder(adapter, mods);
+    whatRestoreDestroys: async (mods: readonly string[], others: readonly OtherManifest[] = []): Promise<WhatRestoreDestroys> => {
+      const folders = foldersOf(adapter, others);
       const asked: ModByFolder[] = [];
       const skipped: ItemRefusal<string>[] = [];
-      for (const folder of folders) {
+      for (const folder of await byFolder(adapter, namesOf(mods, others), folders)) {
+        if (!folders.isMod(folder.name)) { asked.push(folder); continue; }
         const held = await adapter.modMetadata(folder.name);
         if (held.kind === 'unreadable') skipped.push({ item: folder.name, reason: `was skipped: ${metadataUnreadable(held.reason)}.` });
         else asked.push(modWithMetadata(folder, held));
@@ -666,7 +715,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       if (asked.length === 0) return { destroys: [], refused: skipped };
       const listing = await client.getWhatRestoreDestroys(asked, adapter.statCacheFolder);
       if (isReadFailed(listing)) return { refusal: `Could not ask what restore from manifest destroys: ${failureReason(listing)}` };
-      for (const { mod, metadata } of listing.manifests) {
+      for (const { mod, metadata } of listing.manifests.filter(({ mod }) => folders.isMod(mod))) {
         const why = await adapter.unwritableMetadata(mod, heldByAdapter(metadata));
         if (why !== undefined) skipped.push({ item: mod, reason: `was skipped: ${why}.` });
       }
@@ -676,13 +725,14 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
 
     /** `everyManifest`: the mods are every mod, so a source mod whose folder its build has not made joins them. */
     restoreFromManifest: (
-      mods: readonly string[], options: ModlistCallOptions<RestoreStatus> = {}, everyManifest = false,
-    ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options, everyManifest),
+      mods: readonly string[], options: ModlistCallOptions<RestoreStatus> = {}, everyManifest = false, others: readonly OtherManifest[] = [],
+    ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options, everyManifest, others),
+
+    otherManifests: (): Promise<OtherManifests> => otherManifestsOf(adapter),
 
     /** Each mod's folder against its manifest (modlist-repository.md, Status). */
     modStatus: async (mods: readonly string[]): Promise<readonly ModStatus[] | ReadFailed> => {
-      const folders = await byFolder(adapter, mods);
-      const asked = await withMetadataRead(folders, (mod) => adapter.modMetadata(mod));
+      const asked = await withMetadataRead(await byFolder(adapter, mods, foldersOf(adapter, [])), (mod) => adapter.modMetadata(mod));
       return asked.length === 0 ? [] : client.getModStatus(asked, adapter.statCacheFolder);
     },
   };
