@@ -70,6 +70,7 @@ As a user, I want:
 3. A separator in a selection to stand for itself and its mods, so a collapsed group acts whole. Cites: mods.md, The tree, story 2
 4. Each mod to land on its own: a refused or skipped mod never stops the rest. Cites: A selection is one gesture, and each item lands on its own
 5. Progress by mod, with Cancel. Cancel stops after the mod in hand, and the mods that landed stay. Cites: VS Code's progress notification
+6. Two manifests, one folder inside the other's, both refused and named by update manifest as by restore, so neither writes the other's files. Cites: ADR-0022
 
 ## Update manifest
 

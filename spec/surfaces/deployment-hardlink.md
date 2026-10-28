@@ -33,7 +33,7 @@ As a user, I want:
 
 1. On Windows, deploy to write `plugins.txt` where the game reads it, in my Windows user's local application data. Cites: Windows and Linux alike
 2. On Windows, a `plugins.txt` there that deploy did not write to be renamed, not replaced, and the report to name its new name, so I can put it back. Cites: ADR-0003; Never silently wrong
-3. On Linux, deploy to write `plugins.txt` into the prefix of the non-Steam game in Steam that runs a program in the deployment folder. Deploy owns that file. Cites: Windows and Linux alike
+3. On Linux, deploy to write `plugins.txt` into the prefix of the non-Steam game in Steam that runs a program in the deployment folder. A `plugins.txt` there that deploy did not write to be renamed, as on Windows. Cites: Windows and Linux alike; ADR-0003; Never silently wrong
 4. On Linux, with no such non-Steam game or no prefix yet, deploy to write the files, and the report to say that `plugins.txt` was not written, why, and the page that sets it up. Cites: user-docs.md, The wiki, story 2; Never silently wrong
 5. On Windows, the instances of one game to share the one `plugins.txt` the game reads, so the game reads the plugin order of the last deploy. On Linux, each deployment folder's non-Steam game has a prefix of its own, so each instance's `plugins.txt` is its own. Cites: Windows and Linux alike
 
@@ -50,7 +50,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Purge to remove each file deploy wrote that is still as deploy wrote it, and on Windows to put back the `plugins.txt` deploy renamed.
+1. Purge to remove each file deploy wrote that is still as deploy wrote it, and to put back the `plugins.txt` deploy renamed.
 2. Purge to ask nothing. This is an exception to Confirm what destroys: deploy writes again every file purge removes. Cites: commands.md, Confirm what destroys
 
 ## Test seam
