@@ -20,6 +20,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 import { hardlinkDeployment, overwritePathOf, type FileTheGameGets, type PluginOrder } from '../deployment';
 import type { PluginsTxtPlace } from '../pluginsTxtPlace';
 import { recordIn } from '../record';
+import { fileIdAt } from '../changes';
 
 let root: string;
 let mods: string;
@@ -61,6 +62,24 @@ const purge = (to = folder) => hardlinkDeployment(storage, place).purge(to);
 const NOTHING = { wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
 const inode = async (path: string): Promise<bigint> => (await lstat(path, { bigint: true })).ino;
+
+describe('a file ID', () => {
+  it('differs for a file made later that reuses the inode of one removed', async () => {
+    const path = join(root, 'f');
+    await writeFile(path, 'first');
+    const first = await fileIdAt(path);
+    const firstInode = await inode(path);
+    let reused = false;
+    for (let attempt = 0; attempt < 200 && !reused; attempt++) {
+      await rm(path);
+      await writeFile(path, 'later');
+      reused = (await inode(path)) === firstInode;
+    }
+
+    expect.soft(reused).toBe(true);
+    expect(await fileIdAt(path)).not.toBe(first);
+  });
+});
 
 describe('deploy', () => {
   it.each([
@@ -361,7 +380,7 @@ describe('a deploy killed part way through its changes', () => {
   const listing = async () => (await readdir(join(folder, 'Data'))).sort();
   const recording = async (...files: { winner: string }[]) =>
     recordIn(join(storage, 'deployment.json')).write(folder, {
-      files: await Promise.all(files.map(async ({ winner }) => ({ path: 'Data/a.esp', ino: String(await inode(winner)) }))),
+      files: await Promise.all(files.map(async ({ winner }) => ({ path: 'Data/a.esp', ino: (await fileIdAt(winner)) ?? '' }))),
       folders: [],
     });
 
@@ -752,7 +771,7 @@ describe('plugins.txt', () => {
 
     const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
-    expect(recorded.pluginsTxt).toEqual({ path: plugins, ino: String(await inode(plugins)), renamed: [`${plugins}.modbench_renamed`] });
+    expect(recorded.pluginsTxt).toEqual({ path: plugins, ino: await fileIdAt(plugins), renamed: [`${plugins}.modbench_renamed`] });
   });
 });
 

@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
 import { PLUGINS_FILE_NAME, pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
-import { ASIDE, changeAll, fileIdAt, recoveryIn, removedIfEmpty, type Link, type Step } from './changes';
+import { ASIDE, changeAll, fileIdAt, fileIdOf, recoveryIn, removedIfEmpty, type Link, type Step } from './changes';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginsTxtChange, pluginsTxtPurge } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
@@ -113,9 +113,9 @@ async function linksOnTheFolderVolume(folder: string, files: Iterable<FileTheGam
       lost.push({ path: earlier.path, winner });
       continue;
     }
-    const { dev, ino } = await stat(winner, { bigint: true });
-    if (dev !== volume) elsewhere.set(dev, winner);
-    wanted.set(fold(path), { path, source: winner, ino: String(ino) });
+    const stats = await stat(winner, { bigint: true });
+    if (stats.dev !== volume) elsewhere.set(stats.dev, winner);
+    wanted.set(fold(path), { path, source: winner, ino: fileIdOf(stats) });
   }
   if (elsewhere.size > 0) {
     const others = await Promise.all([...elsewhere.values()].map(volumeOf));
