@@ -20,6 +20,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         return new([.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))]) { StatCache = cache };
     }
 
+    public IScratchFiles CreateScratchFiles() => new ScratchFiles();
+
     public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes)
     {
         if (read.StatCache is not { } cache) return null;
@@ -58,7 +60,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             var cache = new StatCache(statCache, modFolder, time);
             var onDisk = there ? FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal) : [];
             List<string> differing = [], gone = [], notInPackage = [], otherBytes = [];
-            foreach (var line in manifest.Files)
+            var packed = manifest.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var line in manifest.Files.Where(line => !packed.Contains(line.Path)))
             {
                 var fixedBy = manifest.FixedBy(line);
                 if (line.Entry is PackageEntry.OtherBytes) otherBytes.Add(line.Path);

@@ -90,6 +90,8 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
 
+    public IScratchFiles CreateScratchFiles() => new ModFolderRepository(TimeProvider.System).CreateScratchFiles();
+
     public bool InstallationFileExists(string path) => _files.ContainsKey((string.Empty, path)) || _streams.ContainsKey((string.Empty, path));
 
     public string InstallationFileName(string path) => path[(path.LastIndexOf('/') + 1)..];

@@ -17,7 +17,7 @@ public sealed class ChangeSourceManifestHandlerTests : IDisposable
     public void Dispose() => _source.Dispose();
 
     private static readonly Manifest Built = new(
-        new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [new ManifestFile("Mod.esp", new PackageEntry.Held())], "1.0")
+        [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)], [new ManifestFile("Mod.esp", new PackageEntry.Held())], "1.0")
     {
         Output = "Old Name",
         Archives = [new ManifestArchive("Mod - Main.ba2", ["meshes/a.nif"])],

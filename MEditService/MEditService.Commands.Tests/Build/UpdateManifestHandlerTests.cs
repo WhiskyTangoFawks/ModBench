@@ -1,5 +1,3 @@
-using System.IO.Compression;
-using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
@@ -23,7 +21,7 @@ public sealed class UpdateManifestHandlerTests
     private Manifest BuiltSourceMod()
     {
         _folders.WithFile(Mod, "a.esp", "built").WithFile(Mod, "z.txt", "edited").WithFile(Mod, "y.txt", "edited");
-        var built = new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [
+        var built = new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)], [
             new ManifestFile("a.esp", new PackageEntry.Held()),
             new ManifestFile("z.txt", new PackageEntry.NotHeld()),
             new ManifestFile("y.txt", new PackageEntry.OtherBytes()),
@@ -44,7 +42,7 @@ public sealed class UpdateManifestHandlerTests
 
     private InstallationFile DownloadedFile(string path, params (string Path, string Hash)[] entries)
     {
-        _folders.WithBytes(string.Empty, path, Zip(entries));
+        _folders.WithBytes(string.Empty, path, DownloadedZip.Bytes(entries));
         return new InstallationFile(path, Page: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, e.Hash))]);
     }
 
@@ -62,20 +60,6 @@ public sealed class UpdateManifestHandlerTests
         var result = await Update(mods);
         Assert.Empty(result.Refused);
         return result.Applied.Single();
-    }
-
-    private static byte[] Zip(params (string Path, string Text)[] entries)
-    {
-        using var buffer = new MemoryStream();
-        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (path, text) in entries)
-            {
-                using var entry = archive.CreateEntry(path).Open();
-                entry.Write(Encoding.ASCII.GetBytes(text));
-            }
-        }
-        return buffer.ToArray();
     }
 
     [Fact]
@@ -115,7 +99,7 @@ public sealed class UpdateManifestHandlerTests
     [MemberData(nameof(VersionsByPackage))]
     public async Task TheVersionOfAMod_IsInItsManifestOnlyWhenTheModHasAPackage(InstallationFile? installationFile, string? version)
     {
-        _folders.WithFile(Mod, "a.txt", "hello").WithBytes(string.Empty, "dl/Mod.zip", Zip(("a.txt", "hello")));
+        _folders.WithFile(Mod, "a.txt", "hello").WithBytes(string.Empty, "dl/Mod.zip", DownloadedZip.Bytes(("a.txt", "hello")));
 
         await Landed(ModFrom("Mod", installationFile) with { Version = "1.2.3" });
 
@@ -184,7 +168,7 @@ public sealed class UpdateManifestHandlerTests
     {
         WithFiles([("textures/a.dds", "optimised"), ("textures/b.dds", "original")]);
         ManifestFile[] madeByStep = [new("textures/a.dds", new PackageEntry.MadeByStep()), new("textures/c.dds", new PackageEntry.MadeByStep())];
-        _folders.Manifests[Mod] = new Manifest(null, madeByStep)
+        _folders.Manifests[Mod] = new Manifest([], madeByStep)
         {
             Steps = [new ManifestStep("Optimise textures", ["textures/a.dds"]), new ManifestStep("Archive", [])],
             Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser")],
@@ -202,7 +186,7 @@ public sealed class UpdateManifestHandlerTests
     public async Task AManifestsOutputExclusionsAndArchives_AreKeptAsWritten()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
-        _folders.Manifests[Mod] = new Manifest(null, [])
+        _folders.Manifests[Mod] = new Manifest([], [])
         {
             Output = "Stock Game",
             Exclude = ["docs/readme.txt"],

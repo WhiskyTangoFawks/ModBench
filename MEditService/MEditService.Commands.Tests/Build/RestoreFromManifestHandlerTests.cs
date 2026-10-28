@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
@@ -25,7 +24,7 @@ public sealed class RestoreFromManifestHandlerTests
     private static InstanceToRestore Instance() => new("stat-cache", ".mohidden", Archives: null, GameFolder: null);
 
     private static ModToRestore ModFrom(string folder, InstallationFile? installationFile = null) =>
-        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile, ["meta.ini"], Submodule: null, UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder: null);
+        new(folder[(folder.LastIndexOf('/') + 1)..], folder, installationFile is null ? [] : [installationFile], ["meta.ini"], Submodule: null, UnreadableGameFiles: null, UnreadableInstallationFiles: null, SourceFolder: null);
 
     private Task<RestoreFromManifestResult> Restore(params ModToRestore[] mods) => RestoreIn(Instance(), mods);
 
@@ -37,7 +36,7 @@ public sealed class RestoreFromManifestHandlerTests
 
     private InstallationFile DownloadedFileOfBytes(string path, params (string Path, byte[] Bytes)[] entries)
     {
-        _folders.WithBytes(string.Empty, path, Zip(entries));
+        _folders.WithBytes(string.Empty, path, DownloadedZip.Bytes(entries));
         return new InstallationFile(path, Page: null, Size: 7, Hash: $"#{path}", [.. entries.Select(e => new HashedEntry(e.Path, Encoding.ASCII.GetString(e.Bytes)))]);
     }
 
@@ -47,7 +46,7 @@ public sealed class RestoreFromManifestHandlerTests
     private static ManifestFile Line(string path, PackageEntry entry) => new(path, entry);
 
     private void Manifested(string folder, InstallationFile installationFile, params ManifestFile[] files) =>
-        _folders.Manifests[folder] = new Manifest(PackageOf(installationFile), files);
+        _folders.Manifests[folder] = new Manifest([PackageOf(installationFile)], files);
 
     private string? WrittenText(string folder, string path) =>
         _folders.Written.TryGetValue((folder, path), out var bytes) ? Encoding.ASCII.GetString(bytes) : null;
@@ -56,20 +55,6 @@ public sealed class RestoreFromManifestHandlerTests
 
     private IEnumerable<ModlistProgress> Progress =>
         _notifications.Notifications.OfType<RestoreFromManifestProgressNotification>().Select(n => n.Progress);
-
-    private static byte[] Zip(params (string Path, byte[] Bytes)[] entries)
-    {
-        using var buffer = new MemoryStream();
-        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (path, bytes) in entries)
-            {
-                using var entry = archive.CreateEntry(path).Open();
-                entry.Write(bytes);
-            }
-        }
-        return buffer.ToArray();
-    }
 
     private ModToRestore AnotherModThatLands()
     {
@@ -95,10 +80,39 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AFileThatNamesItsPackage_IsTakenFromThatPackage_NotFromTheFirst()
+    {
+        var first = DownloadedFile("dl/First.zip", ("a.nif", "from the first"), ("b.nif", "wrong"));
+        var second = DownloadedFile("dl/Second.zip", ("b.nif", "from the second"));
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+        _folders.Manifests[Mod] = new Manifest(
+            [PackageOf(first), PackageOf(second)], [Line("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.Held(), "Second.zip")]);
+
+        Assert.Single((await Restore(ModFrom(Mod) with { InstallationFiles = [first, second] })).Applied);
+
+        Assert.Equal(("from the first", "from the second"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "b.nif")));
+    }
+
+    [Fact]
+    public async Task AFileInAPackageTheRequestDidNotHand_SkipsTheMod_NamingThatPackage_NeverTakingTheFileFromAnother()
+    {
+        var first = DownloadedFile("dl/First.zip", ("a.nif", "from the first"), ("b.nif", "wrong"));
+        var second = PackageOf(DownloadedFile("dl/Second.zip", ("b.nif", "from the second")));
+        _folders.WithFile(Mod, "meta.ini", "[General]");
+        _folders.Manifests[Mod] = new Manifest(
+            [PackageOf(first), second], [Line("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.Held(), "Second.zip")]);
+
+        var skipped = Assert.Single((await Restore(ModFrom(Mod, first))).Refused);
+
+        Assert.Equal((RestoreRefusal.NotFound, second), (skipped.Refusal, Assert.Single(skipped.InstallationFilesNotFound)));
+        Assert.Empty(_folders.Written);
+    }
+
+    [Fact]
     public async Task AManifestThatNamesNothing_LandsWritingNothing_AndNamingItsMetadataNowhere()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
-        _folders.Manifests[Mod] = new Manifest(null, []);
+        _folders.Manifests[Mod] = new Manifest([], []);
 
         var restored = Assert.Single((await Restore(ModFrom(Mod))).Applied);
 
@@ -136,7 +150,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "a.nif", "a");
-        _folders.Manifests[Mod] = new Manifest(PackageOf(downloadedFile) with { Page = "nexus:fallout4:7;7:9" }, [Line("a.nif", new PackageEntry.Held())], "1.2");
+        _folders.Manifests[Mod] = new Manifest([PackageOf(downloadedFile) with { Page = "nexus:fallout4:7;7:9" }], [Line("a.nif", new PackageEntry.Held())], "1.2");
 
         var result = await Restore(ModFrom(Mod, downloadedFile));
 
@@ -214,7 +228,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "mine.txt", "changed");
-        _folders.Manifests[Mod] = new Manifest(PackageOf(downloadedFile), [Line("a.nif", new PackageEntry.Held()), .. lines]);
+        _folders.Manifests[Mod] = new Manifest([PackageOf(downloadedFile)], [Line("a.nif", new PackageEntry.Held()), .. lines]);
 
         var result = await Restore(handed(downloadedFile), AnotherModThatLands());
 
@@ -266,7 +280,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"), ("a.dds", "a"));
         _folders.WithFile(Mod, "a.nif", "edited");
-        _folders.Manifests[Mod] = new Manifest(PackageOf(downloadedFile), [Line("a.nif", new PackageEntry.Held()), Line("a.dds", new PackageEntry.MadeByStep())])
+        _folders.Manifests[Mod] = new Manifest([PackageOf(downloadedFile)], [Line("a.nif", new PackageEntry.Held()), Line("a.dds", new PackageEntry.MadeByStep())])
         {
             Steps = [new ManifestStep("Optimise textures", ["a.dds"])],
             Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser")],
@@ -278,7 +292,7 @@ public sealed class RestoreFromManifestHandlerTests
     public async Task AManifestWithHeldFilesAndNoPackage_IsSkipped_NamingEachFile()
     {
         _folders.WithFile(Mod, "a.nif", "a");
-        _folders.Manifests[Mod] = new Manifest(null, [Line("a.nif", new PackageEntry.Held())]);
+        _folders.Manifests[Mod] = new Manifest([], [Line("a.nif", new PackageEntry.Held())]);
 
         var skipped = Assert.Single((await Restore(ModFrom(Mod))).Refused);
 
@@ -290,12 +304,12 @@ public sealed class RestoreFromManifestHandlerTests
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
         var named = new ManifestPackage.InstallationFile("Mod.zip", 7, "#dl/Mod.zip", "https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2");
-        _folders.Manifests[Mod] = new Manifest(named, []);
+        _folders.Manifests[Mod] = new Manifest([named], []);
 
         var skipped = Assert.Single((await Restore(ModFrom(Mod))).Refused);
 
         Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
-        Assert.Equal(named, skipped.InstallationFileNotFound);
+        Assert.Equal(named, Assert.Single(skipped.InstallationFilesNotFound));
     }
 
     [Fact]
@@ -326,7 +340,7 @@ public sealed class RestoreFromManifestHandlerTests
     [Fact]
     public async Task AFileComesBackFromAnEntryNamedWithBackslashes()
     {
-        _folders.WithFile(Mod, "meshes/a.nif", "edited").WithBytes(string.Empty, "dl/Mod.zip", Zip(("meshes\\a.nif", "a"u8.ToArray())));
+        _folders.WithFile(Mod, "meshes/a.nif", "edited").WithBytes(string.Empty, "dl/Mod.zip", DownloadedZip.Bytes(("meshes\\a.nif", "a"u8.ToArray())));
         var downloadedFile = new InstallationFile("dl/Mod.zip", null, 7, "#zip", [new HashedEntry("meshes/a.nif", "a")]);
         Manifested(Mod, downloadedFile, Line("meshes/a.nif", new PackageEntry.Held()));
 
@@ -356,7 +370,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.nif", "edited");
         _folders.Manifests[Mod] = new Manifest(
-            new ManifestPackage.InstallationFile("Mod.zip", 7, "#dl/Mod.zip"),
+            [new ManifestPackage.InstallationFile("Mod.zip", 7, "#dl/Mod.zip")],
             [Line("a.nif", new PackageEntry.Held()), Line("c.nif", new PackageEntry.NotHeld())]);
 
         var skipped = Assert.Single((await Restore(ModFrom(Mod))).Refused);
@@ -415,7 +429,7 @@ public sealed class RestoreFromManifestHandlerTests
 
     private void GameFolderModManifested(params (string Path, string Text)[] taken) =>
         _folders.Manifests[Mod] = new Manifest(
-            new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([.. taken.Select(file => new HashedFile(file.Path, file.Text))])),
+            [new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([.. taken.Select(file => new HashedFile(file.Path, file.Text))]))],
             [.. taken.Select(file => Line(file.Path, new PackageEntry.Held()))]);
 
     private static InstanceToRestore InstanceWithGameFiles(params (string Path, string Text)[] files) =>
@@ -466,7 +480,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.nif", "a");
         _folders.Manifests[Mod] = new Manifest(
-            new ManifestPackage.GameFolder("Fallout 4", "#"), [Line("a.nif", new PackageEntry.Held()), Line("mine.txt", new PackageEntry.NotHeld())]);
+            [new ManifestPackage.GameFolder("Fallout 4", "#")], [Line("a.nif", new PackageEntry.Held()), Line("mine.txt", new PackageEntry.NotHeld())]);
         var unread = ModFrom(Mod) with { UnreadableGameFiles = new Dictionary<string, string> { ["a.nif"] = "EACCES" } };
 
         var refused = Assert.Single((await Restore(unread)).Refused);
@@ -480,7 +494,7 @@ public sealed class RestoreFromManifestHandlerTests
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "a.nif", "a");
         Manifested(Mod, downloadedFile, Line("a.nif", new PackageEntry.Held()));
-        var unread = ModFrom(Mod) with { UnreadableInstallationFile = "EACCES" };
+        var unread = ModFrom(Mod) with { UnreadableInstallationFiles = new Dictionary<string, string> { ["Mod.zip"] = "EACCES" } };
 
         var refused = Assert.Single((await Restore(unread)).Refused);
 

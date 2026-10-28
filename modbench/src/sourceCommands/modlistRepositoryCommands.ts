@@ -12,7 +12,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { initRepositoryIn } from './initRepositoryIn';
-import { namedDownloadedFiles } from './namedDownloadedFiles';
+import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
@@ -109,9 +109,6 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
   }
   return asked;
 }
-
-const wireFile = (file: InstallationFile | undefined): UpdateManifestMod['installationFile'] =>
-  (file === undefined ? undefined : { path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] });
 
 async function gameFilesOf(
   adapter: Adapter, mod: string, game: GameToHand | undefined,
@@ -399,25 +396,49 @@ async function restoreFolders(
     const notFound = retried.get(mod.name);
     return notFound === undefined
       ? [] : [{
-        ...mod, installationFile: wireFile(downloaded.handed(notFound.installationFile?.name)), submodule: submodules.handed(notFound.submodule),
-        unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFile: downloaded.unreadable(notFound.installationFile?.name),
+        ...mod, installationFiles: notFound.installationFiles.flatMap((file) => wireFile(downloaded.handed(file.name)) ?? []), submodule: submodules.handed(notFound.submodule),
+        unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFiles: downloaded.unreadableAmong(notFound.installationFiles),
       }];
   });
-  const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: false }, restoring);
+  const builtFromSource = new Set(again.filter((mod) => mod.submodule !== undefined).map((mod) => mod.name));
+  const secondFacts = { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: builtFromSource.size > 0 };
+  const second = await restoreOnce(client, again, secondFacts, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
-  const unreadFor = new Map(second.notFound.map(({ mod, submodule, installationFile }) => {
-    const notDownloaded = downloaded.notDownloaded(installationFile?.name);
-    return [mod, submodules.unread(submodule) + (notDownloaded === undefined ? '' : sentence(notDownloaded))];
+
+  // modlist-repository.md, Restore from manifest, story 3: the manifest of a source mod names its installation files, and
+  // it is read once its submodule is checked out.
+  const needing = new Map(second.notFound.filter((notFound) => builtFromSource.has(notFound.mod) && notFound.installationFiles.length > 0).map((notFound) => [notFound.mod, notFound]));
+  const fetched = needing.size === 0 || signal?.aborted
+    ? undefined
+    : await namedDownloadedFiles({ adapter, nexus }, [...needing.values()], { onDownload: (file) => { onProgress?.({ phase: 'Downloading', file }); }, signal });
+  const third = fetched === undefined || signal?.aborted ? undefined : await restoreOnce(
+    client,
+    again.flatMap((mod) => {
+      const notFound = needing.get(mod.name);
+      return notFound === undefined ? [] : [{
+        ...mod, installationFiles: notFound.installationFiles.flatMap((file) => wireFile(fetched.handed(file.name)) ?? []),
+        unreadableInstallationFiles: fetched.unreadableAmong(notFound.installationFiles),
+      }];
+    }),
+    { ...secondFacts, asksWhatItLacks: false }, restoring);
+  if (third !== undefined && !third.applied) return { ...third, landed: [...first.landed, ...second.landed] };
+
+  const answeredAgain = new Set(third === undefined ? [] : needing.keys());
+  const stillLacking = [...second.notFound.filter(({ mod }) => !answeredAgain.has(mod)), ...(third?.notFound ?? [])];
+  const unreadFor = new Map(stillLacking.map(({ mod, submodule, installationFiles }) => {
+    const whyNot = installationFiles.flatMap(({ name }) => [downloaded.notDownloaded(name), fetched?.notDownloaded(name)].filter((why) => why !== undefined));
+    return [mod, submodules.unread(submodule) + whyNot.map(sentence).join('')];
   }));
+  const refusedAgain = [...second.refused.filter(({ item }) => !answeredAgain.has(item)), ...(third?.refused ?? [])];
   return {
     applied: true,
-    landed: [...first.landed, ...second.landed],
+    landed: [...first.landed, ...second.landed, ...(third?.landed ?? [])],
     refused: [
       ...firstRefused,
-      ...second.refused.map((refused) => ({ ...refused, reason: refused.reason + (unreadFor.get(refused.item) ?? '') })),
+      ...refusedAgain.map((refused) => ({ ...refused, reason: refused.reason + (unreadFor.get(refused.item) ?? '') })),
       ...read.refused,
     ],
-    ...cancelRefused(second.cancelRefusal, cancelRefusal),
+    ...cancelRefused(third?.cancelRefusal, second.cancelRefusal, cancelRefusal),
   };
 }
 

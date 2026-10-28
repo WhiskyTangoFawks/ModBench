@@ -37,7 +37,7 @@ public sealed class ModStatusMetadataTests : IDisposable
         ManifestPackage? package = manifest.InstallationFile is { } file
             ? new ManifestPackage.InstallationFile(file.Name, 1, "hash", file.Page)
             : manifest.Version is not null ? new ManifestPackage.GameFolder("Fallout4", "hash") : null;
-        _repository.WriteManifest(_root, "mod", new Manifest(package, [], manifest.Version));
+        _repository.WriteManifest(_root, "mod", new Manifest(package is null ? [] : [package], [], manifest.Version));
         return _repository.Status(_root, "mod", new HashSet<string>(), _statCache, held, sourceFolder: null);
     }
 

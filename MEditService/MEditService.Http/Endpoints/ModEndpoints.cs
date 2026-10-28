@@ -106,7 +106,7 @@ internal static class ModEndpoints
         return await EndpointMapping.Answered(
             "Build", logger,
             buildModHandler.BuildAsync(
-                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule, mod.Made))],
+                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule, mod.Made) { InstallationFiles = [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], UnreadableInstallationFiles = mod.UnreadableInstallationFiles })],
                 new InstanceToBuild(req.ExclusionMark, variants, req.StatCache) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal) }),
             EndpointMapping.Refusal);
     }
@@ -126,7 +126,8 @@ internal sealed record BuildRequest(
 /// repository is a submodule (ADR-0022). Made: the files its build answered it made, handed back once its steps ran.</summary>
 internal sealed record BuildModRequest(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false,
-    IReadOnlyList<string>? Made = null);
+    IReadOnlyList<string>? Made = null, IReadOnlyList<InstallationFileRequest>? InstallationFiles = null,
+    IReadOnlyDictionary<string, string>? UnreadableInstallationFiles = null);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)

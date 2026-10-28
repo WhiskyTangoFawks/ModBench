@@ -1055,13 +1055,18 @@ export interface components {
             version?: string | null;
             isSubmodule: boolean;
             made?: string[] | null;
+            installationFiles?: components["schemas"]["InstallationFileRequest"][] | null;
+            unreadableInstallationFiles?: {
+                [key: string]: string;
+            } | null;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool" | "InstallationFileLacking";
         BuildRefused: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
+            installationFilesNotFound: components["schemas"]["InstallationFile"][];
         };
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
@@ -1853,8 +1858,11 @@ export interface components {
             unreadableGameFiles?: {
                 [key: string]: string;
             } | null;
-            unreadableInstallationFile?: string | null;
+            unreadableInstallationFiles?: {
+                [key: string]: string;
+            } | null;
             sourceFolder?: string | null;
+            installationFiles?: components["schemas"]["InstallationFileRequest"][] | null;
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
@@ -1876,7 +1884,7 @@ export interface components {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
-            installationFileNotFound?: components["schemas"]["InstallationFile"] | null;
+            installationFilesNotFound: components["schemas"]["InstallationFile"][];
             gameFilesNotFound: string[];
             buildRefusal: components["schemas"]["BuildRefusal"];
             submoduleNotFound?: string | null;
