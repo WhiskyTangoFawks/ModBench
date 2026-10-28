@@ -66,9 +66,9 @@ function deployedPath(relativePath: string): string | undefined {
  *  or undefined when no mod file lands at that path. */
 export function overwritePathOf(path: string): string | undefined {
   const [first = '', ...below] = path.split('/');
-  if (path.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'))) return undefined;
   const inOverwrite = fold(first) === 'data' && below.length > 0 ? below.join('/') : `Root/${path}`;
-  return deployedPath(inOverwrite) === undefined ? undefined : inOverwrite;
+  const back = deployedPath(inOverwrite);
+  return back !== undefined && fold(back) === fold(path) ? inOverwrite : undefined;
 }
 
 async function volumeOf(path: string): Promise<string> {
@@ -144,8 +144,8 @@ async function filesBelow(folder: string, within = ''): Promise<string[]> {
 }
 
 async function unmanagedIn(folder: string, managed: readonly Written[]): Promise<string[]> {
-  const ours = new Set(managed.map(({ path }) => fold(path)));
-  return (await filesBelow(folder)).filter((path) => !ours.has(fold(path)) && !path.includes(ASIDE));
+  const ours = new Set(managed.map(({ path }) => path));
+  return (await filesBelow(folder)).filter((path) => !ours.has(path) && !path.includes(ASIDE));
 }
 
 async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned: ReadonlyMap<string, Written>): Promise<Plan> {
@@ -201,7 +201,7 @@ async function deployTo(
   const owned = await stillWritten(folder, recorded.files);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
-  const unmanaged = await unmanagedIn(folder, [...after, ...removals, ...relinks]);
+  const unmanaged = await unmanagedIn(folder, [...after, ...removals]);
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();

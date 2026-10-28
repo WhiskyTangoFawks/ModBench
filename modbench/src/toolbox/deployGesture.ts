@@ -14,7 +14,7 @@ interface DeployGestureDeps {
 const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
 
 // deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
-export function registerDeployCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
+export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
   const deploy = async (): Promise<void> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
@@ -30,7 +30,7 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
       const { unmanaged } = result;
       reporter.shownOnSurface('warning', 'The deployment folder holds files deploy does not manage:', unmanaged.join(', '));
       reporter.report('warning', `The deployment folder holds ${unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
-        { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, unmanaged) });
+        result.canMoveToOverwrite ? { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, unmanaged) } : undefined);
     }
     if (result.lost.length > 0) {
       reporter.report('warning', 'Deploy left out each file whose path another file the game gets wins:',

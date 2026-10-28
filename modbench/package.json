@@ -453,7 +453,7 @@
       },
       {
         "command": "modbench.instance.moveToOverwrite",
-        "title": "Move Files Deploy Does Not Manage to Overwrite",
+        "title": "Move to Overwrite",
         "category": "Modbench"
       },
       {

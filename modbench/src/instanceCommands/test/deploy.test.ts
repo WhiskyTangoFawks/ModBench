@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Deployed, Deployment, FileTheGameGets, PluginOrder } from '../../deployment/deployment';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { deployCommands, type DeploymentFolderSetting, type LoadOrderToDeploy } from '../deploy';
 
 const NOT_IN_GAME = { gameFolder: () => Promise.resolve({ kind: 'found' as const, root: '/games/Fallout4', dataFolder: '/games/Fallout4/Data' }) };
-const NO_MOVES = { moveIntoOverwrite: () => Promise.resolve(), ...NOT_IN_GAME };
+const NO_MOVES = { moveIntoOverwrite: () => Promise.resolve(undefined), ...NOT_IN_GAME };
 const SETTING_ID = 'modbench.deployment.folder';
 const FILES: FileTheGameGets[] = [{ relativePath: 'a.esp', winner: '/instance/mods/Mod/a.esp' }];
 const LOAD: LoadOrderToDeploy = { files: FILES, plugins: [], gameName: 'Fallout 4' };
@@ -32,7 +33,27 @@ describe('deploy', () => {
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
 
-    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: [{ path: 'Data/mine.ini', winner: '/instance/mods/Mod/mine.ini' }], unmanaged: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }, [['/deployed', FILES, { release: 'Fallout4', entries: [] }]]]);
+    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: [{ path: 'Data/mine.ini', winner: '/instance/mods/Mod/mine.ini' }], unmanaged: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] }, canMoveToOverwrite: true }, [['/deployed', FILES, { release: 'Fallout4', entries: [] }]]]);
+  });
+
+  it.each([
+    ['is the game folder', '/games/Fallout4'],
+    ['holds the game folder', '/games'],
+    ['sits inside the game folder', '/games/Fallout4/Data'],
+  ])('answers that moving to Overwrite does not apply when the deployment folder %s', async (_case, folder) => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) }).deploy(LOAD);
+
+    expect(result).toMatchObject({ applied: true, canMoveToOverwrite: false });
+  });
+
+  it('answers that moving to Overwrite does not apply when deploy manages every file', async () => {
+    const { deployment } = deploymentAnswering(() => Promise.resolve({ wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }));
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
+
+    expect(result).toMatchObject({ applied: true, canMoveToOverwrite: false });
   });
 
   it.each([
@@ -79,44 +100,41 @@ describe('deploy', () => {
 });
 
 describe('move to Overwrite', () => {
-  function moving(answer: () => Promise<void> = () => Promise.resolve(), folder = '/deployed', gameRoot = '/games/Fallout4') {
-    const moved: unknown[] = [];
-    const adapter = {
-      moveIntoOverwrite: (moves: unknown) => { moved.push(moves); return answer(); },
-      gameFolder: () => Promise.resolve({ kind: 'found' as const, root: gameRoot, dataFolder: `${gameRoot}/Data` }),
-    };
-    const commands = deployCommands({ adapter, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) });
-    return { moved, commands };
+  function moving(folder = '/deployed', gameRoot = '/games/Fallout4') {
+    const fake = fakeInstanceAdapter(readingFixture({ gameFolder: { kind: 'found', root: gameRoot, dataFolder: `${gameRoot}/Data` } }), {});
+    const commands = deployCommands({ adapter: fake.adapter, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) });
+    return { adapter: fake, commands };
   }
 
   it('moves each file from its path in the deployment folder to the path the next deploy links it back from', async () => {
-    const { moved, commands } = moving();
+    const { adapter, commands } = moving();
 
     const result = await commands.moveToOverwrite(['Data/MCM/settings.ini', 'game.exe']);
 
-    expect([result, moved]).toEqual([{ applied: true, wrote: true, left: [] }, [[
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [
       { from: '/deployed/Data/MCM/settings.ini', relativePath: 'MCM/settings.ini' }, { from: '/deployed/game.exe', relativePath: 'Root/game.exe' },
-    ]]]);
+    ] }]]);
   });
 
   it('moves the files deploy does not manage now when none are named', async () => {
-    const { moved, commands } = moving();
+    const { adapter, commands } = moving();
 
     const result = await commands.moveToOverwrite();
 
-    expect([result, moved]).toEqual([{ applied: true, wrote: true, left: [] }, [[{ from: '/deployed/Data/current.ini', relativePath: 'current.ini' }]]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: '/deployed/Data/current.ini', relativePath: 'current.ini' }] }]]);
   });
 
   it('leaves in the folder, and names, each file no mod file can land at the path of, and moves the rest', async () => {
-    const { moved, commands } = moving();
+    const { adapter, commands } = moving();
 
-    const result = await commands.moveToOverwrite(['Data/.hidden', 'Data/a.esp']);
+    const result = await commands.moveToOverwrite(['Data/.hidden', 'Data/Root/x.ini', 'Data/a.esp']);
 
-    expect([result, moved]).toEqual([{ applied: true, wrote: true, left: ['Data/.hidden'] }, [[{ from: '/deployed/Data/a.esp', relativePath: 'a.esp' }]]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: ['Data/.hidden', 'Data/Root/x.ini'] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: '/deployed/Data/a.esp', relativePath: 'a.esp' }] }]]);
   });
 
-  it('is refused with the reason Overwrite cannot take the files', async () => {
-    const { commands } = moving(() => Promise.reject(new Error('"a.esp" is already in Overwrite.')));
+  it('is refused with the reason Overwrite gives', async () => {
+    const adapter = { ...NOT_IN_GAME, moveIntoOverwrite: () => Promise.resolve('"a.esp" is already in Overwrite.') };
+    const commands = deployCommands({ adapter, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) });
 
     expect(await commands.moveToOverwrite(['Data/a.esp'])).toEqual({ applied: false, refusal: '"a.esp" is already in Overwrite.' });
   });
@@ -126,19 +144,19 @@ describe('move to Overwrite', () => {
     ['holds the game folder', '/games'],
     ['sits inside the game folder', '/games/Fallout4/Data'],
   ])('is refused, moving nothing, when the deployment folder %s', async (_case, folder) => {
-    const { moved, commands } = moving(undefined, folder);
+    const { adapter, commands } = moving(folder);
 
     const result = await commands.moveToOverwrite(['Data/a.esp']);
 
-    expect([result, moved]).toEqual([{ applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
+    expect([result, adapter.calls]).toEqual([{ applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
   });
 
   it('moves from a deployment folder whose name is only the start of the game folder\'s', async () => {
-    const { moved, commands } = moving(undefined, '/games/Fallout');
+    const { adapter, commands } = moving('/games/Fallout');
 
     await commands.moveToOverwrite(['Data/a.esp']);
 
-    expect(moved).toHaveLength(1);
+    expect(adapter.calls).toEqual([{ verb: 'moveIntoOverwrite', moves: [{ from: '/games/Fallout/Data/a.esp', relativePath: 'a.esp' }] }]);
   });
 
   it('is refused, naming the setting, while the setting holds no value', async () => {

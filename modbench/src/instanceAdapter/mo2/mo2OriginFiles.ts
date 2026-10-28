@@ -71,13 +71,15 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
 
     async moveIntoOverwrite(moves) {
       const folder = overwriteDir(context.instanceRoot);
-      const targets = moves.map(({ from, relativePath }) => {
+      const targets: { from: string; to: string }[] = [];
+      const taken = new Set<string>();
+      for (const { from, relativePath } of moves) {
         const to = fileUnder(folder, relativePath);
-        if (to === undefined) throw new Error(`Not a file of Overwrite: "${relativePath}"`);
-        return { from, to, relativePath };
-      });
-      for (const { to, relativePath } of targets) {
-        if (await exists(to)) throw new Error(`"${relativePath}" is already in Overwrite.`);
+        if (to === undefined) return `Not a file of Overwrite: "${relativePath}"`;
+        if (taken.has(relativePath.toLowerCase())) return `More than one file is moving to "${relativePath}" in Overwrite.`;
+        if (await exists(to)) return `"${relativePath}" is already in Overwrite.`;
+        taken.add(relativePath.toLowerCase());
+        targets.push({ from, to });
       }
       const undos: Undo[] = [];
       try {
@@ -91,6 +93,7 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       } catch (err) {
         throw await undoAll(undos, err);
       }
+      return undefined;
     },
 
     exclusionMark: EXCLUDED_SUFFIX,

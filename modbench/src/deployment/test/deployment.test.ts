@@ -787,6 +787,14 @@ describe('the files in the deployment folder deploy does not manage', () => {
     expect((await hardlinkDeployment(storage, place).unmanaged(folder)).sort()).toEqual(['Data/b.esp', 'game.exe']);
   });
 
+  it.skipIf(process.platform === 'win32')('names a file whose name differs only in case from one deploy wrote', async () => {
+    const written = await modFile('Mod', 'foo.esp');
+    await deploy([written]);
+    await writeFile(join(folder, 'Data', 'Foo.esp'), 'mine');
+
+    expect((await deploy([written])).unmanaged).toEqual(['Data/Foo.esp']);
+  });
+
   it('names none in an empty folder', async () => {
     expect((await deploy([])).unmanaged).toEqual([]);
   });
@@ -799,6 +807,7 @@ describe('the path in Overwrite that the next deploy links back to a path below 
     ['a file at the root', 'f4se_loader.exe', 'Root/f4se_loader.exe'],
     ['a file below a root folder', 'f4se/plugins/x.dll', 'Root/f4se/plugins/x.dll'],
     ['a dot file at the root', '.gitignore', 'Root/.gitignore'],
+    ['a file at the root named for a folder of Data', 'Root.ini', 'Root/Root.ini'],
   ])('is %s', (_case, path, inOverwrite) => {
     expect(overwritePathOf(path)).toBe(inOverwrite);
   });
@@ -806,8 +815,7 @@ describe('the path in Overwrite that the next deploy links back to a path below 
   it.each([
     ['a dot file at the root of Data', 'Data/.hidden'],
     ['a file in a source folder at the root of Data', 'Data/source/x.psc'],
-    ['a path that leaves the folder', 'Data/../x'],
-    ['a path with an empty segment', 'Data//x'],
+    ['a file in a Root folder under Data', 'Data/Root/x.ini'],
   ])('is none for %s, which deploy would not link back', (_case, path) => {
     expect(overwritePathOf(path)).toBeUndefined();
   });

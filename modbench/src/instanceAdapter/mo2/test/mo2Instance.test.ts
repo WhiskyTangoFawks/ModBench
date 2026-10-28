@@ -2281,7 +2281,9 @@ describe('the MO2 Instance adapter', () => {
         await put(elsewhere('b.txt'), 'mine');
         await put(join(root, 'overwrite', 'b.txt'), 'theirs');
 
-        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'a.txt' }, { from: elsewhere('b.txt'), relativePath: 'b.txt' }])).rejects.toThrow('"b.txt" is already in Overwrite.');
+        const refusal = await adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'a.txt' }, { from: elsewhere('b.txt'), relativePath: 'b.txt' }]);
+
+        expect(refusal).toBe('"b.txt" is already in Overwrite.');
 
         expect([await isThere(elsewhere('a.txt')), await isThere(join(root, 'overwrite', 'a.txt')), await text(root, join('overwrite', 'b.txt'))]).toEqual([true, false, 'theirs']);
       });
@@ -2289,9 +2291,19 @@ describe('the MO2 Instance adapter', () => {
       it('refuses a path that leaves Overwrite', async () => {
         await put(elsewhere('a.txt'), 'mine');
 
-        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: '../mods/a.txt' }])).rejects.toThrow('Not a file of Overwrite');
+        expect(await adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: '../mods/a.txt' }])).toBe('Not a file of Overwrite: "../mods/a.txt"');
 
         expect(await isThere(elsewhere('a.txt'))).toBe(true);
+      });
+
+      it.each([['one path', 'x.ini', 'x.ini'], ['paths that differ only in case', 'a/X.ini', 'a/x.INI']])('refuses, and moves nothing, when two files move to %s', async (_case, first, second) => {
+        await put(elsewhere('1'), 'first');
+        await put(elsewhere('2'), 'second');
+
+        const refusal = await adapter.moveIntoOverwrite([{ from: elsewhere('1'), relativePath: first }, { from: elsewhere('2'), relativePath: second }]);
+
+        expect([refusal, await text(root, join('deployed', '1')), await text(root, join('deployed', '2')), await isThere(join(root, 'overwrite', first))])
+          .toEqual([`More than one file is moving to "${second}" in Overwrite.`, 'first', 'second', false]);
       });
 
       it('puts back the files before the one that failed to move', async () => {
