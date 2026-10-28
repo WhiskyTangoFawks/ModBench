@@ -16,7 +16,7 @@ function modsOfDefinition({ mods = [] }: vscode.TaskDefinition): Argument[] {
   return mods.map((name) => ({ kind: 'mod', name }));
 }
 
-/** A refusal, or a mod that landed in part, fails the task; a warning does not (mods.md, Build, story 15). */
+// mods.md, Build, story 15: a refusal or a mod landed in part fails the task, and a warning does not.
 function buildVerdict(result: Built): TaskVerdict {
   if (!result.applied) return { passed: false, lines: [result.refusal, ...(result.detail === undefined ? [] : [result.detail])] };
   const { landed, refused } = result.outcome;
