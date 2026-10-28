@@ -4,7 +4,7 @@ import { fakeInstanceAdapter, readingFixture, sourceModsOf, type InstanceAnswers
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import type { BuildMod, BuildOutcome } from '../../client';
+import type { BuildMod, BuildOutcome, ManifestStep } from '../../client';
 
 const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 
@@ -28,13 +28,11 @@ describe('sourceCommands build', () => {
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(['Optimise textures']) }).build(['ModA', 'ModB']);
 
     const ba2 = { ba2: { version: 1, compressed: true } };
-    expect(client.calls).toEqual([{
-      method: 'build',
-      args: [[
-        { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true },
-        { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false },
-      ], { exclusionMark: EXCLUSION_MARK, archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache', tasks: ['Optimise textures'] }],
-    }]);
+    const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache', tasks: ['Optimise textures'] };
+    expect(client.calls).toEqual([
+      { method: 'build', args: [[{ name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true }], facts] },
+      { method: 'build', args: [[{ name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false }], facts] },
+    ]);
   });
 
   it('saves each mod\'s source folder, and refuses a mod whose file VS Code leaves unsaved, naming the file, while the rest build', async () => {
@@ -52,8 +50,7 @@ describe('sourceCommands build', () => {
 
     expect(saved).toEqual(['/instance/source/ModA', '/instance/source/Old ModB']);
     expect(predicates).toEqual([isPluginSourcePath, isPluginSourcePath]);
-    expect(client.calls).toHaveLength(1);
-    expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModA' }]);
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }]]);
     expect(outcome).toMatchObject({
       refused: [{ item: 'ModB', reason: 'VS Code did not save its plugin source: /instance/source/Old ModB/plugin-source/B.esp/Cell.json' }],
     });
@@ -115,6 +112,48 @@ describe('sourceCommands build', () => {
 
     expect(client.calls).toMatchObject([{ args: [[{ name: sent }], expect.anything()] }]);
     expect(outcome).toEqual({ ...BUILT, refused: [{ item, reason }] });
+  });
+});
+
+describe('sourceCommands build, in mod order', () => {
+  const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'separator', name: 'Group', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
+  const builtOf = (mod: string, steps: readonly ManifestStep[] = []) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [...steps], made: [] });
+  const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], sourceMods: sourceModsOf(SOURCES) })).adapter;
+
+  it('builds the mods from the losing end of mod order, the winning mod last, whatever order they were asked in', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModB' }], [{ name: 'ModA' }]]);
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+  });
+
+  it('reports the mods that built when mEdit refuses a later mod, and refuses that mod and the rest, naming why', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) =>
+      Promise.resolve(mods[0]?.name === 'ModB' ? { landed: [builtOf('ModB')], refused: [] } : { refused: true as const, message: 'mEdit stopped' }));
+
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+
+    expect(outcome).toEqual({ landed: [builtOf('ModB')], refused: [{ item: 'ModA', reason: 'was not built: mEdit stopped' }] });
+  });
+
+  it('runs a mod\'s steps and has its manifest written before the next mod builds', async () => {
+    const steps: ManifestStep[] = [{ task: 'Patch', args: [] }];
+    const log: string[] = [];
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
+      log.push(`${mods[0]?.made ? 'manifest' : 'build'} ${mods[0]?.name}`);
+      return Promise.resolve({ landed: [builtOf(mods[0]?.name ?? '', mods[0]?.made ? [] : steps)], refused: [] });
+    });
+    const tasks = recordingTasks(['Patch']);
+    const logging = { ...tasks, whyStepsFailed: (ran: readonly ManifestStep[], folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
+
+    await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: logging }).build(['ModA', 'ModB']);
+
+    expect(log).toEqual(['build ModB', 'steps /mods/ModB', 'manifest ModB', 'build ModA', 'steps /mods/ModA', 'manifest ModA']);
   });
 });
 
