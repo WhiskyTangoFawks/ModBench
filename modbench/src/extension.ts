@@ -1,6 +1,8 @@
 // The composition root (target-architecture.d2, Activation): builds every box and registers it
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient, type ReadModStatus } from './client';
 import { makeReporter } from './drivingLib/reporter';
@@ -175,7 +177,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
-  const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting }));
+  const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, join(homedir(), '.steam', 'steam'));
+  const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeOfPluginsTxt }));
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
@@ -222,7 +225,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   own(registerDeployCommand({
     commands: deployCommands({
-      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, pluginsTxtPlace()),
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt),
       deploymentFolder: deploymentFolderSetting,
     }),
     instance, reporter: reporterFor('deploy'),

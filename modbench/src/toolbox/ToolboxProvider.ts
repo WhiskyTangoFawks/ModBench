@@ -4,6 +4,8 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
+import { gameReleaseForGame } from '../tables/gamePaths';
+import type { PluginsTxtPlace } from '../deployment/pluginsTxtPlace';
 import { deploymentFolderOf, type DeploymentFolderSetting } from '../instanceCommands/deploy';
 
 export interface DeploymentRowSetting extends DeploymentFolderSetting {
@@ -12,7 +14,7 @@ export interface DeploymentRowSetting extends DeploymentFolderSetting {
 }
 
 type ToolboxDeps =
-  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting }
+  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting; pluginsTxtPlace: PluginsTxtPlace }
   | { instance: undefined };
 
 const versionText = (version: ProgramVersion): string => {
@@ -125,6 +127,15 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
+  }
+
+  async resolveTreeItem(item: vscode.TreeItem): Promise<vscode.TreeItem> {
+    if (!this.deps.instance || item.contextValue !== 'deployment') return item;
+    const folder = deploymentFolderOf(this.deps.deploymentFolder);
+    if (folder === undefined) return item;
+    const where = await this.deps.pluginsTxtPlace(gameReleaseForGame(this.deps.instance.value.gameName), folder);
+    item.tooltip = `${folder}\n${'folder' in where ? `plugins.txt: ${where.folder}` : `No plugins.txt: ${where.why}`}`;
+    return item;
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
