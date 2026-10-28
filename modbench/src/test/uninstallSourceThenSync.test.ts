@@ -37,7 +37,8 @@ async function instanceWithSourceMod(): Promise<{ root: string; adapter: Instanc
   await mkdir(join(root, 'mods', MOD), { recursive: true });
   await writeFile(join(root, 'mods', MOD, 'a.txt'), 'x');
   const adapter = adapterOver(root);
-  expect(await modSyncOver(adapter)()).toMatchObject({ applied: true, added: expect.arrayContaining([MOD]) });
+  const added = await modSyncOver(adapter)();
+  expect(added.applied && added.added).toContain(MOD);
   return { root, adapter };
 }
 
