@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { INSTALLATION_FILE_EXTENSIONS } from './installationFileNames';
 import { errorMessage } from '../../ports/errorMessage';
 import type { InstallationFileReader } from './installationFileReader';

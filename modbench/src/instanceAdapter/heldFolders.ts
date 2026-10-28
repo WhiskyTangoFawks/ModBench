@@ -5,7 +5,7 @@ import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { errnoCode } from './errno';
+import { errnoCode } from '../ports/errno';
 import { ignoreSkippedLink, listFolders } from './files';
 
 export interface HeldFolderWatch {

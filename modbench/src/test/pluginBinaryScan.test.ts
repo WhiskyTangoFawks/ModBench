@@ -96,7 +96,7 @@ const VERSION_READ: ByteReader = {
 };
 
 const FOMOD_XML_READ: ByteReader = {
-  imports: { 'node:fs/promises': new Set(['readFile']), '../errno': new Set(['errnoCode']) },
+  imports: { 'node:fs/promises': new Set(['readFile']), '../../ports/errno': new Set(['errnoCode']) },
   exports: new Set(['releaseXmlText']),
   exportReturns: 'Promise<string>',
 };

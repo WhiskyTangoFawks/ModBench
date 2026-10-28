@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { errnoCode } from './errno';
+import { errnoCode } from '../ports/errno';
 
 // Linux keeps a process's name in 15 characters, and Wine names a process for its program file.
 const LINUX_NAME_LENGTH = 15;

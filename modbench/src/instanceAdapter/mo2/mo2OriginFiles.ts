@@ -1,7 +1,7 @@
 // MO2's exclusion of a file, the file or folder renamed with MO2's suffix or restored, and a mod's file sent to the trash.
 
 import { isAbsolute, relative, sep } from 'node:path';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { exists, factsOf, realPathIfThere, rename, withLock } from '../files';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './layout';

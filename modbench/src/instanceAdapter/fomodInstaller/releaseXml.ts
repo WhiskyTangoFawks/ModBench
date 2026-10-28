@@ -2,7 +2,7 @@
 // declaration names, else UTF-8, else Windows-1252 for the reference's Latin-1.
 
 import { readFile } from 'node:fs/promises';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 
 const DECLARED = /^<\?xml[^>]*?\bencoding\s*=\s*["']([\w.:-]+)["']/;
 
