@@ -4,7 +4,7 @@ import type {
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
-import { gameFolderResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
+import { gameFolderResolver, steamInstallResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
 import { adapterForInstance } from '../../instanceAdapter/openInstance';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2/mo2Instance';
 import type { ConfigurationFile, ManagerAdapter } from '../../instanceAdapter/publisher';
@@ -45,6 +45,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
     resolveGameFolder: gameFolder !== undefined
       ? (typeof gameFolder === 'function' ? gameFolder : () => Promise.resolve(gameFolder))
       : gameFolderResolver(setting, detectors),
+    resolveSteamInstall: steamInstallResolver(detectors),
     resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(root, detectors),
     watch: mo2Watch(root, setting.changed),

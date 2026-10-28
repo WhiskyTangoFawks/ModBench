@@ -7,7 +7,7 @@ import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { exists, get, ignoreSkippedLink, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from '../files';
-import type { GameFolderResolver } from '../gameFolder/gameFolderResolver';
+import type { GameFolderResolver, SteamInstallResolver } from '../gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from '../instanceAdapter';
 import type { FileOrigin } from '../instanceAdapter';
 import { entryDir, manifestFileIn, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
@@ -17,6 +17,7 @@ import type { Mo2Watch } from './mo2Watch';
 export interface Mo2Context {
   readonly instanceRoot: string;
   readonly resolveGameFolder: GameFolderResolver;
+  readonly resolveSteamInstall: SteamInstallResolver;
   readonly resolveDownloadsFolder: DownloadsDirectoryResolver;
   readonly resolveMyGames: MyGamesResolver;
   readonly watch: Mo2Watch;

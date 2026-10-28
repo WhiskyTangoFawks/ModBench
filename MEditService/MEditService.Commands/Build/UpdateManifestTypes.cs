@@ -12,9 +12,15 @@ public sealed record ModToUpdate(
 /// Instance adapter knows it (ADR-0013).</summary>
 public sealed record GameFile(string Path, string Hash);
 
-/// <summary>The game folder as the Instance adapter hands it: the game's name, its Data folder, and the game files at the paths of
-/// the mods' files.</summary>
-public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<GameFile> Files);
+/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files at the paths of the mods' files.</summary>
+public sealed record GameFolderPlace(string DataFolder, IReadOnlyList<GameFile> Files);
+
+/// <summary>The game folder as the Instance adapter hands it. Elsewhere: the game's other places, tried in order
+/// when this one lacks a mod's pinned bytes.</summary>
+public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<GameFile> Files, IReadOnlyList<GameFolderPlace>? Elsewhere = null)
+{
+    internal IEnumerable<GameFolder> Places() => [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files))];
+}
 
 /// <summary>The instance's facts beyond its mods: the folder of the stat cache and the game folder, none when it was not found.</summary>
 public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder);

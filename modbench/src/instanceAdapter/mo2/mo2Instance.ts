@@ -3,7 +3,7 @@
 
 import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
-import { gameFolderResolver, STEAM } from '../gameFolder/gameFolderResolver';
+import { gameFolderResolver, steamInstallResolver, STEAM } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
 import type { GameFolder, InstallationFileReader, GameFolderSetting } from '../instanceAdapter';
 import type { FomodEngine } from '../fomodInstaller/fomodInstaller';
@@ -53,6 +53,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
     resolveGameFolder: gameFolderResolver(options.gameFolderSetting),
+    resolveSteamInstall: steamInstallResolver(),
     resolveDownloadsFolder: downloadsDirectoryResolver(),
     resolveMyGames: myGamesResolver(instanceRoot, STEAM),
     watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
@@ -67,6 +68,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
+    steamInstall: async () => context.resolveSteamInstall((await source.settings()).gameRelease),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
