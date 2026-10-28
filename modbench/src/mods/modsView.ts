@@ -28,6 +28,7 @@ import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
+import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
 import { PublisherProblems } from './publisherProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
@@ -200,6 +201,7 @@ function registerSourceGestures(
       sourceFiles: (origin) => sourceFiles(instance.value, origin),
       modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),
+    registerBuildTask(reporterFor('mod.build')),
     provider.onDidChangeTreeData(showAnySource),
     problems,
   ];
