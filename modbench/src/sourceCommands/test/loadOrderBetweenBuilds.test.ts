@@ -21,7 +21,7 @@ const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const built = (waitMs = 1_000) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), loadOrderWaitMs: waitMs }).build(['ModA', 'ModB']);
   return { client, built };
 };
-const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.map(({ args }) => (args[0] as readonly { name: string }[])[0]?.name);
+const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.map((call) => JSON.stringify(call.args[0]).match(/"name":"(\w+)"/)?.[1]);
 const pause = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 10); });
 
 describe('sourceCommands build, between mods', () => {
