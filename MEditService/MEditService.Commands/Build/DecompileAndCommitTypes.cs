@@ -3,8 +3,7 @@ using System.Text.Json.Serialization;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to decompile and commit, by name, with the source folder its repository goes in, the mod manager's own files in
-/// its folder, which no build makes, its installation file, its version and the game files it may take from, none when no game
-/// folder exists.</summary>
+/// its folder, its installation file, its version and the game files it may take from.</summary>
 public sealed record ModToDecompileAndCommit(
     string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles, InstallationFile? InstallationFile = null, string? Version = null,
     GameFolder? GameFolder = null);

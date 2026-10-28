@@ -5,8 +5,7 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to build: the source folder holding its manifest, its folder, version and metadata files. Made: the
-/// files its build made, once its steps ran. InstallationFiles: those its manifest names, and why any was unreadable.
-/// UnreadableGameFiles: why the game files its manifest takes could not be read, by path.</summary>
+/// files its build made, once its steps ran. InstallationFiles: those its manifest names. Unreadable files: why, by name.</summary>
 public sealed record ModToBuild(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule,
     IReadOnlyList<string>? Made = null)
@@ -19,8 +18,7 @@ public sealed record ModToBuild(
 }
 
 /// <summary>The instance's facts a build needs: the exclusion mark, the archive variants, none when the per-release
-/// table names none, the stat cache's folder, each VS Code task this machine has, and the game files a manifest may take,
-/// none when no game folder exists.</summary>
+/// table names none, the stat cache's folder, each VS Code task this machine has, and the game folder.</summary>
 public sealed record InstanceToBuild(string ExclusionMark, ArchiveVariants? Archives, string StatCache)
 {
     public IReadOnlySet<string> Tasks { get; init; } = new HashSet<string>();
