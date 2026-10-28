@@ -14,8 +14,8 @@ interface DeployGestureDeps {
 // deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
 export function registerDeployCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable {
   const deploy = async (): Promise<void> => {
-    const { files } = await instance.landed();
-    const result = await commands.deploy(instance.sequence === 0 ? undefined : files);
+    const { files, plugins, gameName } = await instance.landed();
+    const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
     if (!result.applied) {
       reporter.report('error', 'Could not deploy.', result.refusal);
       return;
@@ -26,6 +26,12 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
     if (result.lost.length > 0) {
       reporter.report('warning', 'Deploy left out each file whose path another file the game gets wins:',
         result.lost.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
+    }
+    if (result.pluginsTxt.kind === 'notWritten') {
+      reporter.report('warning', 'Deploy wrote no plugins.txt:', result.pluginsTxt.why);
+    }
+    if (result.pluginsTxt.kind !== 'notWritten' && result.pluginsTxt.renamed.length > 0) {
+      reporter.report('warning', 'Deploy renamed each plugins.txt it did not write, so the game reads the plugin order of this load order:', result.pluginsTxt.renamed.join(', '));
     }
     if (result.leftAside.length > 0) {
       reporter.report('warning', 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:', result.leftAside.join(', '));

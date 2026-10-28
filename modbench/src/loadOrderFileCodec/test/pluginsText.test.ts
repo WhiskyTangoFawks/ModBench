@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  parsePlugins, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText, renamePluginInText,
+  parsePlugins, pluginsTextOf, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText, renamePluginInText,
 } from '../pluginsText';
 import type { PluginEntry } from '../pluginsText';
 
@@ -225,5 +225,15 @@ describe('movePluginsInText — byte-faithful reorder', () => {
     ['to land before a trailing comment, not past it', '*A.esp\r\nB.esp\r\n# trailing comment\r\n', 'B.esp', '*A.esp\r\nB.esp\r\n# trailing comment\r\n'],
   ])('clamps an out-of-range index %s', (_case, text, moved, expected) => {
     expect(movePluginsInText(text, [moved], 99)).toBe(expected);
+  });
+});
+
+describe('pluginsTextOf', () => {
+  it('writes each entry on a CRLF-ended line, enabled ones marked, and parsePlugins reads it back', () => {
+    const entries = [{ name: 'Foo.esp', enabled: true }, { name: 'Bar.esp', enabled: false }];
+
+    const text = pluginsTextOf(entries);
+
+    expect([text, parsePlugins(text)]).toEqual(['*Foo.esp\r\nBar.esp\r\n', entries]);
   });
 });

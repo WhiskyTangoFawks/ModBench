@@ -5,7 +5,9 @@
     "outDir": "../../out/projects/deployment"
   },
   "references": [
-    { "path": "../ports" }
+    { "path": "../loadOrderFileCodec" },
+    { "path": "../ports" },
+    { "path": "../tables" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]
