@@ -211,7 +211,7 @@ describe('Refresh', () => {
   it.each<[string, RefreshResult, string, { severity: string; message: string; detail: string }]>([
     ['the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window',
       { applied: false, heldElsewhere: true }, '/instance/FO4',
-      { severity: 'error', message: 'This instance is open in another Modbench window', detail: '/instance/FO4' }],
+      { severity: 'error', message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4' }],
     ['any other refused refresh with its own generic message at error, the backend\'s refusal as its reason',
       { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, '/instance',
       { severity: 'error', message: 'Could not refresh.', detail: 'Failed to rebuild the store.' }],
