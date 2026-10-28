@@ -54,6 +54,20 @@ public sealed class IndexedAsOnDiskTests
         Assert.Equal(index.Status.Failures.Single(failure => failure.Name == "Patch.esp").Reason, answer.Reason);
     }
 
+    [Fact]
+    public void APluginRewrittenSinceMEditFailedToReadIt_IsNotYet_NotReadFailed()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("as-on-disk-fixed").WithPlugin("Patch.esp", m => m.Npcs.AddNew("Broken")).Build();
+        using var index = Indexes.Open(holder, new FailsToRead());
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        Assert.Equal(PluginIndexing.ReadFailed, index.Queries.GetPluginIndexedAsOnDisk(Patch).Value().State);
+
+        PluginBinaries.Rewrite(Path.Combine(data.DataFolder, "Patch.esp"), m => m.Npcs.AddNew("Fixed"));
+
+        Assert.Equal(PluginIndexing.NotYet, index.Queries.GetPluginIndexedAsOnDisk(Patch).Value().State);
+    }
+
     private sealed class FailsToRead() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
