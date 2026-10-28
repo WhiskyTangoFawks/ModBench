@@ -22,7 +22,7 @@ async function manifestIn(sourceFolder: string): Promise<{ name: string; text: s
   }
 }
 
-async function outputOf(sourceFolder: string): Promise<{ output: string } | { reason: string }> {
+async function outputOf(sourceFolder: string): Promise<{ output: string } | { reason: string; output?: string }> {
   const manifest = await manifestIn(sourceFolder);
   if ('reason' in manifest) return manifest;
   let parsed: unknown;
@@ -34,7 +34,7 @@ async function outputOf(sourceFolder: string): Promise<{ output: string } | { re
   const output = typeof parsed === 'object' && parsed !== null && MANIFEST_OUTPUT_KEY in parsed ? parsed[MANIFEST_OUTPUT_KEY] : undefined;
   if (typeof output !== 'string') return { reason: 'its manifest names no output folder' };
   if (modFolderName(output) === undefined) return { reason: `its manifest's output "${output}" is not a folder name` };
-  return manifest.name === `${output}${MANIFEST_SUFFIX}` ? { output } : { reason: `its manifest ${manifest.name} is not named for its output "${output}"` };
+  return manifest.name === `${output}${MANIFEST_SUFFIX}` ? { output } : { reason: `its manifest ${manifest.name} is not named for its output "${output}"`, output };
 }
 
 /** The key of a `.gitmodules` entry that names the mod its repository's manifest builds, so a clone knows the mod before it can read the manifest. */
@@ -82,11 +82,13 @@ export async function outputUnset(instanceRoot: string, mod: string): Promise<vo
 export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
   const root = sourceRootDir(instanceRoot);
   const byKey = new Map<string, { output: string; folder: string }>();
+  const claims = new Map<string, string>();
   const notes: string[] = [];
   for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink), [])).sort()) {
     const folder = join(root, name);
     if (!(await isRepository(folder))) continue;
     const built = await outputOf(folder);
+    if (built.output !== undefined) claims.set(folder, built.output);
     if ('reason' in built) {
       notes.push(`${folder} is not a source mod: ${built.reason}.`);
       continue;
@@ -100,6 +102,7 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
     builds: (mod) => byKey.has(modNameKey(mod)) || uncloned.has(modNameKey(mod)),
     folders: new Map([...byKey.values()].map(({ output, folder }) => [output, folder])),
     folderOf: (mod) => byKey.get(modNameKey(mod))?.folder,
+    claimedOutput: (folder) => claims.get(folder),
     notes,
   };
 }
