@@ -59,7 +59,7 @@ export type GameFolder =
 export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
 
 /** The depots a place records as installed, and why its store record gave fewer. */
-export interface PlaceDepots {
+interface PlaceDepots {
   readonly depots: readonly Depot[];
   readonly depotProblems: readonly string[];
 }
