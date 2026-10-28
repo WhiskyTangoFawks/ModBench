@@ -450,6 +450,39 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AGameFolderMod_WhoseGameFilesTheFirstPlaceHoldsWithOtherBytes_ComesBackFromAnotherPlaceThatHoldsThem()
+    {
+        _folders.WithFile("data", "a.nif", "edited").WithFile("steam", "a.nif", "a");
+        _folders.WithFile(Mod, "a.nif", "stale");
+        GameFolderModManifested(("a.nif", "a"));
+        var instance = Instance() with
+        {
+            GameFolder = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "edited")], [new GameFolderPlace("steam", [new GameFile("a.nif", "a")])]),
+        };
+
+        var restored = Assert.Single((await RestoreIn(instance, ModFrom(Mod))).Applied);
+
+        Assert.Equal(["a.nif"], restored.Written);
+        Assert.Equal("a", WrittenText(Mod, "a.nif"));
+    }
+
+    [Fact]
+    public async Task AGameFolderMod_NoPlaceHoldsWithItsPinnedBytes_IsSkippedNamingTheFirstPlacesLack()
+    {
+        _folders.WithFile(Mod, "a.nif", "stale");
+        GameFolderModManifested(("a.nif", "a"));
+        var instance = Instance() with
+        {
+            GameFolder = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "edited")], [new GameFolderPlace("steam", [new GameFile("a.nif", "also edited")])]),
+        };
+
+        var refused = Assert.Single((await RestoreIn(instance, ModFrom(Mod))).Refused);
+
+        Assert.Equal(RestoreRefusal.Lacking, refused.Refusal);
+        Assert.Empty(WrittenIn(Mod));
+    }
+
+    [Fact]
     public async Task AGameFolderMod_WhoseGameFilesTheRequestDidNotHand_IsNotFound_NamingEach()
     {
         _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.dds", "b");

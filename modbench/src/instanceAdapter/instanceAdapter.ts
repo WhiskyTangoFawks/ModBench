@@ -51,6 +51,8 @@ export type GameFolder =
     readonly setting: string;
   };
 
+export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
+
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
   gameName?: string;
@@ -585,6 +587,8 @@ export interface InstanceAdapter {
   gameRelease(): Promise<string>;
   /** Where the game is now. */
   gameFolder(): Promise<GameFolder>;
+  /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
+  steamInstall(): Promise<FoundGameFolder | undefined>;
   /** Every profile's name. */
   profiles(): Promise<readonly string[]>;
   /** The active profile's mod order and the mod folders, without the rest of the instance. */

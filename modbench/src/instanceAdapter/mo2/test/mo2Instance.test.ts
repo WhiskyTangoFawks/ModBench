@@ -37,6 +37,7 @@ import { Readable } from 'node:stream';
 import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
+import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import type { ManagerAdapter } from '../../publisher';
 import type { Mo2Context } from '../mo2Context';
@@ -110,6 +111,20 @@ describe('the MO2 Instance adapter', () => {
           await mkdir(join(game, 'Data'));
 
           expect(await managerOver(root, { gameFolderSettingValue: game }).gameFolder()).toEqual({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
+      it('answers the Steam install apart from the game folder the setting names', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
+        try {
+          await mkdir(join(game, 'Data'));
+          const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
+          const adapter = managerOver(root, { gameFolderSettingValue: game, detectors });
+
+          expect(await adapter.steamInstall()).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
+          expect(await adapter.gameFolder()).toMatchObject({ root: game });
         } finally {
           await rm(game, { recursive: true, force: true });
         }
