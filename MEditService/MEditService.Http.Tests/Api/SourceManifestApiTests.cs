@@ -20,7 +20,7 @@ public sealed class SourceManifestApiTests : HostedTests
     {
         File.WriteAllText(Manifest, "{\"output\": \"Old Name\", \"files\": []}");
 
-        var response = await Change(new { sourceFolder = _sourceFolder.Path, output = "New Name", exclude = new[] { "textures/a.dds" } });
+        var response = await Change(new { sourceFolder = _sourceFolder.Path, output = "New Name", exclude = new[] { "textures/a.dds" }, exclusionMark = ".mohidden" });
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -29,6 +29,7 @@ public sealed class SourceManifestApiTests : HostedTests
     {
         { "no source folder", """{"output": "New Name"}""" },
         { "a path that is null", """{"sourceFolder": "/source/Mod", "exclude": [null]}""" },
+        { "paths without the exclusion mark", """{"sourceFolder": "/source/Mod", "exclude": ["a.dds"]}""" },
         { "nothing to change", """{"sourceFolder": "/source/Mod", "exclude": []}""" },
     };
 

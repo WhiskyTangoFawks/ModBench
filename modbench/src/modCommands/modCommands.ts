@@ -128,7 +128,8 @@ interface SourceModWriters {
 
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
 
-const exclusionChange = (mark: OriginFileMark, paths: string[]) => (mark === 'Excluded' ? { exclude: paths } : { include: paths });
+const exclusionChange = (mark: OriginFileMark, paths: string[], exclusionMark: string) =>
+  (mark === 'Excluded' ? { exclude: paths, exclusionMark } : { include: paths, exclusionMark });
 
 function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionOutcome<OriginFileRef>> {
   return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
@@ -231,7 +232,7 @@ async function markFiles(
   }
   const { read, unread } = await readEach(adapter, files);
   const change: ExclusionChange = (sourceFolder, of, to) =>
-    mEdit.changeSourceManifest(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath)));
+    mEdit.changeSourceManifest(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath), adapter.exclusionMark));
   const groups = bySourceFolder(read, sourceMods);
   const configured = await configureEach(change, groups, mark);
   if ('unreachable' in configured) return { applied: false, refusal: configured.unreachable };
