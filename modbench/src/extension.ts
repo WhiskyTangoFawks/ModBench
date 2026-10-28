@@ -1,8 +1,6 @@
 // The composition root (target-architecture.d2, Activation): builds every box and registers it
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient, type ReadModStatus } from './client';
 import { makeReporter } from './drivingLib/reporter';
@@ -179,7 +177,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
-  const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, join(homedir(), '.steam', 'steam'));
+  const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, (folder) => adapter.nonSteamPrefix(folder));
   const placeForGame: PluginsTxtPlaceOf = (folder, gameName) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
   const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({

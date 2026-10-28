@@ -54,8 +54,22 @@ function windowsVdfPaths(steamPath: string): string[] {
   ];
 }
 
+export const linuxSteamRoot = (): string => posix.join(os.homedir(), '.steam', 'steam');
+
+/** Steam's root, then every other library its libraryfolders.vdf names. */
+export async function steamLibraries(steamRoot: string): Promise<string[]> {
+  let content: string;
+  try {
+    content = await readFile(posix.join(steamRoot, 'config', 'libraryfolders.vdf'), 'utf-8');
+  } catch {
+    return [steamRoot];
+  }
+  const named = [...content.matchAll(/"path"\s+"([^"]+)"/g)].map(([, path]) => path?.replaceAll('\\\\', '\\') ?? steamRoot);
+  return [...new Set([steamRoot, ...named])];
+}
+
 function findSteamLibrary(steamAppId: string): Promise<string | null> {
-  return findLibraryInVdfs([posix.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf')], steamAppId);
+  return findLibraryInVdfs([posix.join(linuxSteamRoot(), 'config', 'libraryfolders.vdf')], steamAppId);
 }
 
 async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
