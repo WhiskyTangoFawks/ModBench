@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Deployed, Deployment, Purged, FileTheGameGets, PluginOrder } from '../../deployment/deployment';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
@@ -119,7 +120,7 @@ describe('move to Overwrite', () => {
     const result = await commands.moveToOverwrite(['Data/MCM/settings.ini', 'game.exe']);
 
     expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [
-      { from: '/deployed/Data/MCM/settings.ini', relativePath: 'MCM/settings.ini' }, { from: '/deployed/game.exe', relativePath: 'Root/game.exe' },
+      { from: join('/deployed/Data/MCM/settings.ini'), relativePath: 'MCM/settings.ini' }, { from: join('/deployed/game.exe'), relativePath: 'Root/game.exe' },
     ] }]]);
   });
 
@@ -128,7 +129,7 @@ describe('move to Overwrite', () => {
 
     const result = await commands.moveToOverwrite();
 
-    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: '/deployed/Data/current.ini', relativePath: 'current.ini' }] }]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/current.ini'), relativePath: 'current.ini' }] }]]);
   });
 
   it('leaves in the folder, and names, each file no mod file can land at the path of, and moves the rest', async () => {
@@ -136,7 +137,7 @@ describe('move to Overwrite', () => {
 
     const result = await commands.moveToOverwrite(['Data/.hidden', 'Data/Root/x.ini', 'Data/a.esp']);
 
-    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: ['Data/.hidden', 'Data/Root/x.ini'] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: '/deployed/Data/a.esp', relativePath: 'a.esp' }] }]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: ['Data/.hidden', 'Data/Root/x.ini'] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/a.esp'), relativePath: 'a.esp' }] }]]);
   });
 
   it('is refused with the reason Overwrite gives', async () => {
@@ -163,7 +164,7 @@ describe('move to Overwrite', () => {
 
     await commands.moveToOverwrite(['Data/a.esp']);
 
-    expect(adapter.calls).toEqual([{ verb: 'moveIntoOverwrite', moves: [{ from: '/games/Fallout/Data/a.esp', relativePath: 'a.esp' }] }]);
+    expect(adapter.calls).toEqual([{ verb: 'moveIntoOverwrite', moves: [{ from: join('/games/Fallout/Data/a.esp'), relativePath: 'a.esp' }] }]);
   });
 
   it('is refused, naming the setting, while the setting holds no value', async () => {

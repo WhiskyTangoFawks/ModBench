@@ -1,4 +1,4 @@
-import { join, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { archiveListsOf } from '../tables/gamePaths';
 
 const SETUP_PAGE = 'https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/deployment-on-linux.md';
@@ -15,7 +15,7 @@ export type PrefixOf = (deploymentFolder: string) => Promise<{ readonly prefix: 
 async function inPrefix(prefixOf: PrefixOf, deploymentFolder: string, gameFolder: string): Promise<PluginsTxtWhere> {
   const found = await prefixOf(deploymentFolder);
   if ('why' in found) return { why: `${found.why}; the page that sets it up: ${SETUP_PAGE}` };
-  return { folder: join(found.prefix, 'drive_c', 'users', 'steamuser', 'AppData', 'Local', gameFolder) };
+  return { folder: posix.join(found.prefix, 'drive_c', 'users', 'steamuser', 'AppData', 'Local', gameFolder) };
 }
 
 /** Where the game reads plugins.txt: on Windows in the local application data, on Linux in the prefix of the non-Steam game in
