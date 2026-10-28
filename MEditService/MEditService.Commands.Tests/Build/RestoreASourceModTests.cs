@@ -137,6 +137,20 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
+    public async Task ABuildThatMakesNoFolder_LeavesTheModNotFinished_NotRestoredWithNothingWritten()
+    {
+        Directory.Delete(ModFolder, recursive: true);
+        var empty = Commit("{\"output\": \"Mod\"}", "unused");
+        Git(_submodule.Remote, "rm", "-q", "-r", "assets");
+        Git(_submodule.Remote, "commit", "-q", "-m", "empty");
+        empty = Git(_submodule.Remote, "rev-parse", "HEAD").Trim();
+
+        var refused = Assert.Single((await Restore(empty)).Refused);
+
+        Assert.Equal(RestoreRefusal.NotFinished, refused.Refusal);
+    }
+
+    [Fact]
     public async Task TheRebuild_WritesAManifestNamingTheSubmodule_WithTheVersionItsManifestHeld()
     {
         var versioned = Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\", \"version\": \"1.2.3\"}]}", "c");

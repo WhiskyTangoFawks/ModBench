@@ -48,7 +48,7 @@ public sealed class RestoreFromManifestHandler
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
+            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message.TrimEnd('.')}");
         }
 
         if (held is not { } manifest) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
@@ -68,7 +68,7 @@ public sealed class RestoreFromManifestHandler
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
+            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message.TrimEnd('.')}");
         }
 
         var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
@@ -108,11 +108,11 @@ public sealed class RestoreFromManifestHandler
         Dictionary<string, string> before;
         try
         {
-            before = HashesIn(mod, metadataFiles, instance);
+            before = HashesBeforeTheBuild(mod, metadataFiles, instance);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
+            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message.TrimEnd('.')}");
         }
 
         var answer = await _build.BuildAsync(
@@ -155,11 +155,14 @@ public sealed class RestoreFromManifestHandler
     private string? VersionIn(string sourceFolder) =>
         _repository.ReadSourceManifest(sourceFolder).Holds(out var manifest, out _) ? manifest?.Version : null;
 
-    private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance)
+    private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
+        _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+
+    private Dictionary<string, string> HashesBeforeTheBuild(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance)
     {
         try
         {
-            return _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+            return HashesIn(mod, metadataFiles, instance);
         }
         catch (DirectoryNotFoundException)
         {
