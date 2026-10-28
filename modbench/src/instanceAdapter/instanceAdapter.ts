@@ -668,9 +668,8 @@ export interface InstanceAdapter {
   /** The game files in `dataFolder` at the paths of a mod's files, named as the game folder names them, with their hashes.
    *  A path that could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files in `dataFolder` that the files below `folder` may be, as `gameFiles` names them: each file's path, and
-   *  that path below each of its folders, since a copy of the game folder holds the game's files below a folder of its own.
-   *  `folder` is a mod's, or any folder a manifest builds. */
+  /** The game files in `dataFolder` that the files below `folder`, a mod's or any folder a manifest builds, may be: each
+   *  file's path and its path below each folder. */
   gameFilesTakenBy(dataFolder: string, folder: string): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
