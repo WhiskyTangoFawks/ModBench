@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
-const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined, inodes: new Map<string, bigint>() }));
+const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined, inodes: new Map<string, bigint>(), recordWritesLeft: Infinity }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -21,6 +21,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         ? stats
         : new Proxy(stats, { get: (target, key) => (key === 'ino' ? reused : key === 'birthtimeNs' ? target.birthtimeNs + 1n : Reflect.get(target, key) as unknown) });
     },
+    writeFile: (...args: Parameters<typeof actual.writeFile>) =>
+      (typeof args[0] === 'string' && args[0].endsWith('deployment.json.tmp') && --busy.recordWritesLeft < 0
+        ? Promise.reject(ebusy('open', args[0]))
+        : actual.writeFile(...args)),
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
@@ -44,6 +48,7 @@ beforeEach(async () => {
   busy.readdirs = [];
   busy.onLink = undefined;
   busy.inodes.clear();
+  busy.recordWritesLeft = Infinity;
   place = () => Promise.resolve({ why: NOT_WRITTEN.why });
   order = { release: 'Fallout4', entries: [] };
 });
@@ -493,6 +498,20 @@ describe('a deploy killed part way through its changes', () => {
     await expect(deploy([kept, await modFile('Mod', 'b.esp')])).rejects.toThrow();
 
     expect(await recordIn(join(storage, 'deployment.json')).of(folder)).toEqual(before);
+  });
+});
+
+describe('a deploy that landed', () => {
+  it('names why it could not trim its record, which still names the file it removed', async () => {
+    const kept = await modFile('Mod', 'a.esp');
+    await deploy([kept, await modFile('Mod', 'b.esp')]);
+    busy.recordWritesLeft = 2;
+
+    const deployed = await deploy([kept]);
+
+    const recorded = (await recordIn(join(storage, 'deployment.json')).of(folder)).files.map(({ path }) => path).sort();
+    expect([deployed.wrote, deployed.leftAside, deployed.staleRecord?.includes('EBUSY'), recorded, await readdir(join(folder, 'Data'))])
+      .toEqual([true, [], true, ['Data/a.esp', 'Data/b.esp'], ['a.esp']]);
   });
 });
 

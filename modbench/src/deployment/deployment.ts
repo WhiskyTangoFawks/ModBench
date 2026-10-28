@@ -42,6 +42,8 @@ export interface Deployed {
   readonly unmanaged: readonly string[];
   readonly lost: readonly Lost[];
   readonly leftAside: readonly string[];
+  /** Why the record still names files that are gone. */
+  readonly staleRecord?: string;
   readonly pluginsTxt: PluginsTxtDeployed;
 }
 
@@ -274,15 +276,16 @@ async function deployTo(
   } catch (err) {
     throw await restoredRecord(record, folder, recorded, err, 'Deploy');
   }
+  let staleRecord: string | undefined;
   if (leftAside.length === 0) {
     try {
       await recordWith(after);
     } catch (err) {
-      leftAside.push(`the record of what deploy wrote (${errorMessage(err)})`);
+      staleRecord = errorMessage(err);
     }
   }
   leftAside.push(...await part.settle());
-  return { wrote: true, leftOut, unmanaged, lost, leftAside, pluginsTxt: part.deployed() };
+  return { wrote: true, leftOut, unmanaged, lost, leftAside, staleRecord, pluginsTxt: part.deployed() };
 }
 
 async function removedFolders(folder: string, made: readonly string[], unfinished: string[]): Promise<string[]> {

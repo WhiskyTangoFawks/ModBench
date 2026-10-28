@@ -32,6 +32,9 @@ export function deployWarnings(result: Deployed): DeployProblem[] {
   if (result.leftAside.length > 0) {
     problems.push({ message: 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:', detail: result.leftAside.join(', ') });
   }
+  if (result.staleRecord !== undefined) {
+    problems.push({ message: 'Deploy landed, and could not trim its list of what it wrote, which the next deploy rewrites:', detail: result.staleRecord });
+  }
   return problems;
 }
 
