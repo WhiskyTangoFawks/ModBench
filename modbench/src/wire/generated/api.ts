@@ -1418,10 +1418,15 @@ export interface components {
             path: string;
             hash: string;
         };
+        GameFolderPlaceRequest: {
+            dataFolder: string;
+            files: components["schemas"]["GameFileRequest"][];
+        };
         GameFolderRequest: {
             name: string;
             dataFolder: string;
             files: components["schemas"]["GameFileRequest"][];
+            elsewhere?: components["schemas"]["GameFolderPlaceRequest"][] | null;
         };
         GridPosition: {
             /** Format: int32 */
