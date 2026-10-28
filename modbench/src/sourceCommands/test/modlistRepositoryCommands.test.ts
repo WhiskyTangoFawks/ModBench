@@ -1191,17 +1191,19 @@ describe('modlistRepositoryCommands what restore destroys', () => {
 });
 
 describe('modlistRepositoryCommands other manifests', () => {
-  it('are the folders outside the mod folders the Instance adapter finds a manifest in', async () => {
-    const { commands } = commandsOver({ otherManifests: [STOCK_GAME] });
-
-    expect(await commands.otherManifests()).toEqual({ applied: true, others: [STOCK_GAME] });
-  });
-
-  it('refuse, naming why, when the instance could not be searched for them', async () => {
-    const { commands } = commandsOver({ unreadReads: { otherManifests: "EACCES: permission denied, scandir '/instance/logs'" } });
+  it('are the folders outside the mod folders the Instance adapter finds a manifest in, each folder it could not read refused', async () => {
+    const { commands } = commandsOver({ otherManifests: [STOCK_GAME], unsearched: [{ name: 'logs/', reason: 'EACCES' }] });
 
     expect(await commands.otherManifests()).toEqual({
-      applied: false, refusal: "Could not search the instance for every manifest: EACCES: permission denied, scandir '/instance/logs'",
+      others: [STOCK_GAME], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }],
+    });
+  });
+
+  it('are refused as one, naming why, when the instance could not be searched for them', async () => {
+    const { commands } = commandsOver({ unreadReads: { otherManifests: 'download_directory "%X%" could not be resolved' } });
+
+    expect(await commands.otherManifests()).toEqual({
+      others: [], refused: [{ item: 'every other manifest', reason: 'was not searched for: download_directory "%X%" could not be resolved' }],
     });
   });
 });

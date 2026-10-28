@@ -289,7 +289,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AManifest_IsNamedForTheFolderItBuilds_WhateverTheNameItIsAskedBy()
+    public void AManifest_IsNamedForTheFolderItBuilds_AndIsNoFileOfIt()
     {
         var folder = Directory.CreateDirectory(Path.Combine(_root, "plugins", "rootbuilder")).FullName;
         File.WriteAllText(Path.Combine(folder, "a.txt"), "hello");
@@ -299,6 +299,32 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["a.txt", "rootbuilder.manifest.json"], Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         Assert.Equal(["a.txt"], _repository.Files(folder, new HashSet<string>(), statCache: null).Files.Select(file => file.Path));
         Assert.Single(Assert.IsType<Manifest>(_repository.ReadManifest(folder)).Files);
+    }
+
+    [Fact]
+    public void AManifestNamedForItsFolderInAnotherCase_IsItsManifest_WrittenUnderItsOwnName_AndIsNoFileOfIt()
+    {
+        Write("a.txt", "hello");
+        Write("MOD.manifest.json", "{\n\"files\": []\n}\n");
+
+        var held = _repository.ReadManifest(_root);
+        _repository.WriteManifest(_root, new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
+
+        Assert.NotNull(held);
+        Assert.Equal(["MOD.manifest.json", "a.txt"], Directory.GetFiles(_root).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal(["a.txt"], _repository.Files(_root, new HashSet<string>(), statCache: null).Files.Select(file => file.Path));
+        Assert.Single(Assert.IsType<Manifest>(_repository.ReadManifest(_root)).Files);
+    }
+
+    [PosixFact]
+    public void OnAFileSystemThatTellsCaseApart_TwoManifestsWhoseNamesDifferInCaseAlone_AreRefusedNamingBoth()
+    {
+        Write("mod.manifest.json", "{\n\"files\": []\n}\n");
+        Write("MOD.manifest.json", "{\n\"files\": []\n}\n");
+
+        var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root));
+
+        Assert.Equal("its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'", refused.Message);
     }
 
     [Fact]

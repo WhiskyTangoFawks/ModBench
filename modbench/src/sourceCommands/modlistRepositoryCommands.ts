@@ -573,15 +573,16 @@ async function keptOutOfPublisher(adapter: Adapter): Promise<readonly string[]> 
   }
 }
 
-/** The manifests outside the mod folders, which every manifest holds beside the mods' (modlist-repository.md, Every mod,
- *  story 1). */
-export type OtherManifests = CommandResult<{ others: readonly OtherManifest[] }>;
+/** Every other manifest (modlist-repository.md, Every mod, story 1), and each folder the search could not read, or the
+ *  search itself, refused on its own (story 4). */
+export interface OtherManifests { readonly others: readonly OtherManifest[]; readonly refused: readonly ItemRefusal<string>[] }
 
 async function otherManifestsOf(adapter: Adapter): Promise<OtherManifests> {
   try {
-    return { applied: true, others: await adapter.otherManifests() };
+    const { manifests, unsearched } = await adapter.otherManifests();
+    return { others: manifests, refused: unsearched.map(({ name, reason }) => ({ item: name, reason: `was not searched for a manifest: ${reason}` })) };
   } catch (err) {
-    return { applied: false, refusal: `Could not search the instance for every manifest: ${errorMessage(err)}` };
+    return { others: [], refused: [{ item: 'every other manifest', reason: `was not searched for: ${errorMessage(err)}` }] };
   }
 }
 

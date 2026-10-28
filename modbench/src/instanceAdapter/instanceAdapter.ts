@@ -358,6 +358,9 @@ interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly o
  *  manifest, story 20). `name` is its path in the instance, ending in `/`, so no mod has it. */
 export interface OtherManifest { readonly name: string; readonly folder: string }
 
+/** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
+export interface UnsearchedFolder { readonly name: string; readonly reason: string }
+
 // A path a file holds, the file by its path in the instance repository.
 interface PathInFile { readonly file: string; readonly path: string }
 
@@ -669,11 +672,11 @@ export interface InstanceAdapter {
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;
-  /** Each folder outside the mod manager's own folders, the source mods and the repository that holds its manifest; none
-   *  inside a folder that does, and none a link reaches. */
-  otherManifests(): Promise<readonly OtherManifest[]>;
-  /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder: their lines
-   *  in the ignore list, in place of the ones there. Writes nothing without an ignore list. */
+  /** Each folder outside the mod manager's own folders and the source mods that holds its manifest, none inside another
+   *  or through a link, and each folder it could not read. Rejects when it cannot tell what to skip. */
+  otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[] }>;
+  /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder. Writes
+   *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
   writeOtherManifestLines(): Promise<void>;
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;

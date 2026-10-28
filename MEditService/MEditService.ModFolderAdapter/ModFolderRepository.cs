@@ -112,10 +112,24 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     private IEnumerable<string> FilesOf(string modFolder) =>
         new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
             .Select(file => PathIn(modFolder, file.FullName))
-            .Where(path => path != ManifestOf(modFolder) && !TempName.HoldsTemp(path));
+            .Where(path => !string.Equals(path, ManifestName.Of(FolderName(modFolder)), StringComparison.OrdinalIgnoreCase) && !TempName.HoldsTemp(path));
 
-    // modlist-repository.md, The manifest, story 16: named for the folder it builds.
-    private string ManifestOf(string modFolder) => ManifestName.Of(FolderName(modFolder));
+    // modlist-repository.md, The manifest, story 16: named for the folder it builds, in any case, as Modbench finds it, so a
+    // folder reads alike on Windows and Linux. Where two names differ in case alone, neither is the manifest.
+    private string ManifestOf(string modFolder)
+    {
+        var named = ManifestName.Of(FolderName(modFolder));
+        List<string> held = Directory.Exists(modFolder)
+            ? [.. Directory.EnumerateFiles(modFolder).Select(Path.GetFileName).OfType<string>()
+                .Where(name => string.Equals(name, named, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal)]
+            : [];
+        return held switch
+        {
+            [] => named,
+            [var one] => one,
+            [var one, var other, ..] => throw new InvalidDataException($"its folder holds two manifests, '{one}' and '{other}'"),
+        };
+    }
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 

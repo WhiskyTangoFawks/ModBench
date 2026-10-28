@@ -155,13 +155,6 @@ export const isSkippedByManifestSearch = (name: string): boolean => NOT_SEARCHED
 /** Whether `fileName` is the manifest of the folder named `folderName`. */
 export const isOwnManifest = (folderName: string, fileName: string): boolean => fileName.toLowerCase() === manifestFileName(folderName).toLowerCase();
 
-/** Whether `path` has the shape of another manifest: in a folder outside those the search skips, named for it. */
-export function isOtherManifestPath(instanceRoot: string, path: string): boolean {
-  const segments = relative(instanceRoot, path).split(sep);
-  const [top, ...below] = segments;
-  const [folder, file] = segments.slice(-2);
-  return below.length > 0 && !isSkippedByManifestSearch(top ?? '') && isOwnManifest(folder ?? '', file ?? '');
-}
 
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);
@@ -203,6 +196,14 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
+/** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
+export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
+  '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
+  ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
+  ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
+  ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),
+].join('\n')}\n`;
+
 type Markers = readonly [first: string, last: string];
 
 // Git's last matching line wins: what leaves a folder out sits before the user's lines, and what lets a file in after.
@@ -217,7 +218,7 @@ const OTHER_MANIFESTS: OwnLines = {
   leftOut: ['# Manifests outside the mod folders, the rest left out', '# End of manifests outside the mod folders, the rest left out'],
   letIn: ['# Manifests outside the mod folders', '# End of manifests outside the mod folders'],
 };
-const WHITELIST_LAST_LINE = `!/${MODS}/*/*.${MANIFEST_SUFFIX.slice(1)}`;
+const WHITELIST_LAST_LINE = whitelistIgnoreList(undefined).trimEnd().split('\n').at(-1);
 
 const markersOf = (role: Role): Markers[] => [SOURCE_MODS[role], OTHER_MANIFESTS[role]];
 
@@ -257,13 +258,15 @@ function placed(lines: string[], role: Role, [first, last]: Markers, inner: read
   return true;
 }
 
-// An ignore list with `own` written as its kind's two blocks, every other line kept. Undefined when markers do not pair.
+// An ignore list with `own` written as its kind's two blocks, every other line kept, in the list's line ending. Undefined
+// when markers do not pair.
 function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]): string | undefined {
-  const lines = ignoreList.split('\n');
+  const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
+  const lines = ignoreList.split(/\r?\n/);
   if (lines.at(-1) === '') lines.pop();
   const letIn = own.filter((line) => line.startsWith('!'));
   const leftOut = own.filter((line) => !line.startsWith('!'));
-  return placed(lines, 'leftOut', kind.leftOut, leftOut) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join('\n')}\n` : undefined;
+  return placed(lines, 'leftOut', kind.leftOut, leftOut) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
 }
 
 /** An ignore list with the lines of `folderNames`, the source mods with a remote. Undefined when their markers do not
@@ -293,14 +296,6 @@ function otherManifestLines(manifests: readonly (readonly string[])[]): string[]
  *  not pair. */
 export const withOtherManifestLines = (ignoreList: string, manifests: readonly (readonly string[])[]): string | undefined =>
   withOwnLines(ignoreList, OTHER_MANIFESTS, otherManifestLines(manifests));
-
-/** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
-export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
-  '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
-  ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
-  ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
-  ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),
-].join('\n')}\n`;
 
 /** The mod manager's configuration as git's attributes match it. */
 export const SETTINGS_FILE_PATTERN = `/${SETTINGS_FILE_NAME}`;

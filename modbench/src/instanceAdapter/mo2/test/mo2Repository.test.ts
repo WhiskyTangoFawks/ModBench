@@ -31,6 +31,8 @@ async function put(path: string, text = 'x'): Promise<void> {
 
 const runGit = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 
+const SETTINGS_NAMING_DOWNLOADS = '[General]\r\ngameName=Fallout 4\r\n[Settings]\r\ndownload_directory=@ByteArray(my downloads)\r\n';
+
 describe('the MO2 adapter\'s repository', () => {
   it('reads that the instance holds none until its folder has a .git', async () => {
     const adapter = await instance();
@@ -138,6 +140,7 @@ describe('the MO2 adapter\'s repository', () => {
   describe('the files Modbench keeps in the instance', () => {
     it('are its record index, hash index, stat cache, source folder and repository files, every manifest a mod folder holds, and every other manifest', async () => {
       const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('mods/A/A.manifest.json');
       await put('mods/A/meta.ini');
       await put('mods/B/Renamed.manifest.json');
@@ -161,12 +164,17 @@ describe('the MO2 adapter\'s repository', () => {
     ['a path below a manifest', ['mods', 'A', 'A.manifest.json', 'x'], false],
     ['a manifest in a folder of a mod', ['mods', 'A', 'sub', 'A.manifest.json'], false],
     ['a source mod\'s manifest', ['source', 'A', 'A.manifest.json'], false],
-    ['a manifest outside the mod folders, named for the folder it is in', ['plugins', 'Rootbuilder', 'rootbuilder.MANIFEST.json'], true],
+    ['a manifest outside the mod folders, named for the folder it is in, there or not', ['plugins', 'Rootbuilder', 'rootbuilder.MANIFEST.json'], true],
     ['a manifest at the instance root', ['instance.manifest.json'], false],
     ['a manifest outside the mod folders named for another folder', ['plugins', 'rootbuilder', 'other.manifest.json'], false],
     ['a manifest in a profile\'s folder', ['profiles', 'P', 'P.manifest.json'], false],
+    ['a manifest in the downloads folder', ['my downloads', 'D', 'D.manifest.json'], false],
+    ['a manifest below the folder of another', ['Stock Game', 'Data', 'Data.manifest.json'], false],
   ])('owns %s: %s', async (_name, segments, owned) => {
-    const { owns } = await (await instance()).filesKept();
+    const adapter = await instance();
+    await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+    await put('Stock Game/Stock Game.manifest.json');
+    const { owns } = await adapter.filesKept();
 
     expect(owns(join(root, ...segments))).toBe(owned);
   });
@@ -268,31 +276,66 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('is each folder outside the mod folders, profiles, Overwrite, downloads, source mods and repository that holds a manifest named for it, and none inside one that does', async () => {
       const adapter = await instance();
-      await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\n[Settings]\r\ndownload_directory=@ByteArray(my downloads)\r\n');
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await Promise.all([
         'Stock Game/Stock Game.manifest.json', 'Stock Game/Data/Data.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/x.dll',
         'plugins/other/notes.manifest.json', 'downloads/D/D.manifest.json', ...NOT_SEARCHED,
       ].map((path) => put(path)));
 
-      expect(await adapter.otherManifests()).toEqual([
-        { name: 'Stock Game/', folder: join(root, 'Stock Game') },
-        { name: 'downloads/D/', folder: join(root, 'downloads', 'D') },
-        { name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') },
-      ]);
+      expect(await adapter.otherManifests()).toEqual({
+        manifests: [
+          { name: 'Stock Game/', folder: join(root, 'Stock Game') },
+          { name: 'downloads/D/', folder: join(root, 'downloads', 'D') },
+          { name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') },
+        ],
+        unsearched: [],
+      });
     });
 
     it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) is never a folder a link reaches, which can be outside the instance', async () => {
       const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('elsewhere/linked.manifest.json');
       await symlink(join(root, 'elsewhere'), join(root, 'linked'));
 
-      expect(await adapter.otherManifests()).toEqual([]);
+      expect(await adapter.otherManifests()).toEqual({ manifests: [], unsearched: [] });
+    });
+
+    it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) names each folder it cannot read, finds the rest, and leaves their lines in the ignore list as they are', async () => {
+      const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      await put('.gitignore', 'mine\n');
+      await put('plugins/rootbuilder/rootbuilder.manifest.json');
+      await put('logs/a.log');
+      await chmod(join(root, 'logs'), 0o000);
+      try {
+        const answer = await adapter.otherManifests();
+        const writing = adapter.writeOtherManifestLines();
+
+        expect(answer).toEqual({
+          manifests: [{ name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') }],
+          unsearched: [{ name: 'logs/', reason: expect.stringContaining('EACCES') as unknown }],
+        });
+        await expect(writing).rejects.toThrow(/logs\/.*EACCES/);
+        expect(await ignoreList()).toBe('mine\n');
+      } finally {
+        await chmod(join(root, 'logs'), 0o755);
+      }
+    });
+
+    it('is not searched for, naming why, when the downloads folder the settings name cannot be resolved', async () => {
+      await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      const adapter = managerOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory "%X%" could not be resolved' } });
+
+      await expect(adapter.otherManifests()).rejects.toThrow('download_directory "%X%" could not be resolved');
     });
 
     it('is what git sees of its folder and the folders above it', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      const listed = ['Stock Game/Stock Game.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/[x]/[x].manifest.json'];
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      const listed = ['ModOrganizer.ini', 'Stock Game/Stock Game.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/[x]/[x].manifest.json'];
       const ignored = ['Stock Game/Fallout4.exe', 'Stock Game/Data/Fallout4.esm', 'plugins/rootbuilder/rootbuilder.py', 'plugins/x.dll', 'plugins/[x]/x.py', 'logs/a.log'];
       await Promise.all([...listed, ...ignored].map((path) => put(path)));
       await adapter.writeIgnoreList();
@@ -306,6 +349,7 @@ describe('the MO2 adapter\'s repository', () => {
     it('keeps the effect of each line written after the whitelist, lets no such line hide a manifest or a source mod, and writes the same lines again', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await adapter.writeIgnoreList();
       await writeFile(join(root, '.gitignore'), `${await ignoreList()}!/plugins/\n/plugins/*\n!/plugins/mine.py\n!/source/\n/source/*\n!/source/notes.md\n`);
       await Promise.all(['plugins/mine.py', 'plugins/x.dll', 'plugins/rootbuilder/rootbuilder.manifest.json', 'source/notes.md'].map((path) => put(path)));
@@ -330,6 +374,7 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('takes the lines of a manifest that is gone, keeping every line it did not write', async () => {
       const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('.gitignore', 'mine\n');
       await put('Stock Game/Stock Game.manifest.json');
       await put('plugins/rootbuilder/rootbuilder.manifest.json');
@@ -344,6 +389,20 @@ describe('the MO2 adapter\'s repository', () => {
         'mine', 'theirs',
         '# Manifests outside the mod folders', '!/Stock Game/', '!/Stock Game/Stock Game.manifest.json', '# End of manifests outside the mod folders', '',
       ].join('\n'));
+    });
+
+    it('rewrites its lines in place in an ignore list of CRLF lines, as Windows writes them', async () => {
+      const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      await put('.gitignore', whitelistIgnoreList(undefined));
+      await put('plugins/rootbuilder/rootbuilder.manifest.json');
+      await adapter.writeOtherManifestLines();
+      const crlf = (await ignoreList()).replaceAll('\n', '\r\n');
+      await writeFile(join(root, '.gitignore'), crlf);
+
+      await adapter.writeOtherManifestLines();
+
+      expect(await ignoreList()).toBe(crlf);
     });
 
     it('writes no ignore list where there is none', async () => {

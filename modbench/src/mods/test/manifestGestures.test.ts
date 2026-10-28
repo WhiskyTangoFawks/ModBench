@@ -96,7 +96,7 @@ beforeEach(() => {
   updateManifest.mockResolvedValue({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
   whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
-  otherManifests.mockResolvedValue({ applied: true, others: [] });
+  otherManifests.mockResolvedValue({ others: [], refused: [] });
 });
 
 describe('Every mod (update manifest and restore from manifest)', () => {
@@ -225,7 +225,7 @@ describe('Every other manifest', () => {
     ['an agent\'s update manifest that names no mod', UPDATE, [new AgentCall([], {})], 1],
     ['an agent\'s restore from manifest that names no mod', RESTORE, [new AgentCall([], { force: true })], 2],
   ])('joins every mod in %s', async (_case, command, args, calls) => {
-    otherManifests.mockResolvedValueOnce({ applied: true, others: [STOCK_GAME] });
+    otherManifests.mockResolvedValueOnce({ others: [STOCK_GAME], refused: [] });
     const { run } = register();
 
     await run(command, ...args);
@@ -242,7 +242,7 @@ describe('Every other manifest', () => {
   });
 
   it('is not restored when what restore destroys skipped it', async () => {
-    otherManifests.mockResolvedValueOnce({ applied: true, others: [STOCK_GAME] });
+    otherManifests.mockResolvedValueOnce({ others: [STOCK_GAME], refused: [] });
     whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'Stock Game/', reason: 'was skipped: a file could not be read' }] });
     const { run } = register();
 
@@ -251,17 +251,27 @@ describe('Every other manifest', () => {
     expect(restoreFromManifest.mock.calls.map(([, , , others]) => others)).toEqual([[]]);
   });
 
-  it('refuses the gesture, naming why, when the instance could not be searched for it', async () => {
-    otherManifests.mockResolvedValue({ applied: false, refusal: 'Could not search the instance for every manifest: EACCES' });
+  it.each([
+    ['update manifest', UPDATE, 'Update manifest: 0 mods unchanged, 0 updated, 1 refused; their packages do not hold 0 files and hold 0 files with other bytes.'],
+    ['restore from manifest', RESTORE, 'Could not restore 1 of 5 mods.'],
+  ])('%s names a folder the search could not read beside what it did, and still acts on every mod', async (_case, command, message) => {
+    otherManifests.mockResolvedValueOnce({ others: [], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] });
     const { reporter, run } = register();
 
-    await run(UPDATE);
-    await run(RESTORE);
+    await run(command);
 
-    expect([updateManifest.mock.calls, whatRestoreDestroys.mock.calls, reporter.reports]).toEqual([[], [], [
-      { severity: 'error', message: 'Could not search the instance for every manifest: EACCES', detail: undefined },
-      { severity: 'error', message: 'Could not search the instance for every manifest: EACCES', detail: undefined },
-    ]]);
+    expect([[...updateManifest.mock.calls, ...restoreFromManifest.mock.calls].map(([mods]) => mods), reporter.reports]).toEqual([
+      [EVERY_MOD], [{ severity: 'error', message, detail: '"logs/" (was not searched for a manifest: EACCES)' }],
+    ]);
+  });
+
+  it('an agent\'s call names a folder the search could not read among what it refused', async () => {
+    otherManifests.mockResolvedValueOnce({ others: [], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] });
+    const { run } = register();
+
+    const answer = await run(UPDATE, new AgentCall([], {}));
+
+    expect(answer).toMatchObject({ applied: true, outcome: { refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] } });
   });
 });
 

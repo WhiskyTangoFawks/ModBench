@@ -42,7 +42,7 @@ export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disp
 
 // modlist-repository.md, Every mod, story 1: every manifest is every mod's and every other one in the instance.
 const othersOf = ({ commands }: ManifestGestureDeps, everyManifest: boolean): Promise<OtherManifests> =>
-  (everyManifest ? commands.otherManifests() : Promise.resolve({ applied: true, others: [] }));
+  (everyManifest ? commands.otherManifests() : Promise.resolve({ others: [], refused: [] }));
 
 type Label = (modName: string) => string;
 const labelsOf = ({ value }: Pick<ManifestGestureDeps['instance'], 'value'>): Label => modLabelsOf(value.modFolders);
@@ -78,13 +78,12 @@ async function updateManifest(deps: ManifestGestureDeps, { mods, refused, view, 
   const label = labelsOf(instance);
   await runWritingGesture(view, instance, async () => {
     const found = await othersOf(deps, everyMod);
-    if (!found.applied) { reporter.report('error', found.refusal); return; }
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }, found.others));
     if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
     reportCancelRefused(reporter, outcome);
     const answered = named(label, outcome);
-    reportUpdated(reporter, label, { ...answered, refused: [...answered.refused, ...refused] });
+    reportUpdated(reporter, label, { ...answered, refused: [...answered.refused, ...refused, ...found.refused] });
   });
 }
 
@@ -95,14 +94,13 @@ async function updateManifestForAgent(
   const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
-  if (!found.applied) return found;
   const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others));
   if (!result.applied) return { applied: false, refusal: result.refusal };
   const outcome = named(label, result);
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
-    outcome: { landed: outcome.landed, refused: outcome.refused },
+    outcome: { landed: outcome.landed, refused: [...outcome.refused, ...found.refused] },
     partial: warned('Update manifest:', [...notHeld, ...otherBytes, ...notesOf(label, result.notes), ...result.repositoryNotes, ...statCacheNotWritten(outcome.landed)]),
   };
 }
@@ -172,10 +170,10 @@ async function confirmRestore(ask: AskQuestion, label: Label, { mods, everyMod: 
 // modlist-repository.md, Restore from manifest, story 2: the question only when the restore destroys something.
 async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
-  const { mods, refused, view } = toRun;
+  const { mods, view } = toRun;
   const label = labelsOf(instance);
   const found = await othersOf(deps, toRun.everyMod);
-  if (!found.applied) { reporter.report('error', found.refusal); return; }
+  const refused = [...toRun.refused, ...found.refused];
   const total = mods.length + found.others.length + refused.length;
   if (mods.length + found.others.length === 0) {
     reportRestored(reporter, total, named(label, { landed: [], refused }));
@@ -216,7 +214,6 @@ async function restoreFromManifestForAgent(
   const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
-  if (!found.applied) return found;
   const listing = await commands.whatRestoreDestroys(mods, found.others);
   if ('refusal' in listing) return { applied: false, refusal: listing.refusal };
   const overwrites = options.force === true ? [] : listing.destroys
@@ -228,7 +225,7 @@ async function restoreFromManifestForAgent(
         ...metadataDiffers ? ["the version or installation files its metadata names with its manifest's"] : [],
       ].join(' and ')}. Request it again with force to overwrite them.`,
     }));
-  const refused = [...listing.refused, ...overwrites];
+  const refused = [...listing.refused, ...overwrites, ...found.refused];
   const notRestored = new Set(refused.map(({ item }) => item));
   const toRestore = mods.filter((mod) => !notRestored.has(mod));
   const others = found.others.filter(({ name }) => !notRestored.has(name));
