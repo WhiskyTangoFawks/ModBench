@@ -71,7 +71,6 @@ interface NamedGameFolder {
   readonly steamDataFolder?: string;
 }
 
-// The game files each place holds: the game folder, then the Steam install.
 interface HeldGameFiles {
   readonly game: readonly GameFile[];
   readonly steam: readonly GameFile[];
@@ -95,7 +94,9 @@ async function namedGameFolder(adapter: Adapter, gameRelease: string): Promise<N
   };
 }
 
-const placesOf = (folder: NamedGameFolder): string[] => [folder.dataFolder, ...folder.steamDataFolder === undefined ? [] : [folder.steamDataFolder]];
+const placesOf = (folder: NamedGameFolder): { place: keyof HeldGameFiles; dataFolder: string }[] => [
+  { place: 'game', dataFolder: folder.dataFolder }, ...folder.steamDataFolder === undefined ? [] : [{ place: 'steam' as const, dataFolder: folder.steamDataFolder }],
+];
 
 async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<GameToHand> {
   const [{ modFolders }, folder] = await Promise.all([adapter.modOrder(), namedGameFolder(adapter, await adapter.gameRelease())]);
@@ -137,11 +138,13 @@ async function gameFilesOf(
 ): Promise<{ gameFiles: HeldGameFiles; notes: readonly string[] } | { refusal: string }> {
   if (game === undefined || !game.takes(mod)) return { gameFiles: NONE_HELD, notes: [] };
   if (typeof game.folder === 'string') return { gameFiles: NONE_HELD, notes: [`${game.folder}, so its manifest cannot name the game folder as its package`] };
-  const [inGame, inSteam] = await Promise.all(placesOf(game.folder).map((dataFolder) => adapter.gameFilesTakenBy(dataFolder, mod)));
+  const [inGame, inSteam] = await Promise.all(placesOf(game.folder).map(({ dataFolder }) => adapter.gameFilesTakenBy(dataFolder, mod)));
   if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
   if (inGame.kind === 'unreadable') return { refusal: inGame.reason };
   if (inSteam === undefined) return { gameFiles: { game: inGame.answer.gameFiles, steam: [] }, notes: inGame.answer.notes };
-  if (inSteam.kind === 'unreadable') return { refusal: inSteam.reason };
+  if (inSteam.kind === 'unreadable') {
+    return { gameFiles: { game: inGame.answer.gameFiles, steam: [] }, notes: [...inGame.answer.notes, `the Steam install could not be read: ${inSteam.reason}`] };
+  }
   return { gameFiles: { game: inGame.answer.gameFiles, steam: inSteam.answer.gameFiles }, notes: [...new Set([...inGame.answer.notes, ...inSteam.answer.notes])] };
 }
 
@@ -211,10 +214,10 @@ async function namedGameFiles(
       continue;
     }
     const reasons: Record<string, string> = {};
-    for (const [place, dataFolder] of placesOf(folder).entries()) {
+    for (const { place, dataFolder } of placesOf(folder)) {
       const read = await adapter.gameFiles(dataFolder, gameFiles);
       Object.assign(reasons, read.unreadable, reasons);
-      for (const file of read.files) found[place === 0 ? 'game' : 'steam'].set(file.path.toLowerCase(), file);
+      for (const file of read.files) found[place].set(file.path.toLowerCase(), file);
     }
     unreadable.set(mod, reasons);
   }

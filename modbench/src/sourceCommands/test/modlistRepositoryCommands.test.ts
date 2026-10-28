@@ -1215,6 +1215,21 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(client.calls[1]?.args[0]).toMatchObject([{ unreadableGameFiles: { 'meshes/a.nif': 'EACCES' } }]);
   });
 
+  it('does not refuse a mod the game folder holds when the Steam install cannot be read, and notes why', async () => {
+    const taken: FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =
+      { kind: 'read', answer: { gameFiles: [{ path: 'Meshes/B.nif', hash: '#b' }], notes: [] } };
+    const { commands, client } = commandsOver({
+      gameFilesTaken: new Map([['ModB', taken]]),
+      steam: { install: STEAM, gameFilesTaken: new Map([['ModB', { kind: 'unreadable', reason: 'EACCES' }]]) },
+    });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModB']);
+
+    expect(client.calls[0]?.args[1]).toMatchObject({ gameFolder: { files: [{ path: 'Meshes/B.nif', hash: '#b' }] } });
+    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModB', note: expect.stringContaining('EACCES') as unknown }] });
+  });
+
   it('hands no other place when the Steam install is the game folder', async () => {
     const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/B.nif', '#b']]), install: FOUND } });
     client.setCommandResult('updateManifest', UPDATED);
