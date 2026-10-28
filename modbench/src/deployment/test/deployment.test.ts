@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
-const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], onLink: undefined as ((to: string) => void) | undefined }));
+const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -12,6 +12,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...actual,
     link: (from: string, to: string) => (busy.onLink?.(to), busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
+    readdir: (path: Parameters<typeof actual.readdir>[0], options?: Parameters<typeof actual.readdir>[1]) =>
+      (typeof path === 'string' && busy.readdirs.includes(path) ? Promise.reject(ebusy('scandir', path)) : actual.readdir(path, options as never)),
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
@@ -32,6 +34,7 @@ beforeEach(async () => {
   await mkdir(folder);
   busy.links = [];
   busy.unlinks = [];
+  busy.readdirs = [];
   busy.onLink = undefined;
   place = () => Promise.resolve({ why: NOT_WRITTEN.why });
   order = { release: 'Fallout4', entries: [] };
@@ -975,6 +978,15 @@ describe('purge', () => {
     });
   });
 
+  it('lands and names the files it could not read afterwards, rather than failing', async () => {
+    await deploy([await modFile('Mod', 'a.esp')]);
+    busy.readdirs.push(folder);
+
+    const purged = await purge();
+
+    expect([purged.wrote, purged.unmanaged, purged.unfinished]).toEqual([true, [], [`the files left in the folder, which it could not read (EBUSY: resource busy or locked, scandir '${folder}')`]]);
+  });
+
   describe('killed', () => {
     let game: string;
     let plugins: string;
@@ -1007,6 +1019,25 @@ describe('purge', () => {
       await deploy([]);
 
       expect(await contentsOfGame()).toContain('mine');
+    });
+
+    it('after a deploy renamed a plugins.txt in another place than it last wrote, puts the renamed file back', async () => {
+      await deploy([]);
+      const elsewhere = join(root, 'local', 'Other');
+      await mkdir(elsewhere, { recursive: true });
+      await writeFile(join(elsewhere, 'plugins.txt'), 'mine');
+      place = () => Promise.resolve({ folder: elsewhere });
+      let recordWhenRenamed = '';
+      busy.onLink = (to) => {
+        if (to === join(elsewhere, 'plugins.txt.modbench_renamed')) recordWhenRenamed = readFileSync(recordFile(), 'utf8');
+      };
+      await deploy([]);
+      busy.onLink = undefined;
+      await writeFile(recordFile(), recordWhenRenamed);
+
+      const purged = await purge();
+
+      expect([purged.restored, await readFile(join(elsewhere, 'plugins.txt'), 'utf8')]).toEqual([join(elsewhere, 'plugins.txt.modbench_renamed'), 'mine']);
     });
 
     it('after a deploy renamed plugins.txt and before its record landed, puts the renamed file back', async () => {

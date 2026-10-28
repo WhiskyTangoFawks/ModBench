@@ -205,11 +205,12 @@ async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, 
   if ('why' in where) {
     return { steps: [], recordChanged: false, recordBefore: () => previous, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
   }
+  const path = join(where.folder, PLUGINS_FILE_NAME);
   const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
   return {
     steps: change.step === undefined ? [] : [change.step],
     recordChanged: change.recordChanged,
-    recordBefore: () => previous ?? { path: join(where.folder, PLUGINS_FILE_NAME), ino: '', renamed: [] },
+    recordBefore: () => (previous?.path === path ? previous : { path, ino: '', renamed: [] }),
     recordAfter: () => change.written(),
     settle: () => change.settle(),
     deployed: () => ({ kind: change.step === undefined ? 'unchanged' : 'written', renamed: change.renamed() }),
@@ -285,6 +286,15 @@ async function removedFolders(folder: string, made: readonly string[], unfinishe
   return kept;
 }
 
+async function unmanagedLeft(folder: string, unfinished: string[]): Promise<string[]> {
+  try {
+    return await unmanagedIn(folder, []);
+  } catch (err) {
+    unfinished.push(`the files left in the folder, which it could not read (${errorMessage(err)})`);
+    return [];
+  }
+}
+
 async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purged> {
   const recorded = await record.of(folder);
   const removals = [...(await stillWritten(folder, recorded.files)).values()];
@@ -312,9 +322,10 @@ async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purg
     }
   }
   const hadRecord = recorded.files.length > 0 || recorded.pluginsTxt !== undefined;
+  const unmanaged = hadRecord ? await unmanagedLeft(folder, unfinished) : [];
   return {
     wrote, restored: plugins?.restored, leftRenamed: plugins?.left ?? [], unfinished,
-    unmanaged: hadRecord ? await unmanagedIn(folder, []) : [],
+    unmanaged,
   };
 }
 
