@@ -543,6 +543,16 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AFileAddedBelowAFolderOfTheInstallationFile_IsNotOneItHoldsWithOtherBytes()
+    {
+        WithFiles([("readme.txt", "hello"), ("docs/readme.txt", "added")]);
+
+        var manifest = await UpdatedWithDownloadedFiles([], ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("readme.txt", "hello"))));
+
+        Assert.Equal([new ManifestFile("docs/readme.txt", new PackageEntry.NotHeld()), new ManifestFile("readme.txt", new PackageEntry.Held())], manifest.Files);
+    }
+
+    [Fact]
     public async Task AFileBelowDataTheGameFolderHoldsWithOtherBytes_IsRecordedAsSuch()
     {
         _folders.WithFile(Mod, "Data/Fallout4.esm", "edited").WithFile(Mod, "a.nif", "a");
