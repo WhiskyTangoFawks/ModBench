@@ -795,6 +795,26 @@ describe('the files in the deployment folder deploy does not manage', () => {
     expect((await deploy([written])).unmanaged).toEqual(['Data/Foo.esp']);
   });
 
+  it('does not name a file of deploy\'s that another program renamed by case alone', async () => {
+    await deploy([await modFile('Mod', 'foo.esp')]);
+    await rename(join(folder, 'Data', 'foo.esp'), join(folder, 'Data', 'Foo.esp'));
+
+    expect(await hardlinkDeployment(storage, place).unmanaged(folder)).toEqual([]);
+  });
+
+  it('is read after a deploy under way, which it does not race', async () => {
+    const deployment = hardlinkDeployment(storage, place);
+    const file = await modFile('Mod', 'a.esp');
+    const finished: string[] = [];
+    let read: Promise<string[]> | undefined;
+    busy.onLink = () => { read ??= deployment.unmanaged(folder).then((names) => { finished.push('read'); return names; }); };
+
+    await deployment.deploy(folder, [file], order).then(() => finished.push('deploy'));
+    await read;
+
+    expect([finished, await read]).toEqual([['deploy', 'read'], []]);
+  });
+
   it('names none in an empty folder', async () => {
     expect((await deploy([])).unmanaged).toEqual([]);
   });

@@ -143,9 +143,17 @@ async function filesBelow(folder: string, within = ''): Promise<string[]> {
   return found;
 }
 
+// A file is deploy's when it is at a recorded path, by case alone, and is the file recorded there.
 async function unmanagedIn(folder: string, managed: readonly Written[]): Promise<string[]> {
-  const ours = new Set(managed.map(({ path }) => path));
-  return (await filesBelow(folder)).filter((path) => !ours.has(path) && !path.includes(ASIDE));
+  const recordedAt = new Map<string, string[]>();
+  for (const { path, ino } of managed) recordedAt.set(fold(path), [...recordedAt.get(fold(path)) ?? [], ino]);
+  const unmanaged: string[] = [];
+  for (const path of await filesBelow(folder)) {
+    const recorded = recordedAt.get(fold(path));
+    const isOurs = recorded !== undefined && recorded.includes(await fileIdAt(join(folder, path)) ?? '');
+    if (!isOurs && !path.includes(ASIDE)) unmanaged.push(path);
+  }
+  return unmanaged;
 }
 
 async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned: ReadonlyMap<string, Written>): Promise<Plan> {
@@ -201,7 +209,8 @@ async function deployTo(
   const owned = await stillWritten(folder, recorded.files);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
-  const unmanaged = await unmanagedIn(folder, [...after, ...removals]);
+  const setAside = [...removals, ...relinks].map(asWritten);
+  const unmanaged = await unmanagedIn(folder, [...after, ...setAside]);
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();
@@ -213,7 +222,6 @@ async function deployTo(
   }
   // A hardlink's file ID is its source's, so the record is known before the files change. A deploy killed
   // part way leaves a record the next deploy recovers from (ADR-0003); a failed deploy restores the old one.
-  const setAside = [...removals, ...relinks].map(asWritten);
   const intended = [...after, ...setAside];
   await record.write(folder, { files: intended, ...(recorded.pluginsTxt === undefined ? {} : { pluginsTxt: recorded.pluginsTxt }) });
   let leftAside: string[];
@@ -237,12 +245,10 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Dep
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {
-    async unmanaged(folder) {
-      const written: Written[] = [];
-      for (const entry of (await record.of(folder)).files) {
-        if (await fileIdAt(join(folder, entry.path)) === entry.ino) written.push(entry);
-      }
-      return unmanagedIn(folder, written);
+    unmanaged(folder) {
+      const run = last.then(async () => unmanagedIn(folder, (await record.of(folder)).files));
+      last = run.catch(() => undefined);
+      return run;
     },
     deploy(folder, files, plugins) {
       const run = last.then(() => deployTo(record, place, folder, files, plugins));
