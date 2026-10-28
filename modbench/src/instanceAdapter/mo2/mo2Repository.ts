@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
+import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
 import { hashIndexDir, ignoreListFile, isManifestPath, modsDir, recordIndexDir, sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
@@ -19,7 +20,7 @@ const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry>
 function caseBlindFinder(dataFolder: string) {
   const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
   const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
-    const kept = listings.get(folder) ?? listEntries(folder, ignoreSkippedLink).then(
+    const kept = listings.get(folder) ?? listOwnEntries(folder, ignoreLink).then(
       (entries): FileRead<Map<string, ResolvedEntry>> => ({ kind: 'read', answer: lowerCased(entries) }),
       (err: unknown): FileRead<Map<string, ResolvedEntry>> => errnoCode(err) === 'ENOENT'
         ? { kind: 'read', answer: new Map() } : { kind: 'unreadable', reason: errorMessage(err) },
