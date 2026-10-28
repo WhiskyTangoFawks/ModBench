@@ -14,7 +14,8 @@ const { handlers, registerCommand, executeCommand } = vi.hoisted(() => {
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return { commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress } };
+  const { taskModule } = await import('../../test/taskDouble');
+  return { ...taskModule(), commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress } };
 });
 
 import { progressSteps } from '../../test/recordedProgress';

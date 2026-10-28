@@ -152,6 +152,11 @@
     ],
     "taskDefinitions": [
       {
+        "type": "modbench.instance.deploy",
+        "required": [],
+        "properties": {}
+      },
+      {
         "type": "modbench.mod.build",
         "required": [],
         "properties": {
