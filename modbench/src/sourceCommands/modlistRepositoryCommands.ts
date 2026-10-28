@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, GamePlace, OtherManifest, SourceMods, Depot } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -17,7 +17,7 @@ import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
-import { gameToHand, gameFilesOf, namedGameFolder, namedGameFiles, wireGameFolder, NONE_HELD, type GameToHand, type HeldGameFiles, type NamedGameFolder } from './gameFolderFacts';
+import { gameToHand, gameFilesOf, namedGameFolder, namedGameFiles, wireGameFolder, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter, 'foldersRefused' |

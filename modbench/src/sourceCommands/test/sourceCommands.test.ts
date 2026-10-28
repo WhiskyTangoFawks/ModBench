@@ -90,7 +90,7 @@ describe('sourceCommands build', () => {
   });
 
   describe('a game file its manifest takes', () => {
-    const NEEDING = { landed: [], refused: [{ item: 'ModA', reason: 'was not built: game file textures/a.dds is missing.', refusal: 'PackageLacking', installationFilesNotFound: [], gameFilesNotFound: ['textures/a.dds'] }] };
+    const NEEDING = { landed: [], refused: [{ item: 'ModA', reason: 'was not built: game file textures/a.dds is missing.', refusal: 'PackageLacking' as const, installationFilesNotFound: [], gameFilesNotFound: ['textures/a.dds'] }] };
     const asksOnceThenBuilds = (client: InMemoryMEditClient): void => {
       client.setCommandHandler('build', (_mods, facts) => Promise.resolve((facts.gameFolder?.files ?? []).length === 0 ? NEEDING : BUILT));
     };
