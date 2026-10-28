@@ -87,7 +87,13 @@ internal sealed class ModInit(
         List<Asset> assets;
         try
         {
-            (manifest, assets) = ContentsOf(mod, toCommit, provided, loadOrder.GameRelease);
+            var held = modFolders.ReadManifest(mod.Folder, mod.Name);
+            if (held?.Packages.OfType<ManifestPackage.GameFolder>().FirstOrDefault() is { } gameFolder)
+            {
+                return Refused(DecompileAndCommitRefusal.ManifestNamesGameFolder,
+                    $"'{mod.Name}' was not initialized: its manifest names the game folder '{gameFolder.Name}' as a package, and a source mod's build reads only installation files, so its files would become assets in git.");
+            }
+            (manifest, assets) = ContentsOf(held, mod, toCommit, provided, loadOrder.GameRelease);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -138,24 +144,29 @@ internal sealed class ModInit(
     private static ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>> Refused(DecompileAndCommitRefusal refusal, string message) =>
         ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
 
-    // plugins.md, Decompile and commit, story 2: the manifest takes what the installation file yields with its bytes, and the rest
-    // but what compile writes is an asset.
+    // plugins.md, Decompile and commit, story 2: the installation file yields what it holds with its bytes, a step makes what the
+    // manifest says, and compile writes the plugins; the rest are assets. The manifest is in the form a build writes.
     private (Manifest Manifest, List<Asset> Assets) ContentsOf(
-        PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
+        Manifest? held, PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
     {
-        var held = modFolders.ReadManifest(mod.Folder, mod.Name);
         var all = modFolders.Files(mod.Folder, mod.Name, toCommit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
         var paths = all.Select(file => file.Path).ToList();
         var compiled = provided.SelectMany(plugin => plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
-        var files = all.Where(file => !compiled.Contains(file.Path)).ToList();
         var installationFile = toCommit.InstallationFile is { } named ? (modFolders.InstallationFileName(named.Path), named) : ((string, InstallationFile)?)null;
-        var recorded = new ManifestBuilder(installationFile, gameFolder: null).Manifest(files, toCommit.Version, held);
-        var taken = recorded.Files.Where(line => recorded.BytesOf(line) is FileBytes.InInstallationFile).ToList();
-        var madeByStep = recorded.Files.Where(line => line.Entry is PackageEntry.MadeByStep);
-        var yielded = taken.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
-        return (
-            recorded with { Files = [.. taken, .. madeByStep], Output = modFolders.FolderName(mod.Folder) },
-            [.. files.Where(file => !yielded.Contains(file.Path)).Select(file => new Asset(file.Path, () => modFolders.OpenFile(mod.Folder, file.Path)))]);
+        var recorded = new ManifestBuilder(installationFile, gameFolder: null).Manifest([.. all.Where(file => !compiled.Contains(file.Path))], toCommit.Version, held);
+        var taken = recorded.Files.Select(line => recorded.BytesOf(line) is FileBytes.InInstallationFile yielded ? line with { Package = yielded.Name } : null).OfType<ManifestFile>().ToList();
+        var madeByStep = recorded.Files.Where(line => line.Entry is PackageEntry.MadeByStep).ToList();
+        var notTheBuilds = taken.Concat(madeByStep).Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        var made = all.Where(file => !notTheBuilds.Contains(file.Path)).ToList();
+        var repository = new ManifestPackage.SourceRepository(modFolders.FolderName(toCommit.SourceFolder), IsSubmodule: false);
+        var manifest = recorded with
+        {
+            Packages = [repository, .. recorded.Packages],
+            Files = [.. made.Select(file => new ManifestFile(file.Path, new PackageEntry.Held())), .. taken, .. madeByStep],
+            Output = modFolders.FolderName(mod.Folder),
+            Version = toCommit.Version,
+        };
+        return (manifest, [.. made.Where(file => !compiled.Contains(file.Path)).Select(file => new Asset(file.Path, () => modFolders.OpenFile(mod.Folder, file.Path)))]);
     }
 
     // The adapter writes nothing when any of it fails (plugins.md, Decompile and commit, story 5).

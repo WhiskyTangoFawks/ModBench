@@ -1254,7 +1254,7 @@ export interface components {
         /** @enum {string} */
         DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
         /** @enum {string} */
-        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "ManifestNamesGameFolder" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         DecompileAndCommitRefused: {
             item: string;
             refusal: components["schemas"]["DecompileAndCommitRefusal"];

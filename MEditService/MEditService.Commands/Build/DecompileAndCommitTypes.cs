@@ -30,6 +30,9 @@ public enum DecompileAndCommitRefusal
     /// <summary>A file of the mod folder could not be read, so its assets are not known.</summary>
     ModFilesUnreadable,
 
+    /// <summary>The mod folder's manifest names the game folder as a package, which a source mod's build does not read.</summary>
+    ManifestNamesGameFolder,
+
     /// <summary>The plugins passed their gate, and the file system or git refused the source folder's files or its one commit,
     /// or the removal of the manifest its mod folder held.</summary>
     CommitFailed,
