@@ -36,6 +36,8 @@ import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
+import type { PluginsTxtPlaceOf } from './toolbox/ToolboxProvider';
+import { gameReleaseForGame } from './tables/gamePaths';
 import { hostGit } from './hostGit';
 import { hostTasks } from './tasks';
 import { stepTasks } from './sourceCommands/steps';
