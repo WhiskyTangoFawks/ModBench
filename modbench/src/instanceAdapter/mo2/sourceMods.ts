@@ -40,25 +40,42 @@ async function outputOf(sourceFolder: string): Promise<{ output: string } | { re
 /** The key of a `.gitmodules` entry that names the mod its repository's manifest builds, so a clone knows the mod before it can read the manifest. */
 export const SUBMODULE_OUTPUT_KEY = 'output';
 
-// Each .gitmodules entry for a source repository that is not cloned, by the output it records.
-async function unclonedOutputs(instanceRoot: string, notes: string[]): Promise<string[]> {
+// The name of each .gitmodules entry for a source repository that records an output, by the mod it names.
+async function entriesByOutput(instanceRoot: string): Promise<Map<string, string>> {
   const file = submodulesFile(instanceRoot);
-  if (!(await exists(file))) return [];
-  try {
-    const entries = (await git(instanceRoot, 'config', '-f', file, '--null', '--list')).split('\0')
-      .map((entry) => { const [key = '', value] = entry.split('\n'); return { key, value }; });
-    const valueOf = (name: string, key: string): string | undefined => entries.find((e) => e.key === `submodule.${name}.${key}`)?.value;
-    const outputs: string[] = [];
-    for (const { key, value: path } of entries) {
-      const name = key.startsWith('submodule.') && key.endsWith('.path') ? key.slice('submodule.'.length, -'.path'.length) : undefined;
-      const output = name === undefined ? undefined : valueOf(name, SUBMODULE_OUTPUT_KEY);
-      if (name !== undefined && output !== undefined && path === sourceModPath(name) && !(await isRepository(join(sourceRootDir(instanceRoot), name)))) outputs.push(output);
-    }
-    return outputs;
-  } catch (err) {
-    notes.push(`${file} could not be read, so no uncloned source mod is known: ${errorMessage(err)}.`);
-    return [];
+  const byOutput = new Map<string, string>();
+  if (!(await exists(file))) return byOutput;
+  const values = new Map<string, string>();
+  for (const entry of (await git(instanceRoot, 'config', '-f', file, '--null', '--list')).split('\0')) {
+    const [key = '', value = ''] = entry.split('\n');
+    values.set(key, value);
   }
+  for (const [key, output] of values) {
+    if (!key.startsWith('submodule.') || !key.endsWith(`.${SUBMODULE_OUTPUT_KEY}`)) continue;
+    const name = key.slice('submodule.'.length, -`.${SUBMODULE_OUTPUT_KEY}`.length);
+    if (values.get(`submodule.${name}.path`) === sourceModPath(name)) byOutput.set(modNameKey(output), name);
+  }
+  return byOutput;
+}
+
+async function unclonedOutputs(instanceRoot: string, notes: string[]): Promise<Set<string>> {
+  try {
+    const uncloned = new Set<string>();
+    for (const [output, name] of await entriesByOutput(instanceRoot)) {
+      if (!(await isRepository(join(sourceRootDir(instanceRoot), name)))) uncloned.add(output);
+    }
+    return uncloned;
+  } catch (err) {
+    notes.push(`${submodulesFile(instanceRoot)} could not be read, so no uncloned source mod is known: ${errorMessage(err)}.`);
+    return new Set();
+  }
+}
+
+/** Takes back the output `.gitmodules` records for `mod`, once its source is trashed and builds nothing. The entry is update
+ *  manifest's to remove. Rejects when `.gitmodules` cannot be read or written. */
+export async function outputUnset(instanceRoot: string, mod: string): Promise<void> {
+  const name = (await entriesByOutput(instanceRoot)).get(modNameKey(mod));
+  if (name !== undefined) await git(instanceRoot, 'config', '-f', submodulesFile(instanceRoot), '--unset-all', `submodule.${name}.${SUBMODULE_OUTPUT_KEY}`);
 }
 
 // MO2 matches mod names without case, so an output names the mod whatever its case.
@@ -78,7 +95,7 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
     if (holder === undefined) byKey.set(modNameKey(built.output), { output: built.output, folder });
     else notes.push(`${folder} is not a source mod: ${holder.folder} builds "${holder.output}" too.`);
   }
-  const uncloned = new Set((await unclonedOutputs(instanceRoot, notes)).map(modNameKey));
+  const uncloned = await unclonedOutputs(instanceRoot, notes);
   return {
     builds: (mod) => byKey.has(modNameKey(mod)) || uncloned.has(modNameKey(mod)),
     folders: new Map([...byKey.values()].map(({ output, folder }) => [output, folder])),

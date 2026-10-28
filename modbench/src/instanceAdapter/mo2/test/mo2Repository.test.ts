@@ -8,7 +8,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { adapterOver, managerOver } from '../../../test/mo2/adapterOver';
 import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { whitelistIgnoreList, withSourceModLines } from '../layout';
@@ -338,6 +338,28 @@ describe('the MO2 adapter\'s repository', () => {
       const sources = await adapter.sourceMods();
 
       expect([sources.builds('Mod A'), sources.builds('Mod B')]).toEqual([false, true]);
+    });
+
+    it('takes back the output when the source is trashed, uncloned or not, and keeps the entry for update manifest', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+
+      await adapterOver(root).trashSourceFolder('Mod A', (path) => rm(path, { recursive: true }));
+
+      const sources = await adapter.sourceMods();
+      expect([sources.builds('Mod A'), runGit('config', '-f', '.gitmodules', 'submodule.Mod A source.url').trim()]).toEqual([false, 'https://example.test/a.git']);
+    });
+
+    it('notes a .gitmodules it cannot read, rather than naming no uncloned source mod in silence', async () => {
+      const adapter = await instance();
+      await put('.gitmodules', '[submodule "A"\n');
+
+      const { notes } = await adapter.sourceMods();
+
+      expect(notes).toEqual([expect.stringContaining('.gitmodules could not be read')]);
     });
 
     it('changes nothing when the source mods are as the last call left them', async () => {
