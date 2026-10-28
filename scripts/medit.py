@@ -145,7 +145,7 @@ def _quoted(segment: str) -> str:
 def _call(method: str, path: str, body: JsonRecord | None = None) -> Any:
     port = os.environ.get('MEDIT_PORT')
     if port is None:
-        raise MEditError('This script has no mEdit to reach: run it in a terminal of a Modbench window.')
+        raise MEditError('This script has no mEdit to reach: run it in a terminal, a notebook or a Run and Debug launch of a Modbench window.')
     request = urllib.request.Request(
         f'http://localhost:{port}{path}', method=method, data=None if body is None else json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'})
