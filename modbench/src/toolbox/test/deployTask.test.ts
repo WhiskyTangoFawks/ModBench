@@ -54,6 +54,7 @@ describe('the deploy task', () => {
 
   it.each([
     ['a file set aside and left', { leftAside: ['Data/b.esp.modbench_aside_7_0 (EBUSY)'] }],
+    ['a record it could not trim', { staleRecord: 'EBUSY' }],
     ['a plugins.txt renamed', { pluginsTxt: { kind: 'written', renamed: ['plugins.txt.modbench_renamed'] } }],
     ['files it does not manage', { unmanaged: ['Data/MCM/settings.ini'] }],
   ] as const)('passes with %s, and writes it as a warning', async (_name, overrides) => {
