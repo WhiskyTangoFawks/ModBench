@@ -39,6 +39,8 @@ const workspaceTasks = JSON.stringify({
   tasks: [
     { label: 'Process step', type: 'process', command: process.execPath, args: [step, 'workspace'] },
     { label: 'Workspace step', type: 'process', command: process.execPath, args: [step] },
+    { label: 'Build a mod no source holds', type: 'modbench.build', mods: ['NoSuchMod'] },
+    { label: 'After the build', type: 'process', command: process.execPath, args: [step, 'after the build'], dependsOn: 'Build a mod no source holds' },
   ],
 });
 

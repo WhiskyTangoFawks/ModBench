@@ -1,5 +1,6 @@
 import * as assert from 'assert';
-import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import * as vscode from 'vscode';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, it } from 'mocha';
@@ -36,5 +37,24 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
     }));
 
     assert.deepStrictEqual(ran, RUNS.map(({ label, ran: recorded, code }) => [`step '${label}' exited with code ${code}`, `${recorded}\n${TEST_PORT}`]));
+  });
+});
+
+describe('a build task in a chain', () => {
+  it('fails on a mod no source holds, and a task that depends on it does not run', async () => {
+    const root = present(vscode.workspace.workspaceFolders?.[0], 'the workspace folder').uri.fsPath;
+    const marker = path.join(root, 'ran.txt');
+    const exitCodes: (number | undefined)[] = [];
+    const listener = vscode.tasks.onDidEndTaskProcess((event) => { exitCodes.push(event.exitCode); });
+    const dependent = present((await vscode.tasks.fetchTasks()).find((task) => task.name === 'After the build'), 'the dependent task');
+
+    const ended = new Promise<void>((resolve) => {
+      const done = vscode.tasks.onDidEndTask(() => { done.dispose(); resolve(); });
+    });
+    await vscode.tasks.executeTask(dependent);
+    await ended;
+    listener.dispose();
+
+    assert.deepStrictEqual([exitCodes, existsSync(marker)], [[1], false]);
   });
 });

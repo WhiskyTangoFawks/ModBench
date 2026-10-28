@@ -10,6 +10,7 @@ import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { BuildProblems } from './buildProblems';
 import { pluginRowName } from '../wire/pluginAddress';
 import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
+import { MODS_KEY_ARGS } from './gestureEntry';
 
 /** What build needs: the build itself, the Instance loader's refresh, where the diagnostics go, and
  *  how the user is told. */
@@ -25,7 +26,7 @@ export interface BuildDeps {
   pluginsView: string;
 }
 
-type Built = GestureResult<BuildOutcome['landed'][number], string>;
+export type Built = GestureResult<BuildOutcome['landed'][number], string>;
 
 /** commands.md, `build`: the mods a row, the selection or the palette's pick names, and from an agent call naming none, every source. */
 export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
@@ -35,7 +36,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
       const named = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
       if (named) return { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView), everySource: false };
       const mods = await pickSourceMods(deps.sourceModNames());
-      return mods === undefined ? undefined : { ...givenByAgent([]), mods, everySource: false };
+      return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view, everySource: false };
     },
     fromAgent: ({ argument }) => ({ ...givenByAgent(argument), everySource: argument.length === 0 }),
     run: (given) => buildMods(deps, given),
@@ -52,7 +53,6 @@ async function pickSourceMods(sourceModNames: Iterable<string>): Promise<string[
 }
 
 interface BuildGiven extends ModsGiven {
-  /** Source commands read the source folder when it builds, so a repository cloned since the last refresh is built. */
   readonly everySource: boolean;
 }
 
