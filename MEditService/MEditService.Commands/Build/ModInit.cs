@@ -153,7 +153,7 @@ internal sealed class ModInit(
         var paths = all.Select(file => file.Path).ToList();
         var compiled = provided.SelectMany(plugin => plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
         var installationFile = toCommit.InstallationFile is { } named ? (modFolders.InstallationFileName(named.Path), named) : ((string, InstallationFile)?)null;
-        var recorded = new ManifestBuilder(installationFile, gameFolder: null).Manifest([.. all.Where(file => !compiled.Contains(file.Path))], toCommit.Version, held);
+        var recorded = new ManifestBuilder(installationFile, gameFolder: null, downloadedFiles: []).Manifest([.. all.Where(file => !compiled.Contains(file.Path))], toCommit.Version, held);
         var taken = recorded.Files.Select(line => recorded.BytesOf(line) is FileBytes.InInstallationFile yielded ? line with { Package = yielded.Name } : null).OfType<ManifestFile>().ToList();
         var madeByStep = recorded.Files.Where(line => line.Entry is PackageEntry.MadeByStep).ToList();
         var notTheBuilds = taken.Concat(madeByStep).Select(line => line.Path).ToHashSet(StringComparer.Ordinal);

@@ -2,17 +2,17 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to update the manifest of, with its installation file, its version, its metadata files, which no line
-/// names, and a source mod's source folder, whose repository holds the manifest its build writes.</summary>
+/// <summary>A mod to update the manifest of, with its installation file, version, metadata files, which no line names, source
+/// folder if a source mod, and the game files it may take from, none when no game folder exists.</summary>
 public sealed record ModToUpdate(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder,
-    string? Version);
+    string? Version, GameFolder? GameFolder = null);
 
 /// <summary>A game file by its forward-slash path under the game's Data folder as the game folder names it, with its hash as the
 /// Instance adapter knows it (ADR-0013).</summary>
 public sealed record GameFile(string Path, string Hash);
 
-/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files at the paths of the mods' files.</summary>
+/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files a mod's files may be.</summary>
 public sealed record GameFolderPlace(string DataFolder, IReadOnlyList<GameFile> Files);
 
 /// <summary>The game folder as the Instance adapter hands it. Elsewhere: the game's other places, tried in order
@@ -22,8 +22,8 @@ public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<Ga
     internal IEnumerable<GameFolder> Places() => [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files))];
 }
 
-/// <summary>The instance's facts beyond its mods: the folder of the stat cache and the game folder, none when it was not found.</summary>
-public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder);
+/// <summary>The instance's facts beyond its mods: the stat cache's folder and the downloaded files already hashed.</summary>
+public sealed record InstanceToUpdate(string StatCache, IReadOnlyList<InstallationFile> DownloadedFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal

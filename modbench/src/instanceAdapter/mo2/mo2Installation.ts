@@ -8,6 +8,7 @@ import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import { md5Of } from '../downloadedFileContents/contentDigest';
+import { errorMessage } from '../../ports/errorMessage';
 import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata, NexusModFile } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
 import { parseDownloadedFileMeta } from './codecs/downloads';
@@ -34,6 +35,19 @@ async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise
   const game = meta.gameName ?? readGameName(await get(settingsFile(instanceRoot)));
   const domain = nexusDomainForMetaGame(game);
   return domain === undefined ? { unpagedGame: game } : { page: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
+}
+
+// The page of a downloaded file on its host, from its metadata, else its name; an unreadable metadata costs the page alone.
+async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; note?: string }> {
+  try {
+    const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+    const modId = effectiveModId(meta.modID, name);
+    if (modId === undefined) return {};
+    const domain = nexusDomainForMetaGame(meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot))));
+    return domain === undefined ? {} : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }) };
+  } catch (err) {
+    return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
+  }
 }
 
 async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
@@ -102,8 +116,8 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 }
 
 export function mo2Installation(
-  context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+  context: Mo2Context, { downloadedFileHash, indexedDownloadedFiles }: Pick<HashIndex, 'downloadedFileHash' | 'indexedDownloadedFiles'>,
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'indexedDownloadedFiles' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -154,6 +168,17 @@ export function mo2Installation(
       if (!(await exists(path))) return { kind: 'read', answer: undefined };
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
+    },
+
+    indexedDownloadedFiles: async () => {
+      const downloads = await readOrReason(() => currentDownloadsDir(context));
+      if (downloads.kind === 'unreadable') return { files: [], notes: [`the downloads folder could not be read: ${downloads.reason}`] };
+      const indexed = await indexedDownloadedFiles();
+      const paged = await Promise.all(indexed.files.filter(({ path }) => dirname(path) === downloads.answer).map(async (file) => {
+        const { page, note } = await pageOfDownloadedFile(context, downloads.answer, basename(file.path));
+        return { file: { ...file, page }, notes: note === undefined ? [] : [note] };
+      }));
+      return { files: paged.map(({ file }) => file), notes: [...indexed.notes, ...paged.flatMap(({ notes }) => notes)] };
     },
 
     nexusFileAt: parseNexusPage,

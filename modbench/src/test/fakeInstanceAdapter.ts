@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
@@ -116,6 +117,8 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloadedFiles?: ReadonlyMap<string, FileRead<InstallationFile>>;
+  /** The downloaded files already hashed, and why any could not be read; none when not said. */
+  indexedDownloadedFiles?: { readonly files: readonly InstallationFile[]; readonly notes: readonly string[] };
   /** Why each downloaded file cannot be queried, by name. */
   unreadableQueries?: ReadonlyMap<string, string>;
   /** What each downloaded file's query holds beyond its MD5 and the game, by name. */
@@ -331,6 +334,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
+    indexedDownloadedFiles: () => Promise.resolve(answers.indexedDownloadedFiles ?? { files: [], notes: [] }),
     nexusFileAt: parseNexusPage,
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);
@@ -347,7 +351,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         })),
       });
     },
-    gameFilesTakenBy: (dataFolder, mod) => Promise.resolve(placeAnswers(dataFolder).gameFilesTaken?.get(mod) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
+    gameFilesTakenBy: (dataFolder, folder) => Promise.resolve(placeAnswers(dataFolder).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });

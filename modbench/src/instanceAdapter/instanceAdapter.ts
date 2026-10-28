@@ -641,6 +641,9 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded files of the downloads folder already hashed, with their entries, and why any could not be read. It
+   *  hashes and extracts nothing, so a file never hashed is absent. */
+  indexedDownloadedFiles(): Promise<{ readonly files: readonly InstallationFile[]; readonly notes: readonly string[] }>;
   /** The file on Nexus a page names, or its mod alone; undefined when it is no Nexus page. */
   nexusFileAt(page: string): NexusPage | undefined;
   /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */
@@ -666,9 +669,9 @@ export interface InstanceAdapter {
   /** The game files in `dataFolder` at the paths of a mod's files, named as the game folder names them, with their hashes.
    *  A path that could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files in `dataFolder` at the paths of the files in `mod`'s folder, as `gameFiles` names them, listed in any
-   *  profile or none. */
-  gameFilesTakenBy(dataFolder: string, mod: string): Promise<FileRead<GameFilesTaken>>;
+  /** The game files in `dataFolder` that the files below `folder`, a mod's or any folder a manifest builds, may be: each
+   *  file's path and its path below each folder. */
+  gameFilesTakenBy(dataFolder: string, folder: string): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;

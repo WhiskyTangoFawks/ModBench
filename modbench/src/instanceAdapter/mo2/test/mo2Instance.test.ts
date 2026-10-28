@@ -2074,6 +2074,66 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
+    describe('the downloaded files already hashed', () => {
+      afterEach(() => { vi.useRealTimers(); });
+
+      it('lists a downloaded file once it is hashed, and none before', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        const before = await manager.indexedDownloadedFiles();
+        await manager.downloadedFile(DOWNLOADED_FILE);
+
+        const after = await manager.indexedDownloadedFiles();
+
+        expect([before, after]).toEqual([
+          { files: [], notes: [] },
+          { files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }], notes: [] },
+        ]);
+      });
+
+      it('gives a listed file the page its metadata names, with the file, else the mod its name carries', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=Fallout4\r\nmodID=7\r\nfileID=78\r\n');
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await manager.downloadedFile(DOWNLOADED_FILE);
+
+        const listed = await manager.indexedDownloadedFiles();
+
+        expect(listed).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
+      });
+
+      it('costs a listed file its page alone, saying why, when its metadata cannot be read', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await manager.downloadedFile(DOWNLOADED_FILE);
+        await rm(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
+        await mkdir(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
+
+        const listed = await manager.indexedDownloadedFiles();
+
+        expect(listed).toMatchObject({
+          files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: undefined, hash: 'yMPjZVarjmw=' }],
+          notes: [expect.stringContaining(`the page of ${DOWNLOADED_FILE} could not be read`) as unknown],
+        });
+      });
+
+      it('lists none, saying why, when the downloads folder cannot be resolved', async () => {
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await rm(join(root, INI));
+
+        expect(await manager.indexedDownloadedFiles()).toMatchObject({ files: [], notes: [expect.stringContaining('the downloads folder could not be read') as unknown] });
+      });
+
+      it('lists none of the files indexed in a folder other than the downloads folder the settings name', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await manager.downloadedFile(DOWNLOADED_FILE);
+        await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
+
+        expect(await manager.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
+      });
+    });
+
     it.each([
       ['a file\'s page', 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78', { game: 'fallout4', modId: '7', fileId: '78' }],
       ['a mod\'s page, which names no file', 'https://www.nexusmods.com/fallout4/mods/7', { game: 'fallout4', modId: '7', fileId: undefined }],
