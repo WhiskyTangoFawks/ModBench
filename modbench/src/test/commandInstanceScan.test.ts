@@ -96,7 +96,6 @@ const instanceValueFields = (): ReadonlyMap<string, string> => {
   return fields;
 };
 
-// target-architecture.md: put load order and deploy hand the value on, to mEdit as state or to Deployment as the load order to deploy.
 const HANDING_ON = new Set(['LoadOrderToDeploy']);
 
 const slicedFieldsIn = (source: string, fields: ReadonlyMap<string, string>): string[] => {

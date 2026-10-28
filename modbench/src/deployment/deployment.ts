@@ -160,7 +160,7 @@ async function pluginsPartOf(place: PluginsTxtPlace, { release, entries }: Plugi
     return { steps: [], changes: change.adopted !== undefined, recordAfter: () => change.adopted ?? previous, settle: () => change.settle(), deployed: () => ({ kind: 'unchanged' }) };
   }
   const renamedTo = (): PluginsTxtDeployed => ({ kind: 'written', ...(change.renamedTo() === undefined ? {} : { renamedTo: change.renamedTo() }) });
-  return { steps: [change.step], changes: true, recordAfter: change.written, settle: () => change.settle(), deployed: renamedTo };
+  return { steps: [change.step], changes: true, recordAfter: () => change.written(), settle: () => change.settle(), deployed: renamedTo };
 }
 
 async function deployTo(
