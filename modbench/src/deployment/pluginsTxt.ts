@@ -148,9 +148,7 @@ export interface PluginsTxtPurge {
   settle(): Promise<string[]>;
 }
 
-/** What purge does to the plugins.txt deploy wrote: removes it while it is still deploy's (its file ID, the mark, or a killed deploy's
- *  record of it), and puts back the file deploy renamed last that is still there, a killed deploy's included. Any other plugins.txt
- *  stays, with each file deploy renamed (ADR-0003). */
+// A plugins.txt that is not deploy's stays, with each file deploy renamed (ADR-0003).
 export async function pluginsTxtPurge(previous: WrittenPluginsTxt): Promise<PluginsTxtPurge> {
   const path = previous.path;
   const present = await fileIdAt(path);

@@ -45,9 +45,7 @@ export interface Deployed {
   readonly pluginsTxt: PluginsTxtDeployed;
 }
 
-/** `restored` is the plugins.txt purge put back and `leftRenamed` each file deploy renamed that it left. `unmanaged` is every file
- *  left in the folder that deploy did not write or that is no longer as deploy wrote it. `unfinished` names, with why, each thing a
- *  purge that landed did not finish: a file set aside and not removed, a folder not removed, a record not updated. */
+/** `unmanaged` is every file left in the folder that is not as deploy wrote it; `unfinished` names, with why, what a landed purge did not finish. */
 export interface Purged {
   readonly wrote: boolean;
   readonly restored: string | undefined;
@@ -218,7 +216,7 @@ async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, 
   };
 }
 
-/** Each folder below `folder` that a link at one of `paths` makes, which does not exist yet. */
+// A folder deploy makes is one a link at one of `paths` needs and the folder does not hold.
 async function foldersToMake(folder: string, paths: readonly string[]): Promise<string[]> {
   const missing = new Set<string>();
   for (const path of paths) {
@@ -274,7 +272,6 @@ async function deployTo(
   return { wrote: true, leftOut, unmanaged, lost, leftAside, pluginsTxt: part.deployed() };
 }
 
-/** Folders deploy made that are empty are removed, deepest first; the rest stay recorded, and `unfinished` names each that could not be removed. */
 async function removedFolders(folder: string, made: readonly string[], unfinished: string[]): Promise<string[]> {
   const kept: string[] = [];
   for (const dir of [...made].sort((a, b) => b.split('/').length - a.split('/').length)) {
