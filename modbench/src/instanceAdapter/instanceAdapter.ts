@@ -10,6 +10,7 @@ import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { ProgramVersions } from './gameFolder/programVersions';
+import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -589,6 +590,8 @@ export interface InstanceAdapter {
   gameFolder(): Promise<GameFolder>;
   /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
   steamInstall(): Promise<FoundGameFolder | undefined>;
+  /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */
+  nonSteamPrefix(folder: string): Promise<NonSteamPrefix>;
   /** Every profile's name. */
   profiles(): Promise<readonly string[]>;
   /** The active profile's mod order and the mod folders, without the rest of the instance. */

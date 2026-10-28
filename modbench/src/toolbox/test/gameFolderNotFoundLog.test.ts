@@ -19,7 +19,7 @@ const LINE =
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
-  new ToolboxProvider({ instance, channel: { warn: (line) => lines.push(line) }, deploymentFolder: NO_DEPLOYMENT_FOLDER });
+  new ToolboxProvider({ instance, channel: { warn: (line) => lines.push(line) }, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) });
   return lines;
 }
 

@@ -4,7 +4,11 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
+import type { PluginsTxtWhere } from '../deployment/pluginsTxtPlace';
 import { deploymentFolderOf, type DeploymentFolderSetting } from '../instanceCommands/deploy';
+
+/** Where deploy writes plugins.txt for a deployment folder and a game, or why it writes none. */
+export type PluginsTxtPlaceOf = (gameName: string, deploymentFolder: string) => Promise<PluginsTxtWhere>;
 
 export interface DeploymentRowSetting extends DeploymentFolderSetting {
   nameOf(path: string): string;
@@ -12,7 +16,7 @@ export interface DeploymentRowSetting extends DeploymentFolderSetting {
 }
 
 type ToolboxDeps =
-  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting }
+  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting; pluginsTxtPlace: PluginsTxtPlaceOf }
   | { instance: undefined };
 
 const versionText = (version: ProgramVersion): string => {
@@ -80,7 +84,6 @@ function deploymentRow(setting: DeploymentRowSetting): vscode.TreeItem {
   row.iconPath = new vscode.ThemeIcon('rocket');
   const folder = deploymentFolderOf(setting);
   row.description = folder === undefined ? 'no deployment folder' : setting.nameOf(folder);
-  row.tooltip = folder;
   row.contextValue = 'deployment';
   row.command = { command: 'modbench.settings.openDeploymentFolderHere', title: 'Open Deployment Folder Setting' };
   return row;
@@ -125,6 +128,15 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
+  }
+
+  async resolveTreeItem(item: vscode.TreeItem): Promise<vscode.TreeItem> {
+    if (!this.deps.instance || item.contextValue !== 'deployment') return item;
+    const folder = deploymentFolderOf(this.deps.deploymentFolder);
+    if (folder === undefined) return item;
+    const where = await this.deps.pluginsTxtPlace(this.deps.instance.value.gameName, folder);
+    item.tooltip = `${folder}\n${'folder' in where ? `plugins.txt: ${where.folder}` : `No plugins.txt: ${where.why}`}`;
+    return item;
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {

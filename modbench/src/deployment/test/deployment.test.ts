@@ -33,7 +33,7 @@ beforeEach(async () => {
   busy.links = [];
   busy.unlinks = [];
   busy.onLink = undefined;
-  place = () => ({ why: NOT_WRITTEN.why });
+  place = () => Promise.resolve({ why: NOT_WRITTEN.why });
   order = { release: 'Fallout4', entries: [] };
 });
 
@@ -48,6 +48,7 @@ async function modFile(mod: string, relativePath: string, content = relativePath
   return { relativePath, winner };
 }
 
+const MARK = '# Written by Modbench deploy.\r\n';
 const NOT_WRITTEN = { kind: 'notWritten', why: 'no place' } as const;
 let place: PluginsTxtPlace;
 let order: PluginOrder;
@@ -496,7 +497,7 @@ describe('plugins.txt', () => {
   beforeEach(() => {
     game = join(root, 'local', 'Fallout4');
     plugins = join(game, 'plugins.txt');
-    place = () => ({ folder: game });
+    place = () => Promise.resolve({ folder: game });
     order = { release: 'Fallout4', entries: [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: false }] };
   });
 
@@ -505,19 +506,19 @@ describe('plugins.txt', () => {
   it('is written where the game reads it, in the plugin order, with the folder made', async () => {
     const deployed = await deploy([await modFile('Mod', 'a.esp')]);
 
-    expect([deployed.pluginsTxt, await readFile(plugins, 'utf8')]).toEqual([{ kind: 'written', renamed: [] }, '*A.esp\r\nB.esp\r\n']);
+    expect([deployed.pluginsTxt, await readFile(plugins, 'utf8')]).toEqual([{ kind: 'written', renamed: [] }, MARK + '*A.esp\r\nB.esp\r\n']);
   });
 
-  it('is asked for the release of the load order', async () => {
-    const asked: (string | undefined)[] = [];
-    place = (release) => {
-      asked.push(release);
-      return { folder: game };
+  it('is asked for the release of the load order and the deployment folder', async () => {
+    const asked: (string | undefined)[][] = [];
+    place = (release, deploymentFolder) => {
+      asked.push([release, deploymentFolder]);
+      return Promise.resolve({ folder: game });
     };
 
     await deploy([]);
 
-    expect(asked).toEqual(['Fallout4']);
+    expect(asked).toEqual([['Fallout4', folder]]);
   });
 
   it('is renamed, not replaced, when deploy did not write it, and the report names the new name', async () => {
@@ -550,7 +551,17 @@ describe('plugins.txt', () => {
     const deployed = await deploy([]);
 
     expect([deployed, await siblings(), await readFile(plugins, 'utf8')]).toEqual([
-      { wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: [] } }, ['plugins.txt'], '*B.esp\r\n']);
+      { wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: [] } }, ['plugins.txt'], MARK + '*B.esp\r\n']);
+  });
+
+  it('is replaced, with nothing renamed, when a deploy of another instance wrote it', async () => {
+    await mkdir(join(root, 'other-deployed'), { recursive: true });
+    await hardlinkDeployment(join(root, 'other-storage'), place).deploy(join(root, 'other-deployed'), [], order);
+    order = { release: 'Fallout4', entries: [{ name: 'B.esp', enabled: true }] };
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, await siblings(), await readFile(plugins, 'utf8')]).toEqual([{ kind: 'written', renamed: [] }, ['plugins.txt'], MARK + '*B.esp\r\n']);
   });
 
   it('is left alone when deploy wrote it and the order is the same', async () => {
@@ -563,7 +574,7 @@ describe('plugins.txt', () => {
   });
 
   it('is not written where the place gives no folder, and the files are', async () => {
-    place = () => ({ why: 'no prefix' });
+    place = () => Promise.resolve({ why: 'no prefix' });
 
     const deployed = await deploy([await modFile('Mod', 'a.esp')]);
 
@@ -597,7 +608,7 @@ describe('plugins.txt', () => {
 
     await expect(deploy([await modFile('Mod', 'a.esp')])).rejects.toThrow('EBUSY');
 
-    expect([await siblings(), await readFile(plugins, 'utf8')]).toEqual([['plugins.txt'], '*A.esp\r\nB.esp\r\n']);
+    expect([await siblings(), await readFile(plugins, 'utf8')]).toEqual([['plugins.txt'], MARK + '*A.esp\r\nB.esp\r\n']);
   });
 
   it('writes nothing and renames nothing when the file there already holds the text, whoever wrote it', async () => {
@@ -630,7 +641,7 @@ describe('plugins.txt', () => {
 
     const deployed = await deploy([]);
 
-    expect([deployed.pluginsTxt, await siblings(), await readFile(plugins, 'utf8')]).toEqual([{ kind: 'written', renamed: [] }, ['plugins.txt'], '*C.esp\r\n']);
+    expect([deployed.pluginsTxt, await siblings(), await readFile(plugins, 'utf8')]).toEqual([{ kind: 'written', renamed: [] }, ['plugins.txt'], MARK + '*C.esp\r\n']);
   });
 
   it('is recorded as its own when a killed deploy placed it and it already holds the text', async () => {
