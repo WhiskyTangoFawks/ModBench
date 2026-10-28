@@ -16,13 +16,14 @@ function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFi
     : [])));
 }
 
-/** The source mods whose repositories write the named output folders. */
-export const sourceModsOf = (folders: Record<string, string>, notes: string[] = [], uncloned: readonly string[] = []): SourceMods => {
+/** The source mods whose repositories write the named output folders, and the outputs that repositories build no mod name, by folder. */
+export const sourceModsOf = (folders: Record<string, string>, notes: string[] = [], uncloned: readonly string[] = [], claims: Record<string, string> = {}): SourceMods => {
   const folderOf = (name: string): string | undefined => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1];
   return {
     folders: new Map(Object.entries(folders)),
     folderOf,
     builds: (name) => folderOf(name) !== undefined || uncloned.some((output) => output.toLowerCase() === name.toLowerCase()),
+    claimedOutput: (folder) => Object.entries(folders).find(([, built]) => built === folder)?.[0] ?? claims[folder],
     notes,
   };
 };
