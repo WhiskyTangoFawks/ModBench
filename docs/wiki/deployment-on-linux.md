@@ -10,7 +10,7 @@ Deploy writes the plugin order to the `plugins.txt` the game reads. On Linux the
 4. Launch the game from Steam once. Steam makes the prefix at `steamapps/compatdata/<id>/pfx` in one of its libraries, where `<id>` is the number Steam gives the non-Steam game.
 5. Close the game and deploy again.
 
-Deploy finds the non-Steam game by its program: the one shortcut in Steam that runs a program inside the deployment folder. Then deploy writes `plugins.txt` into that game's prefix, at `drive_c/users/steamuser/AppData/Local/<game>`. Deploy owns that file and replaces it.
+Deploy finds the non-Steam game by its program: the one shortcut in Steam that runs a program inside the deployment folder. Then deploy writes `plugins.txt` into that game's prefix, at `drive_c/users/steamuser/AppData/Local/<game>`. A `plugins.txt` that deploy did not write is renamed aside to `plugins.txt.modbench_renamed*`, not replaced. Purge puts it back.
 
 ## One prefix for each deployment folder
 

@@ -771,6 +771,20 @@ describe('plugins.txt', () => {
 });
 
 describe('the files in the deployment folder deploy does not manage', () => {
+  it('names none, and the record holds the files exactly, after a deploy that relinked a changed file and removed a disabled one', async () => {
+    const changed = await modFile('Mod', 'Meshes/Changed.nif', 'old');
+    const gone = await modFile('Mod', 'Meshes/Gone.nif');
+    await deploy([changed, gone]);
+    await rm(changed.winner);
+    await writeFile(changed.winner, 'new');
+    const files = async (): Promise<string[]> => (await recordIn(join(storage, 'deployment.json')).of(folder)).files.map(({ path }) => path).sort();
+
+    const relinked = await deploy([changed]);
+    const afterwards = [relinked.unmanaged, await files(), (await deploy([changed])).unmanaged];
+
+    expect(afterwards).toEqual([[], ['Data/Meshes/Changed.nif'], []]);
+  });
+
   it('names each, below any folder, and none that deploy wrote or has set aside', async () => {
     const written = await modFile('Mod', 'a.esp');
     await deploy([written]);

@@ -137,6 +137,7 @@ interface Plan {
   readonly kept: readonly Written[];
   readonly links: readonly Link[];
   readonly relinks: readonly Link[];
+  readonly replaced: readonly Written[];
   readonly removals: readonly Written[];
   readonly leftOut: readonly Lost[];
 }
@@ -173,11 +174,15 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
   const kept: Written[] = [];
   const links: Link[] = [];
   const relinks: Link[] = [];
+  const replaced: Written[] = [];
   const leftOut: Lost[] = [];
   for (const [key, want] of wanted) {
     const own = owned.get(key);
     if (own?.fileId === want.fileId) kept.push(own);
-    else if (own !== undefined) relinks.push({ ...want, path: own.path });
+    else if (own !== undefined) {
+      relinks.push({ ...want, path: own.path });
+      replaced.push(own);
+    }
     else {
       const path = await inFolder(want.path);
       if (await fileIdAt(join(folder, path)) === undefined) links.push({ ...want, path });
@@ -185,7 +190,7 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
     }
   }
   const removals = [...owned].filter(([key]) => !wanted.has(key)).map(([, own]) => own);
-  return { kept, links, relinks, removals, leftOut };
+  return { kept, links, relinks, replaced, removals, leftOut };
 }
 
 const asWritten = ({ path, fileId }: Written): Written => ({ path, fileId });
@@ -244,9 +249,9 @@ async function deployTo(
   const { wanted, lost } = await linksOnTheFolderVolume(folder, files);
   const recorded = await record.of(folder);
   const owned = await stillWritten(folder, recorded.files);
-  const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
+  const { kept, links, relinks, replaced, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
-  const setAside = [...removals, ...relinks].map(asWritten);
+  const setAside = [...removals, ...replaced].map(asWritten);
   const unmanaged = await unmanagedIn(folder, [...after, ...setAside]);
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
   const folders = [...new Set([...recorded.folders, ...await foldersToMake(folder, [...relinks, ...links].map(({ path }) => path))])];
@@ -268,6 +273,13 @@ async function deployTo(
     leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith(intended), 'Deploy');
   } catch (err) {
     throw await restoredRecord(record, folder, recorded, err, 'Deploy');
+  }
+  if (leftAside.length === 0) {
+    try {
+      await recordWith(after);
+    } catch (err) {
+      leftAside.push(`the record of what deploy wrote (${errorMessage(err)})`);
+    }
   }
   leftAside.push(...await part.settle());
   return { wrote: true, leftOut, unmanaged, lost, leftAside, pluginsTxt: part.deployed() };
