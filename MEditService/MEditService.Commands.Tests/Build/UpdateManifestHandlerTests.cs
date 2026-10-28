@@ -21,7 +21,7 @@ public sealed class UpdateManifestHandlerTests
     private Manifest BuiltSourceMod()
     {
         _folders.WithFile(Mod, "a.esp", "built").WithFile(Mod, "z.txt", "edited").WithFile(Mod, "y.txt", "edited");
-        var built = new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [
+        var built = new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)], [
             new ManifestFile("a.esp", new PackageEntry.Held()),
             new ManifestFile("z.txt", new PackageEntry.NotHeld()),
             new ManifestFile("y.txt", new PackageEntry.OtherBytes()),

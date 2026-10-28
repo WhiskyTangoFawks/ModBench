@@ -45,7 +45,7 @@ internal static class ManifestText
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
             List<ManifestStep> steps = root.TryGetProperty("steps", out var held) ? [.. held.EnumerateArray().Index().Select(entry => StepOf(entry.Index, entry.Item))] : [];
             List<ManifestTool> tools = root.TryGetProperty("tools", out var named) ? [.. named.EnumerateArray().Index().Select(entry => ToolOf(entry.Index, entry.Item))] : [];
-            var (packages, version) = root.TryGetProperty("packages", out var line) ? PackagesOf(line) : ([], null);
+            var (packages, version) = root.TryGetProperty("packages", out var line) ? PackagesWithVersionOfFirst(line) : ([], null);
             if (files.FindIndex(file => file.Package is { } named && packages.All(package => Manifest.NameOf(package) != named)) is var unnamed and >= 0)
                 throw Unreadable(unnamed, "it names a package the manifest does not name");
             if (steps.Count == 0 && files.FindIndex(file => file.Entry is PackageEntry.MadeByStep) is var madeByStep and >= 0)
@@ -102,8 +102,7 @@ internal static class ManifestText
         writer.WriteEndArray();
     }
 
-    // The mod's version rides the first package's line.
-    private static (List<ManifestPackage> Packages, string? Version) PackagesOf(JsonElement lines)
+    private static (List<ManifestPackage> Packages, string? Version) PackagesWithVersionOfFirst(JsonElement lines)
     {
         List<ManifestPackage> packages = [];
         string? version = null;

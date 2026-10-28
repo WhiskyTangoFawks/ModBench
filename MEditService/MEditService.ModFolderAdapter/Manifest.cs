@@ -1,14 +1,9 @@
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What a mod's manifest says: its packages, each named once with its pin, and each file's place in its package.
-/// A file names its package only when it is not the first (ADR-0013).</summary>
+/// A file names its package only when it is not the first (ADR-0022).</summary>
 public sealed record Manifest(IReadOnlyList<ManifestPackage> Packages, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
-    public Manifest(ManifestPackage? package, IReadOnlyList<ManifestFile> files, string? version = null)
-        : this(package is null ? [] : [package], files, version)
-    {
-    }
-
     /// <summary>The package a file is in when it names none.</summary>
     public ManifestPackage? Package => Packages.Count > 0 ? Packages[0] : null;
 

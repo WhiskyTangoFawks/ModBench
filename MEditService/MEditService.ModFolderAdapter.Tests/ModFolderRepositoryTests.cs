@@ -386,7 +386,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("made.dds", "whatever the step wrote");
         ManifestFile[] madeByStep = [new("made.dds", new PackageEntry.MadeByStep()), new("lacked.dds", new PackageEntry.MadeByStep())];
-        _repository.WriteManifest(_root, "mod", new Manifest(Package, madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
+        _repository.WriteManifest(_root, "mod", new Manifest([Package], madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
 
         var status = Status();
 
@@ -477,7 +477,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void WriteManifest_WritesAJsonFileWithALineForThePackageWithItsVersionAndOneForEachFile_InPathOrder()
     {
         var manifest = new Manifest(
-            Package,
+            [Package],
             [
                 new ManifestFile("z.txt", new PackageEntry.NotHeld()),
                 new ManifestFile("y.esp", new PackageEntry.OtherBytes()),
@@ -507,7 +507,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void AManifest_HasALineForEachStep_InTheOrderTheyRun_ForEachTool_AndSaysWhichFileAStepMakes()
     {
-        var manifest = new Manifest(Package, [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep()), new ManifestFile("a.nif", new PackageEntry.Held())])
+        var manifest = new Manifest([Package], [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep()), new ManifestFile("a.nif", new PackageEntry.Held())])
         {
             Steps = [new ManifestStep("Optimise textures", ["--in", "textures"]), new ManifestStep("Archive", [])],
             Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser"), new ManifestTool("Archive", "https://example.com/archive")],
@@ -608,7 +608,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [MemberData(nameof(PackagesAndTheirLines))]
     public void WriteManifest_NamesTheModsPackageByItsKind_WithTheVersion(ManifestPackage package, string line)
     {
-        _repository.WriteManifest(_root, "mod", new Manifest(package, [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
+        _repository.WriteManifest(_root, "mod", new Manifest([package], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
         Assert.Contains("\"packages\": [\n" + line + "\n]", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
@@ -668,19 +668,19 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public static TheoryData<Manifest> Manifests => new()
     {
         new Manifest(
-            Package,
+            [Package],
             [
                 new ManifestFile("a.nif", new PackageEntry.Held()),
                 ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
                 new ManifestFile("z.txt", new PackageEntry.NotHeld()),
             ],
             "1.2.3"),
-        new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.nif", new PackageEntry.Held())]),
-        new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
-        new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: false), [new ManifestFile("d.esp", new PackageEntry.Held())]),
-        new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
+        new Manifest([new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA")], [new ManifestFile("a.nif", new PackageEntry.Held())]),
+        new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
+        new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: false)], [new ManifestFile("d.esp", new PackageEntry.Held())]),
+        new Manifest([new ManifestPackage.GameFolder("Fallout 4", "AAAA")], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
         new Manifest([], []),
-        new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.esp", new PackageEntry.OtherBytes())]),
+        new Manifest([new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA")], [new ManifestFile("a.esp", new PackageEntry.OtherBytes())]),
     };
 
     [Theory]
@@ -869,14 +869,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private Manifest Manifested(string installationFile, ManifestFile[] lines)
     {
-        var manifest = new Manifest(new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile), lines);
+        var manifest = new Manifest([new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile)], lines);
         _repository.WriteManifest(_root, "mod", manifest);
         return manifest;
     }
 
     private Manifest ManifestedFromSource(string repository, bool isSubmodule = true)
     {
-        var manifest = new Manifest(new ManifestPackage.SourceRepository(repository, isSubmodule), [new ManifestFile("a.esp", new PackageEntry.Held())]) { Output = "mod" };
+        var manifest = new Manifest([new ManifestPackage.SourceRepository(repository, isSubmodule)], [new ManifestFile("a.esp", new PackageEntry.Held())]) { Output = "mod" };
         _repository.WriteSourceManifest(_source, manifest);
         return manifest;
     }

@@ -2,7 +2,7 @@ namespace MEditService.ModFolderAdapter.Tests;
 
 public sealed class ManifestLineBytesTests
 {
-    private static readonly Manifest Installed = new(new ManifestPackage.InstallationFile("First.7z", 1, "H1"), []);
+    private static readonly Manifest Installed = new([new ManifestPackage.InstallationFile("First.7z", 1, "H1")], []);
 
     private static ManifestFile Line(PackageEntry entry) => new("a.nif", entry);
 
@@ -14,7 +14,7 @@ public sealed class ManifestLineBytesTests
             ManifestFile.At("a.nif", new FileBytes.InInstallationFile("First.7z", "x/a.nif")), new FileBytes.InInstallationFile("First.7z", "x/a.nif")
         },
         {
-            "a line of a source mod, as its build writes it", new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), []),
+            "a line of a source mod, as its build writes it", new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)], []),
             Line(new PackageEntry.Held()), new FileBytes.Built("a.nif")
         },
     };

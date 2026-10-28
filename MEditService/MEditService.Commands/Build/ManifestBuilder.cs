@@ -38,9 +38,9 @@ internal sealed class ManifestBuilder
     private Manifest Recorded(IReadOnlyList<HashedFile> files, string? version)
     {
         if (FromGameFolder(files) is { } gameFolder)
-            return new(gameFolder, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version);
+            return new([gameFolder], [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version);
         if (_package is null) return new([], [.. files.Select(EntryOf)]);
-        return new(_package, [.. files.Select(EntryOf)], version);
+        return new([_package], [.. files.Select(EntryOf)], version);
     }
 
     private ManifestPackage.GameFolder? FromGameFolder(IReadOnlyList<HashedFile> files)

@@ -98,7 +98,7 @@ public sealed class RestoreASourceModTests : IDisposable
     {
         Directory.CreateDirectory(SourceFolder);
         _folders.WriteSourceManifest(SourceFolder, new Manifest(
-            new ManifestPackage.SourceRepository(ModName, IsSubmodule: false), [new ManifestFile("meshes/c.nif", new PackageEntry.Held())])
+            [new ManifestPackage.SourceRepository(ModName, IsSubmodule: false)], [new ManifestFile("meshes/c.nif", new PackageEntry.Held())])
         { Output = ModName });
 
         var skipped = Assert.Single((await Restore(pin: null)).Refused);

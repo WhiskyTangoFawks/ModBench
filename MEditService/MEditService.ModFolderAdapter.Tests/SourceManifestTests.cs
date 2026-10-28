@@ -17,7 +17,7 @@ public sealed class SourceManifestTests : IDisposable
     private string Why() => _repository.ReadSourceManifest(_source).Holds(out _, out var why) ? throw new Xunit.Sdk.XunitException("It read.") : why;
 
     private static readonly Manifest Built = new(
-        new ManifestPackage.SourceRepository("Mod", IsSubmodule: true),
+        [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)],
         [new ManifestFile("Mod - Main.ba2", new PackageEntry.Held()), new ManifestFile("Mod.esp", new PackageEntry.Held())],
         "1.0")
     {
