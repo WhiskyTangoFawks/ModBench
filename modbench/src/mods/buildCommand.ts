@@ -27,9 +27,7 @@ export interface BuildDeps {
 
 type Built = GestureResult<BuildOutcome['landed'][number], string>;
 
-/** commands.md, `build`: the mods of Mods rows, plugin rows, a column header, the palette's
- *  selection, or the palette's pick of every source mod, built from the working tree. An agent call
- *  that names no mod builds every source in the source folder. */
+/** commands.md, `build`: the mods a row, the selection or the palette's pick names, and from an agent call naming none, every source. */
 export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   const gesture: AgentGesture<unknown, BuildGiven, Built> = {
     fromView: async (entry) => {
