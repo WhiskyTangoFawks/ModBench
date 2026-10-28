@@ -518,44 +518,68 @@ describe('plugins.txt', () => {
     expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'written', renamed: [] }, ['plugins.txt']]);
   });
 
-  describe('after a deploy killed once it had renamed the file it found', () => {
-    const killed = async (): Promise<void> => {
-      await mkdir(game, { recursive: true });
-      await writeFile(`${plugins}.modbench_renamed`, 'mine');
-      await writeFile(plugins, '*A.esp\r\nB.esp\r\n');
-    };
+  describe('with a renamed file the record does not name', () => {
+    const orphan = (): string => `${plugins}.modbench_renamed`;
+    const recordedRenamed = async (): Promise<readonly string[] | undefined> => (await recordIn(join(storage, 'deployment.json')).of(folder)).pluginsTxt?.renamed;
 
-    it('names and records the renamed file, and writes nothing, when the file in place holds the text', async () => {
-      await killed();
+    it('names and records it, and writes nothing, when the file in place holds the text', async () => {
+      await mkdir(game, { recursive: true });
+      await writeFile(orphan(), 'mine');
+      await writeFile(plugins, '*A.esp\r\nB.esp\r\n');
 
       const deployed = await deploy([]);
-      const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
-      expect([deployed.pluginsTxt, await siblings(), recorded.pluginsTxt?.renamed]).toEqual([
-        { kind: 'unchanged', renamed: [`${plugins}.modbench_renamed`] }, ['plugins.txt', 'plugins.txt.modbench_renamed'], [`${plugins}.modbench_renamed`]]);
+      expect([deployed.pluginsTxt, await siblings(), await recordedRenamed()]).toEqual([
+        { kind: 'unchanged', renamed: [orphan()] }, ['plugins.txt', 'plugins.txt.modbench_renamed'], [orphan()]]);
     });
 
-    it('names and records the renamed file, and renames nothing again, when the text differs', async () => {
-      await killed();
+    it('names and records it, and renames the file in place as one deploy did not write, when the text differs', async () => {
+      await mkdir(game, { recursive: true });
+      await writeFile(orphan(), 'an earlier folder\'s');
+      await writeFile(plugins, 'edited since');
+
+      const deployed = await deploy([]);
+
+      expect([deployed.pluginsTxt, await readFile(orphan(), 'utf8'), await readFile(`${orphan()}_2`, 'utf8'), await recordedRenamed()]).toEqual([
+        { kind: 'written', renamed: [orphan(), `${orphan()}_2`] }, 'an earlier folder\'s', 'edited since', [orphan(), `${orphan()}_2`]]);
+    });
+
+    it('is replaced, nothing else renamed, when a file deploy set aside holds the recorded file ID', async () => {
+      await deploy([]);
+      await link(plugins, `${plugins}.modbench_aside_1_1`);
+      await rename(plugins, join(root, 'held'));
+      await writeFile(plugins, '*Placed.esp\r\n');
+      await writeFile(orphan(), 'mine');
       order = { release: 'Fallout4', entries: [{ name: 'C.esp', enabled: true }] };
 
       const deployed = await deploy([]);
-      const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
-      expect([deployed.pluginsTxt, await siblings(), await readFile(`${plugins}.modbench_renamed`, 'utf8'), recorded.pluginsTxt?.renamed]).toEqual([
-        { kind: 'written', renamed: [`${plugins}.modbench_renamed`] }, ['plugins.txt', 'plugins.txt.modbench_renamed'], 'mine', [`${plugins}.modbench_renamed`]]);
+      expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'written', renamed: [orphan()] }, ['plugins.txt', 'plugins.txt.modbench_renamed']]);
     });
   });
 
-  it('renames the file in place once, when a deploy killed before it placed ours left a second link to it', async () => {
+  it('records a name once when the user puts the file back and deploy renames it to the same name again', async () => {
+    await mkdir(game, { recursive: true });
+    await writeFile(plugins, 'mine');
+    await deploy([]);
+    await rename(plugins, join(root, 'held'));
+    await rename(`${plugins}.modbench_renamed`, plugins);
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, (await recordIn(join(storage, 'deployment.json')).of(folder)).pluginsTxt?.renamed])
+      .toEqual([{ kind: 'written', renamed: [`${plugins}.modbench_renamed`] }, [`${plugins}.modbench_renamed`]]);
+  });
+
+  it('keeps both names, each holding the user\'s file, when a deploy killed before it placed ours left a second link to it', async () => {
     await mkdir(game, { recursive: true });
     await writeFile(plugins, 'mine');
     await link(plugins, `${plugins}.modbench_renamed`);
 
     const deployed = await deploy([]);
 
-    expect([deployed.pluginsTxt, await siblings(), await readFile(`${plugins}.modbench_renamed`, 'utf8')])
-      .toEqual([{ kind: 'written', renamed: [`${plugins}.modbench_renamed`] }, ['plugins.txt', 'plugins.txt.modbench_renamed'], 'mine']);
+    expect([deployed.pluginsTxt, await readFile(`${plugins}.modbench_renamed`, 'utf8'), await readFile(`${plugins}.modbench_renamed_2`, 'utf8')]).toEqual([
+      { kind: 'written', renamed: [`${plugins}.modbench_renamed`, `${plugins}.modbench_renamed_2`] }, 'mine', 'mine']);
   });
 
   it('leaves the file deploy found, and no renamed file, when the record cannot be written', async () => {

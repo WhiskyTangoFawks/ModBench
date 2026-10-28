@@ -80,11 +80,12 @@ interface Leftovers {
   readonly stale: string[];
   /** Files a killed deploy renamed and never recorded. */
   readonly recovered: string[];
-  /** The file in place is one a killed deploy wrote and never recorded. */
+  /** A file deploy set aside carries the recorded file ID, so the file in place is one a killed deploy wrote and never recorded. */
   readonly placedUnrecorded: boolean;
 }
 
-// A deploy killed after it renamed or set aside the file in place leaves that file, which the record does not name.
+// A renamed file the record does not name is recorded and reported, and proves nothing about the file in place: the record is
+// per deployment folder and plugins.txt is shared.
 async function leftoversOf(folder: string, present: string | undefined, previous: WrittenPluginsTxt | undefined): Promise<Leftovers> {
   const stale: string[] = [];
   const recovered: string[] = [];
@@ -97,7 +98,7 @@ async function leftoversOf(folder: string, present: string | undefined, previous
       if (present !== undefined && previous !== undefined && present !== previous.ino && await fileIdAt(at) === previous.ino) placedUnrecorded = true;
     } else if (name.startsWith(PLUGINS_FILE_NAME + RENAMED) && !previous?.renamed.includes(at)) recovered.push(at);
   }
-  return { stale, recovered, placedUnrecorded: placedUnrecorded || recovered.length > 0 };
+  return { stale, recovered, placedUnrecorded };
 }
 
 /** What writing `text` as the plugins.txt in `folder` changes, given what deploy last wrote. A file that already holds
@@ -108,10 +109,13 @@ export async function pluginsTxtChange(folder: string, text: string, previous: W
   const ours = previous?.path === path ? previous : undefined;
   const { stale, recovered, placedUnrecorded } = await leftoversOf(folder, present, ours);
   const isDeploys = present !== undefined && (ours?.ino === present || placedUnrecorded);
-  const recordedAs = (ino: string, renamedNow: string[]): WrittenPluginsTxt => ({ path, ino, renamed: [...(ours?.renamed ?? []), ...recovered, ...renamedNow] });
+  const recordedAs = (ino: string, renamedNow: string[]): WrittenPluginsTxt => ({
+    path, ino, renamed: [...new Set([...(ours?.renamed ?? []), ...recovered, ...renamedNow])],
+  });
   if (present !== undefined && await readFile(path, 'utf8') === text) {
-    const recordChanged = isDeploys && (ours?.ino !== present || recovered.length > 0);
-    return { step: undefined, recordChanged, written: () => (recordChanged ? recordedAs(present, []) : ours), renamed: () => recovered, settle: () => removedAll(stale) };
+    const recordChanged = (isDeploys && ours?.ino !== present) || recovered.length > 0;
+    const written = (): WrittenPluginsTxt | undefined => (recordChanged ? recordedAs(isDeploys ? present : (ours?.ino ?? ''), []) : ours);
+    return { step: undefined, recordChanged, written, renamed: () => recovered, settle: () => removedAll(stale) };
   }
   const write = writing(folder, text, isDeploys ? { nameAt: asideAt(path), isTheUsers: false } : { nameAt: renamedAt(path), isTheUsers: true }, stale);
   const renamedNow = (): string[] => {
