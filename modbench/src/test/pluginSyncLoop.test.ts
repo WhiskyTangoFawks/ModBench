@@ -190,7 +190,7 @@ describe('the game folder not found, across the whole instance', () => {
     const channel = { error: write, warn: write, info: write };
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
     instances.push(instance);
-    toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER }));
+    toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) }));
     const { pluginSync, modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
       instance, channel, syncMods: modSyncOver(fake.adapter), syncPlugins: pluginSyncOver(fake.adapter, unreadStatus, NO_MOD_STATUSES),
     });

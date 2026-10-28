@@ -147,8 +147,8 @@ interface PluginsPart {
   deployed(): PluginsTxtDeployed;
 }
 
-async function pluginsPartOf(place: PluginsTxtPlace, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
-  const where = place(release);
+async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
+  const where = await place(release, folder);
   if ('why' in where) {
     return { steps: [], recordChanged: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
   }
@@ -170,7 +170,7 @@ async function deployTo(
   const owned = await stillWritten(folder, recorded.files);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
-  const part = await pluginsPartOf(place, plugins, recorded.pluginsTxt);
+  const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();
     return record.write(folder, { files, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });

@@ -7,6 +7,9 @@ import type { WrittenPluginsTxt } from './record';
 
 const RENAMED = '.modbench_renamed';
 const NEW = '.modbench_new_';
+// The game reads a `#` line as a comment. The mark is the one evidence of a deploy's file that holds across instances and
+// deployment folders, as the plugins.txt the game reads is shared and no record is.
+const MARK = '# Written by Modbench deploy.\r\n';
 
 export interface PluginsTxtChange {
   /** Absent when the file already holds the text. */
@@ -101,18 +104,21 @@ async function leftoversOf(folder: string, present: string | undefined, previous
   return { stale, recovered, placedUnrecorded };
 }
 
-/** What writing `text` as the plugins.txt in `folder` changes, given what deploy last wrote. A file that already holds
- *  the text is left, whoever wrote it, as no order is lost. */
-export async function pluginsTxtChange(folder: string, text: string, previous: WrittenPluginsTxt | undefined): Promise<PluginsTxtChange> {
+/** What writing `order` as the plugins.txt in `folder` changes, given what deploy last wrote. A marked file is deploy's, from any
+ *  instance; a file that already holds the order is left. */
+export async function pluginsTxtChange(folder: string, order: string, previous: WrittenPluginsTxt | undefined): Promise<PluginsTxtChange> {
   const path = join(folder, PLUGINS_FILE_NAME);
+  const text = MARK + order;
   const present = await fileIdAt(path);
+  const held = present === undefined ? undefined : await readFile(path, 'utf8');
+  const marked = held?.startsWith(MARK) === true;
   const ours = previous?.path === path ? previous : undefined;
   const { stale, recovered, placedUnrecorded } = await leftoversOf(folder, present, ours);
-  const isDeploys = present !== undefined && (ours?.ino === present || placedUnrecorded);
+  const isDeploys = present !== undefined && (marked || ours?.ino === present || placedUnrecorded);
   const recordedAs = (ino: string, renamedNow: string[]): WrittenPluginsTxt => ({
     path, ino, renamed: [...new Set([...(ours?.renamed ?? []), ...recovered, ...renamedNow])],
   });
-  if (present !== undefined && await readFile(path, 'utf8') === text) {
+  if (held !== undefined && (marked ? held.slice(MARK.length) : held) === order) {
     const recordChanged = (isDeploys && ours?.ino !== present) || recovered.length > 0;
     const written = (): WrittenPluginsTxt | undefined => (recordChanged ? recordedAs(isDeploys ? present : (ours?.ino ?? ''), []) : ours);
     return { step: undefined, recordChanged, written, renamed: () => recovered, settle: () => removedAll(stale) };
