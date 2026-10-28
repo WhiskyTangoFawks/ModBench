@@ -64,6 +64,7 @@ import { hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
+import { reachMEditFromEnvFile } from './agent/scriptEnvFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -128,6 +129,7 @@ interface OpenedInstance {
 interface Opened {
   facts: InstanceFacts;
   instance?: Instance;
+  scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -143,12 +145,12 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
+        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python').get<string>('envFile'), installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      return { facts: factsOf(instance), instance, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
   });
@@ -322,6 +324,7 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
   });
+  const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
@@ -329,7 +332,11 @@ function start(context: vscode.ExtensionContext): void {
     editor,
     agentServer,
     offerToVsCodeChat(agentServer),
-    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath),
+    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, scriptsPath),
+    ...opened.scriptEnvironmentFile === undefined ? [] : [reachMEditFromEnvFile({
+      client: meditClient, scriptsPath, envFile: opened.scriptEnvironmentFile,
+      fail: (message) => { reporterFor('scriptEnvironment').report('error', message); },
+    })],
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),
