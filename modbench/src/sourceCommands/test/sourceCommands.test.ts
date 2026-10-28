@@ -4,7 +4,7 @@ import { fakeInstanceAdapter, readingFixture, sourceModsOf, type InstanceAnswers
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import type { BuildMod, BuildOutcome } from '../../client';
+import type { BuildMod, BuildOutcome, ManifestStep } from '../../client';
 
 const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 
@@ -117,11 +117,12 @@ describe('sourceCommands build', () => {
 
 describe('sourceCommands build, in mod order', () => {
   const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'separator', name: 'Group', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
+  const builtOf = (mod: string, steps: readonly ManifestStep[] = []) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [...steps], made: [] });
   const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], sourceMods: sourceModsOf(SOURCES) })).adapter;
 
   it('builds the mods from the losing end of mod order, the winning mod last, whatever order they were asked in', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => ({ ...BUILT.landed[0], mod: mod.name })), refused: [] }));
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] }));
 
     const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
 
@@ -130,15 +131,15 @@ describe('sourceCommands build, in mod order', () => {
   });
 
   it('runs a mod\'s steps and has its manifest written before the next mod builds', async () => {
-    const steps = [{ task: 'Patch', args: [] }];
+    const steps: ManifestStep[] = [{ task: 'Patch', args: [] }];
     const log: string[] = [];
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
       log.push(`${mods[0]?.made ? 'manifest' : 'build'} ${mods[0]?.name}`);
-      return Promise.resolve({ landed: [{ ...BUILT.landed[0], mod: mods[0]?.name ?? '', steps: mods[0]?.made ? [] : steps, made: [] }], refused: [] });
+      return Promise.resolve({ landed: [builtOf(mods[0]?.name ?? '', mods[0]?.made ? [] : steps)], refused: [] });
     });
     const tasks = recordingTasks(['Patch']);
-    const logging = { ...tasks, whyStepsFailed: (ran: typeof steps, folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
+    const logging = { ...tasks, whyStepsFailed: (ran: readonly ManifestStep[], folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
 
     await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: logging }).build(['ModA', 'ModB']);
 
