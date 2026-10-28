@@ -27,6 +27,12 @@ describe('the deploy task', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.instance.deploy', new AgentCall([], {}));
   });
 
+  it('passes, and says the deployment folder already held the load order, when deploy wrote nothing', async () => {
+    const { written, closedWith } = await deploy(landed({ wrote: false }));
+
+    expect([written, closedWith]).toEqual(['The deployment folder already held the load order.\r\n', [0]]);
+  });
+
   it('fails with a refusal, writing it to the terminal and the Output', async () => {
     const { written, closedWith, reporter } = await deploy({ applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' });
 

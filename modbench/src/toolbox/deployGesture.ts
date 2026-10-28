@@ -18,7 +18,6 @@ const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
 
 // deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
 export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
-  // A task or an agent is answered the result and reports it itself.
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
