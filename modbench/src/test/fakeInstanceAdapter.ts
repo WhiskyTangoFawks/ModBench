@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
@@ -350,7 +351,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         })),
       });
     },
-    gameFilesTakenBy: (dataFolder, mod) => Promise.resolve(placeAnswers(dataFolder).gameFilesTaken?.get(mod) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
+    gameFilesTakenBy: (dataFolder, folder) => Promise.resolve(placeAnswers(dataFolder).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });

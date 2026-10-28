@@ -150,13 +150,13 @@ async function byFolder(adapter: Adapter, mods: readonly string[], folders: Fold
 }
 
 async function gameFilesOf(
-  adapter: Adapter, mod: string, game: GameToHand | undefined, installed: boolean,
+  adapter: Adapter, { mod, folder }: { mod: string; folder: string }, game: GameToHand | undefined, installed: boolean,
 ): Promise<{ gameFiles: HeldGameFiles; notes: readonly string[] } | { refusal: string }> {
   if (game === undefined || !game.takes(mod)) return { gameFiles: NONE_HELD, notes: [] };
   if (typeof game.folder === 'string') {
     return { gameFiles: NONE_HELD, notes: installed ? [] : [`${game.folder}, so its manifest cannot name the game folder as its package`] };
   }
-  const [inGame, inSteam] = await Promise.all(placesOf(game.folder).map(({ dataFolder }) => adapter.gameFilesTakenBy(dataFolder, mod)));
+  const [inGame, inSteam] = await Promise.all(placesOf(game.folder).map(({ dataFolder }) => adapter.gameFilesTakenBy(dataFolder, folder)));
   if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
   if (inGame.kind === 'unreadable') return { refusal: inGame.reason };
   if (inSteam === undefined) return { gameFiles: { game: inGame.answer.gameFiles, steam: [] }, notes: inGame.answer.notes };
@@ -171,10 +171,17 @@ async function readMod(
 ): Promise<{ read: ReadMod; notes: readonly string[] } | { refusal: string }> {
   const folder = await folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
-  if (!folders.isMod(mod)) return { read: { name: mod, folder, metadataFiles: [] }, notes: [] };
+  if (!folders.isMod(mod)) {
+    const takenByFolder = await gameFilesOf(adapter, { mod, folder }, game, false);
+    if ('refusal' in takenByFolder) return takenByFolder;
+    return {
+      read: { name: mod, folder, metadataFiles: [], ...game === undefined ? {} : { gameFolder: wireGameFolder(game.folder, takenByFolder.gameFiles) } },
+      notes: takenByFolder.notes,
+    };
+  }
   const installed = await installationFileOf(mod);
   if (installed.kind === 'unreadable') return { refusal: installed.reason };
-  const taken = await gameFilesOf(adapter, mod, game, installed.answer !== undefined);
+  const taken = await gameFilesOf(adapter, { mod, folder }, game, installed.answer !== undefined);
   if ('refusal' in taken) return taken;
   return {
     read: {

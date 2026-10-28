@@ -2087,8 +2087,19 @@ describe('the MO2 Instance adapter', () => {
 
         expect([before, after]).toEqual([
           { kind: 'read', answer: [] },
-          { kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }] },
+          { kind: 'read', answer: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }] },
         ]);
+      });
+
+      it('gives a listed file the page its metadata names, with the file, else the mod its name carries', async () => {
+        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=Fallout4\r\nmodID=7\r\nfileID=78\r\n');
+        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+        await manager.downloadedFile(DOWNLOADED_FILE);
+
+        const listed = await manager.indexedDownloadedFiles();
+
+        expect(listed).toMatchObject({ kind: 'read', answer: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
       });
 
       it('lists none of the files indexed in a folder other than the downloads folder the settings name', async () => {

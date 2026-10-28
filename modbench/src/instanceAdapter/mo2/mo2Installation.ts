@@ -36,6 +36,15 @@ async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise
   return domain === undefined ? { unpagedGame: game } : { page: formatNexusPage({ game: domain, modId, fileId: file?.fileId }) };
 }
 
+// The page of a downloaded file on its host, from its metadata, else its name.
+async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<string | undefined> {
+  const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+  const modId = effectiveModId(meta.modID, name);
+  if (modId === undefined) return undefined;
+  const domain = nexusDomainForMetaGame(meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot))));
+  return domain === undefined ? undefined : formatNexusPage({ game: domain, modId, fileId: meta.fileID });
+}
+
 async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
   const instanceGame = readGameName(await get(settingsFile(instanceRoot)));
   return nexusDomainForMetaGame(instanceGame) === domain ? instanceGame : gameReleaseForNexusDomain(domain);
@@ -158,7 +167,8 @@ export function mo2Installation(
 
     indexedDownloadedFiles: () => readOrReason(async () => {
       const downloadsDir = await currentDownloadsDir(context);
-      return (await indexedDownloadedFiles()).filter(({ path }) => dirname(path) === downloadsDir);
+      const indexed = (await indexedDownloadedFiles()).filter(({ path }) => dirname(path) === downloadsDir);
+      return Promise.all(indexed.map(async (file) => ({ ...file, page: await pageOfDownloadedFile(context, downloadsDir, basename(file.path)) })));
     }),
 
     nexusFileAt: parseNexusPage,

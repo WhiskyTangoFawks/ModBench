@@ -35,7 +35,6 @@ const WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD: InstanceAnswers = {
   installations: new Map([[STOCK_GAME.name, recording(INSTALLED)]]),
   metadata: new Map([[STOCK_GAME.name, { version: '9' }]]),
   unwritableMetadata: new Map([[STOCK_GAME.name, 'it was asked']]),
-  gameFilesTaken: new Map([[STOCK_GAME.name, { kind: 'unreadable', reason: 'it was asked' }]]),
 };
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
@@ -283,15 +282,17 @@ describe('modlistRepositoryCommands update manifest', () => {
     expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, repositoryNotes: ['/instance/.gitignore has a marker with no match'] });
   });
 
-  it('hands mEdit a folder outside the mod folders by its name, with its folder and none of what a mod manager holds of a mod', async () => {
-    const { commands, client } = commandsOver(WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD);
+  it('hands mEdit a folder outside the mod folders by its name, with its folder, the game files its files may be, and none of what a mod manager holds of a mod', async () => {
+    const stockGameFiles: FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =
+      { kind: 'read', answer: { gameFiles: [{ path: 'Meshes/A.nif', hash: '#a' }], notes: [] } };
+    const { commands, client } = commandsOver({ ...WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD, gameFilesTaken: new Map([['Stock Game', stockGameFiles]]) });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA'], {}, [STOCK_GAME]);
 
     expect(client.calls[0]?.args[0]).toEqual([
       { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], gameFolder: GAME_FOLDER },
-      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [] },
+      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [], gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] } },
     ]);
     expect(outcome).toMatchObject({ applied: true, refused: [], notes: [] });
   });
