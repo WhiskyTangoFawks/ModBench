@@ -940,7 +940,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       expect(sent).toEqual(['ModB']);
       client.emit({
         kind: 'load-order-status',
-        loadOrderStatus: { totalPlugins: 1, activePlugins: 1, indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }], conflictsComputed: true, failures: [], version: 1, holdsNone: false },
+        loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }], conflictsComputed: true, failures: [], version: 1 },
       });
 
       expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });

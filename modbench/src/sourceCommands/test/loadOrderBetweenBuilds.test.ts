@@ -11,7 +11,7 @@ const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefu
 const savedAll = () => Promise.resolve([]);
 
 const statusHolding = (...indexed: readonly { name: string; origin: string }[]): LoadOrderProgress =>
-  ({ totalPlugins: indexed.length, activePlugins: indexed.length, indexedPlugins: [...indexed], conflictsComputed: true, failures: [], version: 1, holdsNone: false });
+  ({ state: 'Ready', totalPlugins: indexed.length, activePlugins: indexed.length, indexedPlugins: [...indexed], conflictsComputed: true, failures: [], version: 1 });
 const hear = (client: InMemoryMEditClient, status: LoadOrderProgress): void => { client.emit({ kind: 'load-order-status', loadOrderStatus: status }); };
 
 const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
