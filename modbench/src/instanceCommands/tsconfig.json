@@ -10,7 +10,8 @@
     { "path": "../coreLib" },
     { "path": "../client" },
     { "path": "../nexus" },
-    { "path": "../deployment" }
+    { "path": "../deployment" },
+    { "path": "../tables" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

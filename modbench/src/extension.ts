@@ -59,6 +59,7 @@ import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { deployCommands } from './instanceCommands/deploy';
 import { hardlinkDeployment } from './deployment/deployment';
+import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommand } from './toolbox/deployGesture';
 import { present } from './ports/present';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
@@ -221,7 +222,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   own(registerDeployCommand({
     commands: deployCommands({
-      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath),
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, pluginsTxtPlace()),
       deploymentFolder: deploymentFolderSetting,
     }),
     instance, reporter: reporterFor('deploy'),

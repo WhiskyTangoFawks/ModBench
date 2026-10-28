@@ -11,13 +11,16 @@ export interface Link extends Written {
   readonly source: string;
 }
 
+/** A change outside the deployment folder: it makes itself and answers how to undo itself, or undoes what it did and throws. */
+export type Step = () => Promise<Undo>;
+
 export interface Changes {
   readonly removals: readonly Written[];
   readonly relinks: readonly Link[];
   readonly links: readonly Link[];
 }
 
-interface Undo {
+export interface Undo {
   readonly left: string;
   readonly run: () => Promise<void>;
 }
@@ -89,7 +92,7 @@ export function recoveryIn() {
   };
 }
 
-async function removeFolders(from: string, upTo: string): Promise<void> {
+export async function removeFolders(from: string, upTo: string): Promise<void> {
   for (let folder = from; ; folder = dirname(folder)) {
     await rmdir(folder);
     if (folder === upTo) return;
@@ -120,10 +123,10 @@ async function removedAside(folder: string, asides: readonly string[]): Promise<
   return left;
 }
 
-/** Makes every change, then `land`s them, and answers each file it set aside and could not remove;
+/** Makes every change and each of `steps`, then `land`s them, and answers each file it set aside and could not remove;
  *  or, when a change or the landing fails, undoes the rest and throws why, naming each change it could
  *  not undo. */
-export async function changeAll(folder: string, { removals, relinks, links }: Changes, land: () => Promise<void>): Promise<string[]> {
+export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>): Promise<string[]> {
   const undos: Undo[] = [];
   const asides: string[] = [];
   try {
@@ -140,6 +143,7 @@ export async function changeAll(folder: string, { removals, relinks, links }: Ch
       await link(source, at);
       undos.push({ left: `${path}, which deploy linked`, run: () => unlink(at) });
     }
+    for (const step of steps) undos.push(await step());
     await land();
   } catch (err) {
     const left = await undoAll(undos);
