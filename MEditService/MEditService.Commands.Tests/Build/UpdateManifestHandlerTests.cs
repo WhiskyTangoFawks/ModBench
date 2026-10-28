@@ -494,17 +494,6 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AGameFolderMod_TakenFromTheSteamInstall_NamesTheDepotsOfThatPlace()
-    {
-        _folders.WithFile(Mod, "a.nif", "a");
-        var instance = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "edited")], [new GameFolderPlace("steam", [new GameFile("a.nif", "a")], SteamDepots)]);
-
-        var manifest = await UpdatedWith(instance);
-
-        Assert.Equal(SteamDepots, Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots);
-    }
-
-    [Fact]
     public async Task AGameFolderModsManifest_DoesNotChange_WhenTheGameFolderGainsOrChangesAFileTheModDoesNotTake()
     {
         _folders.WithFile(Mod, "a.nif", "a");
@@ -610,17 +599,49 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.Held()), new ManifestFile("c.nif", new PackageEntry.Held())], manifest.Files);
     }
 
+    private static readonly GameDepot[] PrimaryDepots = [new("1", "1")];
+
+    private static readonly GameDepot[] GogDepots = [new("377162", "22"), new("9", "9")];
+
+    public static TheoryData<string, GameFile[], GameFile[], GameFile[], GameDepot[]> DepotsOfThePlacesTaken => new()
+    {
+        { "only the place the file is taken from", [new("a.nif", "edited")], [new("a.nif", "a")], [new("z.nif", "z")], SteamDepots },
+        { "each contributing place, a depot once", [new("a.nif", "a")], [new("b.nif", "b")], [new("c.nif", "c")], [.. PrimaryDepots, .. SteamDepots, GogDepots[1]] },
+        { "none of a place that gave no file", [new("a.nif", "a"), new("b.nif", "b")], [new("a.nif", "a")], [new("z.nif", "z")], PrimaryDepots },
+    };
+
+    [Theory]
+    [MemberData(nameof(DepotsOfThePlacesTaken))]
+    public async Task AGameFolderMod_NamesTheDepots_OfThePlacesItsFilesAreTakenFrom(string says, GameFile[] primary, GameFile[] steam, GameFile[] gog, GameDepot[] expected)
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b").WithFile(Mod, "c.nif", "c");
+        var game = new GameFolder("Fallout 4", "data", primary, [new GameFolderPlace("steam", steam, SteamDepots), new GameFolderPlace("gog", gog, GogDepots)], PrimaryDepots);
+
+        var manifest = await UpdatedWith(game);
+
+        Assert.True(expected.SequenceEqual(Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots), says);
+    }
+
     [Fact]
-    public async Task AGameFolderMod_NamesTheDepotsOfOnlyThePlacesItsFilesAreTakenFrom()
+    public async Task AFileSeveralPlacesHold_IsTakenFromThePlaceHoldingMostOfTheFilesWanted()
     {
         _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b");
-        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [
-            new GameFolderPlace("steam", [new GameFile("b.nif", "b")], SteamDepots),
-            new GameFolderPlace("gog", [new GameFile("z.nif", "z")], [new GameDepot("9", "9")])]);
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", [new GameFile("a.nif", "a"), new GameFile("b.nif", "b")], SteamDepots)], [new GameDepot("1", "1")]);
 
         var manifest = await UpdatedWith(game);
 
         Assert.Equal(SteamDepots, Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots);
+    }
+
+    [Fact]
+    public async Task AFileALaterPlaceOfTheGameHoldsWithOtherBytes_IsRecordedAsOtherBytes()
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "c.nif", "edited");
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", [new GameFile("c.nif", "original")])]);
+
+        var manifest = await UpdatedWith(game);
+
+        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("c.nif", new PackageEntry.OtherBytes())], manifest.Files);
     }
 
     [Fact]

@@ -9,11 +9,13 @@ internal sealed class ManifestBuilder
     private readonly DownloadedFile? _own;
     private readonly IReadOnlyList<DownloadedFile> _others;
     private readonly IReadOnlyList<(Holder Holder, IReadOnlyList<GameDepot> Depots)> _places;
+    private readonly Holder? _game;
 
     public ManifestBuilder((string Name, InstallationFile File)? installationFile, GameFolder? gameFolder, IReadOnlyList<DownloadedFile> downloadedFiles)
     {
         _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
         _others = [.. downloadedFiles.Where(other => other.Package.Name != _own?.Package.Name)];
+        _game = gameFolder is null ? null : new Holder(gameFolder.Name, [.. gameFolder.Places().SelectMany(place => place.Files.Select(game => (game.Path, game.Hash)))], keptBelowFolders: true);
         _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => (new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true), place.Depots ?? []))];
     }
 
@@ -64,7 +66,7 @@ internal sealed class ManifestBuilder
             taken.AddRange(takenHere);
             depots.AddRange(placeDepots.Except(depots));
         }
-        if (taken.Count > 0) sourcing.Packages.Add((_places[0].Holder, new ManifestPackage.GameFolder(_places[0].Holder.Name, FileHash.OfFilesTaken([.. ordered.Where(taken.Contains)]), depots)));
+        if (taken.Count > 0 && _game is { } game) sourcing.Packages.Add((game, new ManifestPackage.GameFolder(game.Name, FileHash.OfFilesTaken(taken), depots)));
     }
 
     private void TakeFromOtherDownloadedFiles(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)
