@@ -7,6 +7,7 @@ import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -77,6 +78,7 @@ export type AdapterCall =
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
+  | { readonly verb: 'moveIntoOverwrite'; readonly moves: Parameters<InstanceAdapter['moveIntoOverwrite']>[0] }
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
@@ -301,6 +303,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     activeProfile: () => Promise.resolve(current.profile),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
+    gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
     steamInstall: () => Promise.resolve(answers.steam?.install),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
@@ -470,6 +473,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         });
         return { gone: false, wrote: true, relativePath: renamedPath(relativePath) };
       }),
+    moveIntoOverwrite: (moves) => write<string | undefined>({ verb: 'moveIntoOverwrite', moves }, () => undefined),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),

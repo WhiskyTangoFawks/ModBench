@@ -1,14 +1,14 @@
 // MO2's exclusion of a file, the file or folder renamed with MO2's suffix or restored, and a mod's file sent to the trash.
 
-import { isAbsolute, relative, sep } from 'node:path';
+import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { exists, factsOf, realPathIfThere, rename, withLock } from '../files';
+import { ensureDir, exists, factsOf, realPathIfThere, remove, rename, undoAll, withLock, type Undo } from '../files';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
-import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './layout';
+import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'trashModFile' | 'exclusionMark'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashModFile' | 'exclusionMark'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -19,6 +19,12 @@ async function pathOf(context: Mo2Context, origin: FileOrigin, relativePath: str
   const path = fileUnder(await originFolder(context, origin, 'list'), relativePath);
   if (path === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
   return path;
+}
+
+async function topmostMissing(folder: string): Promise<string | undefined> {
+  let missing: string | undefined;
+  for (let up = folder; !(await exists(up)); up = dirname(up)) missing = up;
+  return missing;
 }
 
 export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
@@ -61,6 +67,33 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
       if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw notAFile;
       await trash(file);
+    },
+
+    async moveIntoOverwrite(moves) {
+      const folder = overwriteDir(context.instanceRoot);
+      const targets: { from: string; to: string }[] = [];
+      const taken = new Set<string>();
+      for (const { from, relativePath } of moves) {
+        const to = fileUnder(folder, relativePath);
+        if (to === undefined) return `Not a file of Overwrite: "${relativePath}"`;
+        if (taken.has(relativePath.toLowerCase())) return `More than one file is moving to "${relativePath}" in Overwrite.`;
+        if (await exists(to)) return `"${relativePath}" is already in Overwrite.`;
+        taken.add(relativePath.toLowerCase());
+        targets.push({ from, to });
+      }
+      const undos: Undo[] = [];
+      try {
+        for (const { from, to } of targets) {
+          const made = await topmostMissing(dirname(to));
+          if (made !== undefined) undos.unshift(() => remove(made));
+          await ensureDir(dirname(to));
+          await rename(from, to);
+          undos.unshift(() => rename(to, from));
+        }
+      } catch (err) {
+        throw await undoAll(undos, err);
+      }
+      return undefined;
     },
 
     exclusionMark: EXCLUDED_SUFFIX,

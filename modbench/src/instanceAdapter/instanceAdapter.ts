@@ -590,6 +590,8 @@ export interface InstanceAdapter {
   gameFolder(): Promise<GameFolder>;
   /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
   steamInstall(): Promise<FoundGameFolder | undefined>;
+  /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
+  gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */
   nonSteamPrefix(folder: string): Promise<NonSteamPrefix>;
   /** Every profile's name. */
@@ -723,6 +725,9 @@ export interface InstanceAdapter {
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
+  /** Moves each file `from` into Overwrite at its `relativePath`. Answers why it refused, moving nothing: a path outside
+   *  Overwrite, a file already there, or two files to one path. A move that fails puts back those before it and rejects. */
+  moveIntoOverwrite(moves: readonly { readonly from: string; readonly relativePath: string }[]): Promise<string | undefined>;
   /** How the manager matches an entry's name; two entries with one key are one name to it. */
   entryKey(entry: EntryRef): string;
   /** The mark the manager reads as excluded. */

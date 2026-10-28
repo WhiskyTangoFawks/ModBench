@@ -1,12 +1,12 @@
 // Deployment (target-architecture.d2): a load order deployed into the deployment folder. Its one type
 // is hardlink (deployment-hardlink.md): each file the game gets is linked to its copy in the instance.
 
-import { realpath, stat } from 'node:fs/promises';
+import { readdir, realpath, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
 import { pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
-import { changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
+import { ASIDE, changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginsTxtChange } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
@@ -34,11 +34,12 @@ interface Lost {
   readonly winner: string;
 }
 
-/** `wrote` is false when the folder already held the load order. Deploy leaves out the winner at each
- *  `leftOut` path and each `lost` winner, and `leftAside` names each file it set aside and could not remove. */
+/** `wrote` is false when the folder already held the load order. `leftOut` winners find a file deploy did not write at
+ *  their path; `unmanaged` is every such file; `leftAside` is each file set aside and not removed. */
 export interface Deployed {
   readonly wrote: boolean;
-  readonly leftOut: readonly string[];
+  readonly leftOut: readonly Lost[];
+  readonly unmanaged: readonly string[];
   readonly lost: readonly Lost[];
   readonly leftAside: readonly string[];
   readonly pluginsTxt: PluginsTxtDeployed;
@@ -48,6 +49,8 @@ export interface Deployment {
   /** `files` in the order their winners win: of two that land at one path, the earlier wins it.
    *  When it cannot deploy, it throws why, and has written nothing or names what it left changed. */
   deploy(folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder): Promise<Deployed>;
+  /** Every file in `folder` that is not still as deploy last wrote it. */
+  unmanaged(folder: string): Promise<string[]>;
 }
 
 // A mod's Root folder holds what the game reads from beside its program; the rest is Data's.
@@ -57,6 +60,15 @@ function deployedPath(relativePath: string): string | undefined {
   if (below.length === 0) return `Data/${relativePath}`;
   if (fold(first) === 'source') return undefined;
   return fold(first) === 'root' ? below.join('/') : `Data/${relativePath}`;
+}
+
+/** The path in Overwrite at which the next deploy links the file at `path` below the deployment folder back to it,
+ *  or undefined when no mod file lands at that path. */
+export function overwritePathOf(path: string): string | undefined {
+  const [first = '', ...below] = path.split('/');
+  const inOverwrite = fold(first) === 'data' && below.length > 0 ? below.join('/') : `Root/${path}`;
+  const back = deployedPath(inOverwrite);
+  return back !== undefined && fold(back) === fold(path) ? inOverwrite : undefined;
 }
 
 async function volumeOf(path: string): Promise<string> {
@@ -114,7 +126,34 @@ interface Plan {
   readonly links: readonly Link[];
   readonly relinks: readonly Link[];
   readonly removals: readonly Written[];
-  readonly leftOut: readonly string[];
+  readonly leftOut: readonly Lost[];
+}
+
+async function filesBelow(folder: string, within = ''): Promise<string[]> {
+  const found: string[] = [];
+  const entries = await readdir(join(folder, within), { withFileTypes: true }).catch((err: unknown) => {
+    if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return [];
+    throw err;
+  });
+  for (const entry of entries) {
+    const path = within === '' ? entry.name : `${within}/${entry.name}`;
+    if (entry.isDirectory()) found.push(...await filesBelow(folder, path));
+    else found.push(path);
+  }
+  return found;
+}
+
+// A file is deploy's when it is at a recorded path, by case alone, and is the file recorded there.
+async function unmanagedIn(folder: string, managed: readonly Written[]): Promise<string[]> {
+  const recordedAt = new Map<string, string[]>();
+  for (const { path, ino } of managed) recordedAt.set(fold(path), [...recordedAt.get(fold(path)) ?? [], ino]);
+  const unmanaged: string[] = [];
+  for (const path of await filesBelow(folder)) {
+    const recorded = recordedAt.get(fold(path));
+    const isOurs = recorded !== undefined && recorded.includes(await fileIdAt(join(folder, path)) ?? '');
+    if (!isOurs && !path.includes(ASIDE)) unmanaged.push(path);
+  }
+  return unmanaged;
 }
 
 async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned: ReadonlyMap<string, Written>): Promise<Plan> {
@@ -122,7 +161,7 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
   const kept: Written[] = [];
   const links: Link[] = [];
   const relinks: Link[] = [];
-  const leftOut: string[] = [];
+  const leftOut: Lost[] = [];
   for (const [key, want] of wanted) {
     const own = owned.get(key);
     if (own?.ino === want.ino) kept.push(own);
@@ -130,7 +169,7 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
     else {
       const path = await inFolder(want.path);
       if (await fileIdAt(join(folder, path)) === undefined) links.push({ ...want, path });
-      else leftOut.push(path);
+      else leftOut.push({ path, winner: want.source });
     }
   }
   const removals = [...owned].filter(([key]) => !wanted.has(key)).map(([, own]) => own);
@@ -170,6 +209,8 @@ async function deployTo(
   const owned = await stillWritten(folder, recorded.files);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
+  const setAside = [...removals, ...relinks].map(asWritten);
+  const unmanaged = await unmanagedIn(folder, [...after, ...setAside]);
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();
@@ -177,11 +218,10 @@ async function deployTo(
   };
   if (links.length + relinks.length + removals.length === 0 && !part.steps.length) {
     if (after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
-    return { wrote: false, leftOut, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
+    return { wrote: false, leftOut, unmanaged, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
   }
   // A hardlink's file ID is its source's, so the record is known before the files change. A deploy killed
   // part way leaves a record the next deploy recovers from (ADR-0003); a failed deploy restores the old one.
-  const setAside = [...removals, ...relinks].map(asWritten);
   const intended = [...after, ...setAside];
   await record.write(folder, { files: intended, ...(recorded.pluginsTxt === undefined ? {} : { pluginsTxt: recorded.pluginsTxt }) });
   let leftAside: string[];
@@ -196,7 +236,7 @@ async function deployTo(
     throw err;
   }
   leftAside.push(...await part.settle());
-  return { wrote: true, leftOut, lost, leftAside, pluginsTxt: part.deployed() };
+  return { wrote: true, leftOut, unmanaged, lost, leftAside, pluginsTxt: part.deployed() };
 }
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of
@@ -205,6 +245,11 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Dep
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {
+    unmanaged(folder) {
+      const run = last.then(async () => unmanagedIn(folder, (await record.of(folder)).files));
+      last = run.catch(() => undefined);
+      return run;
+    },
     deploy(folder, files, plugins) {
       const run = last.then(() => deployTo(record, place, folder, files, plugins));
       last = run.catch(() => undefined);

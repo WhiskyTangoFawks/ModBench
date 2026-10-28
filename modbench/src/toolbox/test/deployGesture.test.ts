@@ -1,50 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handlers, registerCommand } = vi.hoisted(() => {
-  const handlers = new Map<string, () => Promise<void>>();
+const { handlers, registerCommand, executeCommand } = vi.hoisted(() => {
+  const handlers = new Map<string, (...args: unknown[]) => Promise<void>>();
   return {
     handlers,
-    registerCommand: vi.fn((command: string, handler: () => Promise<void>) => {
+    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void>) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
+    executeCommand: vi.fn(),
   };
 });
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return { commands: { registerCommand }, window: { withProgress: recordedWithProgress } };
+  return { commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress } };
 });
 
 import { progressSteps } from '../../test/recordedProgress';
-import { registerDeployCommand } from '../deployGesture';
+import { registerDeployCommands } from '../deployGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import type { DeployCommands, DeployResult } from '../../instanceCommands/deploy';
+import type { DeployCommands, DeployResult, MoveToOverwriteResult } from '../../instanceCommands/deploy';
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 
-function deployAnswering(result: DeployResult, sequence = 1) {
+const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
+
+function deployAnswering(result: DeployResult, sequence = 1, moved: MoveToOverwriteResult = NOT_MOVED) {
   const reporter = recordingReporter();
   const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
-  registerDeployCommand({
-    commands: { deploy },
+  const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
+  registerDeployCommands({
+    commands: { deploy, moveToOverwrite },
     instance: { landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
     reporter,
   });
-  return { reporter, deploy, run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler') };
+  return { reporter, deploy, moveToOverwrite, run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
 }
 
 beforeEach(() => {
   handlers.clear();
+  executeCommand.mockClear();
   progressSteps.length = 0;
 });
 
 describe('Deploy', () => {
   it('deploys the files the instance value says the game gets, under the Toolbox\'s progress, and says nothing', async () => {
-    const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
+    const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false });
 
     await run();
 
@@ -69,19 +74,19 @@ describe('Deploy', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not deploy.', detail: 'No deployment folder: set modbench.deployment.folder.' }]);
   });
 
-  it('warns of each file it left out, naming its path', async () => {
-    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: ['Data/MCM/settings.ini', 'Data/a.esp'], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
+  it('warns of each file it left out, naming it and the path that holds a file deploy did not write', async () => {
+    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [{ path: 'Data/MCM/settings.ini', winner: '/instance/mods/A/MCM/settings.ini' }, { path: 'Data/a.esp', winner: '/instance/mods/B/a.esp' }], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false });
 
     await run();
 
     expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Deploy left out each file whose path holds a file it did not write:', detail: 'Data/MCM/settings.ini, Data/a.esp',
+      severity: 'warning', message: 'Deploy left out each file whose path holds a file it did not write:', detail: '/instance/mods/A/MCM/settings.ini at Data/MCM/settings.ini, /instance/mods/B/a.esp at Data/a.esp',
     }]);
   });
 
   it('warns of each file it left out for another the game gets at its path, naming both', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], lost: [{ path: 'Data/x.ini', winner: '/instance/mods/Lower/Root/Data/x.ini' }], leftAside: [], pluginsTxt: UNCHANGED,
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [{ path: 'Data/x.ini', winner: '/instance/mods/Lower/Root/Data/x.ini' }], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true,
     });
 
     await run();
@@ -93,7 +98,7 @@ describe('Deploy', () => {
 
   it('warns of each file it set aside and could not remove, which the next deploy removes', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], lost: [], leftAside: ['Data/b.esp.modbench_aside_7_0 (EBUSY: resource busy or locked)'], pluginsTxt: UNCHANGED,
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: ['Data/b.esp.modbench_aside_7_0 (EBUSY: resource busy or locked)'], pluginsTxt: UNCHANGED, canMoveToOverwrite: true,
     });
 
     await run();
@@ -106,7 +111,7 @@ describe('Deploy', () => {
 
   it('warns that it wrote no plugins.txt, saying why', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'notWritten', why: 'no prefix' },
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'notWritten', why: 'no prefix' }, canMoveToOverwrite: false,
     });
 
     await run();
@@ -116,7 +121,7 @@ describe('Deploy', () => {
 
   it('warns of the plugins.txt it renamed, naming its new name', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: ['C:\\Local\\Fallout4\\plugins.txt.modbench_renamed', 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2'] },
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: ['C:\\Local\\Fallout4\\plugins.txt.modbench_renamed', 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2'] }, canMoveToOverwrite: false,
     });
 
     await run();
@@ -125,5 +130,65 @@ describe('Deploy', () => {
       severity: 'warning', message: 'Deploy renamed each plugins.txt it did not write, so the game reads the plugin order of this load order:',
       detail: 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed, C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2',
     }]);
+  });
+
+  it('warns of each file in the deployment folder it does not manage, and offers to move them to Overwrite', async () => {
+    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: ['Data/MCM/settings.ini', 'game.exe'], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true });
+
+    await run();
+    const [report] = reporter.reports;
+    report?.action?.run();
+
+    expect([reporter.shownFailures, reporter.reports.length, report?.severity, report?.message, report?.detail, report?.action?.title, executeCommand.mock.calls]).toEqual([
+      [{ severity: 'warning', message: 'The deployment folder holds files deploy does not manage:', detail: 'Data/MCM/settings.ini, game.exe' }],
+      1, 'warning', 'The deployment folder holds 2 files deploy does not manage, each named in the Output.', undefined, 'Move to Overwrite',
+      [['modbench.instance.moveToOverwrite', ['Data/MCM/settings.ini', 'game.exe']]],
+    ]);
+  });
+
+  it('offers no move to Overwrite where it does not apply', async () => {
+    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: ['Data/a.esp'], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false });
+
+    await run();
+
+    expect(reporter.reports.map((r) => [r.message, r.action])).toEqual([['The deployment folder holds 1 files deploy does not manage, each named in the Output.', undefined]]);
+  });
+});
+
+describe('Move to Overwrite', () => {
+  const NOTHING = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true } as const;
+
+  it('moves the files it is given under the Toolbox\'s progress, and says nothing', async () => {
+    const { reporter, moveToOverwrite, runMove } = deployAnswering(NOTHING, 1, { applied: true, wrote: true, left: [] });
+
+    await runMove(['Data/a.esp']);
+
+    expect([moveToOverwrite.mock.calls, progressSteps, reporter.reports]).toEqual([
+      [[['Data/a.esp']]], ['progress opens on modbench.toolbox', 'move', 'read again', 'progress closes'], [],
+    ]);
+  });
+
+  it('reports a refusal at error, saying why', async () => {
+    const { reporter, runMove } = deployAnswering(NOTHING, 1, { applied: false, refusal: '"a.esp" is already in Overwrite.' });
+
+    await runMove(['Data/a.esp']);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move to Overwrite.', detail: '"a.esp" is already in Overwrite.' }]);
+  });
+
+  it('warns of each file it left in the deployment folder', async () => {
+    const { reporter, runMove } = deployAnswering(NOTHING, 1, { applied: true, wrote: true, left: ['Data/.hidden'] });
+
+    await runMove(['Data/.hidden', 'Data/a.esp']);
+
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Left in the deployment folder, because no mod file lands at their path:', detail: 'Data/.hidden' }]);
+  });
+
+  it('asks for the files deploy does not manage now when none are named, as from the command palette', async () => {
+    const { moveToOverwrite, runMove } = deployAnswering(NOTHING);
+
+    await runMove();
+
+    expect(moveToOverwrite.mock.calls).toEqual([[undefined]]);
   });
 });

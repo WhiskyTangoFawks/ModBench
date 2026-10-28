@@ -1,22 +1,12 @@
-import { readdir, realpath, stat } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { readdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { readOrAbsent, readOrReason } from '../files';
+import { isWithin } from './pathWithin';
 import { steamLibraries } from './gamePathDetector';
 import { shortcutsAt, type Shortcut } from './steamShortcuts';
 
 /** The Proton prefix of a non-Steam game in Steam, or why there is none. */
 export type NonSteamPrefix = { readonly prefix: string } | { readonly why: string };
-
-async function realPathOf(path: string): Promise<string> {
-  const absolute = resolve(path);
-  const parent = dirname(absolute);
-  return readOrAbsent(() => realpath(absolute), undefined).then(async (real) => real ?? (parent === absolute ? absolute : join(await realPathOf(parent), basename(absolute))));
-}
-
-async function isWithin(folder: string, path: string): Promise<boolean> {
-  const below = relative(await realPathOf(folder), await realPathOf(path));
-  return !below.startsWith('..') && !isAbsolute(below);
-}
 
 async function shortcutsUnder(steamRoot: string): Promise<Shortcut[]> {
   const users = join(steamRoot, 'userdata');

@@ -452,6 +452,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.moveToOverwrite",
+        "title": "Move to Overwrite",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.instance.logIn",
         "title": "Log In Instance to Nexus",
         "category": "Modbench"
@@ -1116,6 +1121,10 @@
         },
         {
           "command": "modbench.instance.deploy",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.instance.moveToOverwrite",
           "when": "modbench.folder == instance"
         },
         {

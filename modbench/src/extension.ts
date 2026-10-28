@@ -62,7 +62,7 @@ import { instanceCommands } from './instanceCommands/instanceCommands';
 import { deployCommands } from './instanceCommands/deploy';
 import { hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
-import { registerDeployCommand } from './toolbox/deployGesture';
+import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
@@ -224,8 +224,9 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(registerRefreshCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
-  own(registerDeployCommand({
+  ownAll(own, registerDeployCommands({
     commands: deployCommands({
+      adapter,
       deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt),
       deploymentFolder: deploymentFolderSetting,
     }),
