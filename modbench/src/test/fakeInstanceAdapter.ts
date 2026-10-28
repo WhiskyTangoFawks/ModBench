@@ -16,11 +16,15 @@ function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFi
 }
 
 /** The source mods whose repositories write the named output folders. */
-export const sourceModsOf = (folders: Record<string, string>, notes: string[] = []): SourceMods => ({
-  folders: new Map(Object.entries(folders)),
-  folderOf: (name) => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1],
-  notes,
-});
+export const sourceModsOf = (folders: Record<string, string>, notes: string[] = [], uncloned: readonly string[] = []): SourceMods => {
+  const folderOf = (name: string): string | undefined => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1];
+  return {
+    folders: new Map(Object.entries(folders)),
+    folderOf,
+    builds: (name) => folderOf(name) !== undefined || uncloned.some((output) => output.toLowerCase() === name.toLowerCase()),
+    notes,
+  };
+};
 
 /** An instance that holds no publisher's configuration. */
 export const NO_PUBLISHER = { kind: 'none' } as const;
@@ -49,7 +53,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     runtimeOutput: { origin: 'overwrite', folder: undefined, files: [], folders: [], notes: [] },
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
-    sourceMods: { folders: new Map(), folderOf: () => undefined, notes: [] },
+    sourceMods: sourceModsOf({}),
     holdsRepository: false,
     repositorySetUp: false,
     watchNotes: [],

@@ -5,7 +5,7 @@ import { fileInFolder } from '../../instanceAdapter/instanceAdapter';
 import type {
   EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, fileIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, sourceModsOf, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
@@ -18,7 +18,7 @@ const FIXTURE_ORDER = [
   separator(RADFALL), mod('ENBoost'), mod('Harder VATS', false), mod('Cracked Screen'),
 ];
 const sourceMods = (folders: ReadonlyMap<string, string>): Pick<InstanceReading, 'sourceMods'> =>
-  ({ sourceMods: { folders, folderOf: (mod) => folders.get(mod), notes: [] } });
+  ({ sourceMods: sourceModsOf(Object.fromEntries(folders)) });
 const NO_TRASH = () => Promise.resolve();
 
 function over(
@@ -748,6 +748,19 @@ describe('syncMods', () => {
       { kind: 'dropMod', mod: 'Gone Mod' }, { kind: 'dropSeparator', separator: 'Gone Sep' },
       { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'Hand Extracted Mod' } },
     ])]);
+  });
+
+  it('keeps the line of a gone folder that a manifest builds, as the mod manager matches names', async () => {
+    const fake = fakeInstanceAdapter(readingFixture({
+      mods: [mod('Unbuilt'), mod('Cloned Source'), mod('Gone Mod')], modFolders: modFoldersOf(),
+      sourceMods: sourceModsOf({ 'Cloned Source': '/instance/source/Cloned Source' }, [], ['UNBUILT']),
+    }));
+    const run = { fake };
+
+    const outcome = await sync(run);
+
+    expect(outcome).toEqual({ applied: true, added: [], dropped: ['Gone Mod'] });
+    expect(run.fake.calls).toEqual([orderWrite([{ kind: 'dropMod', mod: 'Gone Mod' }])]);
   });
 
   it('writes the profile the mod manager selects', async () => {
