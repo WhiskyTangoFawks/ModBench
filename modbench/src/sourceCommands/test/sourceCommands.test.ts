@@ -186,6 +186,33 @@ describe('sourceCommands decompileAndCommit', () => {
     }]);
   });
 
+  it('hands mEdit each mod\'s installation file and its version as its metadata says', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
+    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'a.dds', hash: 'E' }] };
+    const adapter = fakeAdapter({ installations: new Map([['ModA', { kind: 'read', answer: pack }]]), metadata: new Map([['ModA', { version: '1.2.3' }]]) });
+
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+
+    expect(client.calls[0]?.args[0]).toEqual([{
+      name: 'ModA', sourceFolder: '/source/ModA', metadataFiles: ['meta.ini'], version: '1.2.3',
+      installationFile: { path: '/downloads/Pack.7z', size: 7, hash: 'H', entries: [{ path: 'a.dds', hash: 'E' }] },
+    }]);
+  });
+
+  it.each<[string, InstanceAnswers, string]>([
+    ['whose installation file cannot be read', { installations: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) }, 'EACCES'],
+    ['whose metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) }, 'its metadata could not be read: EISDIR: meta.ini'],
+  ])('refuses a mod %s, naming why, and commits the rest', async (_case, answers, reason) => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(answers), saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA', 'ModB']);
+
+    expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModB' }]);
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason }] });
+  });
+
   it('refuses a mod whose name gives it no source folder, naming why', async () => {
     const client = new InMemoryMEditClient();
 

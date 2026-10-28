@@ -2,9 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to decompile and commit, by name, with the source folder its repository goes in and the mod manager's own files in
-/// its folder, which no build makes.</summary>
-public sealed record ModToDecompileAndCommit(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
+/// <summary>A mod to decompile and commit, by name, with the source folder its repository goes in, the mod manager's own files in
+/// its folder, which no build makes, its installation file and its version.</summary>
+public sealed record ModToDecompileAndCommit(
+    string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles, InstallationFile? InstallationFile = null, string? Version = null);
 
 /// <summary>Why decompile and commit refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
@@ -28,6 +29,9 @@ public enum DecompileAndCommitRefusal
 
     /// <summary>A file of the mod folder could not be read, so its assets are not known.</summary>
     ModFilesUnreadable,
+
+    /// <summary>The mod folder's manifest names the game folder as a package, which a source mod's build does not read.</summary>
+    ManifestNamesGameFolder,
 
     /// <summary>The plugins passed their gate, and the file system or git refused the source folder's files or its one commit,
     /// or the removal of the manifest its mod folder held.</summary>
