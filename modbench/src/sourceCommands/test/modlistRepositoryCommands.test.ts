@@ -5,7 +5,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile, ManifestStep } from '../../client';
 import type { SubmodulesCloned } from '../../client/MEditClient';
 import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import { archiveVariants } from '../sourceCommands';
 import type { HostGit } from '../../ports/repository';
@@ -30,17 +30,17 @@ const loggedOutOfNexus = (): Nexus => nexusAnswering(answeringFrom({})).nexus;
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
-interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks }
+interface Wiring { nexus?: Nexus; hostGit?: HostGit<string>; adapterOver?: Partial<InstanceAdapter>; tasks?: StepTasks; loadOrderWaitMs?: number }
 
 function commandsOver(
   answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
-  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks() }: Wiring = {},
+  { nexus = loggedOutOfNexus(), hostGit, adapterOver = {}, tasks = recordingTasks(), loadOrderWaitMs }: Wiring = {},
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
     client, adapter: { ...adapter.adapter, ...adapterOver }, nexus, instanceRoot: '/instance',
-    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks,
+    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks, loadOrderWaitMs,
   });
   return { commands, client, adapter, repositories };
 }
@@ -916,6 +916,46 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
       expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: expect.stringContaining('mEdit stopped') as unknown }] });
+    });
+  });
+
+  describe('between mods', () => {
+    const order = ['ModA', 'ModB'].map((name) => ({ kind: 'mod', name, enabled: true }) as const);
+    const modBPlugin = { origin: { kind: 'mod', name: 'ModB' }, name: 'B.esp' } as const;
+    const restoringWith = (loadOrderWaitMs: number) => {
+      const wired = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf({ ModA: '/source/ModA', ModB: '/source/ModB' }), mods: [...order], ...pluginFilesHeld(modBPlugin) }, { loadOrderWaitMs });
+      const sent: string[] = [];
+      wired.client.setCommandHandler('restoreFromManifest', (mods) => {
+        sent.push(...sentNamesOf(mods));
+        return Promise.resolve({ landed: sentNamesOf(mods).map((mod) => restoredMod({ mod })), refused: [], notFound: [] });
+      });
+      return { ...wired, sent };
+    };
+
+    it('hands mEdit the next mod once the record index holds the plugins of the one restored', async () => {
+      const { commands, client, sent } = restoringWith(1_000);
+
+      const outcome = commands.restoreFromManifest(['ModA', 'ModB']);
+      await new Promise((resolve) => { setTimeout(resolve, 10); });
+      expect(sent).toEqual(['ModB']);
+      client.emit({
+        kind: 'load-order-status',
+        loadOrderStatus: { totalPlugins: 1, activePlugins: 1, indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }], conflictsComputed: true, failures: [], version: 1, holdsNone: false },
+      });
+
+      expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+    });
+
+    it('answers a mod whose plugin never reaches the record index as not finished, and the mods after it as not finished', async () => {
+      const { commands, sent } = restoringWith(20);
+
+      const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
+
+      expect(sent).toEqual(['ModB']);
+      expect(outcome).toMatchObject({
+        applied: true, landed: [],
+        refused: [{ item: 'ModB', reason: expect.stringMatching(/^was not finished: .*B\.esp/) as unknown }, { item: 'ModA', reason: expect.stringMatching(/^was not finished: .*B\.esp/) as unknown }],
+      });
     });
   });
 

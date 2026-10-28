@@ -12,6 +12,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { inModOrder } from './inModOrder';
+import { whyNotIndexed } from './whyNotIndexed';
 import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
@@ -19,18 +20,19 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter,
-  'gameFolder' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'reading' | 'gameFolder' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'loadOrderStatus' | 'onLoadOrderStatus'>;
   adapter: Adapter;
   nexus: Pick<Nexus, 'download'>;
   instanceRoot: string;
   hostGit: HostGit<unknown>;
   trash: MoveToTrash;
   tasks: StepTasks;
+  loadOrderWaitMs?: number;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -275,7 +277,8 @@ async function restoreChunk(
   const landed = [...restored.landed].sort((a, b) => rank(a.mod) - rank(b.mod));
   const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(landed, sourceMods, cloned));
   const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
-  return { restored, finished: stepped.finished, unfinished: [...trashed.unfinished, ...stepped.unfinished] };
+  const indexed = await withPluginsIndexed(deps, stepped.finished);
+  return { restored, finished: indexed.finished, unfinished: [...trashed.unfinished, ...stepped.unfinished, ...indexed.unfinished], notIndexed: indexed.unfinished };
 }
 
 const notFinishedAfter = (why: string) => (item: string): ItemRefusal<string> =>
@@ -297,12 +300,16 @@ async function restoreFromManifest(
   let cancelRefusal: string | undefined;
   for (const [at, chunk] of chunks.entries()) {
     if (options.signal?.aborted) break;
-    const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
+    const { restored, finished, unfinished, notIndexed } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
     landed.push(...finished);
     if (restored.applied) {
       refused.push(...restored.refused, ...unfinished);
       cancelRefusal = restored.cancelRefusal ?? cancelRefusal;
-      continue;
+      const waited = notIndexed[0];
+      if (waited === undefined) continue;
+      const why = waited.reason.replace(/^was not finished: /, '').replace(/\. Restoring it again finishes it\.$/, '');
+      refused.push(...chunks.slice(at + 1).flat().map(notFinishedAfter(why)));
+      break;
     }
     const later = chunks.slice(at + 1).flat();
     const unfinishedNames = [...restored.unfinished, ...unfinished.map(({ item }) => item), ...later];
@@ -359,6 +366,21 @@ async function withFilesNoLineNamesTrashed(
   }
   return { finished, unfinished };
 }
+
+// mods.md, Build, story 11: the next mod's script reads these plugins in the load order, so the first that does not reach the
+// record index in time stops the restore there.
+async function withPluginsIndexed(
+  { client, adapter, loadOrderWaitMs }: ModlistRepositoryCommandsDeps, landed: Restored,
+): Promise<{ finished: Restored; unfinished: readonly ItemRefusal<string>[] }> {
+  for (const [at, { mod }] of landed.entries()) {
+    const why = await whyNotIndexed({ client, adapter, loadOrderWaitMs }, mod);
+    if (why !== undefined) return { finished: landed.slice(0, at), unfinished: landed.slice(at).map((left) => notFinishedAfterIndexing(left.mod, mod, why)) };
+  }
+  return { finished: landed, unfinished: [] };
+}
+
+const notFinishedAfterIndexing = (item: string, waited: string, why: string): ItemRefusal<string> =>
+  ({ item, reason: `was not finished: ${item === waited ? 'its' : `${waited}'s`} ${why}. Restoring it again finishes it.` });
 
 // modlist-repository.md, The manifest, story 17: restore runs a mod's steps once its folder holds what its packages give.
 async function withRestoredStepsRun(

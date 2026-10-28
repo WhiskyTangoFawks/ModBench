@@ -7,14 +7,16 @@ import { ba2VersionsOf } from '../tables/gamePaths';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
+import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'loadOrderStatus' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
+  loadOrderWaitMs?: number;
 }
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
@@ -24,7 +26,7 @@ export const metadataUnreadable = (reason: string): string => `its metadata coul
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved, tasks, loadOrderWaitMs }: SourceCommandsDeps) {
   const buildMod = async (mod: string, sourceFolder: string | undefined): Promise<BuildMod | ItemRefusal<string>> => {
     const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
     if (unsaved.length > 0) return unsavedRefusal(mod, unsaved);
@@ -103,8 +105,14 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
           refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${outcome.message}` })));
           break;
         }
-        landed.push(...outcome.landed);
         refused.push(...outcome.refused);
+        // mods.md, Build, story 11: the next mod's script reads this mod's plugins in the load order.
+        const why = outcome.landed.length === 0 ? undefined : await whyNotIndexed({ client, adapter, loadOrderWaitMs }, mod);
+        landed.push(...(why === undefined ? outcome.landed : outcome.landed.map((built) => ({ ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` }))));
+        if (why !== undefined) {
+          refused.push(...ordered.slice(at + 1).map((item) => ({ item, reason: `was not built: ${mod}'s ${why}` })));
+          break;
+        }
       }
       return { landed, refused };
     },
