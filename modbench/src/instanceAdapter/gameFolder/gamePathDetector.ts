@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import { posix, win32 } from 'node:path';
+import { readOrAbsent } from '../files';
 
 export interface GamePaths {
   dataFolder: string;
@@ -13,17 +14,17 @@ export interface GameAutodetect {
   steamFolderName: string;
 }
 
-// Parses Valve's VDF format just enough to find a library path that contains a given AppID.
-function parseLibraryFoldersVdf(content: string, appId: string): string | null {
+// Parses Valve's VDF format just enough to find the libraries, and the library that contains a given AppID.
+function libraryEntries(content: string): { path: string; block: string }[] {
   // A library block reads:  "path"  "/some/path"  ...  "appid"  "value"
-  const libraryBlocks = content.split(/"\d+"\s*\{/);
-  for (const block of libraryBlocks) {
-    if (!block.includes(`"${appId}"`)) continue;
+  return content.split(/"\d+"\s*\{/).flatMap((block) => {
     const path = block.match(/"path"\s+"([^"]+)"/)?.[1];
-    if (path !== undefined) return path.replaceAll('\\\\', '\\');
-  }
-  return null;
+    return path === undefined ? [] : [{ path: path.replaceAll('\\\\', '\\'), block }];
+  });
 }
+
+const parseLibraryFoldersVdf = (content: string, appId: string): string | null =>
+  libraryEntries(content).find(({ block }) => block.includes(`"${appId}"`))?.path ?? null;
 
 /** Takes `platform` explicitly (rather than reading `process.platform` itself) so tests can
  *  exercise both branches directly instead of stubbing global process state. */
@@ -54,18 +55,15 @@ function windowsVdfPaths(steamPath: string): string[] {
   ];
 }
 
-export const linuxSteamRoot = (): string => posix.join(os.homedir(), '.steam', 'steam');
+const linuxSteamRoot = (): string => posix.join(os.homedir(), '.steam', 'steam');
 
-/** Steam's root, then every other library its libraryfolders.vdf names. */
+/** Where Steam is on `platform`, when Modbench looks for its prefixes there. */
+export const steamRootOn = (platform: NodeJS.Platform): string | undefined => (platform === 'linux' ? linuxSteamRoot() : undefined);
+
+/** Steam's root, then every other library its libraryfolders.vdf names. A libraryfolders.vdf that cannot be read rejects. */
 export async function steamLibraries(steamRoot: string): Promise<string[]> {
-  let content: string;
-  try {
-    content = await readFile(posix.join(steamRoot, 'config', 'libraryfolders.vdf'), 'utf-8');
-  } catch {
-    return [steamRoot];
-  }
-  const named = [...content.matchAll(/"path"\s+"([^"]+)"/g)].map(([, path]) => path?.replaceAll('\\\\', '\\') ?? steamRoot);
-  return [...new Set([steamRoot, ...named])];
+  const content = await readOrAbsent(() => readFile(posix.join(steamRoot, 'config', 'libraryfolders.vdf'), 'utf-8'), '');
+  return [...new Set([steamRoot, ...libraryEntries(content).map(({ path }) => path)])];
 }
 
 function findSteamLibrary(steamAppId: string): Promise<string | null> {

@@ -497,7 +497,7 @@ describe('plugins.txt', () => {
   beforeEach(() => {
     game = join(root, 'local', 'Fallout4');
     plugins = join(game, 'plugins.txt');
-    place = () => Promise.resolve({ folder: game });
+    place = () => Promise.resolve({ folder: game, shared: true });
     order = { release: 'Fallout4', entries: [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: false }] };
   });
 
@@ -513,7 +513,7 @@ describe('plugins.txt', () => {
     const asked: (string | undefined)[][] = [];
     place = (release, deploymentFolder) => {
       asked.push([release, deploymentFolder]);
-      return Promise.resolve({ folder: game });
+      return Promise.resolve({ folder: game, shared: true });
     };
 
     await deploy([]);
@@ -529,6 +529,17 @@ describe('plugins.txt', () => {
 
     expect([deployed.pluginsTxt, await siblings(), await readFile(`${plugins}.modbench_renamed`, 'utf8')])
       .toEqual([{ kind: 'written', renamed: [`${plugins}.modbench_renamed`] }, ['plugins.txt', 'plugins.txt.modbench_renamed'], 'mine']);
+  });
+
+  it('is replaced, with nothing renamed, when the place is deploy\'s own, as a prefix is', async () => {
+    place = () => Promise.resolve({ folder: game, shared: false });
+    await mkdir(game, { recursive: true });
+    await writeFile(plugins, 'mine');
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, await siblings(), await readFile(plugins, 'utf8')])
+      .toEqual([{ kind: 'written', renamed: [] }, ['plugins.txt'], MARK + '*A.esp\r\nB.esp\r\n']);
   });
 
   it('is renamed to a name that is free when an earlier rename holds the first', async () => {

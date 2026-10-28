@@ -120,11 +120,11 @@ describe('the Toolbox view, given an instance value', () => {
   describe('the Deployment row', () => {
     const DEPLOYMENT = '/games/deployments/fo4-survival';
 
-    it('reads the deployment folder\'s name and names the folder in its tooltip, a click opens the setting, and it is the deployment the Deployment menu keys on', () => {
+    it('reads the deployment folder\'s name, a click opens the setting, and it is the deployment the Deployment menu keys on', () => {
       const deployment = row(new FakeInstance(VALUE), 'Deployment', new FakeDeploymentFolder(DEPLOYMENT));
 
-      expect([deployment.description, deployment.iconPath, deployment.tooltip, deployment.command?.command, deployment.contextValue])
-        .toEqual(['fo4-survival', new ThemeIcon('rocket'), DEPLOYMENT, 'modbench.settings.openDeploymentFolderHere', 'deployment']);
+      expect([deployment.description, deployment.iconPath, deployment.command?.command, deployment.contextValue])
+        .toEqual(['fo4-survival', new ThemeIcon('rocket'), 'modbench.settings.openDeploymentFolderHere', 'deployment']);
     });
 
     it('reads "no deployment folder" while the instance has none, and a click still opens the setting', () => {
@@ -135,16 +135,18 @@ describe('the Toolbox view, given an instance value', () => {
     });
 
     it.each([
-      ['where deploy writes plugins.txt', { folder: '/prefix/Fallout4' }, `${DEPLOYMENT}\nplugins.txt: /prefix/Fallout4`],
+      ['where deploy writes plugins.txt', { folder: '/prefix/Fallout4', shared: false },`${DEPLOYMENT}\nplugins.txt: /prefix/Fallout4`],
       ['why it writes none', { why: 'launch the game once' }, `${DEPLOYMENT}\nNo plugins.txt: launch the game once`],
-    ])('adds %s to its tooltip once resolved, asking for the folder and the game', async (_case, where, tooltip) => {
+    ])('gives its tooltip, once VS Code resolves the row it holds no tooltip on, the folder and %s', async (_case, where, tooltip) => {
       const asked: unknown[] = [];
       const provider = providerOf(new FakeInstance(VALUE), new FakeDeploymentFolder(DEPLOYMENT), (...args) => { asked.push(args); return Promise.resolve(where); });
       const item = present(provider.getChildren().find((r) => r.label === 'Deployment'), 'the Deployment row');
 
+      const unresolved = item.tooltip;
+
       const resolved = await provider.resolveTreeItem(item);
 
-      expect([resolved.tooltip, asked]).toEqual([tooltip, [[DEPLOYMENT, VALUE.gameName]]]);
+      expect([unresolved, resolved.tooltip, asked]).toEqual([undefined, tooltip, [[VALUE.gameName, DEPLOYMENT]]]);
     });
 
     it('follows the setting', () => {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -66,18 +66,29 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
     expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ prefix: prefixIn(library) });
   });
 
-  it('is none, and says so, when no Steam is known', async () => {
-    expect(await nonSteamPrefixRunning(undefined, deployment)).toEqual({ why: 'Modbench found no Steam' });
+  it.each([
+    ['no Steam is looked for', undefined, 'Modbench looks for no Steam on this platform'],
+    ['the Steam root is not there', '/nowhere/steam', 'Modbench found no Steam at /nowhere/steam'],
+  ])('is none, and says so, when %s', async (_case, steamRoot, why) => {
+    expect(await nonSteamPrefixRunning(steamRoot, deployment)).toEqual({ why });
   });
 
-  it('is none when Steam holds no shortcuts', async () => {
-    expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ why: `no non-Steam game in Steam runs a program in ${deployment}` });
-  });
-
-  it('is none when no non-Steam game runs a program in the folder', async () => {
+  it('is none when Steam holds no shortcuts, or none runs a program in the folder', async () => {
+    await mkdir(steam, { recursive: true });
+    const none = { why: `no non-Steam game in Steam runs a program in ${deployment}` };
+    const noShortcuts = await nonSteamPrefixRunning(steam, deployment);
     await shortcutsOf('1', [{ appid: APP_ID, exe: join(deployment, '..', 'other', 'f4se_loader.exe') }]);
     await mkdir(prefixIn(steam), { recursive: true });
-    expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ why: `no non-Steam game in Steam runs a program in ${deployment}` });
+
+    expect([noShortcuts, await nonSteamPrefixRunning(steam, deployment)]).toEqual([none, none]);
+  });
+
+  it('finds the program by the real path of the folder, through a link', async () => {
+    const link = join(root, 'link-to-deployment');
+    await symlink(deployment, link);
+    await shortcutsOf('1', [{ appid: APP_ID, exe: join(link, 'f4se_loader.exe') }]);
+    await mkdir(prefixIn(steam), { recursive: true });
+    expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ prefix: prefixIn(steam) });
   });
 
   it('is none, and names the shortcut, when the one that runs a program in the folder holds no appid', async () => {
@@ -86,8 +97,48 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
     expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ why: `Steam's shortcut for ${exe} holds no appid` });
   });
 
+  it('is none, and names each, when several non-Steam games run programs in the folder', async () => {
+    const first = join(deployment, 'f4se_loader.exe');
+    const second = join(deployment, 'Fallout4.exe');
+    await shortcutsOf('1', [{ appid: APP_ID, exe: first }, { appid: APP_ID + 1, exe: second }]);
+    await mkdir(prefixIn(steam), { recursive: true });
+    expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ why: `several non-Steam games in Steam run programs in ${deployment}: ${first}, ${second}` });
+  });
+
   it('is none when the game has no prefix yet', async () => {
     await shortcutsOf('1', [{ appid: APP_ID, exe: join(deployment, 'f4se_loader.exe') }]);
     expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ why: `Steam has made no prefix at ${prefixIn(steam)} yet` });
+  });
+
+  describe('when a file of Steam\'s cannot be read', () => {
+    const exe = () => join(deployment, 'f4se_loader.exe');
+    const whyOf = (answer: Awaited<ReturnType<typeof nonSteamPrefixRunning>>): string => ('why' in answer ? answer.why : `prefix ${answer.prefix}`);
+    const shortcutsPath = () => join(steam, 'userdata', '1', 'config', 'shortcuts.vdf');
+
+    it.each([
+      ['truncated', (file: Buffer) => file.subarray(0, file.length - 3), /ends inside/],
+      ['corrupt', () => Buffer.from('\0shortcuts\0\u0007x\0', 'latin1'), /unknown tag 7/],
+    ])('is none, and says why, when shortcuts.vdf is %s', async (_case, damage, reason) => {
+      await shortcutsOf('1', [{ appid: APP_ID, exe: exe() }]);
+      await writeFile(shortcutsPath(), damage(shortcutsFile([{ appid: APP_ID, exe: exe() }])));
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(new RegExp(`^Steam cannot be read: .*${reason.source}`));
+    });
+
+    it('is none, and says why, when shortcuts.vdf is not a file', async () => {
+      await mkdir(shortcutsPath(), { recursive: true });
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*EISDIR/);
+    });
+
+    it('is none, and says why, when a plain file sits in userdata', async () => {
+      await mkdir(join(steam, 'userdata'), { recursive: true });
+      await writeFile(join(steam, 'userdata', 'stray'), 'x');
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*ENOTDIR/);
+    });
+
+    it('is none, and says why, when libraryfolders.vdf is not a file', async () => {
+      await shortcutsOf('1', [{ appid: APP_ID, exe: exe() }]);
+      await mkdir(join(steam, 'config', 'libraryfolders.vdf'), { recursive: true });
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*EISDIR/);
+    });
   });
 });

@@ -3,7 +3,7 @@
 
 import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
-import { linuxSteamRoot } from '../gameFolder/gamePathDetector';
+import { steamRootOn } from '../gameFolder/gamePathDetector';
 import { nonSteamPrefixRunning } from '../gameFolder/steamPrefix';
 import { gameFolderResolver, steamInstallResolver, STEAM } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
@@ -70,7 +70,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
-    nonSteamPrefix: (folder) => nonSteamPrefixRunning(process.platform === 'linux' ? linuxSteamRoot() : undefined, folder),
+    nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
     steamInstall: async () => context.resolveSteamInstall((await source.settings()).gameRelease),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,

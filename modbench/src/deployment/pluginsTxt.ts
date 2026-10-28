@@ -104,9 +104,9 @@ async function leftoversOf(folder: string, present: string | undefined, previous
   return { stale, recovered, placedUnrecorded };
 }
 
-/** What writing `order` as the plugins.txt in `folder` changes, given what deploy last wrote. A marked file is deploy's,
- *  from any instance. A file that already holds the order is left, whoever wrote it. */
-export async function pluginsTxtChange(folder: string, order: string, previous: WrittenPluginsTxt | undefined): Promise<PluginsTxtChange> {
+/** What writing `order` as the plugins.txt in `folder` changes, given what deploy last wrote. In a shared place only a marked file is
+ *  deploy's; a file that already holds the order is left. */
+export async function pluginsTxtChange({ folder, shared }: { folder: string; shared: boolean }, order: string, previous: WrittenPluginsTxt | undefined): Promise<PluginsTxtChange> {
   const path = join(folder, PLUGINS_FILE_NAME);
   const text = MARK + order;
   const present = await fileIdAt(path);
@@ -114,7 +114,7 @@ export async function pluginsTxtChange(folder: string, order: string, previous: 
   const marked = held?.startsWith(MARK) === true;
   const ours = previous?.path === path ? previous : undefined;
   const { stale, recovered, placedUnrecorded } = await leftoversOf(folder, present, ours);
-  const isDeploys = present !== undefined && (marked || ours?.ino === present || placedUnrecorded);
+  const isDeploys = present !== undefined && (!shared || marked || ours?.ino === present || placedUnrecorded);
   const recordedAs = (ino: string, renamedNow: string[]): WrittenPluginsTxt => ({
     path, ino, renamed: [...new Set([...(ours?.renamed ?? []), ...recovered, ...renamedNow])],
   });
