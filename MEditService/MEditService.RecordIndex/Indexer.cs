@@ -1,9 +1,9 @@
-using MEditService.RecordIndex.Queries;
 using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Store;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
