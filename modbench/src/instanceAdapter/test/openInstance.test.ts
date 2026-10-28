@@ -64,6 +64,14 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['modbench', '.gitignore', 'source']) as unknown });
   });
 
+  it('lists the script environment\'s file in the publisher\'s ignore list', async () => {
+    await writeFile(join(root, SETTINGS_FILE), '{}');
+
+    await adapterOver(root).keepOutOfPublisher();
+
+    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['.env']) as unknown });
+  });
+
   it('drops the entry of a manifest a rename left behind once update manifest keeps the files out again', async () => {
     const adapter = adapterOver(root);
     await writeFile(join(root, SETTINGS_FILE), '{}');

@@ -4,6 +4,7 @@ import { isAbsolute, join } from 'node:path';
 const WORKSPACE_FOLDER = '${workspaceFolder}';
 
 export interface ScriptEnvironmentFile {
+  readonly path: () => string;
   read(): Promise<string>;
   write(text: string): Promise<void>;
 }
@@ -15,6 +16,7 @@ export function scriptEnvironmentFile(instanceRoot: string, setting: () => strin
     return isAbsolute(named) ? named : join(instanceRoot, named);
   };
   return {
+    path,
     read: async () => {
       try {
         return await readFile(path(), 'utf8');

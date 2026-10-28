@@ -9,6 +9,7 @@ import { wabbajackPublisher } from './wabbajack/wabbajackPublisher';
 export const isInstance = isMo2Instance;
 export function adapterForInstance(options: Mo2InstanceOptions & { scriptEnvironmentFileSetting: () => string | undefined }): InstanceAdapter {
   const publisher = wabbajackPublisher(options.instanceRoot, { neverShipped: [overwriteDir(options.instanceRoot)], enabledMods: enabledModsIn(options.instanceRoot) });
-  const adapter = withPublisher(mo2InstanceAdapter(options, publisher.configurationFile), publisher);
-  return { ...adapter, scriptEnvironmentFile: scriptEnvironmentFile(options.instanceRoot, options.scriptEnvironmentFileSetting) };
+  const envFile = scriptEnvironmentFile(options.instanceRoot, options.scriptEnvironmentFileSetting);
+  const adapter = withPublisher(mo2InstanceAdapter(options, publisher.configurationFile), publisher, envFile.path);
+  return { ...adapter, scriptEnvironmentFile: envFile };
 }

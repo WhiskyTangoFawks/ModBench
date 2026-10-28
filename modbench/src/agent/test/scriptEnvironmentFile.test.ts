@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -156,9 +156,10 @@ describe('the file the Python tooling reads to reach mEdit', () => {
       await new Promise<void>((listening) => mEdit.listen(0, '127.0.0.1', listening));
       const elsewhere = await mkdtemp(join(tmpdir(), 'script-env-'));
       try {
-        const scripts = resolve(__dirname, '../../../../scripts');
+        const scripts = join(elsewhere, 'my scripts');
+        await cp(resolve(__dirname, '../../../../scripts'), scripts, { recursive: true });
         await windowHolding(portOf(mEdit), scripts);
-        const variables = Object.fromEntries((held ?? '').split('\n').filter((line) => line.includes('=')).map((line): [string, string] => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
+        const variables = Object.fromEntries((held ?? '').split('\n').filter((line) => line.includes('=')).map((line): [string, string] => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1).replace(/^'(.*)'$/, '$1')]));
 
         const { stdout } = await promisify(execFile)(
           process.platform === 'win32' ? 'python' : 'python3',
