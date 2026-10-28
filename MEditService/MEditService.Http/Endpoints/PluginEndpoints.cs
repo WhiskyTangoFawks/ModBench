@@ -53,6 +53,22 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc) =>
+        {
+            if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(svc.GetPluginIndexedAsOnDisk(address));
+        })
+            .WithName("GetPluginIndexedAsOnDisk")
+            .WithTags(Tag)
+            .WithDescription(
+                "Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003): " +
+                "AsOnDisk, also when no file claim backs the rows, as for a compiled plugin read from its source; " +
+                "NotYet when the file changed since or the record index holds no rows for it; ReadFailed, with mEdit's reason, " +
+                "when its last read of the plugin failed.")
+            .Produces<PluginIndexedState>()
+            .ProducesProblem(400)
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;

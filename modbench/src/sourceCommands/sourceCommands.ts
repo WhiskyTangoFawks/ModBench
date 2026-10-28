@@ -7,11 +7,12 @@ import { ba2VersionsOf } from '../tables/gamePaths';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
+import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -91,12 +92,21 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
         exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder,
         tasks: [...await tasks.labels()],
       };
-      const landed: BuildOutcome['landed'][number][] = [];
+      let landed: BuildOutcome['landed'][number][] = [];
       const refused: ItemRefusal<string>[] = [];
       const ordered = await inModOrder(adapter, mods);
+      let previous: string | undefined;
       for (const [at, mod] of ordered.entries()) {
         const decided = await buildMod(mod, sourceMods.folderOf(mod));
         if ('reason' in decided) { refused.push(decided); continue; }
+        // mods.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
+        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
+        if (previous !== undefined && why !== undefined) {
+          const waited = previous;
+          landed = landed.map((built) => (built.mod === waited ? { ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` } : built));
+          refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${waited}'s ${why}` })));
+          break;
+        }
         const outcome = await builtWhole(decided, facts);
         if (isRefused(outcome)) {
           if (landed.length === 0 && refused.length === 0) return outcome;
@@ -105,6 +115,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
         }
         landed.push(...outcome.landed);
         refused.push(...outcome.refused);
+        previous = outcome.landed.length === 0 ? undefined : mod;
       }
       return { landed, refused };
     },
