@@ -723,6 +723,9 @@ export interface InstanceAdapter {
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
+  /** Moves each file `from` into Overwrite at its `relativePath`. Refuses, moving nothing, a path outside Overwrite and
+   *  a file already there; a move that fails puts back those before it. */
+  moveIntoOverwrite(moves: readonly { readonly from: string; readonly relativePath: string }[]): Promise<void>;
   /** How the manager matches an entry's name; two entries with one key are one name to it. */
   entryKey(entry: EntryRef): string;
   /** The mark the manager reads as excluded. */

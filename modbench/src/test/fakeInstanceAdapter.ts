@@ -77,6 +77,7 @@ export type AdapterCall =
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
+  | { readonly verb: 'moveIntoOverwrite'; readonly moves: Parameters<InstanceAdapter['moveIntoOverwrite']>[0] }
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
@@ -457,6 +458,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         });
         return { gone: false, wrote: true, relativePath: renamedPath(relativePath) };
       }),
+    moveIntoOverwrite: (moves) => write<void>({ verb: 'moveIntoOverwrite', moves }, () => undefined),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),

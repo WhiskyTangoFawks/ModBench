@@ -15,7 +15,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
-import { hardlinkDeployment, type FileTheGameGets, type PluginOrder } from '../deployment';
+import { hardlinkDeployment, overwritePathOf, type FileTheGameGets, type PluginOrder } from '../deployment';
 import type { PluginsTxtPlace } from '../pluginsTxtPlace';
 import { recordIn } from '../record';
 
@@ -109,7 +109,7 @@ describe('a deploy after another', () => {
 
     const deployed = await deploy(files);
 
-    expect([deployed, [await changed(join(folder, 'Data', 'a.esp')), await changed(join(folder, 'b.dll'))]]).toEqual([{ wrote: false, leftOut: [], lost: [], leftAside: [], pluginsTxt: NOT_WRITTEN }, before]);
+    expect([deployed, [await changed(join(folder, 'Data', 'a.esp')), await changed(join(folder, 'b.dll'))]]).toEqual([{ wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: NOT_WRITTEN }, before]);
   });
 
   it('removes a file it wrote that the load order does not hold', async () => {
@@ -167,9 +167,11 @@ describe('a file in the deployment folder that deploy did not write', () => {
     await mkdir(join(folder, 'Data'));
     await writeFile(join(folder, 'Data', 'a.esp'), 'mine');
 
-    const deployed = await deploy([await modFile('Mod', 'a.esp')]);
+    const file = await modFile('Mod', 'a.esp');
 
-    expect([deployed.leftOut, await contentOf(join(folder, 'Data', 'a.esp'))]).toEqual([['Data/a.esp'], 'mine']);
+    const deployed = await deploy([file]);
+
+    expect([deployed.leftOut, await contentOf(join(folder, 'Data', 'a.esp'))]).toEqual([[{ path: 'Data/a.esp', winner: file.winner }], 'mine']);
   });
 
   it.each([
@@ -179,9 +181,11 @@ describe('a file in the deployment folder that deploy did not write', () => {
     await deploy([await modFile('Lower', 'MCM/settings.ini')]);
     await replaced(join(folder, 'Data', 'MCM', 'settings.ini'), 'mine');
 
-    const deployed = await deploy([await modFile(winningMod, 'MCM/settings.ini')]);
+    const winner = await modFile(winningMod, 'MCM/settings.ini');
 
-    expect([deployed.leftOut, await contentOf(join(folder, 'Data', 'MCM', 'settings.ini'))]).toEqual([['Data/MCM/settings.ini'], 'mine']);
+    const deployed = await deploy([winner]);
+
+    expect([deployed.leftOut, await contentOf(join(folder, 'Data', 'MCM', 'settings.ini'))]).toEqual([[{ path: 'Data/MCM/settings.ini', winner: winner.winner }], 'mine']);
   });
 
   it('is left when another program replaced a file deploy wrote and the load order does not hold it', async () => {
@@ -253,7 +257,7 @@ describe('a deploy that fails', () => {
     const { lower, removed } = await deployedOnce();
     await expect(failingDeploy()).rejects.toThrow();
 
-    expect(await deploy([lower, removed])).toEqual({ wrote: false, leftOut: [], lost: [], leftAside: [], pluginsTxt: NOT_WRITTEN });
+    expect(await deploy([lower, removed])).toEqual({ wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: NOT_WRITTEN });
   });
 
   it('names each change it could not undo', async () => {
@@ -288,7 +292,7 @@ describe('a deploy that lands', () => {
     const { deployed } = await landedLeavingAside();
 
     expect(deployed).toEqual({
-      wrote: true, pluginsTxt: NOT_WRITTEN, leftOut: [], lost: [], leftAside: [`Data/${ASIDE} (EBUSY: resource busy or locked, unlink '${join(folder, 'Data', ASIDE)}')`],
+      wrote: true, pluginsTxt: NOT_WRITTEN, leftOut: [], unmanaged: [], lost: [], leftAside: [`Data/${ASIDE} (EBUSY: resource busy or locked, unlink '${join(folder, 'Data', ASIDE)}')`],
     });
   });
 
@@ -328,10 +332,12 @@ describe('a file a killed deploy set aside', () => {
     await killedAfterSettingAside();
     await writeFile(join(folder, 'Data', 'a.esp'), 'mine');
 
-    const deployed = await deploy([await modFile('Mod', 'a.esp')]);
+    const file = await modFile('Mod', 'a.esp');
+
+    const deployed = await deploy([file]);
 
     expect([deployed.leftOut, await listing(), await readFile(join(folder, 'Data', 'a.esp'), 'utf8')])
-      .toEqual([['Data/a.esp'], ['Data', join('Data', 'a.esp')], 'mine']);
+      .toEqual([[{ path: 'Data/a.esp', winner: file.winner }], ['Data', join('Data', 'a.esp')], 'mine']);
   });
 
   it('is the user\'s when it is not the file deploy wrote', async () => {
@@ -440,7 +446,7 @@ describe('a deploy killed part way through its changes', () => {
 
     const deployed = await deploy([file]);
 
-    expect([deployed.leftOut, await readFile(at(), 'utf8')]).toEqual([['Data/a.esp'], 'other']);
+    expect([deployed.leftOut, await readFile(at(), 'utf8')]).toEqual([[{ path: 'Data/a.esp', winner: file.winner }], 'other']);
   });
 
   it('records a file before it links it', async () => {
@@ -551,7 +557,7 @@ describe('plugins.txt', () => {
     const deployed = await deploy([]);
 
     expect([deployed, await siblings(), await readFile(plugins, 'utf8')]).toEqual([
-      { wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: [] } }, ['plugins.txt'], MARK + '*B.esp\r\n']);
+      { wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: [] } }, ['plugins.txt'], MARK + '*B.esp\r\n']);
   });
 
   it('is replaced, with nothing renamed, when a deploy of another instance wrote it', async () => {
@@ -570,7 +576,7 @@ describe('plugins.txt', () => {
 
     const deployed = await deploy([]);
 
-    expect([deployed, await inode(plugins)]).toEqual([{ wrote: false, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }, before]);
+    expect([deployed, await inode(plugins)]).toEqual([{ wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }, before]);
   });
 
   it('is not written where the place gives no folder, and the files are', async () => {
@@ -741,5 +747,57 @@ describe('plugins.txt', () => {
     const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
     expect(recorded.pluginsTxt).toEqual({ path: plugins, ino: String(await inode(plugins)), renamed: [`${plugins}.modbench_renamed`] });
+  });
+});
+
+describe('the files in the deployment folder deploy does not manage', () => {
+  it('names each, below any folder, and none that deploy wrote or has set aside', async () => {
+    const written = await modFile('Mod', 'a.esp');
+    await deploy([written]);
+    await writeFile(join(folder, 'game.exe'), 'game');
+    await mkdir(join(folder, 'Data', 'MCM'), { recursive: true });
+    await writeFile(join(folder, 'Data', 'MCM', 'settings.ini'), 'mine');
+    await writeFile(join(folder, 'Data', 'old.esp.modbench_aside_1_0'), 'aside');
+
+    const deployed = await deploy([written]);
+
+    expect(deployed.unmanaged.sort()).toEqual(['Data/MCM/settings.ini', 'game.exe']);
+  });
+
+  it('names a file that replaced one deploy wrote, and a file at the path of a winner left out', async () => {
+    const replacedFile = await modFile('Mod', 'b.esp');
+    await deploy([replacedFile]);
+    await rm(join(folder, 'Data', 'b.esp'));
+    await writeFile(join(folder, 'Data', 'b.esp'), 'mine');
+    await writeFile(join(folder, 'Data', 'a.esp'), 'mine');
+
+    const deployed = await deploy([replacedFile, await modFile('Mod', 'a.esp')]);
+
+    expect(deployed.unmanaged.sort()).toEqual(['Data/a.esp', 'Data/b.esp']);
+  });
+
+  it('names none in an empty folder', async () => {
+    expect((await deploy([])).unmanaged).toEqual([]);
+  });
+});
+
+describe('the path in Overwrite that the next deploy links back to a path below the deployment folder', () => {
+  it.each([
+    ['a file under Data', 'Data/MCM/settings.ini', 'MCM/settings.ini'],
+    ['Data in any case', 'data/x.ini', 'x.ini'],
+    ['a file at the root', 'f4se_loader.exe', 'Root/f4se_loader.exe'],
+    ['a file below a root folder', 'f4se/plugins/x.dll', 'Root/f4se/plugins/x.dll'],
+    ['a dot file at the root', '.gitignore', 'Root/.gitignore'],
+  ])('is %s', (_case, path, inOverwrite) => {
+    expect(overwritePathOf(path)).toBe(inOverwrite);
+  });
+
+  it.each([
+    ['a dot file at the root of Data', 'Data/.hidden'],
+    ['a file in a source folder at the root of Data', 'Data/source/x.psc'],
+    ['a path that leaves the folder', 'Data/../x'],
+    ['a path with an empty segment', 'Data//x'],
+  ])('is none for %s, which deploy would not link back', (_case, path) => {
+    expect(overwritePathOf(path)).toBeUndefined();
   });
 });

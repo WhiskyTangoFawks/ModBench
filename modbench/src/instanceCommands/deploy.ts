@@ -1,4 +1,6 @@
-import type { Deployed, Deployment, FileTheGameGets, PluginOrder } from '../deployment/deployment';
+import { join } from 'node:path';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { overwritePathOf, type Deployed, type Deployment, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
@@ -42,11 +44,35 @@ async function deploy(
   }
 }
 
-/** The deployment's commands, bound to its deployment and its folder's setting. `load` is the load
+/** `left` names each file no mod file can land at the path of, which stays in the deployment folder. */
+export type MoveToOverwriteResult = CommandResult<{ wrote: boolean; left: readonly string[] }>;
+
+// A file moves to Overwrite at the path the next deploy links it back from.
+async function moveToOverwrite(
+  adapter: Pick<InstanceAdapter, 'moveIntoOverwrite'>, setting: DeploymentFolderSetting, paths: readonly string[],
+): Promise<MoveToOverwriteResult> {
+  const folder = deploymentFolderOf(setting);
+  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  const moves = paths.flatMap((path) => {
+    const relativePath = overwritePathOf(path);
+    return relativePath === undefined ? [] : [{ from: join(folder, path), relativePath }];
+  });
+  try {
+    await adapter.moveIntoOverwrite(moves);
+    return { applied: true, wrote: moves.length > 0, left: paths.filter((path) => overwritePathOf(path) === undefined) };
+  } catch (err) {
+    return refuse(err);
+  }
+}
+
+/** The deployment's commands, bound to its deployment, its folder's setting and the instance's Overwrite. `load` is the load
  *  order to deploy, undefined while the instance has not been read. */
-export function deployCommands({ deployment, deploymentFolder }: { deployment: Deployment; deploymentFolder: DeploymentFolderSetting }) {
+export function deployCommands(
+  { deployment, deploymentFolder, adapter }: { deployment: Deployment; deploymentFolder: DeploymentFolderSetting; adapter: Pick<InstanceAdapter, 'moveIntoOverwrite'> },
+) {
   return {
     deploy: (load: LoadOrderToDeploy | undefined) => deploy(deployment, deploymentFolder, load),
+    moveToOverwrite: (paths: readonly string[]) => moveToOverwrite(adapter, deploymentFolder, paths),
   };
 }
 

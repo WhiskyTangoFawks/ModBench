@@ -1,14 +1,14 @@
 // MO2's exclusion of a file, the file or folder renamed with MO2's suffix or restored, and a mod's file sent to the trash.
 
-import { isAbsolute, relative, sep } from 'node:path';
+import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { exists, factsOf, realPathIfThere, rename, withLock } from '../files';
+import { ensureDir, exists, factsOf, realPathIfThere, rename, undoAll, withLock, type Undo } from '../files';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
-import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './layout';
+import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'trashModFile' | 'exclusionMark'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashModFile' | 'exclusionMark'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -61,6 +61,28 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
       if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw notAFile;
       await trash(file);
+    },
+
+    async moveIntoOverwrite(moves) {
+      const folder = overwriteDir(context.instanceRoot);
+      const targets = moves.map(({ from, relativePath }) => {
+        const to = fileUnder(folder, relativePath);
+        if (to === undefined) throw new Error(`Not a file of Overwrite: "${relativePath}"`);
+        return { from, to, relativePath };
+      });
+      for (const { to, relativePath } of targets) {
+        if (await exists(to)) throw new Error(`"${relativePath}" is already in Overwrite.`);
+      }
+      const undos: Undo[] = [];
+      try {
+        for (const { from, to } of targets) {
+          await ensureDir(dirname(to));
+          await rename(from, to);
+          undos.unshift(() => rename(to, from));
+        }
+      } catch (err) {
+        throw await undoAll(undos, err);
+      }
     },
 
     exclusionMark: EXCLUDED_SUFFIX,

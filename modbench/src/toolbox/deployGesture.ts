@@ -6,13 +6,15 @@ import type { Reporter } from '../ports/reporter';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface DeployGestureDeps {
-  commands: Pick<DeployCommands, 'deploy'>;
+  commands: Pick<DeployCommands, 'deploy' | 'moveToOverwrite'>;
   instance: Pick<Instance, 'landed' | 'sequence' | 'refresh'>;
   reporter: Reporter;
 }
 
+const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
+
 // deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
-export function registerDeployCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable {
+export function registerDeployCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
   const deploy = async (): Promise<void> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
@@ -21,7 +23,13 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
       return;
     }
     if (result.leftOut.length > 0) {
-      reporter.report('warning', 'Deploy left out each file whose path holds a file it did not write:', result.leftOut.join(', '));
+      reporter.report('warning', 'Deploy left out each file whose path holds a file it did not write:',
+        result.leftOut.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
+    }
+    if (result.unmanaged.length > 0) {
+      const { unmanaged } = result;
+      reporter.report('warning', 'The deployment folder holds files deploy does not manage:', unmanaged.join(', '),
+        { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, unmanaged) });
     }
     if (result.lost.length > 0) {
       reporter.report('warning', 'Deploy left out each file whose path another file the game gets wins:',
@@ -38,5 +46,25 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
     }
   };
   // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
-  return vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy));
+  return [
+    vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy)),
+    registerMoveToOverwriteCommand({ commands, instance, reporter }),
+  ];
+}
+
+// deployment-hardlink.md, Files deploy does not manage, story 4: the notification of deploy names the files.
+function registerMoveToOverwriteCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable {
+  const move = async (paths: unknown): Promise<void> => {
+    if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string')) {
+      reporter.report('error', 'Could not move to Overwrite.', 'Deploy offers it, naming the files.');
+      return;
+    }
+    const result = await commands.moveToOverwrite(paths);
+    if (!result.applied) {
+      reporter.report('error', 'Could not move to Overwrite.', result.refusal);
+    } else if (result.left.length > 0) {
+      reporter.report('warning', 'Left in the deployment folder, because no mod file lands at their path:', result.left.join(', '));
+    }
+  };
+  return vscode.commands.registerCommand(MOVE_TO_OVERWRITE, (paths: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => move(paths)));
 }

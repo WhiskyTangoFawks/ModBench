@@ -2263,6 +2263,46 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(root, 'overwrite', 'a.esp'))).toBe(true);
     });
 
+    describe('moving files into Overwrite', () => {
+      const elsewhere = (name: string): string => join(root, 'deployed', name);
+
+      it('moves each file to its path in Overwrite, making the folders', async () => {
+        await put(elsewhere('settings.ini'), 'mine');
+        await put(elsewhere('b.txt'), 'other');
+
+        await adapter.moveIntoOverwrite([{ from: elsewhere('settings.ini'), relativePath: 'MCM/settings.ini' }, { from: elsewhere('b.txt'), relativePath: 'Root/b.txt' }]);
+
+        expect([await text(root, join('overwrite', 'MCM', 'settings.ini')), await text(root, join('overwrite', 'Root', 'b.txt')), await isThere(elsewhere('settings.ini')), await isThere(elsewhere('b.txt'))])
+          .toEqual(['mine', 'other', false, false]);
+      });
+
+      it('refuses, and moves nothing, when Overwrite already holds a file at one path', async () => {
+        await put(elsewhere('a.txt'), 'mine');
+        await put(elsewhere('b.txt'), 'mine');
+        await put(join(root, 'overwrite', 'b.txt'), 'theirs');
+
+        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'a.txt' }, { from: elsewhere('b.txt'), relativePath: 'b.txt' }])).rejects.toThrow('"b.txt" is already in Overwrite.');
+
+        expect([await isThere(elsewhere('a.txt')), await isThere(join(root, 'overwrite', 'a.txt')), await text(root, join('overwrite', 'b.txt'))]).toEqual([true, false, 'theirs']);
+      });
+
+      it('refuses a path that leaves Overwrite', async () => {
+        await put(elsewhere('a.txt'), 'mine');
+
+        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: '../mods/a.txt' }])).rejects.toThrow('Not a file of Overwrite');
+
+        expect(await isThere(elsewhere('a.txt'))).toBe(true);
+      });
+
+      it('puts back the files before the one that failed to move', async () => {
+        await put(elsewhere('a.txt'), 'mine');
+
+        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'a.txt' }, { from: elsewhere('gone.txt'), relativePath: 'gone.txt' }])).rejects.toThrow('ENOENT');
+
+        expect([await text(root, join('deployed', 'a.txt')), await isThere(join(root, 'overwrite', 'a.txt'))]).toEqual(['mine', false]);
+      });
+    });
+
     it('refuses a mod that has no folder', async () => {
       await expect(adapter.markOriginFile({ kind: 'mod', name: '../profiles' }, 'a.esp', 'Excluded')).rejects.toThrow(/Not a file of/);
     });

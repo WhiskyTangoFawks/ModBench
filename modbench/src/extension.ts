@@ -224,8 +224,9 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(registerRefreshCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
-  own(registerDeployCommand({
+  ownAll(own, registerDeployCommand({
     commands: deployCommands({
+      adapter,
       deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt),
       deploymentFolder: deploymentFolderSetting,
     }),
