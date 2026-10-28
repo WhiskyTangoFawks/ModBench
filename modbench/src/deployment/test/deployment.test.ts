@@ -776,6 +776,17 @@ describe('the files in the deployment folder deploy does not manage', () => {
     expect([...deployed.unmanaged].sort()).toEqual(['Data/a.esp', 'Data/b.esp']);
   });
 
+  it('is read without a deploy, naming a file that replaced one deploy wrote and none still as deploy wrote it', async () => {
+    const kept = await modFile('Mod', 'a.esp');
+    const replacedFile = await modFile('Mod', 'b.esp');
+    await deploy([kept, replacedFile]);
+    await rm(join(folder, 'Data', 'b.esp'));
+    await writeFile(join(folder, 'Data', 'b.esp'), 'mine');
+    await writeFile(join(folder, 'game.exe'), 'game');
+
+    expect((await hardlinkDeployment(storage, place).unmanaged(folder)).sort()).toEqual(['Data/b.esp', 'game.exe']);
+  });
+
   it('names none in an empty folder', async () => {
     expect((await deploy([])).unmanaged).toEqual([]);
   });

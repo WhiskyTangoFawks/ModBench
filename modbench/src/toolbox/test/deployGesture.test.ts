@@ -139,8 +139,9 @@ describe('Deploy', () => {
     const [report] = reporter.reports;
     report?.action?.run();
 
-    expect([reporter.reports.length, report?.severity, report?.message, report?.detail, report?.action?.title, executeCommand.mock.calls]).toEqual([
-      1, 'warning', 'The deployment folder holds files deploy does not manage:', 'Data/MCM/settings.ini, game.exe', 'Move to Overwrite',
+    expect([reporter.shownFailures, reporter.reports.length, report?.severity, report?.message, report?.detail, report?.action?.title, executeCommand.mock.calls]).toEqual([
+      [{ severity: 'warning', message: 'The deployment folder holds files deploy does not manage:', detail: 'Data/MCM/settings.ini, game.exe' }],
+      1, 'warning', 'The deployment folder holds 2 files deploy does not manage, each named in the Output.', undefined, 'Move to Overwrite',
       [['modbench.instance.moveToOverwrite', ['Data/MCM/settings.ini', 'game.exe']]],
     ]);
   });
@@ -175,11 +176,11 @@ describe('Move to Overwrite', () => {
     expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Left in the deployment folder, because no mod file lands at their path:', detail: 'Data/.hidden' }]);
   });
 
-  it('moves nothing when no files are named, as from the command palette', async () => {
-    const { reporter, moveToOverwrite, runMove } = deployAnswering(NOTHING);
+  it('asks for the files deploy does not manage now when none are named, as from the command palette', async () => {
+    const { moveToOverwrite, runMove } = deployAnswering(NOTHING);
 
     await runMove();
 
-    expect([moveToOverwrite.mock.calls, reporter.reports.map((r) => r.message)]).toEqual([[], ['Could not move to Overwrite.']]);
+    expect(moveToOverwrite.mock.calls).toEqual([[undefined]]);
   });
 });

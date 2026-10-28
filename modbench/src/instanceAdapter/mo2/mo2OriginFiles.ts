@@ -2,7 +2,7 @@
 
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { ensureDir, exists, factsOf, realPathIfThere, rename, undoAll, withLock, type Undo } from '../files';
+import { ensureDir, exists, factsOf, realPathIfThere, remove, rename, undoAll, withLock, type Undo } from '../files';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
 import { originFileOf } from './mo2Files';
@@ -19,6 +19,12 @@ async function pathOf(context: Mo2Context, origin: FileOrigin, relativePath: str
   const path = fileUnder(await originFolder(context, origin, 'list'), relativePath);
   if (path === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
   return path;
+}
+
+async function topmostMissing(folder: string): Promise<string | undefined> {
+  let missing: string | undefined;
+  for (let up = folder; !(await exists(up)); up = dirname(up)) missing = up;
+  return missing;
 }
 
 export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
@@ -76,6 +82,8 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       const undos: Undo[] = [];
       try {
         for (const { from, to } of targets) {
+          const made = await topmostMissing(dirname(to));
+          if (made !== undefined) undos.unshift(() => remove(made));
           await ensureDir(dirname(to));
           await rename(from, to);
           undos.unshift(() => rename(to, from));

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Deployed, Deployment, FileTheGameGets, PluginOrder } from '../../deployment/deployment';
 import { deployCommands, type DeploymentFolderSetting, type LoadOrderToDeploy } from '../deploy';
 
-const NO_MOVES = { moveIntoOverwrite: () => Promise.resolve() };
+const NOT_IN_GAME = { gameFolder: () => Promise.resolve({ kind: 'found' as const, root: '/games/Fallout4', dataFolder: '/games/Fallout4/Data' }) };
+const NO_MOVES = { moveIntoOverwrite: () => Promise.resolve(), ...NOT_IN_GAME };
 const SETTING_ID = 'modbench.deployment.folder';
 const FILES: FileTheGameGets[] = [{ relativePath: 'a.esp', winner: '/instance/mods/Mod/a.esp' }];
 const LOAD: LoadOrderToDeploy = { files: FILES, plugins: [], gameName: 'Fallout 4' };
@@ -18,6 +19,7 @@ function deploymentAnswering(answer: () => Promise<Deployed>) {
       deployedTo.push([folder, [...files], plugins]);
       return answer();
     },
+    unmanaged: () => Promise.resolve(['Data/current.ini']),
   };
   return { deployment, deployedTo };
 }
@@ -77,10 +79,13 @@ describe('deploy', () => {
 });
 
 describe('move to Overwrite', () => {
-  function moving(answer: () => Promise<void> = () => Promise.resolve()) {
+  function moving(answer: () => Promise<void> = () => Promise.resolve(), folder = '/deployed', gameRoot = '/games/Fallout4') {
     const moved: unknown[] = [];
-    const adapter = { moveIntoOverwrite: (moves: unknown) => { moved.push(moves); return answer(); } };
-    const commands = deployCommands({ adapter, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) });
+    const adapter = {
+      moveIntoOverwrite: (moves: unknown) => { moved.push(moves); return answer(); },
+      gameFolder: () => Promise.resolve({ kind: 'found' as const, root: gameRoot, dataFolder: `${gameRoot}/Data` }),
+    };
+    const commands = deployCommands({ adapter, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) });
     return { moved, commands };
   }
 
@@ -92,6 +97,14 @@ describe('move to Overwrite', () => {
     expect([result, moved]).toEqual([{ applied: true, wrote: true, left: [] }, [[
       { from: '/deployed/Data/MCM/settings.ini', relativePath: 'MCM/settings.ini' }, { from: '/deployed/game.exe', relativePath: 'Root/game.exe' },
     ]]]);
+  });
+
+  it('moves the files deploy does not manage now when none are named', async () => {
+    const { moved, commands } = moving();
+
+    const result = await commands.moveToOverwrite();
+
+    expect([result, moved]).toEqual([{ applied: true, wrote: true, left: [] }, [[{ from: '/deployed/Data/current.ini', relativePath: 'current.ini' }]]]);
   });
 
   it('leaves in the folder, and names, each file no mod file can land at the path of, and moves the rest', async () => {
@@ -106,6 +119,25 @@ describe('move to Overwrite', () => {
     const { commands } = moving(() => Promise.reject(new Error('"a.esp" is already in Overwrite.')));
 
     expect(await commands.moveToOverwrite(['Data/a.esp'])).toEqual({ applied: false, refusal: '"a.esp" is already in Overwrite.' });
+  });
+
+  it.each([
+    ['is the game folder', '/games/Fallout4'],
+    ['holds the game folder', '/games'],
+  ])('is refused, moving nothing, when the deployment folder %s', async (_case, folder) => {
+    const { moved, commands } = moving(undefined, folder);
+
+    const result = await commands.moveToOverwrite(['Data/a.esp']);
+
+    expect([result, moved]).toEqual([{ applied: false, refusal: `The deployment folder ${folder} is or holds the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
+  });
+
+  it('moves from a deployment folder whose name is only the start of the game folder\'s', async () => {
+    const { moved, commands } = moving(undefined, '/games/Fallout');
+
+    await commands.moveToOverwrite(['Data/a.esp']);
+
+    expect(moved).toHaveLength(1);
   });
 
   it('is refused, naming the setting, while the setting holds no value', async () => {

@@ -2301,6 +2301,14 @@ describe('the MO2 Instance adapter', () => {
 
         expect([await text(root, join('deployed', 'a.txt')), await isThere(join(root, 'overwrite', 'a.txt'))]).toEqual(['mine', false]);
       });
+
+      it('leaves Overwrite as it was when a move fails, the folders it made included', async () => {
+        await put(elsewhere('a.txt'), 'mine');
+
+        await expect(adapter.moveIntoOverwrite([{ from: elsewhere('a.txt'), relativePath: 'MCM/deep/a.txt' }, { from: elsewhere('gone.txt'), relativePath: 'gone.txt' }])).rejects.toThrow('ENOENT');
+
+        expect(await isThere(join(root, 'overwrite', 'MCM'))).toBe(false);
+      });
     });
 
     it('refuses a mod that has no folder', async () => {

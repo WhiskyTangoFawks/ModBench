@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { overwritePathOf, type Deployed, type Deployment, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
 import { gameReleaseForGame } from '../tables/gamePaths';
@@ -47,12 +47,34 @@ async function deploy(
 /** `left` names each file no mod file can land at the path of, which stays in the deployment folder. */
 export type MoveToOverwriteResult = CommandResult<{ wrote: boolean; left: readonly string[] }>;
 
+const comparable = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
+
+function holds(folder: string, inside: string): boolean {
+  const below = relative(comparable(folder), comparable(inside));
+  return below !== '..' && !below.startsWith(`..${sep}`) && !isAbsolute(below);
+}
+
 // A file moves to Overwrite at the path the next deploy links it back from.
 async function moveToOverwrite(
-  adapter: Pick<InstanceAdapter, 'moveIntoOverwrite'>, setting: DeploymentFolderSetting, paths: readonly string[],
+  { adapter, deployment }: { adapter: Pick<InstanceAdapter, 'moveIntoOverwrite' | 'gameFolder'>; deployment: Deployment },
+  setting: DeploymentFolderSetting, named: readonly string[] | undefined,
 ): Promise<MoveToOverwriteResult> {
   const folder = deploymentFolderOf(setting);
   if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  try {
+    const game = await adapter.gameFolder();
+    if (game.kind === 'found' && holds(folder, game.root)) {
+      return { applied: false, refusal: `The deployment folder ${folder} is or holds the game folder ${game.root}: moving the game's own files out of it would break the game.` };
+    }
+  } catch (err) {
+    return refuse(err);
+  }
+  let paths: readonly string[];
+  try {
+    paths = named ?? await deployment.unmanaged(folder);
+  } catch (err) {
+    return refuse(err);
+  }
   const moves = paths.flatMap((path) => {
     const relativePath = overwritePathOf(path);
     return relativePath === undefined ? [] : [{ from: join(folder, path), relativePath }];
@@ -68,11 +90,11 @@ async function moveToOverwrite(
 /** The deployment's commands, bound to its deployment, its folder's setting and the instance's Overwrite. `load` is the load
  *  order to deploy, undefined while the instance has not been read. */
 export function deployCommands(
-  { deployment, deploymentFolder, adapter }: { deployment: Deployment; deploymentFolder: DeploymentFolderSetting; adapter: Pick<InstanceAdapter, 'moveIntoOverwrite'> },
+  { deployment, deploymentFolder, adapter }: { deployment: Deployment; deploymentFolder: DeploymentFolderSetting; adapter: Pick<InstanceAdapter, 'moveIntoOverwrite' | 'gameFolder'> },
 ) {
   return {
     deploy: (load: LoadOrderToDeploy | undefined) => deploy(deployment, deploymentFolder, load),
-    moveToOverwrite: (paths: readonly string[]) => moveToOverwrite(adapter, deploymentFolder, paths),
+    moveToOverwrite: (paths?: readonly string[]) => moveToOverwrite({ adapter, deployment }, deploymentFolder, paths),
   };
 }
 

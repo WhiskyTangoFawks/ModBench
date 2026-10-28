@@ -49,6 +49,8 @@ export interface Deployment {
   /** `files` in the order their winners win: of two that land at one path, the earlier wins it.
    *  When it cannot deploy, it throws why, and has written nothing or names what it left changed. */
   deploy(folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder): Promise<Deployed>;
+  /** Every file in `folder` that is not still as deploy last wrote it. */
+  unmanaged(folder: string): Promise<string[]>;
 }
 
 // A mod's Root folder holds what the game reads from beside its program; the rest is Data's.
@@ -235,6 +237,13 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Dep
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {
+    async unmanaged(folder) {
+      const written: Written[] = [];
+      for (const entry of (await record.of(folder)).files) {
+        if (await fileIdAt(join(folder, entry.path)) === entry.ino) written.push(entry);
+      }
+      return unmanagedIn(folder, written);
+    },
     deploy(folder, files, plugins) {
       const run = last.then(() => deployTo(record, place, folder, files, plugins));
       last = run.catch(() => undefined);

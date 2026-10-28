@@ -28,7 +28,8 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
     }
     if (result.unmanaged.length > 0) {
       const { unmanaged } = result;
-      reporter.report('warning', 'The deployment folder holds files deploy does not manage:', unmanaged.join(', '),
+      reporter.shownOnSurface('warning', 'The deployment folder holds files deploy does not manage:', unmanaged.join(', '));
+      reporter.report('warning', `The deployment folder holds ${unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
         { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, unmanaged) });
     }
     if (result.lost.length > 0) {
@@ -55,11 +56,8 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
 // deployment-hardlink.md, Files deploy does not manage, story 4: the notification of deploy names the files.
 function registerMoveToOverwriteCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable {
   const move = async (paths: unknown): Promise<void> => {
-    if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string')) {
-      reporter.report('error', 'Could not move to Overwrite.', 'Deploy offers it, naming the files.');
-      return;
-    }
-    const result = await commands.moveToOverwrite(paths);
+    const named = Array.isArray(paths) && paths.every((path) => typeof path === 'string') ? paths : undefined;
+    const result = await commands.moveToOverwrite(named);
     if (!result.applied) {
       reporter.report('error', 'Could not move to Overwrite.', result.refusal);
     } else if (result.left.length > 0) {
