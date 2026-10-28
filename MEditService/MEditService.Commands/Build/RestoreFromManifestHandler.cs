@@ -48,7 +48,7 @@ public sealed class RestoreFromManifestHandler
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
+            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message.TrimEnd('.')}");
         }
 
         if (held is not { } manifest) return Skipped(RestoreRefusal.NoManifest, "it has no manifest");
@@ -68,7 +68,7 @@ public sealed class RestoreFromManifestHandler
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
+            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message.TrimEnd('.')}");
         }
 
         var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
@@ -108,11 +108,11 @@ public sealed class RestoreFromManifestHandler
         Dictionary<string, string> before;
         try
         {
-            before = HashesIn(mod, metadataFiles, instance);
+            before = HashesBeforeTheBuild(mod, metadataFiles, instance);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
+            return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message.TrimEnd('.')}");
         }
 
         var answer = await _build.BuildAsync(
@@ -158,15 +158,29 @@ public sealed class RestoreFromManifestHandler
     private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
         _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
+    private Dictionary<string, string> HashesBeforeTheBuild(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance)
+    {
+        try
+        {
+            return HashesIn(mod, metadataFiles, instance);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
+    }
+
     private static ItemAnswer<RestoreSkip, ModRestored> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
-        if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
         var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
         var installationFiles = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Named).ToList();
         var submodule = lacks.OfType<PackageContents.Lack.SubmoduleMissing>().Select(lack => lack.Name).FirstOrDefault();
         if (gameFiles.Count == 0 && installationFiles.Count == 0 && submodule is null)
+        {
+            if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
             return Skipped(lacks.All(lack => lack is PackageContents.Lack.NoTask) ? RestoreRefusal.NoTaskForTool : RestoreRefusal.Lacking, why);
+        }
         return Skipped(
             new RestoreSkip(RestoreRefusal.NotFound) { InstallationFilesNotFound = installationFiles, GameFilesNotFound = gameFiles, SubmoduleNotFound = submodule },
             why);
