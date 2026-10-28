@@ -889,18 +889,24 @@ describe('the MO2 adapter\'s game files', () => {
     expect(found).toEqual({ files: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
   });
 
-  it('hands no game file for a path that is a link in the Data folder, a link being a deployed file', async () => {
+  it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands no game file for a path through or to a symlink in the Data folder', async () => {
     const adapter = await instance();
     await put('elsewhere/A.nif', 'aaaa');
     await put('elsewhere/b.dds', 'bbbb');
-    await put('elsewhere/own.dds', 'cccc');
-    await put('game/Data/Textures/c.dds', 'cccc');
     await mkdir(join(root, 'game', 'Data'), { recursive: true });
     await symlink(join(root, 'elsewhere'), join(root, 'game', 'Data', 'Meshes'));
     await symlink(join(root, 'elsewhere', 'b.dds'), join(root, 'game', 'Data', 'b.dds'));
+
+    expect(await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'b.dds'])).toEqual({ files: [], unreadable: {} });
+  });
+
+  it('hands no game file for a path that is a hard link in the Data folder, a link being a deployed file', async () => {
+    const adapter = await instance();
+    await put('elsewhere/own.dds', 'cccc');
+    await put('game/Data/Textures/c.dds', 'cccc');
     await link(join(root, 'elsewhere', 'own.dds'), join(root, 'game', 'Data', 'Textures', 'own.dds'));
 
-    const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'b.dds', 'textures/own.dds', 'textures/c.dds']);
+    const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['textures/own.dds', 'textures/c.dds']);
 
     expect(found).toEqual({ files: [{ path: 'Textures/c.dds', hash: HASH_OF_CCCC }], unreadable: {} });
   });

@@ -19,7 +19,7 @@ export interface ArchiveReads {
   /** The archives the game's INIs list, in load order, a key's last value winning. `notes` says what
    *  was not read, and where it looked. */
   archiveList(
-    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
+    profile: string, gameFolder: GameFolder, gameRelease: string | undefined, ignoredLink: IgnoredLink,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
   gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined, ignoredLink: IgnoredLink): Promise<DataFolderArchives>;
 }
@@ -124,7 +124,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
       programVersions: await programVersions(gameFolder, gameRelease),
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder, ignoreGameLink),
       creationClubList: await source.creationClubList(gameFolder, gameRelease),
-      archiveList: await source.archiveList(profile, gameFolder, gameRelease),
+      archiveList: await source.archiveList(profile, gameFolder, gameRelease, ignoreGameLink),
       dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease, ignoreGameLink),
     })),
     source.profiles(skipLink),

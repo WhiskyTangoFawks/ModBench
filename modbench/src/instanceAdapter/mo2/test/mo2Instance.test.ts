@@ -617,19 +617,28 @@ describe('the MO2 Instance adapter', () => {
         expect(await source.gameFolderPlugins(found(data), ignoreLink)).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
       });
 
-      it('answers no plugin that is a link, and hands over each link, a link being a deployed file', async () => {
+      it('answers no plugin that is a hard link, and hands over the link, a link being a deployed file', async () => {
         const data = join(game, 'Data');
         await mkdir(data, { recursive: true });
         await writeFile(join(game, 'Real.esp'), '');
         await writeFile(join(data, 'Own.esp'), '');
-        await symlink(join(game, 'Real.esp'), join(data, 'Soft.esp'));
-        await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
         await link(join(game, 'Real.esp'), join(data, 'Hard.esp'));
-
         const ignored: string[] = [];
 
         expect(await source.gameFolderPlugins(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', names: new Set(['Own.esp']) });
-        expect(ignored.sort()).toEqual([join(data, 'Broken.esp'), join(data, 'Hard.esp'), join(data, 'Soft.esp')]);
+        expect(ignored).toEqual([join(data, 'Hard.esp')]);
+      });
+
+      it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) answers no plugin that is a symlink, broken or not, and hands over each', async () => {
+        const data = join(game, 'Data');
+        await mkdir(data, { recursive: true });
+        await writeFile(join(game, 'Real.esp'), '');
+        await symlink(join(game, 'Real.esp'), join(data, 'Soft.esp'));
+        await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
+        const ignored: string[] = [];
+
+        expect(await source.gameFolderPlugins(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', names: new Set() });
+        expect(ignored.sort()).toEqual([join(data, 'Broken.esp'), join(data, 'Soft.esp')]);
       });
 
       it('answers unresolved when the game folder was not found', async () => {
@@ -698,15 +707,24 @@ describe('the MO2 Instance adapter', () => {
           '; sResourceArchiveList2=Commented.ba2', 'sResourceStartUpArchiveList=Fallout4 - Startup.ba2,Fallout4 - Interface.ba2,',
         ].join('\r\n'));
 
-        expect((await source.archiveList('Default', found(), 'Fallout4')).archives)
+        expect((await source.archiveList('Default', found(), 'Fallout4', ignoreLink)).archives)
           .toEqual(['Fallout4 - Startup.ba2', 'Fallout4 - Interface.ba2', 'Fallout4 - Voices.ba2', 'Fallout4 - Meshes.ba2']);
+      });
+
+      it('reads no default INI that is a link, and hands the link over, a link being a deployed file', async () => {
+        await writeFile(join(root, 'Deployed.ini'), '[Archive]\nsResourceArchiveList=Deployed.ba2\n');
+        await link(join(root, 'Deployed.ini'), join(game, 'Fallout4_Default.ini'));
+        const ignored: string[] = [];
+
+        expect((await source.archiveList('Default', found(), 'Fallout4', (path) => ignored.push(path))).archives).toEqual([]);
+        expect(ignored).toEqual([join(game, 'Fallout4_Default.ini')]);
       });
 
       it('lists the default INI\'s archives and notes the profile by name, when it keeps no game INIs and the My Games folder is nowhere', async () => {
         await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
         await localSettings(false);
 
-        const { archives, notes } = await source.archiveList('Default', found(), 'Fallout4');
+        const { archives, notes } = await source.archiveList('Default', found(), 'Fallout4', ignoreLink);
 
         expect(archives).toEqual(['Default.ba2']);
         expect(notes).toEqual([expect.stringMatching(/^The profile Default keeps no game INIs of its own/)]);
@@ -733,13 +751,22 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(myGames, 'Fallout4.ini'), '[Archive]\nsResourceArchiveList=Main.ba2\nsResourceArchiveList2=Main2.ba2\n');
           await writeFile(join(myGames, 'Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
 
-          expect(await myGamesSource.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+          expect(await myGamesSource.archiveList('Default', found(), 'Fallout4', ignoreLink)).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+        });
+
+        it('reads a My Games INI that is a link, which is the user\'s own file and not the game folder\'s', async () => {
+          await writeFile(join(root, 'Shared.ini'), '[Archive]\nsResourceArchiveList=Shared.ba2\n');
+          await link(join(root, 'Shared.ini'), join(myGames, 'Fallout4.ini'));
+          const ignored: string[] = [];
+
+          expect((await myGamesSource.archiveList('Default', found(), 'Fallout4', (path) => ignored.push(path))).archives).toEqual(['Shared.ba2', 'Default2.ba2']);
+          expect(ignored).toEqual([]);
         });
 
         it('reads none of the profile\'s INIs', async () => {
           await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
 
-          expect((await myGamesSource.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2', 'Default2.ba2']);
+          expect((await myGamesSource.archiveList('Default', found(), 'Fallout4', ignoreLink)).archives).toEqual(['Default.ba2', 'Default2.ba2']);
         });
       });
 
@@ -749,7 +776,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(profileFile('Fallout4Custom.ini'), '[Archive]\nsResourceArchiveList2=Custom2.ba2\n');
         await localSettings(true);
 
-        expect(await source.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
+        expect(await source.archiveList('Default', found(), 'Fallout4', ignoreLink)).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
       });
 
       it.each([
@@ -758,7 +785,7 @@ describe('the MO2 Instance adapter', () => {
       ])('lists none when %s', async (_why, gameFolder, release) => {
         await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
 
-        expect((await source.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
+        expect((await source.archiveList('Default', gameFolder(), release, ignoreLink)).archives).toEqual([]);
       });
 
     });
@@ -787,7 +814,18 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers no archive or strings file that is a link, and hands over each link, a link being a deployed file', async () => {
+      it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) answers no archive that is a symlink, and hands it over', async () => {
+        const data = join(game, 'Data');
+        await mkdir(data, { recursive: true });
+        await writeFile(join(game, 'Real.ba2'), '');
+        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Soft.ba2'));
+        const ignored: string[] = [];
+
+        expect(await source.gameFolderArchives(found(), 'Fallout4', (path) => ignored.push(path))).toEqual({ kind: 'listed', archives: [], stringsFiles: [] });
+        expect(ignored).toEqual([join(data, 'Fallout4 - Soft.ba2')]);
+      });
+
+      it('answers no archive or strings file that is a hard link, and hands over each link, a link being a deployed file', async () => {
         const data = join(game, 'Data');
         await mkdir(join(data, 'Strings'), { recursive: true });
         await mkdir(join(game, 'Real', 'strings'), { recursive: true });
@@ -795,7 +833,6 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Fallout4 - Own.ba2'), '');
         await writeFile(join(data, 'Strings', 'Fallout4_en.STRINGS'), '');
         await writeFile(join(game, 'Real', 'strings', 'Fallout4_fr.STRINGS'), '');
-        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Soft.ba2'));
         await link(join(game, 'Real.ba2'), join(data, 'Fallout4 - Hard.ba2'));
         await link(join(game, 'Real', 'strings', 'Fallout4_fr.STRINGS'), join(data, 'Strings', 'Fallout4_fr.STRINGS'));
         const ignored: string[] = [];
@@ -804,7 +841,7 @@ describe('the MO2 Instance adapter', () => {
           kind: 'listed', archives: ['Fallout4 - Own.ba2'], stringsFiles: ['Strings/Fallout4_en.STRINGS'],
         });
         expect(ignored.sort()).toEqual([
-          join(data, 'Fallout4 - Hard.ba2'), join(data, 'Fallout4 - Soft.ba2'), join(data, 'Strings', 'Fallout4_fr.STRINGS'),
+          join(data, 'Fallout4 - Hard.ba2'), join(data, 'Strings', 'Fallout4_fr.STRINGS'),
         ]);
       });
 
@@ -1184,7 +1221,7 @@ describe('the MO2 Instance adapter', () => {
         const watched = watchedOver(contextOver(root));
         watched.subscribe(() => undefined);
 
-        await watched.archiveList('Default', found, 'Fallout4');
+        await watched.archiveList('Default', found, 'Fallout4', ignoreLink);
         await watched.gameFolderArchives(found, 'Fallout4', ignoreLink);
 
         expect(fire(join(game, folder), name)).toBe(heard);
@@ -1205,7 +1242,7 @@ describe('the MO2 Instance adapter', () => {
         }));
         watched.subscribe(() => undefined);
 
-        await watched.archiveList('Default', found, 'Fallout4');
+        await watched.archiveList('Default', found, 'Fallout4', ignoreLink);
 
         expect(fire(myGames, 'FALLOUT4CUSTOM.ini')).toBe(true);
         expect(fire(myGames, 'Fallout4Prefs.ini')).toBe(false);
