@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
 import { ignoreSkippedLink } from '../../files';
+import { ignoreLink } from '../../gameFolder/ownEntries';
 import {
-  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
+  access, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
@@ -602,7 +603,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Patch.esp'), '');
         await writeFile(join(data, 'readme.txt'), '');
 
-        const plugins = await source.gameFolderPlugins(found(data), ignoreSkippedLink);
+        const plugins = await source.gameFolderPlugins(found(data), ignoreLink);
 
         expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
       });
@@ -613,30 +614,32 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Foo.esp'), '');
         await writeFile(join(data, 'foo.esp'), '');
 
-        expect(await source.gameFolderPlugins(found(data), ignoreSkippedLink)).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+        expect(await source.gameFolderPlugins(found(data), ignoreLink)).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
       });
 
-      it('answers a plugin that is a link to a file, and no link to nothing', async () => {
+      it('answers no plugin that is a link, and hands over each link, a link being a deployed file', async () => {
         const data = join(game, 'Data');
         await mkdir(data, { recursive: true });
         await writeFile(join(game, 'Real.esp'), '');
-        await symlink(join(game, 'Real.esp'), join(data, 'Linked.esp'));
+        await writeFile(join(data, 'Own.esp'), '');
+        await symlink(join(game, 'Real.esp'), join(data, 'Soft.esp'));
         await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
+        await link(join(game, 'Real.esp'), join(data, 'Hard.esp'));
 
-        const skipped: string[] = [];
+        const ignored: string[] = [];
 
-        expect(await source.gameFolderPlugins(found(data), (link) => skipped.push(link))).toEqual({ kind: 'listed', names: new Set(['Linked.esp']) });
-        expect(skipped).toEqual([join(data, 'Broken.esp')]);
+        expect(await source.gameFolderPlugins(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', names: new Set(['Own.esp']) });
+        expect(ignored.sort()).toEqual([join(data, 'Broken.esp'), join(data, 'Hard.esp'), join(data, 'Soft.esp')]);
       });
 
       it('answers unresolved when the game folder was not found', async () => {
         const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
-        expect(await source.gameFolderPlugins(notFound, ignoreSkippedLink)).toEqual({ kind: 'unresolved' });
+        expect(await source.gameFolderPlugins(notFound, ignoreLink)).toEqual({ kind: 'unresolved' });
       });
 
       it('answers unreadable, with why, when the Data folder cannot be listed', async () => {
-        const plugins = await source.gameFolderPlugins(found(join(game, 'Missing')), ignoreSkippedLink);
+        const plugins = await source.gameFolderPlugins(found(join(game, 'Missing')), ignoreLink);
 
         expect(expectKind(plugins, 'unreadable').reason).toMatch(/ENOENT/);
       });
@@ -779,36 +782,38 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
         await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
 
-        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreSkippedLink)).toEqual({
+        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreLink)).toEqual({
           kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
         });
       });
 
-      it('answers an archive that is a link to a file, and a strings folder that is a link to a folder', async () => {
+      it('answers no archive or strings file that is a link, and hands over each link, a link being a deployed file', async () => {
         const data = join(game, 'Data');
+        await mkdir(join(data, 'Strings'), { recursive: true });
         await mkdir(join(game, 'Real', 'strings'), { recursive: true });
-        await mkdir(data, { recursive: true });
         await writeFile(join(game, 'Real.ba2'), '');
-        await writeFile(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), '');
-        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Linked.ba2'));
-        await symlink(join(game, 'Real', 'strings'), join(data, 'Strings'));
-        await symlink(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), join(game, 'Real', 'strings', 'Fallout4_de.STRINGS'));
+        await writeFile(join(data, 'Fallout4 - Own.ba2'), '');
+        await writeFile(join(data, 'Strings', 'Fallout4_en.STRINGS'), '');
+        await writeFile(join(game, 'Real', 'strings', 'Fallout4_fr.STRINGS'), '');
+        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Soft.ba2'));
+        await link(join(game, 'Real.ba2'), join(data, 'Fallout4 - Hard.ba2'));
+        await link(join(game, 'Real', 'strings', 'Fallout4_fr.STRINGS'), join(data, 'Strings', 'Fallout4_fr.STRINGS'));
+        const ignored: string[] = [];
 
-        await symlink(join(game, 'nowhere.ba2'), join(data, 'Fallout4 - Broken.ba2'));
-        const skipped: string[] = [];
-
-        expect(await source.gameFolderArchives(found(), 'Fallout4', (link) => skipped.push(link))).toEqual({
-          kind: 'listed', archives: ['Fallout4 - Linked.ba2'], stringsFiles: ['Strings/Fallout4_de.STRINGS', 'Strings/Fallout4_en.STRINGS'],
+        expect(await source.gameFolderArchives(found(), 'Fallout4', (path) => ignored.push(path))).toEqual({
+          kind: 'listed', archives: ['Fallout4 - Own.ba2'], stringsFiles: ['Strings/Fallout4_en.STRINGS'],
         });
-        expect(skipped).toEqual([join(data, 'Fallout4 - Broken.ba2')]);
+        expect(ignored.sort()).toEqual([
+          join(data, 'Fallout4 - Hard.ba2'), join(data, 'Fallout4 - Soft.ba2'), join(data, 'Strings', 'Fallout4_fr.STRINGS'),
+        ]);
       });
 
       it('answers unresolved when the game folder was not found', async () => {
-        expect(await source.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4', ignoreSkippedLink)).toEqual({ kind: 'unresolved' });
+        expect(await source.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4', ignoreLink)).toEqual({ kind: 'unresolved' });
       });
 
       it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
-        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreSkippedLink))
+        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreLink))
           .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
       });
     });
@@ -1180,7 +1185,7 @@ describe('the MO2 Instance adapter', () => {
         watched.subscribe(() => undefined);
 
         await watched.archiveList('Default', found, 'Fallout4');
-        await watched.gameFolderArchives(found, 'Fallout4', ignoreSkippedLink);
+        await watched.gameFolderArchives(found, 'Fallout4', ignoreLink);
 
         expect(fire(join(game, folder), name)).toBe(heard);
       } finally {

@@ -84,6 +84,19 @@ describe('the Toolbox view, given an instance value', () => {
     });
   });
 
+  it.each([
+    [1, '1 link, which Modbench ignores'],
+    [3, '3 links, which Modbench ignores'],
+  ])('ends the Game row\'s tooltip with how many links the game folder holds, given %i', (gameFolderLinks, line) => {
+    const { tooltip } = row(new FakeInstance({ ...VALUE, gameFolderLinks }), 'Game');
+
+    expect(tooltip).toMatch(new RegExp(`\\n${line}$`));
+  });
+
+  it('says nothing of links while the game folder holds none', () => {
+    expect(row(new FakeInstance(VALUE), 'Game').tooltip).not.toMatch(/link/);
+  });
+
   it('reads the active profile, and a click switches profile', () => {
     const profile = row(new FakeInstance(VALUE), 'Profile');
 
