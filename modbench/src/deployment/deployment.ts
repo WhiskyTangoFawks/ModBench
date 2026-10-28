@@ -34,9 +34,8 @@ interface Lost {
   readonly winner: string;
 }
 
-/** `wrote` is false when the folder already held the load order. Deploy leaves out each `leftOut` winner, whose path
- *  holds a file it did not write, and each `lost` winner. `unmanaged` names every file in the folder deploy did not
- *  write, and `leftAside` each file it set aside and could not remove. */
+/** `wrote` is false when the folder already held the load order. `leftOut` winners find a file deploy did not write at
+ *  their path; `unmanaged` is every such file; `leftAside` is each file set aside and not removed. */
 export interface Deployed {
   readonly wrote: boolean;
   readonly leftOut: readonly Lost[];

@@ -458,7 +458,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         });
         return { gone: false, wrote: true, relativePath: renamedPath(relativePath) };
       }),
-    moveIntoOverwrite: (moves) => write<void>({ verb: 'moveIntoOverwrite', moves }, () => undefined),
+    moveIntoOverwrite: (moves) => write({ verb: 'moveIntoOverwrite', moves }, () => undefined),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),

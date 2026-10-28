@@ -761,7 +761,7 @@ describe('the files in the deployment folder deploy does not manage', () => {
 
     const deployed = await deploy([written]);
 
-    expect(deployed.unmanaged.sort()).toEqual(['Data/MCM/settings.ini', 'game.exe']);
+    expect([...deployed.unmanaged].sort()).toEqual(['Data/MCM/settings.ini', 'game.exe']);
   });
 
   it('names a file that replaced one deploy wrote, and a file at the path of a winner left out', async () => {
@@ -773,7 +773,7 @@ describe('the files in the deployment folder deploy does not manage', () => {
 
     const deployed = await deploy([replacedFile, await modFile('Mod', 'a.esp')]);
 
-    expect(deployed.unmanaged.sort()).toEqual(['Data/a.esp', 'Data/b.esp']);
+    expect([...deployed.unmanaged].sort()).toEqual(['Data/a.esp', 'Data/b.esp']);
   });
 
   it('names none in an empty folder', async () => {
