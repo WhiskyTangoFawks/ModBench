@@ -932,17 +932,17 @@ describe('modlistRepositoryCommands restore from manifest', () => {
         sent.push(...sentNamesOf(mods));
         return Promise.resolve({ landed: sentNamesOf(mods).map((mod) => restoredMod({ mod })), refused: [], notFound: [] });
       });
-      return { ...wired, sent, asked: () => wired.client.calls.filter((call) => call.method === 'isPluginIndexedAsOnDisk').map((call) => call.args[0]) };
+      return { ...wired, sent, asked: () => wired.client.calls.filter((call) => call.method === 'getPluginIndexing').map((call) => call.args[0]) };
     };
 
     it('hands mEdit the next source mod once the record index holds the plugins of the mod restored before it', async () => {
       const { commands, client, sent } = restoring();
-      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
 
       const outcome = commands.restoreFromManifest(['ModA', 'ModC']);
       await vi.advanceTimersByTimeAsync(1_000);
       expect(sent).toEqual(['ModC']);
-      client.setQueryAnswer('isPluginIndexedAsOnDisk', true);
+      client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
       client.emit(loadOrderStatusEventFixture());
 
       expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModC' }, { mod: 'ModA' }] });
@@ -950,7 +950,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     it('answers a mod whose plugin never reaches the record index with the reason, and restores the rest', async () => {
       const { commands, client, sent } = restoring();
-      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
 
       const outcome = commands.restoreFromManifest(['ModA', 'ModB', 'ModC']);
       await vi.advanceTimersByTimeAsync(121_000);
@@ -962,9 +962,24 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       });
     });
 
+    it('reads the instance once for every mod it waits on, and ends at once for a plugin mEdit failed to read', async () => {
+      const unwaited = restoring();
+      await unwaited.commands.restoreFromManifest(['ModA']);
+      const wired = restoring();
+      wired.client.setQueryAnswer('getPluginIndexing', { state: 'ReadFailed', reason: 'C.esp is not a plugin.' });
+
+      const outcome = await wired.commands.restoreFromManifest(['ModA', 'ModB', 'ModC']);
+
+      expect(wired.adapter.readings).toBe(unwaited.adapter.readings + 1);
+      expect(outcome).toMatchObject({
+        applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }],
+        refused: [{ item: 'ModC', reason: 'was restored, but plugin C.esp could not be read: C.esp is not a plugin.' }],
+      });
+    });
+
     it('waits for no mod after the last, or before a mod that is not a source mod', async () => {
       const { commands, client, asked } = restoring();
-      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
 
       const outcome = await commands.restoreFromManifest(['ModB', 'ModC']);
 
@@ -974,7 +989,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     it('stops waiting when the restore is cancelled, and names the mods it did not finish', async () => {
       const { commands, client } = restoring();
-      client.setQueryAnswer('isPluginIndexedAsOnDisk', false);
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
       const cancel = new AbortController();
 
       const outcome = commands.restoreFromManifest(['ModA', 'ModC'], { signal: cancel.signal });

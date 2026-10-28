@@ -405,8 +405,8 @@ internal sealed class RecordQueries(
             return Dependants.Of(plugin, _loadOrder.Require(), opened);
         });
 
-    public Answer<bool, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
-        _answer.Of(() => _index.IndexedAsOnDisk(plugin));
+    public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
+        _answer.Of(() => _index.IndexedState(plugin));
 
     // A plugin the record index has not reached holds no record yet, so every link into it would read as a
     // missing record.

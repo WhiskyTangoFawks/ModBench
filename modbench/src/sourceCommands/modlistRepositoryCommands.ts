@@ -25,7 +25,7 @@ type Adapter = Pick<InstanceAdapter,
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'isPluginIndexedAsOnDisk' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Adapter;
   nexus: Pick<Nexus, 'download'>;
   instanceRoot: string;
@@ -302,10 +302,7 @@ async function restoreFromManifest(
     if (options.signal?.aborted) break;
     // mods.md, Build, story 11: a source mod's script reads the plugins of the mods restored before it in the load order.
     if (sourceMods.folderOf(chunk[0] ?? '') !== undefined) {
-      for (const mod of pending.splice(0)) {
-        const why = await whyNotIndexed(deps, mod, options.signal);
-        if (why !== undefined) notIndexed.set(mod, why);
-      }
+      for (const [mod, why] of await whyNotIndexed(deps, pending.splice(0), options.signal)) notIndexed.set(mod, why);
     }
     const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
     landed.push(...finished);

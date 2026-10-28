@@ -41,7 +41,7 @@ public interface IQueries
 
     Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses();
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
-    Answer<bool, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
+    Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems();
 
     // Answered in every state, "no load order yet" included (ADR-0013).

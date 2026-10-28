@@ -19,7 +19,7 @@ import {
   type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
+  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
   type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginRepairPreview, type PluginToRepair, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress,
@@ -696,10 +696,10 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails, { timed: true });
   }
 
-  isPluginIndexedAsOnDisk({ name: plugin, origin }: PluginAddress): Promise<boolean | ReadFailed> {
-    return this.read(`isPluginIndexedAsOnDisk(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/indexed-as-on-disk', {
+  getPluginIndexing({ name: plugin, origin }: PluginAddress): Promise<PluginIndexedState | ReadFailed> {
+    return this.read(`getPluginIndexing(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/indexed-as-on-disk', {
       params: { path: { plugin }, query: { origin } }, signal,
-    }), (data) => data ?? NO_ANSWER);
+    }), noBodyFails);
   }
 
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed> {

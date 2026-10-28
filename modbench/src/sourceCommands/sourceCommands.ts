@@ -10,7 +10,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'isPluginIndexedAsOnDisk' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
@@ -100,7 +100,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
         const decided = await buildMod(mod, sourceMods.folderOf(mod));
         if ('reason' in decided) { refused.push(decided); continue; }
         // mods.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
-        const why = previous === undefined ? undefined : await whyNotIndexed({ client, adapter }, previous);
+        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
         if (previous !== undefined && why !== undefined) {
           const waited = previous;
           landed = landed.map((built) => (built.mod === waited ? { ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` } : built));

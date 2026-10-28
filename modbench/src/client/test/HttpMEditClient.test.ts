@@ -405,7 +405,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }),
       answer: { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] },
       path: '/plugins/Base.esm/dependants', query: { origin: 'BaseMod' } },
-    { name: 'isPluginIndexedAsOnDisk', verb: (c) => c.isPluginIndexedAsOnDisk({ name: 'Patch.esp', origin: 'PatchMod' }), answer: false,
+    { name: 'getPluginIndexing', verb: (c) => c.getPluginIndexing({ name: 'Patch.esp', origin: 'PatchMod' }), answer: { state: 'ReadFailed', reason: 'Patch.esp could not be parsed.' },
       path: '/plugins/Patch.esp/indexed-as-on-disk', query: { origin: 'PatchMod' } },
     { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
       path: '/plugins/problems', query: {} },

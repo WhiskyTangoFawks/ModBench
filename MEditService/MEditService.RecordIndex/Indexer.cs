@@ -1,3 +1,4 @@
+using MEditService.RecordIndex.Queries;
 using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
@@ -197,14 +198,17 @@ internal sealed class Indexer : IDisposable
     }
 
     /// <summary>Asked of the file now on disk, not the last snapshot (ADR-0003); a plugin nothing on disk backs is as it was read.</summary>
-    public bool IndexedAsOnDisk(PluginAddress key)
+    public PluginIndexedState IndexedState(PluginAddress key)
     {
         var scope = RequireScope();
         lock (_lock)
         {
-            if (!_indexed.Exists(held => PluginAddress.Comparer.Equals(held, key))) return false;
+            if (scope.Held.Failures.FirstOrDefault(failure => PluginAddress.Comparer.Equals(new PluginAddress(failure.Name, failure.Origin), key)) is { } failed)
+                return new(PluginIndexing.ReadFailed, failed.Reason);
+            if (!_indexed.Exists(held => PluginAddress.Comparer.Equals(held, key))) return new(PluginIndexing.NotYet);
         }
-        return scope.Store.IndexedFile(key) is not { } claim || scope.Store.FileContentHash(claim.FilePath) == claim.ContentHash;
+        var asOnDisk = scope.Store.IndexedFile(key) is not { } claim || scope.Store.FileContentHash(claim.FilePath) == claim.ContentHash;
+        return new(asOnDisk ? PluginIndexing.AsOnDisk : PluginIndexing.NotYet);
     }
 
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
