@@ -1,108 +1,82 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventEmitter } from '../../test/vscodeMock';
-import { present } from '../../ports/present';
 
-interface Terminal { onDidWrite: (listener: (text: string) => void) => void; onDidClose: (listener: (code: number) => void) => void; open: () => void }
-interface TaskStandIn { execution: { start: () => Promise<Terminal> } }
+vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
 
-interface Provided { type?: string; resolveTask?: (task: { definition: object }) => TaskStandIn }
-
-const { executeCommand, provided } = vi.hoisted((): { executeCommand: ReturnType<typeof vi.fn>; provided: Provided } => ({
-  executeCommand: vi.fn(),
-  provided: {},
-}));
-
-vi.mock('vscode', () => {
-  class CustomExecution { constructor(readonly start: () => Promise<unknown>) {} }
-  class Task {
-    constructor(readonly definition: unknown, readonly scope: unknown, readonly name: string, readonly source: string, readonly execution: CustomExecution) {}
-  }
-  return {
-    EventEmitter, CustomExecution, Task, TaskScope: { Workspace: 2 },
-    commands: { executeCommand },
-    tasks: {
-      registerTaskProvider: (type: string, taskProvider: { resolveTask: (task: { definition: object }) => TaskStandIn }) => {
-        provided.type = type;
-        provided.resolveTask = taskProvider.resolveTask;
-        return { dispose: () => undefined };
-      },
-    },
-  };
-});
-
+import { executeCommand, runRegisteredTask } from '../../test/taskDouble';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import type { BuildOutcome } from '../../client';
-import type { PartialFailure } from '../../drivingLib/agentGesture';
-import { AgentCall } from '../../drivingLib/agentGesture';
+import { AgentCall, type PartialFailure } from '../../drivingLib/agentGesture';
 import { registerBuildTask } from '../buildTask';
 
 type Landed = BuildOutcome['landed'][number];
 const landed = (overrides: Partial<Landed> = {}): Landed =>
   ({ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [], ...overrides });
+const applied = (outcome: BuildOutcome) => ({ applied: true, outcome });
+const DEFINITION = { type: 'modbench.mod.build' };
 
-async function runBuildTask(definition: object, answered: unknown): Promise<{ written: string; closedWith: number[] }> {
-  executeCommand.mockReset();
-  executeCommand.mockResolvedValueOnce(answered);
-  registerBuildTask();
-  const task = present(provided.resolveTask, 'the build task provider')({ definition });
-  const terminal = await task.execution.start();
-  let written = '';
-  const closedWith: number[] = [];
-  terminal.onDidWrite((text) => { written += text; });
-  terminal.onDidClose((code) => { closedWith.push(code); });
-  terminal.open();
-  await vi.waitFor(() => { expect(closedWith).toHaveLength(1); });
-  return { written, closedWith };
+function build(definition: object, answered: unknown) {
+  const reporter = recordingReporter();
+  registerBuildTask(reporter);
+  return runRegisteredTask(definition, { resolves: answered }).then((run) => ({ ...run, reporter }));
 }
 
-const applied = (outcome: BuildOutcome, partial: PartialFailure[] = []) => ({ applied: true, outcome, partial });
-
 describe('the build task', () => {
-  it('is the modbench.build type', () => {
-    registerBuildTask();
-
-    expect(provided.type).toBe('modbench.build');
-  });
-
   it('builds the mods its definition names, as an agent call does, and passes when every mod landed whole', async () => {
-    const { written, closedWith } = await runBuildTask({ type: 'modbench.build', mods: ['ModA', 'ModB'] }, applied({ landed: [landed(), landed({ mod: 'ModB' })], refused: [] }));
+    const { written, closedWith, reporter } = await build(
+      { ...DEFINITION, mods: ['ModA', 'ModB'] }, applied({ landed: [landed(), landed({ mod: 'ModB' })], refused: [] }),
+    );
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], {}));
-    expect([written, closedWith]).toEqual(['Built "ModA".\r\nBuilt "ModB".\r\n', [0]]);
+    expect([written, closedWith, reporter.shownFailures]).toEqual(['Built "ModA".\r\nBuilt "ModB".\r\n', [0], []]);
   });
 
   it('names no mod when its definition names none', async () => {
-    await runBuildTask({ type: 'modbench.build' }, applied({ landed: [], refused: [] }));
+    await build(DEFINITION, applied({ landed: [], refused: [] }));
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([], {}));
   });
 
-  it('passes when the build only warned, and writes the warning', async () => {
+  it('passes when the build only warned, and writes the warning to the terminal and the Output', async () => {
     const warning: PartialFailure = { message: 'Build overwrote 1 file that differed.', detail: '"a.txt (ModA)"', severity: 'warning' };
+    const answered = { applied: true, outcome: { landed: [landed({ overwritten: ['a.txt'] })], refused: [] }, partial: [warning] };
 
-    const { written, closedWith } = await runBuildTask({ type: 'modbench.build' }, applied({ landed: [landed({ overwritten: ['a.txt'] })], refused: [] }, [warning]));
+    const { written, closedWith, reporter } = await build(DEFINITION, answered);
 
-    expect([written, closedWith]).toEqual(['Built "ModA".\r\nBuild overwrote 1 file that differed. "a.txt (ModA)"\r\n', [0]]);
+    expect([written, closedWith, reporter.shownFailures]).toEqual([
+      'Build overwrote 1 file that differed. "a.txt (ModA)"\r\nBuilt "ModA".\r\n', [0],
+      [{ severity: 'warning', message: 'Build overwrote 1 file that differed.', detail: '"a.txt (ModA)"' }],
+    ]);
   });
 
   it.each([
-    ['a mod refused', { landed: [], refused: [{ item: 'ModC', reason: 'no repository' }] }],
-    ['a plugin refused in a built mod', { landed: [landed({ refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: 'light range' }] })], refused: [] }],
-    ['an archive refused in a built mod', { landed: [landed({ archivesRefused: [{ item: 'A.ba2', reason: 'too large' }] })], refused: [] }],
-    ['a mod built in part', { landed: [landed({ failure: 'archive step' })], refused: [] }],
-  ])('fails with %s', async (_name, outcome) => {
-    const { closedWith } = await runBuildTask({ type: 'modbench.build' }, applied(outcome));
+    ['a mod refused', { landed: [], refused: [{ item: 'ModC', reason: 'no repository' }] }, 'Could not build "ModC": no repository'],
+    [
+      'a plugin refused in a built mod',
+      { landed: [landed({ refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: 'light range' }] })], refused: [] },
+      'Could not build "A.esp (ModA)" in "ModA". light range',
+    ],
+    [
+      'an archive refused in a built mod',
+      { landed: [landed({ archivesRefused: [{ item: 'A.ba2', reason: 'too large' }] })], refused: [] },
+      'Could not pack "A.ba2" in "ModA". too large',
+    ],
+    ['a mod built in part', { landed: [landed({ failure: 'archive step' })], refused: [] }, 'Built 1 mod only in part. "ModA" (archive step)'],
+  ])('fails with %s, writing it first and no mod as built', async (_name, outcome, text) => {
+    const { written, closedWith, reporter } = await build(DEFINITION, applied(outcome));
 
-    expect(closedWith).toEqual([1]);
+    expect([written, closedWith, reporter.shownFailures.map(({ severity }) => severity)]).toEqual([`${text}\r\n`, [1], ['error']]);
   });
 
   it('fails with the refusal of a whole build, and writes its words', async () => {
-    const { written, closedWith } = await runBuildTask({ type: 'modbench.build' }, { applied: false, refusal: 'Save first.', detail: 'A.psc' });
+    const { written, closedWith, reporter } = await build(DEFINITION, { applied: false, refusal: 'Save first.', detail: 'A.psc' });
 
-    expect([written, closedWith]).toEqual(['Save first.\r\nA.psc\r\n', [1]]);
+    expect([written, closedWith, reporter.shownFailures]).toEqual([
+      'Save first. A.psc\r\n', [1], [{ severity: 'error', message: 'Save first.', detail: 'A.psc' }],
+    ]);
   });
 
   it('fails on a definition whose mods are not a list of names, without building', async () => {
-    const { written, closedWith } = await runBuildTask({ type: 'modbench.build', mods: 'ModA' }, applied({ landed: [], refused: [] }));
+    const { written, closedWith } = await build({ ...DEFINITION, mods: 'ModA' }, applied({ landed: [], refused: [] }));
 
     expect([written, closedWith]).toEqual(['A build task\'s "mods" is a list of mod names.\r\n', [1]]);
     expect(executeCommand).not.toHaveBeenCalled();

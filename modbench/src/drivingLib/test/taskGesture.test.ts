@@ -1,78 +1,53 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventEmitter } from '../../test/vscodeMock';
-import { Refusal } from '../refusal';
-import { present } from '../../ports/present';
 
-interface Terminal { onDidWrite: (listener: (text: string) => void) => void; onDidClose: (listener: (code: number) => void) => void; open: () => void }
-interface TaskStandIn { execution: { start: () => Promise<Terminal> } }
+vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule());
 
-const { registerTaskProvider, executeCommand, provider } = vi.hoisted(() => {
-  const provided: { current?: { provideTasks(): unknown[]; resolveTask(task: unknown): TaskStandIn } } = {};
-  return {
-    provider: provided,
-    executeCommand: vi.fn(),
-    registerTaskProvider: vi.fn((_type: string, taskProvider: typeof provided.current) => { provided.current = taskProvider; return { dispose: vi.fn() }; }),
-  };
-});
-
-vi.mock('vscode', () => {
-  class CustomExecution { constructor(readonly start: () => Promise<unknown>) {} }
-  class Task {
-    constructor(readonly definition: unknown, readonly scope: unknown, readonly name: string, readonly source: string, readonly execution: CustomExecution) {}
-  }
-  return {
-    EventEmitter, CustomExecution, Task, TaskScope: { Workspace: 2 },
-    commands: { executeCommand }, tasks: { registerTaskProvider },
-  };
-});
-
+import { executeCommand, registered, runRegisteredTask } from '../../test/taskDouble';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { AgentCall } from '../agentGesture';
+import { Refusal } from '../refusal';
 import { registerTaskGesture, type TaskVerdict } from '../taskGesture';
 
-async function runTask(settle: (outcome: string) => TaskVerdict): Promise<{ written: string; closedWith: number[] }> {
-  registerTaskGesture<string>({ type: 'modbench.test', label: 'Test', command: 'modbench.test.run', argument: () => [], settle });
-  const task = present(provider.current, 'the registered task provider').resolveTask({ definition: { type: 'modbench.test' } });
-  const terminal = await task.execution.start();
-  let written = '';
-  const closedWith: number[] = [];
-  terminal.onDidWrite((text) => { written += text; });
-  terminal.onDidClose((code) => { closedWith.push(code); });
-  terminal.open();
-  await vi.waitFor(() => { expect(closedWith).toHaveLength(1); });
-  return { written, closedWith };
+function register(settle: (outcome: string) => TaskVerdict = () => ({ passed: true, lines: [], problems: [] })) {
+  const reporter = recordingReporter();
+  registerTaskGesture<string>({ label: 'Test', command: 'modbench.test.run', reporter, argument: () => [], settle });
+  return reporter;
 }
 
 describe('a task over a command', () => {
-  it('calls the command as an agent call does, writes the verdict\'s lines, and closes 0 when it passed', async () => {
-    executeCommand.mockResolvedValueOnce('outcome');
+  it('is of its command\'s type, and offered once with a definition of that type alone', () => {
+    register();
 
-    const { written, closedWith } = await runTask((outcome) => ({ passed: true, lines: [`got ${outcome}`, 'fine'] }));
+    expect(registered.type).toBe('modbench.test.run');
+    expect(registered.provider?.provideTasks()).toMatchObject([{ definition: { type: 'modbench.test.run' }, name: 'Test' }]);
+  });
+
+  it('calls the command as an agent call does, writes the verdict, and closes 0 when it passed', async () => {
+    register((outcome) => ({ passed: true, lines: [`got ${outcome}`, 'fine'], problems: [] }));
+
+    const { written, closedWith } = await runRegisteredTask({ type: 'modbench.test.run' }, { resolves: 'outcome' });
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.test.run', new AgentCall([], {}));
-    expect(written).toBe('got outcome\r\nfine\r\n');
-    expect(closedWith).toEqual([0]);
+    expect([written, closedWith]).toEqual(['got outcome\r\nfine\r\n', [0]]);
   });
 
-  it('closes non-zero when the verdict failed', async () => {
-    executeCommand.mockResolvedValueOnce('outcome');
+  it('closes non-zero when the verdict failed, writing each problem to the terminal and to the Output', async () => {
+    const reporter = register(() => ({
+      passed: false, lines: [], problems: [{ severity: 'error', message: 'Refused.', detail: 'why' }, { severity: 'warning', message: 'Warned.' }],
+    }));
 
-    const { closedWith } = await runTask(() => ({ passed: false, lines: ['refused'] }));
+    const { written, closedWith } = await runRegisteredTask({ type: 'modbench.test.run' }, { resolves: 'outcome' });
 
-    expect(closedWith).toEqual([1]);
+    expect([written, closedWith]).toEqual(['Refused. why\r\nWarned.\r\n', [1]]);
+    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'Refused.', detail: 'why' }, { severity: 'warning', message: 'Warned.', detail: undefined }]);
   });
 
-  it('closes non-zero and writes the message of a command that throws', async () => {
-    executeCommand.mockRejectedValueOnce(new Refusal('no such mod'));
+  it('closes non-zero and writes the message of a command that throws, to the terminal and to the Output', async () => {
+    const reporter = register();
 
-    const { written, closedWith } = await runTask(() => ({ passed: true, lines: [] }));
+    const { written, closedWith } = await runRegisteredTask({ type: 'modbench.test.run' }, { rejects: new Refusal('no such mod') });
 
-    expect(written).toBe('no such mod\r\n');
-    expect(closedWith).toEqual([1]);
-  });
-
-  it('is offered once, with a definition of its type alone', () => {
-    registerTaskGesture<string>({ type: 'modbench.test', label: 'Test', command: 'c', argument: () => [], settle: () => ({ passed: true, lines: [] }) });
-
-    expect(provider.current?.provideTasks()).toMatchObject([{ definition: { type: 'modbench.test' }, name: 'Test' }]);
+    expect([written, closedWith]).toEqual(['no such mod\r\n', [1]]);
+    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'no such mod', detail: undefined }]);
   });
 });

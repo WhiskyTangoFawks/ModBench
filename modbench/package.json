@@ -152,7 +152,7 @@
     ],
     "taskDefinitions": [
       {
-        "type": "modbench.build",
+        "type": "modbench.mod.build",
         "required": [],
         "properties": {
           "mods": {

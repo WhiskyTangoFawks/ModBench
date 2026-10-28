@@ -41,20 +41,25 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
 });
 
 describe('a build task in a chain', () => {
+  const root = (): string => present(vscode.workspace.workspaceFolders?.[0], 'the workspace folder').uri.fsPath;
+  const labelled = async (label: string): Promise<vscode.Task> => present((await vscode.tasks.fetchTasks()).find((task) => task.name === label), `the task ${label}`);
+  const ended = (execution: vscode.TaskExecution): Promise<void> => new Promise((resolve) => {
+    const done = vscode.tasks.onDidEndTask((event) => { if (event.execution === execution) { done.dispose(); resolve(); } });
+  });
+
   it('fails on a mod no source holds, and a task that depends on it does not run', async () => {
-    const root = present(vscode.workspace.workspaceFolders?.[0], 'the workspace folder').uri.fsPath;
-    const marker = path.join(root, 'ran.txt');
     const exitCodes: (number | undefined)[] = [];
     const listener = vscode.tasks.onDidEndTaskProcess((event) => { exitCodes.push(event.exitCode); });
-    const dependent = present((await vscode.tasks.fetchTasks()).find((task) => task.name === 'After the build'), 'the dependent task');
 
-    const ended = new Promise<void>((resolve) => {
-      const done = vscode.tasks.onDidEndTask(() => { done.dispose(); resolve(); });
-    });
-    await vscode.tasks.executeTask(dependent);
-    await ended;
+    const chain = await vscode.tasks.executeTask(await labelled('After the build'));
+    await ended(chain);
+    const later = await vscode.tasks.executeTask(await labelled('Workspace step'));
+    await ended(later);
     listener.dispose();
 
-    assert.deepStrictEqual([exitCodes, existsSync(marker)], [[1], false]);
+    assert.deepStrictEqual(
+      [exitCodes.slice(0, 1), existsSync(path.join(root(), 'chain', 'ran.txt')), existsSync(path.join(root(), 'ran.txt'))],
+      [[1], false, true],
+    );
   });
 });

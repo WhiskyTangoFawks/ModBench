@@ -201,7 +201,7 @@ function registerSourceGestures(
       sourceFiles: (origin) => sourceFiles(instance.value, origin),
       modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),
-    registerBuildTask(),
+    registerBuildTask(reporterFor('mod.build')),
     provider.onDidChangeTreeData(showAnySource),
     problems,
   ];

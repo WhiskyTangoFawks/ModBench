@@ -212,7 +212,7 @@ describe('the Mods view registers its own gestures', () => {
   it('offers build as a task, for a chain', () => {
     h.taskTypes.length = 0;
     createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
-    expect(h.taskTypes).toEqual(['modbench.build']);
+    expect(h.taskTypes).toEqual(['modbench.mod.build']);
   });
 
   it('hears its copy value in the Mods view\'s key', () => {

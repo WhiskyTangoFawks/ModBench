@@ -1,14 +1,13 @@
 import type * as vscode from 'vscode';
 import type { Argument } from '../wire/argument';
-import { registerTaskGesture, type TaskVerdict } from '../drivingLib/taskGesture';
+import { registerTaskGesture, type TaskProblem, type TaskVerdict } from '../drivingLib/taskGesture';
 import { Refusal } from '../drivingLib/refusal';
-import type { Built } from './buildCommand';
+import type { Reporter } from '../ports/reporter';
+import { buildFailures, buildWarnings, type Built } from './buildCommand';
 
 /** mods.md, Build, story 15: the task builds the mods its definition names, or every source. */
-export function registerBuildTask(): vscode.Disposable {
-  return registerTaskGesture<Built>({
-    type: 'modbench.build', label: 'Build', command: 'modbench.mod.build', argument: modsOfDefinition, settle: buildVerdict,
-  });
+export function registerBuildTask(reporter: Reporter): vscode.Disposable {
+  return registerTaskGesture<Built>({ label: 'Build', command: 'modbench.mod.build', reporter, argument: modsOfDefinition, settle: buildVerdict });
 }
 
 function modsOfDefinition({ mods = [] }: vscode.TaskDefinition): Argument[] {
@@ -18,13 +17,13 @@ function modsOfDefinition({ mods = [] }: vscode.TaskDefinition): Argument[] {
 
 // mods.md, Build, story 15: a refusal or a mod landed in part fails the task, and a warning does not.
 function buildVerdict(result: Built): TaskVerdict {
-  if (!result.applied) return { passed: false, lines: [result.refusal, ...(result.detail === undefined ? [] : [result.detail])] };
+  if (!result.applied) return { passed: false, lines: [], problems: [{ severity: 'error', message: result.refusal, detail: result.detail }] };
   const { landed, refused } = result.outcome;
-  const lines = [
-    ...landed.map(({ mod }) => `Built "${mod}".`),
-    ...refused.map(({ item, reason }) => `Could not build "${item}": ${reason}`),
-    ...(result.partial ?? []).map(({ message, detail }) => `${message} ${detail}`),
+  const failures: TaskProblem[] = [
+    ...refused.map(({ item, reason }): TaskProblem => ({ severity: 'error', message: `Could not build "${item}":`, detail: reason })),
+    ...buildFailures(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'error', message, detail })),
   ];
-  const failed = landed.some(({ refused: plugins, archivesRefused, failure }) => plugins.length + archivesRefused.length > 0 || failure !== undefined);
-  return { passed: refused.length === 0 && !failed, lines };
+  const warnings = buildWarnings(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'warning', message, detail }));
+  const passed = failures.length === 0;
+  return { passed, lines: passed ? landed.map(({ mod }) => `Built "${mod}".`) : [], problems: [...failures, ...warnings] };
 }

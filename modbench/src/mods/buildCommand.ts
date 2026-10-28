@@ -68,7 +68,7 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, ever
     return {
       applied: true,
       outcome: { landed: outcome.landed, refused: [...refusedRows, ...outcome.refused] },
-      partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome), ...refusedInMods(outcome)],
+      partial: [...partlyBuilt(outcome), ...buildWarnings(outcome), ...refusedInMods(outcome)],
     };
   });
 }
@@ -117,6 +117,13 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome, action: ReportAc
   const what = more.length === 0 ? `"${only.mod}"` : `${outcome.landed.length} mods`;
   reporter.landed(diagnostics > 0 ? `Built ${what} with ${diagnosticsWords(diagnostics)}` : `Built ${what}.`);
 }
+
+/** The parts of a landed build that did not land whole. */
+export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...partlyBuilt(outcome), ...refusedInMods(outcome)];
+
+/** What a landed build says and the build still succeeded. */
+export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
+  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
