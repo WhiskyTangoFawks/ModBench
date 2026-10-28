@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { isWithin } from '../instanceAdapter/gameFolder/pathWithin';
+import { isWithin } from '../ports/pathWithin';
 import { overwritePathOf, type Deployed, type Deployment, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import { refuse } from '../coreLib/refuse';

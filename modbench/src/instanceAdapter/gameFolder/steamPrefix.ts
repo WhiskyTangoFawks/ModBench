@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readOrAbsent, readOrReason } from '../files';
-import { isWithin } from './pathWithin';
+import { isWithin } from '../../ports/pathWithin';
 import { steamLibraries } from './gamePathDetector';
 import { shortcutsAt, type Shortcut } from './steamShortcuts';
 
