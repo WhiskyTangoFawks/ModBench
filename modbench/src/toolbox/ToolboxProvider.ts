@@ -4,9 +4,10 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
-import { gameReleaseForGame } from '../tables/gamePaths';
-import type { PluginsTxtPlace } from '../deployment/pluginsTxtPlace';
 import { deploymentFolderOf, type DeploymentFolderSetting } from '../instanceCommands/deploy';
+
+/** Where deploy writes plugins.txt for a deployment folder and a game, or why it writes none. */
+export type PluginsTxtPlaceOf = (deploymentFolder: string, gameName: string) => Promise<{ readonly folder: string } | { readonly why: string }>;
 
 export interface DeploymentRowSetting extends DeploymentFolderSetting {
   nameOf(path: string): string;
@@ -14,7 +15,7 @@ export interface DeploymentRowSetting extends DeploymentFolderSetting {
 }
 
 type ToolboxDeps =
-  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting; pluginsTxtPlace: PluginsTxtPlace }
+  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting; pluginsTxtPlace: PluginsTxtPlaceOf }
   | { instance: undefined };
 
 const versionText = (version: ProgramVersion): string => {
@@ -133,7 +134,7 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     if (!this.deps.instance || item.contextValue !== 'deployment') return item;
     const folder = deploymentFolderOf(this.deps.deploymentFolder);
     if (folder === undefined) return item;
-    const where = await this.deps.pluginsTxtPlace(gameReleaseForGame(this.deps.instance.value.gameName), folder);
+    const where = await this.deps.pluginsTxtPlace(folder, this.deps.instance.value.gameName);
     item.tooltip = `${folder}\n${'folder' in where ? `plugins.txt: ${where.folder}` : `No plugins.txt: ${where.why}`}`;
     return item;
   }

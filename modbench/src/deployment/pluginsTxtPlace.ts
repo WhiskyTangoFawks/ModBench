@@ -4,7 +4,7 @@ import { archiveListsOf } from '../tables/gamePaths';
 import { errnoCode } from '../ports/errno';
 import { shortcutsIn } from './steamShortcuts';
 
-export const SETUP_PAGE = 'https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/deployment-on-linux.md';
+const SETUP_PAGE = 'https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/deployment-on-linux.md';
 
 export type PluginsTxtPlace = (release: string | undefined, deploymentFolder: string) => Promise<{ readonly folder: string } | { readonly why: string }>;
 
@@ -27,7 +27,7 @@ const isWithin = (folder: string, path: string): boolean => {
 async function appIdRunningIn(steamRoot: string, deploymentFolder: string): Promise<number | undefined> {
   const users = join(steamRoot, 'userdata');
   for (const user of await ifThere(readdir(users), [])) {
-    const file = await ifThere(readFile(join(users, user, 'config', 'shortcuts.vdf')), undefined);
+    const file = await ifThere(readFile(join(users, user, 'config', 'shortcuts.vdf'), 'latin1'), undefined);
     const found = file && shortcutsIn(file).find(({ exe }) => isWithin(deploymentFolder, exe));
     if (found) return found.appId;
   }

@@ -178,7 +178,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, join(homedir(), '.steam', 'steam'));
-  const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeOfPluginsTxt }));
+  const placeForGame: PluginsTxtPlaceOf = (folder, gameName) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
+  const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,

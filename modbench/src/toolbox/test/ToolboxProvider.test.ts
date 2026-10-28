@@ -4,9 +4,7 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import type { InstanceValue, ProgramVersion } from '../../instanceLoader/instance';
-import { ToolboxProvider } from '../ToolboxProvider';
-import type { PluginsTxtPlace } from '../../deployment/pluginsTxtPlace';
-import { gameReleaseForGame } from '../../tables/gamePaths';
+import { ToolboxProvider, type PluginsTxtPlaceOf } from '../ToolboxProvider';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -41,7 +39,7 @@ class FakeDeploymentFolder {
 }
 
 const providerOf = (
-  instance: FakeInstance, deploymentFolder = new FakeDeploymentFolder(), pluginsTxtPlace: PluginsTxtPlace = () => Promise.resolve({ why: 'no place' }),
+  instance: FakeInstance, deploymentFolder = new FakeDeploymentFolder(), pluginsTxtPlace: PluginsTxtPlaceOf = () => Promise.resolve({ why: 'no place' }),
 ) => new ToolboxProvider({ instance, channel: SILENT, deploymentFolder, pluginsTxtPlace });
 
 function rowsOf(instance: FakeInstance) {
@@ -139,14 +137,14 @@ describe('the Toolbox view, given an instance value', () => {
     it.each([
       ['where deploy writes plugins.txt', { folder: '/prefix/Fallout4' }, `${DEPLOYMENT}\nplugins.txt: /prefix/Fallout4`],
       ['why it writes none', { why: 'launch the game once' }, `${DEPLOYMENT}\nNo plugins.txt: launch the game once`],
-    ])('adds %s to its tooltip once resolved, asking for the game\'s release and the folder', async (_case, where, tooltip) => {
+    ])('adds %s to its tooltip once resolved, asking for the folder and the game', async (_case, where, tooltip) => {
       const asked: unknown[] = [];
       const provider = providerOf(new FakeInstance(VALUE), new FakeDeploymentFolder(DEPLOYMENT), (...args) => { asked.push(args); return Promise.resolve(where); });
       const item = present(provider.getChildren().find((r) => r.label === 'Deployment'), 'the Deployment row');
 
       const resolved = await provider.resolveTreeItem(item);
 
-      expect([resolved.tooltip, asked]).toEqual([tooltip, [[gameReleaseForGame(VALUE.gameName), DEPLOYMENT]]]);
+      expect([resolved.tooltip, asked]).toEqual([tooltip, [[DEPLOYMENT, VALUE.gameName]]]);
     });
 
     it('follows the setting', () => {

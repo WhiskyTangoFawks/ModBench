@@ -2,9 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { pluginsTxtPlace, SETUP_PAGE } from '../pluginsTxtPlace';
+import { pluginsTxtPlace } from '../pluginsTxtPlace';
 
 const LOCAL = 'C:\\Users\\me\\AppData\\Local';
+const SETUP_PAGE = 'https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/deployment-on-linux.md';
 const NO_ROW = 'Modbench knows no folder where this game reads plugins.txt';
 
 describe('the folder the game reads plugins.txt from on Windows', () => {
