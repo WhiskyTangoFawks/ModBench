@@ -7,6 +7,7 @@ import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
 import { pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import { changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
+import { errorMessage } from '../ports/errorMessage';
 import { pluginsTxtChange } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
 import { recordIn, type DeploymentRecord, type Written, type WrittenPluginsTxt } from './record';
@@ -178,9 +179,22 @@ async function deployTo(
     if (after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
     return { wrote: false, leftOut, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
   }
-  // The record keeps each file set aside, so the next deploy removes one this deploy could not.
+  // A hardlink's file ID is its source's, so the record is known before the files change. A deploy killed
+  // part way leaves a record the next deploy recovers from (ADR-0003); a failed deploy restores the old one.
   const setAside = [...removals, ...relinks].map(asWritten);
-  const leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith([...after, ...setAside]));
+  const intended = [...after, ...setAside];
+  await record.write(folder, { files: intended, ...(recorded.pluginsTxt === undefined ? {} : { pluginsTxt: recorded.pluginsTxt }) });
+  let leftAside: string[];
+  try {
+    leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith(intended));
+  } catch (err) {
+    try {
+      await record.write(folder, recorded);
+    } catch (restoreErr) {
+      throw new Error(`${errorMessage(err)}. Deploy could not restore its record: ${errorMessage(restoreErr)}`);
+    }
+    throw err;
+  }
   leftAside.push(...await part.settle());
   return { wrote: true, leftOut, lost, leftAside, pluginsTxt: part.deployed() };
 }
