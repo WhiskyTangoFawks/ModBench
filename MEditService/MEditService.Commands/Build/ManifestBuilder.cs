@@ -8,13 +8,13 @@ internal sealed class ManifestBuilder
 {
     private readonly DownloadedFile? _own;
     private readonly IReadOnlyList<DownloadedFile> _others;
-    private readonly IReadOnlyList<Holder> _places;
+    private readonly IReadOnlyList<(Holder Holder, IReadOnlyList<GameDepot> Depots)> _places;
 
     public ManifestBuilder((string Name, InstallationFile File)? installationFile, GameFolder? gameFolder, IReadOnlyList<DownloadedFile> downloadedFiles)
     {
         _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
         _others = [.. downloadedFiles.Where(other => other.Package.Name != _own?.Package.Name)];
-        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true))];
+        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => (new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true), place.Depots ?? []))];
     }
 
     /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make, kept as written
@@ -25,11 +25,20 @@ internal sealed class ManifestBuilder
         var recorded = Recorded([.. files.Where(file => !madeByStep.Contains(file.Path))], version);
         return (held ?? recorded) with
         {
-            Packages = recorded.Packages,
+            Packages = [.. recorded.Packages.Select(package => KeepingDepots(package, held))],
             Version = recorded.Version,
             Files = [.. recorded.Files, .. madeByStep.Select(path => new ManifestFile(path, new PackageEntry.MadeByStep()))],
         };
     }
+
+    // A version recorded with a hash holds the files that hash pins, so the depots stay while the files taken do, and when a
+    // place records none, as a copy of the game does.
+    private static ManifestPackage KeepingDepots(ManifestPackage package, Manifest? held) =>
+        package is ManifestPackage.GameFolder recorded
+        && held?.Packages.OfType<ManifestPackage.GameFolder>().FirstOrDefault(named => named.Name == recorded.Name) is { Depots.Count: > 0 } kept
+        && (recorded.Depots.Count == 0 || kept.Hash == recorded.Hash)
+            ? recorded with { Depots = kept.Depots }
+            : package;
 
     // The version rides the first package, so a mod with no package has none.
     private Manifest Recorded(IReadOnlyList<HashedFile> files, string? version)
@@ -46,9 +55,10 @@ internal sealed class ManifestBuilder
     private void TakeFromAPlaceOfTheGame(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)
     {
         var wanting = sourcing.Unsourced(ordered);
-        if (_places.MaxBy(place => wanting.Count(file => place.PathHolding(file) is not null)) is not { } place) return;
-        var taken = sourcing.Take(place, wanting);
-        if (taken.Count > 0) sourcing.Packages.Add((place, new ManifestPackage.GameFolder(place.Name, FileHash.OfFilesTaken(taken))));
+        if (_places.Count == 0) return;
+        var (holder, depots) = _places.MaxBy(place => wanting.Count(file => place.Holder.PathHolding(file) is not null));
+        var taken = sourcing.Take(holder, wanting);
+        if (taken.Count > 0) sourcing.Packages.Add((holder, new ManifestPackage.GameFolder(holder.Name, FileHash.OfFilesTaken(taken), depots)));
     }
 
     private void TakeFromOtherDownloadedFiles(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)

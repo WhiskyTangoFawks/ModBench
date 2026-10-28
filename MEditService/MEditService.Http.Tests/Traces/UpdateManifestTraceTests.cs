@@ -68,6 +68,8 @@ public sealed class UpdateManifestTraceTests : HostedTests
         { "an elsewhere place with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"files": [{{AGameFile}}]}]} }], "statCache": "/cache"}""" },
         { "an elsewhere place with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data"}]} }], "statCache": "/cache"}""" },
         { "an elsewhere game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]}]} }], "statCache": "/cache"}""" },
+        { "a depot with no version", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "depots": [{"id": "377162"}]} }], "statCache": "/cache"}""" },
+        { "an elsewhere depot with no id", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data", "files": [], "depots": [{"version": "1"}]}]} }], "statCache": "/cache"}""" },
         { "a game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]} }], "statCache": "/cache"}""" },
     };
 
@@ -137,6 +139,35 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Equal(
             "{\n\"packages\": [\n{\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"}\n],\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n",
             File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
+    }
+
+    [Fact]
+    public async Task UpdatingTheManifestOfAModTakenFromTheGameFoldersDepots_NamesEachDepotAndItsVersion()
+    {
+        Directory.CreateDirectory(ModFolder);
+        File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
+
+        var response = await Client.PostAsJsonAsync("/update-manifest", new
+        {
+            mods = new[]
+            {
+                new
+                {
+                    name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>(),
+                    gameFolder = new
+                    {
+                        name = "Fallout4",
+                        dataFolder = Path.Combine(_instance, "game", "Data"),
+                        files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } },
+                        depots = new[] { new { id = "377162", version = "22" } },
+                    },
+                },
+            },
+            statCache = Path.Combine(_instance, "stat-cache"),
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Contains("\"depots\":{\"377162\":\"22\"}", File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 
     [Fact]

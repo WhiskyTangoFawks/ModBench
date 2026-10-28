@@ -640,6 +640,10 @@ public sealed class ModFolderRepositoryTests : IDisposable
         { new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), "{\"submodule\":\"Mod\",\"version\":\"2\"}" },
         { new ManifestPackage.SourceRepository("Mod", IsSubmodule: false), "{\"repository\":\"Mod\",\"version\":\"2\"}" },
         { new ManifestPackage.GameFolder("Fallout 4", "AAAA"), "{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}" },
+        {
+            new ManifestPackage.GameFolder("Fallout 4", "AAAA", [new GameDepot("377162", "22"), new GameDepot("377161", "11")]),
+            "{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"depots\":{\"377161\":\"11\",\"377162\":\"22\"},\"version\":\"2\"}"
+        },
     };
 
     [Theory]
@@ -717,6 +721,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: true)], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
         new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: false)], [new ManifestFile("d.esp", new PackageEntry.Held())]),
         new Manifest([new ManifestPackage.GameFolder("Fallout 4", "AAAA")], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
+        new Manifest([new ManifestPackage.GameFolder("Fallout 4", "AAAA", [new GameDepot("377161", "11")])], [new ManifestFile("d.esp", new PackageEntry.Held())]),
         new Manifest([], []),
         new Manifest([new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA")], [new ManifestFile("a.esp", new PackageEntry.OtherBytes())]),
     };

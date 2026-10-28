@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import {
@@ -282,7 +282,23 @@ describe('the Steam install', () => {
 
     const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
 
-    expect(install).toEqual({ kind: 'found', root: dirname('/steam/Fallout 4/Data'), dataFolder: '/steam/Fallout 4/Data' });
+    expect(install).toEqual({ kind: 'found', root: dirname('/steam/Fallout 4/Data'), dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] });
+  });
+
+  it('records the depots Steam installed of the game, from the app manifest of its library', async () => {
+    const library = await mkdtemp(join(tmpdir(), 'medit-steamlib-'));
+    try {
+      const dataFolder = join(library, 'steamapps', 'common', 'Fallout 4', 'Data');
+      await mkdir(dataFolder, { recursive: true });
+      await writeFile(join(library, 'steamapps', 'appmanifest_377160.acf'), '"AppState"\n{\n"InstalledDepots"\n{\n"377162"\n{\n"manifest" "2222"\n}\n}\n}\n');
+      const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder }) };
+
+      const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
+
+      expect(install?.depots).toEqual([{ id: '377162', version: '2222' }]);
+    } finally {
+      await rm(library, { recursive: true, force: true });
+    }
   });
 
   it('is none when Steam holds no such game', async () => {

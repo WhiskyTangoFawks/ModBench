@@ -468,6 +468,42 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal(new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile("a.nif", "a")])), manifest.Package);
     }
 
+    private static readonly GameDepot[] SteamDepots = [new("377161", "11"), new("377162", "22")];
+
+    private static GameDepot[] DepotsOf(params string[] versions) => [.. versions.Select(version => new GameDepot("377161", version))];
+
+    public static TheoryData<string, string[], string, string[], string, string[]> DepotsAcrossUpdates => new()
+    {
+        { "names the depots a place records when its manifest names none", [], "a", ["11"], "a", ["11"] },
+        { "keeps its depots when the place records none", ["11"], "a", [], "a", ["11"] },
+        { "keeps its depots, never rewriting them, when the files it takes are the same", ["11"], "a", ["99"], "a", ["11"] },
+        { "names the depots a place records now when the files it takes changed", ["11"], "a", ["99"], "a2", ["99"] },
+    };
+
+    [Theory]
+    [MemberData(nameof(DepotsAcrossUpdates))]
+    public async Task AGameFolderMod_AcrossTwoUpdates(string says, string[] thenDepots, string thenText, string[] nowDepots, string nowText, string[] expected)
+    {
+        _folders.WithFile(Mod, "a.nif", thenText);
+        await UpdatedWith(GameFolderHolding(("a.nif", thenText)) with { Depots = DepotsOf(thenDepots) });
+        _folders.WithFile(Mod, "a.nif", nowText);
+
+        var manifest = await UpdatedWith(GameFolderHolding(("a.nif", nowText)) with { Depots = DepotsOf(nowDepots) });
+
+        Assert.True(DepotsOf(expected).SequenceEqual(Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots), says);
+    }
+
+    [Fact]
+    public async Task AGameFolderMod_TakenFromTheSteamInstall_NamesTheDepotsOfThatPlace()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var instance = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "edited")], [new GameFolderPlace("steam", [new GameFile("a.nif", "a")], SteamDepots)]);
+
+        var manifest = await UpdatedWith(instance);
+
+        Assert.Equal(SteamDepots, Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots);
+    }
+
     [Fact]
     public async Task AGameFolderModsManifest_DoesNotChange_WhenTheGameFolderGainsOrChangesAFileTheModDoesNotTake()
     {

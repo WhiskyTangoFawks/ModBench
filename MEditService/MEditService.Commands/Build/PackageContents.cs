@@ -20,6 +20,11 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
 
         internal sealed record SubmoduleMissing(string Name) : Lack($"its submodule '{Name}' is missing");
 
+        internal sealed record GameFolderOtherBytes(string Name) : Lack($"the files it takes from the game folder '{Name}' have other bytes");
+
+        internal sealed record GameFolderDepots(string Name, IReadOnlyList<GameDepot> Depots)
+            : Lack($"the game folder '{Name}' is {string.Join(" and ", Depots.Select(depot => $"depot {depot.Id} at version {depot.Version}"))}");
+
         internal sealed record NoHost() : Lack("its package has no host");
 
         internal sealed record NoTask(string Why) : Lack(Why);
@@ -66,14 +71,18 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
             if (lack is not null) lacks.Add(lack);
         }
         if (lacks.Count == 0) lacks.AddRange(manifest.Packages.OfType<ManifestPackage.GameFolder>().Select(pinned => PinnedLack(pinned, sourced)).OfType<Lack>());
+        if (lacks.Any(lack => lack is Lack.GameFileMissing or Lack.GameFolderOtherBytes))
+        {
+            lacks.AddRange(manifest.Packages.OfType<ManifestPackage.GameFolder>().Where(named => named.Depots.Count > 0).Select(named => new Lack.GameFolderDepots(named.Name, named.Depots)));
+        }
         var built = manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: true } submodule ? submodule.Name : null;
         return new Resolved(sourced, [.. lacks.Distinct()], built);
     }
 
-    private static Lack? PinnedLack(ManifestPackage.GameFolder pinned, IReadOnlyList<PackagedFile> taken) =>
+    private static Lack.GameFolderOtherBytes? PinnedLack(ManifestPackage.GameFolder pinned, IReadOnlyList<PackagedFile> taken) =>
         FileHash.OfFilesTaken(taken.OfType<PackagedFile.InGameFolder>().Select(file => new HashedFile(file.Path, file.Hash))) == pinned.Hash
             ? null
-            : new Lack($"the files it takes from the game folder '{pinned.Name}' have other bytes");
+            : new Lack.GameFolderOtherBytes(pinned.Name);
 
     private (PackagedFile?, Lack?) EntryOf(ManifestFile file, GameFolder? place) => manifest.BytesOf(file) switch
     {
