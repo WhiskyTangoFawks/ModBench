@@ -11,8 +11,7 @@ interface Deps {
   loadOrderWaitMs?: number;
 }
 
-/** Why the record index does not hold the plugins `mod`'s folder gives the load order as they are on disk, once the bound passes; nothing once it does.
- *  The watch carries the change (ADR-0003); this asks mEdit whether its rows are of the file now there. */
+/** Why mEdit's rows are not of the plugins `mod`'s folder gives the load order as they are on disk, once the bound passes; nothing once they are (ADR-0003). */
 export async function whyNotIndexed({ client, adapter, loadOrderWaitMs = LOAD_ORDER_WAIT_MS }: Deps, mod: string): Promise<string | undefined> {
   const reading = await adapter.reading();
   const enabled = reading.mods.some((entry) => entry.kind === 'mod' && entry.name === mod && entry.enabled);
