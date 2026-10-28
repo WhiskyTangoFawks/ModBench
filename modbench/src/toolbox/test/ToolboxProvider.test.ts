@@ -135,7 +135,7 @@ describe('the Toolbox view, given an instance value', () => {
     });
 
     it.each([
-      ['where deploy writes plugins.txt', { folder: '/prefix/Fallout4', shared: false },`${DEPLOYMENT}\nplugins.txt: /prefix/Fallout4`],
+      ['where deploy writes plugins.txt', { folder: '/prefix/Fallout4' },`${DEPLOYMENT}\nplugins.txt: /prefix/Fallout4`],
       ['why it writes none', { why: 'launch the game once' }, `${DEPLOYMENT}\nNo plugins.txt: launch the game once`],
     ])('gives its tooltip, once VS Code resolves the row it holds no tooltip on, the folder and %s', async (_case, where, tooltip) => {
       const asked: unknown[] = [];

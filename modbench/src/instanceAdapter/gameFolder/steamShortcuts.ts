@@ -57,12 +57,18 @@ function shortcutsIn(file: Buffer): Shortcut[] {
   return found;
 }
 
-/** The shortcuts in the shortcuts.vdf at `path`, each with its program; none when the file is missing. */
+/** The shortcuts in the shortcuts.vdf at `path`, each with its program; none when the file is missing. A file that does not parse rejects, naming `path`. */
 export async function shortcutsAt(path: string): Promise<Shortcut[]> {
+  let file: Buffer;
   try {
-    return shortcutsIn(await readFile(path));
+    file = await readFile(path);
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return [];
     throw err;
+  }
+  try {
+    return shortcutsIn(file);
+  } catch (err) {
+    throw new Error(`${path}: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

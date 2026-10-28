@@ -152,7 +152,7 @@ async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, 
   if ('why' in where) {
     return { steps: [], recordChanged: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
   }
-  const change = await pluginsTxtChange(where, pluginsTextOf(entries), previous);
+  const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
   return {
     steps: change.step === undefined ? [] : [change.step],
     recordChanged: change.recordChanged,

@@ -121,7 +121,7 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
     ])('is none, and says why, when shortcuts.vdf is %s', async (_case, damage, reason) => {
       await shortcutsOf('1', [{ appid: APP_ID, exe: exe() }]);
       await writeFile(shortcutsPath(), damage(shortcutsFile([{ appid: APP_ID, exe: exe() }])));
-      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(new RegExp(`^Steam cannot be read: .*${reason.source}`));
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(new RegExp(`^Steam cannot be read: ${shortcutsPath()}: .*${reason.source}`));
     });
 
     it('is none, and says why, when shortcuts.vdf is not a file', async () => {

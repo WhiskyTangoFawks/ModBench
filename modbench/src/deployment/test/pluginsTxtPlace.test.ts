@@ -15,7 +15,7 @@ describe('the folder the game reads plugins.txt from on Windows', () => {
     ['SkyrimVR', 'Skyrim VR'],
     ['Starfield', 'Starfield'],
   ])('for %s is %s in the local application data', async (release, name) => {
-    expect(await place(release, { LOCALAPPDATA: LOCAL })).toEqual({ folder: `${LOCAL}\\${name}`, shared: true });
+    expect(await place(release, { LOCALAPPDATA: LOCAL })).toEqual({ folder: `${LOCAL}\\${name}` });
   });
 
   it.each([
@@ -35,7 +35,7 @@ describe('the folder the game reads plugins.txt from on Linux', () => {
 
     const where = await place((folder) => { asked.push(folder); return Promise.resolve({ prefix: '/steam/compatdata/1/pfx' }); });
 
-    expect([where, asked]).toEqual([{ folder: '/steam/compatdata/1/pfx/drive_c/users/steamuser/AppData/Local/Fallout4', shared: false }, ['/deployments/survival']]);
+    expect([where, asked]).toEqual([{ folder: '/steam/compatdata/1/pfx/drive_c/users/steamuser/AppData/Local/Fallout4' }, ['/deployments/survival']]);
   });
 
   it('is none when there is no prefix, and says why and names the page', async () => {

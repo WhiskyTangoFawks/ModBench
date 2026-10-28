@@ -4,9 +4,8 @@ import { archiveListsOf } from '../tables/gamePaths';
 const SETUP_PAGE = 'https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/deployment-on-linux.md';
 const NO_FOLDER_KNOWN = 'Modbench knows no folder where this game reads plugins.txt';
 
-/** Where the game reads plugins.txt, or why deploy writes none. A shared place is read by every instance of the game, so a file
- *  there that deploy did not write is the user's. */
-export type PluginsTxtWhere = { readonly folder: string; readonly shared: boolean } | { readonly why: string };
+/** Where the game reads plugins.txt, or why deploy writes none. */
+export type PluginsTxtWhere = { readonly folder: string } | { readonly why: string };
 
 export type PluginsTxtPlace = (release: string | undefined, deploymentFolder: string) => Promise<PluginsTxtWhere>;
 
@@ -16,7 +15,7 @@ export type PrefixOf = (deploymentFolder: string) => Promise<{ readonly prefix: 
 async function inPrefix(prefixOf: PrefixOf, deploymentFolder: string, gameFolder: string): Promise<PluginsTxtWhere> {
   const found = await prefixOf(deploymentFolder);
   if ('why' in found) return { why: `${found.why}; the page that sets it up: ${SETUP_PAGE}` };
-  return { folder: join(found.prefix, 'drive_c', 'users', 'steamuser', 'AppData', 'Local', gameFolder), shared: false };
+  return { folder: join(found.prefix, 'drive_c', 'users', 'steamuser', 'AppData', 'Local', gameFolder) };
 }
 
 /** Where the game reads plugins.txt: on Windows in the local application data, on Linux in the prefix of the non-Steam game in
@@ -26,7 +25,7 @@ export function pluginsTxtPlace(platform: NodeJS.Platform, env: NodeJS.ProcessEn
     const gameFolder = archiveListsOf(release)?.myGamesFolder;
     if (gameFolder === undefined) return { why: NO_FOLDER_KNOWN };
     if (platform === 'win32') {
-      return env.LOCALAPPDATA ? { folder: win32.join(env.LOCALAPPDATA, gameFolder), shared: true } : { why: 'LOCALAPPDATA is not set' };
+      return env.LOCALAPPDATA ? { folder: win32.join(env.LOCALAPPDATA, gameFolder) } : { why: 'LOCALAPPDATA is not set' };
     }
     return inPrefix(prefixOf, deploymentFolder, gameFolder);
   };
