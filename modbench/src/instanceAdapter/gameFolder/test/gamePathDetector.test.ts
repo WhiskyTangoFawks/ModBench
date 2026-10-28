@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { access, readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 
 vi.mock('node:fs/promises');
 
-import { detectGamePaths, detectWinePrefix, type GameAutodetect } from '../gamePathDetector';
+import { detectGamePaths, detectWinePrefix, steamRootOn, type GameAutodetect } from '../gamePathDetector';
 
 const FO4_APP_ID = '377160';
 const FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK: GameAutodetect = { steamAppId: FO4_APP_ID, steamFolderName: 'Fallout 4' };
@@ -173,5 +174,15 @@ describe('the game\'s Data folder on Windows in a second Steam library', () => {
     const result = await detectGamePaths('win32', FALLOUT4_STEAM_FACTS_AS_A_FIXTURE_NEVER_A_PLATFORM_LOCK, runRegQuery);
 
     expect(result).toEqual({ dataFolder: 'D:\\Games\\SteamLibrary\\steamapps\\common\\Fallout 4\\Data' });
+  });
+});
+
+describe('where Modbench looks for Steam\'s prefixes', () => {
+  it.each([
+    ['linux', `${homedir()}/.steam/steam`],
+    ['win32', undefined],
+    ['darwin', undefined],
+  ] as const)('on %s is %s', (platform, root) => {
+    expect(steamRootOn(platform)).toBe(root);
   });
 });

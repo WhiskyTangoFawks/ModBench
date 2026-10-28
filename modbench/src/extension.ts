@@ -34,6 +34,8 @@ import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
+import type { PluginsTxtPlaceOf } from './toolbox/ToolboxProvider';
+import { gameReleaseForGame } from './tables/gamePaths';
 import { hostGit } from './hostGit';
 import { hostTasks } from './tasks';
 import { stepTasks } from './sourceCommands/steps';
@@ -175,7 +177,9 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
-  const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting }));
+  const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, (folder) => adapter.nonSteamPrefix(folder));
+  const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
+  const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
@@ -222,7 +226,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   own(registerDeployCommand({
     commands: deployCommands({
-      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, pluginsTxtPlace()),
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt),
       deploymentFolder: deploymentFolderSetting,
     }),
     instance, reporter: reporterFor('deploy'),

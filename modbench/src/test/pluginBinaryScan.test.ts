@@ -101,6 +101,13 @@ const FOMOD_XML_READ: ByteReader = {
   exportReturns: 'Promise<string>',
 };
 
+const STEAM_SHORTCUTS_READ: ByteReader = {
+  imports: { 'node:fs/promises': new Set(['readFile']), '../../ports/errno': new Set(['errnoCode']) },
+  exports: new Set(['shortcutsAt']),
+  exportReturns: 'Promise<Shortcut[]>',
+  exportedTypes: new Set(['Shortcut']),
+};
+
 const isExported = (node: ts.Node): boolean =>
   ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
 
@@ -145,6 +152,7 @@ const BYTE_READERS: readonly (readonly [string, ByteReader])[] = [
   [join('instanceAdapter', 'downloadedFileContents', 'contentDigest.ts'), DIGEST],
   [join('instanceAdapter', 'gameFolder', 'versionResource.ts'), VERSION_READ],
   [join('instanceAdapter', 'fomodInstaller', 'releaseXml.ts'), FOMOD_XML_READ],
+  [join('instanceAdapter', 'gameFolder', 'steamShortcuts.ts'), STEAM_SHORTCUTS_READ],
 ];
 const isByteReader = (path: string): boolean => BYTE_READERS.some(([reader]) => reader === relative(SRC, path));
 
@@ -170,12 +178,12 @@ function modulesImported(sourceText: string, fileName: string): string[] {
 const importsTheFomodXmlReadFromOutside = (sourceText: string, fileName: string): boolean =>
   !relative(SRC, fileName).startsWith(`${FOMOD_INSTALLER}${sep}`) && modulesImported(sourceText, fileName).includes(FOMOD_XML_READ_MODULE);
 
-describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, the Game folder\'s version read and the FOMOD installer\'s XML read, feed a hash, a program\'s version or a FOMOD\'s text, and nothing else', () => {
+describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, the Game folder\'s version read, the FOMOD installer\'s XML read and Steam\'s shortcuts read, feed a hash, a program\'s version, a FOMOD\'s text or a Steam shortcut, and nothing else', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
 
-  it('decodes every file it reads outside those three, so no production read can yield a plugin\'s bytes', () => {
+  it('decodes every file it reads outside those four, so no production read can yield a plugin\'s bytes', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
       if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(relative(SRC, path)) || isByteReader(path)) continue;
