@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, OtherManifest, SourceMods, SteamDepot } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -64,22 +64,18 @@ type ReadMod = Omit<UpdateManifestMod, 'version'>;
 
 type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
-type WireDepots = readonly { id: string; version: string }[];
+type WireDepots = NonNullable<NonNullable<UpdateManifestMod['gameFolder']>['depots']>;
 
-// The game folder found, named by the game's release, with the Data folder of the Steam install when it is another place.
-// Depots are the Steam install's: here when the game folder is that install, else in steamDepots.
 interface NamedGameFolder {
   readonly name: string;
   readonly dataFolder: string;
-  readonly depots?: WireDepots;
-  readonly steamDataFolder?: string;
-  readonly steamDepots?: WireDepots;
+  readonly depots: readonly SteamDepot[];
+  readonly steam?: { readonly dataFolder: string; readonly depots: readonly SteamDepot[] };
   readonly depotProblems: readonly string[];
 }
 
-const depotProblemsOf = (game: GameToHand): readonly string[] => (typeof game.folder === 'string' ? [] : game.folder.depotProblems);
-
-const withDepots = (key: 'depots' | 'steamDepots', depots: WireDepots): Partial<NamedGameFolder> => (depots.length === 0 ? {} : { [key]: depots });
+const depotProblemsOf = (game: GameToHand, mods: readonly ReadMod[]): readonly string[] =>
+  (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.depotProblems);
 
 interface HeldGameFiles {
   readonly game: readonly GameFile[];
@@ -99,14 +95,14 @@ async function namedGameFolder(adapter: Adapter, gameRelease: string): Promise<N
   if (gameFolder.kind !== 'found') return 'the game folder was not found';
   const steam = await adapter.steamInstall();
   const named = { name: gameRelease, dataFolder: gameFolder.dataFolder };
-  if (steam === undefined) return { ...named, depotProblems: [] };
-  const { depotProblems } = steam;
-  if (steam.dataFolder === gameFolder.dataFolder) return { ...named, depotProblems, ...withDepots('depots', steam.depots) };
-  return { ...named, depotProblems, steamDataFolder: steam.dataFolder, ...withDepots('steamDepots', steam.depots) };
+  if (steam === undefined) return { ...named, depots: [], depotProblems: [] };
+  const { depots, depotProblems } = steam;
+  if (steam.dataFolder === gameFolder.dataFolder) return { ...named, depots, depotProblems };
+  return { ...named, depots: [], steam: { dataFolder: steam.dataFolder, depots }, depotProblems };
 }
 
 const placesOf = (folder: NamedGameFolder): { place: keyof HeldGameFiles; dataFolder: string }[] => [
-  { place: 'game', dataFolder: folder.dataFolder }, ...folder.steamDataFolder === undefined ? [] : [{ place: 'steam' as const, dataFolder: folder.steamDataFolder }],
+  { place: 'game', dataFolder: folder.dataFolder }, ...folder.steam === undefined ? [] : [{ place: 'steam' as const, dataFolder: folder.steam.dataFolder }],
 ];
 
 async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<GameToHand> {
@@ -114,14 +110,19 @@ async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<Gam
   return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined && modFolders?.find((entry) => entry.modName === mod)?.kind !== 'separator' };
 }
 
-const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles): RestoreFacts['gameFolder'] => {
+const wireDepots = (depots: readonly SteamDepot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
+
+// Only update manifest reads the depots; restore's manifest names them.
+const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): RestoreFacts['gameFolder'] => {
   if (typeof folder === 'string') return undefined;
-  const { name, dataFolder, steamDataFolder, steamDepots, depots } = folder;
-  const elsewhere = steamDataFolder === undefined || held.steam.length === 0
+  const { name, dataFolder, steam } = folder;
+  const elsewhere = steam === undefined || held.steam.length === 0
     ? {}
-    : { elsewhere: [{ dataFolder: steamDataFolder, files: [...held.steam], ...steamDepots === undefined ? {} : { depots: [...steamDepots] } }] };
-  return { name, dataFolder, files: [...held.game], ...depots === undefined ? {} : { depots: [...depots] }, ...elsewhere };
+    : { elsewhere: [{ dataFolder: steam.dataFolder, files: [...held.steam], ...wireDepots(steam.depots, withDepots) }] };
+  return { name, dataFolder, files: [...held.game], ...wireDepots(folder.depots, withDepots), ...elsewhere };
 };
+
+const takesFromTheGame = (mod: ReadMod): boolean => (mod.gameFolder?.files.length ?? 0) > 0 || (mod.gameFolder?.elsewhere?.length ?? 0) > 0;
 
 interface ReadMods {
   readonly sent: readonly ReadMod[];
@@ -190,7 +191,7 @@ async function readMod(
     const takenByFolder = await gameFilesOf(adapter, { mod, folder }, game, false);
     if ('refusal' in takenByFolder) return takenByFolder;
     return {
-      read: { name: mod, folder, metadataFiles: [], ...game === undefined ? {} : { gameFolder: wireGameFolder(game.folder, takenByFolder.gameFiles) } },
+      read: { name: mod, folder, metadataFiles: [], ...game === undefined ? {} : { gameFolder: wireGameFolder(game.folder, takenByFolder.gameFiles, true) } },
       notes: takenByFolder.notes,
     };
   }
@@ -201,7 +202,7 @@ async function readMod(
   return {
     read: {
       name: mod, folder, installationFile: wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder], ...sourceFolderOf(sourceMods, mod),
-      ...game === undefined ? {} : { gameFolder: wireGameFolder(game.folder, taken.gameFiles) },
+      ...game === undefined ? {} : { gameFolder: wireGameFolder(game.folder, taken.gameFiles, true) },
     },
     notes: [
       ...taken.notes,
@@ -505,7 +506,7 @@ async function restoreFolders(
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
-    statCache: adapter.statCacheFolder, exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, NONE_HELD), asksWhatItLacks: true,
+    statCache: adapter.statCacheFolder, exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, NONE_HELD, false), asksWhatItLacks: true,
     tasks: [...await tasks.labels()],
   };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
@@ -530,7 +531,7 @@ async function restoreFolders(
       }];
   });
   const builtFromSource = new Set(again.filter((mod) => mod.submodule !== undefined).map((mod) => mod.name));
-  const secondFacts = { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: builtFromSource.size > 0 };
+  const secondFacts = { ...facts, gameFolder: wireGameFolder(folder, named.found, false), asksWhatItLacks: builtFromSource.size > 0 };
   const second = await restoreOnce(client, again, secondFacts, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
 
@@ -718,7 +719,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const submodules = await submodulesWritten(adapter);
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
-        repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
+        repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
       };
     },
 

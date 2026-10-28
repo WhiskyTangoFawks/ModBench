@@ -18,6 +18,7 @@ export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersio
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
+export type { SteamDepot } from './gameFolder/steamAppManifest';
 
 export type { InstallationFileReader } from './downloadedFileContents/installationFileReader';
 export { INSTALLATION_FILE_EXTENSIONS } from './downloadedFileContents/installationFileNames';

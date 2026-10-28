@@ -132,7 +132,6 @@ export interface InstanceAnswers {
   /** The Steam install, holding what the three answers above say of the game folder; none when Steam holds none. */
   steam?: {
     install: FoundGameFolder;
-    /** The depots Steam records as installed; none when absent. */
     depots?: readonly SteamDepot[];
     depotProblems?: readonly string[];
     gameFiles?: ReadonlyMap<string, GameFile>;

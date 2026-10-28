@@ -3,15 +3,12 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>The files a package holds, looked up by hash.</summary>
-internal sealed class Holder(
-    string name, IReadOnlyCollection<(string Path, string Hash)> files, bool keptBelowFolders = false, IReadOnlyList<GameDepot>? depots = null)
+internal sealed class Holder(string name, IReadOnlyCollection<(string Path, string Hash)> files, bool keptBelowFolders = false)
 {
     private readonly ILookup<string, string> _pathsByHash = files.ToLookup(file => file.Hash, file => file.Path, StringComparer.Ordinal);
     private readonly HashSet<string> _paths = files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public string Name { get; } = name;
-
-    public IReadOnlyList<GameDepot> Depots { get; } = depots ?? [];
 
     public string? PathHolding(HashedFile held)
     {

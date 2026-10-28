@@ -1336,6 +1336,24 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(outcome).toMatchObject({ applied: true, repositoryNotes: depotProblems });
   });
 
+  it('notes no depot problem when no mod of the update takes a file from the game', async () => {
+    const { commands, client } = commandsOver({ steam: { ...steamHolding([]), depotProblems: ['appmanifest_377160.acf records no installed depot'] } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModB']);
+
+    expect(outcome).toMatchObject({ applied: true, repositoryNotes: [] });
+  });
+
+  it('hands restore no depots, which its manifest names', async () => {
+    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/A.nif', '#a']]), depots: [{ id: '377162', version: '2222' }] } });
+    client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
+
+    await commands.restoreFromManifest(['ModA']);
+
+    expect(client.calls[1]?.args[1]).not.toHaveProperty('gameFolder.elsewhere.0.depots');
+  });
+
   it('hands update manifest the depots on the game folder when the game folder is the Steam install', async () => {
     const depots = [{ id: '377162', version: '2222' }];
     const { commands, client } = commandsOver({ steam: { ...steamHolding([]), install: FOUND, depots } });

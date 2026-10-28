@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { readOrAbsent } from '../files';
+import { readOrAbsent, readOrReason } from '../files';
 
 /** A store depot the game's install records, by its id, and the ID Steam gives the version installed. */
 export interface SteamDepot {
@@ -40,7 +40,9 @@ export interface InstalledDepots {
  *  when Steam holds no app manifest for it. */
 export async function installedDepots(steamapps: string, appId: string): Promise<InstalledDepots> {
   const file = `appmanifest_${appId}.acf`;
-  const text = await readOrAbsent(() => readFile(join(steamapps, file), 'utf-8'), undefined);
+  const read = await readOrReason(() => readOrAbsent(() => readFile(join(steamapps, file), 'utf-8'), undefined));
+  if (read.kind === 'unreadable') return { depots: [], problems: [`${file} could not be read: ${read.reason}`] };
+  const text = read.answer;
   if (text === undefined) return { depots: [], problems: [] };
   const tokens = [...text.matchAll(TOKEN)].map((match) => match[1] ?? match[2] ?? '');
   const appState = asMap(parseMap(tokens, 0).map.AppState);
