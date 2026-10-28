@@ -379,7 +379,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Whether the record index's rows for the plugin were built from the file now on disk; false when the file changed since, or the record index holds no rows for it. */
+        /** @description Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003). False when the file changed since, or the record index holds no rows for it; true when no file claim backs the rows, as for a compiled plugin read from its source. */
         get: operations["GetPluginIndexedAsOnDisk"];
         put?: never;
         post?: never;
