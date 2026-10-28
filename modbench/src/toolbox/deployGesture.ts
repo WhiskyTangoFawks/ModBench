@@ -15,7 +15,7 @@ interface DeployGestureDeps {
 export function registerDeployCommand({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable {
   const deploy = async (): Promise<void> => {
     const { files, plugins, gameName } = await instance.landed();
-    const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
+    const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, game: gameName });
     if (!result.applied) {
       reporter.report('error', 'Could not deploy.', result.refusal);
       return;

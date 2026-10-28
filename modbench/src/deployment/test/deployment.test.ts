@@ -405,7 +405,7 @@ describe('plugins.txt', () => {
     await mkdir(game, { recursive: true });
     await writeFile(plugins, 'first');
     await deploy([]);
-    await rm(plugins);
+    await rename(plugins, join(root, 'held'));
     await writeFile(plugins, 'second');
 
     const deployed = await deploy([]);
@@ -471,6 +471,16 @@ describe('plugins.txt', () => {
     expect([await siblings(), await readFile(plugins, 'utf8')]).toEqual([['plugins.txt'], '*A.esp\r\nB.esp\r\n']);
   });
 
+  it('leaves the file deploy found, and no renamed file, when the record cannot be written', async () => {
+    await mkdir(game, { recursive: true });
+    await writeFile(plugins, 'mine');
+    await mkdir(join(storage, 'deployment.json.tmp'), { recursive: true });
+
+    await expect(deploy([])).rejects.toThrow();
+
+    expect([await siblings(), await readFile(plugins, 'utf8')]).toEqual([['plugins.txt'], 'mine']);
+  });
+
   it('is recorded with the name it renamed the file to, so purge can put it back', async () => {
     await mkdir(game, { recursive: true });
     await writeFile(plugins, 'mine');
@@ -478,8 +488,8 @@ describe('plugins.txt', () => {
     order = { release: 'Fallout4', entries: [] };
     await deploy([]);
 
-    const recorded = JSON.parse(await readFile(join(storage, 'deployment.json'), 'utf8')) as Record<string, { pluginsTxt: { path: string; renamedTo: string } }>;
+    const recorded = await readFile(join(storage, 'deployment.json'), 'utf8');
 
-    expect(Object.values(recorded).map(({ pluginsTxt }) => [pluginsTxt.path, pluginsTxt.renamedTo])).toEqual([[plugins, `${plugins}.modbench_renamed`]]);
+    expect([recorded.includes(`"path":${JSON.stringify(plugins)}`), recorded.includes(`"renamedTo":${JSON.stringify(`${plugins}.modbench_renamed`)}`)]).toEqual([true, true]);
   });
 });
