@@ -46,6 +46,7 @@ As a user, I want:
 7. An instance whose game Modbench does not support refused when it opens, naming the game, and no file of it written. Cites: Never break the instance for its owner
 8. A warning, when the mod manager that made the instance is running, that it overwrites my changes when it launches a program or exits. Cites: Never break the instance for its owner; Never silently wrong
 9. One instance in each window: the first open folder that is an instance, chosen when Modbench starts. No view shows the other open folders, which stay VS Code's, and each other instance among them gets one line in the Output naming it. No notification. Cites: Existing tools
+10. An instance another Modbench window has open to stay closed in this window. No mEdit starts, no mEdit item shows, and Modbench takes no port for my agent. Every view that shows the instance says "This instance is open in another Modbench window" in place of its rows, and names the instance. No gesture acts on it. Cites: mo2.md, Divergences, 22; Never silently wrong
 
 ## A gesture that writes
 
