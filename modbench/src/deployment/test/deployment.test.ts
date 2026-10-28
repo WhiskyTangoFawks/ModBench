@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
-const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined }));
+const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], readdirs: [] as string[], onLink: undefined as ((to: string) => void) | undefined, inodes: new Map<string, bigint>() }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -14,13 +14,17 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     link: (from: string, to: string) => (busy.onLink?.(to), busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
     readdir: (...args: Parameters<typeof actual.readdir>) =>
       (typeof args[0] === 'string' && busy.readdirs.includes(args[0]) ? Promise.reject(ebusy('scandir', args[0])) : actual.readdir(...args)),
+    lstat: async (...args: Parameters<typeof actual.lstat>) => {
+      const stats = await actual.lstat(...args);
+      const reused = busy.inodes.get(String(args[0]));
+      return reused === undefined ? stats : { ...stats, ino: reused };
+    },
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
 import { hardlinkDeployment, overwritePathOf, type FileTheGameGets, type PluginOrder } from '../deployment';
 import type { PluginsTxtPlace } from '../pluginsTxtPlace';
 import { recordIn } from '../record';
-import { fileIdAt } from '../changes';
 
 let root: string;
 let mods: string;
@@ -37,6 +41,7 @@ beforeEach(async () => {
   busy.unlinks = [];
   busy.readdirs = [];
   busy.onLink = undefined;
+  busy.inodes.clear();
   place = () => Promise.resolve({ why: NOT_WRITTEN.why });
   order = { release: 'Fallout4', entries: [] };
 });
@@ -62,24 +67,6 @@ const purge = (to = folder) => hardlinkDeployment(storage, place).purge(to);
 const NOTHING = { wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
 const inode = async (path: string): Promise<bigint> => (await lstat(path, { bigint: true })).ino;
-
-describe('a file ID', () => {
-  it('differs for a file made later that reuses the inode of one removed', async () => {
-    const path = join(root, 'f');
-    await writeFile(path, 'first');
-    const first = await fileIdAt(path);
-    const firstInode = await inode(path);
-    let reused = false;
-    for (let attempt = 0; attempt < 200 && !reused; attempt++) {
-      await rm(path);
-      await writeFile(path, 'later');
-      reused = (await inode(path)) === firstInode;
-    }
-
-    expect.soft(reused).toBe(true);
-    expect(await fileIdAt(path)).not.toBe(first);
-  });
-});
 
 describe('deploy', () => {
   it.each([
@@ -378,11 +365,17 @@ describe('a file a killed deploy set aside', () => {
 describe('a deploy killed part way through its changes', () => {
   const at = () => join(folder, 'Data', 'a.esp');
   const listing = async () => (await readdir(join(folder, 'Data'))).sort();
-  const recording = async (...files: { winner: string }[]) =>
-    recordIn(join(storage, 'deployment.json')).write(folder, {
-      files: await Promise.all(files.map(async ({ winner }) => ({ path: 'Data/a.esp', ino: (await fileIdAt(winner)) ?? '' }))),
-      folders: [],
-    });
+  const fileIdOf = async (file: FileTheGameGets): Promise<string> => {
+    const probe = join(root, 'probe');
+    await mkdir(probe, { recursive: true });
+    await deploy([file], probe);
+    return (await recordIn(join(storage, 'deployment.json')).of(probe)).files.map(({ fileId }) => fileId).join();
+  };
+  const recording = async (...files: FileTheGameGets[]) => {
+    const written = [];
+    for (const file of files) written.push({ path: 'Data/a.esp', fileId: await fileIdOf(file) });
+    await recordIn(join(storage, 'deployment.json')).write(folder, { files: written, folders: [] });
+  };
 
   async function killedAfterLinkingANewPath() {
     const file = await modFile('Mod', 'a.esp');
@@ -771,7 +764,7 @@ describe('plugins.txt', () => {
 
     const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
-    expect(recorded.pluginsTxt).toEqual({ path: plugins, ino: await fileIdAt(plugins), renamed: [`${plugins}.modbench_renamed`] });
+    expect(recorded.pluginsTxt).toEqual({ path: plugins, fileId: expect.stringMatching(/^\d+:\d+$/), renamed: [`${plugins}.modbench_renamed`] });
   });
 });
 
@@ -1146,6 +1139,7 @@ describe('purge', () => {
     it('leaves a plugins.txt that deploy did not write, and each file it renamed', async () => {
       await writeFile(plugins, 'mine');
       await deploy([]);
+      busy.inodes.set(plugins, await inode(plugins));
       await rm(plugins);
       await writeFile(plugins, 'other program');
 

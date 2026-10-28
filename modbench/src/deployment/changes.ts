@@ -117,14 +117,14 @@ export function recoveryIn() {
     names.set(folder, read);
     return read;
   };
-  return async (at: string, { ino }: Written): Promise<string | undefined> => {
+  return async (at: string, { fileId }: Written): Promise<string | undefined> => {
     let id = await fileIdAt(at);
     for (const name of await asidesIn(dirname(at))) {
       const aside = join(dirname(at), name);
-      if (!name.startsWith(`${basename(at)}${ASIDE}`) || await fileIdAt(aside) !== ino) continue;
+      if (!name.startsWith(`${basename(at)}${ASIDE}`) || await fileIdAt(aside) !== fileId) continue;
       if (id === undefined) {
         await moved(aside, at);
-        id = ino;
+        id = fileId;
       } else await unlink(aside);
     }
     return id;

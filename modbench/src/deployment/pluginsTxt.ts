@@ -34,7 +34,7 @@ const asideAt = (path: string) => (n: number): string => `${path}${ASIDE}${proce
 
 interface Writing {
   readonly step: Step;
-  readonly ino: () => string;
+  readonly fileId: () => string;
   readonly renamedNow: () => string | undefined;
   readonly settle: () => Promise<string[]>;
 }
@@ -42,7 +42,7 @@ interface Writing {
 function writing(folder: string, text: string, backup: Backup, stale: readonly string[]): Writing {
   const path = join(folder, PLUGINS_FILE_NAME);
   let kept: string | undefined;
-  let ino = '';
+  let fileId = '';
   const step: Step = async () => {
     const created = await mkdir(folder, { recursive: true });
     const temp = `${path}${NEW}${process.pid}`;
@@ -60,7 +60,7 @@ function writing(folder: string, text: string, backup: Backup, stale: readonly s
       if (await fileIdAt(path) !== undefined) kept = await linkedFree(path, backup.nameAt);
       await rename(temp, path);
       placed = true;
-      ino = (await fileIdAt(path)) ?? '';
+      fileId = (await fileIdAt(path)) ?? '';
     } catch (err) {
       try {
         await restore();
@@ -73,7 +73,7 @@ function writing(folder: string, text: string, backup: Backup, stale: readonly s
   };
   return {
     step,
-    ino: () => ino,
+    fileId: () => fileId,
     renamedNow: () => (backup.isTheUsers ? kept : undefined),
     settle: () => removedAll(backup.isTheUsers || kept === undefined ? stale : [...stale, kept]),
   };
@@ -98,7 +98,7 @@ async function leftoversOf(folder: string, present: string | undefined, previous
     if (name.startsWith(PLUGINS_FILE_NAME + NEW)) stale.push(at);
     else if (name.startsWith(PLUGINS_FILE_NAME + ASIDE)) {
       stale.push(at);
-      if (present !== undefined && previous !== undefined && present !== previous.ino && await fileIdAt(at) === previous.ino) placedUnrecorded = true;
+      if (present !== undefined && previous !== undefined && present !== previous.fileId && await fileIdAt(at) === previous.fileId) placedUnrecorded = true;
     } else if (name.startsWith(PLUGINS_FILE_NAME + RENAMED) && !previous?.renamed.includes(at)) recovered.push(at);
   }
   return { stale, recovered, placedUnrecorded };
@@ -114,13 +114,13 @@ export async function pluginsTxtChange(folder: string, order: string, previous: 
   const marked = held?.startsWith(MARK) === true;
   const ours = previous?.path === path ? previous : undefined;
   const { stale, recovered, placedUnrecorded } = await leftoversOf(folder, present, ours);
-  const isDeploys = present !== undefined && (marked || ours?.ino === present || placedUnrecorded);
-  const recordedAs = (ino: string, renamedNow: string[]): WrittenPluginsTxt => ({
-    path, ino, renamed: [...new Set([...(ours?.renamed ?? []), ...recovered, ...renamedNow])],
+  const isDeploys = present !== undefined && (marked || ours?.fileId === present || placedUnrecorded);
+  const recordedAs = (fileId: string, renamedNow: string[]): WrittenPluginsTxt => ({
+    path, fileId, renamed: [...new Set([...(ours?.renamed ?? []), ...recovered, ...renamedNow])],
   });
   if (held !== undefined && (marked ? held.slice(MARK.length) : held) === order) {
-    const recordChanged = (isDeploys && ours?.ino !== present) || recovered.length > 0;
-    const written = (): WrittenPluginsTxt | undefined => (recordChanged ? recordedAs(isDeploys ? present : (ours?.ino ?? ''), []) : ours);
+    const recordChanged = (isDeploys && ours?.fileId !== present) || recovered.length > 0;
+    const written = (): WrittenPluginsTxt | undefined => (recordChanged ? recordedAs(isDeploys ? present : (ours?.fileId ?? ''), []) : ours);
     return { step: undefined, recordChanged, written, renamed: () => recovered, settle: () => removedAll(stale) };
   }
   const write = writing(folder, text, isDeploys ? { nameAt: asideAt(path), isTheUsers: false } : { nameAt: renamedAt(path), isTheUsers: true }, stale);
@@ -131,7 +131,7 @@ export async function pluginsTxtChange(folder: string, order: string, previous: 
   return {
     step: write.step,
     recordChanged: true,
-    written: () => recordedAs(write.ino(), renamedNow()),
+    written: () => recordedAs(write.fileId(), renamedNow()),
     renamed: () => [...recovered, ...renamedNow()],
     settle: write.settle,
   };
@@ -154,7 +154,7 @@ export async function pluginsTxtPurge(previous: WrittenPluginsTxt): Promise<Plug
   const present = await fileIdAt(path);
   const marked = present !== undefined && (await readFile(path, 'utf8')).startsWith(MARK);
   const { stale, recovered, placedUnrecorded } = await leftoversOf(dirname(path), present, previous);
-  const isDeploys = present !== undefined && (marked || previous.ino === present || placedUnrecorded);
+  const isDeploys = present !== undefined && (marked || previous.fileId === present || placedUnrecorded);
   const there: string[] = [];
   for (const name of new Set([...previous.renamed, ...recovered])) if (await fileIdAt(name) !== undefined) there.push(name);
   const back = present === undefined || isDeploys ? there.at(-1) : undefined;

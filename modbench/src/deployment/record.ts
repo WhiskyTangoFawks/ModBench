@@ -8,12 +8,12 @@ import { errnoCode } from '../ports/errno';
 /** A file deploy linked: its path below the deployment folder, `/`-separated, and its file ID. */
 export interface Written {
   readonly path: string;
-  readonly ino: string;
+  readonly fileId: string;
 }
 
 export interface WrittenPluginsTxt {
   readonly path: string;
-  readonly ino: string;
+  readonly fileId: string;
   /** Each file deploy found there and renamed, in order. */
   readonly renamed: readonly string[];
 }
@@ -28,7 +28,7 @@ export interface Recorded {
 type ByFolder = Partial<Record<string, Recorded>>;
 
 const isWritten = (entry: unknown): entry is Written =>
-  typeof entry === 'object' && entry !== null && 'path' in entry && typeof entry.path === 'string' && 'ino' in entry && typeof entry.ino === 'string';
+  typeof entry === 'object' && entry !== null && 'path' in entry && typeof entry.path === 'string' && 'fileId' in entry && typeof entry.fileId === 'string';
 
 const isWrittenPluginsTxt = (entry: unknown): entry is WrittenPluginsTxt =>
   isWritten(entry) && 'renamed' in entry && Array.isArray(entry.renamed) && entry.renamed.every((name) => typeof name === 'string');

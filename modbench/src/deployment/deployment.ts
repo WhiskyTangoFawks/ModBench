@@ -115,7 +115,7 @@ async function linksOnTheFolderVolume(folder: string, files: Iterable<FileTheGam
     }
     const stats = await stat(winner, { bigint: true });
     if (stats.dev !== volume) elsewhere.set(stats.dev, winner);
-    wanted.set(fold(path), { path, source: winner, ino: fileIdOf(stats) });
+    wanted.set(fold(path), { path, source: winner, fileId: fileIdOf(stats) });
   }
   if (elsewhere.size > 0) {
     const others = await Promise.all([...elsewhere.values()].map(volumeOf));
@@ -128,7 +128,7 @@ async function stillWritten(folder: string, written: readonly Written[]): Promis
   const recovered = recoveryIn();
   const owned = new Map<string, Written>();
   for (const entry of written) {
-    if (await recovered(join(folder, entry.path), entry) === entry.ino) owned.set(fold(entry.path), entry);
+    if (await recovered(join(folder, entry.path), entry) === entry.fileId) owned.set(fold(entry.path), entry);
   }
   return owned;
 }
@@ -158,7 +158,7 @@ async function filesBelow(folder: string, within = ''): Promise<string[]> {
 // A file is deploy's when it is at a recorded path, by case alone, and is the file recorded there.
 async function unmanagedIn(folder: string, managed: readonly Written[]): Promise<string[]> {
   const recordedAt = new Map<string, string[]>();
-  for (const { path, ino } of managed) recordedAt.set(fold(path), [...recordedAt.get(fold(path)) ?? [], ino]);
+  for (const { path, fileId } of managed) recordedAt.set(fold(path), [...recordedAt.get(fold(path)) ?? [], fileId]);
   const unmanaged: string[] = [];
   for (const path of await filesBelow(folder)) {
     const recorded = recordedAt.get(fold(path));
@@ -176,7 +176,7 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
   const leftOut: Lost[] = [];
   for (const [key, want] of wanted) {
     const own = owned.get(key);
-    if (own?.ino === want.ino) kept.push(own);
+    if (own?.fileId === want.fileId) kept.push(own);
     else if (own !== undefined) relinks.push({ ...want, path: own.path });
     else {
       const path = await inFolder(want.path);
@@ -188,7 +188,7 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
   return { kept, links, relinks, removals, leftOut };
 }
 
-const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
+const asWritten = ({ path, fileId }: Written): Written => ({ path, fileId });
 
 interface PluginsPart {
   readonly steps: Step[];
@@ -210,7 +210,7 @@ async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, 
   return {
     steps: change.step === undefined ? [] : [change.step],
     recordChanged: change.recordChanged,
-    recordBefore: () => (previous?.path === path ? previous : { path, ino: '', renamed: [] }),
+    recordBefore: () => (previous?.path === path ? previous : { path, fileId: '', renamed: [] }),
     recordAfter: () => change.written(),
     settle: () => change.settle(),
     deployed: () => ({ kind: change.step === undefined ? 'unchanged' : 'written', renamed: change.renamed() }),
@@ -304,7 +304,7 @@ async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purg
   const wrote = removals.length + steps.length > 0;
   if (wrote) {
     // Blanking the file ID leaves a purge killed after it put the user's file back no claim on that file: it is known by its mark alone.
-    const pluginsTxt = recorded.pluginsTxt === undefined ? {} : { pluginsTxt: { ...recorded.pluginsTxt, ino: '' } };
+    const pluginsTxt = recorded.pluginsTxt === undefined ? {} : { pluginsTxt: { ...recorded.pluginsTxt, fileId: '' } };
     await record.write(folder, { files: recorded.files, folders: recorded.folders, ...pluginsTxt });
     try {
       unfinished.push(...await changeAll(folder, { removals, relinks: [], links: [] }, steps, () => Promise.resolve(), 'Purge'));
