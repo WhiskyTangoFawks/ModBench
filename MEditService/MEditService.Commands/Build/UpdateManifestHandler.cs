@@ -53,7 +53,7 @@ public sealed class UpdateManifestHandler
                 UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: its manifest could not be read: {e.Message}");
         }
 
-        if (installationFile is null && instance.GameFolder is null && held?.Package is ManifestPackage.GameFolder)
+        if (instance.GameFolder is null && held?.Packages.OfType<ManifestPackage.GameFolder>().Any() == true)
         {
             return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.GameFolderNotFound, "was not updated: its manifest names the game folder, and the game folder was not found.");
@@ -64,7 +64,8 @@ public sealed class UpdateManifestHandler
         try
         {
             read = _repository.Files(mod.Folder, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
-            manifest = new ManifestBuilder(installationFile is null ? null : (_repository.InstallationFileName(installationFile.Path), installationFile), instance.GameFolder)
+            manifest = new ManifestBuilder(
+                    installationFile is null ? null : NamedByItsFile(installationFile), instance.GameFolder, (instance.DownloadedFiles ?? []).Select(NamedByItsFile))
                 .Manifest(read.Files, mod.Version, held);
         }
         catch (DirectoryNotFoundException)
@@ -93,6 +94,8 @@ public sealed class UpdateManifestHandler
         return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(
             mod.Name, written, PathsWhere<PackageEntry.NotHeld>(manifest), PathsWhere<PackageEntry.OtherBytes>(manifest), statCacheNotWritten));
     }
+
+    private (string Name, InstallationFile File) NamedByItsFile(InstallationFile file) => (_repository.InstallationFileName(file.Path), file);
 
     private static string[] PathsWhere<TEntry>(Manifest manifest) where TEntry : PackageEntry =>
         [.. manifest.Files.Where(file => file.Entry is TEntry).Select(file => file.Path).Order(StringComparer.Ordinal)];

@@ -60,6 +60,8 @@ public sealed class UpdateManifestTraceTests : HostedTests
         { "a download whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "installationFile": {"path": "/d/Mod.zip", "size": 7, "hash": "WHOLE", "entries": [{{AnEntry}}]} }], "statCache": "/cache"}""" },
         { "a download with no entries", $$"""{"mods": [{ {{AMod}}, "installationFile": {"path": "/d/Mod.zip", "size": 7, "hash": "AAECAwQFBgc="} }], "statCache": "/cache"}""" },
         { "an entry whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "installationFile": {"path": "/d/Mod.zip", "size": 7, "hash": "AAECAwQFBgc=", "entries": [{"path": "kept.txt", "hash": "WHOLE"}]} }], "statCache": "/cache"}""" },
+        { "a downloaded file with no size", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "downloadedFiles": [{"path": "/d/Mod.zip", "hash": "AAECAwQFBgc=", "entries": [{{AnEntry}}]}]}""" },
+        { "a downloaded file whose entry hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "downloadedFiles": [{"path": "/d/Mod.zip", "size": 7, "hash": "AAECAwQFBgc=", "entries": [{"path": "kept.txt", "hash": "WHOLE"}]}]}""" },
         { "a game folder with no name", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"dataFolder": "/game/Data", "files": [{{AGameFile}}]} }""" },
         { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "files": [{{AGameFile}}]} }""" },
         { "a game folder with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data"} }""" },
@@ -129,6 +131,32 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Equal(
             "{\n\"packages\": [\n{\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"}\n],\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n",
             File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
+    }
+
+    [Fact]
+    public async Task UpdatingTheManifestOfAModWithNoInstallationFile_TakesAFileFromADownloadedFileTheRequestHandsByItsHash()
+    {
+        Directory.CreateDirectory(ModFolder);
+        File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
+
+        var response = await Client.PostAsJsonAsync("/update-manifest", new
+        {
+            mods = new[] { new { name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>() } },
+            statCache = Path.Combine(_instance, "stat-cache"),
+            downloadedFiles = new[]
+            {
+                new
+                {
+                    path = Path.Combine(Downloads, "Other.zip"), size = 7, hash = DownloadedMod.HashOfTheZip,
+                    entries = new[] { new { path = "Data/A.nif", hash = "E46vZ8f023k=" } },
+                },
+            },
+        });
+
+        response.EnsureSuccessStatusCode();
+        var manifest = File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json"));
+        Assert.Contains("\"installationFile\":\"Other.zip\"", manifest);
+        Assert.Contains("\"packagePath\":\"Data/A.nif\"", manifest);
     }
 
     [Fact]

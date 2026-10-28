@@ -128,6 +128,9 @@ public sealed record ManifestFile(string Path, PackageEntry Entry, string? Packa
 {
     /// <summary>The line for the file at <paramref name="path"/> whose bytes <paramref name="bytes"/> locates in the package.</summary>
     public static ManifestFile At(string path, FileBytes.InInstallationFile bytes) => new(path, PackageEntry.At(path, bytes.Path));
+
+    /// <summary>The line for the file at <paramref name="path"/> that the package <paramref name="package"/> holds at <paramref name="packagePath"/>.</summary>
+    public static ManifestFile In(string package, string path, string packagePath) => new(path, PackageEntry.At(path, packagePath), package);
 }
 
 public abstract record PackageEntry

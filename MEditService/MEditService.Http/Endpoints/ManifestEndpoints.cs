@@ -16,7 +16,7 @@ internal static class ManifestEndpoints
                 "Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes in its " +
                 "repository: that one is refused when its folder differs from what the build wrote. A mod with no installation file names the game " +
                 "folder as its package when the game files the request hands hold each of its files with their bytes. A mod lands or is refused on its own, " +
-                "and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, " +
+                "and a landed mod takes each file its installation file lacks from the game folder or a downloaded file the request hands, by hash, and names each file nothing provides. Progress is the update-manifest-progress notification, " +
                 "which names the request's gesture.")
             .Produces<UpdateManifestResult>()
             .ProducesProblem(400);
@@ -87,13 +87,13 @@ internal static class ManifestEndpoints
         UpdateManifestRequest req, UpdateManifestHandler handler, ModlistGestureCancels cancels, ILoggerFactory loggerFactory, CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.StatCache, req.GameFolder) is { } malformed) return malformed;
+        if (Malformed(mods, req.StatCache, req.GameFolder, req.DownloadedFiles) is { } malformed) return malformed;
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.UpdateManifestAsync(
             [.. mods.Select(mod => new ModToUpdate(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.SourceFolder, mod.Version))],
-            new InstanceToUpdate(req.StatCache, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
+            new InstanceToUpdate(req.StatCache, req.GameFolder?.ToGameFolder(), req.DownloadedFiles?.Select(file => file.ToInstallationFile()).ToList()), req.Gesture, running.Token);
 
         return EndpointMapping.Answered("Update manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result);
     }
@@ -103,7 +103,7 @@ internal static class ManifestEndpoints
         CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.StatCache, req.GameFolder) is { } malformed) return malformed;
+        if (Malformed(mods, req.StatCache, req.GameFolder, null) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
         var variants = req.Archives?.Variants();
@@ -170,11 +170,12 @@ internal static class ManifestEndpoints
     private static List<ModStatus> StatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
         [.. req.Mods.Select(mod => mod.StatusIn(repository, req.StatCache))];
 
-    private static IResult? Malformed(IReadOnlyList<IModRequest> mods, string? statCache, GameFolderRequest? gameFolder)
+    private static IResult? Malformed(
+        IReadOnlyList<IModRequest> mods, string? statCache, GameFolderRequest? gameFolder, IReadOnlyList<InstallationFileRequest>? downloadedFiles)
     {
         if (mods.Count == 0) return EndpointMapping.BadRequest("At least one mod is required.");
         if (string.IsNullOrWhiteSpace(statCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
-        var installationFiles = mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().ToList();
+        var installationFiles = mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().Concat(downloadedFiles ?? []).ToList();
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
             return EndpointMapping.BadRequest("Every mod needs a name and a folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.");
@@ -189,9 +190,11 @@ internal static class ManifestEndpoints
 }
 
 /// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). StatCache is the stat cache's folder,
-/// outside every mod folder. Gesture names it to a cancel and in its progress.</summary>
+/// outside every mod folder. DownloadedFiles are the downloaded files the hash index holds, which a file its mod's installation
+/// file lacks is looked for in. Gesture names it to a cancel and in its progress.</summary>
 internal sealed record UpdateManifestRequest(
-    IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, GameFolderRequest? GameFolder, string? Gesture);
+    IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, GameFolderRequest? GameFolder, string? Gesture,
+    IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
 
 /// <summary>The game folder by the game's name and Data folder, with the game files at the paths of the mods' files, none
 /// when not found. Elsewhere is the Steam install when it is another place (ADR-0013).</summary>

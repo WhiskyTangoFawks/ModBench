@@ -22,8 +22,9 @@ public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<Ga
     internal IEnumerable<GameFolder> Places() => [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files))];
 }
 
-/// <summary>The instance's facts beyond its mods: the folder of the stat cache and the game folder, none when it was not found.</summary>
-public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder);
+/// <summary>The instance's facts beyond its mods: the folder of the stat cache, the game folder, none when it was not found,
+/// and the downloaded files the hash index holds, which a file its mod's installation file lacks is looked for in.</summary>
+public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder, IReadOnlyList<InstallationFile>? DownloadedFiles = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal

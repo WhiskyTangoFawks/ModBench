@@ -581,8 +581,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
 
   describe('rebuildIndex answered with a failure', () => {
     const heldBody = {
-      detail: 'This instance\'s index is open in another Modbench window (/instance/modbench/index.duckdb). '
-        + 'Close mEdit there first, or open a different instance here.',
+      detail: 'This instance\'s record index is open in another Modbench window (/instance/modbench/index.duckdb). '
+        + 'Close that window, then refresh.',
     };
     it.each([
       ['a 423 as heldElsewhere', answers(423, heldBody), { rebuilt: false, heldElsewhere: true }],
