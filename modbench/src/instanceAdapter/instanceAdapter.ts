@@ -327,6 +327,8 @@ export interface SourceMods {
   readonly folders: ReadonlyMap<string, string>;
   /** The source folder that builds `mod`, its name matched as the manager matches names. */
   folderOf(mod: string): string | undefined;
+  /** Whether a manifest builds `mod`: one in a cloned repository, or the output `.gitmodules` records for a repository not cloned yet. */
+  builds(mod: string): boolean;
   readonly notes: readonly string[];
 }
 

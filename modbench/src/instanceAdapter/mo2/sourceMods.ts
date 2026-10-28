@@ -3,10 +3,11 @@
 
 import { join } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, ignoreSkippedLink, isRepository, listDir, listFolders, readOrAbsent } from '../files';
+import { exists, get, ignoreSkippedLink, isRepository, listDir, listFolders, readOrAbsent } from '../files';
 import type { SourceMods } from '../instanceAdapter';
 import { MANIFEST_OUTPUT_KEY, MANIFEST_SUFFIX } from '../../wire/sourceMod';
-import { modFolderName, sourceRootDir } from './layout';
+import { git } from '../git';
+import { modFolderName, sourceModPath, sourceRootDir, submodulesFile } from './layout';
 import { modNameKey } from './codecs/modlistText';
 
 async function manifestIn(sourceFolder: string): Promise<{ name: string; text: string } | { reason: string }> {
@@ -36,6 +37,47 @@ async function outputOf(sourceFolder: string): Promise<{ output: string } | { re
   return manifest.name === `${output}${MANIFEST_SUFFIX}` ? { output } : { reason: `its manifest ${manifest.name} is not named for its output "${output}"` };
 }
 
+/** The key of a `.gitmodules` entry that names the mod its repository's manifest builds, so a clone knows the mod before it can read the manifest. */
+export const SUBMODULE_OUTPUT_KEY = 'output';
+
+// The name of each .gitmodules entry for a source repository that records an output, by the mod it names.
+async function entriesByOutput(instanceRoot: string): Promise<Map<string, string>> {
+  const file = submodulesFile(instanceRoot);
+  const byOutput = new Map<string, string>();
+  if (!(await exists(file))) return byOutput;
+  const values = new Map<string, string>();
+  for (const entry of (await git(instanceRoot, 'config', '-f', file, '--null', '--list')).split('\0')) {
+    const [key = '', value = ''] = entry.split('\n');
+    values.set(key, value);
+  }
+  for (const [key, output] of values) {
+    if (!key.startsWith('submodule.') || !key.endsWith(`.${SUBMODULE_OUTPUT_KEY}`)) continue;
+    const name = key.slice('submodule.'.length, -`.${SUBMODULE_OUTPUT_KEY}`.length);
+    if (values.get(`submodule.${name}.path`) === sourceModPath(name)) byOutput.set(modNameKey(output), name);
+  }
+  return byOutput;
+}
+
+async function unclonedOutputs(instanceRoot: string, notes: string[]): Promise<Set<string>> {
+  try {
+    const uncloned = new Set<string>();
+    for (const [output, name] of await entriesByOutput(instanceRoot)) {
+      if (!(await isRepository(join(sourceRootDir(instanceRoot), name)))) uncloned.add(output);
+    }
+    return uncloned;
+  } catch (err) {
+    notes.push(`${submodulesFile(instanceRoot)} could not be read, so no uncloned source mod is known: ${errorMessage(err)}.`);
+    return new Set();
+  }
+}
+
+/** Takes back the output `.gitmodules` records for `mod`, once its source is trashed and builds nothing. The entry is update
+ *  manifest's to remove. Rejects when `.gitmodules` cannot be read or written. */
+export async function outputUnset(instanceRoot: string, mod: string): Promise<void> {
+  const name = (await entriesByOutput(instanceRoot)).get(modNameKey(mod));
+  if (name !== undefined) await git(instanceRoot, 'config', '-f', submodulesFile(instanceRoot), '--unset-all', `submodule.${name}.${SUBMODULE_OUTPUT_KEY}`);
+}
+
 // MO2 matches mod names without case, so an output names the mod whatever its case.
 export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
   const root = sourceRootDir(instanceRoot);
@@ -53,7 +95,9 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
     if (holder === undefined) byKey.set(modNameKey(built.output), { output: built.output, folder });
     else notes.push(`${folder} is not a source mod: ${holder.folder} builds "${holder.output}" too.`);
   }
+  const uncloned = await unclonedOutputs(instanceRoot, notes);
   return {
+    builds: (mod) => byKey.has(modNameKey(mod)) || uncloned.has(modNameKey(mod)),
     folders: new Map([...byKey.values()].map(({ output, folder }) => [output, folder])),
     folderOf: (mod) => byKey.get(modNameKey(mod))?.folder,
     notes,

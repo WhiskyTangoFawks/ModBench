@@ -8,7 +8,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { adapterOver, managerOver } from '../../../test/mo2/adapterOver';
 import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { whitelistIgnoreList, withSourceModLines } from '../layout';
@@ -306,9 +306,60 @@ describe('the MO2 adapter\'s repository', () => {
       expect(report).toEqual({ notes: [], other: [] });
       expect(submodulesNamed()).toEqual(['submodule.Mod A.url https://example.test/a.git']);
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.branch').trim()).toBe('main');
+      expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.output').trim()).toBe('Mod A');
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.path').trim()).toBe('source/Mod A');
       expect(runGit('ls-files', '-s', 'source').trim().split('\n').map((line) => line.slice(0, 6) + line.slice(line.indexOf('\t')))).toEqual(['160000\tsource/Mod A']);
       expect(runGit('ls-files', '.gitmodules')).toBe('.gitmodules\n');
+    });
+
+    it('records the output of a repository whose folder is not cloned, so its mod is built before the clone', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const path = await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      await rm(path, { recursive: true });
+      await rm(join(root, 'source', 'Other'), { recursive: true, force: true });
+
+      const sources = await adapter.sourceMods();
+
+      expect([sources.builds('mod a'), sources.builds('Mod B'), sources.folderOf('Mod A')]).toEqual([true, false, undefined]);
+    });
+
+    it('lets the manifest of a cloned repository speak, not the output .gitmodules recorded before a rename', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+      await rm(join(root, 'source', 'Mod A source', 'Mod A.manifest.json'));
+      await put('source/Mod A source/Mod B.manifest.json', SOURCE_MANIFEST('Mod B'));
+
+      const sources = await adapter.sourceMods();
+
+      expect([sources.builds('Mod A'), sources.builds('Mod B')]).toEqual([false, true]);
+    });
+
+    it('takes back the output when the source is trashed, uncloned or not, and keeps the entry for update manifest', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
+      await adapter.writeSubmodules();
+
+      await adapterOver(root).trashSourceFolder('Mod A', (path) => rm(path, { recursive: true }));
+
+      const sources = await adapter.sourceMods();
+      expect([sources.builds('Mod A'), runGit('config', '-f', '.gitmodules', 'submodule.Mod A source.url').trim()]).toEqual([false, 'https://example.test/a.git']);
+    });
+
+    it('notes a .gitmodules it cannot read, rather than naming no uncloned source mod in silence', async () => {
+      const adapter = await instance();
+      await put('.gitmodules', '[submodule "A"\n');
+
+      const { notes } = await adapter.sourceMods();
+
+      expect(notes).toEqual([expect.stringContaining('.gitmodules could not be read')]);
     });
 
     it('changes nothing when the source mods are as the last call left them', async () => {
