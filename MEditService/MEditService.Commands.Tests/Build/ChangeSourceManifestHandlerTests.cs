@@ -88,6 +88,20 @@ public sealed class ChangeSourceManifestHandlerTests : IDisposable
     }
 
     [Fact]
+    public void AnExclusionAndAnInclusion_MoveTheLineOfABuiltFile_WithTheFolder()
+    {
+        var built = new Manifest([new ManifestPackage.SourceRepository("Mod", IsSubmodule: false)], [new ManifestFile("textures/a.dds", new PackageEntry.Held())]) { Output = "Old Name" };
+        _folders.WriteSourceManifest(_source, built);
+
+        _handler.Change(_source, new SourceManifestChange(null, ["textures/a.dds"], [], ".excluded"));
+        var excluded = _folders.ReadSourceManifest(_source).Value()?.Files.Select(line => line.Path).Single();
+        _handler.Change(_source, new SourceManifestChange(null, [], ["textures/a.dds"], ".excluded"));
+        var included = _folders.ReadSourceManifest(_source).Value()?.Files.Select(line => line.Path).Single();
+
+        Assert.Equal(("textures/a.dds.excluded", "textures/a.dds"), (excluded, included));
+    }
+
+    [Fact]
     public void ARepositoryWithNoManifest_IsRefusedAsUnreadable_AndGetsNone()
     {
         var changed = _handler.Change(_source, new SourceManifestChange("Other", [], []));

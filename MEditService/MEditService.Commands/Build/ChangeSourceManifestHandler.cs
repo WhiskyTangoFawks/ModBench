@@ -40,14 +40,19 @@ public sealed class ChangeSourceManifestHandler
         return new();
     }
 
-    // A taken file's line names the path the folder holds it at, marked as the build writes it (mods.md, A source mod, story 2).
+    // A line of a taken or built file names the path the folder holds it at, marked as the build writes it (mods.md, A source mod, story 2).
     private static IReadOnlyList<ManifestFile> AtTheirFolderPaths(Manifest manifest, FolderWrite written, string mark) =>
     [
         .. manifest.Files.Select(line =>
         {
-            if (manifest.BytesOf(line) is not FileBytes.InInstallationFile held) return line;
             var at = written.PathOf(Unmarked(line.Path, mark));
-            return at == line.Path ? line : ManifestFile.At(at, held) with { Package = line.Package };
+            if (at == line.Path) return line;
+            return manifest.BytesOf(line) switch
+            {
+                FileBytes.InInstallationFile held => ManifestFile.At(at, held) with { Package = line.Package },
+                FileBytes.Built => new ManifestFile(at, new PackageEntry.Held(), line.Package),
+                _ => line,
+            };
         }),
     ];
 
