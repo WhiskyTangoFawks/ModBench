@@ -203,24 +203,73 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
-// An ignore list with the block between `first` and `last` made of `inner` in place, and gone with no `inner`. Every line
-// outside the block is kept. Undefined when the block's markers do not pair.
-function withBlock(ignoreList: string, first: string, last: string, inner: readonly string[]): string | undefined {
-  const lines = ignoreList.split('\n');
-  if (lines.at(-1) === '') lines.pop();
-  const begin = lines.indexOf(first);
-  const end = lines.indexOf(last);
-  if ((begin === -1) !== (end === -1) || end < begin) return undefined;
-  const block = inner.length === 0 ? [] : [first, ...inner, last];
-  if (begin === -1) lines.push(...block);
-  else lines.splice(begin, end - begin + 1, ...block);
-  return `${lines.join('\n')}\n`;
+type Markers = readonly [first: string, last: string];
+
+// Git's last matching line wins: what leaves a folder out sits before the user's lines, and what lets a file in after.
+interface OwnLines { readonly leftOut: Markers; readonly letIn: Markers }
+type Role = keyof OwnLines;
+
+const SOURCE_MODS: OwnLines = {
+  leftOut: ['# Source mods with a remote, the rest left out', '# End of source mods with a remote, the rest left out'],
+  letIn: ['# Source mods with a remote', '# End of source mods with a remote'],
+};
+const OTHER_MANIFESTS: OwnLines = {
+  leftOut: ['# Manifests outside the mod folders, the rest left out', '# End of manifests outside the mod folders, the rest left out'],
+  letIn: ['# Manifests outside the mod folders', '# End of manifests outside the mod folders'],
+};
+const WHITELIST_LAST_LINE = `!/${MODS}/*/*.${MANIFEST_SUFFIX.slice(1)}`;
+
+const markersOf = (role: Role): Markers[] => [SOURCE_MODS[role], OTHER_MANIFESTS[role]];
+
+function afterLeftOutBlocks(lines: readonly string[], at: number): number {
+  const markers = markersOf('leftOut').find(([first]) => first === lines[at]);
+  const end = markers === undefined ? -1 : lines.indexOf(markers[1], at);
+  return end === -1 ? at : afterLeftOutBlocks(lines, end + 1);
 }
 
-/** An ignore list with its block of `folderNames`, the source mods with a remote, made in place. Undefined when the
- *  block's markers do not pair. */
+function beforeLetInBlocks(lines: readonly string[], at: number): number {
+  const markers = markersOf('letIn').find(([, last]) => last === lines[at - 1]);
+  const begin = markers === undefined ? -1 : lines.lastIndexOf(markers[0], at - 1);
+  return begin === -1 ? at : beforeLetInBlocks(lines, begin);
+}
+
+// The run of blocks of `role`: the left-out ones after the whitelist, or first with none; the let-in ones last.
+function runOf(lines: readonly string[], role: Role): { readonly start: number; readonly end: number } {
+  if (role === 'letIn') return { start: beforeLetInBlocks(lines, lines.length), end: lines.length };
+  const start = lines.findLastIndex((line) => line.trimEnd() === WHITELIST_LAST_LINE) + 1;
+  return { start, end: afterLeftOutBlocks(lines, start) };
+}
+
+// The block of `role` made of `inner`, and gone with no `inner`: in place in its run, else moved to the run's end. False
+// when its markers do not pair.
+function placed(lines: string[], role: Role, [first, last]: Markers, inner: readonly string[]): boolean {
+  const begin = lines.indexOf(first);
+  const end = lines.indexOf(last);
+  if ((begin === -1) !== (end === -1) || end < begin) return false;
+  const block = inner.length === 0 ? [] : [first, ...inner, last];
+  const run = runOf(lines, role);
+  if (begin !== -1 && begin >= run.start && begin < run.end) {
+    lines.splice(begin, end - begin + 1, ...block);
+    return true;
+  }
+  if (begin !== -1) lines.splice(begin, end - begin + 1);
+  lines.splice(runOf(lines, role).end, 0, ...block);
+  return true;
+}
+
+// An ignore list with `own` written as its kind's two blocks, every other line kept. Undefined when markers do not pair.
+function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]): string | undefined {
+  const lines = ignoreList.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  const letIn = own.filter((line) => line.startsWith('!'));
+  const leftOut = own.filter((line) => !line.startsWith('!'));
+  return placed(lines, 'leftOut', kind.leftOut, leftOut) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join('\n')}\n` : undefined;
+}
+
+/** An ignore list with the lines of `folderNames`, the source mods with a remote. Undefined when their markers do not
+ *  pair. */
 export const withSourceModLines = (ignoreList: string, folderNames: readonly string[]): string | undefined =>
-  withBlock(ignoreList, '# Source mods with a remote', '# End of source mods with a remote', folderNames.length === 0 ? [] : [
+  withOwnLines(ignoreList, SOURCE_MODS, folderNames.length === 0 ? [] : [
     `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, ...folderNames.map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),
   ]);
 
@@ -240,10 +289,10 @@ function otherManifestLines(manifests: readonly (readonly string[])[]): string[]
   return lines;
 }
 
-/** An ignore list with its block of other manifests, each by its path in the instance, made in place. Undefined when the
- *  block's markers do not pair. */
+/** An ignore list with the lines of other manifests, each by its path in the instance. Undefined when their markers do
+ *  not pair. */
 export const withOtherManifestLines = (ignoreList: string, manifests: readonly (readonly string[])[]): string | undefined =>
-  withBlock(ignoreList, '# Manifests outside the mod folders', '# End of manifests outside the mod folders', otherManifestLines(manifests));
+  withOwnLines(ignoreList, OTHER_MANIFESTS, otherManifestLines(manifests));
 
 /** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[

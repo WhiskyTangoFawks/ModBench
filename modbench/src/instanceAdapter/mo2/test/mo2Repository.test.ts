@@ -303,7 +303,32 @@ describe('the MO2 adapter\'s repository', () => {
       expect(shown.sort()).toEqual([...listed, '.gitignore'].sort());
     });
 
-    it('takes the lines of a manifest that is gone, in place, keeping every line it did not write', async () => {
+    it('keeps the effect of each line written after the whitelist, lets no such line hide a manifest or a source mod, and writes the same lines again', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await writeFile(join(root, '.gitignore'), `${await ignoreList()}!/plugins/\n/plugins/*\n!/plugins/mine.py\n!/source/\n/source/*\n!/source/notes.md\n`);
+      await Promise.all(['plugins/mine.py', 'plugins/x.dll', 'plugins/rootbuilder/rootbuilder.manifest.json', 'source/notes.md'].map((path) => put(path)));
+      await put('source/Mod A/Mod A.manifest.json', JSON.stringify({ output: 'Mod A', files: [] }));
+      const repository = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' });
+      repository(join(root, 'source', 'Mod A'), 'init', '--quiet', '--initial-branch=main');
+      repository(join(root, 'source', 'Mod A'), 'remote', 'add', 'origin', 'https://example.test/a.git');
+      repository(join(root, 'source', 'Mod A'), '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');
+
+      await adapter.writeSubmodules();
+      await adapter.writeOtherManifestLines();
+      const written = await ignoreList();
+      await adapter.writeSubmodules();
+      const rewrittenOnce = await ignoreList();
+      await adapter.writeOtherManifestLines();
+
+      const ignored = (path: string): boolean => spawnSync('git', ['check-ignore', '--quiet', path], { cwd: root }).status === 0;
+      expect(['plugins/mine.py', 'source/notes.md', 'plugins/rootbuilder/rootbuilder.manifest.json', 'source/Mod A', 'plugins/x.dll'].map(ignored))
+        .toEqual([false, false, false, false, true]);
+      expect([rewrittenOnce, await ignoreList()]).toEqual([written, written]);
+    });
+
+    it('takes the lines of a manifest that is gone, keeping every line it did not write', async () => {
       const adapter = await instance();
       await put('.gitignore', 'mine\n');
       await put('Stock Game/Stock Game.manifest.json');
@@ -315,8 +340,9 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeOtherManifestLines();
 
       expect(await ignoreList()).toBe([
-        'mine', '# Manifests outside the mod folders', '!/Stock Game/', '/Stock Game/*', '!/Stock Game/Stock Game.manifest.json',
-        '# End of manifests outside the mod folders', 'theirs', '',
+        '# Manifests outside the mod folders, the rest left out', '/Stock Game/*', '# End of manifests outside the mod folders, the rest left out',
+        'mine', 'theirs',
+        '# Manifests outside the mod folders', '!/Stock Game/', '!/Stock Game/Stock Game.manifest.json', '# End of manifests outside the mod folders', '',
       ].join('\n'));
     });
 
@@ -616,21 +642,24 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
-    it('rewrites its block where it stands, with the lines after it left after it, and changes nothing when nothing changed', async () => {
+    it('writes the lines that let it in after every line written after them, and changes nothing when nothing changed', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
       await adapter.writeSubmodules();
       await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}after/\n`);
+      await adapter.writeSubmodules();
       const before = await readFile(join(root, '.gitignore'), 'utf8');
       await adapter.writeSubmodules();
+      const unchanged = await readFile(join(root, '.gitignore'), 'utf8');
       await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
 
       await adapter.writeSubmodules();
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
 
-      expect([before, lines.indexOf('!/source/Mod B') < lines.indexOf('after/'), lines.at(-2)]).toEqual([before, true, 'after/']);
+      expect([unchanged, lines.indexOf('after/') < lines.indexOf('!/source/Mod A'), lines.at(-3), lines.at(-2)])
+        .toEqual([before, true, '!/source/Mod B', '# End of source mods with a remote']);
     });
 
     it.each([
