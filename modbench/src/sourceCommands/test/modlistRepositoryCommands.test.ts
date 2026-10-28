@@ -880,7 +880,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       const wired = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf(sources), mods: [...winningFirst] }, { tasks: logging });
       wired.client.setCommandHandler('restoreFromManifest', (mods) => {
         const names = sentNamesOf(mods);
-        log.push(`restore ${names.join('+')}`);
+        log.push(`restore ${names.join(', ')}`);
         return Promise.resolve({ landed: names.map((mod) => restoredMod({ mod, steps })), refused: [], notFound: [] });
       });
       return { ...wired, log };
