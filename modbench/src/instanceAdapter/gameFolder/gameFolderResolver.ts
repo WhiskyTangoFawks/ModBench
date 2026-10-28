@@ -9,7 +9,8 @@ import { documentsFolder } from './documentsFolder';
 import { factsOf } from '../files';
 import { present } from '../../ports/present';
 import { errorMessage } from '../../ports/errorMessage';
-import type { FoundGameFolder, GameFolder, GameFolderLook, GameFolderSetting } from '../instanceAdapter';
+import type { FoundGameFolder, GameFolder, GameFolderLook, GameFolderSetting, SteamInstall } from '../instanceAdapter';
+import { installedDepots } from './steamAppManifest';
 
 // What the mod manager says about where the game is, read by the manager from its own configuration.
 export interface ManagerGamePath {
@@ -24,7 +25,7 @@ export interface ManagerGamePath {
  *  read, so a resolution can never come from a different generation than the value it lands in. */
 export type GameFolderResolver = (managed: ManagerGamePath) => Promise<GameFolder>;
 
-export type SteamInstallResolver = (release: string | undefined) => Promise<FoundGameFolder | undefined>;
+export type SteamInstallResolver = (release: string | undefined) => Promise<SteamInstall | undefined>;
 
 type DetectWinePrefix = () => Promise<string | null>;
 
@@ -137,7 +138,9 @@ async function steamInstall(facts: GameAutodetect, detectors: GameDetectors): Pr
 export function steamInstallResolver(detectors: GameDetectors = STEAM): SteamInstallResolver {
   return async (release) => {
     const facts = autodetectFacts(release);
-    return facts ? steamInstall(facts, detectors) : undefined;
+    const install = facts ? await steamInstall(facts, detectors) : undefined;
+    if (facts === undefined || install === undefined) return undefined;
+    return { ...install, depots: await installedDepots(dirname(dirname(install.root)), facts.steamAppId) };
   };
 }
 

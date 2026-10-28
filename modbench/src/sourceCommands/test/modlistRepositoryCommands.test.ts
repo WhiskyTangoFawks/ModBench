@@ -1314,6 +1314,28 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(firstModSent(client)).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/B.nif', hash: '#b' }] }] } });
   });
 
+  it('hands update manifest the depots the Steam install records, on the place that is the Steam install', async () => {
+    const depots = [{ id: '377162', version: '2222' }];
+    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/B.nif', '#b']]), depots } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    await commands.updateManifest(['ModB']);
+
+    const sent = firstModSent(client);
+    expect(sent).toMatchObject({ gameFolder: { elsewhere: [{ dataFolder: '/steam/Data', depots }] } });
+    expect(sent).not.toHaveProperty('gameFolder.depots');
+  });
+
+  it('hands update manifest the depots on the game folder when the game folder is the Steam install', async () => {
+    const depots = [{ id: '377162', version: '2222' }];
+    const { commands, client } = commandsOver({ steam: { ...steamHolding([]), install: FOUND, depots } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    await commands.updateManifest(['ModB']);
+
+    expect(firstModSent(client)).toMatchObject({ gameFolder: { depots } });
+  });
+
   it('hands restore\'s retry the Steam install\'s files as another place', async () => {
     const { commands, client } = commandsOver({ steam: steamHolding([['Meshes/A.nif', '#a']]) });
     client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));

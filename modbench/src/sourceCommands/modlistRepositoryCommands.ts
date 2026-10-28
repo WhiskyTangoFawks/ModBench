@@ -64,12 +64,19 @@ type ReadMod = Omit<UpdateManifestMod, 'version'>;
 
 type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
+type WireDepots = readonly { id: string; version: string }[];
+
 // The game folder found, named by the game's release, with the Data folder of the Steam install when it is another place.
+// Depots are the Steam install's: here when the game folder is that install, else in steamDepots.
 interface NamedGameFolder {
   readonly name: string;
   readonly dataFolder: string;
+  readonly depots?: WireDepots;
   readonly steamDataFolder?: string;
+  readonly steamDepots?: WireDepots;
 }
+
+const withDepots = (key: 'depots' | 'steamDepots', depots: WireDepots): Partial<NamedGameFolder> => (depots.length === 0 ? {} : { [key]: depots });
 
 interface HeldGameFiles {
   readonly game: readonly GameFile[];
@@ -88,10 +95,9 @@ async function namedGameFolder(adapter: Adapter, gameRelease: string): Promise<N
   const gameFolder = await adapter.gameFolder();
   if (gameFolder.kind !== 'found') return 'the game folder was not found';
   const steam = await adapter.steamInstall();
-  return {
-    name: gameRelease, dataFolder: gameFolder.dataFolder,
-    ...(steam === undefined || steam.dataFolder === gameFolder.dataFolder ? {} : { steamDataFolder: steam.dataFolder }),
-  };
+  if (steam === undefined) return { name: gameRelease, dataFolder: gameFolder.dataFolder };
+  if (steam.dataFolder === gameFolder.dataFolder) return { name: gameRelease, dataFolder: gameFolder.dataFolder, ...withDepots('depots', steam.depots) };
+  return { name: gameRelease, dataFolder: gameFolder.dataFolder, steamDataFolder: steam.dataFolder, ...withDepots('steamDepots', steam.depots) };
 }
 
 const placesOf = (folder: NamedGameFolder): { place: keyof HeldGameFiles; dataFolder: string }[] => [
@@ -105,9 +111,11 @@ async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<Gam
 
 const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles): RestoreFacts['gameFolder'] => {
   if (typeof folder === 'string') return undefined;
-  const { steamDataFolder, ...named } = folder;
-  const elsewhere = steamDataFolder === undefined || held.steam.length === 0 ? {} : { elsewhere: [{ dataFolder: steamDataFolder, files: [...held.steam] }] };
-  return { ...named, files: [...held.game], ...elsewhere };
+  const { steamDataFolder, steamDepots, depots, ...named } = folder;
+  const elsewhere = steamDataFolder === undefined || held.steam.length === 0
+    ? {}
+    : { elsewhere: [{ dataFolder: steamDataFolder, files: [...held.steam], ...steamDepots === undefined ? {} : { depots: [...steamDepots] } }] };
+  return { ...named, files: [...held.game], ...depots === undefined ? {} : { depots: [...depots] }, ...elsewhere };
 };
 
 interface ReadMods {

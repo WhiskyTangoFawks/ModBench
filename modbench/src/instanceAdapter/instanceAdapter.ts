@@ -11,6 +11,7 @@ import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
+import type { SteamDepot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
@@ -54,6 +55,9 @@ export type GameFolder =
   };
 
 export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
+
+/** The game's install in Steam's library, with the depots Steam records as installed. */
+export type SteamInstall = FoundGameFolder & { readonly depots: readonly SteamDepot[] };
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
@@ -599,7 +603,7 @@ export interface InstanceAdapter {
   /** Where the game is now. */
   gameFolder(): Promise<GameFolder>;
   /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
-  steamInstall(): Promise<FoundGameFolder | undefined>;
+  steamInstall(): Promise<SteamInstall | undefined>;
   /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
   gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */

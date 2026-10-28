@@ -18,7 +18,7 @@ public sealed record GameFile(string Path, string Hash);
 public sealed record GameFolderPlace(string DataFolder, IReadOnlyList<GameFile> Files, IReadOnlyList<GameDepot>? Depots = null);
 
 /// <summary>The game folder as the Instance adapter hands it. Elsewhere: the game's other places, tried in order
-/// when this one lacks a mod's pinned bytes. Depots: the store depots this one records as installed, when it is the store's install.</summary>
+/// when this one lacks a mod's pinned bytes. Depots: those it records, when it is the store's install.</summary>
 public sealed record GameFolder(
     string Name, string DataFolder, IReadOnlyList<GameFile> Files, IReadOnlyList<GameFolderPlace>? Elsewhere = null, IReadOnlyList<GameDepot>? Depots = null)
 {
