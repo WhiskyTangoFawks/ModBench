@@ -132,6 +132,15 @@ describe('sourceCommands build, in mod order', () => {
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
   });
 
+  it('builds every source mod the adapter reads now, in mod order, when asked for every source', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build([], true);
+
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+  });
+
   it('reports the mods that built when mEdit refuses a later mod, and refuses that mod and the rest, naming why', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', (mods: readonly BuildMod[]) =>

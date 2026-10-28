@@ -95,8 +95,9 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
   return {
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder or metadata
      *  the Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest with the release's archive variants. */
-    build: async (mods: readonly string[]): Promise<BuildOutcome | WriteRefused> => {
+    build: async (asked: readonly string[], everySource = false): Promise<BuildOutcome | WriteRefused> => {
       const sourceMods = await adapter.sourceMods();
+      const mods = everySource ? [...sourceMods.folders.keys()] : asked;
       const facts: BuildFacts = {
         exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder,
         tasks: [...await tasks.labels()],
