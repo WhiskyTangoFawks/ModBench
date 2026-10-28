@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Deployed, Deployment, FileTheGameGets, PluginOrder } from '../../deployment/deployment';
+import type { Deployed, Deployment, Purged, FileTheGameGets, PluginOrder } from '../../deployment/deployment';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { deployCommands, type DeploymentFolderSetting, type LoadOrderToDeploy } from '../deploy';
 
@@ -13,16 +13,23 @@ function settingHolding(held: { workspaceValue?: string; globalValue?: string } 
   return { id: SETTING_ID, inspect: () => held };
 }
 
+const PURGED: Purged = { wrote: true, restored: '/local/plugins.txt', left: ['/local/plugins.txt.modbench_renamed'], leftAside: [] };
+
 function deploymentAnswering(answer: () => Promise<Deployed>) {
+  const purgedFrom: string[] = [];
   const deployedTo: [string, FileTheGameGets[], PluginOrder][] = [];
   const deployment: Deployment = {
     deploy: (folder, files, plugins) => {
       deployedTo.push([folder, [...files], plugins]);
       return answer();
     },
+    purge: (folder) => {
+      purgedFrom.push(folder);
+      return Promise.resolve(PURGED);
+    },
     unmanaged: () => Promise.resolve(['Data/current.ini']),
   };
-  return { deployment, deployedTo };
+  return { deployment, deployedTo, purgedFrom };
 }
 
 const landed = (): Promise<Deployed> => Promise.resolve({ wrote: true, leftOut: [{ path: 'Data/mine.ini', winner: '/instance/mods/Mod/mine.ini' }], unmanaged: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } });
@@ -163,5 +170,32 @@ describe('move to Overwrite', () => {
     const commands = deployCommands({ adapter: NO_MOVES, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding(undefined) });
 
     expect(await commands.moveToOverwrite(['Data/a.esp'])).toEqual({ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` });
+  });
+});
+
+describe('purge', () => {
+  it('purges the workspace's deployment folder, and answers what it put back and left', async () => {
+    const { deployment, purgedFrom } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).purge();
+
+    expect([result, purgedFrom]).toEqual([{ applied: true, ...PURGED }, ['/deployed']]);
+  });
+
+  it('is refused, naming the setting, while the setting holds no value', async () => {
+    const { deployment, purgedFrom } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding(undefined) }).purge();
+
+    expect([result, purgedFrom]).toEqual([{ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` }, []]);
+  });
+
+  it('is refused with the reason the deployment cannot purge', async () => {
+    const { deployment } = deploymentAnswering(landed);
+    deployment.purge = () => Promise.reject(new Error('EBUSY: resource busy'));
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).purge();
+
+    expect(result).toEqual({ applied: false, refusal: 'EBUSY: resource busy' });
   });
 });

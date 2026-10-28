@@ -22,23 +22,26 @@ import { registerDeployCommands } from '../deployGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import type { DeployCommands, DeployResult, MoveToOverwriteResult } from '../../instanceCommands/deploy';
+import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult } from '../../instanceCommands/deploy';
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 
 const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
 
-function deployAnswering(result: DeployResult, sequence = 1, moved: MoveToOverwriteResult = NOT_MOVED) {
+const NOT_PURGED: PurgeResult = { applied: true, wrote: false, restored: undefined, left: [], leftAside: [] };
+
+function deployAnswering(result: DeployResult, sequence = 1, moved: MoveToOverwriteResult = NOT_MOVED, purged: PurgeResult = NOT_PURGED) {
   const reporter = recordingReporter();
   const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
+  const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
   registerDeployCommands({
-    commands: { deploy, moveToOverwrite },
+    commands: { deploy, purge, moveToOverwrite },
     instance: { landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
     reporter,
   });
-  return { reporter, deploy, moveToOverwrite, run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
+  return { reporter, deploy, purge, moveToOverwrite, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
 }
 
 beforeEach(() => {
@@ -190,5 +193,41 @@ describe('Move to Overwrite', () => {
     await runMove();
 
     expect(moveToOverwrite.mock.calls).toEqual([[undefined]]);
+  });
+});
+
+describe('Purge', () => {
+  const DEPLOYED: DeployResult = { applied: false, refusal: 'unused' };
+
+  it('purges under the Toolbox's progress, reads again, and says nothing', async () => {
+    const { reporter, purge, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: '/local/plugins.txt', left: [], leftAside: [] });
+
+    await runPurge();
+
+    expect([purge.mock.calls, progressSteps, reporter.reports]).toEqual([[[]], ['progress opens on modbench.toolbox', 'purge', 'read again', 'progress closes'], []]);
+  });
+
+  it('reports a refused purge at error, saying why', async () => {
+    const { reporter, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' });
+
+    await runPurge();
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not purge.', detail: 'No deployment folder: set modbench.deployment.folder.' }]);
+  });
+
+  it('warns of each plugins.txt deploy renamed that it left, naming it', async () => {
+    const { reporter, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: undefined, left: ['/local/plugins.txt.modbench_renamed'], leftAside: [] });
+
+    await runPurge();
+
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Purge left each plugins.txt deploy renamed, which is yours to put back:', detail: '/local/plugins.txt.modbench_renamed' }]);
+  });
+
+  it('warns of each file it set aside and could not remove', async () => {
+    const { reporter, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: undefined, left: [], leftAside: ['Data/a.esp (EBUSY)'] });
+
+    await runPurge();
+
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Purge landed, and could not remove each file it set aside:', detail: 'Data/a.esp (EBUSY)' }]);
   });
 });

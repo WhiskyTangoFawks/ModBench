@@ -9,7 +9,7 @@ const RENAMED = '.modbench_renamed';
 const NEW = '.modbench_new_';
 // The game reads a `#` line as a comment. The mark is the one evidence of a deploy's file that holds across instances and
 // deployment folders, as the plugins.txt the game reads is shared and no record is.
-const MARK = '# Written by Modbench deploy.\r\n';
+export const MARK = '# Written by Modbench deploy.\r\n';
 
 export interface PluginsTxtChange {
   /** Absent when the file already holds the text. */

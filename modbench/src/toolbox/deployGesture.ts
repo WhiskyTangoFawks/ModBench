@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface DeployGestureDeps {
-  commands: Pick<DeployCommands, 'deploy' | 'moveToOverwrite'>;
+  commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite'>;
   instance: Pick<Instance, 'landed' | 'sequence' | 'refresh'>;
   reporter: Reporter;
 }
@@ -46,9 +46,24 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
       reporter.report('warning', 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:', result.leftAside.join(', '));
     }
   };
+  // deployment-hardlink.md, Purge, story 2: purge asks nothing.
+  const purge = async (): Promise<void> => {
+    const result = await commands.purge();
+    if (!result.applied) {
+      reporter.report('error', 'Could not purge.', result.refusal);
+      return;
+    }
+    if (result.left.length > 0) {
+      reporter.report('warning', 'Purge left each plugins.txt deploy renamed, which is yours to put back:', result.left.join(', '));
+    }
+    if (result.leftAside.length > 0) {
+      reporter.report('warning', 'Purge landed, and could not remove each file it set aside:', result.leftAside.join(', '));
+    }
+  };
   // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
   return [
     vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy)),
+    vscode.commands.registerCommand('modbench.instance.purge', () => runWritingGesture(TOOLBOX_VIEW, instance, purge)),
     registerMoveToOverwriteCommand({ commands, instance, reporter }),
   ];
 }

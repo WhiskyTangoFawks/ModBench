@@ -42,7 +42,7 @@ export async function fileIdAt(path: string): Promise<string | undefined> {
 }
 
 // A link fails where a file is, so neither move replaces a file deploy does not own.
-async function moved(from: string, to: string): Promise<void> {
+export async function moved(from: string, to: string): Promise<void> {
   await link(from, to);
   try {
     await unlink(from);
@@ -65,7 +65,7 @@ export async function linkedFree(from: string, nameAt: (n: number) => string): P
   }
 }
 
-async function setAside(at: string): Promise<string> {
+export async function setAside(at: string): Promise<string> {
   const aside = await linkedFree(at, (n) => `${at}${ASIDE}${process.pid}_${n}`);
   try {
     await unlink(at);
@@ -131,6 +131,19 @@ export async function removeFolders(from: string, upTo: string): Promise<void> {
   for (let folder = from; ; folder = dirname(folder)) {
     await rmdir(folder);
     if (folder === upTo) return;
+  }
+}
+
+/** Removes each folder from `from` up to, not including, `upTo` that holds nothing, and stops at one that holds something. */
+export async function removeEmptyFolders(from: string, upTo: string): Promise<void> {
+  for (let folder = from; folder !== upTo; folder = dirname(folder)) {
+    try {
+      await rmdir(folder);
+    } catch (err) {
+      const code = errnoCode(err);
+      if (code === 'ENOTEMPTY' || code === 'EEXIST') return;
+      if (!missing(err)) throw err;
+    }
   }
 }
 
