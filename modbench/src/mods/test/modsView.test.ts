@@ -92,7 +92,7 @@ const otherDeps = () => ({
   },
   checkForUpdates: vi.fn(),
   manifestGestures: {
-    toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), whatRestoreDestroys: vi.fn() }, say: () => undefined,
+    toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), whatRestoreDestroys: vi.fn(), otherManifests: vi.fn() }, say: () => undefined,
     focusedView: { id: () => undefined, selection: () => [] },
   },
 });

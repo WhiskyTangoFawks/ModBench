@@ -1327,7 +1327,6 @@ internal sealed class Indexer : IDisposable
         _plannedCount = 0;
         _activeCount = 0;
         _collisionFailures = [];
-        _standing = _standing.WithoutRefusals();
         return detached;
     }
 }

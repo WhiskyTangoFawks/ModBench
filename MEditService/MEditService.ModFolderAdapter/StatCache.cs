@@ -1,3 +1,5 @@
+using System.IO.Hashing;
+using System.Text;
 using System.Text.Json;
 using MEditService.RepositoriesLib;
 
@@ -24,11 +26,15 @@ internal sealed class StatCache
     {
         _folder = folder;
         _modFolder = modFolder;
-        _file = Path.Combine(folder, Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder)));
+        _file = Path.Combine(folder, FileNameFor(modFolder));
         _memo = new StampGatedMemo<string>(time);
         (_read, _fixes) = Parsed(Read(_file));
         foreach (var (path, entry) in _read) _memo.Remember(FileAt(path), new FileStamp(entry.Size, entry.Modified, entry.Changed), entry.Hash);
     }
+
+    // Two folders of one name, a mod's and one outside the mod folders, never share a file: it is named for the whole path.
+    private static string FileNameFor(string modFolder) =>
+        Convert.ToHexString(XxHash64.Hash(Encoding.UTF8.GetBytes(Path.GetFullPath(Path.TrimEndingDirectorySeparator(modFolder)))));
 
     private static (Dictionary<string, Entry> Files, Dictionary<(string Package, string Path), string> Fixes) Parsed(Content content)
     {

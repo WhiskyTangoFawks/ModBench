@@ -4,7 +4,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile, ManifestStep } from '../../client';
 import type { SubmodulesCloned } from '../../client/MEditClient';
-import type { FileRead, FoundGameFolder, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, FoundGameFolder, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles, OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import { archiveVariants } from '../sourceCommands';
@@ -28,6 +28,15 @@ const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap
   new Map(Object.entries(filesByMod).map(([mod, files]) => [mod, { origin: mod, folder: `/mods/${mod}`, files, folders: [], notes: [] }]));
 
 const loggedOutOfNexus = (): Nexus => nexusAnswering(answeringFrom({})).nexus;
+
+const STOCK_GAME: OtherManifest = { name: 'Stock Game/', folder: '/instance/Stock Game' };
+
+const WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD: InstanceAnswers = {
+  installations: new Map([[STOCK_GAME.name, recording(INSTALLED)]]),
+  metadata: new Map([[STOCK_GAME.name, { version: '9' }]]),
+  unwritableMetadata: new Map([[STOCK_GAME.name, 'it was asked']]),
+  gameFilesTaken: new Map([[STOCK_GAME.name, { kind: 'unreadable', reason: 'it was asked' }]]),
+};
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
@@ -203,7 +212,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'keepOutOfPublisher' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
+    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'writeOtherManifestLines' }, { verb: 'keepOutOfPublisher' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
   });
 
   it('reports each path no path token names, naming its file, and leaves the path tokens as git init wrote them', async () => {
@@ -212,7 +221,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'keepOutOfPublisher'], {
+    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'writeOtherManifestLines', 'keepOutOfPublisher'], {
       applied: true, repositoryNotes: ['ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
     }]);
   });
@@ -263,6 +272,28 @@ describe('modlistRepositoryCommands update manifest', () => {
     const outcome = await commands.updateManifest(['ModA']);
 
     expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, notes: [], repositoryNotes: ['git is not available'] });
+  });
+
+  it('names the failure to write the lines of the other manifests beside the manifests that landed', async () => {
+    const { commands, client } = commandsOver({ refusals: refusing('writeOtherManifestLines', '/instance/.gitignore has a marker with no match') });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA']);
+
+    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, repositoryNotes: ['/instance/.gitignore has a marker with no match'] });
+  });
+
+  it('hands mEdit a folder outside the mod folders by its name, with its folder and none of what a mod manager holds of a mod', async () => {
+    const { commands, client } = commandsOver(WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD);
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA'], {}, [STOCK_GAME]);
+
+    expect(client.calls[0]?.args[0]).toEqual([
+      { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
+      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [] },
+    ]);
+    expect(outcome).toMatchObject({ applied: true, refused: [], notes: [] });
   });
 
   it('refuses a mod whose metadata cannot be read, naming why, and updates the rest', async () => {
@@ -591,7 +622,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA']);
 
-    expect(adapter.calls.map(({ verb }) => verb).filter((verb) => verb !== 'writeModMetadata')).toEqual(['writePathTokens', 'trashModFile', 'refuseUnpublishedPins']);
+    expect(adapter.calls.map(({ verb }) => verb).filter((verb) => verb !== 'writeModMetadata')).toEqual(['writePathTokens', 'trashFileIn', 'refuseUnpublishedPins']);
     expect(outcome).not.toHaveProperty('pushRefusalNotWritten');
   });
 
@@ -853,8 +884,8 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect([adapter.calls.filter(({ verb }) => verb === 'trashModFile'), outcome]).toEqual([
-      [{ verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }],
+    expect([adapter.calls.filter(({ verb }) => verb === 'trashFileIn'), outcome]).toEqual([
+      [{ verb: 'trashFileIn', folder: '/mods/ModA', relativePath: 'mine.txt' }],
       { applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: ['ModB'] },
     ]);
   });
@@ -865,8 +896,8 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(adapter.calls.filter(({ verb }) => verb === 'trashModFile')).toEqual([
-      { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'trashModFile', mod: 'ModA', relativePath: 'meshes/b.nif' },
+    expect(adapter.calls.filter(({ verb }) => verb === 'trashFileIn')).toEqual([
+      { verb: 'trashFileIn', folder: '/mods/ModA', relativePath: 'mine.txt' }, { verb: 'trashFileIn', folder: '/mods/ModA', relativePath: 'meshes/b.nif' },
     ]);
   });
 
@@ -1006,7 +1037,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const order: string[] = [];
     const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), {
       tasks: { ...tasks, whyStepsFailed: (steps, folder) => { order.push('ran its steps'); return tasks.whyStepsFailed(steps, folder); } },
-      adapterOver: { trashModFile: (_mod, path) => { order.push(`trashed ${path}`); return Promise.resolve(); } },
+      adapterOver: { trashFileIn: (_folder, path) => { order.push(`trashed ${path}`); return Promise.resolve(); } },
     });
     const steps = [{ task: 'Zip', args: ['a'] }, { task: 'Archive', args: [] }];
     client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'], steps })], refused: [], notFound: [] });
@@ -1016,6 +1047,22 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(tasks.runs).toEqual([{ steps, folder: '/mods/ModA' }]);
     expect(order).toEqual(['trashed mine.txt', 'ran its steps']);
     expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModA' }], refused: [] });
+  });
+
+  it('restores a folder outside the mod folders by its name: its files no line names to the trash and its steps in its folder, and no metadata', async () => {
+    const tasks = recordingTasks(['Zip']);
+    const { commands, client, adapter } = commandsOver(WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD, new InMemoryMEditClient(), {}, readingOf(), { tasks });
+    const steps = [{ task: 'Zip', args: [] }];
+    client.setCommandResult('restoreFromManifest', {
+      landed: [restoredMod({ mod: 'Stock Game/', namedByNoLine: ['mine.txt'], steps, metadata: { version: '1' } })], refused: [], notFound: [],
+    });
+
+    const outcome = await commands.restoreFromManifest([], {}, false, [STOCK_GAME]);
+
+    expect(client.calls[0]?.args[0]).toEqual([{ name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [] }]);
+    expect(adapter.calls).toEqual([{ verb: 'writePathTokens' }, { verb: 'trashFileIn', folder: '/instance/Stock Game', relativePath: 'mine.txt' }]);
+    expect(tasks.runs).toEqual([{ steps, folder: '/instance/Stock Game' }]);
+    expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'Stock Game/' }], refused: [] });
   });
 
   it('answers a mod whose step failed as not finished, naming the step', async () => {
@@ -1030,7 +1077,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('answers a mod with a file the trash refused as not finished, naming the file and why', async () => {
-    const { commands, client } = commandsOver({ refusals: refusing('trashModFile', 'the trash is full') });
+    const { commands, client } = commandsOver({ refusals: refusing('trashFileIn', 'the trash is full') });
     client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [] });
 
     expect(await commands.restoreFromManifest(['ModA'])).toEqual({
@@ -1047,7 +1094,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     await commands.restoreFromManifest(['ModA']);
 
     expect(adapter.calls).toEqual([
-      { verb: 'writePathTokens' }, { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'writeModMetadata', mod: 'ModA', metadata },
+      { verb: 'writePathTokens' }, { verb: 'trashFileIn', folder: '/mods/ModA', relativePath: 'mine.txt' }, { verb: 'writeModMetadata', mod: 'ModA', metadata },
     ]);
   });
 
@@ -1125,11 +1172,39 @@ describe('modlistRepositoryCommands what restore destroys', () => {
     });
   });
 
+  it('asks mEdit of a folder outside the mod folders by its name, with its folder and no metadata, and skips it for no metadata', async () => {
+    const { commands, client } = commandsOver(WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD);
+    const destroys = [{ mod: 'Stock Game/', differing: ['Fallout4.exe'], namedByNoLine: [], metadataDiffers: false }];
+    client.setQueryAnswer('getWhatRestoreDestroys', { destroys, refused: [], manifests: [{ mod: 'Stock Game/', metadata: { version: '1' } }] });
+
+    const listing = await commands.whatRestoreDestroys([], [STOCK_GAME]);
+
+    expect([client.calls[0]?.args[0], listing]).toEqual([[{ name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [] }], { destroys, refused: [] }]);
+  });
+
   it('refuses with mEdit\'s reason when it cannot answer', async () => {
     const { commands, client } = commandsOver();
     client.setQueryFailure('getWhatRestoreDestroys', { failed: 'unreachable' });
 
     expect(await commands.whatRestoreDestroys(['ModA'])).toEqual({ refusal: 'Could not ask what restore from manifest destroys: mEdit could not be reached.' });
+  });
+});
+
+describe('modlistRepositoryCommands other manifests', () => {
+  it('are the folders outside the mod folders the Instance adapter finds a manifest in, each folder it could not read refused', async () => {
+    const { commands } = commandsOver({ otherManifests: [STOCK_GAME], unsearched: [{ name: 'logs/', reason: 'EACCES' }] });
+
+    expect(await commands.otherManifests()).toEqual({
+      others: [STOCK_GAME], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }],
+    });
+  });
+
+  it('are refused as one, naming why, when the instance could not be searched for them', async () => {
+    const { commands } = commandsOver({ unreadReads: { otherManifests: 'download_directory "%X%" could not be resolved' } });
+
+    expect(await commands.otherManifests()).toEqual({
+      others: [], refused: [{ item: 'every other manifest', reason: 'was not searched for: download_directory "%X%" could not be resolved' }],
+    });
   });
 });
 
