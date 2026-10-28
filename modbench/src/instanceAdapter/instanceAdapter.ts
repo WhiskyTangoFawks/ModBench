@@ -367,9 +367,6 @@ interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly o
  *  manifest, story 20). `name` is its path in the instance, ending in `/`, so no mod has it. */
 export interface OtherManifest { readonly name: string; readonly folder: string }
 
-/** A manifest the search refuses because its folder holds, or sits inside, another manifest's, by its path in the instance ending in `/`. */
-interface NestedManifest { readonly name: string; readonly reason: string }
-
 /** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
 export interface UnsearchedFolder { readonly name: string; readonly reason: string }
 
@@ -692,9 +689,9 @@ export interface InstanceAdapter {
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;
-  /** Each folder outside the mod manager's own folders and the source mods that holds its manifest, none inside another
-   *  or through a link, and each folder it could not read. Rejects when it cannot tell what to skip. */
-  otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[]; readonly nested: readonly NestedManifest[] }>;
+  /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
+   *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
+  otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[]; readonly nested: readonly { readonly name: string; readonly reason: string }[] }>;
   /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder. Writes
    *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
   writeOtherManifestLines(): Promise<void>;
