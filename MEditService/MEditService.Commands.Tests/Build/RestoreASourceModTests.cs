@@ -88,7 +88,8 @@ public sealed class RestoreASourceModTests : IDisposable
         var pinned = _submodule.Commit(("Mod.manifest.json", GameFolderOnDisk.ManifestTakingATextureFrom(game)), ("assets/textures/a.dds", "placeholder"));
 
         var skipped = Assert.Single((await Restore(pinned)).Refused);
-        Assert.Equal((RestoreRefusal.NotFound, ["textures/a.dds"]), (skipped.Refusal, skipped.GameFilesNotFound));
+        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
+        Assert.Equal(["textures/a.dds"], skipped.GameFilesNotFound);
 
         Assert.Single((await Restore(pinned, gameFolder: game)).Applied);
         Assert.Equal("from the game", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));

@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Commands.Build;
 using MEditService.ModFolderAdapter;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
