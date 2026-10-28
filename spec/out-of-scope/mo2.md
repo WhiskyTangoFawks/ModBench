@@ -44,7 +44,6 @@ Gestures Modbench does differently.
 | 19 | FOMOD conditions on a program's version | A game program that is missing, or a game program or script extender loader whose version cannot be read, refuses the install and says why. A loader the game folder lacks reads as 0.0.0.0, as in MO2 ([mods-fomod.md](../surfaces/mods-fomod.md), Groups and options, story 3) | Reads each of these as version 0.0.0.0, so a condition on it fails with nothing said | Principle: Never silently wrong. |
 | 20 | Fallout 4 VR's script extender | Its loader is `f4sevr_loader.exe` | Looks for `f4se_loader.exe` | Principle: Never silently wrong. |
 | 21 | Mod sync | Keeps the line of a mod whose folder a manifest builds until I restore the mod | Drops each line whose folder is gone | ADR-0022: a mod is what its manifest says. |
-| 22 | A second window | One Modbench window for each instance, and any number of instances at once. A second window on an instance already open opens nothing of it ([common.md](../surfaces/common.md), States, story 10) | One process for every instance: a second hands its command line to the first, or refuses to start, unless started with `--multiple` | Principle: Mutagen's data, the reference's behaviour, VS Code's interaction. VS Code gives an open folder one window. Ruling: two instances share nothing, so both stay open. |
 
 ## Omissions by object
 
