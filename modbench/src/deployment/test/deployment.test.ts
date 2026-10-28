@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
@@ -469,6 +469,52 @@ describe('plugins.txt', () => {
     await expect(deploy([await modFile('Mod', 'a.esp')])).rejects.toThrow('EBUSY');
 
     expect([await siblings(), await readFile(plugins, 'utf8')]).toEqual([['plugins.txt'], '*A.esp\r\nB.esp\r\n']);
+  });
+
+  it('writes nothing and renames nothing when the file there already holds the text, whoever wrote it', async () => {
+    await mkdir(game, { recursive: true });
+    await writeFile(plugins, '*A.esp\r\nB.esp\r\n');
+    const before = await inode(plugins);
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, deployed.wrote, await siblings(), await inode(plugins)]).toEqual([{ kind: 'unchanged' }, false, ['plugins.txt'], before]);
+  });
+
+  it('removes what a killed deploy left of its own, and renames nothing', async () => {
+    await deploy([]);
+    await writeFile(`${plugins}.modbench_new_77`, 'half');
+    await writeFile(`${plugins}.modbench_replaced_3`, 'stray');
+    order = { release: 'Fallout4', entries: [{ name: 'C.esp', enabled: true }] };
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'written' }, ['plugins.txt']]);
+  });
+
+  it('is its own when a killed deploy placed it and never recorded it, so it is replaced and nothing is renamed', async () => {
+    await deploy([]);
+    await link(plugins, `${plugins}.modbench_replaced_1`);
+    await rename(plugins, join(root, 'held'));
+    await writeFile(plugins, '*Placed.esp\r\n');
+    order = { release: 'Fallout4', entries: [{ name: 'C.esp', enabled: true }] };
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, await siblings(), await readFile(plugins, 'utf8')]).toEqual([{ kind: 'written' }, ['plugins.txt'], '*C.esp\r\n']);
+  });
+
+  it('is recorded as its own when a killed deploy placed it and it already holds the text', async () => {
+    await deploy([]);
+    await link(plugins, `${plugins}.modbench_replaced_1`);
+    await rename(plugins, join(root, 'held'));
+    await writeFile(plugins, '*A.esp\r\nB.esp\r\n');
+    await deploy([]);
+    order = { release: 'Fallout4', entries: [{ name: 'C.esp', enabled: true }] };
+
+    const deployed = await deploy([]);
+
+    expect([deployed.pluginsTxt, await siblings()]).toEqual([{ kind: 'written' }, ['plugins.txt']]);
   });
 
   it('leaves the file deploy found, and no renamed file, when the record cannot be written', async () => {

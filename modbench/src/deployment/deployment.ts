@@ -6,10 +6,10 @@ import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
 import { pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
-import { changeAll, fileIdAt, recoveryIn, type Link } from './changes';
+import { changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
 import { pluginsTxtChange } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
-import { recordIn, type DeploymentRecord, type Recorded, type Written } from './record';
+import { recordIn, type DeploymentRecord, type Written, type WrittenPluginsTxt } from './record';
 
 /** A file the game gets: its path in the mod, `/`-separated, and the copy that wins it. */
 export interface FileTheGameGets {
@@ -139,6 +139,30 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
 
 const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
 
+interface PluginsPart {
+  readonly steps: Step[];
+  /** Whether deploy has plugins.txt to write, or to record. */
+  readonly changes: boolean;
+  /** What the record holds of plugins.txt once the deploy lands. */
+  recordAfter(): WrittenPluginsTxt | undefined;
+  /** Removes what plugins.txt kept for the deploy to undo itself. */
+  settle(): Promise<string[]>;
+  deployed(): PluginsTxtDeployed;
+}
+
+async function pluginsPartOf(place: PluginsTxtPlace, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
+  const where = place(release);
+  if ('why' in where) {
+    return { steps: [], changes: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
+  }
+  const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
+  if (change.kind === 'unchanged') {
+    return { steps: [], changes: change.adopted !== undefined, recordAfter: () => change.adopted ?? previous, settle: change.settle, deployed: () => ({ kind: 'unchanged' }) };
+  }
+  const renamedTo = (): PluginsTxtDeployed => ({ kind: 'written', ...(change.renamedTo() === undefined ? {} : { renamedTo: change.renamedTo() }) });
+  return { steps: [change.step], changes: true, recordAfter: change.written, settle: change.settle, deployed: renamedTo };
+}
+
 async function deployTo(
   record: DeploymentRecord, place: PluginsTxtPlace, folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder,
 ): Promise<Deployed> {
@@ -147,25 +171,20 @@ async function deployTo(
   const owned = await stillWritten(folder, recorded.files);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
-  const where = place(plugins.release);
-  const pluginsChange = 'folder' in where ? await pluginsTxtChange(where.folder, pluginsTextOf(plugins.entries), recorded.pluginsTxt) : undefined;
-  const notWritten: PluginsTxtDeployed = 'why' in where ? { kind: 'notWritten', why: where.why } : { kind: 'unchanged' };
-  if (links.length + relinks.length + removals.length === 0 && pluginsChange?.kind !== 'write') {
-    if (after.length !== recorded.files.length) await record.write(folder, { ...recorded, files: after });
-    return { wrote: false, leftOut, lost, leftAside: [], pluginsTxt: notWritten };
+  const part = await pluginsPartOf(place, plugins, recorded.pluginsTxt);
+  const recordWith = (files: readonly Written[]): Promise<void> => {
+    const pluginsTxt = part.recordAfter();
+    return record.write(folder, { files, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
+  };
+  if (links.length + relinks.length + removals.length === 0 && !part.steps.length) {
+    if (after.length !== recorded.files.length || part.changes) await recordWith(after);
+    return { wrote: false, leftOut, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
   }
   // The record keeps each file set aside, so the next deploy removes one this deploy could not.
   const setAside = [...removals, ...relinks].map(asWritten);
-  const steps = pluginsChange?.kind === 'write' ? [pluginsChange.step] : [];
-  const land = (): Promise<void> => {
-    const next: Recorded = { files: [...after, ...setAside], ...(pluginsChange?.kind === 'write' ? { pluginsTxt: pluginsChange.written() } : recorded.pluginsTxt === undefined ? {} : { pluginsTxt: recorded.pluginsTxt }) };
-    return record.write(folder, next);
-  };
-  const leftAside = await changeAll(folder, { removals, relinks, links }, steps, land);
-  if (pluginsChange?.kind !== 'write') return { wrote: true, leftOut, lost, leftAside, pluginsTxt: notWritten };
-  leftAside.push(...await pluginsChange.settle());
-  const renamedTo = pluginsChange.renamedTo();
-  return { wrote: true, leftOut, lost, leftAside, pluginsTxt: { kind: 'written', ...(renamedTo === undefined ? {} : { renamedTo }) } };
+  const leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith([...after, ...setAside]));
+  leftAside.push(...await part.settle());
+  return { wrote: true, leftOut, lost, leftAside, pluginsTxt: part.deployed() };
 }
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of

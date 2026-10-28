@@ -4,7 +4,7 @@ import { deployCommands, type DeploymentFolderSetting, type LoadOrderToDeploy } 
 
 const SETTING_ID = 'modbench.deployment.folder';
 const FILES: FileTheGameGets[] = [{ relativePath: 'a.esp', winner: '/instance/mods/Mod/a.esp' }];
-const LOAD: LoadOrderToDeploy = { files: FILES, plugins: [], game: 'Fallout 4' };
+const LOAD: LoadOrderToDeploy = { files: FILES, plugins: [], gameName: 'Fallout 4' };
 
 function settingHolding(held: { workspaceValue?: string; globalValue?: string } | undefined): DeploymentFolderSetting {
   return { id: SETTING_ID, inspect: () => held };

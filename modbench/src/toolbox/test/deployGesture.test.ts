@@ -49,7 +49,7 @@ describe('Deploy', () => {
     await run();
 
     expect([deploy.mock.calls, progressSteps, reporter.reports, reporter.landings]).toEqual([
-      [[{ files: value.files, plugins: value.plugins, game: value.gameName }]], ['progress opens on modbench.toolbox', 'deploy', 'read again', 'progress closes'], [], [],
+      [[{ files: value.files, plugins: value.plugins, gameName: value.gameName }]], ['progress opens on modbench.toolbox', 'deploy', 'read again', 'progress closes'], [], [],
     ]);
   });
 

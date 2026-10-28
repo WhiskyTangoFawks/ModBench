@@ -96,9 +96,13 @@ const instanceValueFields = (): ReadonlyMap<string, string> => {
   return fields;
 };
 
+// target-architecture.md: put load order and deploy hand the value on, to mEdit as state or to Deployment as the load order to deploy.
+const HANDING_ON = new Set(['LoadOrderToDeploy']);
+
 const slicedFieldsIn = (source: string, fields: ReadonlyMap<string, string>): string[] => {
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
+    if (ts.isInterfaceDeclaration(node) && HANDING_ON.has(node.name.text)) return;
     if ((ts.isPropertySignature(node) || ts.isParameter(node)) && typeTextOf(node) !== undefined && fields.get(node.name.getText()) === typeTextOf(node)) {
       found.push(node.name.getText());
     }
@@ -130,5 +134,15 @@ describe('no command takes a slice of the instance value', () => {
   it('flags a slice declared as a type of its own', () => {
     const planted = 'interface InstanceSlice { readonly profiles: readonly string[]; readonly activeProfile: string; readonly plugins: readonly string[] }\n';
     expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['profiles', 'activeProfile']);
+  });
+
+  it('leaves the load order a command hands on to Deployment alone', () => {
+    const planted = 'interface LoadOrderToDeploy { readonly gameName: string }\n';
+    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual([]);
+  });
+
+  it('flags the same field in any other command type', () => {
+    const planted = 'interface PurgeInput { readonly gameName: string }\n';
+    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['gameName']);
   });
 });

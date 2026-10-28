@@ -17,14 +17,14 @@ export const deploymentFolderOf = (setting: Pick<DeploymentFolderSetting, 'inspe
 export interface LoadOrderToDeploy {
   readonly files: Iterable<FileTheGameGets>;
   readonly plugins: readonly { readonly name: string; readonly line: number | null; readonly enabled: boolean }[];
-  readonly game: string;
+  readonly gameName: string;
 }
 
 // An overridden plugin shares the line of the one that wins, so one entry stands for each line.
-function pluginOrderOf({ plugins, game }: LoadOrderToDeploy): PluginOrder {
+function pluginOrderOf({ plugins, gameName }: LoadOrderToDeploy): PluginOrder {
   const byLine = new Map<number, { name: string; enabled: boolean }>();
   for (const { name, line, enabled } of plugins) if (line !== null && !byLine.has(line)) byLine.set(line, { name, enabled });
-  return { release: gameReleaseForGame(game), entries: [...byLine].sort(([a], [b]) => a - b).map(([, entry]) => entry) };
+  return { release: gameReleaseForGame(gameName), entries: [...byLine].sort(([a], [b]) => a - b).map(([, entry]) => entry) };
 }
 
 export type DeployResult = CommandResult<Deployed>;
