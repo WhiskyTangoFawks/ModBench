@@ -7,7 +7,7 @@ import type { InstallationFileReader } from '../downloadedFileContents/installat
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
 import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
 import { manifestFileIn, modMetaFileIn, modsDir, stagingPrefix } from './layout';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from '../instanceReading';

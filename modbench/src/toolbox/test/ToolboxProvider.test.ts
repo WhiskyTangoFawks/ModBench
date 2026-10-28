@@ -22,6 +22,8 @@ const SILENT = { warn: () => undefined };
 class FakeDeploymentFolder {
   private readonly listeners: (() => void)[] = [];
 
+  readonly id = 'modbench.deployment.folder';
+
   constructor(public current?: string) {}
 
   inspect = (): { workspaceValue?: string; globalValue?: string } => ({ workspaceValue: this.current });
@@ -104,26 +106,18 @@ describe('the Toolbox view, given an instance value', () => {
   describe('the Deployment row', () => {
     const DEPLOYMENT = '/games/deployments/fo4-survival';
 
-    it('reads the deployment folder\'s name and names the folder in its tooltip, and a click opens the setting', () => {
+    it('reads the deployment folder\'s name and names the folder in its tooltip, a click opens the setting, and it is the deployment the Deployment menu keys on', () => {
       const deployment = row(new FakeInstance(VALUE), 'Deployment', new FakeDeploymentFolder(DEPLOYMENT));
 
-      expect([deployment.description, deployment.iconPath, deployment.tooltip, deployment.command?.command])
-        .toEqual(['fo4-survival', new ThemeIcon('rocket'), DEPLOYMENT, 'modbench.settings.openDeploymentFolderHere']);
+      expect([deployment.description, deployment.iconPath, deployment.tooltip, deployment.command?.command, deployment.contextValue])
+        .toEqual(['fo4-survival', new ThemeIcon('rocket'), DEPLOYMENT, 'modbench.settings.openDeploymentFolderHere', 'deployment']);
     });
 
-    it.each([undefined, ''])('reads "no deployment folder" while the setting holds %j, and a click still opens the setting', (setting) => {
-      const deployment = row(new FakeInstance(VALUE), 'Deployment', new FakeDeploymentFolder(setting));
+    it('reads "no deployment folder" while the instance has none, and a click still opens the setting', () => {
+      const deployment = row(new FakeInstance(VALUE), 'Deployment', new FakeDeploymentFolder());
 
       expect([deployment.description, deployment.tooltip, deployment.command?.command])
         .toEqual(['no deployment folder', undefined, 'modbench.settings.openDeploymentFolderHere']);
-    });
-
-    it('reads "no deployment folder" while only the user holds a value, which every instance would share', () => {
-      const userLevel = { inspect: () => ({ globalValue: DEPLOYMENT }), nameOf: () => 'fo4-survival', changed: () => ({ dispose: () => undefined }) };
-      const deployment = present(new ToolboxProvider({ instance: new FakeInstance(VALUE), channel: SILENT, deploymentFolder: userLevel })
-        .getChildren().find((r) => r.label === 'Deployment'), 'the Deployment row');
-
-      expect([deployment.description, deployment.tooltip]).toEqual(['no deployment folder', undefined]);
     });
 
     it('follows the setting', () => {

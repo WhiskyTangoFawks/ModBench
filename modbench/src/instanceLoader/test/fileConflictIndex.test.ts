@@ -36,6 +36,12 @@ describe('the winner and providers of each path the mods ship', () => {
     expect(entry?.providers).toEqual([modOrigin('ModA'), modOrigin('ModB')]);
   });
 
+  it('lists each path in the order its winner wins, Overwrite\'s first, then each mod\'s in mod order', () => {
+    const index = indexOver([mod('ModB'), mod('ModA')], { ModA: ['a.nif', 'shared.nif'], ModB: ['b.nif', 'shared.nif'] }, [fileIn('/overwrite', 'o.nif')]);
+
+    expect([...index.files].map((entry) => entry.relativePath)).toEqual(['o.nif', 'b.nif', 'shared.nif', 'a.nif']);
+  });
+
   it('flips the winner when the mods are reordered', () => {
     const index = indexOver([mod('ModB'), mod('ModA')], conflicting);
     expect(index.files.get('textures/shared/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));

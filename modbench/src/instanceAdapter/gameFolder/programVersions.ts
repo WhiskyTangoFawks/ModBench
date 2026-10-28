@@ -3,7 +3,7 @@
 
 import { join } from 'node:path';
 import { programsOf } from '../../tables/gamePaths';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import type { GameFolder } from '../instanceAdapter';
 import { versionResourceOf, type VersionResource } from './versionResource';

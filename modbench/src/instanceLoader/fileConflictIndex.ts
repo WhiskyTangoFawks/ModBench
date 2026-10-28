@@ -79,6 +79,7 @@ export class FileConflictLookup {
     return this.byFoldedPath.get(foldPath(relativePath));
   }
 
+  /** Each path once, in the order its winner wins: Overwrite's paths first, then each enabled mod's in mod order. */
   values(): IterableIterator<ConflictEntry> {
     return this.byFoldedPath.values();
   }

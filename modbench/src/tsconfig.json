@@ -21,6 +21,7 @@
     { "path": "./downloadedFileCommands" },
     { "path": "./client" },
     { "path": "./nexus" },
+    { "path": "./deployment" },
     { "path": "./drivingLib" },
     { "path": "./textDocuments" },
     { "path": "./toolbox" },

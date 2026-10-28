@@ -1,7 +1,7 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import { join } from 'node:path';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
