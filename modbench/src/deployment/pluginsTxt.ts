@@ -104,9 +104,8 @@ async function leftoversOf(folder: string, present: string | undefined, previous
   return { stale, recovered, placedUnrecorded };
 }
 
-/** What writing `order` as the plugins.txt in `folder` changes, given what deploy last wrote. A file deploy wrote is replaced,
- *  whichever instance and deployment folder it wrote it for. A file that already holds the order is left, whoever wrote it,
- *  as no order is lost. */
+/** What writing `order` as the plugins.txt in `folder` changes, given what deploy last wrote. A marked file is deploy's,
+ *  from any instance. A file that already holds the order is left, whoever wrote it. */
 export async function pluginsTxtChange(folder: string, order: string, previous: WrittenPluginsTxt | undefined): Promise<PluginsTxtChange> {
   const path = join(folder, PLUGINS_FILE_NAME);
   const text = MARK + order;

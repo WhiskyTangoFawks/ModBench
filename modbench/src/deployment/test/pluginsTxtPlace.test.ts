@@ -77,7 +77,7 @@ describe('the folder the game reads plugins.txt from on Linux', () => {
   });
 
   it('is none when no Steam is known, and says why and names the page', async () => {
-    expect(await pluginsTxtPlace('linux', {}, undefined)('Fallout4', deployment)).toEqual({ why: expect.stringContaining(SETUP_PAGE) });
+    expect(await pluginsTxtPlace('linux', {}, undefined)('Fallout4', deployment)).toEqual({ why: `Modbench found no Steam; set one up: ${SETUP_PAGE}` });
   });
 
   it('is none when Steam holds no shortcuts, and says why and names the page', async () => {
