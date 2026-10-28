@@ -534,6 +534,43 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal((RestoreRefusal.Lacking, "was skipped: installation file 'Mod.zip' could not be read: EACCES."), (refused.Refusal, refused.Message));
     }
 
+    private ModToRestore TakingFromAnInstallationFileAndTheGameFolder(string gameFileText)
+    {
+        var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
+        _folders.WithFile(Mod, "a.nif", "stale").WithFile(Mod, "b.dds", "stale");
+        _folders.Manifests[Mod] = new Manifest(
+            [PackageOf(downloadedFile), new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile("b.dds", gameFileText)]))],
+            [Line("a.nif", new PackageEntry.Held()), new ManifestFile("b.dds", new PackageEntry.Held(), "Fallout 4")]);
+        return ModFrom(Mod, downloadedFile);
+    }
+
+    [Fact]
+    public async Task AModTakingFromAnInstallationFileAndTheGameFolder_WhoseGameFileTheGameFolderHoldsWithOtherBytes_IsSkippedWritingNothing()
+    {
+        _folders.WithFile("data", "b.dds", "newer");
+        var mod = TakingFromAnInstallationFileAndTheGameFolder("b");
+
+        var refused = Assert.Single((await RestoreIn(InstanceWithGameFiles(("b.dds", "newer")), mod)).Refused);
+
+        Assert.Equal((RestoreRefusal.Lacking, "was skipped: the files it takes from the game folder 'Fallout 4' have other bytes."), (refused.Refusal, refused.Message));
+        Assert.Empty(WrittenIn(Mod));
+    }
+
+    [Fact]
+    public async Task AModTakingFromAnInstallationFileAndTheGameFolder_WhoseGameFileTheFirstPlaceHoldsWithOtherBytes_TakesItFromAnotherPlace_AndTheRestFromTheInstallationFile()
+    {
+        _folders.WithFile("data", "b.dds", "newer").WithFile("steam", "b.dds", "b");
+        var mod = TakingFromAnInstallationFileAndTheGameFolder("b");
+        var instance = Instance() with
+        {
+            GameFolder = new GameFolder("Fallout 4", "data", [new GameFile("b.dds", "newer")], [new GameFolderPlace("steam", [new GameFile("b.dds", "b")])]),
+        };
+
+        Assert.Single((await RestoreIn(instance, mod)).Applied);
+
+        Assert.Equal(("a", "b"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "b.dds")));
+    }
+
     [Fact]
     public async Task AGameFolderMod_WhoseGameFilesHaveOtherBytes_IsSkippedWritingNothing()
     {
