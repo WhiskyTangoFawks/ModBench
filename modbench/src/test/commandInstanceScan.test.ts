@@ -137,12 +137,12 @@ describe('no command takes a slice of the instance value', () => {
   });
 
   it('leaves the load order a command hands on to Deployment alone', () => {
-    const planted = 'interface LoadOrderToDeploy { readonly gameName: string }\n';
+    const planted = 'interface LoadOrderToDeploy { readonly profiles: readonly string[] }\n';
     expect(slicedFieldsIn(planted, instanceValueFields())).toEqual([]);
   });
 
   it('flags the same field in any other command type', () => {
-    const planted = 'interface PurgeInput { readonly gameName: string }\n';
-    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['gameName']);
+    const planted = 'interface PurgeInput { readonly profiles: readonly string[] }\n';
+    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['profiles']);
   });
 });

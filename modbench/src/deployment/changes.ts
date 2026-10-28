@@ -123,9 +123,8 @@ async function removedAside(folder: string, asides: readonly string[]): Promise<
   return left;
 }
 
-/** Makes every change and each of `steps`, then `land`s them, and answers each file it set aside and could not remove;
- *  or, when a change or the landing fails, undoes the rest and throws why, naming each change it could
- *  not undo. */
+/** Makes every change and `steps`, then `land`s them, and answers each file it set aside and could not remove;
+ *  or, when one fails, undoes the rest and throws why, naming each change it could not undo. */
 export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>): Promise<string[]> {
   const undos: Undo[] = [];
   const asides: string[] = [];
