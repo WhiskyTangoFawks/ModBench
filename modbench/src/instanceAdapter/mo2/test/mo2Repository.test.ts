@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
@@ -877,6 +877,7 @@ describe('the MO2 adapter\'s submodules', () => {
 
 describe('the MO2 adapter\'s game files', () => {
   const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
+  const HASH_OF_CCCC = 'rYontyeqpd8=';
 
   it('hands the game file at each path of a mod\'s files, named as the game folder names it, and none for a path the game folder lacks', async () => {
     const adapter = await instance();
@@ -888,17 +889,26 @@ describe('the MO2 adapter\'s game files', () => {
     expect(found).toEqual({ files: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
   });
 
-  it('reads through a link to a folder in the Data folder, and finds no folder where a link to a file stands', async () => {
+  it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands no game file for a path through or to a symlink in the Data folder', async () => {
     const adapter = await instance();
     await put('elsewhere/A.nif', 'aaaa');
-    await put('elsewhere/file.txt');
+    await put('elsewhere/b.dds', 'bbbb');
     await mkdir(join(root, 'game', 'Data'), { recursive: true });
     await symlink(join(root, 'elsewhere'), join(root, 'game', 'Data', 'Meshes'));
-    await symlink(join(root, 'elsewhere', 'file.txt'), join(root, 'game', 'Data', 'Linked.txt'));
+    await symlink(join(root, 'elsewhere', 'b.dds'), join(root, 'game', 'Data', 'b.dds'));
 
-    const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'linked.txt/a.nif']);
+    expect(await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'b.dds'])).toEqual({ files: [], unreadable: {} });
+  });
 
-    expect(found).toEqual({ files: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
+  it('hands no game file for a path that is a hard link in the Data folder, a link being a deployed file', async () => {
+    const adapter = await instance();
+    await put('elsewhere/own.dds', 'cccc');
+    await put('game/Data/Textures/c.dds', 'cccc');
+    await link(join(root, 'elsewhere', 'own.dds'), join(root, 'game', 'Data', 'Textures', 'own.dds'));
+
+    const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['textures/own.dds', 'textures/c.dds']);
+
+    expect(found).toEqual({ files: [{ path: 'Textures/c.dds', hash: HASH_OF_CCCC }], unreadable: {} });
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, only the paths whose folder cannot be listed, not that they are absent', async () => {

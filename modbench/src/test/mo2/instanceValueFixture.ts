@@ -30,6 +30,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     entryKey,
     gameFolder: GAME_FOLDER_NOT_FOUND,
     programVersions: { kind: 'unresolved' },
+    gameFolderLinks: 0,
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,
     loadOrderSnapshot: undefined,
