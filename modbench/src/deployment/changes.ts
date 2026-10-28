@@ -3,7 +3,7 @@
 
 import type { BigIntStats } from 'node:fs';
 import { link, lstat, mkdir, readdir, rmdir, unlink } from 'node:fs/promises';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { basename, dirname, join, relative, sep, toNamespacedPath } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { Written } from './record';
@@ -131,10 +131,12 @@ export function recoveryIn() {
   };
 }
 
+/** Removes `from` and each folder above it, up to and including `upTo`. `upTo` is what `mkdir` answered, which on Windows is the
+ *  namespaced path (`\\?\C:\…`, `\\?\UNC\…`). */
 export async function removeFolders(from: string, upTo: string): Promise<void> {
   for (let folder = from; ; folder = dirname(folder)) {
     await rmdir(folder);
-    if (folder === upTo) return;
+    if (toNamespacedPath(folder) === toNamespacedPath(upTo) || dirname(folder) === folder) return;
   }
 }
 
@@ -181,7 +183,7 @@ export async function changeAll(folder: string, { removals, relinks, links }: Ch
     for (const { path, source } of [...relinks, ...links]) {
       const at = join(folder, path);
       const created = await mkdir(dirname(at), { recursive: true });
-      if (created !== undefined) undos.push({ left: `${relative(folder, created)}, a folder deploy made`, run: () => removeFolders(dirname(at), created) });
+      if (created !== undefined) undos.push({ left: `${relative(toNamespacedPath(folder), created)}, a folder deploy made`, run: () => removeFolders(dirname(at), created) });
       await link(source, at);
       undos.push({ left: `${path}, which deploy linked`, run: () => unlink(at) });
     }

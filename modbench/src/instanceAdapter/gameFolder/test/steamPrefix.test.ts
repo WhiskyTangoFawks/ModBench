@@ -57,6 +57,16 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
     expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ prefix: prefixIn(steam) });
   });
 
+  it('finds the shortcut in a Steam user\'s folder that is a symlink', async () => {
+    const elsewhere = join(root, 'elsewhere');
+    await mkdir(join(elsewhere, 'config'), { recursive: true });
+    await writeFile(join(elsewhere, 'config', 'shortcuts.vdf'), shortcutsFile([{ appid: APP_ID, exe: join(deployment, 'Fallout4.exe') }]));
+    await mkdir(join(steam, 'userdata'), { recursive: true });
+    await symlink(elsewhere, join(steam, 'userdata', '1'), 'dir');
+    await mkdir(prefixIn(steam), { recursive: true });
+    expect(await nonSteamPrefixRunning(steam, deployment)).toEqual({ prefix: prefixIn(steam) });
+  });
+
   it('finds the prefix in another Steam library its libraryfolders.vdf names', async () => {
     const library = join(root, 'library');
     await mkdir(join(steam, 'config'), { recursive: true });
@@ -121,7 +131,9 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
     ])('is none, and says why, when shortcuts.vdf is %s', async (_case, damage, reason) => {
       await shortcutsOf('1', [{ appid: APP_ID, exe: exe() }]);
       await writeFile(shortcutsPath(), damage(shortcutsFile([{ appid: APP_ID, exe: exe() }])));
-      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(new RegExp(`^Steam cannot be read: ${shortcutsPath()}: .*${reason.source}`));
+      const why = whyOf(await nonSteamPrefixRunning(steam, deployment));
+      expect(why).toContain(`Steam cannot be read: ${shortcutsPath()}: `);
+      expect(why).toMatch(reason);
     });
 
     it('is none, and says why, when shortcuts.vdf is not a file', async () => {
@@ -129,10 +141,10 @@ describe('the prefix of the non-Steam game that runs a program in a folder', () 
       expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*EISDIR/);
     });
 
-    it('is none, and says why, when a plain file sits in userdata', async () => {
+    it('is none, and says why, when a plain file sits in userdata, which is not a Steam user', async () => {
       await mkdir(join(steam, 'userdata'), { recursive: true });
       await writeFile(join(steam, 'userdata', 'stray'), 'x');
-      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^Steam cannot be read: .*ENOTDIR/);
+      expect(whyOf(await nonSteamPrefixRunning(steam, deployment))).toMatch(/^no non-Steam game/);
     });
 
     it('is none, and says why, when libraryfolders.vdf is not a file', async () => {
