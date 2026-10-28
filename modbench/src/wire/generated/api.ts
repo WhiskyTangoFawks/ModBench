@@ -372,6 +372,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/indexed-as-on-disk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003): AsOnDisk, also when no file claim backs the rows, as for a compiled plugin read from its source; NotYet when the file changed since or the record index holds no rows for it; ReadFailed, with mEdit's reason, when its last read of the plugin failed. */
+        get: operations["GetPluginIndexedAsOnDisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/record-types": {
         parameters: {
             query?: never;
@@ -1626,6 +1643,12 @@ export interface components {
             origin: string;
             text: string;
         };
+        PluginIndexedState: {
+            state: components["schemas"]["PluginIndexing"];
+            reason?: string | null;
+        };
+        /** @enum {string} */
+        PluginIndexing: "AsOnDisk" | "NotYet" | "ReadFailed";
         PluginLoadFailure: {
             name: string;
             origin: string;
@@ -2872,6 +2895,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginDependants"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginIndexedAsOnDisk: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginIndexedState"];
                 };
             };
             /** @description Bad Request */

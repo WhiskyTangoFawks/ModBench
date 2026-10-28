@@ -357,5 +357,12 @@ public sealed record PluginProblems(
 /// read and so may.</summary>
 public sealed record PluginDependants(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
 
+/// <summary>Whether the record index's rows for a plugin are of the file now on disk (ADR-0003), not yet, or its read failed.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PluginIndexing { AsOnDisk, NotYet, ReadFailed }
+
+/// <summary><paramref name="Reason"/> is mEdit's, and set only when the read failed (ADR-0019).</summary>
+public sealed record PluginIndexedState(PluginIndexing State, string? Reason = null);
+
 /// <summary>The record filter in force: the SQL that narrows the listings, and the file or document it was written in.</summary>
 public sealed record RecordFilter(string Sql, string Source);

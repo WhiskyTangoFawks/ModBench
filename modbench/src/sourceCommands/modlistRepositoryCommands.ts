@@ -12,6 +12,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { inModOrder } from './inModOrder';
+import { whyNotIndexed } from './whyNotIndexed';
 import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
@@ -19,12 +20,12 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter,
-  'gameFolder' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'reading' | 'gameFolder' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Adapter;
   nexus: Pick<Nexus, 'download'>;
   instanceRoot: string;
@@ -295,13 +296,20 @@ async function restoreFromManifest(
   const landed: Restored[number][] = [];
   const refused: ItemRefusal<string>[] = [...cloned.refused];
   let cancelRefusal: string | undefined;
+  const pending: string[] = [];
+  const notIndexed = new Map<string, string>();
   for (const [at, chunk] of chunks.entries()) {
     if (options.signal?.aborted) break;
+    // mods.md, Build, story 11: a source mod's script reads the plugins of the mods restored before it in the load order.
+    if (sourceMods.folderOf(chunk[0] ?? '') !== undefined) {
+      for (const [mod, why] of await whyNotIndexed(deps, pending.splice(0), options.signal)) notIndexed.set(mod, why);
+    }
     const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
     landed.push(...finished);
     if (restored.applied) {
       refused.push(...restored.refused, ...unfinished);
       cancelRefusal = restored.cancelRefusal ?? cancelRefusal;
+      pending.push(...finished.map(({ mod }) => mod));
       continue;
     }
     const later = chunks.slice(at + 1).flat();
@@ -311,9 +319,10 @@ async function restoreFromManifest(
     break;
   }
   const pushRefusalNotWritten = await pushRefusalWrittenOrWhy(deps.adapter);
-  const answered = { landed, refused };
+  refused.push(...[...notIndexed].map(([item, why]) => ({ item, reason: `was restored, but ${why}` })));
+  const answered = { landed: landed.filter(({ mod }) => !notIndexed.has(mod)), refused };
   return {
-    applied: true, landed, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, answered)] : refused,
+    applied: true, landed: answered.landed, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, answered)] : refused,
     ...(cancelRefusal === undefined ? {} : { cancelRefusal }),
     ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
     ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),

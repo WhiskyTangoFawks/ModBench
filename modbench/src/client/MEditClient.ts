@@ -135,6 +135,9 @@ export const UNLIMITED_RECORDS = 2147483647;
 /** The plugins that list a plugin's file name as a master, and the plugins whose masters mEdit could
  *  not read. */
 export type PluginDependants = components['schemas']['PluginDependants'];
+
+/** Whether mEdit's rows for a plugin are of the file now on disk, not yet, or its read failed with `reason` (ADR-0003, ADR-0019). */
+export type PluginIndexedState = components['schemas']['PluginIndexedState'];
 /** What is wrong in a compiled, active plugin's source, per plugin: each problem names the referring
  *  record and its source file relative to the mod's source folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
@@ -358,6 +361,7 @@ export interface MEditClient {
   getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not opened would read as no dependant.
   getPluginDependants(plugin: PluginAddress): Promise<PluginDependants | ReadFailed>;
+  getPluginIndexing(plugin: PluginAddress): Promise<PluginIndexedState | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed>;
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed>;
