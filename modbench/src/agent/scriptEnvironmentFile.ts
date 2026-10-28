@@ -11,7 +11,7 @@ export function reachMEditFromEnvFile(options: {
   client: Pick<MEditClient, 'onPort' | 'onLoadOrderStatus' | 'loadOrderStatus'>;
   scriptsPath: string;
   /** Absent for a window with no instance. */
-  envFile: InstanceAdapter['scriptEnvironmentFile'] | undefined;
+  envFile: Pick<InstanceAdapter['scriptEnvironmentFile'], 'read' | 'write'> | undefined;
   fail: (message: string, detail: string) => void;
 }): { dispose(): void } {
   const { client, scriptsPath, envFile, fail } = options;
