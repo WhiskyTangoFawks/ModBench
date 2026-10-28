@@ -69,6 +69,16 @@ function refuseCaseCollisions(entries: readonly string[]): void {
   }
 }
 
+async function heldAtTheirStamps(held: ReadonlyMap<string, Kept>): Promise<(HashedDownloadedFile & { readonly path: string })[]> {
+  const listed = await Promise.all([...held].map(async ([path, known]) => {
+    const stamped = await readOrReason(() => stampOf(path));
+    if (stamped.kind === 'unreadable' || !sameStamp(known.stamp, stamped.answer)) return [];
+    const read = await known.hashed;
+    return read.kind === 'read' && held.get(path) === known ? [{ path, ...read.answer }] : [];
+  }));
+  return listed.flat();
+}
+
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
  *  its extraction there. */
 export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
@@ -147,21 +157,13 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     return read.kind === 'read' ? { kind: 'read', answer: { size: read.answer.size, hash: read.answer.hash } } : read;
   };
 
-  async function indexedDownloadedFiles(): Promise<(HashedDownloadedFile & { readonly path: string })[]> {
-    await load();
-    const listed = await Promise.all([...kept.downloadedFile].map(async ([path, known]) => {
-      const stamped = await readOrReason(() => stampOf(path));
-      if (stamped.kind === 'unreadable' || !sameStamp(known.stamp, stamped.answer)) return [];
-      const read = await known.hashed;
-      return read.kind === 'read' && kept.downloadedFile.get(path) === known ? [{ path, ...read.answer }] : [];
-    }));
-    return listed.flat();
-  }
-
   return {
     originFileHash: (path) => hashAlone('origin', path),
     gameFileHash: (path) => hashAlone('game', path),
     downloadedFileHash: (path) => hashOf('downloadedFile', path),
-    indexedDownloadedFiles,
+    indexedDownloadedFiles: async () => {
+      await load();
+      return heldAtTheirStamps(kept.downloadedFile);
+    },
   };
 }
