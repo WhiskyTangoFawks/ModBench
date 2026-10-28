@@ -2,22 +2,23 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod's manifest from the mod as it is. Each file is taken by its hash from the mod's installation file, then the
-/// game folder, then another downloaded file.</summary>
+/// <summary>A mod's manifest from the mod as it is. Each file is taken by its hash from the mod's installation file, then from
+/// one place of the game, then from another downloaded file.</summary>
 internal sealed class ManifestBuilder
 {
-    private readonly Download? _own;
-    private readonly IReadOnlyList<Download> _others;
-    private readonly GameFolder? _gameFolder;
-    private readonly Dictionary<string, string> _gamePathByHash = new(StringComparer.Ordinal);
+    private readonly DownloadedFile? _own;
+    private readonly IReadOnlyList<DownloadedFile> _others;
+    private readonly IReadOnlyList<Holder> _places;
 
     public ManifestBuilder(
-        (string Name, InstallationFile File)? installationFile, GameFolder? gameFolder, IEnumerable<(string Name, InstallationFile File)>? downloadedFiles = null)
+        (string Name, InstallationFile File)? installationFile, GameFolder? gameFolder, IEnumerable<(string Name, InstallationFile File)> downloadedFiles)
     {
-        _gameFolder = gameFolder;
-        _own = installationFile is var (name, file) ? new Download(name, file) : null;
-        _others = [.. (downloadedFiles ?? []).Where(other => other.Name != _own?.Package.Name).OrderBy(other => other.Name, StringComparer.Ordinal).Select(other => new Download(other.Name, other.File))];
-        foreach (var game in gameFolder?.Places().SelectMany(place => place.Files) ?? []) _gamePathByHash.TryAdd(game.Hash, game.Path);
+        _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
+        _others = [.. downloadedFiles
+            .OrderBy(other => other.Name, StringComparer.Ordinal).ThenBy(other => other.File.Hash, StringComparer.Ordinal)
+            .DistinctBy(other => other.Name).Where(other => other.Name != _own?.Holder.Name)
+            .Select(other => new DownloadedFile(other.Name, other.File))];
+        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))]))];
     }
 
     /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make, kept as written
@@ -37,79 +38,77 @@ internal sealed class ManifestBuilder
     // The version rides the first package, so a mod with no package has none.
     private Manifest Recorded(IReadOnlyList<HashedFile> files, string? version)
     {
-        var taken = new Taken(_own);
-        var lines = files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal)
-            .Select(file => EntryOf(file, taken)).ToList();
-        var packages = taken.Packages();
-        return new Manifest(packages, [.. lines.Select(line => line.Package == taken.FirstName ? line with { Package = null } : line)], packages.Count > 0 ? version : null);
+        var ordered = files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).ToList();
+        List<(Holder Holder, ManifestPackage Package)> packages = _own is null ? [] : [(_own.Holder, _own.Package)];
+        Dictionary<string, ManifestFile> lines = [];
+
+        TakeFrom(_own?.Holder, ordered, lines);
+        var wanting = ordered.Where(file => !lines.ContainsKey(file.Path)).ToList();
+
+        if (_places.MaxBy(place => wanting.Count(file => place.PathHolding(file) is not null)) is { } place)
+        {
+            var taken = TakeFrom(place, wanting, lines);
+            if (taken.Count > 0) packages.Add((place, new ManifestPackage.GameFolder(place.Name, FileHash.OfFilesTaken(taken))));
+        }
+        wanting = [.. wanting.Where(file => !lines.ContainsKey(file.Path))];
+
+        List<DownloadedFile> used = [];
+        foreach (var file in wanting)
+        {
+            var holding = _others.Where(other => other.Holder.PathHolding(file) is not null).OrderBy(other => !used.Contains(other)).FirstOrDefault();
+            if (holding is null) continue;
+            if (!used.Contains(holding)) used.Add(holding);
+            lines[file.Path] = ManifestFile.In(holding.Holder.Name, file.Path, holding.Holder.PathHolding(file) ?? file.Path);
+        }
+        packages.AddRange(used.Select(other => (other.Holder, (ManifestPackage)other.Package)));
+
+        foreach (var file in wanting.Where(file => !lines.ContainsKey(file.Path)))
+        {
+            var holdingItsPath = packages.Select(package => package.Holder).FirstOrDefault(holder => holder.HoldsItsPath(file));
+            lines[file.Path] = holdingItsPath is null
+                ? new ManifestFile(file.Path, new PackageEntry.NotHeld())
+                : new ManifestFile(file.Path, new PackageEntry.OtherBytes(), holdingItsPath.Name);
+        }
+
+        var first = packages.Count > 0 ? packages[0].Holder.Name : null;
+        return new Manifest(
+            [.. packages.Select(package => package.Package)],
+            [.. ordered.Select(file => lines[file.Path]).Select(line => line.Package == first ? line with { Package = null } : line)],
+            packages.Count > 0 ? version : null);
     }
 
-    private ManifestFile EntryOf(HashedFile file, Taken taken)
+    private static List<HashedFile> TakeFrom(Holder? holder, IEnumerable<HashedFile> files, Dictionary<string, ManifestFile> lines)
     {
-        if (_own?.Holds(file) is { } inOwn) return ManifestFile.In(_own.Package.Name, file.Path, inOwn);
-        if (_gameFolder is not null && _gamePathByHash.TryGetValue(file.Hash, out var gamePath))
+        List<HashedFile> taken = [];
+        foreach (var file in files)
         {
-            taken.FromGameFolder(_gameFolder.Name, file);
-            return ManifestFile.In(_gameFolder.Name, file.Path, gamePath);
+            if (holder?.PathHolding(file) is not { } path) continue;
+            lines[file.Path] = ManifestFile.In(holder.Name, file.Path, path);
+            taken.Add(file);
         }
-        var holding = _others.Select(other => (Download: other, Path: other.Holds(file))).Where(other => other.Path is not null).OrderBy(other => !taken.Uses(other.Download)).FirstOrDefault();
-        if (holding.Path is null) return new ManifestFile(file.Path, _own?.HoldsAtItsPath(file) == true ? new PackageEntry.OtherBytes() : new PackageEntry.NotHeld());
-        taken.From(holding.Download);
-        return ManifestFile.In(holding.Download.Package.Name, file.Path, holding.Path);
+        return taken;
     }
 
-    private sealed class Taken
+    private sealed class DownloadedFile(string name, InstallationFile file)
     {
-        private readonly List<Download?> _order = [];
-        private readonly List<HashedFile> _fromGame = [];
-        private string _gameFolder = string.Empty;
-
-        public Taken(Download? own)
-        {
-            if (own is not null) _order.Add(own);
-        }
-
-        public string? FirstName => _order.Count == 0 ? null : _order[0]?.Package.Name ?? _gameFolder;
-
-        public bool Uses(Download download) => _order.Contains(download);
-
-        public void From(Download download)
-        {
-            if (!Uses(download)) _order.Add(download);
-        }
-
-        public void FromGameFolder(string name, HashedFile file)
-        {
-            if (_fromGame.Count == 0) _order.Add(null);
-            _gameFolder = name;
-            _fromGame.Add(file);
-        }
-
-        public List<ManifestPackage> Packages() =>
-            [.. _order.Select(download => download?.Package ?? (ManifestPackage)new ManifestPackage.GameFolder(_gameFolder, FileHash.OfFilesTaken(_fromGame)))];
-    }
-
-    private sealed class Download(string name, InstallationFile file)
-    {
-        private readonly ILookup<string, HashedEntry> _byHash = file.Entries.ToLookup(entry => entry.Hash, StringComparer.Ordinal);
-        private readonly Dictionary<string, HashedEntry> _byPath = ByPath(file.Entries);
+        public Holder Holder { get; } = new(name, [.. file.Entries.Select(entry => (entry.Path, entry.Hash))]);
 
         public ManifestPackage.InstallationFile Package { get; } = new(name, file.Size, file.Hash, file.Page);
+    }
 
-        public string? Holds(HashedFile held)
+    private sealed class Holder(string name, IReadOnlyCollection<(string Path, string Hash)> files)
+    {
+        private readonly ILookup<string, string> _pathsByHash = files.ToLookup(file => file.Hash, file => file.Path, StringComparer.Ordinal);
+        private readonly HashSet<string> _paths = files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        public string Name { get; } = name;
+
+        public string? PathHolding(HashedFile held)
         {
-            var holding = _byHash[held.Hash].ToList();
-            if (holding.Count == 0) return null;
-            return (_byPath.TryGetValue(held.Path, out var samePath) && samePath.Hash == held.Hash ? samePath : holding[0]).Path;
+            var paths = _pathsByHash[held.Hash];
+            return paths.FirstOrDefault(path => string.Equals(path, held.Path, StringComparison.OrdinalIgnoreCase)) ?? paths.FirstOrDefault();
         }
 
-        public bool HoldsAtItsPath(HashedFile held) => _byPath.ContainsKey(held.Path);
-
-        private static Dictionary<string, HashedEntry> ByPath(IEnumerable<HashedEntry> entries)
-        {
-            Dictionary<string, HashedEntry> byPath = new(StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in entries) byPath.TryAdd(entry.Path, entry);
-            return byPath;
-        }
+        public bool HoldsItsPath(HashedFile held) => _paths.Contains(held.Path);
     }
 }

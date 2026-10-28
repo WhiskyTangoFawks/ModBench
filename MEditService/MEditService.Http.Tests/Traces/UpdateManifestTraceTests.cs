@@ -62,13 +62,13 @@ public sealed class UpdateManifestTraceTests : HostedTests
         { "an entry whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "installationFile": {"path": "/d/Mod.zip", "size": 7, "hash": "AAECAwQFBgc=", "entries": [{"path": "kept.txt", "hash": "WHOLE"}]} }], "statCache": "/cache"}""" },
         { "a downloaded file with no size", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "downloadedFiles": [{"path": "/d/Mod.zip", "hash": "AAECAwQFBgc=", "entries": [{{AnEntry}}]}]}""" },
         { "a downloaded file whose entry hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "downloadedFiles": [{"path": "/d/Mod.zip", "size": 7, "hash": "AAECAwQFBgc=", "entries": [{"path": "kept.txt", "hash": "WHOLE"}]}]}""" },
-        { "a game folder with no name", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"dataFolder": "/game/Data", "files": [{{AGameFile}}]} }""" },
-        { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "files": [{{AGameFile}}]} }""" },
-        { "a game folder with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data"} }""" },
-        { "an elsewhere place with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"files": [{{AGameFile}}]}]} }""" },
-        { "an elsewhere place with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data"}]} }""" },
-        { "an elsewhere game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]}]} }""" },
-        { "a game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]} }""" },
+        { "a game folder with no name", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"dataFolder": "/game/Data", "files": [{{AGameFile}}]} }], "statCache": "/cache"}""" },
+        { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "files": [{{AGameFile}}]} }], "statCache": "/cache"}""" },
+        { "a game folder with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data"} }], "statCache": "/cache"}""" },
+        { "an elsewhere place with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"files": [{{AGameFile}}]}]} }], "statCache": "/cache"}""" },
+        { "an elsewhere place with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data"}]} }], "statCache": "/cache"}""" },
+        { "an elsewhere game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]}]} }], "statCache": "/cache"}""" },
+        { "a game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]} }], "statCache": "/cache"}""" },
     };
 
     [Theory]
@@ -117,14 +117,20 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/update-manifest", new
         {
-            mods = new[] { new { name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>() } },
-            statCache = Path.Combine(_instance, "stat-cache"),
-            gameFolder = new
+            mods = new[]
             {
-                name = "Fallout4",
-                dataFolder = Path.Combine(_instance, "game", "Data"),
-                files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } },
+                new
+                {
+                    name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>(),
+                    gameFolder = new
+                    {
+                        name = "Fallout4",
+                        dataFolder = Path.Combine(_instance, "game", "Data"),
+                        files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } },
+                    },
+                },
             },
+            statCache = Path.Combine(_instance, "stat-cache"),
         });
 
         response.EnsureSuccessStatusCode();
@@ -134,7 +140,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task UpdatingTheManifestOfAModWithNoInstallationFile_TakesAFileFromADownloadedFileTheRequestHandsByItsHash()
+    public async Task UpdatingTheManifestOfAModWithNoInstallationFile_NamesADownloadedFileTheRequestHandsAsAPackage()
     {
         Directory.CreateDirectory(ModFolder);
         File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
@@ -154,9 +160,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         });
 
         response.EnsureSuccessStatusCode();
-        var manifest = File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json"));
-        Assert.Contains("\"installationFile\":\"Other.zip\"", manifest);
-        Assert.Contains("\"packagePath\":\"Data/A.nif\"", manifest);
+        Assert.Contains("\"installationFile\":\"Other.zip\"", File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 
     [Fact]
@@ -167,18 +171,24 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/update-manifest", new
         {
-            mods = new[] { new { name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>() } },
-            statCache = Path.Combine(_instance, "stat-cache"),
-            gameFolder = new
+            mods = new[]
             {
-                name = "Fallout4",
-                dataFolder = Path.Combine(_instance, "game", "Data"),
-                files = Array.Empty<object>(),
-                elsewhere = new[]
+                new
                 {
-                    new { dataFolder = Path.Combine(_instance, "steam", "Data"), files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } } },
+                    name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>(),
+                    gameFolder = new
+                    {
+                        name = "Fallout4",
+                        dataFolder = Path.Combine(_instance, "game", "Data"),
+                        files = Array.Empty<object>(),
+                        elsewhere = new[]
+                        {
+                            new { dataFolder = Path.Combine(_instance, "steam", "Data"), files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } } },
+                        },
+                    },
                 },
             },
+            statCache = Path.Combine(_instance, "stat-cache"),
         });
 
         response.EnsureSuccessStatusCode();

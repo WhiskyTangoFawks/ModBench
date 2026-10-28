@@ -3,10 +3,11 @@ using System.Text.Json.Serialization;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to update the manifest of, with its installation file, its version, its metadata files, which no line
-/// names, and a source mod's source folder, whose repository holds the manifest its build writes.</summary>
+/// names, a source mod's source folder, whose repository holds the manifest its build writes, and the game folder with the
+/// game files it may take from, none when the game folder was not found.</summary>
 public sealed record ModToUpdate(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder,
-    string? Version);
+    string? Version, GameFolder? GameFolder = null);
 
 /// <summary>A game file by its forward-slash path under the game's Data folder as the game folder names it, with its hash as the
 /// Instance adapter knows it (ADR-0013).</summary>
@@ -22,9 +23,8 @@ public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<Ga
     internal IEnumerable<GameFolder> Places() => [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files))];
 }
 
-/// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder (none when not found), and the
-/// downloaded files the hash index holds.</summary>
-public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder, IReadOnlyList<InstallationFile>? DownloadedFiles = null);
+/// <summary>The instance's facts beyond its mods: the stat cache's folder and the downloaded files the hash index holds.</summary>
+public sealed record InstanceToUpdate(string StatCache, IReadOnlyList<InstallationFile> DownloadedFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal
