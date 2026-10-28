@@ -4,11 +4,11 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to restore, with what the request found of what its manifest names, why it could not
-/// read its game files, by game path, or its installation file, and a source mod's source folder.</summary>
+/// <summary>A mod to restore, with the installation files the request found, why it could not read game files or
+/// installation files, and a source mod's source folder.</summary>
 public sealed record ModToRestore(
-    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, Submodule? Submodule,
-    IReadOnlyDictionary<string, string>? UnreadableGameFiles, string? UnreadableInstallationFile, string? SourceFolder);
+    string Name, string Folder, IReadOnlyList<InstallationFile> InstallationFiles, IReadOnlyList<string> MetadataFiles, Submodule? Submodule,
+    IReadOnlyDictionary<string, string>? UnreadableGameFiles, IReadOnlyDictionary<string, string>? UnreadableInstallationFiles, string? SourceFolder);
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder with the game files the request
 /// found for the manifests, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>
@@ -55,11 +55,11 @@ public enum RestoreRefusal
     NoTaskForTool,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the installation file, the game files and the submodule it lacks, as a
+/// <summary>Why a mod was skipped. A NotFound mod names the installation files, the game files and the submodule it lacks, as a
 /// request hands them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
 internal sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
-    public ManifestPackage.InstallationFile? InstallationFileNotFound { get; init; }
+    public IReadOnlyList<ManifestPackage.InstallationFile> InstallationFilesNotFound { get; init; } = [];
 
     public string? SubmoduleNotFound { get; init; }
 

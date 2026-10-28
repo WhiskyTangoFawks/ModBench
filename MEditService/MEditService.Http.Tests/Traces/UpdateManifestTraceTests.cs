@@ -92,7 +92,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             "{\n"
-            + $"\"package\": {{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{DownloadedMod.HashOfTheZip}\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"}},\n"
+            + $"\"packages\": [\n{{\"installationFile\":\"Mod.zip\",\"size\":7,\"hash\":\"{DownloadedMod.HashOfTheZip}\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"}}\n],\n"
             + "\"files\": [\n"
             + "{\"path\":\"edited.txt\",\"otherBytes\":true},\n"
             + "{\"path\":\"kept.txt\"}\n"
@@ -124,7 +124,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\n\"package\": {\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"},\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n",
+            "{\n\"packages\": [\n{\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"}\n],\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n",
             File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 }

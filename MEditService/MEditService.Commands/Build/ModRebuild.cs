@@ -36,7 +36,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, string modFold
         }
     }
 
-    private void Extract(InstallationFile file, IEnumerable<string> entries, Action<string, Stream> onEntry)
+    internal void Extract(InstallationFile file, IEnumerable<string> entries, Action<string, Stream> onEntry)
     {
         var wanted = entries.ToHashSet(StringComparer.OrdinalIgnoreCase);
         using var archive = repository.OpenInstallationFile(file.Path);

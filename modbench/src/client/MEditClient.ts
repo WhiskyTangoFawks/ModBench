@@ -186,11 +186,11 @@ type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRef
 /** Why mEdit refused a mod's build (ADR-0019). */
 export type BuildRefusalKind = components['schemas']['BuildRefusal'];
 
-/** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
- *  refused as a mod with its reason, and mEdit's kind of refusal when mEdit refused it. */
+/** Build's answer: each mod built, with the plugins it compiled and refused, or refused with its reason, mEdit's kind
+ *  of refusal, and the installation files its manifest names that the call did not hand. */
 export interface BuildOutcome {
   landed: readonly BuiltMod[];
-  refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind })[];
+  refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind; readonly installationFilesNotFound?: readonly ManifestInstallationFile[] })[];
 }
 
 /** A step of a manifest: the VS Code task it runs, by label, and the arguments it hands the task. */
@@ -263,11 +263,11 @@ type RestoredMod = components['schemas']['ModRestored'];
 /** An installation file as a manifest names it: by name, with its hash and its page on its host. */
 export type ManifestInstallationFile = Pick<components['schemas']['InstallationFile'], 'name' | 'hash'> & { readonly page?: string };
 
-/** A skipped mod lacking an installation file, as its manifest names it, a submodule, by name, or game files, by their path in
+/** A skipped mod lacking installation files, as its manifest names them, a submodule, by name, or game files, by their path in
  *  the mod folder, that the call did not hand. A call that hands them brings it back. */
 export interface NotFound {
   mod: string;
-  installationFile?: ManifestInstallationFile;
+  installationFiles: readonly ManifestInstallationFile[];
   gameFiles: readonly string[];
   submodule?: string;
 }

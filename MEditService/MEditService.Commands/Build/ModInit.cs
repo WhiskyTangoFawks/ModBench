@@ -163,7 +163,7 @@ internal sealed class ModInit(
                 sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, modFolders.SpellSourceManifest(new Manifest(null, []) { Output = modFolders.FolderName(mod.Folder) }),
+        return source.Init(sourceFolder, modFolders.SpellSourceManifest(new Manifest([], []) { Output = modFolders.FolderName(mod.Folder) }),
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Key, v.Source.BinarySha256)))], assets,
             repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
     }

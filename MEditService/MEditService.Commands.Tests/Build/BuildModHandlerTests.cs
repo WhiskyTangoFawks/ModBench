@@ -343,6 +343,101 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal("1.2.3", ManifestWritten().Require().Version);
     }
 
+    [Fact]
+    public async Task AFileTheManifestTakesFromAnInstallationFile_ReplacesTheSourcesPlaceholder_AndItsLineKeepsNamingItsPackage()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+
+        await Landed(_noArchives, installationFiles: [Pack(("textures/a.dds", "from the pack"), ("Data/c.nif", "moved"))]);
+
+        Assert.Equal([("meshes/c.nif", "moved"), ("textures/a.dds", "from the pack")], FilesIn(ModFolder));
+        var manifest = ManifestWritten().Require();
+        Assert.Equal(
+            [new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: false), new ManifestPackage.InstallationFile(DownloadedZip.PackName, 1, DownloadedZip.PackHash)],
+            manifest.Packages);
+        Assert.Equal(
+            [new ManifestFile("meshes/c.nif", ManifestFile.At("meshes/c.nif", new FileBytes.InInstallationFile(DownloadedZip.PackName, "Data/c.nif")).Entry, DownloadedZip.PackName),
+                new ManifestFile("textures/a.dds", new PackageEntry.Held(), DownloadedZip.PackName)],
+            manifest.Files.OrderBy(file => file.Path, StringComparer.Ordinal));
+        Assert.Empty(Status().Differing);
+        Assert.Empty(Status().Gone);
+    }
+
+    [Fact]
+    public async Task AnArchive_PacksAFileTakenFromAnInstallationFile_LeavingNoLooseCopy_ThoughItsLineStays_AndTheModIsNotGone()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack.Replace("\"files\"", "\"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\"]}, \"files\""));
+        var variants = new ArchiveVariants(new Ba2Variant(1, Ba2Contents.General, Compressed: false), new Ba2Variant(1, Ba2Contents.Textures, Compressed: false));
+
+        var built = await Landed(new InstanceToBuild(ExclusionMark, variants, StatCache), installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "moved"))]);
+
+        Assert.Empty(built.ArchivesRefused);
+        Assert.Equal(["Mod - Main.ba2", "textures/a.dds"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Contains("meshes/c.nif", ManifestWritten().Require().Files.Select(file => file.Path));
+        Assert.Empty(Status().Gone);
+    }
+
+    [Fact]
+    public async Task ATakenFileTheExclusionMarkRenames_IsRecordedUnderItsFolderName_WhereItsPackageHoldsItUnmarked()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack.Replace("\"files\"", "\"exclude\": [\"textures/a.dds\"], \"files\""));
+
+        await Landed(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "moved"))]);
+
+        Assert.Equal(["meshes/c.nif", "textures/a.dds.excluded"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Equal(
+            ManifestFile.At("textures/a.dds.excluded", new FileBytes.InInstallationFile(DownloadedZip.PackName, "textures/a.dds")) with { Package = DownloadedZip.PackName },
+            ManifestWritten().Require().Files.Single(file => file.Path.StartsWith("textures", StringComparison.Ordinal)));
+        Assert.Empty(Status().Gone);
+        Assert.Empty(Status().Differing);
+    }
+
+    [Fact]
+    public async Task AnInstallationFileTheRequestDidNotHand_RefusesTheMod_NamingItForTheRequestToFind_AndWritesNothing()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+
+        var refused = Assert.Single((await Build(_noArchives)).Refused);
+
+        Assert.Equal(BuildRefusal.InstallationFileLacking, refused.Refusal);
+        Assert.Equal(DownloadedZip.PackName, Assert.Single(refused.InstallationFilesNotFound).Name);
+        Assert.Contains("installation file 'Pack.zip' is missing", refused.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task AnInstallationFileWithOtherBytes_RefusesTheMod_AndIsNotAskedForAgain()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+
+        var refused = Assert.Single((await Build(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "c")) with { Hash = "OTHER" }])).Refused);
+
+        Assert.Equal((BuildRefusal.InstallationFileLacking, "was not built: installation file 'Pack.zip' has other bytes."), (refused.Refusal, refused.Message));
+        Assert.Empty(refused.InstallationFilesNotFound);
+    }
+
+    [Fact]
+    public async Task AnInstallationFileWithoutAnEntryALineTakes_RefusesTheMod_NamingTheEntry()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+
+        var refused = Assert.Single((await Build(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"))])).Refused);
+
+        Assert.Equal("was not built: installation file 'Pack.zip' holds no 'Data/c.nif'.", refused.Message);
+    }
+
+    [Fact]
+    public async Task AnInstallationFileTheRequestCouldNotRead_RefusesTheMod_NamingWhy_AndIsNotAskedForAgain()
+    {
+        WriteSourceText(DownloadedZip.TakingFromAPack, ("textures/a.dds", "placeholder"));
+        var unreadable = new Dictionary<string, string> { [DownloadedZip.PackName] = "EACCES" };
+
+        var refused = Assert.Single((await Build(_noArchives, unreadableInstallationFiles: unreadable)).Refused);
+
+        Assert.Equal("was not built: installation file 'Pack.zip' could not be read: EACCES.", refused.Message);
+        Assert.Empty(refused.InstallationFilesNotFound);
+    }
+
     private async Task InitializedWithALocalizedPlugin()
     {
         var plugin = Path.Combine(Directory.CreateDirectory(ModFolder).FullName, "Fixture.esp");
@@ -358,19 +453,23 @@ public sealed class BuildModHandlerTests : IDisposable
 
     private async Task<ModBuilt> Landed() => await Landed(_noArchives);
 
-    private async Task<ModBuilt> Landed(InstanceToBuild instance, bool isSubmodule = false)
+    private async Task<ModBuilt> Landed(InstanceToBuild instance, bool isSubmodule = false, IReadOnlyList<InstallationFile>? installationFiles = null)
     {
-        var result = await Build(instance, isSubmodule);
+        var result = await Build(instance, isSubmodule, installationFiles: installationFiles);
         Assert.Empty(result.Refused);
         return Assert.Single(result.Applied);
     }
 
-    private async Task<BuildResult> Build(InstanceToBuild instance, bool isSubmodule = false, IReadOnlyList<string>? made = null)
+    private async Task<BuildResult> Build(
+        InstanceToBuild instance, bool isSubmodule = false, IReadOnlyList<string>? made = null, IReadOnlyList<InstallationFile>? installationFiles = null,
+        IReadOnlyDictionary<string, string>? unreadableInstallationFiles = null)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
         return (await TestEditService.BuildModHandler(_holder).BuildAsync(
-            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made)], instance)).Value();
+            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made) { InstallationFiles = installationFiles ?? [], UnreadableInstallationFiles = unreadableInstallationFiles }], instance)).Value();
     }
+
+    private InstallationFile Pack(params (string Path, string Text)[] entries) => DownloadedZip.WritePack(Path.Combine(_root, "downloads"), entries);
 
     private const string WithAStep =
         "{\"output\": \"Mod\", \"steps\": [{\"task\": \"Optimise textures\", \"args\": [\"textures\"]}], "

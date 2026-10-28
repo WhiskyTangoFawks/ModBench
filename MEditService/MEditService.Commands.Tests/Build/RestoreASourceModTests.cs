@@ -68,9 +68,23 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
+    public async Task ASourceModWhoseManifestNamesAnInstallationFileTheRequestDidNotHand_IsNotFound_NamingIt_ThenBuildsFromItOnceHanded()
+    {
+        var pinned = _submodule.Commit(("Mod.manifest.json", DownloadedZip.TakingFromAPack), ("assets/textures/a.dds", "placeholder"));
+        var pack = DownloadedZip.WritePack(Path.Combine(_root, "downloads"), ("textures/a.dds", "from the pack"), ("Data/c.nif", "moved"));
+
+        var skipped = Assert.Single((await Restore(pinned)).Refused);
+        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
+        Assert.Equal("Pack.zip", Assert.Single(skipped.InstallationFilesNotFound).Name);
+
+        Assert.Single((await Restore(pinned, installationFiles: [pack])).Applied);
+        Assert.Equal("from the pack", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));
+    }
+
+    [Fact]
     public async Task AManifestNamingASubmodule_WhoseRequestHandsNone_IsNotFound_NamingIt()
     {
-        CommitAtHead(Commit("{\"output\": \"Mod\", \"package\": {\"submodule\": \"Mod\"}}", "c"));
+        CommitAtHead(Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\"}]}", "c"));
 
         var skipped = Assert.Single((await Restore(pin: null)).Refused);
 
@@ -84,7 +98,7 @@ public sealed class RestoreASourceModTests : IDisposable
     {
         Directory.CreateDirectory(SourceFolder);
         _folders.WriteSourceManifest(SourceFolder, new Manifest(
-            new ManifestPackage.SourceRepository(ModName, IsSubmodule: false), [new ManifestFile("meshes/c.nif", new PackageEntry.Held())])
+            [new ManifestPackage.SourceRepository(ModName, IsSubmodule: false)], [new ManifestFile("meshes/c.nif", new PackageEntry.Held())])
         { Output = ModName });
 
         var skipped = Assert.Single((await Restore(pin: null)).Refused);
@@ -96,7 +110,7 @@ public sealed class RestoreASourceModTests : IDisposable
     [Fact]
     public async Task TheRebuild_WritesAManifestNamingTheSubmodule_WithTheVersionItsManifestHeld()
     {
-        var versioned = Commit("{\"output\": \"Mod\", \"package\": {\"submodule\": \"Mod\", \"version\": \"1.2.3\"}}", "c");
+        var versioned = Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\", \"version\": \"1.2.3\"}]}", "c");
 
         await Restore(versioned);
 
@@ -252,16 +266,17 @@ public sealed class RestoreASourceModTests : IDisposable
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value().Commit;
     }
 
-    private Task<RestoreFromManifestResult> Restore(string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null) =>
-        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks);
+    private Task<RestoreFromManifestResult> Restore(
+        string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null) =>
+        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks, installationFiles);
 
     private Task<RestoreFromManifestResult> Restore(
         string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null,
-        IReadOnlySet<string>? tasks = null)
+        IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null)
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null, SourceFolder)],
+            [new ModToRestore(ModName, ModFolder, installationFiles ?? [], ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFiles: null, SourceFolder)],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null) { Tasks = tasks ?? new HashSet<string>() },
             "restore", cancel);
     }

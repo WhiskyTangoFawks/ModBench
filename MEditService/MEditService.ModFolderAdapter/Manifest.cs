@@ -1,9 +1,12 @@
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>What a mod's manifest says: its one package, if any, and each file's place in it. The package's hash is the
-/// Instance adapter's text, kept as written (ADR-0013).</summary>
-public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFile> Files, string? Version = null)
+/// <summary>What a mod's manifest says: its packages, each named once with its pin, and each file's place in its package.
+/// A file names its package only when it is not the first (ADR-0022).</summary>
+public sealed record Manifest(IReadOnlyList<ManifestPackage> Packages, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
+    /// <summary>The package a file is in when it names none.</summary>
+    public ManifestPackage? Package => Packages.Count > 0 ? Packages[0] : null;
+
     /// <summary>The name of the folder it builds, which a manifest outside that folder names, as a source mod's does
     /// (modlist-repository.md, The manifest, story 20).</summary>
     public string? Output { get; init; }
@@ -27,7 +30,19 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         !path.Contains('\\', StringComparison.Ordinal) && !System.IO.Path.IsPathRooted(path)
         && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or ".."));
 
-    public FileBytes BytesOf(ManifestFile file) => (Package, file.Entry) switch
+    internal static string NameOf(ManifestPackage package) => package switch
+    {
+        ManifestPackage.InstallationFile installationFile => installationFile.Name,
+        ManifestPackage.SourceRepository repository => repository.Name,
+        ManifestPackage.GameFolder gameFolder => gameFolder.Name,
+        _ => throw new ArgumentOutOfRangeException(nameof(package), package, null),
+    };
+
+    /// <summary>The package <paramref name="file"/>'s line is in; none when it names one the manifest does not.</summary>
+    public ManifestPackage? PackageOf(ManifestFile file) =>
+        file.Package is { } name ? Packages.FirstOrDefault(package => NameOf(package) == name) : Package;
+
+    public FileBytes BytesOf(ManifestFile file) => (PackageOf(file), file.Entry) switch
     {
         (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
         (_, PackageEntry.OtherBytes) => new FileBytes.OtherBytes(),
@@ -41,7 +56,7 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
 
     /// <summary>The hash, or the repository whose last build wrote it, that fixes <paramref name="file"/>'s bytes, and its
     /// path in the package. Null when the line names no bytes.</summary>
-    internal (string Package, string Path)? FixedBy(ManifestFile file) => (BytesOf(file), Package) switch
+    internal (string Package, string Path)? FixedBy(ManifestFile file) => (BytesOf(file), PackageOf(file)) switch
     {
         (FileBytes.InInstallationFile held, ManifestPackage.InstallationFile installationFile) => (installationFile.Hash, held.Path),
         (FileBytes.Built built, ManifestPackage.SourceRepository repository) => (repository.Name, built.Path),
@@ -109,7 +124,7 @@ public abstract record FileBytes
 }
 
 /// <summary>A file of the mod folder, and where its package holds it.</summary>
-public sealed record ManifestFile(string Path, PackageEntry Entry)
+public sealed record ManifestFile(string Path, PackageEntry Entry, string? Package = null)
 {
     /// <summary>The line for the file at <paramref name="path"/> whose bytes <paramref name="bytes"/> locates in the package.</summary>
     public static ManifestFile At(string path, FileBytes.InInstallationFile bytes) => new(path, PackageEntry.At(path, bytes.Path));

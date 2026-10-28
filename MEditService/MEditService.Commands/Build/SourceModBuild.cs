@@ -24,7 +24,7 @@ internal sealed class SourceModBuild
 
     /// <summary>Compiled against the held load order. Everything that refuses the mod is checked before its first write
     /// (mods.md, Build, story 4).</summary>
-    internal async Task<ItemAnswer<BuildRefusal, ModBuildOutcome>> BuildAsync(ModToBuild mod, InstanceToBuild instance)
+    internal async Task<ItemAnswer<BuildStop, ModBuildOutcome>> BuildAsync(ModToBuild mod, InstanceToBuild instance)
     {
         if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
         var loadOrder = _loadOrder.Require();
@@ -36,7 +36,7 @@ internal sealed class SourceModBuild
             return Refused(BuildRefusal.OutputNotThisMod,
                 $"its manifest names the output folder '{configured.Output}', not its folder '{folderName}'.");
         }
-        if (mod.Made is { } madeBeforeSteps) return StepsRan(mod, configured, madeBeforeSteps);
+        if (mod.Made is { } madeBeforeSteps) return StepsRan(mod, instance, configured, madeBeforeSteps);
         if (ToolsWithoutTask.Why(configured, instance.Tasks) is { } noTask) return Refused(BuildRefusal.NoTaskForTool, $"{noTask}.");
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
@@ -44,6 +44,17 @@ internal sealed class SourceModBuild
         var plugins = Placed(loadOrder, mod, source.Plugins);
         var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
+        using var taken = new TakenFromInstallationFiles(_modFolders, mod.Folder);
+        var lacking = taken.Lacking(configured, mod.InstallationFiles, mod.UnreadableInstallationFiles);
+        if (lacking is not null) return lacking;
+        try
+        {
+            foreach (var asset in taken.Extract()) assets[asset.Path] = asset;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return ItemAnswer<BuildStop, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], [], $"The build stopped before compiling, as an installation file could not be read: {e.Message}"));
+        }
         var notAnAsset = configured.Archives.SelectMany(archive => archive.Files.Select(file => (Archive: archive.Path, File: file)))
             .FirstOrDefault(packed => !assets.ContainsKey(packed.File));
         if (notAnAsset.File is not null)
@@ -65,7 +76,7 @@ internal sealed class SourceModBuild
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or SharpCompressException)
         {
-            return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
+            return ItemAnswer<BuildStop, ModBuildOutcome>.Landed(new ModBuildOutcome(
                 [], [], [], [.. written.Overwritten.Order(StringComparer.Ordinal)],
                 $"The build stopped before compiling, as a file could not be read or written: {e.Message}"));
         }
@@ -79,8 +90,8 @@ internal sealed class SourceModBuild
         foreach (var archive in configured.Archives.Select(archive => archive.Path))
             made.Add(written.PathOf(archive), vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
-        var (manifest, failure) = Record(mod, instance, configured, made);
-        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
+        var (manifest, failure) = Record(mod, instance, configured, made, written);
+        return ItemAnswer<BuildStop, ModBuildOutcome>.Landed(new ModBuildOutcome(
             landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest)
         {
             Steps = failure is null ? configured.Steps : [],
@@ -89,32 +100,40 @@ internal sealed class SourceModBuild
 
     // mods.md, Build, story 1: the manifest's file lines are written once the steps ran, naming each file the build made that
     // the folder still holds.
-    private ItemAnswer<BuildRefusal, ModBuildOutcome> StepsRan(ModToBuild mod, Manifest configured, IReadOnlyList<string> made)
+    private ItemAnswer<BuildStop, ModBuildOutcome> StepsRan(ModToBuild mod, InstanceToBuild instance, Manifest configured, IReadOnlyList<string> made)
     {
         try
         {
             var held = _modFolders.FilePaths(mod.Folder).ToHashSet(StringComparer.Ordinal);
-            var manifest = Recorded(mod, configured, made.Where(held.Contains));
+            var manifest = Recorded(mod, configured, made.Where(held.Contains), new FolderWrite(_modFolders, mod.Folder, configured.Exclude, instance.ExclusionMark));
             _modFolders.WriteSourceManifest(mod.SourceFolder, manifest);
-            return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], [], null, Manifest: manifest));
+            return ItemAnswer<BuildStop, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], [], null, Manifest: manifest));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], [], $"The build could not write its manifest: {e.Message}"));
+            return ItemAnswer<BuildStop, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], [], $"The build could not write its manifest: {e.Message}"));
         }
     }
 
-    // A file a step makes is the step's: its line says so, whether or not the build also made it.
-    private Manifest Recorded(ModToBuild mod, Manifest configured, IEnumerable<string> made)
+    private Manifest Recorded(ModToBuild mod, Manifest configured, IEnumerable<string> made, FolderWrite written)
     {
-        var madeByStep = configured.Files.Where(line => line.Entry is PackageEntry.MadeByStep).ToList();
-        var stepMakes = madeByStep.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
+        var kept = configured.Files
+            .Where(line => line.Entry is PackageEntry.MadeByStep || configured.PackageOf(line) is ManifestPackage.InstallationFile)
+            .Select(line => AtItsFolderPath(configured, line, written)).ToList();
+        var named = kept.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
         return configured with
         {
-            Package = new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule),
-            Files = [.. made.Where(path => !stepMakes.Contains(path)).Select(path => new ManifestFile(path, new PackageEntry.Held())), .. madeByStep],
+            Packages = [new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), .. configured.Packages.OfType<ManifestPackage.InstallationFile>()],
+            Files = [.. made.Where(path => !named.Contains(path)).Select(path => new ManifestFile(path, new PackageEntry.Held())), .. kept],
             Version = mod.Version,
         };
+    }
+
+    private static ManifestFile AtItsFolderPath(Manifest manifest, ManifestFile line, FolderWrite written)
+    {
+        if (manifest.BytesOf(line) is not FileBytes.InInstallationFile held) return line;
+        var at = written.PathOf(line.Path);
+        return (at == line.Path ? line : ManifestFile.At(at, held)) with { Package = held.Name };
     }
 
     private sealed class MadeFiles
@@ -136,13 +155,13 @@ internal sealed class SourceModBuild
 
     // The manifest is written last, in the mod's repository (mods.md, Build, story 1), and names only the files the build
     // made (story 3). A manifest with steps is written once they ran.
-    private (Manifest? Recorded, string? Failure) Record(ModToBuild mod, InstanceToBuild instance, Manifest configured, MadeFiles made)
+    private (Manifest? Recorded, string? Failure) Record(ModToBuild mod, InstanceToBuild instance, Manifest configured, MadeFiles made, FolderWrite written)
     {
         try
         {
             var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var files = read.Files.Where(file => made.Contains(file.Path)).ToList();
-            var manifest = Recorded(mod, configured, files.Select(file => file.Path));
+            var manifest = Recorded(mod, configured, files.Select(file => file.Path), written);
             if (configured.Steps.Count == 0) _modFolders.WriteSourceManifest(mod.SourceFolder, manifest);
             // A stat cache that cannot be written leaves each file to be read again, and the mod's status says why.
             _ = _modFolders.KeepInStatCache(
@@ -259,6 +278,6 @@ internal sealed class SourceModBuild
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A compile refuses a whole selection only for want of a load order or of git."),
     };
 
-    private static ItemAnswer<BuildRefusal, ModBuildOutcome> Refused(BuildRefusal refusal, string why) =>
-        ItemAnswer<BuildRefusal, ModBuildOutcome>.Refused(refusal, $"was not built: {why}");
+    private static ItemAnswer<BuildStop, ModBuildOutcome> Refused(BuildRefusal refusal, string why) =>
+        ItemAnswer<BuildStop, ModBuildOutcome>.Refused(new BuildStop(refusal), $"was not built: {why}");
 }

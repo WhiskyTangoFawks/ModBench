@@ -5,10 +5,15 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to build: the source folder holding its manifest, its folder, version and metadata files. Made: the
-/// files its build answered it made, once its steps ran, so the build writes its manifest and nothing else.</summary>
+/// files its build made, once its steps ran. InstallationFiles: those its manifest names, and why any was unreadable.</summary>
 public sealed record ModToBuild(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule,
-    IReadOnlyList<string>? Made = null);
+    IReadOnlyList<string>? Made = null)
+{
+    public IReadOnlyList<InstallationFile> InstallationFiles { get; init; } = [];
+
+    public IReadOnlyDictionary<string, string>? UnreadableInstallationFiles { get; init; }
+}
 
 /// <summary>The instance's facts a build needs: the exclusion mark, the archive variants, none when the per-release
 /// table names none, the stat cache's folder, and each VS Code task this machine has.</summary>

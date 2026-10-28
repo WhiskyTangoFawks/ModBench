@@ -57,7 +57,7 @@ public sealed class ArchivePackerTests : IDisposable
 
     private async Task<(byte[]? Archive, ArchiveRefused? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
     {
-        _folders.WriteSourceManifest(SourceFolder, new Manifest(null, []) { Output = "Mod", Archives = [new ManifestArchive(Archive, files)] });
+        _folders.WriteSourceManifest(SourceFolder, new Manifest([], []) { Output = "Mod", Archives = [new ManifestArchive(Archive, files)] });
         var source = new FakeSourceAdapter().Building(SourceFolder, new SourceToBuild(
             [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
         var holder = new LoadOrderHolder();

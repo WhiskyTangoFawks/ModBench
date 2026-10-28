@@ -271,7 +271,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
           archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
           failure: 'The build stopped before compiling.', steps: [{ task: 'Zip', args: ['a'] }], made: ['a.nif'],
         }],
-        refused: [{ item: 'ModC', refusal: 'NoTaskForTool', message: "this machine has no task for its tool 'Pack'." }],
+        refused: [
+          { item: 'ModC', refusal: 'NoTaskForTool', message: "this machine has no task for its tool 'Pack'.", installationFilesNotFound: [] },
+          { item: 'ModE', refusal: 'InstallationFileLacking', message: "installation file 'E.7z' is missing.", installationFilesNotFound: [{ name: 'E.7z', size: 7, hash: 'H' }] },
+        ],
       },
       reads: {
         landed: [{
@@ -279,7 +282,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
           archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
           failure: 'The build stopped before compiling.', steps: [{ task: 'Zip', args: ['a'] }], made: ['a.nif'],
         }],
-        refused: [{ item: 'ModC', reason: "this machine has no task for its tool 'Pack'.", refusal: 'NoTaskForTool' }],
+        refused: [
+          { item: 'ModC', reason: "this machine has no task for its tool 'Pack'.", refusal: 'NoTaskForTool', installationFilesNotFound: [] },
+          { item: 'ModE', reason: "installation file 'E.7z' is missing.", refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'E.7z', hash: 'H' }] },
+        ],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'updateManifest', verb: (c) => c.updateManifest([modToUpdate('ModA'), modToUpdate('ModC')], updateFacts),
@@ -298,12 +304,12 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [
           {
             item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing.",
-            installationFileNotFound: { name: 'B.7z', size: 7, hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' },
+            installationFilesNotFound: [{ name: 'B.7z', size: 7, hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' }],
           },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'." },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'.", installationFilesNotFound: [] },
           {
             item: 'ModD', refusal: 'NotFound', message: "'ModD' was skipped: its submodule 'Mod Source' is missing.",
-            submoduleNotFound: 'Mod Source',
+            submoduleNotFound: 'Mod Source', installationFilesNotFound: [],
           },
         ],
       },
@@ -314,7 +320,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
           { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
           { item: 'ModD', reason: "'ModD' was skipped: its submodule 'Mod Source' is missing." },
         ],
-        notFound: [{ mod: 'ModB', installationFile: { name: 'B.7z', hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' } }, { mod: 'ModD', submodule: 'Mod Source' }],
+        notFound: [{ mod: 'ModB', installationFiles: [{ name: 'B.7z', hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' }] }, { mod: 'ModD', installationFiles: [], submodule: 'Mod Source' }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
