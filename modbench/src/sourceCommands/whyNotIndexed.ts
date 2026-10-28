@@ -2,7 +2,6 @@ import type { LoadOrderProgress, MEditClient } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
-/** How long a built mod's plugins have to reach the record index. mEdit indexes a large plugin in seconds. */
 const LOAD_ORDER_WAIT_MS = 120_000;
 
 interface Deps {
@@ -11,8 +10,7 @@ interface Deps {
   loadOrderWaitMs?: number;
 }
 
-/** Answers why the record index does not hold the plugins `mod`'s folder gives the load order, or nothing once it does.
- *  The watch carries the change to mEdit (ADR-0003); this only waits on the status that arrives through it. */
+/** Why the record index lacks a plugin `mod`'s folder gives the load order, once the bound passes; nothing once it holds them all. The watch carries the change (ADR-0003). */
 export async function whyNotIndexed({ client, adapter, loadOrderWaitMs = LOAD_ORDER_WAIT_MS }: Deps, mod: string): Promise<string | undefined> {
   const reading = await adapter.reading();
   const enabled = reading.mods.some((entry) => entry.kind === 'mod' && entry.name === mod && entry.enabled);
