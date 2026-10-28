@@ -262,7 +262,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's new name, which names the manifest, and the paths in the mod folder its build excludes. Modbench writes the mod folder in the same gesture. */
+        /** @description Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's new name, which names the manifest, and the paths in the mod folder its build excludes, with the lines of its taken files at the paths the folder holds them under the exclusion mark. Modbench writes the mod folder in the same gesture. */
         post: operations["ChangeSourceManifest"];
         delete?: never;
         options?: never;
@@ -1941,6 +1941,7 @@ export interface components {
             output?: string | null;
             exclude?: string[] | null;
             include?: string[] | null;
+            exclusionMark?: string | null;
         };
         SourceMove: {
             from: string;

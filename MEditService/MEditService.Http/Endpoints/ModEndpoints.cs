@@ -43,8 +43,8 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's " +
-                "new name, which names the manifest, and the paths in the mod folder its build excludes. Modbench writes the mod " +
-                "folder in the same gesture.")
+                "new name, which names the manifest, and the paths in the mod folder its build excludes, with the lines of its " +
+                "taken files at the paths the folder holds them under the exclusion mark. Modbench writes the mod folder in the same gesture.")
             .Produces(204)
             .ProducesProblem(400)
             .ProducesProblem(422)
@@ -85,10 +85,12 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("A source folder is required, with an output, or paths to exclude or include.");
         }
+        if (exclude.Count + include.Count > 0 && string.IsNullOrWhiteSpace(req.ExclusionMark))
+            return EndpointMapping.BadRequest("Paths to exclude or include need the exclusion mark.");
 
         return EndpointMapping.Answered(
             "Change source manifest", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder,
-            handler.Change(req.SourceFolder, new SourceManifestChange(req.Output, exclude, include)));
+            handler.Change(req.SourceFolder, new SourceManifestChange(req.Output, exclude, include, req.ExclusionMark)));
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
@@ -120,7 +122,7 @@ internal static class ModEndpoints
 /// <summary>A source mod's folder, and what to change in its manifest: the output folder's new name, and forward-slash
 /// paths in the mod folder to exclude or include.</summary>
 internal sealed record SourceManifestRequest(
-    string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
+    string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include, string? ExclusionMark = null);
 
 /// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, the archive variants, if any,
 /// the stat cache's folder, and the label of each VS Code task this machine has.</summary>

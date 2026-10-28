@@ -3,8 +3,9 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A change to a source mod's manifest: the output folder's new name, and the paths in the mod folder to exclude
-/// from its build or include again.</summary>
-public sealed record SourceManifestChange(string? Output, IReadOnlyList<string> Exclude, IReadOnlyList<string> Include);
+/// from its build or include again. <paramref name="ExclusionMark"/> is the mod manager's, which names the excluded files
+/// the lines of the manifest name.</summary>
+public sealed record SourceManifestChange(string? Output, IReadOnlyList<string> Exclude, IReadOnlyList<string> Include, string? ExclusionMark = null);
 
 /// <summary>The manifest's half of rename and of exclude or include, written uncommitted in the mod's repository, so the
 /// folder Modbench writes already equals the next build's output (mods.md, A source mod, story 2).</summary>
@@ -30,7 +31,8 @@ public sealed class ChangeSourceManifestHandler
         excluded.AddRange(change.Exclude.Where(added => !excluded.Contains(added, StringComparer.OrdinalIgnoreCase)));
         try
         {
-            _modFolders.WriteSourceManifest(sourceFolder, manifest with { Output = change.Output ?? manifest.Output, Exclude = excluded });
+            var files = change.ExclusionMark is { } mark ? AtTheirFolderPaths(manifest, new FolderWrite(_modFolders, sourceFolder, excluded, mark), mark) : manifest.Files;
+            _modFolders.WriteSourceManifest(sourceFolder, manifest with { Output = change.Output ?? manifest.Output, Exclude = excluded, Files = files });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -38,6 +40,20 @@ public sealed class ChangeSourceManifestHandler
         }
         return new();
     }
+
+    // A taken file's line names the path the folder holds it at, marked as the build writes it (mods.md, A source mod, story 2).
+    private static IReadOnlyList<ManifestFile> AtTheirFolderPaths(Manifest manifest, FolderWrite written, string mark) =>
+    [
+        .. manifest.Files.Select(line =>
+        {
+            if (manifest.BytesOf(line) is not FileBytes.InInstallationFile held) return line;
+            var at = written.PathOf(Unmarked(line.Path, mark));
+            return at == line.Path ? line : ManifestFile.At(at, held) with { Package = line.Package };
+        }),
+    ];
+
+    private static string Unmarked(string path, string mark) =>
+        string.Join('/', path.Split('/').Select(segment => segment.EndsWith(mark, StringComparison.Ordinal) ? segment[..^mark.Length] : segment));
 }
 
 /// <summary>Whether the manifest changed, or why it was left as it was.</summary>
