@@ -9,6 +9,7 @@ import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import type { SteamDepot } from '../instanceAdapter/gameFolder/steamAppManifest';
+import { gamePlacesOf } from '../instanceAdapter/gameFolder/gamePlaces';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -317,7 +318,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
     gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
-    steamInstall: () => Promise.resolve(answers.steam === undefined ? undefined : { ...answers.steam.install, depots: answers.steam.depots ?? [], depotProblems: answers.steam.depotProblems ?? [] }),
+    gamePlaces: () => gamePlacesOf(current.gameFolder, answers.steam === undefined ? undefined : { ...answers.steam.install, depots: answers.steam.depots ?? [], depotProblems: answers.steam.depotProblems ?? [] }),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),

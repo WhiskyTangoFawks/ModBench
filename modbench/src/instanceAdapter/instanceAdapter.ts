@@ -61,6 +61,13 @@ export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
 /** The game's install in Steam's library, with the depots Steam records as installed and why its app manifest gave less. */
 export type SteamInstall = FoundGameFolder & { readonly depots: readonly SteamDepot[]; readonly depotProblems: readonly string[] };
 
+/** A folder the game's files are in, with its depots and why they are fewer than the store records. */
+export interface GamePlace {
+  readonly dataFolder: string;
+  readonly depots: readonly SteamDepot[];
+  readonly depotProblems: readonly string[];
+}
+
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
   gameName?: string;
@@ -606,8 +613,8 @@ export interface InstanceAdapter {
   gameRelease(): Promise<string>;
   /** Where the game is now. */
   gameFolder(): Promise<GameFolder>;
-  /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
-  steamInstall(): Promise<SteamInstall | undefined>;
+  /** Every place the game's files are in, the game folder first; none when the game folder is not found. */
+  gamePlaces(): Promise<readonly GamePlace[]>;
   /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
   gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */

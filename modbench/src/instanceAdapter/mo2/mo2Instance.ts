@@ -28,6 +28,7 @@ import { hashIndex } from '../downloadedFileContents/hashIndex';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 import { parseModlist } from './codecs/modlistText';
 import { get } from '../files';
+import { gamePlacesOf } from '../gameFolder/gamePlaces';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
 
 export { overwriteDir } from './layout';
@@ -73,7 +74,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gameFolder,
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
     nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
-    steamInstall: async () => context.resolveSteamInstall((await source.settings()).gameRelease),
+    gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
