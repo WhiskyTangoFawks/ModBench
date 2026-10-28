@@ -40,15 +40,15 @@ export interface Publisher {
   subscribe(listener: () => void): Subscription;
 }
 
-const withFile = ({ present, owns }: KeptFiles, file: string): KeptFiles => ({ present: [...present, file], owns: (path) => path === file || owns(path) });
+const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: string): KeptFiles => ({ present: [...present, environmentFile], owns });
 
-export function withPublisher(manager: ManagerAdapter, publisher: Publisher, alsoKept: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
+export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scriptEnvironmentFilePath: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
   return {
     ...manager,
     publisherTags: publisher.tags,
     changePublisherTag: publisher.changeTag,
     followModFolders: publisher.followFolders,
-    keepOutOfPublisher: async () => publisher.keepOut(withFile(await manager.filesKept(), alsoKept())),
+    keepOutOfPublisher: async () => publisher.keepOut(withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath())),
     publisherConfigurationRefusal: () => publisher.refusal(),
     reading: async () => {
       const [reading, publisherConfiguration] = await Promise.all([manager.reading(), publisher.configuration()]);

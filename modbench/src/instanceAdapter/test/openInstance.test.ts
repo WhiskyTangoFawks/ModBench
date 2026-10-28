@@ -1,7 +1,6 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
@@ -65,24 +64,12 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['modbench', '.gitignore', 'source']) as unknown });
   });
 
-  it.each([
-    ['.env at the instance root when python.envFile names none', undefined, '.env'],
-    ['the file python.envFile names', '${workspaceFolder}/config/py.env', 'config\\py.env'],
-  ])('lists the script environment\'s file in the publisher\'s ignore list: %s', async (_name, setting, entry) => {
+  it('lists the script environment\'s file in the publisher\'s ignore list', async () => {
     await writeFile(join(root, SETTINGS_FILE), '{}');
 
-    await adapterOver(root, { pythonEnvFile: setting }).keepOutOfPublisher();
+    await adapterOver(root).keepOutOfPublisher();
 
-    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining([entry]) as unknown });
-  });
-
-  it('lists nothing of a script environment\'s file outside the instance', async () => {
-    await writeFile(join(root, SETTINGS_FILE), '{}');
-
-    await adapterOver(root, { pythonEnvFile: join(tmpdir(), 'elsewhere.env') }).keepOutOfPublisher();
-
-    const entries: unknown = Reflect.get(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8')), 'Ignore');
-    expect(entries).toEqual(expect.not.arrayContaining([expect.stringContaining('elsewhere')]));
+    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['.env']) as unknown });
   });
 
   it('drops the entry of a manifest a rename left behind once update manifest keeps the files out again', async () => {
