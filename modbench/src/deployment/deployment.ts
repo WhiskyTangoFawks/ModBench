@@ -7,6 +7,7 @@ import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
 import { pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import { changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
+import { errorMessage } from '../ports/errorMessage';
 import { pluginsTxtChange } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
 import { recordIn, type DeploymentRecord, type Written, type WrittenPluginsTxt } from './record';
@@ -187,7 +188,11 @@ async function deployTo(
   try {
     leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith(intended));
   } catch (err) {
-    await record.write(folder, recorded);
+    try {
+      await record.write(folder, recorded);
+    } catch (restoreErr) {
+      throw new Error(`${errorMessage(err)}. Deploy could not restore its record: ${errorMessage(restoreErr)}`);
+    }
     throw err;
   }
   leftAside.push(...await part.settle());

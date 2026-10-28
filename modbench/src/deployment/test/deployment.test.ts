@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { link, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
@@ -449,6 +449,13 @@ describe('a deploy killed part way through its changes', () => {
     await deploy([await modFile('Mod', 'a.esp')]);
 
     expect(recordedAtLink).toContain('Data/a.esp');
+  });
+
+  it('names why the deploy failed when it could not restore its record either', async () => {
+    busy.links = [join(folder, 'Data', 'b.esp')];
+    busy.onLink = () => mkdirSync(join(storage, 'deployment.json.tmp'), { recursive: true });
+
+    await expect(deploy([await modFile('Mod', 'b.esp')])).rejects.toThrow(/EBUSY.*could not restore its record: EISDIR/);
   });
 
   it('keeps the record it had when a deploy fails', async () => {
