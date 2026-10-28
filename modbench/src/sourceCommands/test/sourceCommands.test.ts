@@ -9,7 +9,7 @@ import type { BuildMod, BuildOutcome, ManifestStep } from '../../client';
 const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 
 const fakeAdapter = (answers: InstanceAnswers = {}, gameRelease = 'Fallout4') =>
-  fakeInstanceAdapter(readingFixture({ gameRelease, sourceMods: sourceModsOf(SOURCES, [], [], { '/source/ModD': 'Other' }) }), answers).adapter;
+  fakeInstanceAdapter(readingFixture({ gameRelease, sourceMods: sourceModsOf(SOURCES, [], [], { '/source/ModD': 'Other', '/source/ModE': 'MODE' }) }), answers).adapter;
 
 const EXCLUSION_MARK = fakeAdapter().exclusionMark;
 const savedAll = () => Promise.resolve([]);
@@ -105,6 +105,7 @@ describe('sourceCommands build', () => {
       'ModA', 'its remote could not be read: git remote failed', 'ModB'],
     ['no repository builds', {}, ['ModA', 'ModC'], 'ModC', 'no repository in the source folder builds it', 'ModA'],
     ['whose repository\'s manifest builds another mod', {}, ['ModA', 'ModD'], 'ModD', 'its folder is "ModD", but its repository\'s manifest builds "Other"', 'ModA'],
+    ['whose repository\'s manifest is not named for the mod\'s own name', {}, ['ModA', 'ModE'], 'ModE', 'its repository\'s manifest is not named for its output "MODE"', 'ModA'],
   ])('refuses a mod %s, naming why, and builds the rest', async (_case, answers, mods, item, reason, sent) => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);

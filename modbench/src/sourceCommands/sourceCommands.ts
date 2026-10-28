@@ -29,7 +29,9 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
   const noRepositoryRefusal = (mod: string, sourceMods: SourceMods): ItemRefusal<string> => {
     const own = adapter.sourceFolder(mod);
     const claimed = own === undefined || sourceMods.folderOf(mod) !== undefined ? undefined : sourceMods.claimedOutput(own);
-    return { item: mod, reason: claimed === undefined ? 'no repository in the source folder builds it' : `its folder is "${mod}", but its repository's manifest builds "${claimed}"` };
+    if (claimed === undefined) return { item: mod, reason: 'no repository in the source folder builds it' };
+    const sameMod = adapter.entryKey({ kind: 'mod', name: mod }) === adapter.entryKey({ kind: 'mod', name: claimed });
+    return { item: mod, reason: sameMod ? `its repository's manifest is not named for its output "${claimed}"` : `its folder is "${mod}", but its repository's manifest builds "${claimed}"` };
   };
 
   const buildMod = async (mod: string, sourceMods: SourceMods): Promise<BuildMod | ItemRefusal<string>> => {
