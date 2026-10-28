@@ -52,8 +52,11 @@ public sealed class UpdateManifestHandlerTests
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
     private Task<UpdateManifestResult> Update(
-        IReadOnlyList<ModToUpdate> mods, string? gesture = null, GameFolder? gameFolder = null, CancellationToken cancel = default) =>
-        Handler.UpdateManifestAsync(mods, new InstanceToUpdate("stat-cache", gameFolder), gesture, cancel);
+        IReadOnlyList<ModToUpdate> mods, string? gesture = null, GameFolder? gameFolder = null,
+        IReadOnlyList<InstallationFile>? downloadedFiles = null, CancellationToken cancel = default) =>
+        Handler.UpdateManifestAsync(
+            [.. mods.Select(mod => gameFolder is null ? mod : mod with { GameFolder = gameFolder })],
+            new InstanceToUpdate("stat-cache", downloadedFiles ?? []), gesture, cancel);
 
     private async Task<ModUpdated> Landed(params ModToUpdate[] mods)
     {
@@ -434,6 +437,13 @@ public sealed class UpdateManifestHandlerTests
         return _folders.Manifests[Mod];
     }
 
+    private async Task<Manifest> UpdatedWithDownloadedFiles(IReadOnlyList<InstallationFile> downloadedFiles, ModToUpdate? mod = null, GameFolder? gameFolder = null)
+    {
+        var result = await Update([mod ?? ModFrom("Mod")], gameFolder: gameFolder, downloadedFiles: downloadedFiles);
+        Assert.Empty(result.Refused);
+        return _folders.Manifests[Mod];
+    }
+
     [Fact]
     public async Task AModWithNoInstallationFile_WhoseFilesTheGameFolderHoldsWithTheirBytes_NamesTheGameFolderAsItsPackage()
     {
@@ -481,15 +491,207 @@ public sealed class UpdateManifestHandlerTests
         Assert.NotEqual(before, after);
     }
 
+    private static ManifestPackage.InstallationFile PackageOfDownloadedFile(string name, string path) => new(name, 7, $"#{path}");
+
+    private static ManifestPackage.GameFolder GameFolderPackageTaking(params (string Path, string Hash)[] files) =>
+        new("Fallout 4", FileHash.OfFilesTaken(files.Select(file => new HashedFile(file.Path, file.Hash))));
+
     [Fact]
-    public async Task AModWithAFileTheGameFolderHoldsWithOtherBytes_OrNotAtAll_HasNoPackage_AndItsFilesAreNotInIt()
+    public async Task AFileTheGameFolderHoldsWithOtherBytes_IsRecordedAsSuch_AndAFileNothingHoldsIsNot()
     {
         _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "mine.nif", "mine").WithFile(Mod, "c.nif", "edited");
 
         var manifest = await UpdatedWith(GameFolderHolding(("a.nif", "a"), ("c.nif", "c")));
 
-        Assert.Null(manifest.Package);
-        Assert.All(manifest.Files, file => Assert.IsType<PackageEntry.NotHeld>(file.Entry));
+        Assert.Equal([GameFolderPackageTaking(("a.nif", "a"))], manifest.Packages);
+        Assert.Equal(
+            [
+                new ManifestFile("a.nif", new PackageEntry.Held()),
+                new ManifestFile("c.nif", new PackageEntry.OtherBytes()),
+                new ManifestFile("mine.nif", new PackageEntry.NotHeld()),
+            ],
+            manifest.Files);
+    }
+
+    private sealed class EntriesCountingReads(IReadOnlyList<HashedEntry> entries) : IReadOnlyList<HashedEntry>
+    {
+        public int Reads { get; private set; }
+
+        public int Count => entries.Count;
+
+        public HashedEntry this[int index] => entries[index];
+
+        public IEnumerator<HashedEntry> GetEnumerator()
+        {
+            Reads++;
+            return entries.GetEnumerator();
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    [Fact]
+    public async Task TheDownloadedFilesOfARequest_AreReadOnce_WhateverTheNumberOfMods()
+    {
+        var entries = new EntriesCountingReads([new HashedEntry("a.txt", "a")]);
+        var downloaded = DownloadedFile("dl/Z.zip", ("a.txt", "a")) with { Entries = entries };
+        _folders.WithFile("mods/A", "a.txt", "a").WithFile("mods/B", "a.txt", "a").WithFile("mods/C", "a.txt", "a");
+
+        await Update([ModFrom("A"), ModFrom("B"), ModFrom("C")], downloadedFiles: [downloaded]);
+
+        Assert.Equal(1, entries.Reads);
+    }
+
+    [Fact]
+    public async Task AFileAddedBelowAFolderOfTheInstallationFile_IsNotOneItHoldsWithOtherBytes()
+    {
+        WithFiles([("readme.txt", "hello"), ("docs/readme.txt", "added")]);
+
+        var manifest = await UpdatedWithDownloadedFiles([], ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("readme.txt", "hello"))));
+
+        Assert.Equal([new ManifestFile("docs/readme.txt", new PackageEntry.NotHeld()), new ManifestFile("readme.txt", new PackageEntry.Held())], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AFileBelowDataTheGameFolderHoldsWithOtherBytes_IsRecordedAsSuch()
+    {
+        _folders.WithFile(Mod, "Data/Fallout4.esm", "edited").WithFile(Mod, "a.nif", "a");
+
+        var manifest = await UpdatedWith(GameFolderHolding(("Fallout4.esm", "original"), ("a.nif", "a")));
+
+        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("Data/Fallout4.esm", new PackageEntry.OtherBytes())], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AModsFilesFromTwoPlacesOfTheGame_AreTakenFromOneOnly_TheOtherFilesNotHeld()
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b");
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", [new GameFile("b.nif", "b")])]);
+
+        var manifest = await UpdatedWith(game);
+
+        Assert.Equal([GameFolderPackageTaking(("a.nif", "a"))], manifest.Packages);
+        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.NotHeld())], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AModsManifest_IsTheSame_WhateverOtherModsTheRequestHolds()
+    {
+        _folders.WithFile("mods/A", "a.nif", "a").WithFile("mods/B", "b.nif", "b");
+        var modA = ModFrom("A") with { GameFolder = GameFolderHolding(("unrelated.nif", "u")) };
+        await Update([modA]);
+
+        var result = await Update([ModFrom("B") with { GameFolder = GameFolderHolding(("a.nif", "a")) }, modA]);
+
+        Assert.False(result.Applied.Single(updated => updated.Mod == "A").ManifestWritten);
+    }
+
+    [Fact]
+    public async Task AFileTheInstallationFileLacks_IsTakenFromASecondDownloadedFileHoldingItsBytes_AndNamesItAsAPackage()
+    {
+        WithFiles([("a.nif", "a"), ("b/c.dds", "c")]);
+        var own = DownloadedFile("dl/Own.zip", ("a.nif", "a"));
+        var second = DownloadedFile("dl/Second.zip", ("Data/b/c.dds", "c"));
+
+        var manifest = await UpdatedWithDownloadedFiles([second], ModFrom("Mod", own));
+
+        Assert.Equal([PackageOfDownloadedFile("Own.zip", "dl/Own.zip"), PackageOfDownloadedFile("Second.zip", "dl/Second.zip")], manifest.Packages);
+        Assert.Equal(
+            [new ManifestFile("a.nif", new PackageEntry.Held()), ManifestFile.In("Second.zip", "b/c.dds", "Data/b/c.dds")],
+            manifest.Files);
+    }
+
+    [Fact]
+    public async Task AFileTheInstallationFileHoldsWithOtherBytes_IsTakenFromASecondDownloadedFileHoldingItsBytes()
+    {
+        WithFiles([("a.nif", "edited")]);
+
+        var manifest = await UpdatedWithDownloadedFiles(
+            [DownloadedFile("dl/Patch.zip", ("a.nif", "edited"))], ModFrom("Mod", DownloadedFile("dl/Own.zip", ("a.nif", "original"))));
+
+        Assert.Equal([PackageOfDownloadedFile("Own.zip", "dl/Own.zip"), PackageOfDownloadedFile("Patch.zip", "dl/Patch.zip")], manifest.Packages);
+        Assert.Equal([ManifestFile.In("Patch.zip", "a.nif", "a.nif")], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AFileASecondPackageHoldsWithOtherBytes_IsRecordedAsSuch_NamingThatPackage()
+    {
+        WithFiles([("a.nif", "a"), ("b.nif", "b"), ("c.nif", "edited")]);
+        var own = DownloadedFile("dl/Own.zip", ("a.nif", "a"));
+        var second = DownloadedFile("dl/Second.zip", ("b.nif", "b"), ("c.nif", "original"));
+
+        var manifest = await UpdatedWithDownloadedFiles([second], ModFrom("Mod", own));
+
+        Assert.Equal(new ManifestFile("c.nif", new PackageEntry.OtherBytes(), "Second.zip"), FileOf(Mod, "c.nif"));
+    }
+
+    [Fact]
+    public async Task AModWithNoInstallationFile_NamesEachDownloadedFileItsFilesAreTakenFrom_InTheOrderTheyFirstServe()
+    {
+        WithFiles([("a.txt", "a"), ("b.txt", "b"), ("c.txt", "c")]);
+
+        var manifest = await UpdatedWithDownloadedFiles([DownloadedFile("dl/Z.zip", ("a.txt", "a")), DownloadedFile("dl/Y.zip", ("b.txt", "b"))]);
+
+        Assert.Equal([PackageOfDownloadedFile("Z.zip", "dl/Z.zip"), PackageOfDownloadedFile("Y.zip", "dl/Y.zip")], manifest.Packages);
+        Assert.Equal(
+            [new ManifestFile("a.txt", new PackageEntry.Held()), ManifestFile.In("Y.zip", "b.txt", "b.txt"), new ManifestFile("c.txt", new PackageEntry.NotHeld())],
+            manifest.Files);
+    }
+
+    [Fact]
+    public async Task AFileTwoDownloadedFilesHold_IsTakenFromTheOneAlreadyAPackage()
+    {
+        WithFiles([("a.txt", "a"), ("b.txt", "b")]);
+        var first = DownloadedFile("dl/Z.zip", ("a.txt", "a"), ("b.txt", "b"));
+        var alphabeticallyFirst = DownloadedFile("dl/A.zip", ("b.txt", "b"));
+
+        var manifest = await UpdatedWithDownloadedFiles([alphabeticallyFirst, first]);
+
+        Assert.Equal([PackageOfDownloadedFile("Z.zip", "dl/Z.zip")], manifest.Packages);
+    }
+
+    [Fact]
+    public async Task TwoDownloadedFilesOfOneName_AreOnePackage_TheFirstByHash()
+    {
+        WithFiles([("a.txt", "a"), ("b.txt", "b")]);
+
+        var manifest = await UpdatedWithDownloadedFiles([DownloadedFile("dl1/X.zip", ("a.txt", "a")), DownloadedFile("dl2/X.zip", ("b.txt", "b"))]);
+
+        Assert.Equal([PackageOfDownloadedFile("X.zip", "dl1/X.zip")], manifest.Packages);
+        Assert.Equal([new ManifestFile("a.txt", new PackageEntry.Held()), new ManifestFile("b.txt", new PackageEntry.NotHeld())], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AFileADownloadedFileAndTheGameFolderBothHold_IsTakenFromTheGameFolder()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+
+        var manifest = await UpdatedWithDownloadedFiles([DownloadedFile("dl/Other.zip", ("a.nif", "a"))], gameFolder: GameFolderHolding(("a.nif", "a")));
+
+        Assert.Equal([GameFolderPackageTaking(("a.nif", "a"))], manifest.Packages);
+    }
+
+    [Fact]
+    public async Task AFileNoDownloadedFileAndNoGameFolderHolds_IsReportedNotInThePackage_WhateverElseLands()
+    {
+        WithFiles([("a.txt", "a"), ("g.nif", "g"), ("z.txt", "z")]);
+
+        var result = await Update(
+            [ModFrom("Mod")], gameFolder: GameFolderHolding(("g.nif", "g")), downloadedFiles: [DownloadedFile("dl/Z.zip", ("a.txt", "a"))]);
+
+        Assert.Equal(["z.txt"], result.Applied.Single().NotInPackage);
+    }
+
+    [Fact]
+    public async Task AModWhoseManifestNamesTheGameFolderAsASecondPackage_IsRefused_WhenTheGameFolderWasNotFound()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var own = DownloadedFile("dl/Own.zip", ("a.nif", "a"));
+        _folders.Manifests[Mod] = new Manifest([new ManifestPackage.InstallationFile("Own.zip", 7, "#dl/Own.zip"), new ManifestPackage.GameFolder("Fallout 4", "pin")], []);
+
+        var result = await Update([ModFrom("Mod", own)]);
+
+        Assert.Equal(UpdateManifestRefusal.GameFolderNotFound, result.Refused.Single().Refusal);
     }
 
     [Fact]

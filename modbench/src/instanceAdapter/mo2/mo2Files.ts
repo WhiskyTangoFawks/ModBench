@@ -1,7 +1,7 @@
 // An origin's files as MO2 lays them out: a mod folder walked as MO2's VFS walks it, and the
 // overwrite folder listed whole. Neither answers the adapter's own writes in flight.
 
-import { sep } from 'node:path';
+import { basename, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
@@ -143,6 +143,12 @@ async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
     return { ...walk, files: [], folders: [], notes: [] };
   }
   return walk;
+}
+
+/** The files below `folder` as a mod's are listed, its manifest, named for the folder it builds, not among them. */
+export async function filesBelow(folder: string): Promise<{ files: OriginFile[]; notes: string[] }> {
+  const { files, notes } = await walkMod(folder, basename(folder), false);
+  return { files, notes };
 }
 
 export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list'): Promise<OriginFiles> {

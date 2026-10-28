@@ -2,22 +2,19 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod's manifest from the mod as it is: its one package holds each file whose bytes it has. With no installation
-/// file, the package is the game folder when it holds each file with its bytes.</summary>
+/// <summary>A mod's manifest from the mod as it is. Each file is taken by its hash from the mod's installation file, then from
+/// one place of the game, then from another downloaded file.</summary>
 internal sealed class ManifestBuilder
 {
-    private readonly ManifestPackage.InstallationFile? _package;
-    private readonly GameFolder? _gameFolder;
-    private readonly ILookup<string, HashedEntry> _byHash;
-    private readonly Dictionary<string, HashedEntry> _byPath = new(StringComparer.OrdinalIgnoreCase);
+    private readonly DownloadedFile? _own;
+    private readonly IReadOnlyList<DownloadedFile> _others;
+    private readonly IReadOnlyList<Holder> _places;
 
-    public ManifestBuilder((string Name, InstallationFile File)? installationFile, GameFolder? gameFolder)
+    public ManifestBuilder((string Name, InstallationFile File)? installationFile, GameFolder? gameFolder, IReadOnlyList<DownloadedFile> downloadedFiles)
     {
-        _gameFolder = gameFolder;
-        _package = installationFile is var (name, file) ? new ManifestPackage.InstallationFile(name, file.Size, file.Hash, file.Page) : null;
-        var entries = installationFile?.File.Entries ?? [];
-        _byHash = entries.ToLookup(entry => entry.Hash, StringComparer.Ordinal);
-        foreach (var entry in entries) _byPath.TryAdd(entry.Path, entry);
+        _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
+        _others = [.. downloadedFiles.Where(other => other.Package.Name != _own?.Package.Name)];
+        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true))];
     }
 
     /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make, kept as written
@@ -34,36 +31,83 @@ internal sealed class ManifestBuilder
         };
     }
 
-    // The version rides the package line, so a mod with no package has none.
+    // The version rides the first package, so a mod with no package has none.
     private Manifest Recorded(IReadOnlyList<HashedFile> files, string? version)
     {
-        if (FromGameFolder(files) is { } gameFolder)
-            return new([gameFolder], [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version);
-        if (_package is null) return new([], [.. files.Select(EntryOf)]);
-        return new([_package], [.. files.Select(EntryOf)], version);
+        var ordered = files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).ToList();
+        var sourcing = new Sourcing(_own);
+        sourcing.Take(_own?.Holder, ordered);
+        TakeFromAPlaceOfTheGame(sourcing, ordered);
+        TakeFromOtherDownloadedFiles(sourcing, ordered);
+        sourcing.RecordUnsourced(ordered);
+        return sourcing.Manifest(ordered, version);
     }
 
-    private ManifestPackage.GameFolder? FromGameFolder(IReadOnlyList<HashedFile> files)
+    private void TakeFromAPlaceOfTheGame(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)
     {
-        if (_package is not null || _gameFolder is null || files.Count == 0) return null;
-        return _gameFolder.Places().Any(place => Holds(place, files))
-            ? new ManifestPackage.GameFolder(_gameFolder.Name, FileHash.OfFilesTaken(files))
-            : null;
+        var wanting = sourcing.Unsourced(ordered);
+        if (_places.MaxBy(place => wanting.Count(file => place.PathHolding(file) is not null)) is not { } place) return;
+        var taken = sourcing.Take(place, wanting);
+        if (taken.Count > 0) sourcing.Packages.Add((place, new ManifestPackage.GameFolder(place.Name, FileHash.OfFilesTaken(taken))));
     }
 
-    private static bool Holds(GameFolder place, IReadOnlyList<HashedFile> files)
+    private void TakeFromOtherDownloadedFiles(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)
     {
-        var hashes = place.Files.ToLookup(file => file.Path, file => file.Hash, StringComparer.OrdinalIgnoreCase);
-        return files.All(file => hashes[file.Path].Contains(file.Hash));
+        List<DownloadedFile> used = [];
+        foreach (var file in sourcing.Unsourced(ordered))
+        {
+            var holding = _others.Select(other => (Other: other, Path: other.Holder.PathHolding(file)))
+                .Where(candidate => candidate.Path is not null).OrderBy(candidate => !used.Contains(candidate.Other)).FirstOrDefault();
+            if (holding.Path is null) continue;
+            if (!used.Contains(holding.Other)) used.Add(holding.Other);
+            sourcing.Lines[file.Path] = ManifestFile.In(holding.Other.Holder.Name, file.Path, holding.Path);
+        }
+        sourcing.Packages.AddRange(used.Select(other => (other.Holder, (ManifestPackage)other.Package)));
     }
 
-    private ManifestFile EntryOf(HashedFile file)
+    private sealed class Sourcing
     {
-        var holding = _byHash[file.Hash].ToList();
-        if (_package is null) return new ManifestFile(file.Path, new PackageEntry.NotHeld());
-        if (holding.Count == 0)
-            return new ManifestFile(file.Path, _byPath.ContainsKey(file.Path) ? new PackageEntry.OtherBytes() : new PackageEntry.NotHeld());
-        var entry = _byPath.TryGetValue(file.Path, out var samePath) && samePath.Hash == file.Hash ? samePath : holding[0];
-        return ManifestFile.At(file.Path, new FileBytes.InInstallationFile(_package.Name, entry.Path));
+        public Sourcing(DownloadedFile? own)
+        {
+            if (own is not null) Packages.Add((own.Holder, own.Package));
+        }
+
+        public List<(Holder Holder, ManifestPackage Package)> Packages { get; } = [];
+
+        public Dictionary<string, ManifestFile> Lines { get; } = [];
+
+        public List<HashedFile> Unsourced(IEnumerable<HashedFile> files) => [.. files.Where(file => !Lines.ContainsKey(file.Path))];
+
+        public List<HashedFile> Take(Holder? holder, IEnumerable<HashedFile> files)
+        {
+            List<HashedFile> taken = [];
+            foreach (var file in files)
+            {
+                if (holder?.PathHolding(file) is not { } path) continue;
+                Lines[file.Path] = ManifestFile.In(holder.Name, file.Path, path);
+                taken.Add(file);
+            }
+            return taken;
+        }
+
+        public void RecordUnsourced(IEnumerable<HashedFile> files)
+        {
+            foreach (var file in Unsourced(files))
+            {
+                var holding = Packages.Select(package => package.Holder).FirstOrDefault(holder => holder.HoldsAPathOf(file));
+                Lines[file.Path] = holding is null
+                    ? new ManifestFile(file.Path, new PackageEntry.NotHeld())
+                    : new ManifestFile(file.Path, new PackageEntry.OtherBytes(), holding.Name);
+            }
+        }
+
+        public Manifest Manifest(IEnumerable<HashedFile> ordered, string? version)
+        {
+            var first = Packages.Count > 0 ? Packages[0].Holder.Name : null;
+            return new Manifest(
+                [.. Packages.Select(package => package.Package)],
+                [.. ordered.Select(file => Lines[file.Path]).Select(line => line.Package == first ? line with { Package = null } : line)],
+                Packages.Count > 0 ? version : null);
+        }
     }
 }

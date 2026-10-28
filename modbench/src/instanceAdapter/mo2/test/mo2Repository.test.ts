@@ -1095,6 +1095,7 @@ describe('the MO2 adapter\'s submodules', () => {
 
 describe('the MO2 adapter\'s game files', () => {
   const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
+  const HASH_OF_BBBB = 'M5WSec/sW34=';
   const HASH_OF_CCCC = 'rYontyeqpd8=';
 
   it('hands the game file at each path of a mod\'s files, named as the game folder names it, and none for a path the game folder lacks', async () => {
@@ -1154,8 +1155,8 @@ describe('the MO2 adapter\'s game files', () => {
     await chmod(meshes, 0o000);
 
     try {
-      expect(await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Mod')).toMatchObject({ kind: 'read', answer: { gameFiles: [{ path: 'b.dds' }] } });
-      expect(await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Other')).toMatchObject({ kind: 'unreadable', reason: expect.stringMatching(/EACCES/) as unknown });
+      expect(await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), join(root, 'mods', 'Mod'))).toMatchObject({ kind: 'read', answer: { gameFiles: [{ path: 'b.dds' }] } });
+      expect(await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), join(root, 'mods', 'Other'))).toMatchObject({ kind: 'unreadable', reason: expect.stringMatching(/EACCES/) as unknown });
     } finally {
       await chmod(meshes, 0o755);
     }
@@ -1167,18 +1168,36 @@ describe('the MO2 adapter\'s game files', () => {
     await put('mods/Mod/A.nif', 'zzzz');
     await put('mods/Mod/mine.nif', 'mine');
 
-    const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Mod');
+    const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), join(root, 'mods', 'Mod'));
 
     expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'a.nif', hash: HASH_OF_AAAA }], notes: [] } });
   });
+
+  it('hands the game file a mod\'s file may be at any depth below its folder, as a copy of the game folder holds it', async () => {
+    const adapter = await instance();
+    await put('game/Data/Textures/a.dds', 'aaaa');
+    await put('game/Data/b.esm', 'bbbb');
+    await put('mods/Stock/Data/Textures/a.dds', 'aaaa');
+    await put('mods/Stock/Data/b.esm', 'zzzz');
+    await put('mods/Stock/Fallout4.exe', 'exe');
+
+    const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), join(root, 'mods', 'Stock'));
+
+    expect(taken).toEqual({
+      kind: 'read',
+      answer: { notes: [], gameFiles: expect.arrayContaining([{ path: 'Textures/a.dds', hash: HASH_OF_AAAA }, { path: 'b.esm', hash: HASH_OF_BBBB }]) as unknown },
+    });
+  });
 });
 
-it('answers the game files taken by a mod whose folder differs from its name only in case', async () => {
+it('answers the game files the files below any folder of the instance may be, not its manifest, named for the folder', async () => {
   const adapter = await instance();
   await put('game/Data/a.nif', 'aaaa');
-  await put('mods/MOD/a.nif', 'aaaa');
+  await put('game/Data/Stock Game.manifest.json', 'manifest');
+  await put('Stock Game/Data/a.nif', 'aaaa');
+  await put('Stock Game/Stock Game.manifest.json', 'manifest');
 
-  const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'mod');
+  const taken = await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), join(root, 'Stock Game'));
 
-  expect(taken).toMatchObject({ kind: 'read', answer: { gameFiles: [{ path: 'a.nif' }] } });
+  expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'a.nif', hash: 'Mr+EvxoNp0I=' }], notes: [] } });
 });

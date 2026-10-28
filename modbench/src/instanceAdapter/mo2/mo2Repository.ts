@@ -14,7 +14,7 @@ import {
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
-import { originFilesIn } from './mo2Files';
+import { filesBelow } from './mo2Files';
 
 type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines'> & Pick<ManagerAdapter, 'filesKept'>;
 
@@ -128,6 +128,12 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
   return separator + whitelist.replaceAll('\n', lineEnding);
 }
 
+// A folder that holds a copy of the game folder holds the game's files below a folder of its own, such as Data/.
+const pathsBelowFolders = (path: string): string[] => {
+  const segments = path.split('/');
+  return segments.map((_, skipped) => segments.slice(skipped).join('/'));
+};
+
 export function mo2Repository(
   context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined,
 ): Mo2Repository {
@@ -193,9 +199,9 @@ export function mo2Repository(
 
     gameFiles,
 
-    async gameFilesTakenBy(dataFolder, mod) {
-      const { files, notes } = await originFilesIn(context, { kind: 'mod', name: mod }, false, 'list');
-      const taken = await gameFiles(dataFolder, files.map((file) => file.relativePath));
+    async gameFilesTakenBy(dataFolder, folder) {
+      const { files, notes } = await filesBelow(folder);
+      const taken = await gameFiles(dataFolder, [...new Set(files.flatMap((file) => pathsBelowFolders(file.relativePath)))]);
       const [reason] = Object.values(taken.unreadable);
       return reason === undefined ? { kind: 'read', answer: { gameFiles: taken.files, notes } } : { kind: 'unreadable', reason };
     },

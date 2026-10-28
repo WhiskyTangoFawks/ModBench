@@ -35,7 +35,6 @@ const WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD: InstanceAnswers = {
   installations: new Map([[STOCK_GAME.name, recording(INSTALLED)]]),
   metadata: new Map([[STOCK_GAME.name, { version: '9' }]]),
   unwritableMetadata: new Map([[STOCK_GAME.name, 'it was asked']]),
-  gameFilesTaken: new Map([[STOCK_GAME.name, { kind: 'unreadable', reason: 'it was asked' }]]),
 };
 
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
@@ -197,10 +196,10 @@ describe('modlistRepositoryCommands update manifest', () => {
       method: 'updateManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', installationFile: INSTALLED, metadataFiles: ['meta.ini'], version: '1.2.3' },
-          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
+          { name: 'ModA', folder: '/mods/ModA', installationFile: INSTALLED, metadataFiles: ['meta.ini'], version: '1.2.3', gameFolder: GAME_FOLDER },
+          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB', gameFolder: GAME_FOLDER },
         ],
-        { statCache: '/instance/stat-cache', gameFolder: GAME_FOLDER },
+        { statCache: '/instance/stat-cache', downloadedFiles: [] },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);
@@ -283,15 +282,17 @@ describe('modlistRepositoryCommands update manifest', () => {
     expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, repositoryNotes: ['/instance/.gitignore has a marker with no match'] });
   });
 
-  it('hands mEdit a folder outside the mod folders by its name, with its folder and none of what a mod manager holds of a mod', async () => {
-    const { commands, client } = commandsOver(WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD);
+  it('hands mEdit a folder outside the mod folders by its name, with its folder, the game files its files may be, and none of what a mod manager holds of a mod', async () => {
+    const stockGameFiles: FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =
+      { kind: 'read', answer: { gameFiles: [{ path: 'Meshes/A.nif', hash: '#a' }], notes: [] } };
+    const { commands, client } = commandsOver({ ...WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD, gameFilesTaken: new Map([['Stock Game', stockGameFiles]]) });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA'], {}, [STOCK_GAME]);
 
     expect(client.calls[0]?.args[0]).toEqual([
-      { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
-      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [] },
+      { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], gameFolder: GAME_FOLDER },
+      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [], gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] } },
     ]);
     expect(outcome).toMatchObject({ applied: true, refused: [], notes: [] });
   });
@@ -306,29 +307,65 @@ describe('modlistRepositoryCommands update manifest', () => {
     expect(outcome).toMatchObject({ applied: true, refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
   });
 
-  it('hands mEdit the game files a mod with no installation file takes, once for every mod that takes them, and none for a mod with an installation file', async () => {
+  it('hands mEdit, with each mod, the game files that mod\'s files may take, whether or not it has an installation file', async () => {
     const taken = (path: string): FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =>
       ({ kind: 'read', answer: { gameFiles: [{ path, hash: `#${path}` }], notes: [] } });
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
-      gameFilesTaken: new Map([['ModA', taken('Ignored.nif')], ['ModB', taken('Meshes/B.nif')], ['ModC', taken('meshes/b.nif')]]),
+      gameFilesTaken: new Map([['ModA', taken('Textures/a.dds')], ['ModB', taken('Meshes/B.nif')]]),
     });
     client.setCommandResult('updateManifest', UPDATED);
 
-    await commands.updateManifest(['ModA', 'ModB', 'ModC']);
+    await commands.updateManifest(['ModA', 'ModB']);
+
+    expect(client.calls[0]?.args[0]).toMatchObject([
+      { name: 'ModA', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Textures/a.dds', hash: '#Textures/a.dds' }] } },
+      { name: 'ModB', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/B.nif', hash: '#Meshes/B.nif' }] } },
+    ]);
+  });
+
+  it('hands mEdit the downloaded files already hashed, with their entries, once for the whole call', async () => {
+    const { commands, client } = commandsOver({ indexedDownloadedFiles: { files: [INSTALLED, { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' }], notes: [] } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    await commands.updateManifest(['ModA', 'ModB']);
 
     expect(client.calls[0]?.args[1]).toEqual({
-      statCache: '/instance/stat-cache', gameFolder: { ...GAME_FOLDER, files: [{ path: 'meshes/b.nif', hash: '#meshes/b.nif' }] },
+      statCache: '/instance/stat-cache',
+      downloadedFiles: [INSTALLED, { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' }],
     });
   });
 
-  it('names a mod with no installation file when the game folder was not found, and sends no game folder', async () => {
+  it('updates every mod and reports why a downloaded file could not be read', async () => {
+    const { commands, client } = commandsOver({ indexedDownloadedFiles: { files: [], notes: ['/downloads/Bad.7z could not be read: EIO'] } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA', 'ModB']);
+
+    expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModA', 'ModB']);
+    expect(outcome).toMatchObject({ applied: true, repositoryNotes: ['/downloads/Bad.7z could not be read: EIO'] });
+  });
+
+  it('updates a mod whose installation file yields its bytes though its game files cannot be read, noting why', async () => {
+    const { commands, client } = commandsOver({
+      installations: new Map([['ModA', recording(INSTALLED)]]),
+      gameFilesTaken: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]),
+    });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA']);
+
+    expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModA']);
+    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModA', note: expect.stringContaining('EACCES') as unknown }] });
+  });
+
+  it('names a mod with no installation file when the game folder was not found, and sends it no game folder', async () => {
     const { commands, client } = commandsOver({ installations: new Map([['ModA', recording(INSTALLED)]]) }, new InMemoryMEditClient(), {}, readingOf({}, GAME_FOLDER_NOT_FOUND));
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA', 'ModB']);
 
-    expect(client.calls[0]?.args[1]).toEqual({ statCache: '/instance/stat-cache' });
+    expect(client.calls[0]?.args[0]).not.toContainEqual(expect.objectContaining({ gameFolder: expect.anything() as unknown }));
     expect(outcome).toMatchObject({ notes: [{ mod: 'ModB', note: expect.stringContaining('the game folder was not found') as unknown }] });
   });
 
@@ -1250,6 +1287,11 @@ describe('modlistRepositoryCommands mod status', () => {
   });
 });
 
+const firstModSent = (client: InMemoryMEditClient): unknown => {
+  const mods: unknown = client.calls[0]?.args[0];
+  return Array.isArray(mods) ? (mods as readonly unknown[])[0] : undefined;
+};
+
 describe('modlistRepositoryCommands with the Steam install beside the game folder', () => {
   const STEAM: FoundGameFolder = { kind: 'found', root: '/steam', dataFolder: '/steam/Data' };
   const UPDATED = { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] };
@@ -1269,7 +1311,7 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
 
     await commands.updateManifest(['ModB']);
 
-    expect(client.calls[0]?.args[1]).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/B.nif', hash: '#b' }] }] } });
+    expect(firstModSent(client)).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/B.nif', hash: '#b' }] }] } });
   });
 
   it('hands restore\'s retry the Steam install\'s files as another place', async () => {
@@ -1301,7 +1343,7 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
 
     const outcome = await commands.updateManifest(['ModB']);
 
-    expect(client.calls[0]?.args[1]).toMatchObject({ gameFolder: { files: [{ path: 'Meshes/B.nif', hash: '#b' }] } });
+    expect(firstModSent(client)).toMatchObject({ gameFolder: { files: [{ path: 'Meshes/B.nif', hash: '#b' }] } });
     expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModB', note: expect.stringContaining('EACCES') as unknown }] });
   });
 
@@ -1311,6 +1353,6 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
 
     await commands.updateManifest(['ModB']);
 
-    expect(client.calls[0]?.args[1]).not.toHaveProperty('gameFolder.elsewhere');
+    expect(firstModSent(client)).not.toHaveProperty('gameFolder.elsewhere');
   });
 });
