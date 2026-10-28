@@ -332,6 +332,8 @@ export interface SourceMods {
   folderOf(mod: string): string | undefined;
   /** Whether a manifest builds `mod`: one in a cloned repository, or the output `.gitmodules` records for a repository not cloned yet. */
   builds(mod: string): boolean;
+  /** The output the manifest in `folder` names, though the repository builds no mod for it: a manifest not named for its output, or an output another repository builds too. */
+  claimedOutput(folder: string): string | undefined;
   readonly notes: readonly string[];
 }
 

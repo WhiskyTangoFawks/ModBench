@@ -1623,6 +1623,17 @@ describe('the MO2 Instance adapter', () => {
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unnamed'))]);
       });
 
+      it('answers the output a repository\'s manifest names, though the manifest is not named for it so the repository builds no mod', async () => {
+        await repository('Src', '{ "output": "Other" }');
+        await repository('Good', '{ "output": "Good" }');
+        await repository('Bad', '{ "exclude": [] }');
+
+        const sources = await source.sourceMods();
+
+        expect(['Src', 'Good', 'Bad'].map((name) => sources.claimedOutput(join(root, 'source', name)))).toEqual(['Other', 'Good', undefined]);
+        expect(sources.folderOf('Other')).toBeUndefined();
+      });
+
       it('reads a folder named as a manifest as no manifest, as mEdit does', async () => {
         await repository('Foldered', undefined);
         await mkdir(join(root, 'source', 'Foldered', 'Foldered.manifest.json'));

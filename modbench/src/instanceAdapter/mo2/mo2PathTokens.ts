@@ -15,6 +15,7 @@ import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
 import type { Mo2Context } from './mo2Context';
+import { MANIFEST_SUFFIX } from '../../wire/sourceMod';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens' | 'pathsOutsideFolders'>;
 
@@ -166,6 +167,10 @@ const pathsIn = (text: string): string[] => [...text.matchAll(PATH)].map(({ 0: m
   return text[index - 1] === '(' ? quoted.replace(/\)$/, '') : quoted;
 });
 
+// A manifest's hash is base64, which can start with a slash; the manifest holds a path only under "path".
+const withoutHashes = (file: string, text: string): string =>
+  file.endsWith(MANIFEST_SUFFIX) ? text.replace(/("hash"\s*:\s*)"[^"]*"/g, '$1""') : text;
+
 const filterConfigured = (instanceRoot: string, driver: string): Promise<boolean> =>
   git(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
 
@@ -291,7 +296,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
           if (GIT_PATTERN_FILES.has(basename(file))) continue;
           const text = covered ? await heldByGit(scratch, instanceRoot, file) : await readFile(join(instanceRoot, file), 'utf8').catch(absentAs(''));
           if (text.includes('\0')) continue;
-          found.push(...[...new Set(pathsIn(text))].map((path) => ({ file, path })));
+          found.push(...[...new Set(pathsIn(withoutHashes(file, text)))].map((path) => ({ file, path })));
         }
         return found;
       });

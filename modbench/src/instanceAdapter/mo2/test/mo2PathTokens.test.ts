@@ -403,6 +403,14 @@ describe('the MO2 adapter\'s path tokens', () => {
     ]);
   });
 
+  it('finds no path in a hash a manifest holds, though it starts with a slash, and finds the path beside it', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'mods/Plain/Plain.manifest.json',
+      '{"installationFile": {"path": "C:/Modding/x.zip", "hash": "/emUNYLj+Fc=", "entries": [{"path": "a.txt", "hash": "/AAECAwQFBgc="}]}}');
+
+    expect(await adapter.pathsOutsideFolders()).toEqual([{ file: 'mods/Plain/Plain.manifest.json', path: 'C:/Modding/x.zip' }]);
+  });
+
   it('writes nothing in an instance folder that holds no repository, and finds no path in it', async () => {
     const root = await folder('instance');
     await put(root, 'ModOrganizer.ini', SETTINGS(['1\\binary=C:/Modding/x.exe']));

@@ -1,7 +1,7 @@
 import {
   isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
-import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { isPluginSourcePath, type InstanceAdapter, type SourceMods } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 import { inModOrder } from './inModOrder';
@@ -26,13 +26,22 @@ export const metadataUnreadable = (reason: string): string => `its metadata coul
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
 export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCommandsDeps) {
-  const buildMod = async (mod: string, sourceFolder: string | undefined): Promise<BuildMod | ItemRefusal<string>> => {
+  const noRepositoryRefusal = (mod: string, sourceMods: SourceMods): ItemRefusal<string> => {
+    const own = adapter.sourceFolder(mod);
+    const claimed = own === undefined || sourceMods.folderOf(mod) !== undefined ? undefined : sourceMods.claimedOutput(own);
+    if (claimed === undefined) return { item: mod, reason: 'no repository in the source folder builds it' };
+    const sameMod = adapter.entryKey({ kind: 'mod', name: mod }) === adapter.entryKey({ kind: 'mod', name: claimed });
+    return { item: mod, reason: sameMod ? `its repository's manifest is not named for its output "${claimed}"` : `its folder is "${mod}", but its repository's manifest builds "${claimed}"` };
+  };
+
+  const buildMod = async (mod: string, sourceMods: SourceMods): Promise<BuildMod | ItemRefusal<string>> => {
+    const sourceFolder = sourceMods.folderOf(mod);
     const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
     if (unsaved.length > 0) return unsavedRefusal(mod, unsaved);
     const folder = await adapter.modFolderPath(mod);
     const metadata = await adapter.modMetadata(mod);
     const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
-    if (sourceFolder === undefined || host === undefined) return { item: mod, reason: 'no repository in the source folder builds it' };
+    if (sourceFolder === undefined || host === undefined) return noRepositoryRefusal(mod, sourceMods);
     if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
     if (metadata.kind === 'unreadable') return { item: mod, reason: metadataUnreadable(metadata.reason) };
     if (host.kind === 'unreadable') return { item: mod, reason: `its remote could not be read: ${host.reason}` };
@@ -97,7 +106,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       const ordered = await inModOrder(adapter, mods);
       let previous: string | undefined;
       for (const [at, mod] of ordered.entries()) {
-        const decided = await buildMod(mod, sourceMods.folderOf(mod));
+        const decided = await buildMod(mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
         // mods.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
         const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
