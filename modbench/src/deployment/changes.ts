@@ -42,7 +42,7 @@ export async function fileIdAt(path: string): Promise<string | undefined> {
 }
 
 // A link fails where a file is, so neither move replaces a file deploy does not own.
-async function moved(from: string, to: string): Promise<void> {
+export async function moved(from: string, to: string): Promise<void> {
   await link(from, to);
   try {
     await unlink(from);
@@ -65,7 +65,7 @@ export async function linkedFree(from: string, nameAt: (n: number) => string): P
   }
 }
 
-async function setAside(at: string): Promise<string> {
+export async function setAside(at: string): Promise<string> {
   const aside = await linkedFree(at, (n) => `${at}${ASIDE}${process.pid}_${n}`);
   try {
     await unlink(at);
@@ -134,6 +134,19 @@ export async function removeFolders(from: string, upTo: string): Promise<void> {
   }
 }
 
+/** Removes the folder when it holds nothing, and answers whether it is gone. */
+export async function removedIfEmpty(path: string): Promise<boolean> {
+  try {
+    await rmdir(path);
+    return true;
+  } catch (err) {
+    if (missing(err)) return true;
+    const code = errnoCode(err);
+    if (code === 'ENOTEMPTY' || code === 'EEXIST') return false;
+    throw err;
+  }
+}
+
 async function undoAll(undos: readonly Undo[]): Promise<string[]> {
   const left: string[] = [];
   for (const undo of [...undos].reverse()) {
@@ -151,7 +164,7 @@ const removedAside = (folder: string, asides: readonly string[]): Promise<string
 
 /** Makes every change and `steps`, then `land`s them, and answers each file it set aside and could not remove;
  *  or, when one fails, undoes the rest and throws why, naming each change it could not undo. */
-export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>): Promise<string[]> {
+export async function changeAll(folder: string, { removals, relinks, links }: Changes, steps: readonly Step[], land: () => Promise<void>, gesture: 'Deploy' | 'Purge'): Promise<string[]> {
   const undos: Undo[] = [];
   const asides: string[] = [];
   try {
@@ -172,7 +185,7 @@ export async function changeAll(folder: string, { removals, relinks, links }: Ch
     await land();
   } catch (err) {
     const left = await undoAll(undos);
-    throw new Error(left.length === 0 ? errorMessage(err) : `${errorMessage(err)}. Deploy could not undo: ${left.join('; ')}`);
+    throw new Error(left.length === 0 ? errorMessage(err) : `${errorMessage(err)}. ${gesture} could not undo: ${left.join('; ')}`);
   }
   return removedAside(folder, asides);
 }

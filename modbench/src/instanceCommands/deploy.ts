@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { overwritePathOf, type Deployed, type Deployment, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
+import { overwritePathOf, type Deployed, type Deployment, type Purged, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
@@ -49,6 +49,18 @@ async function deploy(
   }
 }
 
+export type PurgeResult = CommandResult<Purged>;
+
+async function purge({ deployment }: { deployment: Deployment }, setting: DeploymentFolderSetting): Promise<PurgeResult> {
+  const folder = deploymentFolderOf(setting);
+  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  try {
+    return { applied: true, ...await deployment.purge(folder) };
+  } catch (err) {
+    return refuse(err);
+  }
+}
+
 /** `left` names each file no mod file can land at the path of, which stays in the deployment folder. */
 export type MoveToOverwriteResult = CommandResult<{ wrote: boolean; left: readonly string[] }>;
 
@@ -82,6 +94,7 @@ export function deployCommands(
 ) {
   return {
     deploy: (load: LoadOrderToDeploy | undefined) => deploy({ deployment, adapter }, deploymentFolder, load),
+    purge: () => purge({ deployment }, deploymentFolder),
     moveToOverwrite: (paths?: readonly string[]) => moveToOverwrite({ adapter, deployment }, deploymentFolder, paths),
   };
 }

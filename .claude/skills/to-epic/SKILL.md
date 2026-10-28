@@ -20,7 +20,11 @@ The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the t
 
    Check the scope with the user.
 
-3. Write the epic using the template below, then publish it to the project issue tracker with the epic label and a goal or a lane milestone, as `docs/agents/issue-tracker.md` names them. Close by prompting `/to-tickets` on the new epic.
+3. Find the epic the batch joins: list the open epics, `gh issue list --label epic --state open`. When an open epic's goal holds the batch, or the batch is one ticket's worth, it joins that epic (`docs/agents/issue-tracker.md` § The shape of the backlog). Add its pointers to that epic's Scope and Out of scope, widen its Goal when the goal grows, and close by prompting `/to-tickets` on it. Otherwise go on to step 4.
+
+   Done when the batch has joined an open epic, or no open epic holds it.
+
+4. Write the epic using the template below, then publish it to the project issue tracker with the epic label and a goal or a lane milestone, as `docs/agents/issue-tracker.md` names them. Close by prompting `/to-tickets` on the new epic.
 
 <epic-template>
 

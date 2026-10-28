@@ -5,12 +5,12 @@ import { readdir, realpath, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
-import { pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
-import { ASIDE, changeAll, fileIdAt, recoveryIn, type Link, type Step } from './changes';
+import { PLUGINS_FILE_NAME, pluginsTextOf, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
+import { ASIDE, changeAll, fileIdAt, recoveryIn, removedIfEmpty, type Link, type Step } from './changes';
 import { errorMessage } from '../ports/errorMessage';
-import { pluginsTxtChange } from './pluginsTxt';
+import { pluginsTxtChange, pluginsTxtPurge } from './pluginsTxt';
 import type { PluginsTxtPlace } from './pluginsTxtPlace';
-import { recordIn, type DeploymentRecord, type Written, type WrittenPluginsTxt } from './record';
+import { recordIn, type DeploymentRecord, type Recorded, type Written, type WrittenPluginsTxt } from './record';
 
 /** A file the game gets: its path in the mod, `/`-separated, and the copy that wins it. */
 export interface FileTheGameGets {
@@ -45,10 +45,22 @@ export interface Deployed {
   readonly pluginsTxt: PluginsTxtDeployed;
 }
 
+/** `unmanaged` is every file left in the folder that is not as deploy wrote it; `unfinished` names, with why, what a landed purge did not finish. */
+export interface Purged {
+  readonly wrote: boolean;
+  readonly restored: string | undefined;
+  readonly leftRenamed: readonly string[];
+  readonly unmanaged: readonly string[];
+  readonly unfinished: readonly string[];
+}
+
 export interface Deployment {
   /** `files` in the order their winners win: of two that land at one path, the earlier wins it.
    *  When it cannot deploy, it throws why, and has written nothing or names what it left changed. */
   deploy(folder: string, files: Iterable<FileTheGameGets>, plugins: PluginOrder): Promise<Deployed>;
+  /** Removes each file deploy wrote to `folder` that is still as deploy wrote it, and puts back the plugins.txt deploy renamed.
+   *  When it cannot, it throws why, and has written nothing or names what it left changed. */
+  purge(folder: string): Promise<Purged>;
   /** Every file in `folder` that is not still as deploy last wrote it. */
   unmanaged(folder: string): Promise<string[]>;
 }
@@ -181,6 +193,8 @@ const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
 interface PluginsPart {
   readonly steps: Step[];
   readonly recordChanged: boolean;
+  /** What the record holds of plugins.txt while the deploy changes it, so a deploy killed there is recovered. */
+  recordBefore(): WrittenPluginsTxt | undefined;
   recordAfter(): WrittenPluginsTxt | undefined;
   settle(): Promise<string[]>;
   deployed(): PluginsTxtDeployed;
@@ -189,16 +203,39 @@ interface PluginsPart {
 async function pluginsPartOf(place: PluginsTxtPlace, folder: string, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
   const where = await place(release, folder);
   if ('why' in where) {
-    return { steps: [], recordChanged: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
+    return { steps: [], recordChanged: false, recordBefore: () => previous, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
   }
+  const path = join(where.folder, PLUGINS_FILE_NAME);
   const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
   return {
     steps: change.step === undefined ? [] : [change.step],
     recordChanged: change.recordChanged,
+    recordBefore: () => (previous?.path === path ? previous : { path, ino: '', renamed: [] }),
     recordAfter: () => change.written(),
     settle: () => change.settle(),
     deployed: () => ({ kind: change.step === undefined ? 'unchanged' : 'written', renamed: change.renamed() }),
   };
+}
+
+// A folder deploy makes is one a link at one of `paths` needs and the folder does not hold.
+async function foldersToMake(folder: string, paths: readonly string[]): Promise<string[]> {
+  const missing = new Set<string>();
+  for (const path of paths) {
+    for (let dir = dirname(path); dir !== '.' && !missing.has(dir); dir = dirname(dir)) {
+      if (await fileIdAt(join(folder, dir)) !== undefined) break;
+      missing.add(dir);
+    }
+  }
+  return [...missing];
+}
+
+async function restoredRecord(record: DeploymentRecord, folder: string, recorded: Recorded, err: unknown, gesture: 'Deploy' | 'Purge'): Promise<Error> {
+  try {
+    await record.write(folder, recorded);
+  } catch (restoreErr) {
+    return new Error(`${errorMessage(err)}. ${gesture} could not restore its record: ${errorMessage(restoreErr)}`);
+  }
+  return err instanceof Error ? err : new Error(errorMessage(err));
 }
 
 async function deployTo(
@@ -212,9 +249,10 @@ async function deployTo(
   const setAside = [...removals, ...relinks].map(asWritten);
   const unmanaged = await unmanagedIn(folder, [...after, ...setAside]);
   const part = await pluginsPartOf(place, folder, plugins, recorded.pluginsTxt);
+  const folders = [...new Set([...recorded.folders, ...await foldersToMake(folder, [...relinks, ...links].map(({ path }) => path))])];
   const recordWith = (files: readonly Written[]): Promise<void> => {
     const pluginsTxt = part.recordAfter();
-    return record.write(folder, { files, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
+    return record.write(folder, { files, folders, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
   };
   if (links.length + relinks.length + removals.length === 0 && !part.steps.length) {
     if (after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
@@ -223,20 +261,72 @@ async function deployTo(
   // A hardlink's file ID is its source's, so the record is known before the files change. A deploy killed
   // part way leaves a record the next deploy recovers from (ADR-0003); a failed deploy restores the old one.
   const intended = [...after, ...setAside];
-  await record.write(folder, { files: intended, ...(recorded.pluginsTxt === undefined ? {} : { pluginsTxt: recorded.pluginsTxt }) });
+  const before = part.recordBefore();
+  await record.write(folder, { files: intended, folders, ...(before === undefined ? {} : { pluginsTxt: before }) });
   let leftAside: string[];
   try {
-    leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith(intended));
+    leftAside = await changeAll(folder, { removals, relinks, links }, part.steps, () => recordWith(intended), 'Deploy');
   } catch (err) {
-    try {
-      await record.write(folder, recorded);
-    } catch (restoreErr) {
-      throw new Error(`${errorMessage(err)}. Deploy could not restore its record: ${errorMessage(restoreErr)}`);
-    }
-    throw err;
+    throw await restoredRecord(record, folder, recorded, err, 'Deploy');
   }
   leftAside.push(...await part.settle());
   return { wrote: true, leftOut, unmanaged, lost, leftAside, pluginsTxt: part.deployed() };
+}
+
+async function removedFolders(folder: string, made: readonly string[], unfinished: string[]): Promise<string[]> {
+  const kept: string[] = [];
+  for (const dir of [...made].sort((a, b) => b.split('/').length - a.split('/').length)) {
+    try {
+      if (!await removedIfEmpty(join(folder, dir))) kept.push(dir);
+    } catch (err) {
+      kept.push(dir);
+      unfinished.push(`${dir}, a folder deploy made (${errorMessage(err)})`);
+    }
+  }
+  return kept;
+}
+
+async function unmanagedLeft(folder: string, unfinished: string[]): Promise<string[]> {
+  try {
+    return await unmanagedIn(folder, []);
+  } catch (err) {
+    unfinished.push(`the files left in the folder, which it could not read (${errorMessage(err)})`);
+    return [];
+  }
+}
+
+async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purged> {
+  const recorded = await record.of(folder);
+  const removals = [...(await stillWritten(folder, recorded.files)).values()];
+  const plugins = recorded.pluginsTxt === undefined ? undefined : await pluginsTxtPurge(recorded.pluginsTxt);
+  const steps = plugins?.step === undefined ? [] : [plugins.step];
+  const unfinished: string[] = [];
+  const wrote = removals.length + steps.length > 0;
+  if (wrote) {
+    // Blanking the file ID leaves a purge killed after it put the user's file back no claim on that file: it is known by its mark alone.
+    const pluginsTxt = recorded.pluginsTxt === undefined ? {} : { pluginsTxt: { ...recorded.pluginsTxt, ino: '' } };
+    await record.write(folder, { files: recorded.files, folders: recorded.folders, ...pluginsTxt });
+    try {
+      unfinished.push(...await changeAll(folder, { removals, relinks: [], links: [] }, steps, () => Promise.resolve(), 'Purge'));
+    } catch (err) {
+      throw await restoredRecord(record, folder, recorded, err, 'Purge');
+    }
+  }
+  unfinished.push(...await plugins?.settle() ?? []);
+  const folders = await removedFolders(folder, recorded.folders, unfinished);
+  if (recorded.files.length > 0 || recorded.pluginsTxt !== undefined || folders.length !== recorded.folders.length) {
+    try {
+      await record.write(folder, { files: [], folders });
+    } catch (err) {
+      unfinished.push(`the record of what deploy wrote (${errorMessage(err)})`);
+    }
+  }
+  const hadRecord = recorded.files.length > 0 || recorded.pluginsTxt !== undefined;
+  const unmanaged = hadRecord ? await unmanagedLeft(folder, unfinished) : [];
+  return {
+    wrote, restored: plugins?.restored, leftRenamed: plugins?.left ?? [], unfinished,
+    unmanaged,
+  };
 }
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of
@@ -247,6 +337,11 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Dep
   return {
     unmanaged(folder) {
       const run = last.then(async () => unmanagedIn(folder, (await record.of(folder)).files));
+      last = run.catch(() => undefined);
+      return run;
+    },
+    purge(folder) {
+      const run = last.then(() => purgeFrom(record, folder));
       last = run.catch(() => undefined);
       return run;
     },

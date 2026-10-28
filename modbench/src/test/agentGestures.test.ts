@@ -5,7 +5,7 @@ vi.mock('vscode', () => ({}));
 import { AGENT_GESTURES } from '../agent/gestures';
 import { catalogCommandIds, GESTURES_MARKDOWN, SPECIFIED_AHEAD_OF_CODE } from './commandsCatalog';
 
-const KEPT_FROM_THE_AGENT = ['modbench.profile.switch', 'modbench.instance.refresh', 'modbench.instance.logIn', 'modbench.instance.logOut', 'modbench.instance.deploy', 'modbench.instance.moveToOverwrite'];
+const KEPT_FROM_THE_AGENT = ['modbench.profile.switch', 'modbench.instance.refresh', 'modbench.instance.logIn', 'modbench.instance.logOut', 'modbench.instance.deploy', 'modbench.instance.purge', 'modbench.instance.moveToOverwrite'];
 const GIVEN_TO_THE_AGENT = ['modbench.record.open'];
 
 describe('the gestures the agent runs (agent.md, Test seam)', () => {
