@@ -138,8 +138,8 @@ internal sealed class ModInit(
     private static ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>> Refused(DecompileAndCommitRefusal refusal, string message) =>
         ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
 
-    // plugins.md, Decompile and commit, story 2: what the installation file yields with its bytes the manifest takes from it, and
-    // every other file but what compile writes is an asset. The mod folder's manifest keeps its steps and the files they make.
+    // plugins.md, Decompile and commit, story 2: the manifest takes what the installation file yields with its bytes, and the rest
+    // but what compile writes is an asset.
     private (Manifest Manifest, List<Asset> Assets) ContentsOf(
         PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
     {
