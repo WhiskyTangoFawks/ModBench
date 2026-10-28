@@ -10,7 +10,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
   | 'getRecords' | 'searchRecords' | 'getWhatRestoreDestroys' | 'getModStatus'
   | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
@@ -342,6 +342,9 @@ export class InMemoryMEditClient implements MEditClient {
   getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.query('getDiagnoses', []); }
   getPluginDependants(...args: Parameters<MEditClient['getPluginDependants']>): ReturnType<MEditClient['getPluginDependants']> {
     return this.query('getPluginDependants', args);
+  }
+  getPluginIndexing(...args: Parameters<MEditClient['getPluginIndexing']>): ReturnType<MEditClient['getPluginIndexing']> {
+    return this.query('getPluginIndexing', args);
   }
   getPluginProblems(): ReturnType<MEditClient['getPluginProblems']> { return this.query('getPluginProblems', []); }
   getRecordTypes(...args: Parameters<MEditClient['getRecordTypes']>): ReturnType<MEditClient['getRecordTypes']> {

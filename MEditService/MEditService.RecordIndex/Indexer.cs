@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Store;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -65,6 +66,7 @@ internal sealed class Indexer : IDisposable
     // The reconcile's own progress. Guarded by _lock like _scope: written by the reconciling thread
     // as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<PluginAddress> _indexed = [];
+    private readonly Dictionary<PluginAddress, (string? Path, string? Hash)> _failedFileHashes = new(PluginAddress.Comparer);
     private bool _conflictsComputed;
     private bool _validating;
     private int _plannedCount;
@@ -194,6 +196,32 @@ internal sealed class Indexer : IDisposable
         if (_holder.Held is null) throw new NoLoadOrderException();
         throw new IndexNotReadyException(
             status.Message is { } reason ? $"mEdit's record index is not ready: {reason}" : "mEdit's record index is not ready.");
+    }
+
+    // The failure is of the bytes that were there (ADR-0003): a file rewritten since is not yet read again.
+    private void RememberFileFailedAt(OpenScope scope, PluginAddress key)
+    {
+        var path = _holder.Held?.Snapshot.Plugins.FirstOrDefault(plugin => PluginAddress.Comparer.Equals(plugin.Key, key))?.Path;
+        var hash = path is null ? null : scope.Store.FileContentHash(path);
+        lock (_lock) _failedFileHashes[key] = (path, hash);
+    }
+
+    /// <summary>Asked of the file now on disk, not the last snapshot (ADR-0003); a plugin nothing on disk backs is as it was read.</summary>
+    public PluginIndexedState IndexedState(PluginAddress key)
+    {
+        var scope = RequireScope();
+        lock (_lock)
+        {
+            if (scope.Held.Failures.FirstOrDefault(failure => PluginAddress.Comparer.Equals(new PluginAddress(failure.Name, failure.Origin), key)) is { } failed)
+            {
+                var stillTheFileItFailedOn = _failedFileHashes.TryGetValue(key, out var at) && at.Path is not null && at.Hash is not null
+                    && scope.Store.FileContentHash(at.Path) == at.Hash;
+                return stillTheFileItFailedOn ? new(PluginIndexing.ReadFailed, failed.Reason) : new(PluginIndexing.NotYet);
+            }
+            if (!_indexed.Exists(held => PluginAddress.Comparer.Equals(held, key))) return new(PluginIndexing.NotYet);
+        }
+        var asOnDisk = scope.Store.IndexedFile(key) is not { } claim || scope.Store.FileContentHash(claim.FilePath) == claim.ContentHash;
+        return new(asOnDisk ? PluginIndexing.AsOnDisk : PluginIndexing.NotYet);
     }
 
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
@@ -889,6 +917,7 @@ internal sealed class Indexer : IDisposable
     // A failure that says what the plugin already said publishes nothing.
     private void FailRead(OpenScope scope, PluginAddress key, string reason, string? diagnosis = null)
     {
+        RememberFileFailedAt(scope, key);
         if (scope.Held.SetFailure(key, reason, diagnosis)) PublishStatus();
     }
 
