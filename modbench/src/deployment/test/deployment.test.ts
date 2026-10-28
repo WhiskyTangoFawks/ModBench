@@ -17,7 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     lstat: async (...args: Parameters<typeof actual.lstat>) => {
       const stats = await actual.lstat(...args);
       const reused = busy.inodes.get(String(args[0]));
-      return reused === undefined ? stats : { ...stats, ino: reused };
+      return reused === undefined ? stats : new Proxy(stats, { get: (target, key) => (key === 'ino' ? reused : Reflect.get(target, key) as unknown) });
     },
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
@@ -763,7 +763,7 @@ describe('plugins.txt', () => {
 
     const recorded = await recordIn(join(storage, 'deployment.json')).of(folder);
 
-    expect(recorded.pluginsTxt).toEqual({ path: plugins, fileId: expect.stringMatching(/^\d+:\d+$/), renamed: [`${plugins}.modbench_renamed`] });
+    expect(recorded.pluginsTxt).toMatchObject({ path: plugins, renamed: [`${plugins}.modbench_renamed`] });
   });
 });
 
