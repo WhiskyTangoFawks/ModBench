@@ -18,7 +18,6 @@ export interface WrittenPluginsTxt {
   readonly renamedTo?: string;
 }
 
-/** What deploy wrote for one deployment folder. */
 interface Recorded {
   readonly files: readonly Written[];
   readonly pluginsTxt?: WrittenPluginsTxt;
