@@ -448,6 +448,17 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AModWhoseFilesOnlyAnotherPlaceOfTheGameHoldsWithTheirBytes_NamesTheGameFolderAsItsPackage()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var instance = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "edited")], [new GameFolderPlace("steam", [new GameFile("a.nif", "a")])]);
+
+        var manifest = await UpdatedWith(instance);
+
+        Assert.Equal(new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile("a.nif", "a")])), manifest.Package);
+    }
+
+    [Fact]
     public async Task AGameFolderModsManifest_DoesNotChange_WhenTheGameFolderGainsOrChangesAFileTheModDoesNotTake()
     {
         _folders.WithFile(Mod, "a.nif", "a");

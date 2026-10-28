@@ -46,10 +46,15 @@ internal sealed class ManifestBuilder
     private ManifestPackage.GameFolder? FromGameFolder(IReadOnlyList<HashedFile> files)
     {
         if (_package is not null || _gameFolder is null || files.Count == 0) return null;
-        var hashes = _gameFolder.Files.ToLookup(file => file.Path, file => file.Hash, StringComparer.OrdinalIgnoreCase);
-        return files.All(file => hashes[file.Path].Contains(file.Hash))
+        return _gameFolder.Places().Any(place => Holds(place, files))
             ? new ManifestPackage.GameFolder(_gameFolder.Name, FileHash.OfFilesTaken(files))
             : null;
+    }
+
+    private static bool Holds(GameFolder place, IReadOnlyList<HashedFile> files)
+    {
+        var hashes = place.Files.ToLookup(file => file.Path, file => file.Hash, StringComparer.OrdinalIgnoreCase);
+        return files.All(file => hashes[file.Path].Contains(file.Hash));
     }
 
     private ManifestFile EntryOf(HashedFile file)
