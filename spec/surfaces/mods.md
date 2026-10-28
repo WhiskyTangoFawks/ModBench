@@ -199,6 +199,7 @@ As a user, I want:
 12. Source mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
 13. No mod to say a patcher's output is stale. I rerun my patchers before I publish: whether a change before a patcher matters is mine to know, and most changes do not matter to a given patcher. This is an exception to Never silently wrong.
 14. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The manifest, story 8
+15. Build as a task, so my chain builds before it deploys or publishes. No warning of build's fails it. Cites: commands.md, A task is an entry point for a chain
 
 ### Delete separator
 
