@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { readOrAbsent, readOrReason } from '../files';
 
 /** A store depot the game's install records, by its id, and the ID Steam gives the version installed. */
-export interface SteamDepot {
+export interface Depot {
   readonly id: string;
   readonly version: string;
 }
@@ -32,7 +32,7 @@ const asMap = (value: string | VdfMap | undefined): VdfMap => (typeof value === 
 
 /** The depots Steam records as installed, each with the ID Steam gives its version, and why the app manifest gave less than that. */
 export interface InstalledDepots {
-  readonly depots: SteamDepot[];
+  readonly depots: Depot[];
   readonly problems: string[];
 }
 
@@ -49,7 +49,7 @@ export async function installedDepots(steamapps: string, appId: string): Promise
   if (Object.keys(appState).length === 0) return { depots: [], problems: [`${file} is not an app manifest Modbench reads`] };
   const recorded = Object.entries(asMap(appState.InstalledDepots));
   if (recorded.length === 0) return { depots: [], problems: [`${file} records no installed depot`] };
-  const depots: SteamDepot[] = [];
+  const depots: Depot[] = [];
   const problems: string[] = [];
   for (const [id, depot] of recorded) {
     const version = asMap(depot).manifest;

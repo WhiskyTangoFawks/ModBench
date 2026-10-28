@@ -4,7 +4,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile, ManifestStep } from '../../client';
 import type { SubmodulesCloned } from '../../client/MEditClient';
-import type { FileRead, FoundGameFolder, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles, OtherManifest } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, FoundGameFolder, GameFolder, GamePlace, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles, OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { foldersRefused } from '../../instanceAdapter/foldersRefused';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
@@ -1360,21 +1360,27 @@ const firstModSent = (client: InMemoryMEditClient): unknown => {
   return Array.isArray(mods) ? (mods as readonly unknown[])[0] : undefined;
 };
 
-describe('modlistRepositoryCommands with the Steam install beside the game folder', () => {
-  const STEAM: FoundGameFolder = { kind: 'found', root: '/steam', dataFolder: '/steam/Data' };
+describe('modlistRepositoryCommands with another place of the game beside the game folder', () => {
+  const GAME_PLACE: GamePlace = { dataFolder: '/game/Data', depots: [], depotProblems: [] };
+  const STEAM_PLACE: GamePlace = { dataFolder: '/steam/Data', depots: [], depotProblems: [] };
   const UPDATED = { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] };
-  const steamHolding = (files: [string, string][], unreadable: [string, string][] = []): NonNullable<InstanceAnswers['steam']> => ({
-    install: STEAM,
-    gameFiles: new Map(files.map(([path, hash]) => [path.toLowerCase(), { path, hash }])),
-    unreadableGameFiles: new Map(unreadable),
-    gameFilesTaken: new Map([['ModB', { kind: 'read', answer: { gameFiles: files.map(([path, hash]) => ({ path, hash })), notes: [] } }]]),
-  });
+  type Places = NonNullable<InstanceAnswers['places']>;
+  const besideHolding = (files: [string, string][], unreadable: [string, string][] = [], place: Partial<GamePlace> = {}): Places => [
+    GAME_PLACE,
+    {
+      ...STEAM_PLACE,
+      ...place,
+      gameFiles: new Map(files.map(([path, hash]) => [path.toLowerCase(), { path, hash }])),
+      unreadableGameFiles: new Map(unreadable),
+      gameFilesTaken: new Map([['ModB', { kind: 'read', answer: { gameFiles: files.map(([path, hash]) => ({ path, hash })), notes: [] } }]]),
+    },
+  ];
   const skippedForGameFile = (path: string) => ({
     landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', installationFiles: [], gameFiles: [path] }],
   });
 
-  it('hands update manifest the Steam install\'s files as another place', async () => {
-    const { commands, client } = commandsOver({ steam: steamHolding([['Meshes/B.nif', '#b']]) });
+  it('hands update manifest the files of another place as another place', async () => {
+    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/B.nif', '#b']]) });
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModB']);
@@ -1382,9 +1388,9 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(firstModSent(client)).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/B.nif', hash: '#b' }] }] } });
   });
 
-  it('hands update manifest the depots the Steam install records, on the place that is the Steam install', async () => {
+  it('hands update manifest the depots of a place on that place', async () => {
     const depots = [{ id: '377162', version: '2222' }];
-    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/B.nif', '#b']]), depots } });
+    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/B.nif', '#b']], [], { depots }) });
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModB']);
@@ -1394,9 +1400,19 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(sent).not.toHaveProperty('gameFolder.depots');
   });
 
-  it('notes on the update why the Steam install\'s app manifest gave fewer depots than it holds', async () => {
+  it('hands update manifest the depots of the game folder place on the game folder', async () => {
+    const depots = [{ id: '377162', version: '2222' }];
+    const { commands, client } = commandsOver({ places: [{ ...GAME_PLACE, depots }] });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    await commands.updateManifest(['ModB']);
+
+    expect(firstModSent(client)).toMatchObject({ gameFolder: { depots } });
+  });
+
+  it('notes on the update why a place gave fewer depots than it holds', async () => {
     const depotProblems = ['appmanifest_377160.acf records no installed depot'];
-    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/B.nif', '#b']]), depotProblems } });
+    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/B.nif', '#b']], [], { depotProblems }) });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModB']);
@@ -1405,7 +1421,7 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
   });
 
   it('notes no depot problem when no mod of the update takes a file from the game', async () => {
-    const { commands, client } = commandsOver({ steam: { ...steamHolding([]), depotProblems: ['appmanifest_377160.acf records no installed depot'] } });
+    const { commands, client } = commandsOver({ places: besideHolding([], [], { depotProblems: ['appmanifest_377160.acf records no installed depot'] }) });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModB']);
@@ -1414,7 +1430,7 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
   });
 
   it('hands restore no depots, which its manifest names', async () => {
-    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/A.nif', '#a']]), depots: [{ id: '377162', version: '2222' }] } });
+    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/A.nif', '#a']], [], { depots: [{ id: '377162', version: '2222' }] }) });
     client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
 
     await commands.restoreFromManifest(['ModA']);
@@ -1422,18 +1438,8 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(client.calls[1]?.args[1]).not.toHaveProperty('gameFolder.elsewhere.0.depots');
   });
 
-  it('hands update manifest the depots on the game folder when the game folder is the Steam install', async () => {
-    const depots = [{ id: '377162', version: '2222' }];
-    const { commands, client } = commandsOver({ steam: { ...steamHolding([]), install: FOUND, depots } });
-    client.setCommandResult('updateManifest', UPDATED);
-
-    await commands.updateManifest(['ModB']);
-
-    expect(firstModSent(client)).toMatchObject({ gameFolder: { depots } });
-  });
-
-  it('hands restore\'s retry the Steam install\'s files as another place', async () => {
-    const { commands, client } = commandsOver({ steam: steamHolding([['Meshes/A.nif', '#a']]) });
+  it('hands restore\'s retry the files of another place as another place', async () => {
+    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/A.nif', '#a']]) });
     client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
 
     await commands.restoreFromManifest(['ModA']);
@@ -1441,8 +1447,8 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(client.calls[1]?.args[1]).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/A.nif', hash: '#a' }] }] } });
   });
 
-  it('hands mEdit why a Steam file could not be read, so it is not shown as missing', async () => {
-    const { commands, client } = commandsOver({ steam: steamHolding([], [['meshes/a.nif', 'EACCES']]) });
+  it('hands mEdit why a file of another place could not be read, so it is not shown as missing', async () => {
+    const { commands, client } = commandsOver({ places: besideHolding([], [['meshes/a.nif', 'EACCES']]) });
     client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
 
     await commands.restoreFromManifest(['ModA']);
@@ -1450,27 +1456,20 @@ describe('modlistRepositoryCommands with the Steam install beside the game folde
     expect(client.calls[1]?.args[0]).toMatchObject([{ unreadableGameFiles: { 'meshes/a.nif': 'EACCES' } }]);
   });
 
-  it('does not refuse a mod the game folder holds when the Steam install cannot be read, and notes why', async () => {
+  it('does not refuse a mod the game folder holds when another place cannot be read, and notes which place', async () => {
     const taken: FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =
       { kind: 'read', answer: { gameFiles: [{ path: 'Meshes/B.nif', hash: '#b' }], notes: [] } };
     const { commands, client } = commandsOver({
-      gameFilesTaken: new Map([['ModB', taken]]),
-      steam: { install: STEAM, gameFilesTaken: new Map([['ModB', { kind: 'unreadable', reason: 'EACCES' }]]) },
+      places: [
+        { ...GAME_PLACE, gameFilesTaken: new Map([['ModB', taken]]) },
+        { ...STEAM_PLACE, gameFilesTaken: new Map([['ModB', { kind: 'unreadable', reason: 'EACCES' }]]) },
+      ],
     });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModB']);
 
     expect(firstModSent(client)).toMatchObject({ gameFolder: { files: [{ path: 'Meshes/B.nif', hash: '#b' }] } });
-    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModB', note: expect.stringContaining('EACCES') as unknown }] });
-  });
-
-  it('hands no other place when the Steam install is the game folder', async () => {
-    const { commands, client } = commandsOver({ steam: { ...steamHolding([['Meshes/B.nif', '#b']]), install: FOUND } });
-    client.setCommandResult('updateManifest', UPDATED);
-
-    await commands.updateManifest(['ModB']);
-
-    expect(firstModSent(client)).not.toHaveProperty('gameFolder.elsewhere');
+    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModB', note: 'the game files in /steam/Data could not be read: EACCES' }] });
   });
 });

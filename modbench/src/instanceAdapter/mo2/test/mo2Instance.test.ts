@@ -52,6 +52,7 @@ import { ownTempPrefix } from '../../files';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
 import { adapterOver, contextOver, managerOver, sourceOver } from '../../../test/mo2/adapterOver';
+import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
@@ -116,18 +117,53 @@ describe('the MO2 Instance adapter', () => {
         }
       });
 
-      it('answers the Steam install apart from the game folder the setting names', async () => {
+      it('answers the game folder and a Steam install elsewhere as two places', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
           await mkdir(join(game, 'Data'));
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
-          const adapter = managerOver(root, { gameFolderSettingValue: game, detectors });
 
-          expect(await adapter.steamInstall()).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] });
-          expect(await adapter.gameFolder()).toMatchObject({ root: game });
+          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
+            { dataFolder: join(game, 'Data'), depots: [], depotProblems: [] },
+            { dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] },
+          ]);
         } finally {
           await rm(game, { recursive: true, force: true });
         }
+      });
+
+      it('answers a Steam install reached through a link to the game folder as one place, with its depots', async () => {
+        const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
+        const linked = `${library}-link`;
+        try {
+          const game = join(library, 'steamapps', 'common', 'Fallout 4');
+          await mkdir(join(game, 'Data'), { recursive: true });
+          await writeAppManifestOfDepot(library);
+          await symlink(library, linked);
+          const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
+
+          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
+            { dataFolder: join(game, 'Data'), depots: [INSTALLED_DEPOT], depotProblems: [] },
+          ]);
+        } finally {
+          await rm(linked, { force: true });
+          await rm(library, { recursive: true, force: true });
+        }
+      });
+
+      it('answers the game folder alone, with no depots, when Steam holds no such game', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
+        try {
+          await mkdir(join(game, 'Data'));
+
+          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ dataFolder: join(game, 'Data'), depots: [], depotProblems: [] }]);
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
+      it('answers no place when the game folder is not found', async () => {
+        expect(await managerOver(root, {}).gamePlaces()).toEqual([]);
       });
 
       it('answers the active profile\'s mod order, and the folders the mods are in with the separators\'', async () => {

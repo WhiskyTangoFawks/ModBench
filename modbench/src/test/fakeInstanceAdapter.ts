@@ -2,13 +2,12 @@ import { basename } from 'node:path';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type FoundGameFolder, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
-import type { SteamDepot } from '../instanceAdapter/gameFolder/steamAppManifest';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -130,15 +129,8 @@ export interface InstanceAnswers {
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
   gameFiles?: ReadonlyMap<string, GameFile>;
   unreadableGameFiles?: ReadonlyMap<string, string>;
-  /** The Steam install, holding what the three answers above say of the game folder; none when Steam holds none. */
-  steam?: {
-    install: FoundGameFolder;
-    depots?: readonly SteamDepot[];
-    depotProblems?: readonly string[];
-    gameFiles?: ReadonlyMap<string, GameFile>;
-    unreadableGameFiles?: ReadonlyMap<string, string>;
-    gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
-  };
+  /** The places of the game, the game folder first, each holding the three answers above of its own; the game folder alone, holding them, when not said. */
+  places?: readonly (GamePlace & Pick<InstanceAnswers, 'gameFiles' | 'unreadableGameFiles' | 'gameFilesTaken'>)[];
   /** Why each mod's metadata cannot be read, by mod name. */
   unreadableMetadata?: ReadonlyMap<string, string>;
   /** Why each mod's metadata cannot hold the metadata a manifest says, by mod name. */
@@ -306,7 +298,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
   const placeAnswers = (dataFolder: string): Pick<InstanceAnswers, 'gameFiles' | 'unreadableGameFiles' | 'gameFilesTaken'> =>
-    answers.steam !== undefined && dataFolder === answers.steam.install.dataFolder ? answers.steam : answers;
+    answers.places === undefined ? answers : answers.places.find((place) => place.dataFolder === dataFolder) ?? {};
 
   const adapter: InstanceAdapter = {
     reading: () => {
@@ -317,7 +309,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
     gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
-    steamInstall: () => Promise.resolve(answers.steam === undefined ? undefined : { ...answers.steam.install, depots: answers.steam.depots ?? [], depotProblems: answers.steam.depotProblems ?? [] }),
+    gamePlaces: () => Promise.resolve(answers.places ?? (current.gameFolder.kind === 'found' ? [{ dataFolder: current.gameFolder.dataFolder, depots: [], depotProblems: [] }] : [])),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),

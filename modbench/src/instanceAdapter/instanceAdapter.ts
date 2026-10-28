@@ -12,14 +12,14 @@ import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
-import type { SteamDepot } from './gameFolder/steamAppManifest';
+import type { Depot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
-export type { SteamDepot } from './gameFolder/steamAppManifest';
+export type { Depot } from './gameFolder/steamAppManifest';
 
 export type { InstallationFileReader } from './downloadedFileContents/installationFileReader';
 export { INSTALLATION_FILE_EXTENSIONS } from './downloadedFileContents/installationFileNames';
@@ -58,8 +58,15 @@ export type GameFolder =
 
 export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
 
-/** The game's install in Steam's library, with the depots Steam records as installed and why its app manifest gave less. */
-export type SteamInstall = FoundGameFolder & { readonly depots: readonly SteamDepot[]; readonly depotProblems: readonly string[] };
+interface PlaceDepots {
+  readonly depots: readonly Depot[];
+  readonly depotProblems: readonly string[];
+}
+
+/** The game's install in Steam's library. */
+export type SteamInstall = FoundGameFolder & PlaceDepots;
+
+export type GamePlace = PlaceDepots & { readonly dataFolder: string };
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
@@ -606,8 +613,8 @@ export interface InstanceAdapter {
   gameRelease(): Promise<string>;
   /** Where the game is now. */
   gameFolder(): Promise<GameFolder>;
-  /** The game's install in Steam's library, whether or not it is the game folder; none when Steam holds none. */
-  steamInstall(): Promise<SteamInstall | undefined>;
+  /** Every place the game's files are in, the game folder first; none when the game folder is not found. */
+  gamePlaces(): Promise<readonly GamePlace[]>;
   /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
   gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */
