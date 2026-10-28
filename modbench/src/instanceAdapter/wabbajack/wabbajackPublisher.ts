@@ -4,7 +4,7 @@
 
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node, type ParseError } from 'jsonc-parser';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
 import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter';

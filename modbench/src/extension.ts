@@ -57,6 +57,10 @@ import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
+import { deployCommands } from './instanceCommands/deploy';
+import { hardlinkDeployment } from './deployment/deployment';
+import { registerDeployCommand } from './toolbox/deployGesture';
+import { present } from './ports/present';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -81,6 +85,8 @@ interface ViewsDeps {
   trash: MoveToTrash;
   extensionId: string;
   extensionUri: vscode.Uri;
+  /** The workspace's own storage, which an opened folder always has. */
+  storage: vscode.Uri | undefined;
   nexus: Nexus;
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
@@ -213,6 +219,13 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(registerRefreshCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
+  own(registerDeployCommand({
+    commands: deployCommands({
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath),
+      deploymentFolder: deploymentFolderSetting,
+    }),
+    instance, reporter: reporterFor('deploy'),
+  }));
   return {
     instance, toolbox, readStatus,
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
@@ -298,6 +311,7 @@ function start(context: vscode.ExtensionContext): void {
     plugins, registerRepositories: sourceModRepositories.registerRepositories,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
+    storage: context.storageUri,
     nexus: createHttpNexus(context.secrets, context.extension.packageJSON),
     focusedView,
     editor,

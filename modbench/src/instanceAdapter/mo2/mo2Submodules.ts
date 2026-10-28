@@ -2,7 +2,7 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, isRepository, remove, write } from '../files';

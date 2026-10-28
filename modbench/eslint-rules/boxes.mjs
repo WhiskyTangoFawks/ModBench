@@ -7,7 +7,8 @@ const MODBENCH = new URL('../', import.meta.url);
 const SRC = new URL('src/', MODBENCH);
 const ZOOM_OUT = new URL('../spec/architecture/target-architecture.d2', MODBENCH);
 
-export const DRAWN_AHEAD_OF_CODE = ['deployment'];
+/** @type {string[]} */
+export const DRAWN_AHEAD_OF_CODE = [];
 
 /** @param {string} drawing @returns {Record<string, string[]>} */
 function drawnByBand(drawing) {

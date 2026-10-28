@@ -9,7 +9,7 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { errnoCode } from './errno';
+import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
 

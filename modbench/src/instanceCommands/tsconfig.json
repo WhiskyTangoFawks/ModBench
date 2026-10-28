@@ -9,7 +9,8 @@
     { "path": "../instanceAdapter" },
     { "path": "../coreLib" },
     { "path": "../client" },
-    { "path": "../nexus" }
+    { "path": "../nexus" },
+    { "path": "../deployment" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

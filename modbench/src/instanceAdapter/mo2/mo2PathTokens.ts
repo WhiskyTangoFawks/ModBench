@@ -4,7 +4,7 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, undoAll, write, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';

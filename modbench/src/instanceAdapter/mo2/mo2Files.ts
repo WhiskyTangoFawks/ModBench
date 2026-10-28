@@ -2,7 +2,7 @@
 // overwrite folder listed whole. Neither answers the adapter's own writes in flight.
 
 import { sep } from 'node:path';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
