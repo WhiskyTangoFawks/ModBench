@@ -82,6 +82,30 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
+    public async Task ASourceModWhoseManifestTakesAGameFileTheRequestDidNotHand_IsNotFound_NamingIt_ThenBuildsFromTheGameOnceHanded()
+    {
+        var game = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
+        var pinned = _submodule.Commit(("Mod.manifest.json", GameFolderOnDisk.ManifestTakingATextureFrom(game)), ("assets/textures/a.dds", "placeholder"));
+
+        var skipped = Assert.Single((await Restore(pinned)).Refused);
+        Assert.Equal((RestoreRefusal.NotFound, ["textures/a.dds"]), (skipped.Refusal, skipped.GameFilesNotFound));
+
+        Assert.Single((await Restore(pinned, gameFolder: game)).Applied);
+        Assert.Equal("from the game", File.ReadAllText(Path.Combine(ModFolder, "textures", "a.dds")));
+    }
+
+    [Fact]
+    public async Task ASourceModWhoseGameFileTheRequestCouldNotRead_IsSkipped_NamingWhy()
+    {
+        var game = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
+        var pinned = _submodule.Commit(("Mod.manifest.json", GameFolderOnDisk.ManifestTakingATextureFrom(game)), ("assets/textures/a.dds", "placeholder"));
+
+        var skipped = Assert.Single((await Restore(pinned, unreadableGameFiles: new Dictionary<string, string> { ["textures/a.dds"] = "EACCES" })).Refused);
+
+        Assert.Contains("game file 'textures/a.dds' could not be read: EACCES", skipped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AManifestNamingASubmodule_WhoseRequestHandsNone_IsNotFound_NamingIt()
     {
         CommitAtHead(Commit("{\"output\": \"Mod\", \"packages\": [{\"submodule\": \"Mod\"}]}", "c"));
@@ -310,17 +334,19 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     private Task<RestoreFromManifestResult> Restore(
-        string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null) =>
-        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks, installationFiles);
+        string? pin, string? branch = null, ISourceAdapter? source = null, IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null,
+        GameFolder? gameFolder = null, IReadOnlyDictionary<string, string>? unreadableGameFiles = null) =>
+        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source, tasks, installationFiles, gameFolder, unreadableGameFiles);
 
     private Task<RestoreFromManifestResult> Restore(
         string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null,
-        IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null)
+        IReadOnlySet<string>? tasks = null, IReadOnlyList<InstallationFile>? installationFiles = null, GameFolder? gameFolder = null,
+        IReadOnlyDictionary<string, string>? unreadableGameFiles = null)
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, installationFiles ?? [], ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFiles: null, SourceFolder)],
-            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null) { Tasks = tasks ?? new HashSet<string>() },
+            [new ModToRestore(ModName, ModFolder, installationFiles ?? [], ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: unreadableGameFiles, UnreadableInstallationFiles: null, SourceFolder)],
+            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: gameFolder) { Tasks = tasks ?? new HashSet<string>() },
             "restore", cancel);
     }
 

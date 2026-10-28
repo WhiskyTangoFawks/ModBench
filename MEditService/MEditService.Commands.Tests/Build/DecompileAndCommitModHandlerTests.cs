@@ -180,7 +180,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         WriteInModFolder(
             $"{Origin}.manifest.json", "{\"packages\": [{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAAAAAAAAA=\"}], \"files\": [{\"path\": \"textures/a.dds\"}]}");
 
-        var result = await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], GameFolder: GameFolderHolding(("textures/a.dds", "from the game"))));
+        var result = await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], GameFolder: GameFolderOnDisk.Holding(_instanceRoot, "game", ("textures/a.dds", "from the game"))));
 
         Assert.Empty(result.Refused);
         var manifest = CommittedManifest();
@@ -270,19 +270,6 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         }
         var hashes = new ModFolderRepository(TimeProvider.System).Files(pack, new HashSet<string>(), null).Files.ToDictionary(file => file.Path, file => file.Hash);
         return downloaded with { Entries = [.. entries.Select(entry => new HashedEntry(entry.Path, hashes[entry.Path]))] };
-    }
-
-    private GameFolder GameFolderHolding(params (string Path, string Text)[] files)
-    {
-        var data = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game", "Data")).FullName;
-        foreach (var (path, text) in files)
-        {
-            var file = Path.Combine(data, path);
-            Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
-            File.WriteAllText(file, text);
-        }
-        var hashes = new ModFolderRepository(TimeProvider.System).Files(data, new HashSet<string>(), null).Files;
-        return new GameFolder("Fallout 4", data, [.. hashes.Select(file => new GameFile(file.Path, file.Hash))]);
     }
 
     private Manifest CommittedManifest() =>

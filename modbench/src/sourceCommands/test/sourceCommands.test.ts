@@ -294,11 +294,8 @@ describe('sourceCommands decompileAndCommit', () => {
     client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
     const file = { path: 'textures/a.dds', hash: 'G' };
     const adapter = fakeAdapter({
-      places: [{ dataFolder: '/game/Data', depots: [{ id: '377162', version: '7' }], depotProblems: [] }],
-      gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]),
+      places: [{ dataFolder: '/game/Data', depots: [{ id: '377162', version: '7' }], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) }],
     });
-    adapter.gameFilesTakenBy = (_dataFolder, folder) => Promise.resolve(folder.endsWith('ModC')
-      ? { kind: 'read', answer: { gameFiles: [file], notes: [] } } : { kind: 'read', answer: { gameFiles: [], notes: [] } });
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC']);
 
@@ -307,17 +304,18 @@ describe('sourceCommands decompileAndCommit', () => {
     ]);
   });
 
-  it('refuses a mod whose game files cannot be read, naming why, and commits the rest', async () => {
+  it.each<[string, { kind: 'unreadable'; reason: string } | { kind: 'read'; answer: { gameFiles: []; notes: string[] } }, string]>([
+    ['cannot be read', { kind: 'unreadable', reason: 'EACCES' }, 'EACCES'],
+    ['come with a note', { kind: 'read', answer: { gameFiles: [], notes: ['a game file differs in case'] } }, 'a game file differs in case'],
+  ])('refuses a mod whose game files %s, naming why, and commits the rest', async (_case, taken, reason) => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
-    const adapter = fakeAdapter({ places: [{ dataFolder: '/game/Data', depots: [], depotProblems: [] }] });
-    adapter.gameFilesTakenBy = (_dataFolder, folder) => Promise.resolve(folder.endsWith('ModC')
-      ? { kind: 'unreadable', reason: 'EACCES' } : { kind: 'read', answer: { gameFiles: [], notes: [] } });
+    const adapter = fakeAdapter({ places: [{ dataFolder: '/game/Data', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', taken]]) }] });
 
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC', 'ModF']);
 
     expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModF' }]);
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModC', reason: 'EACCES' }] });
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModC', reason }] });
   });
 
   it.each<[string, InstanceAnswers, string]>([

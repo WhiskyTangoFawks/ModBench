@@ -6,7 +6,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
-import { gameFilesOf, gameToHand, namedGameFiles, namedGameFolder, NONE_HELD, wireGameFolder } from './gameFolderFacts';
+import { gameFilesOf, gameToHand, namedGameFiles, namedGameFolder, NONE_HELD, wireGameFolder, type GameToHand } from './gameFolderFacts';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
@@ -33,6 +33,25 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     if (claimed === undefined) return { item: mod, reason: 'no repository in the source folder builds it' };
     const sameMod = adapter.entryKey({ kind: 'mod', name: mod }) === adapter.entryKey({ kind: 'mod', name: claimed });
     return { item: mod, reason: sameMod ? `its repository's manifest is not named for its output "${claimed}"` : `its folder is "${mod}", but its repository's manifest builds "${claimed}"` };
+  };
+
+  // plugins.md, Decompile and commit, story 5: a mod whose game files cannot be read whole is refused, naming why.
+  const decompileMod = async (mod: string, game: GameToHand): Promise<DecompileAndCommitMod | ItemRefusal<string>> => {
+    const sourceFolder = adapter.sourceFolder(mod);
+    if (sourceFolder === undefined) return { item: mod, reason: 'its name gives it no source folder' };
+    const installation = await adapter.installationFile(mod);
+    const metadata = await adapter.modMetadata(mod);
+    const folder = await adapter.modFolderPath(mod);
+    if (installation.kind === 'unreadable') return { item: mod, reason: installation.reason };
+    if (metadata.kind === 'unreadable') return { item: mod, reason: metadataUnreadable(metadata.reason) };
+    if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
+    const taken = typeof game.folder === 'string' ? { gameFiles: NONE_HELD, notes: [] } : await gameFilesOf(adapter, { mod, folder }, game, false);
+    if ('refusal' in taken) return { item: mod, reason: taken.refusal };
+    if (taken.notes.length > 0) return { item: mod, reason: taken.notes.join('; ') };
+    return {
+      name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder], installationFile: wireFile(installation.answer), version: metadata.answer.version,
+      gameFolder: wireGameFolder(game.folder, taken.gameFiles, true),
+    };
   };
 
   const buildMod = async (mod: string, sourceMods: SourceMods): Promise<BuildMod | ItemRefusal<string>> => {
@@ -102,10 +121,8 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     build: async (asked: readonly string[], everySource = false): Promise<BuildOutcome | WriteRefused> => {
       const sourceMods = await adapter.sourceMods();
       const mods = everySource ? [...sourceMods.folders.keys()] : asked;
-      const gameRelease = await adapter.gameRelease();
       const facts: BuildFacts = {
-        exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), statCache: adapter.statCacheFolder,
-        gameFolder: wireGameFolder(await namedGameFolder(adapter, gameRelease), NONE_HELD, false), tasks: [...await tasks.labels()],
+        exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder, tasks: [...await tasks.labels()],
       };
       let landed: BuildOutcome['landed'][number][] = [];
       const refused: ItemRefusal<string>[] = [];
@@ -143,20 +160,9 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       const refused: ItemRefusal<string>[] = [];
       const game = await gameToHand(adapter, await adapter.sourceMods());
       for (const mod of mods) {
-        const sourceFolder = adapter.sourceFolder(mod);
-        if (sourceFolder === undefined) { refused.push({ item: mod, reason: 'its name gives it no source folder' }); continue; }
-        const installation = await adapter.installationFile(mod);
-        const metadata = await adapter.modMetadata(mod);
-        const folder = await adapter.modFolderPath(mod);
-        if (installation.kind === 'unreadable') { refused.push({ item: mod, reason: installation.reason }); continue; }
-        if (metadata.kind === 'unreadable') { refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) }); continue; }
-        if (folder === undefined) { refused.push({ item: mod, reason: 'its name gives it no folder' }); continue; }
-        const taken = await gameFilesOf(adapter, { mod, folder }, game, false);
-        if ('refusal' in taken) { refused.push({ item: mod, reason: taken.refusal }); continue; }
-        sent.push({
-          name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder], installationFile: wireFile(installation.answer), version: metadata.answer.version,
-          gameFolder: wireGameFolder(game.folder, taken.gameFiles, true),
-        });
+        const decided = await decompileMod(mod, game);
+        if ('reason' in decided) refused.push(decided);
+        else sent.push(decided);
       }
       if (sent.length === 0) return { landed: [], refused };
       const outcome = await client.decompileAndCommit(sent, options);

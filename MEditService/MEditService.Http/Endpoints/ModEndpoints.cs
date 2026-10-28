@@ -69,7 +69,7 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("Every installation file needs a path, a size, a hash and its entries, each with a path and a hash, all xxHash64 as Wabbajack writes it: eight bytes in base64.");
         }
-        if (mods.Any(mod => mod.GameFolder is { IsWhole: false })) return GameFolderMalformed;
+        if (mods.Any(mod => mod.GameFolder is { IsWhole: false })) return EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
@@ -94,9 +94,6 @@ internal static class ModEndpoints
             handler.Change(req.SourceFolder, new SourceManifestChange(req.Output, exclude, include, req.ExclusionMark)));
     }
 
-    private static readonly IResult GameFolderMalformed =
-        EndpointMapping.BadRequest("The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.");
-
     // build-mod: the selection (commands.md, A selection is one gesture).
     internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildModHandler, ILoggerFactory loggerFactory)
     {
@@ -111,7 +108,7 @@ internal static class ModEndpoints
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
         if (string.IsNullOrWhiteSpace(req.StatCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
-        if (req.GameFolder is { IsWhole: false }) return GameFolderMalformed;
+        if (req.GameFolder is { IsWhole: false }) return EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
         var variants = req.Archives?.Variants();
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 

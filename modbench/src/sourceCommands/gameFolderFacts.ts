@@ -32,7 +32,6 @@ export async function gameToHand(adapter: GameAdapter, sourceMods: SourceMods): 
 
 const wireDepots = (depots: readonly Depot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
 
-// Only update manifest reads the depots; restore's manifest names them.
 export const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): RestoreFacts['gameFolder'] => {
   if (typeof folder === 'string') return undefined;
   const { name, places: [first, ...others] } = folder;

@@ -408,10 +408,10 @@ public sealed class BuildModHandlerTests : IDisposable
     [Fact]
     public async Task AFileTheManifestTakesFromTheGameFolder_ComesFromThePlaceThatHoldsItsBytes_AndItsLineKeepsNamingTheGameFolder()
     {
-        var edited = GameFolderHolding("edited", ("textures/a.dds", "edited"));
-        var vanilla = GameFolderHolding("steam", ("textures/a.dds", "from the game"));
+        var edited = GameFolderOnDisk.Holding(_root, "edited", ("textures/a.dds", "edited"));
+        var vanilla = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
         var game = edited with { Elsewhere = [new GameFolderPlace(vanilla.DataFolder, vanilla.Files)] };
-        WriteSourceText(TakingFromTheGame(vanilla));
+        WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(vanilla));
 
         var built = await Landed(_noArchives with { GameFolder = game });
 
@@ -425,7 +425,7 @@ public sealed class BuildModHandlerTests : IDisposable
     [Fact]
     public async Task AGameFileTheRequestDidNotHand_RefusesTheMod_NamingItForTheRequestToFind_AndWritesNothing()
     {
-        WriteSourceText(TakingFromTheGame(GameFolderHolding("steam", ("textures/a.dds", "from the game"))));
+        WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"))));
 
         var refused = Assert.Single((await Build(_noArchives)).Refused);
 
@@ -437,10 +437,10 @@ public sealed class BuildModHandlerTests : IDisposable
     [Fact]
     public async Task AGameFileWithOtherBytesInEveryPlace_RefusesTheMod_AndIsNotAskedForAgain()
     {
-        var pinned = GameFolderHolding("steam", ("textures/a.dds", "from the game"));
-        WriteSourceText(TakingFromTheGame(pinned));
+        var pinned = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
+        WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(pinned));
 
-        var refused = Assert.Single((await Build(_noArchives with { GameFolder = GameFolderHolding("edited", ("textures/a.dds", "edited")) })).Refused);
+        var refused = Assert.Single((await Build(_noArchives with { GameFolder = GameFolderOnDisk.Holding(_root, "edited", ("textures/a.dds", "edited")) })).Refused);
 
         Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
         Assert.Empty(refused.GameFilesNotFound);
@@ -510,19 +510,6 @@ public sealed class BuildModHandlerTests : IDisposable
         return (await TestEditService.BuildModHandler(_holder).BuildAsync(
             [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made) { InstallationFiles = installationFiles ?? [], UnreadableInstallationFiles = unreadableInstallationFiles }], instance)).Value();
     }
-
-    private GameFolder GameFolderHolding(string place, params (string Path, string Text)[] files)
-    {
-        var data = Directory.CreateDirectory(Path.Combine(_root, "game", place, "Data")).FullName;
-        foreach (var (path, text) in files) Write(data, path, Encoding.UTF8.GetBytes(text));
-        var hashes = new ModFolderRepository(TimeProvider.System).Files(data, new HashSet<string>(), null).Files;
-        return new GameFolder("Fallout 4", data, [.. hashes.Select(file => new GameFile(file.Path, file.Hash))]);
-    }
-
-    private static string TakingFromTheGame(GameFolder pinned) =>
-        "{\"output\": \"Mod\", \"packages\": [{\"gameFolder\":\"Fallout 4\",\"hash\":\""
-        + FileHash.OfFilesTaken([.. pinned.Files.Select(file => new HashedFile(file.Path, file.Hash))])
-        + "\"}], \"files\": [{\"path\":\"textures/a.dds\"}]}";
 
     private InstallationFile Pack(params (string Path, string Text)[] entries) => DownloadedZip.WritePack(Path.Combine(_root, "downloads"), entries);
 
