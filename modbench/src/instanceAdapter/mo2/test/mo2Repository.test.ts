@@ -274,22 +274,37 @@ describe('the MO2 adapter\'s repository', () => {
     ];
     const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
-    it('is each folder outside the mod folders, profiles, Overwrite, downloads, source mods and repository that holds a manifest named for it, one inside another folder that holds one too', async () => {
+    it('is each folder outside the mod folders, profiles, Overwrite, downloads, source mods and repository that holds a manifest named for it', async () => {
       const adapter = await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await Promise.all([
-        'Stock Game/Stock Game.manifest.json', 'Stock Game/Data/Data.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/x.dll',
+        'Stock Game/Stock Game.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/x.dll',
         'plugins/other/notes.manifest.json', 'downloads/D/D.manifest.json', ...NOT_SEARCHED,
       ].map((path) => put(path)));
 
       expect(await adapter.otherManifests()).toEqual({
         manifests: [
           { name: 'Stock Game/', folder: join(root, 'Stock Game') },
-          { name: 'Stock Game/Data/', folder: join(root, 'Stock Game', 'Data') },
           { name: 'downloads/D/', folder: join(root, 'downloads', 'D') },
           { name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') },
         ],
         unsearched: [],
+        nested: [],
+      });
+    });
+
+    it('answers a manifest inside the folder of another as refused with the other, and neither as a manifest', async () => {
+      const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      await Promise.all(['Stock Game/Stock Game.manifest.json', 'Stock Game/Data/Data.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json'].map((path) => put(path)));
+
+      expect(await adapter.otherManifests()).toEqual({
+        manifests: [{ name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') }],
+        unsearched: [],
+        nested: [
+          { name: 'Stock Game/', reason: "was skipped: its folder holds the folder of 'Stock Game/Data/'." },
+          { name: 'Stock Game/Data/', reason: "was skipped: its folder is inside the folder of 'Stock Game/'." },
+        ],
       });
     });
 
@@ -299,7 +314,7 @@ describe('the MO2 adapter\'s repository', () => {
       await put('elsewhere/linked.manifest.json');
       await symlink(join(root, 'elsewhere'), join(root, 'linked'));
 
-      expect(await adapter.otherManifests()).toEqual({ manifests: [], unsearched: [] });
+      expect(await adapter.otherManifests()).toEqual({ manifests: [], unsearched: [], nested: [] });
     });
 
     it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) names each folder it cannot read, finds the rest, and leaves their lines in the ignore list as they are', async () => {
@@ -316,6 +331,7 @@ describe('the MO2 adapter\'s repository', () => {
         expect(answer).toEqual({
           manifests: [{ name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') }],
           unsearched: [{ name: 'logs/', reason: expect.stringContaining('EACCES') as unknown }],
+          nested: [],
         });
         await expect(writing).rejects.toThrow(/logs\/.*EACCES/);
         expect(await ignoreList()).toBe('mine\n');
@@ -336,7 +352,7 @@ describe('the MO2 adapter\'s repository', () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
-      const listed = ['ModOrganizer.ini', 'Stock Game/Stock Game.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/[x]/[x].manifest.json'];
+      const listed = ['ModOrganizer.ini', 'Stock Game/Stock Game.manifest.json', 'Stock Game/Data/Data.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/[x]/[x].manifest.json'];
       const ignored = ['Stock Game/Fallout4.exe', 'Stock Game/Data/Fallout4.esm', 'plugins/rootbuilder/rootbuilder.py', 'plugins/x.dll', 'plugins/[x]/x.py', 'logs/a.log'];
       await Promise.all([...listed, ...ignored].map((path) => put(path)));
       await adapter.writeIgnoreList();

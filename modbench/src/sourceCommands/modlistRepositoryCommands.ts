@@ -632,8 +632,11 @@ export interface OtherManifests { readonly others: readonly OtherManifest[]; rea
 
 async function otherManifestsOf(adapter: Adapter): Promise<OtherManifests> {
   try {
-    const { manifests, unsearched } = await adapter.otherManifests();
-    return { others: manifests, refused: unsearched.map(({ name, reason }) => ({ item: name, reason: `was not searched for a manifest: ${reason}` })) };
+    const { manifests, unsearched, nested } = await adapter.otherManifests();
+    return {
+      others: manifests,
+      refused: [...unsearched.map(({ name, reason }) => ({ item: name, reason: `was not searched for a manifest: ${reason}` })), ...nested.map(({ name, reason }) => ({ item: name, reason }))],
+    };
   } catch (err) {
     return { others: [], refused: [{ item: 'every other manifest', reason: `was not searched for: ${errorMessage(err)}` }] };
   }

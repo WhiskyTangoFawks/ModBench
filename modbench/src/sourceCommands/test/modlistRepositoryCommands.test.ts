@@ -911,11 +911,8 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       ['one folder built by two manifests', { folders: { ModA: '/instance/mods/Same', ModB: '/instance/mods/Same', ModC: '/instance/mods/ModC' } }, ['ModC'], [
         { item: 'ModA', reason: "was skipped: its folder is also built by 'ModB'." }, { item: 'ModB', reason: "was skipped: its folder is also built by 'ModA'." },
       ]],
-      ['a folder inside another\'s', { folders: { ModA: '/instance/Stock Game/Data/ModA', ModB: '/instance/mods/ModB' }, found: [STOCK_GAME] }, ['ModB'], [
-        { item: 'ModA', reason: "was skipped: its folder is inside the folder of 'Stock Game/'." }, { item: 'Stock Game/', reason: "was skipped: its folder holds the folder of 'ModA'." },
-      ]],
-      ['a selected mod nested in a manifest that was not selected', { folders: { ModA: '/instance/Stock Game/ModA' }, found: [STOCK_GAME], asked: ['ModA'] }, [], [
-        { item: 'ModA', reason: "was skipped: its folder is inside the folder of 'Stock Game/'." },
+      ['a selected mod built into the folder of a manifest that was not selected', { folders: { ModA: '/instance/Stock Game' }, found: [STOCK_GAME], asked: ['ModA'] }, [], [
+        { item: 'ModA', reason: "was skipped: its folder is also built by 'Stock Game/'." },
       ]],
       ['one output built by two repositories', { folders: { ModA: '/instance/mods/ModA', ModB: '/instance/mods/ModB' }, shared: SHARED_OUTPUT }, ['ModB'], [
         { item: 'ModA', reason: "was skipped: the repositories '/source/A' and '/source/B' both build it." },

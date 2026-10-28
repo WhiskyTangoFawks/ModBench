@@ -30,6 +30,19 @@ interface ManifestSearch {
 
 const nameOf = (folders: readonly string[]): string => `${folders.join('/')}/`;
 
+// A manifest's folder holds no other manifest (modlist-repository.md, Restore from manifest, story 14): each of a nested pair is refused, naming the other.
+function nestedAmong(names: readonly string[]): Map<string, string> {
+  const why = new Map<string, string[]>();
+  const add = (name: string, reason: string): void => { why.set(name, [...why.get(name) ?? [], reason]); };
+  for (const inner of names) {
+    for (const outer of names.filter((name) => name !== inner && inner.startsWith(name))) {
+      add(inner, `its folder is inside the folder of '${outer}'`);
+      add(outer, `its folder holds the folder of '${inner}'`);
+    }
+  }
+  return new Map([...why].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, reasons]) => [name, `was skipped: ${reasons.join('; ')}.`]));
+}
+
 // modlist-repository.md, The repository, story 2. A link is not followed: the folder it reaches can be outside the instance.
 // A folder it cannot read is named, and the rest are searched (Every mod, story 4).
 async function searchForOtherManifests(context: Mo2Context): Promise<ManifestSearch> {
@@ -188,7 +201,9 @@ export function mo2Repository(
 
     async otherManifests() {
       const { found, unsearched } = await searchForOtherManifests(context);
-      return { manifests: found.map(({ segments, folder }) => ({ name: nameOf(segments.slice(0, -1)), folder })), unsearched };
+      const named = found.map(({ segments, folder }) => ({ name: nameOf(segments.slice(0, -1)), folder }));
+      const nested = nestedAmong(named.map(({ name }) => name));
+      return { manifests: named.filter(({ name }) => !nested.has(name)), unsearched, nested: [...nested].map(([name, reason]) => ({ name, reason })) };
     },
 
     writeOtherManifestLines: () => otherManifestLinesWritten(context),
