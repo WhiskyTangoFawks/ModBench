@@ -26,7 +26,8 @@ public enum BuildRefusal
     /// <summary>This machine has no VS Code task for a tool its manifest's steps run (mods.md, Build, story 14).</summary>
     NoTaskForTool,
 
-    /// <summary>An installation file its manifest names is missing from the downloads folder, has other bytes, or holds no
-    /// entry a file of the manifest takes (modlist-repository.md, Restore from manifest, story 4).</summary>
-    InstallationFileLacking,
+    /// <summary>A package its manifest names lacks what a file takes: an installation file is missing from the downloads folder,
+    /// has other bytes, or holds no entry; the game folder lacks a file or holds it with other bytes (modlist-repository.md,
+    /// Restore from manifest, story 4).</summary>
+    PackageLacking,
 }

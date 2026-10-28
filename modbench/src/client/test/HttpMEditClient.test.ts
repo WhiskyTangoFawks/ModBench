@@ -273,7 +273,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         }],
         refused: [
           { item: 'ModC', refusal: 'NoTaskForTool', message: "this machine has no task for its tool 'Pack'.", installationFilesNotFound: [] },
-          { item: 'ModE', refusal: 'InstallationFileLacking', message: "installation file 'E.7z' is missing.", installationFilesNotFound: [{ name: 'E.7z', size: 7, hash: 'H' }] },
+          { item: 'ModE', refusal: 'PackageLacking', message: "installation file 'E.7z' is missing.", installationFilesNotFound: [{ name: 'E.7z', size: 7, hash: 'H' }], gameFilesNotFound: ['a.nif'] },
         ],
       },
       reads: {
@@ -284,7 +284,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         }],
         refused: [
           { item: 'ModC', reason: "this machine has no task for its tool 'Pack'.", refusal: 'NoTaskForTool', installationFilesNotFound: [] },
-          { item: 'ModE', reason: "installation file 'E.7z' is missing.", refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'E.7z', hash: 'H' }] },
+          { item: 'ModE', reason: "installation file 'E.7z' is missing.", refusal: 'PackageLacking', installationFilesNotFound: [{ name: 'E.7z', hash: 'H' }], gameFilesNotFound: ['a.nif'] },
         ],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },

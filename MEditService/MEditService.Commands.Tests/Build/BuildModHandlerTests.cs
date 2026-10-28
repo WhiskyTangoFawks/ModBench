@@ -399,9 +399,51 @@ public sealed class BuildModHandlerTests : IDisposable
 
         var refused = Assert.Single((await Build(_noArchives)).Refused);
 
-        Assert.Equal(BuildRefusal.InstallationFileLacking, refused.Refusal);
+        Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
         Assert.Equal(DownloadedZip.PackName, Assert.Single(refused.InstallationFilesNotFound).Name);
         Assert.Contains("installation file 'Pack.zip' is missing", refused.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task AFileTheManifestTakesFromTheGameFolder_ComesFromThePlaceThatHoldsItsBytes_AndItsLineKeepsNamingTheGameFolder()
+    {
+        var edited = GameFolderHolding("edited", ("textures/a.dds", "edited"));
+        var vanilla = GameFolderHolding("steam", ("textures/a.dds", "from the game"));
+        var game = edited with { Elsewhere = [new GameFolderPlace(vanilla.DataFolder, vanilla.Files)] };
+        WriteSourceText(TakingFromTheGame(vanilla));
+
+        var built = await Landed(_noArchives with { GameFolder = game });
+
+        Assert.Empty(built.Overwritten);
+        Assert.Equal([("textures/a.dds", "from the game")], FilesIn(ModFolder));
+        var manifest = ManifestWritten().Require();
+        Assert.Equal(["Fallout 4"], manifest.Packages.OfType<ManifestPackage.GameFolder>().Select(package => package.Name));
+        Assert.Equal([new ManifestFile("textures/a.dds", new PackageEntry.Held(), "Fallout 4")], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AGameFileTheRequestDidNotHand_RefusesTheMod_NamingItForTheRequestToFind_AndWritesNothing()
+    {
+        WriteSourceText(TakingFromTheGame(GameFolderHolding("steam", ("textures/a.dds", "from the game"))));
+
+        var refused = Assert.Single((await Build(_noArchives)).Refused);
+
+        Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
+        Assert.Equal(["textures/a.dds"], refused.GameFilesNotFound);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task AGameFileWithOtherBytesInEveryPlace_RefusesTheMod_AndIsNotAskedForAgain()
+    {
+        var pinned = GameFolderHolding("steam", ("textures/a.dds", "from the game"));
+        WriteSourceText(TakingFromTheGame(pinned));
+
+        var refused = Assert.Single((await Build(_noArchives with { GameFolder = GameFolderHolding("edited", ("textures/a.dds", "edited")) })).Refused);
+
+        Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
+        Assert.Empty(refused.GameFilesNotFound);
         Assert.False(Directory.Exists(ModFolder));
     }
 
@@ -412,7 +454,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
         var refused = Assert.Single((await Build(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "c")) with { Hash = "OTHER" }])).Refused);
 
-        Assert.Equal((BuildRefusal.InstallationFileLacking, "was not built: installation file 'Pack.zip' has other bytes."), (refused.Refusal, refused.Message));
+        Assert.Equal((BuildRefusal.PackageLacking, "was not built: installation file 'Pack.zip' has other bytes."), (refused.Refusal, refused.Message));
         Assert.Empty(refused.InstallationFilesNotFound);
     }
 
@@ -468,6 +510,19 @@ public sealed class BuildModHandlerTests : IDisposable
         return (await TestEditService.BuildModHandler(_holder).BuildAsync(
             [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule, made) { InstallationFiles = installationFiles ?? [], UnreadableInstallationFiles = unreadableInstallationFiles }], instance)).Value();
     }
+
+    private GameFolder GameFolderHolding(string place, params (string Path, string Text)[] files)
+    {
+        var data = Directory.CreateDirectory(Path.Combine(_root, "game", place, "Data")).FullName;
+        foreach (var (path, text) in files) Write(data, path, Encoding.UTF8.GetBytes(text));
+        var hashes = new ModFolderRepository(TimeProvider.System).Files(data, new HashSet<string>(), null).Files;
+        return new GameFolder("Fallout 4", data, [.. hashes.Select(file => new GameFile(file.Path, file.Hash))]);
+    }
+
+    private static string TakingFromTheGame(GameFolder pinned) =>
+        "{\"output\": \"Mod\", \"packages\": [{\"gameFolder\":\"Fallout 4\",\"hash\":\""
+        + FileHash.OfFilesTaken([.. pinned.Files.Select(file => new HashedFile(file.Path, file.Hash))])
+        + "\"}], \"files\": [{\"path\":\"textures/a.dds\"}]}";
 
     private InstallationFile Pack(params (string Path, string Text)[] entries) => DownloadedZip.WritePack(Path.Combine(_root, "downloads"), entries);
 

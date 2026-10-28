@@ -60,7 +60,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [] };
     client.setCommandHandler('build', (mods) => Promise.resolve((mods[0]?.installationFiles ?? []).length === 0
-      ? { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'PackageLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] }
       : BUILT));
     const adapter = fakeAdapter({ downloadedFiles: new Map([['Pack.7z', { kind: 'read', answer: pack }]]) });
 
@@ -72,7 +72,7 @@ describe('sourceCommands build', () => {
 
   it('keeps the refusal of a mod whose installation file the downloads folder lacks, once mEdit is asked again', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] });
+    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'PackageLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] });
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
 
@@ -81,12 +81,51 @@ describe('sourceCommands build', () => {
 
   it('hands mEdit why an installation file its manifest names could not be read, by name', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'InstallationFileLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] });
+    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModA', reason: 'was not built: installation file Pack.7z is missing.', refusal: 'PackageLacking', installationFilesNotFound: [{ name: 'Pack.7z', hash: 'H' }] }] });
     const adapter = fakeAdapter({ downloadedFiles: new Map([['Pack.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
 
     expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', installationFiles: [], unreadableInstallationFiles: { 'Pack.7z': 'EACCES' } }]);
+  });
+
+  describe('a game file its manifest takes', () => {
+    const NEEDING = { landed: [], refused: [{ item: 'ModA', reason: 'was not built: game file textures/a.dds is missing.', refusal: 'PackageLacking', installationFilesNotFound: [], gameFilesNotFound: ['textures/a.dds'] }] };
+    const asksOnceThenBuilds = (client: InMemoryMEditClient): void => {
+      client.setCommandHandler('build', (_mods, facts) => Promise.resolve((facts.gameFolder?.files ?? []).length === 0 ? NEEDING : BUILT));
+    };
+    const place = { dataFolder: '/game/Data', depots: [], depotProblems: [] };
+
+    it('hands mEdit again the mod it refused for game files, with the files from every place of the game that holds them', async () => {
+      const client = new InMemoryMEditClient();
+      asksOnceThenBuilds(client);
+      const file = { path: 'textures/a.dds', hash: 'G' };
+      const adapter = fakeAdapter({ places: [{ ...place, gameFiles: new Map([['textures/a.dds', file]]) }] });
+
+      const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+      expect(client.calls[1]?.args[1]).toMatchObject({ gameFolder: { name: 'Fallout4', dataFolder: '/game/Data', files: [file] } });
+      expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
+    });
+
+    it('hands mEdit why a game file could not be read, by path', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('build', NEEDING);
+      const adapter = fakeAdapter({ places: [{ ...place, unreadableGameFiles: new Map([['textures/a.dds', 'EACCES']]) }] });
+
+      await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+      expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadableGameFiles: { 'textures/a.dds': 'EACCES' } }]);
+    });
+
+    it('hands mEdit that the game folder was not found, for each game file its manifest takes', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('build', NEEDING);
+
+      await sourceCommands({ client, adapter: fakeAdapter({ places: [] }), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+      expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadableGameFiles: { 'textures/a.dds': 'the game folder was not found' } }]);
+    });
   });
 
   it('hands mEdit no archive variant for a release the table names none for', async () => {
@@ -248,6 +287,37 @@ describe('sourceCommands decompileAndCommit', () => {
       name: 'ModA', sourceFolder: '/source/ModA', metadataFiles: ['meta.ini'], version: '1.2.3',
       installationFile: { path: '/downloads/Pack.7z', size: 7, hash: 'H', entries: [{ path: 'a.dds', hash: 'E' }] },
     }]);
+  });
+
+  it('hands mEdit the game files each mod\'s files may be, with the depots the game folder records', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
+    const file = { path: 'textures/a.dds', hash: 'G' };
+    const adapter = fakeAdapter({
+      places: [{ dataFolder: '/game/Data', depots: [{ id: '377162', version: '7' }], depotProblems: [] }],
+      gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]),
+    });
+    adapter.gameFilesTakenBy = (_dataFolder, folder) => Promise.resolve(folder.endsWith('ModC')
+      ? { kind: 'read', answer: { gameFiles: [file], notes: [] } } : { kind: 'read', answer: { gameFiles: [], notes: [] } });
+
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC']);
+
+    expect(client.calls[0]?.args[0]).toMatchObject([
+      { name: 'ModC', gameFolder: { name: 'Fallout4', dataFolder: '/game/Data', files: [file], depots: [{ id: '377162', version: '7' }] } },
+    ]);
+  });
+
+  it('refuses a mod whose game files cannot be read, naming why, and commits the rest', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
+    const adapter = fakeAdapter({ places: [{ dataFolder: '/game/Data', depots: [], depotProblems: [] }] });
+    adapter.gameFilesTakenBy = (_dataFolder, folder) => Promise.resolve(folder.endsWith('ModC')
+      ? { kind: 'unreadable', reason: 'EACCES' } : { kind: 'read', answer: { gameFiles: [], notes: [] } });
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC', 'ModF']);
+
+    expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModF' }]);
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModC', reason: 'EACCES' }] });
   });
 
   it.each<[string, InstanceAnswers, string]>([
