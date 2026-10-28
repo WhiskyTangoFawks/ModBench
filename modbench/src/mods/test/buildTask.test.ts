@@ -61,10 +61,20 @@ describe('the build task', () => {
       'Could not pack "A.ba2" in "ModA". too large',
     ],
     ['a mod built in part', { landed: [landed({ failure: 'archive step' })], refused: [] }, 'Built 1 mod only in part. "ModA" (archive step)'],
-  ])('fails with %s, writing it first and no mod as built', async (_name, outcome, text) => {
+  ])('fails with %s, writing it and no bare line for the mod it left unfinished', async (_name, outcome, text) => {
     const { written, closedWith, reporter } = await build(DEFINITION, applied(outcome));
 
     expect([written, closedWith, reporter.shownFailures.map(({ severity }) => severity)]).toEqual([`${text}\r\n`, [1], ['error']]);
+  });
+
+  it('fails on a refusal beside a mod that landed whole, writing the refusal first and the mod as built', async () => {
+    const { written, closedWith } = await build(DEFINITION, applied({
+      landed: [landed({ mod: 'ModB' }), landed({ failure: 'archive step' })], refused: [{ item: 'ModC', reason: 'no repository' }],
+    }));
+
+    expect([written, closedWith]).toEqual([
+      'Could not build "ModC": no repository\r\nBuilt 1 mod only in part. "ModA" (archive step)\r\nBuilt "ModB".\r\n', [1],
+    ]);
   });
 
   it('fails with the refusal of a whole build, and writes its words', async () => {

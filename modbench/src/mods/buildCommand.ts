@@ -118,6 +118,10 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome, action: ReportAc
   reporter.landed(diagnostics > 0 ? `Built ${what} with ${diagnosticsWords(diagnostics)}` : `Built ${what}.`);
 }
 
+/** The mods of a landed build that landed whole. */
+export const builtWhole = (outcome: BuildOutcome): string[] =>
+  outcome.landed.filter(({ failure, refused, archivesRefused }) => failure === undefined && refused.length + archivesRefused.length === 0).map(({ mod }) => mod);
+
 /** The parts of a landed build that did not land whole. */
 export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...partlyBuilt(outcome), ...refusedInMods(outcome)];
 

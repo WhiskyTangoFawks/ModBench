@@ -3,7 +3,7 @@ import type { Argument } from '../wire/argument';
 import { registerTaskGesture, type TaskProblem, type TaskVerdict } from '../drivingLib/taskGesture';
 import { Refusal } from '../drivingLib/refusal';
 import type { Reporter } from '../ports/reporter';
-import { buildFailures, buildWarnings, type Built } from './buildCommand';
+import { buildFailures, buildWarnings, builtWhole, type Built } from './buildCommand';
 
 /** mods.md, Build, story 15: the task builds the mods its definition names, or every source. */
 export function registerBuildTask(reporter: Reporter): vscode.Disposable {
@@ -18,12 +18,11 @@ function modsOfDefinition({ mods = [] }: vscode.TaskDefinition): Argument[] {
 // mods.md, Build, story 15: a refusal or a mod landed in part fails the task, and a warning does not.
 function buildVerdict(result: Built): TaskVerdict {
   if (!result.applied) return { passed: false, lines: [], problems: [{ severity: 'error', message: result.refusal, detail: result.detail }] };
-  const { landed, refused } = result.outcome;
+  const { refused } = result.outcome;
   const failures: TaskProblem[] = [
     ...refused.map(({ item, reason }): TaskProblem => ({ severity: 'error', message: `Could not build "${item}":`, detail: reason })),
     ...buildFailures(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'error', message, detail })),
   ];
   const warnings = buildWarnings(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'warning', message, detail }));
-  const passed = failures.length === 0;
-  return { passed, lines: passed ? landed.map(({ mod }) => `Built "${mod}".`) : [], problems: [...failures, ...warnings] };
+  return { passed: failures.length === 0, lines: builtWhole(result.outcome).map((mod) => `Built "${mod}".`), problems: [...failures, ...warnings] };
 }
