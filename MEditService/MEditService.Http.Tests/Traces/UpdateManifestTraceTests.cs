@@ -63,6 +63,9 @@ public sealed class UpdateManifestTraceTests : HostedTests
         { "a game folder with no name", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"dataFolder": "/game/Data", "files": [{{AGameFile}}]} }""" },
         { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "files": [{{AGameFile}}]} }""" },
         { "a game folder with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data"} }""" },
+        { "an elsewhere place with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"files": [{{AGameFile}}]}]} }""" },
+        { "an elsewhere place with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data"}]} }""" },
+        { "an elsewhere game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [], "elsewhere": [{"dataFolder": "/steam/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]}]} }""" },
         { "a game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "gameFolder": {"name": "Fallout4", "dataFolder": "/game/Data", "files": [{"path": "A.nif", "hash": "WHOLE"}]} }""" },
     };
 
@@ -126,5 +129,31 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.Equal(
             "{\n\"packages\": [\n{\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"}\n],\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n",
             File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
+    }
+
+    [Fact]
+    public async Task UpdatingTheManifestOfAModWhoseFilesAnotherPlaceHolds_NamesTheGameFolderAsItsPackage()
+    {
+        Directory.CreateDirectory(ModFolder);
+        File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
+
+        var response = await Client.PostAsJsonAsync("/update-manifest", new
+        {
+            mods = new[] { new { name = Mod, folder = ModFolder, metadataFiles = Array.Empty<string>() } },
+            statCache = Path.Combine(_instance, "stat-cache"),
+            gameFolder = new
+            {
+                name = "Fallout4",
+                dataFolder = Path.Combine(_instance, "game", "Data"),
+                files = Array.Empty<object>(),
+                elsewhere = new[]
+                {
+                    new { dataFolder = Path.Combine(_instance, "steam", "Data"), files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } } },
+                },
+            },
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Contains("\"gameFolder\":\"Fallout4\"", File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 }
