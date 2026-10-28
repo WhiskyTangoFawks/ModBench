@@ -599,15 +599,28 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AModsFilesFromTwoPlacesOfTheGame_AreTakenFromOneOnly_TheOtherFilesNotHeld()
+    public async Task AModsFilesFromTwoPlacesOfTheGame_AreAllTaken_UnderTheOneGameFolderPackage()
     {
-        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b");
-        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", [new GameFile("b.nif", "b")])]);
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b").WithFile(Mod, "c.nif", "c");
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a"), new GameFile("c.nif", "other")], [new GameFolderPlace("steam", [new GameFile("b.nif", "b"), new GameFile("c.nif", "c")])]);
 
         var manifest = await UpdatedWith(game);
 
-        Assert.Equal([GameFolderPackageTaking(("a.nif", "a"))], manifest.Packages);
-        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.NotHeld())], manifest.Files);
+        Assert.Equal([GameFolderPackageTaking(("a.nif", "a"), ("b.nif", "b"), ("c.nif", "c"))], manifest.Packages);
+        Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("b.nif", new PackageEntry.Held()), new ManifestFile("c.nif", new PackageEntry.Held())], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AGameFolderMod_NamesTheDepotsOfOnlyThePlacesItsFilesAreTakenFrom()
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b");
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [
+            new GameFolderPlace("steam", [new GameFile("b.nif", "b")], SteamDepots),
+            new GameFolderPlace("gog", [new GameFile("z.nif", "z")], [new GameDepot("9", "9")])]);
+
+        var manifest = await UpdatedWith(game);
+
+        Assert.Equal(SteamDepots, Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots);
     }
 
     [Fact]
