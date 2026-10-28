@@ -71,7 +71,6 @@ function refuseCaseCollisions(entries: readonly string[]): void {
   }
 }
 
-/** The downloaded files already hashed, and why any could not be read. */
 interface IndexedDownloadedFiles {
   readonly files: readonly (HashedDownloadedFile & { readonly path: string })[];
   readonly notes: readonly string[];
