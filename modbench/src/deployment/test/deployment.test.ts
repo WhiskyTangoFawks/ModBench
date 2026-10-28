@@ -366,8 +366,7 @@ describe('a deploy killed part way through its changes', () => {
   const at = () => join(folder, 'Data', 'a.esp');
   const listing = async () => (await readdir(join(folder, 'Data'))).sort();
   const fileIdOf = async (file: FileTheGameGets): Promise<string> => {
-    const probe = join(root, 'probe');
-    await mkdir(probe, { recursive: true });
+    const probe = await mkdtemp(join(root, 'probe-'));
     await deploy([file], probe);
     return (await recordIn(join(storage, 'deployment.json')).of(probe)).files.map(({ fileId }) => fileId).join();
   };
