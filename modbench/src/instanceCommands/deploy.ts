@@ -63,8 +63,8 @@ async function moveToOverwrite(
   if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
   try {
     const game = await adapter.gameFolder();
-    if (game.kind === 'found' && holds(folder, game.root)) {
-      return { applied: false, refusal: `The deployment folder ${folder} is or holds the game folder ${game.root}: moving the game's own files out of it would break the game.` };
+    if (game.kind === 'found' && (holds(folder, game.root) || holds(game.root, folder))) {
+      return { applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder ${game.root}: moving the game's own files out of it would break the game.` };
     }
   } catch (err) {
     return refuse(err);

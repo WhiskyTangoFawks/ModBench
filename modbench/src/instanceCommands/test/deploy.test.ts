@@ -124,12 +124,13 @@ describe('move to Overwrite', () => {
   it.each([
     ['is the game folder', '/games/Fallout4'],
     ['holds the game folder', '/games'],
+    ['sits inside the game folder', '/games/Fallout4/Data'],
   ])('is refused, moving nothing, when the deployment folder %s', async (_case, folder) => {
     const { moved, commands } = moving(undefined, folder);
 
     const result = await commands.moveToOverwrite(['Data/a.esp']);
 
-    expect([result, moved]).toEqual([{ applied: false, refusal: `The deployment folder ${folder} is or holds the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
+    expect([result, moved]).toEqual([{ applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
   });
 
   it('moves from a deployment folder whose name is only the start of the game folder\'s', async () => {
