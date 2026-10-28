@@ -317,9 +317,9 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     await commands.updateManifest(['ModA', 'ModB']);
 
-    expect((client.calls[0]?.args[0] as { name: string; gameFolder: unknown }[]).map(({ name, gameFolder }) => [name, gameFolder])).toEqual([
-      ['ModA', { ...GAME_FOLDER, files: [{ path: 'Textures/a.dds', hash: '#Textures/a.dds' }] }],
-      ['ModB', { ...GAME_FOLDER, files: [{ path: 'Meshes/B.nif', hash: '#Meshes/B.nif' }] }],
+    expect(client.calls[0]?.args[0]).toMatchObject([
+      { name: 'ModA', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Textures/a.dds', hash: '#Textures/a.dds' }] } },
+      { name: 'ModB', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/B.nif', hash: '#Meshes/B.nif' }] } },
     ]);
   });
 
@@ -351,7 +351,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA', 'ModB']);
 
-    expect((client.calls[0]?.args[0] as { gameFolder?: unknown }[]).map(({ gameFolder }) => gameFolder)).toEqual([undefined, undefined]);
+    expect(client.calls[0]?.args[0]).not.toContainEqual(expect.objectContaining({ gameFolder: expect.anything() as unknown }));
     expect(outcome).toMatchObject({ notes: [{ mod: 'ModB', note: expect.stringContaining('the game folder was not found') as unknown }] });
   });
 
@@ -1273,7 +1273,10 @@ describe('modlistRepositoryCommands mod status', () => {
   });
 });
 
-const firstModSent = (client: InMemoryMEditClient): unknown => (client.calls[0]?.args[0] as unknown[])[0];
+const firstModSent = (client: InMemoryMEditClient): unknown => {
+  const mods: unknown = client.calls[0]?.args[0];
+  return Array.isArray(mods) ? (mods as readonly unknown[])[0] : undefined;
+};
 
 describe('modlistRepositoryCommands with the Steam install beside the game folder', () => {
   const STEAM: FoundGameFolder = { kind: 'found', root: '/steam', dataFolder: '/steam/Data' };

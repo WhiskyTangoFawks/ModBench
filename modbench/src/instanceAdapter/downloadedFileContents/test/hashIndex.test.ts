@@ -264,7 +264,7 @@ describe('the sizes and hashes of the record index', () => {
       expect(next.extracted).toEqual([]);
     });
 
-    it('omits a downloaded file whose stamp is no longer the one it was hashed at, and one that is gone', async () => {
+    it('omits a downloaded file whose stamp differs from the one it was hashed at, and one that is gone', async () => {
       clockAnHourPastEveryWrite();
       const changed = await fileHolding('Changed.7z', 'archive');
       const gone = await fileHolding('Gone.7z', 'archive');
