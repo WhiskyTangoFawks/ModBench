@@ -43,7 +43,7 @@ beforeEach(() => {
 
 describe('Deploy', () => {
   it('deploys the files the instance value says the game gets, under the Toolbox\'s progress, and says nothing', async () => {
-    const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], lost: [] });
+    const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], lost: [], leftAside: [] });
 
     await run();
 
@@ -69,7 +69,7 @@ describe('Deploy', () => {
   });
 
   it('warns of each file it left out, naming its path', async () => {
-    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: ['Data/MCM/settings.ini', 'Data/a.esp'], lost: [] });
+    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: ['Data/MCM/settings.ini', 'Data/a.esp'], lost: [], leftAside: [] });
 
     await run();
 
@@ -80,13 +80,26 @@ describe('Deploy', () => {
 
   it('warns of each file it left out for another the game gets at its path, naming both', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], lost: [{ path: 'Data/x.ini', winner: '/instance/mods/Lower/Root/Data/x.ini' }],
+      applied: true, wrote: true, leftOut: [], lost: [{ path: 'Data/x.ini', winner: '/instance/mods/Lower/Root/Data/x.ini' }], leftAside: [],
     });
 
     await run();
 
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: 'Deploy left out each file whose path another file the game gets wins:', detail: '/instance/mods/Lower/Root/Data/x.ini at Data/x.ini',
+    }]);
+  });
+
+  it('warns of each file it set aside and could not remove, which the next deploy removes', async () => {
+    const { reporter, run } = deployAnswering({
+      applied: true, wrote: true, leftOut: [], lost: [], leftAside: ['Data/b.esp.modbench_aside_7_0 (EBUSY: resource busy or locked)'],
+    });
+
+    await run();
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:',
+      detail: 'Data/b.esp.modbench_aside_7_0 (EBUSY: resource busy or locked)',
     }]);
   });
 });

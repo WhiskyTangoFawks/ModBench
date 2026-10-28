@@ -1,11 +1,11 @@
 // Deployment (target-architecture.d2): a load order deployed into the deployment folder. Its one type
 // is hardlink (deployment-hardlink.md): each file the game gets is linked to its copy in the instance.
 
-import { lstat, realpath, stat } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
-import { changeAll, type Link } from './changes';
+import { changeAll, fileIdAt, recoveryIn, type Link } from './changes';
 import { recordIn, type DeploymentRecord, type Written } from './record';
 
 /** A file the game gets: its path in the mod, `/`-separated, and the copy that wins it. */
@@ -19,12 +19,13 @@ interface Lost {
   readonly winner: string;
 }
 
-/** `wrote` is false when the folder already held the load order. Deploy leaves out the winner at
- *  each `leftOut` path, whose file it did not write, and each `lost` winner an earlier one beat to its path. */
+/** `wrote` is false when the folder already held the load order. Deploy leaves out the winner at each
+ *  `leftOut` path and each `lost` winner, and `leftAside` names each file it set aside and could not remove. */
 export interface Deployed {
   readonly wrote: boolean;
   readonly leftOut: readonly string[];
   readonly lost: readonly Lost[];
+  readonly leftAside: readonly string[];
 }
 
 export interface Deployment {
@@ -40,16 +41,6 @@ function deployedPath(relativePath: string): string | undefined {
   if (below.length === 0) return `Data/${relativePath}`;
   if (fold(first) === 'source') return undefined;
   return fold(first) === 'root' ? below.join('/') : `Data/${relativePath}`;
-}
-
-async function fileIdAt(path: string): Promise<string | undefined> {
-  try {
-    return String((await lstat(path, { bigint: true })).ino);
-  } catch (err) {
-    const code = errnoCode(err);
-    if (code === 'ENOENT' || code === 'ENOTDIR') return undefined;
-    throw err;
-  }
 }
 
 async function volumeOf(path: string): Promise<string> {
@@ -94,9 +85,10 @@ async function linksOnTheFolderVolume(folder: string, files: Iterable<FileTheGam
 }
 
 async function stillWritten(folder: string, written: readonly Written[]): Promise<Map<string, Written>> {
+  const recovered = recoveryIn();
   const owned = new Map<string, Written>();
   for (const entry of written) {
-    if (await fileIdAt(join(folder, entry.path)) === entry.ino) owned.set(fold(entry.path), entry);
+    if (await recovered(join(folder, entry.path), entry) === entry.ino) owned.set(fold(entry.path), entry);
   }
   return owned;
 }
@@ -139,10 +131,12 @@ async function deployTo(record: DeploymentRecord, folder: string, files: Iterabl
   const after = [...kept, ...relinks, ...links].map(asWritten);
   if (links.length + relinks.length + removals.length === 0) {
     if (after.length !== written.length) await record.write(folder, after);
-    return { wrote: false, leftOut, lost };
+    return { wrote: false, leftOut, lost, leftAside: [] };
   }
-  await changeAll(folder, { removals, relinks, links }, () => record.write(folder, after));
-  return { wrote: true, leftOut, lost };
+  // The record keeps each file set aside, so the next deploy removes one this deploy could not.
+  const setAside = [...removals, ...relinks].map(asWritten);
+  const leftAside = await changeAll(folder, { removals, relinks, links }, () => record.write(folder, [...after, ...setAside]));
+  return { wrote: true, leftOut, lost, leftAside };
 }
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of

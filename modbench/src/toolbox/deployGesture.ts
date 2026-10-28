@@ -27,6 +27,9 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
       reporter.report('warning', 'Deploy left out each file whose path another file the game gets wins:',
         result.lost.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
     }
+    if (result.leftAside.length > 0) {
+      reporter.report('warning', 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:', result.leftAside.join(', '));
+    }
   };
   // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
   return vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy));

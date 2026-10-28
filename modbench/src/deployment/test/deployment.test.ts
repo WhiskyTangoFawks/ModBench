@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
-const busy = vi.hoisted(() => ({ link: undefined as string | undefined, renameTo: undefined as string | undefined }));
+const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[] }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   const ebusy = (call: string, path: string) => Object.assign(new Error(`EBUSY: resource busy or locked, ${call} '${path}'`), { code: 'EBUSY' });
   return {
     ...actual,
-    link: (from: string, to: string) => (to === busy.link ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
-    rename: (from: string, to: string) => (to === busy.renameTo ? Promise.reject(ebusy('rename', to)) : actual.rename(from, to)),
+    link: (from: string, to: string) => (busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
+    unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
 import { hardlinkDeployment, type FileTheGameGets } from '../deployment';
@@ -27,8 +27,8 @@ beforeEach(async () => {
   folder = join(root, 'deployed');
   storage = join(root, 'storage');
   await mkdir(folder);
-  busy.link = undefined;
-  busy.renameTo = undefined;
+  busy.links = [];
+  busy.unlinks = [];
 });
 
 afterEach(async () => {
@@ -98,7 +98,7 @@ describe('a deploy after another', () => {
 
     const deployed = await deploy(files);
 
-    expect([deployed, [await changed(join(folder, 'Data', 'a.esp')), await changed(join(folder, 'b.dll'))]]).toEqual([{ wrote: false, leftOut: [], lost: [] }, before]);
+    expect([deployed, [await changed(join(folder, 'Data', 'a.esp')), await changed(join(folder, 'b.dll'))]]).toEqual([{ wrote: false, leftOut: [], lost: [], leftAside: [] }, before]);
   });
 
   it('removes a file it wrote that the load order does not hold', async () => {
@@ -212,6 +212,8 @@ describe('what deploy wrote', () => {
   });
 });
 
+const ASIDE = `b.esp.modbench_aside_${process.pid}_0`;
+
 describe('a deploy that fails', () => {
   async function deployedOnce() {
     const lower = await modFile('Lower', 'a.esp');
@@ -223,7 +225,7 @@ describe('a deploy that fails', () => {
   const listing = async () => (await readdir(folder, { recursive: true })).sort();
 
   const failingDeploy = async () => {
-    busy.link = join(folder, 'Data', 'meshes', 'd.nif');
+    busy.links.push(join(folder, 'Data', 'meshes', 'd.nif'));
     return deploy([await modFile('Upper', 'a.esp'), await modFile('Mod', 'textures/c.dds'), await modFile('Mod', 'meshes/d.nif')]);
   };
 
@@ -240,15 +242,95 @@ describe('a deploy that fails', () => {
     const { lower, removed } = await deployedOnce();
     await expect(failingDeploy()).rejects.toThrow();
 
-    expect(await deploy([lower, removed])).toEqual({ wrote: false, leftOut: [], lost: [] });
+    expect(await deploy([lower, removed])).toEqual({ wrote: false, leftOut: [], lost: [], leftAside: [] });
   });
 
   it('names each change it could not undo', async () => {
     await deployedOnce();
-    busy.renameTo = join(folder, 'Data', 'b.esp');
+    busy.links.push(join(folder, 'Data', 'b.esp'));
 
     await expect(failingDeploy()).rejects.toThrow(
-      `. Deploy could not undo: Data/b.esp, set aside as b.esp.modbench_aside_${process.pid} (EBUSY: resource busy or locked, rename '${join(folder, 'Data', 'b.esp')}')`);
+      `. Deploy could not undo: Data/b.esp, set aside as ${ASIDE} (EBUSY: resource busy or locked, link '${join(folder, 'Data', 'b.esp')}')`);
+  });
+
+  it('never replaces a file of the user\'s at the name it sets a file aside as', async () => {
+    const { lower } = await deployedOnce();
+    await writeFile(join(folder, 'Data', ASIDE), 'mine');
+
+    await deploy([lower]);
+
+    expect([await listing(), await readFile(join(folder, 'Data', ASIDE), 'utf8')]).toEqual([['Data', join('Data', 'a.esp'), join('Data', ASIDE)], 'mine']);
+  });
+});
+
+describe('a deploy that lands', () => {
+  const listing = async () => (await readdir(folder, { recursive: true })).sort();
+
+  async function landedLeavingAside() {
+    const kept = await modFile('Mod', 'a.esp');
+    await deploy([kept, await modFile('Mod', 'b.esp')]);
+    busy.unlinks.push(join(folder, 'Data', ASIDE));
+    return { kept, deployed: await deploy([kept]) };
+  }
+
+  it('names each file it set aside and could not remove', async () => {
+    const { deployed } = await landedLeavingAside();
+
+    expect(deployed).toEqual({
+      wrote: true, leftOut: [], lost: [], leftAside: [`Data/${ASIDE} (EBUSY: resource busy or locked, unlink '${join(folder, 'Data', ASIDE)}')`],
+    });
+  });
+
+  it('leaves one the next deploy removes', async () => {
+    const { kept } = await landedLeavingAside();
+    busy.unlinks = [];
+
+    await deploy([kept]);
+
+    expect(await listing()).toEqual(['Data', join('Data', 'a.esp')]);
+  });
+});
+
+describe('a file a killed deploy set aside', () => {
+  const KILLED = 'a.esp.modbench_aside_99999';
+  const listing = async () => (await readdir(folder, { recursive: true })).sort();
+
+  async function killedAfterSettingAside() {
+    const file = await modFile('Mod', 'a.esp');
+    await deploy([file]);
+    await rename(join(folder, 'Data', 'a.esp'), join(folder, 'Data', KILLED));
+    return file;
+  }
+
+  it.each([
+    ['puts it back when the load order holds it', true, ['Data', join('Data', 'a.esp')]],
+    ['removes it when the load order does not hold it', false, ['Data']],
+  ])('%s', async (_case, held, after) => {
+    const file = await killedAfterSettingAside();
+
+    await deploy(held ? [file] : []);
+
+    expect(await listing()).toEqual(after);
+  });
+
+  it('removes it when another file holds its path, which stays as it is', async () => {
+    await killedAfterSettingAside();
+    await writeFile(join(folder, 'Data', 'a.esp'), 'mine');
+
+    const deployed = await deploy([await modFile('Mod', 'a.esp')]);
+
+    expect([deployed.leftOut, await listing(), await readFile(join(folder, 'Data', 'a.esp'), 'utf8')])
+      .toEqual([['Data/a.esp'], ['Data', join('Data', 'a.esp')], 'mine']);
+  });
+
+  it('is the user\'s when it is not the file deploy wrote', async () => {
+    await deploy([await modFile('Mod', 'a.esp')]);
+    await rm(join(folder, 'Data', 'a.esp'));
+    await writeFile(join(folder, 'Data', KILLED), 'mine');
+
+    await deploy([]);
+
+    expect([await listing(), await readFile(join(folder, 'Data', KILLED), 'utf8')]).toEqual([['Data', join('Data', KILLED)], 'mine']);
   });
 });
 
