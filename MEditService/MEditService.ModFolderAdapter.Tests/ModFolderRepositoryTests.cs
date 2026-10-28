@@ -152,6 +152,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AStatCacheThatCannotBeRead_VouchesForNoFile(string text)
     {
         Write("a.txt", "hello");
+        _repository.KeepInStatCache(_repository.Files(_root, new HashSet<string>(), _statCache), NoLines, NoHashes);
         StatCacheSays(text);
         using var held = HeldOpen("a.txt");
 
@@ -169,6 +170,19 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.Equal(HashOfHello, Assert.Single(read.Files).Hash);
         Assert.Contains(taken, _repository.KeepInStatCache(read, NoLines, NoHashes), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoFoldersOfOneName_KeepTheirStatCachesApart()
+    {
+        Write("a.txt", "hello");
+        var other = Directory.CreateDirectory(Path.Combine(_scratch, "plugins", "mod")).FullName;
+        File.WriteAllText(Path.Combine(other, "a.txt"), "other bytes");
+        _repository.KeepInStatCache(_repository.Files(_root, new HashSet<string>(), _statCache), NoLines, NoHashes);
+        _repository.KeepInStatCache(_repository.Files(other, new HashSet<string>(), _statCache), NoLines, NoHashes);
+        using var held = HeldOpen("a.txt");
+
+        Assert.Equal(HashOfHello, Assert.Single(_repository.Files(_root, new HashSet<string>(), _statCache).Files).Hash);
     }
 
     [Fact]
@@ -902,7 +916,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private sealed record CachedEntry(long Size, long Modified, long Changed, string Hash);
 
-    private string StatCacheFile => Path.Combine(_statCache, "mod");
+    private string StatCacheFile => Assert.Single(Directory.GetFiles(_statCache));
 
     private sealed record CachedFiles(Dictionary<string, CachedEntry> Files);
 
