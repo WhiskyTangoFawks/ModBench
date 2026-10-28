@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { link, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 
-const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[] }));
+const busy = vi.hoisted(() => ({ links: [] as string[], unlinks: [] as string[], onLink: undefined as ((to: string) => void) | undefined }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   const ebusy = (call: string, path: string) => Object.assign(new Error(`EBUSY: resource busy or locked, ${call} '${path}'`), { code: 'EBUSY' });
   return {
     ...actual,
-    link: (from: string, to: string) => (busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
+    link: (from: string, to: string) => (busy.onLink?.(to), busy.links.includes(to) ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
     unlink: (path: string) => (busy.unlinks.includes(path) ? Promise.reject(ebusy('unlink', path)) : actual.unlink(path)),
   };
 });
@@ -31,6 +32,7 @@ beforeEach(async () => {
   await mkdir(folder);
   busy.links = [];
   busy.unlinks = [];
+  busy.onLink = undefined;
   place = () => ({ why: NOT_WRITTEN.why });
   order = { release: 'Fallout4', entries: [] };
 });
@@ -342,42 +344,122 @@ describe('a file a killed deploy set aside', () => {
   });
 });
 
-describe('a link a killed deploy made before it wrote the record', () => {
+describe('a deploy killed part way through its changes', () => {
   const at = () => join(folder, 'Data', 'a.esp');
+  const listing = async () => (await readdir(join(folder, 'Data'))).sort();
+  const recording = async (...files: { winner: string }[]) =>
+    recordIn(join(storage, 'deployment.json')).write(folder, {
+      files: await Promise.all(files.map(async ({ winner }) => ({ path: 'Data/a.esp', ino: String(await inode(winner)) }))),
+    });
 
-  it('is recorded as deploy\'s own when it is a new path, so a later deploy removes it', async () => {
+  async function killedAfterLinkingANewPath() {
     const file = await modFile('Mod', 'a.esp');
+    await recording(file);
     await mkdir(dirname(at()), { recursive: true });
     await link(file.winner, at());
+    return file;
+  }
+
+  async function killedAfterRelinking() {
+    const old = await modFile('Old', 'a.esp', 'old');
+    await deploy([old]);
+    const next = await modFile('New', 'a.esp', 'new');
+    await recording(next, old);
+    await rename(at(), join(folder, 'Data', 'a.esp.modbench_aside_99999'));
+    return { old, next };
+  }
+
+  it('leaves a file it linked at a new path managed when the load order still holds it', async () => {
+    const file = await killedAfterLinkingANewPath();
 
     const deployed = await deploy([file]);
-    await deploy([]);
 
-    expect([deployed.leftOut, deployed.wrote, await readdir(join(folder, 'Data'))]).toEqual([[], false, []]);
+    expect([deployed.leftOut, await inode(at())]).toEqual([[], await inode(file.winner)]);
   });
 
-  it('is recorded as deploy\'s own when it replaced a file deploy wrote', async () => {
-    await deploy([await modFile('Old', 'a.esp', 'old')]);
-    const next = await modFile('New', 'a.esp', 'new');
-    await rename(at(), join(folder, 'Data', 'a.esp.modbench_aside_99999'));
+  it('removes a file it linked at a new path when the mod is disabled', async () => {
+    await killedAfterLinkingANewPath();
+
+    const deployed = await deploy([]);
+
+    expect([deployed.leftOut, await listing()]).toEqual([[], []]);
+  });
+
+  it('links a new path it was killed before linking', async () => {
+    const file = await modFile('Mod', 'a.esp');
+    await recording(file);
+
+    const deployed = await deploy([file]);
+
+    expect([deployed.leftOut, await inode(at())]).toEqual([[], await inode(file.winner)]);
+  });
+
+  it('keeps a relinked file managed when the load order still holds it', async () => {
+    const { next } = await killedAfterRelinking();
     await link(next.winner, at());
 
     const deployed = await deploy([next]);
-    await deploy([]);
 
-    expect([deployed.leftOut, await readdir(join(folder, 'Data'))]).toEqual([[], []]);
+    expect([deployed.leftOut, deployed.wrote, await listing()]).toEqual([[], false, ['a.esp']]);
   });
 
-  it('is the user\'s when it is a link to a file other than the one deploy would link there', async () => {
+  it('relinks to another winner and leaves nothing set aside when a relink was killed after linking', async () => {
+    const { next } = await killedAfterRelinking();
+    await link(next.winner, at());
+    const other = await modFile('Other', 'a.esp', 'other');
+
+    const deployed = await deploy([other]);
+
+    expect([deployed.leftOut, await readFile(at(), 'utf8'), await listing()]).toEqual([[], 'other', ['a.esp']]);
+  });
+
+  it('removes a relinked file when the mod is disabled', async () => {
+    const { next } = await killedAfterRelinking();
+    await link(next.winner, at());
+
+    const deployed = await deploy([]);
+
+    expect([deployed.leftOut, await listing()]).toEqual([[], []]);
+  });
+
+  it('puts the old file back when a relink was killed before linking', async () => {
+    const { old } = await killedAfterRelinking();
+
+    const deployed = await deploy([old]);
+
+    expect([deployed.leftOut, await inode(at())]).toEqual([[], await inode(old.winner)]);
+  });
+
+  it('leaves a link to another file at the path the user\'s', async () => {
     const file = await modFile('Mod', 'a.esp');
+    await recording(file);
     const other = await modFile('Other', 'a.esp', 'other');
     await mkdir(dirname(at()), { recursive: true });
     await link(other.winner, at());
 
     const deployed = await deploy([file]);
-    await deploy([]);
 
     expect([deployed.leftOut, await readFile(at(), 'utf8')]).toEqual([['Data/a.esp'], 'other']);
+  });
+
+  it('records a file before it links it', async () => {
+    let recordedAtLink = '';
+    busy.onLink = () => { recordedAtLink = readFileSync(join(storage, 'deployment.json'), 'utf8'); };
+
+    await deploy([await modFile('Mod', 'a.esp')]);
+
+    expect(recordedAtLink).toContain('Data/a.esp');
+  });
+
+  it('keeps the record it had when a deploy fails', async () => {
+    const kept = await modFile('Mod', 'a.esp');
+    await deploy([kept]);
+    const before = await recordIn(join(storage, 'deployment.json')).of(folder);
+    busy.links = [join(folder, 'Data', 'b.esp')];
+
+    await expect(deploy([kept, await modFile('Mod', 'b.esp')])).rejects.toThrow();
+
+    expect(await recordIn(join(storage, 'deployment.json')).of(folder)).toEqual(before);
   });
 });
 
