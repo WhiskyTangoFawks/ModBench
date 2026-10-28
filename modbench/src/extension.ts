@@ -64,6 +64,7 @@ import { hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
+import { reachMEditFromEnvFile } from './agent/scriptEnvFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -126,6 +127,7 @@ interface OpenedInstance {
 }
 
 interface Opened {
+  instanceRoot?: string;
   facts: InstanceFacts;
   instance?: Instance;
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
@@ -148,7 +150,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      return { facts: factsOf(instance), instance, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      return { instanceRoot, facts: factsOf(instance), instance, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
   });
@@ -322,6 +324,7 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
   });
+  const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
@@ -329,7 +332,12 @@ function start(context: vscode.ExtensionContext): void {
     editor,
     agentServer,
     offerToVsCodeChat(agentServer),
-    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath),
+    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, scriptsPath),
+    ...opened.instanceRoot === undefined ? [] : [reachMEditFromEnvFile({
+      client: meditClient, scriptsPath, instanceRoot: opened.instanceRoot,
+      envFileSetting: () => vscode.workspace.getConfiguration('python').get<string>('envFile'),
+      fail: (message) => { reporterFor('scriptEnvironment').report('error', message); },
+    })],
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),

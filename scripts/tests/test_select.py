@@ -58,11 +58,12 @@ class SelectWithoutAWindow(unittest.TestCase):
             with window_of(b):
                 self.assertEqual(medit.select('SELECT 1'), [{'window': 'B'}])
 
-    def test_raises_naming_the_terminal_when_the_terminal_holds_no_port(self) -> None:
+    def test_raises_naming_the_launchers_of_a_window_when_the_launcher_holds_no_port(self) -> None:
         with mock.patch.dict(os.environ), self.assertRaises(medit.MEditError) as raised:
             os.environ.pop('MEDIT_PORT', None)
             medit.select('SELECT 1')
-        self.assertIn('terminal', str(raised.exception))
+        for launcher in ('terminal', 'notebook', 'Debug'):
+            self.assertIn(launcher, str(raised.exception))
 
     def test_raises_the_detail_of_a_problem_mEdit_answers(self) -> None:
         problem = {'status': 503, 'detail': "mEdit's record index is not ready: still reading."}
