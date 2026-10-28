@@ -173,7 +173,24 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_OfAModWhoseManifestNamesTheGameFolder_RefusesTheMod_NamingIt_LeavingNoRepositoryAndTheManifestInPlace()
+    public async Task Init_OfAModWhoseManifestNamesTheGameFolder_KeepsItsPackageAndLines_AndCommitsNoAssetForTheGameFile()
+    {
+        WriteInModFolder("textures/a.dds", "from the game");
+        WriteInModFolder("Scripts/Quest.pex", "mine");
+        WriteInModFolder(
+            $"{Origin}.manifest.json", "{\"packages\": [{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAAAAAAAAA=\"}], \"files\": [{\"path\": \"textures/a.dds\"}]}");
+
+        var result = await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], GameFolder: GameFolderHolding(("textures/a.dds", "from the game"))));
+
+        Assert.Empty(result.Refused);
+        var manifest = CommittedManifest();
+        Assert.Equal("Fallout 4", Assert.IsType<ManifestPackage.GameFolder>(manifest.Packages[1]).Name);
+        Assert.Equal(new ManifestFile("textures/a.dds", new PackageEntry.Held(), "Fallout 4"), manifest.Files.Single(line => line.Path == "textures/a.dds"));
+        Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
+    }
+
+    [Fact]
+    public async Task Init_OfAModWhoseManifestNamesTheGameFolder_WhenTheRequestFoundNone_RefusesTheMod_LeavingNoRepositoryAndTheManifestInPlace()
     {
         WriteInModFolder("textures/a.dds", "from the game");
         WriteInModFolder(
@@ -181,8 +198,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
 
         var refused = Assert.Single((await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []))).Refused);
 
-        Assert.Equal(DecompileAndCommitRefusal.ManifestNamesGameFolder, refused.Refusal);
-        Assert.Contains("'Fallout 4'", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(DecompileAndCommitRefusal.GameFolderNotFound, refused.Refusal);
         Assert.False(Directory.Exists(SourceFolder));
         Assert.True(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
     }
@@ -254,6 +270,19 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         }
         var hashes = new ModFolderRepository(TimeProvider.System).Files(pack, new HashSet<string>(), null).Files.ToDictionary(file => file.Path, file => file.Hash);
         return downloaded with { Entries = [.. entries.Select(entry => new HashedEntry(entry.Path, hashes[entry.Path]))] };
+    }
+
+    private GameFolder GameFolderHolding(params (string Path, string Text)[] files)
+    {
+        var data = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game", "Data")).FullName;
+        foreach (var (path, text) in files)
+        {
+            var file = Path.Combine(data, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
+            File.WriteAllText(file, text);
+        }
+        var hashes = new ModFolderRepository(TimeProvider.System).Files(data, new HashSet<string>(), null).Files;
+        return new GameFolder("Fallout 4", data, [.. hashes.Select(file => new GameFile(file.Path, file.Hash))]);
     }
 
     private Manifest CommittedManifest() =>
