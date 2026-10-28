@@ -10,11 +10,13 @@ import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSub
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
-import { sourceModsIn } from './sourceMods';
+import { SUBMODULE_OUTPUT_KEY, sourceModsIn } from './sourceMods';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
 
-interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
+interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string; readonly output: string }
+
+type FoundEntry = Omit<SubmoduleEntry, 'output'>;
 
 // Why a source mod's entry is not written, and whether the entry it has stays.
 interface EntryNote { readonly note: string; readonly keepsEntry: boolean }
@@ -55,7 +57,7 @@ async function sourceHostOf(folder: string): Promise<SourceHost> {
   return remote === undefined ? { kind: 'noRemote' } : hostOf((await git(folder, 'remote', 'get-url', remote)).trim());
 }
 
-async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined | EntryNote> {
+async function submoduleOf(folder: string): Promise<FoundEntry | undefined | EntryNote> {
   try {
     const host = await sourceHostOf(folder);
     if (host.kind === 'noRemote') return undefined;
@@ -79,17 +81,18 @@ async function sourceEntries(instanceRoot: string, file: string): Promise<string
 
 // An unset key is exit code 5.
 async function entryRemoved(instanceRoot: string, file: string, name: string): Promise<void> {
-  for (const key of ['path', 'url', 'branch']) {
+  for (const key of ['path', 'url', 'branch', SUBMODULE_OUTPUT_KEY]) {
     await git(instanceRoot, 'config', '-f', file, '--unset-all', `submodule.${name}.${key}`).catch((err: unknown) => {
       if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 5) throw err;
     });
   }
 }
 
-async function entryWritten(instanceRoot: string, file: string, { name, url, branch }: SubmoduleEntry): Promise<void> {
+async function entryWritten(instanceRoot: string, file: string, { name, url, branch, output }: SubmoduleEntry): Promise<void> {
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.path`, sourceModPath(name));
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.url`, url);
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.branch`, branch);
+  await git(instanceRoot, 'config', '-f', file, `submodule.${name}.${SUBMODULE_OUTPUT_KEY}`, output);
 }
 
 // A hook outside the repository's own git directory would run in every repository that reads it.
@@ -159,7 +162,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
         } else if (found !== undefined) {
           kept.add(name);
           try {
-            await entryWritten(instanceRoot, file, found);
+            await entryWritten(instanceRoot, file, { ...found, output: mod });
           } catch (err) {
             notes.push({ mod, note: `its entry could not be written: ${errorMessage(err)}` });
           }

@@ -562,11 +562,17 @@ const NO_MOD_FOLDERS = 'there is no folder for mods';
 const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry.name : `${entry.name} (separator)`);
 
 async function syncMods(adapter: InstanceAdapter): Promise<ModSyncResult> {
+  let sourceMods: SourceMods;
+  try {
+    sourceMods = await adapter.sourceMods();
+  } catch (err) {
+    return refuse(err);
+  }
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await changeModOrder(adapter, (order, folders) => {
     if (folders === undefined) throw new Error(NO_MOD_FOLDERS);
-    const gone = order.filter((entry) => folders.holding(entry) === undefined);
+    const gone = order.filter((entry) => folders.holding(entry) === undefined && !(entry.kind === 'mod' && sourceMods.builds(entry.name)));
     const held = new Set(order.flatMap((entry) => folders.holding(entry)?.path ?? []));
     const unlisted = folders.all.filter((folder) => !held.has(folder.path))
       .sort((a, b) => a.name.localeCompare(b.name));

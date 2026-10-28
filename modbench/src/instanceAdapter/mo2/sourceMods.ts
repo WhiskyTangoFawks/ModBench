@@ -3,10 +3,11 @@
 
 import { join } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, ignoreSkippedLink, isRepository, listDir, listFolders, readOrAbsent } from '../files';
+import { exists, get, ignoreSkippedLink, isRepository, listDir, listFolders, readOrAbsent } from '../files';
 import type { SourceMods } from '../instanceAdapter';
 import { MANIFEST_OUTPUT_KEY, MANIFEST_SUFFIX } from '../../wire/sourceMod';
-import { modFolderName, sourceRootDir } from './layout';
+import { git } from '../git';
+import { modFolderName, sourceModPath, sourceRootDir, submodulesFile } from './layout';
 import { modNameKey } from './codecs/modlistText';
 
 async function manifestIn(sourceFolder: string): Promise<{ name: string; text: string } | { reason: string }> {
@@ -36,6 +37,30 @@ async function outputOf(sourceFolder: string): Promise<{ output: string } | { re
   return manifest.name === `${output}${MANIFEST_SUFFIX}` ? { output } : { reason: `its manifest ${manifest.name} is not named for its output "${output}"` };
 }
 
+/** The key of a `.gitmodules` entry that names the mod its repository's manifest builds, so a clone knows the mod before it can read the manifest. */
+export const SUBMODULE_OUTPUT_KEY = 'output';
+
+// Each .gitmodules entry for a source repository that is not cloned, by the output it records.
+async function unclonedOutputs(instanceRoot: string, notes: string[]): Promise<string[]> {
+  const file = submodulesFile(instanceRoot);
+  if (!(await exists(file))) return [];
+  try {
+    const entries = (await git(instanceRoot, 'config', '-f', file, '--null', '--list')).split('\0')
+      .map((entry) => { const [key = '', value] = entry.split('\n'); return { key, value }; });
+    const valueOf = (name: string, key: string): string | undefined => entries.find((e) => e.key === `submodule.${name}.${key}`)?.value;
+    const outputs: string[] = [];
+    for (const { key, value: path } of entries) {
+      const name = key.startsWith('submodule.') && key.endsWith('.path') ? key.slice('submodule.'.length, -'.path'.length) : undefined;
+      const output = name === undefined ? undefined : valueOf(name, SUBMODULE_OUTPUT_KEY);
+      if (name !== undefined && output !== undefined && path === sourceModPath(name) && !(await isRepository(join(sourceRootDir(instanceRoot), name)))) outputs.push(output);
+    }
+    return outputs;
+  } catch (err) {
+    notes.push(`${file} could not be read, so no uncloned source mod is known: ${errorMessage(err)}.`);
+    return [];
+  }
+}
+
 // MO2 matches mod names without case, so an output names the mod whatever its case.
 export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
   const root = sourceRootDir(instanceRoot);
@@ -53,7 +78,9 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
     if (holder === undefined) byKey.set(modNameKey(built.output), { output: built.output, folder });
     else notes.push(`${folder} is not a source mod: ${holder.folder} builds "${holder.output}" too.`);
   }
+  const uncloned = new Set((await unclonedOutputs(instanceRoot, notes)).map(modNameKey));
   return {
+    builds: (mod) => byKey.has(modNameKey(mod)) || uncloned.has(modNameKey(mod)),
     folders: new Map([...byKey.values()].map(({ output, folder }) => [output, folder])),
     folderOf: (mod) => byKey.get(modNameKey(mod))?.folder,
     notes,
