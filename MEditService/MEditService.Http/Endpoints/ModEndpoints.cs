@@ -69,10 +69,11 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("Every installation file needs a path, a size, a hash and its entries, each with a path and a hash, all xxHash64 as Wabbajack writes it: eight bytes in base64.");
         }
+        if (mods.Any(mod => mod.GameFolder is { IsWhole: false })) return EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
-            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? [], mod.InstallationFile?.ToInstallationFile(), mod.Version))]),
+            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? [], mod.InstallationFile?.ToInstallationFile(), mod.Version, mod.GameFolder?.ToGameFolder()))]),
             EndpointMapping.Refusal);
     }
 
@@ -107,14 +108,15 @@ internal static class ModEndpoints
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
         if (string.IsNullOrWhiteSpace(req.StatCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
+        if (req.GameFolder is { IsWhole: false }) return EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
         var variants = req.Archives?.Variants();
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 
         return await EndpointMapping.Answered(
             "Build", logger,
             buildModHandler.BuildAsync(
-                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule, mod.Made) { InstallationFiles = [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], UnreadableInstallationFiles = mod.UnreadableInstallationFiles })],
-                new InstanceToBuild(req.ExclusionMark, variants, req.StatCache) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal) }),
+                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule, mod.Made) { InstallationFiles = [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], UnreadableInstallationFiles = mod.UnreadableInstallationFiles, UnreadableGameFiles = mod.UnreadableGameFiles })],
+                new InstanceToBuild(req.ExclusionMark, variants, req.StatCache) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal), GameFolder = req.GameFolder?.ToGameFolder() }),
             EndpointMapping.Refusal);
     }
 }
@@ -127,14 +129,15 @@ internal sealed record SourceManifestRequest(
 /// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, the archive variants, if any,
 /// the stat cache's folder, and the label of each VS Code task this machine has.</summary>
 internal sealed record BuildRequest(
-    IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache, IReadOnlyList<string>? Tasks = null);
+    IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache, IReadOnlyList<string>? Tasks = null,
+    GameFolderRequest? GameFolder = null);
 
 /// <summary>A mod, the source folder whose manifest names it, its folder, version and metadata files, and whether its
 /// repository is a submodule (ADR-0022). Made: the files its build answered it made, handed back once its steps ran.</summary>
 internal sealed record BuildModRequest(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false,
     IReadOnlyList<string>? Made = null, IReadOnlyList<InstallationFileRequest>? InstallationFiles = null,
-    IReadOnlyDictionary<string, string>? UnreadableInstallationFiles = null);
+    IReadOnlyDictionary<string, string>? UnreadableInstallationFiles = null, IReadOnlyDictionary<string, string>? UnreadableGameFiles = null);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)
@@ -169,4 +172,5 @@ internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommi
 /// <summary>A mod by name, the folder its repository goes in, the mod manager's own files in its folder, by
 /// forward-slash path, which no build makes, its installation file and its version as its metadata says.</summary>
 internal sealed record DecompileAndCommitModRequest(
-    string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles, InstallationFileRequest? InstallationFile = null, string? Version = null);
+    string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles, InstallationFileRequest? InstallationFile = null, string? Version = null,
+    GameFolderRequest? GameFolder = null);

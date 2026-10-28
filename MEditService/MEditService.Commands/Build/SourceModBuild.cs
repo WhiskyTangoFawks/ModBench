@@ -44,8 +44,8 @@ internal sealed class SourceModBuild
         var plugins = Placed(loadOrder, mod, source.Plugins);
         var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
-        using var taken = new TakenFromInstallationFiles(_modFolders, mod.Folder);
-        var lacking = taken.Lacking(configured, mod.InstallationFiles, mod.UnreadableInstallationFiles);
+        using var taken = new TakenFromPackages(_modFolders, mod.Folder);
+        var lacking = taken.Lacking(configured, mod, instance.GameFolder);
         if (lacking is not null) return lacking;
         try
         {
@@ -118,12 +118,12 @@ internal sealed class SourceModBuild
     private Manifest Recorded(ModToBuild mod, Manifest configured, IEnumerable<string> made, FolderWrite written)
     {
         var kept = configured.Files
-            .Where(line => line.Entry is PackageEntry.MadeByStep || configured.PackageOf(line) is ManifestPackage.InstallationFile)
+            .Where(line => line.Entry is PackageEntry.MadeByStep || configured.PackageOf(line) is ManifestPackage.InstallationFile or ManifestPackage.GameFolder)
             .Select(line => AtItsFolderPath(configured, line, written)).ToList();
         var named = kept.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
         return configured with
         {
-            Packages = [new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), .. configured.Packages.OfType<ManifestPackage.InstallationFile>()],
+            Packages = [new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), .. configured.Packages.Where(package => package is ManifestPackage.InstallationFile or ManifestPackage.GameFolder)],
             Files = [.. made.Where(path => !named.Contains(path)).Select(path => new ManifestFile(path, new PackageEntry.Held())), .. kept],
             Version = mod.Version,
         };
@@ -131,9 +131,13 @@ internal sealed class SourceModBuild
 
     private static ManifestFile AtItsFolderPath(Manifest manifest, ManifestFile line, FolderWrite written)
     {
-        if (manifest.BytesOf(line) is not FileBytes.InInstallationFile held) return line;
         var at = written.PathOf(line.Path);
-        return (at == line.Path ? line : ManifestFile.At(at, held)) with { Package = held.Name };
+        return (manifest.BytesOf(line), manifest.PackageOf(line)) switch
+        {
+            (FileBytes.InInstallationFile held, _) => ManifestFile.In(held.Name, at, held.Path),
+            (FileBytes.InGameFolder held, ManifestPackage.GameFolder package) => ManifestFile.In(package.Name, at, held.Path),
+            _ => line,
+        };
     }
 
     private sealed class MadeFiles

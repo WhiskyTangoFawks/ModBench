@@ -1076,14 +1076,18 @@ export interface components {
             unreadableInstallationFiles?: {
                 [key: string]: string;
             } | null;
+            unreadableGameFiles?: {
+                [key: string]: string;
+            } | null;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool" | "InstallationFileLacking";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool" | "PackageLacking";
         BuildRefused: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
             installationFilesNotFound: components["schemas"]["InstallationFile"][];
+            gameFilesNotFound: string[];
         };
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
@@ -1091,6 +1095,7 @@ export interface components {
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             statCache: string;
             tasks?: string[] | null;
+            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
         };
         BuildResult: {
             applied: components["schemas"]["ModBuilt"][];
@@ -1267,11 +1272,12 @@ export interface components {
             metadataFiles: string[];
             installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             version?: string | null;
+            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
         };
         /** @enum {string} */
         DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
         /** @enum {string} */
-        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "ManifestNamesGameFolder" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "GameFolderNotFound" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         DecompileAndCommitRefused: {
             item: string;
             refusal: components["schemas"]["DecompileAndCommitRefusal"];

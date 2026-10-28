@@ -193,7 +193,7 @@ export type BuildRefusalKind = components['schemas']['BuildRefusal'];
  *  of refusal, and the installation files its manifest names that the call did not hand. */
 export interface BuildOutcome {
   landed: readonly BuiltMod[];
-  refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind; readonly installationFilesNotFound?: readonly ManifestInstallationFile[] })[];
+  refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind; readonly installationFilesNotFound?: readonly ManifestInstallationFile[]; readonly gameFilesNotFound?: readonly string[] })[];
 }
 
 /** A step of a manifest: the VS Code task it runs, by label, and the arguments it hands the task. */

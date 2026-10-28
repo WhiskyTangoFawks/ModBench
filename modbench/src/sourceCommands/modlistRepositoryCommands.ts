@@ -3,7 +3,7 @@ import {
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, GamePlace, OtherManifest, SourceMods, Depot } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -17,6 +17,7 @@ import { initRepositoryIn } from './initRepositoryIn';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
+import { gameToHand, gameFilesOf, namedGameFolder, namedGameFiles, wireGameFolder, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter, 'foldersRefused' |
@@ -64,48 +65,8 @@ type ReadMod = Omit<UpdateManifestMod, 'version'>;
 
 type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
-type WireDepots = NonNullable<NonNullable<UpdateManifestMod['gameFolder']>['depots']>;
-
-interface NamedGameFolder {
-  readonly name: string;
-  readonly places: readonly [GamePlace, ...GamePlace[]];
-}
-
 const depotProblemsOf = (game: GameToHand, mods: readonly ReadMod[]): readonly string[] =>
   (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.places.flatMap((place) => place.depotProblems));
-
-type HeldGameFiles = ReadonlyMap<GamePlace, readonly GameFile[]>;
-
-const NONE_HELD: HeldGameFiles = new Map();
-
-interface GameToHand {
-  readonly takes: (mod: string) => boolean;
-  readonly folder: NamedGameFolder | string;
-}
-
-// The game folder found, named by the game's release, or why a manifest cannot name it.
-async function namedGameFolder(adapter: Adapter, gameRelease: string): Promise<NamedGameFolder | string> {
-  const [first, ...others] = await adapter.gamePlaces();
-  return first === undefined ? 'the game folder was not found' : { name: gameRelease, places: [first, ...others] };
-}
-
-async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<GameToHand> {
-  const [{ modFolders }, folder] = await Promise.all([adapter.modOrder(), namedGameFolder(adapter, await adapter.gameRelease())]);
-  return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined && modFolders?.find((entry) => entry.modName === mod)?.kind !== 'separator' };
-}
-
-const wireDepots = (depots: readonly Depot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
-
-// Only update manifest reads the depots; restore's manifest names them.
-const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): RestoreFacts['gameFolder'] => {
-  if (typeof folder === 'string') return undefined;
-  const { name, places: [first, ...others] } = folder;
-  const elsewhere = others.flatMap((place) => {
-    const files = held.get(place) ?? [];
-    return files.length === 0 ? [] : [{ dataFolder: place.dataFolder, files: [...files], ...wireDepots(place.depots, withDepots) }];
-  });
-  return { name, dataFolder: first.dataFolder, files: [...held.get(first) ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
-};
 
 const takesFromTheGame = (mod: ReadMod): boolean => (mod.gameFolder?.files.length ?? 0) > 0 || (mod.gameFolder?.elsewhere?.length ?? 0) > 0;
 
@@ -146,31 +107,6 @@ async function byFolder(adapter: Adapter, mods: readonly string[], folders: Fold
     if (folder !== undefined) asked.push({ name: mod, folder, metadataFiles: metadataFilesOf(adapter, folders, mod), ...sourceFolderOf(sourceMods, mod) });
   }
   return asked;
-}
-
-async function gameFilesOf(
-  adapter: Adapter, { mod, folder }: { mod: string; folder: string }, game: GameToHand | undefined, installed: boolean,
-): Promise<{ gameFiles: HeldGameFiles; notes: readonly string[] } | { refusal: string }> {
-  if (game === undefined || !game.takes(mod)) return { gameFiles: NONE_HELD, notes: [] };
-  if (typeof game.folder === 'string') {
-    return { gameFiles: NONE_HELD, notes: installed ? [] : [`${game.folder}, so its manifest cannot name the game folder as its package`] };
-  }
-  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(async (place) => ({ place, taken: await adapter.gameFilesTakenBy(place.dataFolder, folder) })));
-  if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
-  if (inGame.taken.kind === 'unreadable') {
-    return installed ? { gameFiles: NONE_HELD, notes: [`the game files its files may be could not be read: ${inGame.taken.reason}`] } : { refusal: inGame.taken.reason };
-  }
-  const held = new Map([[inGame.place, inGame.taken.answer.gameFiles]]);
-  const notes = new Set(inGame.taken.answer.notes);
-  for (const { place, taken } of inOthers) {
-    if (taken.kind === 'unreadable') {
-      notes.add(`the game files in ${place.dataFolder} could not be read: ${taken.reason}`);
-    } else {
-      held.set(place, taken.answer.gameFiles);
-      for (const note of taken.answer.notes) notes.add(note);
-    }
-  }
-  return { gameFiles: held, notes: [...notes] };
 }
 
 async function readMod(
@@ -234,30 +170,6 @@ async function restoreOnce(
 }
 
 const sentence = (reason: string): string => ` ${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`;
-
-async function namedGameFiles(
-  adapter: Adapter, folder: NamedGameFolder | string, notFound: readonly NotFound[],
-): Promise<{ found: HeldGameFiles; unreadable: (mod: string) => Record<string, string> }> {
-  const found = new Map<GamePlace, Map<string, GameFile>>();
-  const unreadable = new Map<string, Record<string, string>>();
-  for (const { mod, gameFiles } of notFound) {
-    if (gameFiles.length === 0) continue;
-    if (typeof folder === 'string') {
-      unreadable.set(mod, Object.fromEntries(gameFiles.map((path) => [path, folder])));
-      continue;
-    }
-    const reasons: Record<string, string> = {};
-    for (const place of folder.places) {
-      const read = await adapter.gameFiles(place.dataFolder, gameFiles);
-      Object.assign(reasons, read.unreadable, reasons);
-      const foundHere = found.get(place) ?? new Map<string, GameFile>();
-      for (const file of read.files) foundHere.set(file.path.toLowerCase(), file);
-      found.set(place, foundHere);
-    }
-    unreadable.set(mod, reasons);
-  }
-  return { found: new Map([...found].map(([place, files]) => [place, [...files.values()]])), unreadable: (mod) => unreadable.get(mod) ?? {} };
-}
 
 // modlist-repository.md, Restore from manifest, story 3: git checks each submodule out at the commit the repository pins.
 async function namedSubmodules(adapter: Adapter, notFound: readonly NotFound[]): Promise<{

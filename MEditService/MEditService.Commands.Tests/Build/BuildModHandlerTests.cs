@@ -399,9 +399,51 @@ public sealed class BuildModHandlerTests : IDisposable
 
         var refused = Assert.Single((await Build(_noArchives)).Refused);
 
-        Assert.Equal(BuildRefusal.InstallationFileLacking, refused.Refusal);
+        Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
         Assert.Equal(DownloadedZip.PackName, Assert.Single(refused.InstallationFilesNotFound).Name);
         Assert.Contains("installation file 'Pack.zip' is missing", refused.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task AFileTheManifestTakesFromTheGameFolder_ComesFromThePlaceThatHoldsItsBytes_AndItsLineKeepsNamingTheGameFolder()
+    {
+        var edited = GameFolderOnDisk.Holding(_root, "edited", ("textures/a.dds", "edited"));
+        var vanilla = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
+        var game = edited with { Elsewhere = [new GameFolderPlace(vanilla.DataFolder, vanilla.Files)] };
+        WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(vanilla));
+
+        var built = await Landed(_noArchives with { GameFolder = game });
+
+        Assert.Empty(built.Overwritten);
+        Assert.Equal([("textures/a.dds", "from the game")], FilesIn(ModFolder));
+        var manifest = ManifestWritten().Require();
+        Assert.Equal(["Fallout 4"], manifest.Packages.OfType<ManifestPackage.GameFolder>().Select(package => package.Name));
+        Assert.Equal([new ManifestFile("textures/a.dds", new PackageEntry.Held(), "Fallout 4")], manifest.Files);
+    }
+
+    [Fact]
+    public async Task AGameFileTheRequestDidNotHand_RefusesTheMod_NamingItForTheRequestToFind_AndWritesNothing()
+    {
+        WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"))));
+
+        var refused = Assert.Single((await Build(_noArchives)).Refused);
+
+        Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
+        Assert.Equal(["textures/a.dds"], refused.GameFilesNotFound);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task AGameFileWithOtherBytesInEveryPlace_RefusesTheMod_AndIsNotAskedForAgain()
+    {
+        var pinned = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
+        WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(pinned));
+
+        var refused = Assert.Single((await Build(_noArchives with { GameFolder = GameFolderOnDisk.Holding(_root, "edited", ("textures/a.dds", "edited")) })).Refused);
+
+        Assert.Equal(BuildRefusal.PackageLacking, refused.Refusal);
+        Assert.Empty(refused.GameFilesNotFound);
         Assert.False(Directory.Exists(ModFolder));
     }
 
@@ -412,7 +454,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
         var refused = Assert.Single((await Build(_noArchives, installationFiles: [Pack(("textures/a.dds", "a"), ("Data/c.nif", "c")) with { Hash = "OTHER" }])).Refused);
 
-        Assert.Equal((BuildRefusal.InstallationFileLacking, "was not built: installation file 'Pack.zip' has other bytes."), (refused.Refusal, refused.Message));
+        Assert.Equal((BuildRefusal.PackageLacking, "was not built: installation file 'Pack.zip' has other bytes."), (refused.Refusal, refused.Message));
         Assert.Empty(refused.InstallationFilesNotFound);
     }
 

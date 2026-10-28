@@ -123,8 +123,9 @@ public sealed class RestoreFromManifestHandler
             {
                 InstallationFiles = mod.InstallationFiles,
                 UnreadableInstallationFiles = mod.UnreadableInstallationFiles,
+                UnreadableGameFiles = mod.UnreadableGameFiles,
             },
-            new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache) { Tasks = instance.Tasks });
+            new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache) { Tasks = instance.Tasks, GameFolder = instance.GameFolder });
         if (answer is ItemAnswer<BuildStop, ModBuildOutcome>.Refusing refusing)
             return ItemAnswer<RestoreSkip, ModRestored>.Refused(Skip(refusing.Refusal), refusing.Message);
         var outcome = ((ItemAnswer<BuildStop, ModBuildOutcome>.Wrote)answer).Outcome;
@@ -189,8 +190,8 @@ public sealed class RestoreFromManifestHandler
             why);
     }
 
-    private static RestoreSkip Skip(BuildStop stop) => stop.InstallationFilesNotFound.Count > 0
-        ? new RestoreSkip(RestoreRefusal.NotFound, stop.Kind) { InstallationFilesNotFound = stop.InstallationFilesNotFound }
+    private static RestoreSkip Skip(BuildStop stop) => stop.InstallationFilesNotFound.Count + stop.GameFilesNotFound.Count > 0
+        ? new RestoreSkip(RestoreRefusal.NotFound, stop.Kind) { InstallationFilesNotFound = stop.InstallationFilesNotFound, GameFilesNotFound = stop.GameFilesNotFound }
         : new RestoreSkip(RestoreRefusal.NotBuilt, stop.Kind);
 
     private static ItemAnswer<RestoreSkip, ModRestored> Skipped(RestoreRefusal refusal, string why) =>

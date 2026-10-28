@@ -529,8 +529,8 @@ class HttpMEditClient implements MEditClient {
           ...(m.uncommitted ? { uncommitted: true as const } : {}),
           ...(m.unpushed ? { unpushed: true as const } : {}),
         })),
-        refused: answer.refused.map(({ item, message, refusal, installationFilesNotFound }) =>
-          ({ item, reason: message, refusal, installationFilesNotFound: installationFilesNotFound.map(manifestInstallationFile) })),
+        refused: answer.refused.map(({ item, message, refusal, installationFilesNotFound, gameFilesNotFound }) =>
+          ({ item, reason: message, refusal, installationFilesNotFound: installationFilesNotFound.map(manifestInstallationFile), gameFilesNotFound })),
       }),
     });
   }

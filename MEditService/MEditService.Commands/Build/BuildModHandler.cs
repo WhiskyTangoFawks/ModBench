@@ -34,7 +34,7 @@ public sealed class BuildModHandler
             (mod, _) => _build.BuildAsync(mod, instance), gesture: null, CancellationToken.None);
         return built.ToResult(
             landed => ModBuiltOf(landed.Item, landed.Outcome),
-            refused => new BuildRefused(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFilesNotFound),
+            refused => new BuildRefused(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFilesNotFound, refused.Refusal.GameFilesNotFound),
             (applied, refused) => new BuildResult(applied, refused));
     }
 

@@ -88,10 +88,10 @@ internal sealed class ModInit(
         try
         {
             var held = modFolders.ReadManifest(mod.Folder);
-            if (held?.Packages.OfType<ManifestPackage.GameFolder>().FirstOrDefault() is { } gameFolder)
+            if (toCommit.GameFolder is null && held?.Packages.OfType<ManifestPackage.GameFolder>().Any() == true)
             {
-                return Refused(DecompileAndCommitRefusal.ManifestNamesGameFolder,
-                    $"'{mod.Name}' was not initialized: its manifest names the game folder '{gameFolder.Name}' as a package, and a source mod's build reads only installation files, so its files would become assets in git.");
+                return Refused(DecompileAndCommitRefusal.GameFolderNotFound,
+                    $"'{mod.Name}' was not initialized: its manifest names the game folder, and the game folder was not found.");
             }
             (manifest, assets) = ContentsOf(held, mod, toCommit, provided, loadOrder.GameRelease);
         }
@@ -153,8 +153,13 @@ internal sealed class ModInit(
         var paths = all.Select(file => file.Path).ToList();
         var compiled = provided.SelectMany(plugin => plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
         var installationFile = toCommit.InstallationFile is { } named ? (modFolders.InstallationFileName(named.Path), named) : ((string, InstallationFile)?)null;
-        var recorded = new ManifestBuilder(installationFile, gameFolder: null, downloadedFiles: []).Manifest([.. all.Where(file => !compiled.Contains(file.Path))], toCommit.Version, held);
-        var taken = recorded.Files.Select(line => recorded.BytesOf(line) is FileBytes.InInstallationFile yielded ? line with { Package = yielded.Name } : null).OfType<ManifestFile>().ToList();
+        var recorded = new ManifestBuilder(installationFile, toCommit.GameFolder, downloadedFiles: []).Manifest([.. all.Where(file => !compiled.Contains(file.Path))], toCommit.Version, held);
+        var taken = recorded.Files.Select(line => (recorded.BytesOf(line), recorded.PackageOf(line)) switch
+        {
+            (FileBytes.InInstallationFile, ManifestPackage.InstallationFile package) => line with { Package = package.Name },
+            (FileBytes.InGameFolder, ManifestPackage.GameFolder package) => line with { Package = package.Name },
+            _ => null,
+        }).OfType<ManifestFile>().ToList();
         var madeByStep = recorded.Files.Where(line => line.Entry is PackageEntry.MadeByStep).ToList();
         var notTheBuilds = taken.Concat(madeByStep).Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
         var made = all.Where(file => !notTheBuilds.Contains(file.Path)).ToList();

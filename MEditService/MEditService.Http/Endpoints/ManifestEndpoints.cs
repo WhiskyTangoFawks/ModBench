@@ -186,7 +186,7 @@ internal static class ManifestEndpoints
             return EndpointMapping.BadRequest("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.");
         return gameFolders.All(gameFolder => gameFolder is null || gameFolder.IsWhole)
             ? null
-            : EndpointMapping.BadRequest("The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.");
+            : EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
     }
 
 }
@@ -201,6 +201,8 @@ internal sealed record UpdateManifestRequest(
 internal sealed record GameFolderRequest(
     string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null, IReadOnlyList<GameDepotRequest>? Depots = null)
 {
+    internal const string NotWhole = "The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.";
+
     internal bool IsWhole =>
         !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(DataFolder) && Files is not null
         && GameFileRequest.AreWhole(Files) && GameDepotRequest.AreWhole(Depots) && (Elsewhere ?? []).All(place => place.IsWhole);
