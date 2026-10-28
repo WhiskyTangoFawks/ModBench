@@ -61,7 +61,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text\nhides: its format" {class: kernel}
   wire: "Wire\nowns: the API types, the webview protocol,\nand the shape of a source mod both processes read" {class: kernel}
   tables: "per-release tables\nowns: what differs per game release\nhides: every game name" {class: kernel}
-  sortingrules: "Sorting rules\nowns: whether a plugin order keeps the game's sorting rules\nhides: each rule" {class: kernel}
+  sortingrules: "Sorting rules\nowns: whether a plugin order keeps its sorting rules\nhides: each rule, and LOOT's metadata format and condition language" {class: kernel}
   ports: "Ports\nowns: how the core reaches the user and VS Code,\nand the idioms every band shares" {class: kernel}
 }
 
@@ -97,6 +97,7 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
   textdocuments: "Text documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
   client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {class: repositories}
   nexus: "Nexus\nowns: Modbench's one reach to Nexus\nhides: the API" {class: repositories}
+  lootmetadata: "LOOT metadata\nowns: Modbench's one reach to LOOT's metadata\nhides: its addresses and branches" {class: repositories}
   deployment: "Deployment\nowns: a load order deployed where the game reads it\nhides: the deployment type, and where each platform's game\nreads plugins.txt" {class: repositories}
 }
 
@@ -109,10 +110,11 @@ medit_data: "MEDIT · Systems of record" {
 }
 modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
   class: band; grid-rows: 1
-  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe hash index · the manifests · the repository ·\nthe source folder · the publisher's configuration" {class: sor}
+  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe hash index · the manifests · the repository ·\nthe source folder · the publisher's configuration ·\nthe sorting rule files" {class: sor}
   gamedata: "Game folder\nthe game's own plugins and files" {class: sor}
   deployed: "Deployment\nthe deployment folder · the plugins.txt the game reads ·\nwhat other programs write there" {class: sor}
   tools: "Other tools\nthe mod manager, the user, the game — at any time" {class: other}
   medit: "mEdit\nthe left column" {class: driving}
   nexus: "Nexus\nthe mods and files it hosts" {class: other}
+  loot: "LOOT\nthe masterlists and the prelude it hosts" {class: other}
 }

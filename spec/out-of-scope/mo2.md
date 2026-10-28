@@ -10,7 +10,7 @@ What MO2 does: [the surface audit](../../docs/research/mo2-surface-audit.md).
 |---|---|---|---|
 | VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 28 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch an instance |
 | Manual file management | The operation is a compound file operation. VS Code's file tab and Explorer do it, and Modbench does not abstract the file system away. | 11 | Rename a profile; Remove a profile; Transfer saves |
-| An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). | 2 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
+| An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). Modbench never sorts the plugin order ([ADR-0026](../adr/0026-modbench-checks-the-plugin-order-against-loots-metadata-and-never-sorts-it.md)). | 3 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
 | Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
 | Scripts, tasks or the agent | The gesture runs an external tool or exports data. A task or the agent does the same job. | 1 | Export to CSV |
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 15 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
@@ -44,6 +44,7 @@ Gestures Modbench does differently.
 | 19 | FOMOD conditions on a program's version | A game program that is missing, or a game program or script extender loader whose version cannot be read, refuses the install and says why. A loader the game folder lacks reads as 0.0.0.0, as in MO2 ([mods-fomod.md](../surfaces/mods-fomod.md), Groups and options, story 3) | Reads each of these as version 0.0.0.0, so a condition on it fails with nothing said | Principle: Never silently wrong. |
 | 20 | Fallout 4 VR's script extender | Its loader is `f4sevr_loader.exe` | Looks for `f4se_loader.exe` | Principle: Never silently wrong. |
 | 21 | Mod sync | Keeps the line of a mod whose folder a manifest builds until I restore the mod | Drops each line whose folder is gone | ADR-0022: a mod is what its manifest says. |
+| 22 | A plugin order that breaks the game's sorting rules | Stays as I set it. Each broken sorting rule shows on its plugin, and a drop is refused only for a rule at Error ([plugins.md](../surfaces/plugins.md), Sorting rules; Drag and drop, story 3) | Moves the plugins with the master flag above those without it, and each plugin below its masters, on every refresh, and says nothing. Clamps a drag to the same rules | Principle: Never silently wrong; commands.md, Principles, Refuse, do not repair. |
 | 23 | Delete a downloaded file | Asks nothing: the trash gives the file back | Confirms each delete | Principle: Minimal by default (commands.md, Confirm what destroys). |
 
 ## Omissions by object
@@ -135,6 +136,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Gesture | MO2 | Reason |
 |---|---|---|
 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) | Plugin list: Lock load order | Maintainer ruling |
+| Sort the plugin order with LOOT | Plugin list: Sort | An ADR decides it |
 | Edit the priority cell | Plugin list: F2 | VS Code provides it |
 | Restrict reordering to the priority or mod-index sort | Plugin list | VS Code provides it |
 

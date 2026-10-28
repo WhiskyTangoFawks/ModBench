@@ -28,6 +28,16 @@ Whether a view lists winning at the top or at the bottom. It never changes who w
 
 Avoid: view order, sort order
 
+# Sorting rule
+A statement about a plugin's place in plugin order, or about the plugins it needs or cannot load with. The game states some, and LOOT's masterlist and the instance's userlist state the rest.
+
+Avoid: plugin rule, load-order rule
+
+# Group
+LOOT's named set of plugins, placed in plugin order after the groups it names.
+
+Avoid: separator (a mod entry), category
+
 # Order conflict
 Several items in an order provide the same thing. The order decides which one wins. Say which order unless context makes it clear.
 
@@ -61,7 +71,7 @@ Avoid: plugin, package (that is what a mod is made from)
 ## Mod separator
 A mod entry that groups other mods in the list and holds no files. A mod belongs to its separator whichever way the list is displayed. A separator is not a priority position.
 
-Avoid: group, category
+Avoid: group (LOOT's set of plugins), category
 
 ## Source mod
 A mod whose folder is a build artifact: the build writes it from the mod's repository in the source folder and the installation files its manifest names. With a remote, the repository is a submodule of the instance's repository. It follows one git workflow.

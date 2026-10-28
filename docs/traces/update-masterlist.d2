@@ -1,0 +1,28 @@
+# Update masterlist: LOOT's masterlist and prelude for the game, into the instance.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+surfaces: "Plugins · the palette" {class: driving}
+instancecommands: @../../spec/architecture/target-architecture.modbench_core.instancecommands
+instancecommands.label: instance commands
+lootmetadata: @../../spec/architecture/target-architecture.modbench_repositories.lootmetadata
+lootmetadata.label: LOOT metadata
+loothost: @../../spec/architecture/target-architecture.modbench_data.loot
+loothost.label: "LOOT\nthe masterlists and the prelude it hosts"
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nthe sorting rule files"
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+surfaces -> instancecommands: "the gesture" {class: loadorder}
+instancecommands -> lootmetadata: "the game" {class: loadorder}
+loothost -> lootmetadata: "the masterlist · the prelude" {class: loadorder}
+lootmetadata -> instancecommands: "the masterlist · the prelude" {class: loadorder}
+instancecommands -> instanceadapter: "the masterlist · the prelude" {class: loadorder}
+instanceadapter -> instance: bytes {class: loadorder}
+instancecommands -> surfaces: "applied, or the reason" {class: loadorder}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

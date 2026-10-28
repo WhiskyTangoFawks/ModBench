@@ -1,6 +1,6 @@
 # MO2 is the reference for mod management
 
-Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventions. Where MO2 has an answer to what the user sees and does, Mod Management adopts it, and every divergence and omission is recorded in [mo2.md](../out-of-scope/mo2.md). It adopts MO2's workflows, not its file formats: MO2 is one mod manager behind the Instance adapter, and another, such as Vortex, is a second implementation. The rule does not govern record editing, which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)), or deployment, a boundary of its own.
+Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventions. Where MO2 has an answer to what the user sees and does, Mod Management adopts it, and every divergence and omission is recorded in [mo2.md](../out-of-scope/mo2.md). It adopts MO2's workflows, not its file formats: MO2 is one mod manager behind the Instance adapter, and another, such as Vortex, is a second implementation. The rule does not govern record editing, which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)), sorting rules, which follow LOOT as MO2 does ([ADR-0026](0026-modbench-checks-the-plugin-order-against-loots-metadata-and-never-sorts-it.md)), or deployment, a boundary of its own.
 
 ## Alternatives rejected
 

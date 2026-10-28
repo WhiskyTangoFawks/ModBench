@@ -1,0 +1,24 @@
+# Check sorting rules: the plugin order judged against its sorting rules, after each snapshot.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+plugins: @../../spec/architecture/target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+sortingrules: @../../spec/architecture/target-architecture.modbench_kernel.sortingrules
+sortingrules.label: Sorting rules
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+
+instanceloader -> plugins: "value: the plugin order · the sorting rule files" {class: loadorder}
+plugins -> client: "the plugins" {class: query}
+client -> plugins: "plugin facts" {class: query}
+plugins -> sortingrules: "the plugin order · the sorting rule files · plugin facts" {class: loadorder}
+sortingrules -> plugins: "the files its conditions name" {class: loadorder}
+plugins -> instanceadapter: "the files" {class: loadorder}
+instanceadapter -> plugins: "file facts" {class: loadorder}
+plugins -> sortingrules: "file facts" {class: loadorder}
+sortingrules -> plugins: "the broken sorting rules" {class: loadorder}
+plugins."the row statuses and the Problems panel"

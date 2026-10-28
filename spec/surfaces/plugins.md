@@ -35,7 +35,7 @@ As a user, I want:
 | Check box | checked when its line is enabled | MO2 |
 | Description | the status words below, left out when the plugin has none | common, A view, story 3 |
 | Icon | the status below; none when the plugin has no status | common, A view, story 3 |
-| Tooltip | the file name, its origin (the mod, Overwrite or the game folder), "read-only" when its records cannot be edited, and a line for each status | ruling |
+| Tooltip | the file name, its origin (the mod, Overwrite or the game folder), "read-only" when its records cannot be edited, a line for each status, and a line for each entry of Sorting rules, story 1 | ruling |
 | Badge | while collapsed, the badges of the records beneath it (common.md story 11) | VS Code's source control badges |
 | Identity | the row's kind and the plugin, as (origin, filename) | ADR-0012 |
 
@@ -45,14 +45,15 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 |---|---|---|---|
 | Not restored | a mod's manifest names it, and I have not restored it | `$(warning)` yellow | not restored |
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
-| Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
+| Sorting errors | it is active, and Sorting rules shows an Error for it; once the snapshot is indexed | `$(error)` red | 1 error, N errors |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
 | Plugin source unreadable | it is a compiled plugin, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
 | Changed outside Modbench | it is a compiled plugin, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
+| Sorting warnings | it is active, and Sorting rules shows a Warning for it; once the snapshot is indexed | `$(warning)` yellow | 1 warning, N warnings |
 
-- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. Cites: xedit.md, divergence 28
-- Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not no issues.
+- A broken sorting rule never disables the plugin, cascades to its dependants or moves a plugin. The check box and the order stay as I set them. Cites: xedit.md, divergence 28; ADR-0026
+- Before the snapshot is indexed, a plugin shows no sorting status. That means not yet checked, not no broken rules.
 - A later snapshot keeps the last statuses until the new ones land.
 - A plugin that failed to read stays failed until its bytes change or I refresh. A failure that names another file, a master, a strings file or an archive, clears once that file reads. Cites: ADR-0003
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. Cites: commands.md, Surfaces and their templates
@@ -109,6 +110,27 @@ As a user, I want:
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot becomes a clear icon while it is active. It is its own filter, beside the name filter. It narrows the groups' counts too, and applies again after every change to the record index. It never narrows the Editor or Referenced By. Cites: catalog `filter` under Record; Chrome
 4. A plugin with no record left under the record filter hidden while the record filter is active. A later snapshot keeps the rows the record filter hides until the new ones land.
 
+## Sorting rules
+
+Modbench judges the plugin order I have against the game's sorting rules and LOOT's ([ADR-0026](../adr/0026-modbench-checks-the-plugin-order-against-loots-metadata-and-never-sorts-it.md)). LOOT's come from the instance's masterlist and userlist. Each kind of sorting rule has a level, and so does each LOOT message and LOOT's cleaning data:
+
+| Level | A sorting rule broken, or a LOOT message or cleaning data that applies |
+|---|---|
+| Error | a master loads after a plugin that lists it · a blueprint plugin loads before a plugin that is not one · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
+| Warning | a plugin with the master flag is listed after a plugin without it, so the game loads it earlier than the view shows · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
+| Info | a group loads before a group it names · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
+
+As a user, I want:
+
+1. Each broken sorting rule, LOOT message and cleaning data that applies to show at its level. Cites: LOOT
+2. The game's sorting rules always to apply. No setting turns one off. Cites: ADR-0026
+3. A rule to name a plugin by its file name and to judge the active plugin of that name. A requirement and an incompatibility count a plugin present as LOOT does. Cites: LOOT; ADR-0026
+4. Each in the Problems panel, on the plugin file, at its level, in LOOT's words. One the userlist states is also on its line in the userlist. Info sets no row icon. Cites: commands.md, Surfaces and their templates
+5. Apply suggested move offered for a broken rule a move keeps, when that move breaks no other rule at Error: on the plugin row, and as a code action on its line in the userlist. Modbench moves a plugin only for a gesture I start. Cites: ADR-0026; No dead entries
+6. To disagree with a masterlist rule by editing the masterlist in the instance. Git shows my edit, and update masterlist shows it undone in its diff. Cites: ADR-0026
+7. The userlist and the masterlist to open as text in VS Code, as any file in the instance. Cites: loot.md, divergence 5
+8. A sorting rule file that does not read named in the view's message line, and in the Problems panel on its line. The rules that read still apply. A condition Modbench cannot evaluate is a Warning on its line, never skipped. Cites: Never silently wrong
+
 ## The highlight
 
 A selection here or in Mods highlights the rows related to it. The highlight marks a row's label as VS Code's find marks a match. Every row stays in its place, with its icon, colours and badges. The highlight shows where the related rows sit in the plugin order and the mod order. As a user, I want:
@@ -131,6 +153,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 5. When the record filter matches nothing, a message saying so, naming its source. Cites: common, The name filter, story 6
 6. When indexing the snapshot fails, the view's message line to name the failure, with one line in the Output. A row whose plugin was not reached expands to the error row naming the failure, never to "Still indexing…" for ever. The plugins read before the failure keep their records, and the next change to the instance tries again.
 7. When the record filter cannot apply again after a change to the record index, the filter cleared and every record shown, with a notification naming its source and the database's reason. Cites: Never silently wrong
+8. With no masterlist in the instance, the view's message line to say so and name update masterlist. The game's sorting rules and the userlist's still apply. Cites: Never silently wrong
 
 ## Menus and keys
 
@@ -139,7 +162,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · rename… (source) · create record… · decompile and commit (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy value |
+| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (source) · create record… · load after… · decompile and commit (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record) · copy… · copy value · delete |
@@ -160,7 +183,7 @@ As a user, I want:
 
 1. To drag plugin rows, one or several. They move as one block in their `plugins.txt` order.
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view, as shown.
-3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a plugin that is not one, refused, naming the plugin and the master. A drop whose masters mEdit cannot say yet lands; the Master issues row flags it once mEdit reads the plugin. Cites: xedit.md, divergence 28
+3. A drop that would break a sorting rule at Error refused, naming the rule and its plugins. A rule the order breaks already does not refuse the drop. A drop that breaks a rule at Warning or Info lands, and the rule shows as broken. A drop whose facts mEdit cannot say yet lands, and the rule shows once mEdit reads the plugin. Cites: ADR-0026; xedit.md, divergence 28
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a row being dragged. Cites: mods.md, Drag and drop, story 5
 5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here. Cites: xedit.md: Drag a record onto a reference field
 
@@ -208,6 +231,28 @@ As a user, I want:
 1. From the palette, the selected plugins to move as one block to a place I pick: directly above a plugin row outside the selection, in the order the view shows them, or "Bottom of the view". The block lands as a drop there lands. Cites: catalog `move`, target Option; Drag and drop, story 2
 2. A pick that a drop there would refuse refused the same way. Cites: Drag and drop, story 3
 3. Esc to move nothing. Cites: Esc changes nothing
+
+### Load after
+
+As a user, I want:
+
+1. A pick of one or more plugins the selected plugins load after: the active plugins outside the selection, in the order the view shows them. Cites: LOOT, Edit Metadata, Load After
+2. The userlist to gain a sorting rule for each selected plugin that it loads after each picked plugin, as LOOT writes it. A rule the userlist holds already writes nothing.
+3. Esc to write nothing. Cites: Esc changes nothing
+
+### Apply suggested move
+
+As a user, I want:
+
+1. When one broken rule offers a move, no prompt. When more than one does, a pick of those rules.
+2. The plugin to move to the nearest place that keeps the rule: directly below the plugin it must load after, or directly above the plugin it must load before.
+
+### Update masterlist
+
+As a user, I want:
+
+1. No prompt. While it runs, the view's message line says so.
+2. A refusal while the masterlist has uncommitted changes, naming them, as git refuses a checkout over my changes. Cites: agent.md, Any agent, story 7
 
 ### Create record
 

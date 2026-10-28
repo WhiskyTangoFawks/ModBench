@@ -46,6 +46,7 @@ As a user, I want:
 2. My agent to read each file order conflict: which mod wins each file, and which files each mod loses, as the Mods view and the conflict table show me. Cites: mods.md, The tree, story 8; mods-conflicts.md
 3. My agent never to switch my profile. The profile is the context I work in.
 4. My agent never to deploy, purge or move to Overwrite. Deployment writes outside the instance, where my game runs.
+5. My agent to read what the Plugins view shows me under Sorting rules, each with its level and suggested move, and to name a broken rule to apply suggested move as that read lists it. My agent edits the userlist as a file, as I do. Where the mod manager owns the userlist, this is an exception to Any agent, story 2. Cites: plugins.md, Sorting rules
 
 ## Gestures
 

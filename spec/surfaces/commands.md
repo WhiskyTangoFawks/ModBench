@@ -12,7 +12,7 @@ This file owns the UX vocabulary and the catalog of gestures. `GLOSSARY.md` owns
 - Command ID: the gesture's identity (One identity). It is `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`, `modbench.downloadedFile.delete`). A gesture every list view does to whatever it shows is `modbench.<verb>`, in Every view.
 - Options: the inputs a gesture needs besides its Argument, such as a mode, a destination or a position. An Option may be computed and multi-valued, such as a checked list with defaults.
 - Argument: the value that identifies the object or objects to the gesture, such as a plugin as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container. It is the same on every surface that offers the gesture. Singular means the clicked row, and plural means the whole selection.
-- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)), MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) or git gesture this row follows, read from [the xEdit audit](../../docs/research/xedit-surface-audit.md), [the xEdit grid audit](../../docs/research/xedit-ux-audit.md), [the MO2 audit](../../docs/research/mo2-surface-audit.md). `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
+- Template: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)), MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), LOOT ([ADR-0026](../adr/0026-modbench-checks-the-plugin-order-against-loots-metadata-and-never-sorts-it.md)) or git gesture this row follows, read from [the xEdit audit](../../docs/research/xedit-surface-audit.md), [the xEdit grid audit](../../docs/research/xedit-ux-audit.md), [the MO2 audit](../../docs/research/mo2-surface-audit.md), [the LOOT research](../../docs/research/loot-integration.md). `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
 - Trace: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes: its specification is this row and its surface.
 - Meaning: what the gesture does, in one sentence. Its surface holds the stories.
 - Ruled out: a gesture the maintainer has cut is not in any table. See [Ruling a gesture out](#ruling-a-gesture-out).
@@ -63,7 +63,7 @@ Rules for the title bar of a view.
 
 ## Ruling a gesture out
 
-A template is a standalone program. Modbench is not. A gesture leaves this file only for a reason in the summary table of [xedit.md](../out-of-scope/xedit.md) or [mo2.md](../out-of-scope/mo2.md), and that file lists it. A new reason joins the summary table first.
+A template is a standalone program. Modbench is not. A gesture leaves this file only for a reason in the summary table of [xedit.md](../out-of-scope/xedit.md) or [mo2.md](../out-of-scope/mo2.md), or the omissions of [loot.md](../out-of-scope/loot.md), and that file lists it. A new reason joins the summary table first.
 
 ## Surfaces and their templates
 
@@ -117,6 +117,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 | refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Rebuild the record index, and read the instance again from disk. | load-instance |
 | deploy / purge | writes | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Deploy the active profile's load order to the deployment folder, or remove what deploy wrote there ([deployment-hardlink.md](deployment-hardlink.md)). | - |
 | move to Overwrite | writes | `modbench.instance.moveToOverwrite` | files in the deployment folder that deploy does not manage | - | none | Move each file into Overwrite at its path, so the next deploy links it back. | - |
+| update masterlist | writes | `modbench.instance.updateMasterlist` | - | force: [agent.md](agent.md#any-agent), story 7 | LOOT, Update Masterlist | Fetch the game's masterlist and prelude from LOOT into the instance, in the metadata version this Modbench reads. | update-masterlist |
 
 ## Profile
 
@@ -172,13 +173,15 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | enable / disable | writes | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Enable or disable each plugin in the active profile. | update-load-order-file |
-| move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
+| move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. | update-load-order-file |
 | create | writes | `modbench.plugin.create` | Overwrite or an enabled mod | name | xEdit navigator | Create an empty plugin. | create-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Read each plugin's bytes into its plugin source in the working tree. | decompile-plugin |
 | decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
 | rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a compiled plugin, the files named for it, and its lines. | rename-plugin |
+| apply suggested move | writes | `modbench.plugin.applySuggestedMove` | plugin | broken sorting rule: a pick, when more than one offers a move | none | Move a plugin to the nearest place that keeps a broken sorting rule. | update-load-order-file |
+| load after | writes | `modbench.plugin.loadAfter` | plugins | plugins to load after: a pick | LOOT, Edit Metadata, Load After | Add a sorting rule to the userlist that each plugin loads after the picked plugins. | update-load-order-file |
 
 ## Record
 
