@@ -159,7 +159,7 @@ internal sealed class SourceModBuild
     {
         try
         {
-            var read = _modFolders.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
+            var read = _modFolders.Files(mod.Folder, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
             var files = read.Files.Where(file => made.Contains(file.Path)).ToList();
             var manifest = Recorded(mod, configured, files.Select(file => file.Path), written);
             if (configured.Steps.Count == 0) _modFolders.WriteSourceManifest(mod.SourceFolder, manifest);
@@ -237,7 +237,7 @@ internal sealed class SourceModBuild
     }
 
     private Dictionary<string, string> HashesIn(ModToBuild mod) =>
-        _modFolders.Files(mod.Folder, mod.Name, new HashSet<string>(), statCache: null).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        _modFolders.Files(mod.Folder, new HashSet<string>(), statCache: null).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
     private bool ChangedOutside(RegisteredPlugin plugin, GameRelease release) =>
         _plugins.Exists(plugin.Path)

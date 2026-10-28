@@ -7,7 +7,7 @@ public interface IModFolderRepository
 {
     /// <summary>Every file of the mod but its manifest and those left out, by forward-slash path. A file whose stamp the
     /// stat cache in <paramref name="statCache"/> last read goes unread; with none, every file is read.</summary>
-    ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache);
+    ModFolderFiles Files(string modFolder, IReadOnlySet<string> leftOut, string? statCache);
 
     /// <summary>Keeps in the stat cache what <paramref name="read"/> found, and as the hash each line's package fixes,
     /// the one <paramref name="hashes"/> holds for its path. Why it could not, or null.</summary>
@@ -15,7 +15,7 @@ public interface IModFolderRepository
 
     /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out. A
     /// line names a file in another case where the file system finds it by the line's name.</summary>
-    IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut);
+    IReadOnlyList<string> NamedByNoLine(string modFolder, Manifest manifest, IReadOnlySet<string> leftOut);
 
     /// <summary>The mod's folder against its manifest, a source mod's in <paramref name="sourceFolder"/>, from each file's
     /// stamp, the stat cache, which keeps what it read, and the metadata the mod manager <paramref name="held"/>.</summary>
@@ -55,17 +55,17 @@ public interface IModFolderRepository
     /// <summary>The game file at the forward-slash <paramref name="path"/> under the game's <paramref name="dataFolder"/>.</summary>
     Stream OpenGameFile(string dataFolder, string path);
 
-    /// <summary>Writes the mod's manifest into its folder, and only when its text differs from the one there.
-    /// True when it wrote.</summary>
-    bool WriteManifest(string modFolder, string modName, Manifest manifest);
+    /// <summary>Writes the manifest into the folder it builds, named for that folder, and only when its text differs from the
+    /// one there. True when it wrote.</summary>
+    bool WriteManifest(string modFolder, Manifest manifest);
 
     /// <summary>Deletes the manifest in the mod's folder, as the source mod's repository in <paramref name="sourceFolder"/>
     /// holds its manifest instead, and answers what it deleted. A repository in the mod's folder keeps its own.</summary>
-    SpelledManifest? RemoveManifest(string modFolder, string modName, string sourceFolder);
+    SpelledManifest? RemoveManifest(string modFolder, string sourceFolder);
 
-    /// <summary>The mod's manifest; null when its folder holds none. Throws
+    /// <summary>The manifest named for <paramref name="modFolder"/> in it; null when it holds none. Throws
     /// <see cref="InvalidDataException"/> naming a line it cannot read.</summary>
-    Manifest? ReadManifest(string modFolder, string modName);
+    Manifest? ReadManifest(string modFolder);
 
     /// <summary>The manifest at the root of the source mod's repository in <paramref name="sourceFolder"/>, null when there is
     /// none, or why it cannot be read.</summary>

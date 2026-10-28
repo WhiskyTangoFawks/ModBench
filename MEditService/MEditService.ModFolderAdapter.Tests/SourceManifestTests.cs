@@ -147,8 +147,8 @@ public sealed class SourceManifestTests : IDisposable
         var modFolder = Directory.CreateDirectory(Path.Combine(_source, "mods", "Mod")).FullName;
         File.WriteAllText(Path.Combine(modFolder, "Mod.manifest.json"), "held");
 
-        Assert.Null(_repository.RemoveManifest(modFolder, "Mod", modFolder + Path.DirectorySeparatorChar));
-        var removed = _repository.RemoveManifest(modFolder, "Mod", Path.Combine(_source, "source", "Mod"));
+        Assert.Null(_repository.RemoveManifest(modFolder, modFolder + Path.DirectorySeparatorChar));
+        var removed = _repository.RemoveManifest(modFolder, Path.Combine(_source, "source", "Mod"));
 
         Assert.Equal(("Mod.manifest.json", "held"), (removed?.Name, System.Text.Encoding.UTF8.GetString(removed?.Text ?? [])));
         Assert.False(File.Exists(Path.Combine(modFolder, "Mod.manifest.json")));

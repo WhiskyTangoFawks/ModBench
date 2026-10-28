@@ -1,7 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type FoundGameFolder, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type FoundGameFolder, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -82,7 +82,7 @@ export type AdapterCall =
   | { readonly verb: 'moveIntoOverwrite'; readonly moves: Parameters<InstanceAdapter['moveIntoOverwrite']>[0] }
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
-  | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
+  | { readonly verb: 'trashFileIn'; readonly folder: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
   | { readonly verb: 'followModFolders'; readonly moves: Parameters<InstanceAdapter['followModFolders']>[0] }
   | { readonly verb: 'changePublisherTag'; readonly change: PublisherTagChange; readonly tag: string; readonly paths: readonly string[] }
@@ -96,6 +96,7 @@ export type AdapterCall =
   | { readonly verb: 'removeRepository' }
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules' }
+  | { readonly verb: 'writeOtherManifestLines' }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: InstallKeys; readonly fomod?: FomodAnswer };
@@ -150,7 +151,7 @@ export interface InstanceAnswers {
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods' | 'pathsOutsideFolders', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods' | 'pathsOutsideFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -158,6 +159,8 @@ export interface InstanceAnswers {
   pathTokenLeft?: string;
   /** Each path no path token names in a file the instance repository holds. */
   pathsOutsideFolders?: Awaited<ReturnType<InstanceAdapter['pathsOutsideFolders']>>;
+  /** Each folder outside the mod folders that holds its manifest. */
+  otherManifests?: readonly OtherManifest[];
   /** What writing the submodules says. */
   submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
   /** The host of each source folder, by its path; a folder not there has no remote. */
@@ -364,6 +367,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),
+    otherManifests: () => unreadable('otherManifests', answers.otherManifests ?? []),
+    writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     pathsOutsideFolders: () => unreadable('pathsOutsideFolders', answers.pathsOutsideFolders ?? []),
@@ -498,9 +503,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
       return true;
     },
-    trashModFile: (mod, relativePath) =>
-      write({ verb: 'trashModFile', mod, relativePath }, () => {
-        if (reachesOut(relativePath)) throw notAFileOf({ kind: 'mod', name: mod }, relativePath);
+    trashFileIn: (folder, relativePath) =>
+      write({ verb: 'trashFileIn', folder, relativePath }, () => {
+        if (reachesOut(relativePath)) throw new Error(`Not a file of "${folder}": "${relativePath}"`);
       }),
     trashSourceFolder: async (mod, trash) => {
       const source = await write({ verb: 'trashSourceFolder', mod }, () => current.sourceMods.folderOf(mod));

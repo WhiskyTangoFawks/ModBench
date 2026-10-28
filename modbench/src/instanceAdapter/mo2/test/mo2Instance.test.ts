@@ -2342,7 +2342,7 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds'));
       const trashed: string[] = [];
 
-      await adapter.trashModFile('Harder VATS', 'Textures/a.dds', (file) => {
+      await adapter.trashFileIn(join(root, 'mods', 'Harder VATS'), 'Textures/a.dds', (file) => {
         trashed.push(file);
         return Promise.resolve();
       });
@@ -2353,7 +2353,7 @@ describe('the MO2 Instance adapter', () => {
     it('takes a file already gone as trashed', async () => {
       const trashed: string[] = [];
 
-      await adapter.trashModFile('Harder VATS', 'Textures/gone.dds', (file) => {
+      await adapter.trashFileIn(join(root, 'mods', 'Harder VATS'), 'Textures/gone.dds', (file) => {
         trashed.push(file);
         return Promise.resolve();
       });
@@ -2366,7 +2366,7 @@ describe('the MO2 Instance adapter', () => {
       await symlink(join(root, 'outside'), join(root, 'mods', 'Harder VATS', 'linked'));
       const trashed: string[] = [];
 
-      await expect(adapter.trashModFile('Harder VATS', 'linked/a.txt', (file) => {
+      await expect(adapter.trashFileIn(join(root, 'mods', 'Harder VATS'), 'linked/a.txt', (file) => {
         trashed.push(file);
         return Promise.resolve();
       })).rejects.toThrow(/Not a file of/);

@@ -170,7 +170,8 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       const notAFile = `Not a file of mod "Alpha": "${path}"`;
       await expect(adapter.originFile(ALPHA, path)).rejects.toThrow(notAFile);
       await expect(adapter.markOriginFile(ALPHA, path, 'Excluded')).rejects.toThrow(notAFile);
-      await expect(adapter.trashModFile('Alpha', path, trash)).rejects.toThrow(notAFile);
+      const alpha = await adapter.modFolderPath('Alpha') ?? '';
+      await expect(adapter.trashFileIn(alpha, path, trash)).rejects.toThrow(`Not a file of "${alpha}": "${path}"`);
     });
   });
 

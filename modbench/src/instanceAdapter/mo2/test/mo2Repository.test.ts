@@ -136,15 +136,19 @@ describe('the MO2 adapter\'s repository', () => {
   });
 
   describe('the files Modbench keeps in the instance', () => {
-    it('are its record index, hash index, stat cache, source folder and repository files, and every manifest a mod folder holds', async () => {
+    it('are its record index, hash index, stat cache, source folder and repository files, every manifest a mod folder holds, and every other manifest', async () => {
       const adapter = await instance();
       await put('mods/A/A.manifest.json');
       await put('mods/A/meta.ini');
       await put('mods/B/Renamed.manifest.json');
       await mkdir(join(root, 'mods', 'C'));
 
+      await put('plugins/rootbuilder/rootbuilder.manifest.json');
+      await put('plugins/rootbuilder/rootbuilder.py');
+
       expect((await adapter.filesKept()).present.map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
-        '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/Renamed.manifest.json', 'source', 'stat-cache',
+        '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/Renamed.manifest.json',
+        'plugins/rootbuilder/rootbuilder.manifest.json', 'source', 'stat-cache',
       ].sort());
     });
   });
@@ -156,7 +160,11 @@ describe('the MO2 adapter\'s repository', () => {
     ['another file in a mod folder', ['mods', 'Gone', 'notes.txt'], false],
     ['a path below a manifest', ['mods', 'A', 'A.manifest.json', 'x'], false],
     ['a manifest in a folder of a mod', ['mods', 'A', 'sub', 'A.manifest.json'], false],
-    ['a manifest outside the mods folder', ['source', 'A', 'A.manifest.json'], false],
+    ['a source mod\'s manifest', ['source', 'A', 'A.manifest.json'], false],
+    ['a manifest outside the mod folders, named for the folder it is in', ['plugins', 'Rootbuilder', 'rootbuilder.MANIFEST.json'], true],
+    ['a manifest at the instance root', ['instance.manifest.json'], false],
+    ['a manifest outside the mod folders named for another folder', ['plugins', 'rootbuilder', 'other.manifest.json'], false],
+    ['a manifest in a profile\'s folder', ['profiles', 'P', 'P.manifest.json'], false],
   ])('owns %s: %s', async (_name, segments, owned) => {
     const { owns } = await (await instance()).filesKept();
 
@@ -248,6 +256,77 @@ describe('the MO2 adapter\'s repository', () => {
       await arrange(adapter);
 
       expect(existsSync(hook())).toBe(kept);
+    });
+  });
+
+  describe('every other manifest', () => {
+    const NOT_SEARCHED = [
+      'mods/A/A.manifest.json', 'mods/A/sub/sub.manifest.json', 'profiles/P/P.manifest.json', 'overwrite/O/O.manifest.json',
+      'my downloads/D/D.manifest.json', 'source/S/S.manifest.json', '.git/G/G.manifest.json',
+    ];
+    const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
+
+    it('is each folder outside the mod folders, profiles, Overwrite, downloads, source mods and repository that holds a manifest named for it, and none inside one that does', async () => {
+      const adapter = await instance();
+      await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\n[Settings]\r\ndownload_directory=@ByteArray(my downloads)\r\n');
+      await Promise.all([
+        'Stock Game/Stock Game.manifest.json', 'Stock Game/Data/Data.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/x.dll',
+        'plugins/other/notes.manifest.json', 'downloads/D/D.manifest.json', ...NOT_SEARCHED,
+      ].map((path) => put(path)));
+
+      expect(await adapter.otherManifests()).toEqual([
+        { name: 'Stock Game/', folder: join(root, 'Stock Game') },
+        { name: 'downloads/D/', folder: join(root, 'downloads', 'D') },
+        { name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') },
+      ]);
+    });
+
+    it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) is never a folder a link reaches, which can be outside the instance', async () => {
+      const adapter = await instance();
+      await put('elsewhere/linked.manifest.json');
+      await symlink(join(root, 'elsewhere'), join(root, 'linked'));
+
+      expect(await adapter.otherManifests()).toEqual([]);
+    });
+
+    it('is what git sees of its folder and the folders above it', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      const listed = ['Stock Game/Stock Game.manifest.json', 'plugins/rootbuilder/rootbuilder.manifest.json', 'plugins/[x]/[x].manifest.json'];
+      const ignored = ['Stock Game/Fallout4.exe', 'Stock Game/Data/Fallout4.esm', 'plugins/rootbuilder/rootbuilder.py', 'plugins/x.dll', 'plugins/[x]/x.py', 'logs/a.log'];
+      await Promise.all([...listed, ...ignored].map((path) => put(path)));
+      await adapter.writeIgnoreList();
+
+      await adapter.writeOtherManifestLines();
+
+      const shown = runGit('status', '--porcelain', '-z', '--untracked-files=all').split('\0').filter(Boolean).map((line) => line.slice(3));
+      expect(shown.sort()).toEqual([...listed, '.gitignore'].sort());
+    });
+
+    it('takes the lines of a manifest that is gone, in place, keeping every line it did not write', async () => {
+      const adapter = await instance();
+      await put('.gitignore', 'mine\n');
+      await put('Stock Game/Stock Game.manifest.json');
+      await put('plugins/rootbuilder/rootbuilder.manifest.json');
+      await adapter.writeOtherManifestLines();
+      await writeFile(join(root, '.gitignore'), `${await ignoreList()}theirs\n`);
+      await rm(join(root, 'plugins', 'rootbuilder', 'rootbuilder.manifest.json'));
+
+      await adapter.writeOtherManifestLines();
+
+      expect(await ignoreList()).toBe([
+        'mine', '# Manifests outside the mod folders', '!/Stock Game/', '/Stock Game/*', '!/Stock Game/Stock Game.manifest.json',
+        '# End of manifests outside the mod folders', 'theirs', '',
+      ].join('\n'));
+    });
+
+    it('writes no ignore list where there is none', async () => {
+      const adapter = await instance();
+      await put('plugins/rootbuilder/rootbuilder.manifest.json');
+
+      await adapter.writeOtherManifestLines();
+
+      expect(existsSync(join(root, '.gitignore'))).toBe(false);
     });
   });
 

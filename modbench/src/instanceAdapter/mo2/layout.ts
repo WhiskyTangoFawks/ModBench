@@ -146,6 +146,23 @@ export function isManifestPath(instanceRoot: string, path: string): boolean {
   return mods?.toLowerCase() === MODS && file?.toLowerCase().endsWith(MANIFEST_SUFFIX) === true && deeper.length === 0;
 }
 
+// Each holds manifests of its own kind, or none, so the search for other manifests skips it, as it skips the downloads folder.
+const NOT_SEARCHED = new Set([MODS, PROFILES, OVERWRITE_DIR_NAME, GIT_DIR, SOURCE_MODS_FOLDER]);
+
+/** Whether the search for other manifests skips the folder named `name` at the instance root. */
+export const isSkippedByManifestSearch = (name: string): boolean => NOT_SEARCHED.has(name.toLowerCase());
+
+/** Whether `fileName` is the manifest of the folder named `folderName`. */
+export const isOwnManifest = (folderName: string, fileName: string): boolean => fileName.toLowerCase() === manifestFileName(folderName).toLowerCase();
+
+/** Whether `path` has the shape of another manifest: in a folder outside those the search skips, named for it. */
+export function isOtherManifestPath(instanceRoot: string, path: string): boolean {
+  const segments = relative(instanceRoot, path).split(sep);
+  const [top, ...below] = segments;
+  const [folder, file] = segments.slice(-2);
+  return below.length > 0 && !isSkippedByManifestSearch(top ?? '') && isOwnManifest(folder ?? '', file ?? '');
+}
+
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);
 
@@ -186,24 +203,47 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
-const SOURCE_MODS_BEGIN = '# Source mods with a remote';
-const SOURCE_MODS_END = '# End of source mods with a remote';
-
-/** An ignore list with its block of `folderNames`, the source mods with a remote, made in place. Every line outside
- *  the block is kept. Undefined when the block's markers do not pair. */
-export function withSourceModLines(ignoreList: string, folderNames: readonly string[]): string | undefined {
+// An ignore list with the block between `first` and `last` made of `inner` in place, and gone with no `inner`. Every line
+// outside the block is kept. Undefined when the block's markers do not pair.
+function withBlock(ignoreList: string, first: string, last: string, inner: readonly string[]): string | undefined {
   const lines = ignoreList.split('\n');
   if (lines.at(-1) === '') lines.pop();
-  const begin = lines.indexOf(SOURCE_MODS_BEGIN);
-  const end = lines.indexOf(SOURCE_MODS_END);
+  const begin = lines.indexOf(first);
+  const end = lines.indexOf(last);
   if ((begin === -1) !== (end === -1) || end < begin) return undefined;
-  const block = folderNames.length === 0 ? [] : [
-    SOURCE_MODS_BEGIN, `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, ...folderNames.map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END,
-  ];
+  const block = inner.length === 0 ? [] : [first, ...inner, last];
   if (begin === -1) lines.push(...block);
   else lines.splice(begin, end - begin + 1, ...block);
   return `${lines.join('\n')}\n`;
 }
+
+/** An ignore list with its block of `folderNames`, the source mods with a remote, made in place. Undefined when the
+ *  block's markers do not pair. */
+export const withSourceModLines = (ignoreList: string, folderNames: readonly string[]): string | undefined =>
+  withBlock(ignoreList, '# Source mods with a remote', '# End of source mods with a remote', folderNames.length === 0 ? [] : [
+    `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, ...folderNames.map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),
+  ]);
+
+// Each folder above a manifest is let in once, before the folders and the manifest it holds.
+function otherManifestLines(manifests: readonly (readonly string[])[]): string[] {
+  const lines: string[] = [];
+  const letIn = new Set<string>();
+  for (const segments of manifests) {
+    const escaped = segments.map(escapedForIgnoreList);
+    for (const at of escaped.slice(0, -1).keys()) {
+      const folder = escaped.slice(0, at + 1).join('/');
+      if (!letIn.has(folder)) lines.push(`!/${folder}/`, `/${folder}/*`);
+      letIn.add(folder);
+    }
+    lines.push(`!/${escaped.join('/')}`);
+  }
+  return lines;
+}
+
+/** An ignore list with its block of other manifests, each by its path in the instance, made in place. Undefined when the
+ *  block's markers do not pair. */
+export const withOtherManifestLines = (ignoreList: string, manifests: readonly (readonly string[])[]): string | undefined =>
+  withBlock(ignoreList, '# Manifests outside the mod folders', '# End of manifests outside the mod folders', otherManifestLines(manifests));
 
 /** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[

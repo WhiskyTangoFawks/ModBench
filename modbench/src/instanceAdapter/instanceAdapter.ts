@@ -354,6 +354,10 @@ export type UnclonedSubmodule = { readonly name: string } & (Submodule | { reado
 
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
 
+/** A folder outside every mod folder that holds the manifest named for it, which builds it (modlist-repository.md, The
+ *  manifest, story 20). `name` is its path in the instance, ending in `/`, so no mod has it. */
+export interface OtherManifest { readonly name: string; readonly folder: string }
+
 // A path a file holds, the file by its path in the instance repository.
 interface PathInFile { readonly file: string; readonly path: string }
 
@@ -665,6 +669,12 @@ export interface InstanceAdapter {
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;
+  /** Each folder outside the mod manager's own folders, the source mods and the repository that holds its manifest; none
+   *  inside a folder that does, and none a link reaches. */
+  otherManifests(): Promise<readonly OtherManifest[]>;
+  /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder: their lines
+   *  in the ignore list, in place of the ones there. Writes nothing without an ignore list. */
+  writeOtherManifestLines(): Promise<void>;
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */
@@ -745,9 +755,9 @@ export interface InstanceAdapter {
   /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the
    *  file cannot be trashed. `metadataLeftBehind` is the reason what is kept could not follow. */
   trashDownloadedFile(name: string, trash: MoveToTrash): Promise<DownloadedFileTrashed>;
-  /** Moves the file at the forward-slash `relativePath` in the mod's folder into the trash; a file already gone is done.
-   *  Rejects a path that leaves the folder, its links resolved. */
-  trashModFile(mod: string, relativePath: string, trash: MoveToTrash): Promise<void>;
+  /** Moves the file at the forward-slash `relativePath` in `folder`, a folder a manifest builds, into the trash; a file
+   *  already gone is done. Rejects a path that leaves the folder, its links resolved. */
+  trashFileIn(folder: string, relativePath: string, trash: MoveToTrash): Promise<void>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a

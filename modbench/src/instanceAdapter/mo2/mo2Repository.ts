@@ -1,18 +1,47 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
+import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
-import { hashIndexDir, ignoreListFile, isManifestPath, modsDir, recordIndexDir, sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
+import {
+  defaultDownloadsDir, hashIndexDir, ignoreListFile, isManifestPath, isOtherManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
+  sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceModLines,
+} from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
-import type { Mo2Context } from './mo2Context';
+import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines'> & Pick<ManagerAdapter, 'filesKept'>;
+
+// A manifest outside the mod folders, by the names of the folders down to it and its own.
+interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
+
+// modlist-repository.md, The repository, story 2. A link is not followed: the folder it reaches can be outside the instance.
+async function otherManifestsIn(context: Mo2Context): Promise<FoundManifest[]> {
+  const { instanceRoot } = context;
+  const downloads = await currentDownloadsDir(context).catch(() => defaultDownloadsDir(instanceRoot));
+  const found: FoundManifest[] = [];
+  const search = async (folder: string, segments: readonly string[]): Promise<void> => {
+    const entries = await readOrAbsent(() => listDir(folder), []);
+    const name = segments.at(-1);
+    const manifest = name === undefined ? undefined : entries.find((entry) => entry.isFile() && isOwnManifest(name, entry.name));
+    if (manifest !== undefined) {
+      found.push({ segments: [...segments, manifest.name], folder });
+      return;
+    }
+    const below = entries.filter((entry) => entry.isDirectory() && !(segments.length === 0 && isSkippedByManifestSearch(entry.name))).map((entry) => entry.name).sort();
+    for (const child of below) {
+      const path = join(folder, child);
+      if (relative(path, downloads) !== '') await search(path, [...segments, child]);
+    }
+  };
+  await search(instanceRoot, []);
+  return found;
+}
 
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -103,9 +132,24 @@ export function mo2Repository(
         present: [
           join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
           hashIndexDir(instanceRoot), statCacheDir(instanceRoot), sourceRootDir(instanceRoot), ...inFolders.flat(),
+          ...(await otherManifestsIn(context)).map(({ segments }) => join(instanceRoot, ...segments)),
         ],
-        owns: (path) => isManifestPath(instanceRoot, path),
+        owns: (path) => isManifestPath(instanceRoot, path) || isOtherManifestPath(instanceRoot, path),
       };
+    },
+
+    otherManifests: async () =>
+      (await otherManifestsIn(context)).map(({ segments, folder }) => ({ name: `${segments.slice(0, -1).join('/')}/`, folder })),
+
+    async writeOtherManifestLines() {
+      const file = ignoreListFile(instanceRoot);
+      if (!(await exists(file))) return;
+      const manifests = (await otherManifestsIn(context)).map(({ segments }) => segments);
+      await putIfChanged(file, (before) => {
+        const after = withOtherManifestLines(before, manifests);
+        if (after === undefined) throw new Error(`${file} has a marker of the manifests outside the mod folders with no match, so their lines are left as they are`);
+        return after;
+      });
     },
 
     gameFiles,
