@@ -13,15 +13,23 @@ export interface FileTheGameGets {
   readonly winner: string;
 }
 
+/** A file the game gets that deploy left out, as an earlier one lands at its path below the folder. */
+export interface Lost {
+  readonly path: string;
+  readonly winner: string;
+}
+
 /** `wrote` is false when the deployment folder already held the load order. `leftOut` names each
  *  path below the folder whose file deploy did not write, so deploy left its winner out. */
 export interface Deployed {
   readonly wrote: boolean;
   readonly leftOut: readonly string[];
+  readonly lost: readonly Lost[];
 }
 
 export interface Deployment {
-  /** Throws, writing nothing, when it cannot deploy, and says why. */
+  /** `files` in the order their winners win: of two that land at one path, the earlier wins it.
+   *  Throws, writing nothing, when it cannot deploy, and says why. */
   deploy(folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed>;
 }
 
@@ -68,13 +76,19 @@ async function volumeIdOf(folder: string): Promise<bigint> {
 }
 
 // A hardlink cannot cross volumes.
-async function wantedIn(folder: string, files: Iterable<FileTheGameGets>): Promise<Map<string, Link>> {
+async function wantedIn(folder: string, files: Iterable<FileTheGameGets>): Promise<{ wanted: Map<string, Link>; lost: Lost[] }> {
   const volume = await volumeIdOf(folder);
   const wanted = new Map<string, Link>();
+  const lost: Lost[] = [];
   const elsewhere = new Map<bigint, string>();
   for (const { relativePath, winner } of files) {
     const path = deployedPath(relativePath);
-    if (path === undefined || wanted.has(fold(path))) continue;
+    if (path === undefined) continue;
+    const earlier = wanted.get(fold(path));
+    if (earlier !== undefined) {
+      lost.push({ path: earlier.path, winner });
+      continue;
+    }
     const { dev, ino } = await stat(winner, { bigint: true });
     if (dev !== volume) elsewhere.set(dev, winner);
     wanted.set(fold(path), { path, source: winner, ino: String(ino) });
@@ -83,7 +97,7 @@ async function wantedIn(folder: string, files: Iterable<FileTheGameGets>): Promi
     const others = await Promise.all([...elsewhere.values()].map(volumeOf));
     throw new Error(`The deployment folder is on ${await volumeOf(folder)}, and the instance on ${others.join(', ')}: a hardlink cannot cross volumes.`);
   }
-  return wanted;
+  return { wanted, lost };
 }
 
 async function stillWritten(folder: string, written: readonly Written[]): Promise<Map<string, Written>> {
@@ -131,21 +145,21 @@ async function linkAt(folder: string, { path, source }: Link): Promise<void> {
 }
 
 async function deployTo(record: ReturnType<typeof recordIn>, folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed> {
-  const wanted = await wantedIn(folder, files);
+  const { wanted, lost } = await wantedIn(folder, files);
   const written = await record.of(folder);
   const owned = await stillWritten(folder, written);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
   if (links.length + relinks.length + removals.length === 0) {
     if (after.length !== written.length) await record.write(folder, after);
-    return { wrote: false, leftOut };
+    return { wrote: false, leftOut, lost };
   }
   // Written first, so a deploy cut short still owns every file it may have linked.
   await record.write(folder, [...owned.values(), ...relinks, ...links].map(asWritten));
   for (const { path } of [...removals, ...relinks]) await unlink(join(folder, path));
   for (const each of [...relinks, ...links]) await linkAt(folder, each);
   await record.write(folder, after);
-  return { wrote: true, leftOut };
+  return { wrote: true, leftOut, lost };
 }
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of

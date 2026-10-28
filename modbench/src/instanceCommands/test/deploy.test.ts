@@ -20,7 +20,7 @@ function deploymentAnswering(answer: () => Promise<Deployed>) {
   return { deployment, deployedTo };
 }
 
-const landed = (): Promise<Deployed> => Promise.resolve({ wrote: true, leftOut: ['Data/mine.ini'] });
+const landed = (): Promise<Deployed> => Promise.resolve({ wrote: true, leftOut: ['Data/mine.ini'], lost: [] });
 
 describe('deploy', () => {
   it('deploys the load order to the workspace\'s deployment folder, and answers what deploy left out', async () => {
@@ -28,7 +28,7 @@ describe('deploy', () => {
 
     const result = await deployCommands({ deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(FILES);
 
-    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: ['Data/mine.ini'] }, [['/deployed', FILES]]]);
+    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: ['Data/mine.ini'], lost: [] }, [['/deployed', FILES]]]);
   });
 
   it.each([

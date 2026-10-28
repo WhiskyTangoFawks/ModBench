@@ -60,6 +60,20 @@ describe('deploy', () => {
   });
 });
 
+describe('two files the game gets that land at one path', () => {
+  it.each([
+    ['a mod\'s file over a Root folder\'s', 'x.ini', 'Root/Data/x.ini'],
+    ['a Root folder\'s file over a mod\'s', 'Root/Data/x.ini', 'X.ini'],
+  ])('deploys the one the load order gives first, %s, and names the other with the path it lost', async (_case, winning, losing) => {
+    const winner = await modFile('Upper', winning);
+    const loser = await modFile('Lower', losing);
+
+    const deployed = await deploy([winner, loser]);
+
+    expect([await inode(join(folder, 'Data', 'x.ini')), deployed.lost]).toEqual([await inode(winner.winner), [{ path: 'Data/x.ini', winner: loser.winner }]]);
+  });
+});
+
 describe('a deploy after another', () => {
   const changed = async (path: string): Promise<bigint> => (await lstat(path, { bigint: true })).ctimeNs;
 
@@ -70,7 +84,7 @@ describe('a deploy after another', () => {
 
     const deployed = await deploy(files);
 
-    expect([deployed, [await changed(join(folder, 'Data', 'a.esp')), await changed(join(folder, 'b.dll'))]]).toEqual([{ wrote: false, leftOut: [] }, before]);
+    expect([deployed, [await changed(join(folder, 'Data', 'a.esp')), await changed(join(folder, 'b.dll'))]]).toEqual([{ wrote: false, leftOut: [], lost: [] }, before]);
   });
 
   it('removes a file it wrote that the load order does not hold', async () => {

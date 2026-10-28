@@ -16,9 +16,16 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
   const deploy = async (): Promise<void> => {
     const { files } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : files);
-    if (!result.applied) reporter.report('error', 'Could not deploy.', result.refusal);
-    else if (result.leftOut.length > 0) {
+    if (!result.applied) {
+      reporter.report('error', 'Could not deploy.', result.refusal);
+      return;
+    }
+    if (result.leftOut.length > 0) {
       reporter.report('warning', 'Deploy left out each file whose path holds a file it did not write:', result.leftOut.join(', '));
+    }
+    if (result.lost.length > 0) {
+      reporter.report('warning', 'Deploy left out each file whose path another file the game gets wins:',
+        result.lost.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
     }
   };
   return vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy));
