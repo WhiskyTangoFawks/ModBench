@@ -64,7 +64,7 @@ import { hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
-import { reachMEditFromEnvFile } from './agent/scriptEnvFile';
+import { reachMEditFromEnvFile } from './agent/scriptEnvironmentFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -145,7 +145,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python').get<string>('envFile'), installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
+        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile'), installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
@@ -324,6 +324,7 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
   });
+  const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
@@ -335,7 +336,7 @@ function start(context: vscode.ExtensionContext): void {
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, scriptsPath),
     reachMEditFromEnvFile({
       client: meditClient, scriptsPath, envFile: opened.scriptEnvironmentFile,
-      fail: (message) => { reporterFor('scriptEnvironment').report('error', message); },
+      fail: (message, detail) => { scriptEnvironmentFailures.threw(scriptEnvironmentFailures, message, detail); },
     }),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
