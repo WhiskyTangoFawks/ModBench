@@ -1,7 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
+
+const busy = vi.hoisted(() => ({ link: undefined as string | undefined, renameTo: undefined as string | undefined }));
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const ebusy = (call: string, path: string) => Object.assign(new Error(`EBUSY: resource busy or locked, ${call} '${path}'`), { code: 'EBUSY' });
+  return {
+    ...actual,
+    link: (from: string, to: string) => (to === busy.link ? Promise.reject(ebusy('link', to)) : actual.link(from, to)),
+    rename: (from: string, to: string) => (to === busy.renameTo ? Promise.reject(ebusy('rename', to)) : actual.rename(from, to)),
+  };
+});
 import { hardlinkDeployment, type FileTheGameGets } from '../deployment';
 
 let root: string;
@@ -15,6 +27,8 @@ beforeEach(async () => {
   folder = join(root, 'deployed');
   storage = join(root, 'storage');
   await mkdir(folder);
+  busy.link = undefined;
+  busy.renameTo = undefined;
 });
 
 afterEach(async () => {
@@ -39,6 +53,7 @@ describe('deploy', () => {
     ['a file below a mod\'s Root folder at its path below the root', 'root/f4se/plugins/x.dll', 'f4se/plugins/x.dll'],
     ['a file named root at the mod\'s root under Data', 'root', 'Data/root'],
     ['a file in a source folder below the mod\'s root', 'scripts/source/x.psc', 'Data/scripts/source/x.psc'],
+    ['a dot file below the mod\'s root', 'meshes/.DS_Store', 'Data/meshes/.DS_Store'],
   ])('writes %s, as a hardlink to its copy in the instance', async (_case, relativePath, deployedAt) => {
     const file = await modFile('Mod', relativePath);
 
@@ -48,9 +63,8 @@ describe('deploy', () => {
   });
 
   it.each([
-    ['dot file', '.gitignore'],
-    ['file in a dot folder', '.git/config'],
-    ['dot file below the mod\'s root', 'meshes/.DS_Store'],
+    ['dot file at the mod\'s root', '.gitignore'],
+    ['file in a dot folder at the mod\'s root', '.git/config'],
     ['file in a source folder at the mod\'s root', 'source/scripts/x.psc'],
     ['file in a Source folder at the mod\'s root', 'Source/x.psc'],
   ])('writes no %s', async (_case, relativePath) => {
@@ -170,16 +184,6 @@ describe('a file in the deployment folder that deploy did not write', () => {
 });
 
 describe('what deploy wrote', () => {
-  it('is deploy\'s still when a deploy is cut short', async () => {
-    const linked = await modFile('Mod', 'a.esp');
-    const unlinkable = { relativePath: 'b.esp', winner: join(mods, 'Mod') };
-    await expect(deploy([linked, unlinkable])).rejects.toThrow();
-
-    await deploy([]);
-
-    expect(await readdir(folder, { recursive: true })).toEqual(['Data']);
-  });
-
   it('is kept for each deployment folder apart', async () => {
     const other = join(root, 'other');
     await mkdir(other);
@@ -189,6 +193,62 @@ describe('what deploy wrote', () => {
     await deploy([]);
 
     expect(await readdir(folder, { recursive: true })).toEqual(['Data']);
+  });
+
+  it('is the same for the folder however the setting ends it', async () => {
+    await deploy([await modFile('Mod', 'a.esp')], `${folder}${sep}`);
+
+    await deploy([]);
+
+    expect(await readdir(folder, { recursive: true })).toEqual(['Data']);
+  });
+
+  it.runIf(process.platform === 'win32')('(Windows matches a path without case) is the same for the folder in any case', async () => {
+    await deploy([await modFile('Mod', 'a.esp')], folder.toUpperCase());
+
+    await deploy([]);
+
+    expect(await readdir(folder, { recursive: true })).toEqual(['Data']);
+  });
+});
+
+describe('a deploy that fails', () => {
+  async function deployedOnce() {
+    const lower = await modFile('Lower', 'a.esp');
+    const removed = await modFile('Mod', 'b.esp');
+    await deploy([lower, removed]);
+    return { lower, removed, before: await listing() };
+  }
+
+  const listing = async () => (await readdir(folder, { recursive: true })).sort();
+
+  const failingDeploy = async () => {
+    busy.link = join(folder, 'Data', 'meshes', 'd.nif');
+    return deploy([await modFile('Upper', 'a.esp'), await modFile('Mod', 'textures/c.dds'), await modFile('Mod', 'meshes/d.nif')]);
+  };
+
+  it('leaves the deployment folder as it was, and names the file and the cause', async () => {
+    const { lower, removed, before } = await deployedOnce();
+
+    await expect(failingDeploy()).rejects.toThrow(`EBUSY: resource busy or locked, link '${join(folder, 'Data', 'meshes', 'd.nif')}'`);
+
+    expect([await listing(), await inode(join(folder, 'Data', 'a.esp')), await inode(join(folder, 'Data', 'b.esp'))])
+      .toEqual([before, await inode(lower.winner), await inode(removed.winner)]);
+  });
+
+  it('leaves what deploy wrote as it was', async () => {
+    const { lower, removed } = await deployedOnce();
+    await expect(failingDeploy()).rejects.toThrow();
+
+    expect(await deploy([lower, removed])).toEqual({ wrote: false, leftOut: [], lost: [] });
+  });
+
+  it('names each change it could not undo', async () => {
+    await deployedOnce();
+    busy.renameTo = join(folder, 'Data', 'b.esp');
+
+    await expect(failingDeploy()).rejects.toThrow(
+      `. Deploy could not undo: Data/b.esp, set aside as b.esp.modbench_aside_${process.pid} (EBUSY: resource busy or locked, rename '${join(folder, 'Data', 'b.esp')}')`);
   });
 });
 

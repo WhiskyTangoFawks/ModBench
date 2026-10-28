@@ -28,5 +28,6 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
         result.lost.map(({ path, winner }) => `${winner} at ${path}`).join(', '));
     }
   };
+  // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
   return vscode.commands.registerCommand('modbench.instance.deploy', () => runWritingGesture(TOOLBOX_VIEW, instance, deploy));
 }

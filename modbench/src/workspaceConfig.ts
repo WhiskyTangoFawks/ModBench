@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import type { GameFolderSetting } from './instanceAdapter/instanceAdapter';
-import type { DeploymentFolderSetting } from './toolbox/ToolboxProvider';
+import type { DeploymentRowSetting } from './toolbox/ToolboxProvider';
 import { onSettingChange } from './drivingLib/setting';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
@@ -18,7 +18,7 @@ export const gameFolderSetting: GameFolderSetting = {
 
 const DEPLOYMENT_FOLDER_SETTING_KEY = 'deployment.folder';
 
-export const deploymentFolderSetting: DeploymentFolderSetting = {
+export const deploymentFolderSetting: DeploymentRowSetting = {
   id: `modbench.${DEPLOYMENT_FOLDER_SETTING_KEY}`,
   inspect: () => meditConfig().inspect<string>(DEPLOYMENT_FOLDER_SETTING_KEY),
   nameOf: basename,

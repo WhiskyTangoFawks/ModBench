@@ -4,15 +4,15 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
-import { deploymentFolderOf, type DeploymentFolderSetting as DeployingFolderSetting } from '../instanceCommands/deploy';
+import { deploymentFolderOf, type DeploymentFolderSetting } from '../instanceCommands/deploy';
 
-export interface DeploymentFolderSetting extends DeployingFolderSetting {
+export interface DeploymentRowSetting extends DeploymentFolderSetting {
   nameOf(path: string): string;
   changed(listener: () => void): vscode.Disposable;
 }
 
 type ToolboxDeps =
-  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentFolderSetting }
+  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting }
   | { instance: undefined };
 
 const versionText = (version: ProgramVersion): string => {
@@ -72,7 +72,7 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-function deploymentRow(setting: DeploymentFolderSetting): vscode.TreeItem {
+function deploymentRow(setting: DeploymentRowSetting): vscode.TreeItem {
   const row = new vscode.TreeItem('Deployment');
   row.iconPath = new vscode.ThemeIcon('rocket');
   const folder = deploymentFolderOf(setting);

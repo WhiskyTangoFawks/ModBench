@@ -1,6 +1,3 @@
-// Deploy (deployment-hardlink.md): the one command that hands the instance value on, to Deployment as
-// the load order to deploy (target-architecture.md).
-
 import type { Deployed, Deployment, FileTheGameGets } from '../deployment/deployment';
 import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';

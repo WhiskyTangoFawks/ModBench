@@ -586,7 +586,7 @@ describe('Deploy', () => {
       return existsSync(deployed);
     });
 
-    assert.strictEqual(statSync(deployed).ino, statSync(path.join(modDir, 'textures', 'deployed.dds')).ino);
+    assert.strictEqual(statSync(deployed, { bigint: true }).ino, statSync(path.join(modDir, 'textures', 'deployed.dds'), { bigint: true }).ino);
   });
 });
 

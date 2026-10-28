@@ -1,11 +1,12 @@
 // Deployment (target-architecture.d2): a load order deployed into the deployment folder. Its one type
 // is hardlink (deployment-hardlink.md): each file the game gets is linked to its copy in the instance.
 
-import { link, lstat, mkdir, realpath, stat, unlink } from 'node:fs/promises';
+import { lstat, realpath, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { fold, foldedPathsBelow } from './foldedPaths';
-import { recordIn, type Written } from './record';
+import { changeAll, type Link } from './changes';
+import { recordIn, type DeploymentRecord, type Written } from './record';
 
 /** A file the game gets: its path in the mod, `/`-separated, and the copy that wins it. */
 export interface FileTheGameGets {
@@ -28,22 +29,15 @@ export interface Deployed {
 
 export interface Deployment {
   /** `files` in the order their winners win: of two that land at one path, the earlier wins it.
-   *  Throws, writing nothing, when it cannot deploy, and says why. */
+   *  When it cannot deploy, it throws why, and has written nothing or names what it left changed. */
   deploy(folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed>;
 }
 
-interface Link extends Written {
-  readonly source: string;
-}
-
-const isDotName = (name: string): boolean => name.startsWith('.');
-
 // A mod's Root folder holds what the game reads from beside its program; the rest is Data's.
 function deployedPath(relativePath: string): string | undefined {
-  const names = relativePath.split('/');
-  const [first, ...below] = names;
-  if (names.some(isDotName)) return undefined;
-  if (first === undefined || below.length === 0) return `Data/${relativePath}`;
+  const [first = '', ...below] = relativePath.split('/');
+  if (first.startsWith('.')) return undefined;
+  if (below.length === 0) return `Data/${relativePath}`;
   if (fold(first) === 'source') return undefined;
   return fold(first) === 'root' ? below.join('/') : `Data/${relativePath}`;
 }
@@ -75,7 +69,7 @@ async function volumeIdOf(folder: string): Promise<bigint> {
 }
 
 // A hardlink cannot cross volumes.
-async function wantedIn(folder: string, files: Iterable<FileTheGameGets>): Promise<{ wanted: Map<string, Link>; lost: Lost[] }> {
+async function linksOnTheFolderVolume(folder: string, files: Iterable<FileTheGameGets>): Promise<{ wanted: Map<string, Link>; lost: Lost[] }> {
   const volume = await volumeIdOf(folder);
   const wanted = new Map<string, Link>();
   const lost: Lost[] = [];
@@ -137,14 +131,8 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
 
 const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
 
-async function linkAt(folder: string, { path, source }: Link): Promise<void> {
-  const at = join(folder, path);
-  await mkdir(dirname(at), { recursive: true });
-  await link(source, at);
-}
-
-async function deployTo(record: ReturnType<typeof recordIn>, folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed> {
-  const { wanted, lost } = await wantedIn(folder, files);
+async function deployTo(record: DeploymentRecord, folder: string, files: Iterable<FileTheGameGets>): Promise<Deployed> {
+  const { wanted, lost } = await linksOnTheFolderVolume(folder, files);
   const written = await record.of(folder);
   const owned = await stillWritten(folder, written);
   const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
@@ -153,11 +141,7 @@ async function deployTo(record: ReturnType<typeof recordIn>, folder: string, fil
     if (after.length !== written.length) await record.write(folder, after);
     return { wrote: false, leftOut, lost };
   }
-  // Written first, so a deploy cut short still owns every file it may have linked.
-  await record.write(folder, [...owned.values(), ...relinks, ...links].map(asWritten));
-  for (const { path } of [...removals, ...relinks]) await unlink(join(folder, path));
-  for (const each of [...relinks, ...links]) await linkAt(folder, each);
-  await record.write(folder, after);
+  await changeAll(folder, { removals, relinks, links }, () => record.write(folder, after));
   return { wrote: true, leftOut, lost };
 }
 

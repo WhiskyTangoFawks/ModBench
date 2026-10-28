@@ -2,7 +2,7 @@
 // there. A file at that path that is still that file is deploy's; any other is the user's (ADR-0025).
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { errnoCode } from '../ports/errno';
 
 /** A file deploy linked: its path below the deployment folder, `/`-separated, and its file ID. */
@@ -34,14 +34,22 @@ async function readRecord(file: string): Promise<ByFolder> {
   }
 }
 
+export interface DeploymentRecord {
+  of(folder: string): Promise<readonly Written[]>;
+  write(folder: string, written: readonly Written[]): Promise<void>;
+}
+
+// Windows matches a path without case.
+const keyOf = (folder: string): string => (process.platform === 'win32' ? resolve(folder).toLowerCase() : resolve(folder));
+
 /** The record of every deployment folder of one instance, kept in one file. */
-export function recordIn(file: string) {
+export function recordIn(file: string): DeploymentRecord {
   return {
-    async of(folder: string): Promise<readonly Written[]> {
-      return (await readRecord(file))[folder] ?? [];
+    async of(folder) {
+      return (await readRecord(file))[keyOf(folder)] ?? [];
     },
-    async write(folder: string, written: readonly Written[]): Promise<void> {
-      const record = { ...(await readRecord(file)), [folder]: written };
+    async write(folder, written) {
+      const record = { ...(await readRecord(file)), [keyOf(folder)]: written };
       await mkdir(dirname(file), { recursive: true });
       const temp = `${file}.tmp`;
       await writeFile(temp, JSON.stringify(record));
