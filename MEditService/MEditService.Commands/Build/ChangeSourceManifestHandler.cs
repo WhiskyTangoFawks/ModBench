@@ -3,8 +3,7 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A change to a source mod's manifest: the output folder's new name, and the paths in the mod folder to exclude
-/// from its build or include again. <paramref name="ExclusionMark"/> is the mod manager's, which names the excluded files
-/// the lines of the manifest name.</summary>
+/// from its build or include again, under the mod manager's <paramref name="ExclusionMark"/>.</summary>
 public sealed record SourceManifestChange(string? Output, IReadOnlyList<string> Exclude, IReadOnlyList<string> Include, string? ExclusionMark = null);
 
 /// <summary>The manifest's half of rename and of exclude or include, written uncommitted in the mod's repository, so the
