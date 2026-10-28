@@ -13,14 +13,13 @@ export interface FileTheGameGets {
   readonly winner: string;
 }
 
-/** A file the game gets that deploy left out, as an earlier one lands at its path below the folder. */
 interface Lost {
   readonly path: string;
   readonly winner: string;
 }
 
-/** `wrote` is false when the deployment folder already held the load order. `leftOut` names each
- *  path below the folder whose file deploy did not write, so deploy left its winner out. */
+/** `wrote` is false when the folder already held the load order. Deploy leaves out the winner at
+ *  each `leftOut` path, whose file it did not write, and each `lost` winner an earlier one beat to its path. */
 export interface Deployed {
   readonly wrote: boolean;
   readonly leftOut: readonly string[];
