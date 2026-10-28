@@ -42,7 +42,7 @@ function writing(folder: string, text: string, backup: Backup, stale: readonly s
   let ino = '';
   const step: Step = async () => {
     const created = await mkdir(folder, { recursive: true });
-    const temp = path + NEW + process.pid;
+    const temp = `${path}${NEW}${process.pid}`;
     let placed = false;
     const restore = async (): Promise<void> => {
       await unlinkedIfThere(temp);
