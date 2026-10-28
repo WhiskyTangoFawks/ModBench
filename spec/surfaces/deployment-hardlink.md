@@ -25,6 +25,7 @@ As a user, I want:
 5. No INI and no save of the profile's own. They are the mod manager's. Cites: ADR-0025
 6. No gesture to run the game. A VS Code task of mine runs it, and runs deploy first when I want it to. Cites: ADR-0025; Existing tools
 7. Deploy to ask nothing. This is an exception to Confirm what destroys: deploy removes only files it wrote, and writes each again when the load order holds it. Cites: commands.md, Confirm what destroys
+8. Deploy as a task, which fails on each warning that the game gets something the load order does not hold: a file left out because its path holds a file deploy did not write, a file left out because another file the game gets folds to its path, and no `plugins.txt` written. My chain then stops before the game starts. A file deploy renamed to remove, and could not then delete, does not fail it: the game reads no file by that name. Cites: commands.md, A task is an entry point for a chain; Never silently wrong
 
 ## plugins.txt
 

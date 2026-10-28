@@ -135,7 +135,7 @@ What I expect to need and choose not to build yet, each with why.
 7. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
 8. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
 9. Restore's refusals and skips in the Problems panel, on the manifest each comes from, as a build's failures are. The Output already names each one.
-10. Restore as a VS Code build task. Its menus already reach it.
+10. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
 
 ## Test seam
 
