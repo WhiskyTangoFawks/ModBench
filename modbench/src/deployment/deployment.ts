@@ -114,6 +114,7 @@ interface Plan {
   readonly relinks: readonly Link[];
   readonly removals: readonly Written[];
   readonly leftOut: readonly string[];
+  readonly adopted: number;
 }
 
 async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned: ReadonlyMap<string, Written>): Promise<Plan> {
@@ -122,18 +123,24 @@ async function planFor(folder: string, wanted: ReadonlyMap<string, Link>, owned:
   const links: Link[] = [];
   const relinks: Link[] = [];
   const leftOut: string[] = [];
+  let adopted = 0;
   for (const [key, want] of wanted) {
     const own = owned.get(key);
     if (own?.ino === want.ino) kept.push(own);
     else if (own !== undefined) relinks.push({ ...want, path: own.path });
     else {
       const path = await inFolder(want.path);
-      if (await fileIdAt(join(folder, path)) === undefined) links.push({ ...want, path });
-      else leftOut.push(path);
+      const id = await fileIdAt(join(folder, path));
+      if (id === undefined) links.push({ ...want, path });
+      else if (id === want.ino) {
+        // A killed deploy linked this file and never recorded it.
+        kept.push({ path, ino: id });
+        adopted++;
+      } else leftOut.push(path);
     }
   }
   const removals = [...owned].filter(([key]) => !wanted.has(key)).map(([, own]) => own);
-  return { kept, links, relinks, removals, leftOut };
+  return { kept, links, relinks, removals, leftOut, adopted };
 }
 
 const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
@@ -167,7 +174,7 @@ async function deployTo(
   const { wanted, lost } = await linksOnTheFolderVolume(folder, files);
   const recorded = await record.of(folder);
   const owned = await stillWritten(folder, recorded.files);
-  const { kept, links, relinks, removals, leftOut } = await planFor(folder, wanted, owned);
+  const { kept, links, relinks, removals, leftOut, adopted } = await planFor(folder, wanted, owned);
   const after = [...kept, ...relinks, ...links].map(asWritten);
   const part = await pluginsPartOf(place, plugins, recorded.pluginsTxt);
   const recordWith = (files: readonly Written[]): Promise<void> => {
@@ -175,7 +182,7 @@ async function deployTo(
     return record.write(folder, { files, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
   };
   if (links.length + relinks.length + removals.length === 0 && !part.steps.length) {
-    if (after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
+    if (adopted > 0 || after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
     return { wrote: false, leftOut, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
   }
   // The record keeps each file set aside, so the next deploy removes one this deploy could not.

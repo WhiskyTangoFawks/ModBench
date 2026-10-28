@@ -342,6 +342,45 @@ describe('a file a killed deploy set aside', () => {
   });
 });
 
+describe('a link a killed deploy made before it wrote the record', () => {
+  const at = () => join(folder, 'Data', 'a.esp');
+
+  it('is recorded as deploy\'s own when it is a new path, so a later deploy removes it', async () => {
+    const file = await modFile('Mod', 'a.esp');
+    await mkdir(dirname(at()), { recursive: true });
+    await link(file.winner, at());
+
+    const deployed = await deploy([file]);
+    await deploy([]);
+
+    expect([deployed.leftOut, deployed.wrote, await readdir(join(folder, 'Data'))]).toEqual([[], false, []]);
+  });
+
+  it('is recorded as deploy\'s own when it replaced a file deploy wrote', async () => {
+    await deploy([await modFile('Old', 'a.esp', 'old')]);
+    const next = await modFile('New', 'a.esp', 'new');
+    await rename(at(), join(folder, 'Data', 'a.esp.modbench_aside_99999'));
+    await link(next.winner, at());
+
+    const deployed = await deploy([next]);
+    await deploy([]);
+
+    expect([deployed.leftOut, await readdir(join(folder, 'Data'))]).toEqual([[], []]);
+  });
+
+  it('is the user\'s when it is a link to a file other than the one deploy would link there', async () => {
+    const file = await modFile('Mod', 'a.esp');
+    const other = await modFile('Other', 'a.esp', 'other');
+    await mkdir(dirname(at()), { recursive: true });
+    await link(other.winner, at());
+
+    const deployed = await deploy([file]);
+    await deploy([]);
+
+    expect([deployed.leftOut, await readFile(at(), 'utf8')]).toEqual([['Data/a.esp'], 'other']);
+  });
+});
+
 describe('a deploy refused', () => {
   it('names the deployment folder that does not exist', async () => {
     const missing = join(root, 'missing');
