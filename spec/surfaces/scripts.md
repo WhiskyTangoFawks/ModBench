@@ -8,7 +8,7 @@ Each story cites what decides it. A story that cites nothing is owned here.
 
 As a user, I want:
 
-1. To run a script from any terminal of my window, or with VS Code's Python Run and Debug, with `import medit` and nothing to install or set up. Cites: Existing tools; Minimal by default
+1. `import medit` to work with nothing to install or set up, wherever VS Code's Python tooling runs or reads a script in my window: any terminal, Run and Debug in any console, a notebook cell, and the editor. Cites: Existing tools; Minimal by default
 2. A script to reach my window's mEdit, so two windows on two instances never cross.
 3. No gesture to run a script, and no selection handed to one. A script selects its records by a query or takes them as arguments. Cites: xedit.md, Apply a script over the selection; Minimal by default
 
@@ -46,4 +46,4 @@ As a user, I want:
 - Each read, against mEdit over a fixture instance: what it returns and what it refuses.
 - Each write: mEdit writes it; given a refusal, it raises and nothing is written.
 - A query after a write returns the written rows.
-- A terminal of the window imports `medit` and reaches that window's mEdit.
+- A terminal, a debug launch and a notebook kernel of the window import `medit` and reach that window's mEdit.
