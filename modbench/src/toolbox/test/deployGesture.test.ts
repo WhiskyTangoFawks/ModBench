@@ -199,7 +199,7 @@ describe('Move to Overwrite', () => {
 describe('Purge', () => {
   const DEPLOYED: DeployResult = { applied: false, refusal: 'unused' };
 
-  it('purges under the Toolbox's progress, reads again, and says nothing', async () => {
+  it('purges under the Toolbox\'s progress, reads again, and says nothing', async () => {
     const { reporter, purge, runPurge } = deployAnswering(DEPLOYED, 1, NOT_MOVED, { applied: true, wrote: true, restored: '/local/plugins.txt', left: [], leftAside: [] });
 
     await runPurge();

@@ -174,7 +174,7 @@ describe('move to Overwrite', () => {
 });
 
 describe('purge', () => {
-  it('purges the workspace's deployment folder, and answers what it put back and left', async () => {
+  it('purges the workspace\'s deployment folder, and answers what it put back and left', async () => {
     const { deployment, purgedFrom } = deploymentAnswering(landed);
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).purge();
