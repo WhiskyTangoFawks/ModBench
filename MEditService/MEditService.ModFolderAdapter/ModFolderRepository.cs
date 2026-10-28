@@ -58,7 +58,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             // A folder its build has not made yet lacks every file its manifest names.
             var there = Directory.Exists(modFolder);
             var cache = new StatCache(statCache, modFolder, time);
-            var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
+            var onDisk = there ? FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal) : [];
             List<string> differing = [], gone = [], notInPackage = [], otherBytes = [];
             var packed = manifest.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var line in manifest.Files.Where(line => !packed.Contains(line.Path)))
@@ -69,7 +69,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
                 if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
                 else if (fixedBy is { } fixes && !HoldsWhatItIsFixedBy(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
             }
-            var namedByNoLine = NamedByNoLine(modFolder, modName, manifest, leftOut);
+            var namedByNoLine = there ? NamedByNoLine(modFolder, modName, manifest, leftOut) : [];
             var statCacheNotWritten = there ? cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]) : null;
             var says = ModMetadata.Of(manifest);
             return new(
@@ -110,11 +110,9 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     }
 
     private IEnumerable<string> FilesOf(string modFolder, string modName) =>
-        !Directory.Exists(modFolder)
-            ? []
-            : new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
-                .Select(file => PathIn(modFolder, file.FullName))
-                .Where(path => path != ManifestName.Of(modName) && !TempName.HoldsTemp(path));
+        new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
+            .Select(file => PathIn(modFolder, file.FullName))
+            .Where(path => path != ManifestName.Of(modName) && !TempName.HoldsTemp(path));
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 

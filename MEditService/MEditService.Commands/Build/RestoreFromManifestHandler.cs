@@ -155,8 +155,17 @@ public sealed class RestoreFromManifestHandler
     private string? VersionIn(string sourceFolder) =>
         _repository.ReadSourceManifest(sourceFolder).Holds(out var manifest, out _) ? manifest?.Version : null;
 
-    private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
-        _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+    private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance)
+    {
+        try
+        {
+            return _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
+    }
 
     private static ItemAnswer<RestoreSkip, ModRestored> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
