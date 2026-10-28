@@ -85,9 +85,21 @@ public abstract record ManifestPackage
     /// submodule's remote, pin and branch; a repository that is no submodule has no host (ADR-0022).</summary>
     public sealed record SourceRepository(string Name, bool IsSubmodule) : ManifestPackage;
 
-    /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0022).</summary>
-    public sealed record GameFolder(string Name, string Hash) : ManifestPackage;
+    /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0022), with the
+    /// store depots that hold the game's files.</summary>
+    public sealed record GameFolder(string Name, string Hash, IReadOnlyList<GameDepot>? Depots = null) : ManifestPackage
+    {
+        public IReadOnlyList<GameDepot> Depots { get; init; } = Depots ?? [];
+
+        public bool Equals(GameFolder? other) => other is not null && Name == other.Name && Hash == other.Hash && Depots.SequenceEqual(other.Depots);
+
+        public override int GetHashCode() => HashCode.Combine(Name, Hash, Depots.Count);
+    }
 }
+
+/// <summary>A depot of the game's store by its id, and the ID the store gives the version of it that holds the files, such as
+/// Steam's manifest ID.</summary>
+public sealed record GameDepot(string Id, string Version);
 
 /// <summary>Where a manifest line's bytes are.</summary>
 public abstract record FileBytes

@@ -496,6 +496,21 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AGameFolderMod_WhoseGameFilesTheRequestDidNotHand_NamesTheDepotsAndVersionsItsManifestPins()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        _folders.Manifests[Mod] = new Manifest(
+            [new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile("a.nif", "a")]), [new GameDepot("377161", "11"), new GameDepot("377162", "22")])],
+            [Line("a.nif", new PackageEntry.Held())]);
+
+        var refused = Assert.Single((await Restore(ModFrom(Mod))).Refused);
+
+        Assert.Equal(
+            "was skipped: game file 'a.nif' is missing; the game folder 'Fallout 4' is depot 377161 at version 11 and depot 377162 at version 22.", refused.Message);
+        Assert.Equal(RestoreRefusal.NotFound, refused.Refusal);
+    }
+
+    [Fact]
     public async Task AGameFolderMod_WhoseGameFilesTheRequestCouldNotRead_IsSkippedNamingEachAsUnreadable_NeverMissing()
     {
         _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.dds", "b");

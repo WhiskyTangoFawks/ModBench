@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
@@ -12,14 +13,17 @@ public sealed record ModToUpdate(
 /// Instance adapter knows it (ADR-0013).</summary>
 public sealed record GameFile(string Path, string Hash);
 
-/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files a mod's files may be.</summary>
-public sealed record GameFolderPlace(string DataFolder, IReadOnlyList<GameFile> Files);
+/// <summary>Another Data folder holding the same game, such as the Steam install, with the game files a mod's files may be, and
+/// the store depots it records as installed.</summary>
+public sealed record GameFolderPlace(string DataFolder, IReadOnlyList<GameFile> Files, IReadOnlyList<GameDepot>? Depots = null);
 
 /// <summary>The game folder as the Instance adapter hands it. Elsewhere: the game's other places, tried in order
-/// when this one lacks a mod's pinned bytes.</summary>
-public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<GameFile> Files, IReadOnlyList<GameFolderPlace>? Elsewhere = null)
+/// when this one lacks a mod's pinned bytes. Depots: the store depots this one records as installed, when it is the store's install.</summary>
+public sealed record GameFolder(
+    string Name, string DataFolder, IReadOnlyList<GameFile> Files, IReadOnlyList<GameFolderPlace>? Elsewhere = null, IReadOnlyList<GameDepot>? Depots = null)
 {
-    internal IEnumerable<GameFolder> Places() => [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files))];
+    internal IEnumerable<GameFolder> Places() =>
+        [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files, Depots: place.Depots))];
 }
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder and the downloaded files already hashed.</summary>

@@ -14,7 +14,7 @@ internal sealed class ManifestBuilder
     {
         _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
         _others = [.. downloadedFiles.Where(other => other.Package.Name != _own?.Package.Name)];
-        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true))];
+        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true, place.Depots))];
     }
 
     /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make, kept as written
@@ -25,11 +25,18 @@ internal sealed class ManifestBuilder
         var recorded = Recorded([.. files.Where(file => !madeByStep.Contains(file.Path))], version);
         return (held ?? recorded) with
         {
-            Packages = recorded.Packages,
+            Packages = [.. recorded.Packages.Select(package => KeepingDepots(package, held))],
             Version = recorded.Version,
             Files = [.. recorded.Files, .. madeByStep.Select(path => new ManifestFile(path, new PackageEntry.MadeByStep()))],
         };
     }
+
+    // The game folder the mod takes from may record no depots, as a copy of the game does, and the manifest's own stay.
+    private static ManifestPackage KeepingDepots(ManifestPackage package, Manifest? held) =>
+        package is ManifestPackage.GameFolder { Depots.Count: 0 } recorded
+        && held?.Packages.OfType<ManifestPackage.GameFolder>().FirstOrDefault(named => named.Name == recorded.Name) is { } kept
+            ? recorded with { Depots = kept.Depots }
+            : package;
 
     // The version rides the first package, so a mod with no package has none.
     private Manifest Recorded(IReadOnlyList<HashedFile> files, string? version)
@@ -48,7 +55,7 @@ internal sealed class ManifestBuilder
         var wanting = sourcing.Unsourced(ordered);
         if (_places.MaxBy(place => wanting.Count(file => place.PathHolding(file) is not null)) is not { } place) return;
         var taken = sourcing.Take(place, wanting);
-        if (taken.Count > 0) sourcing.Packages.Add((place, new ManifestPackage.GameFolder(place.Name, FileHash.OfFilesTaken(taken))));
+        if (taken.Count > 0) sourcing.Packages.Add((place, new ManifestPackage.GameFolder(place.Name, FileHash.OfFilesTaken(taken), place.Depots)));
     }
 
     private void TakeFromOtherDownloadedFiles(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)

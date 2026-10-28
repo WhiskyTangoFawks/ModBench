@@ -1414,6 +1414,10 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        GameDepotRequest: {
+            id: string;
+            version: string;
+        };
         GameFileRequest: {
             path: string;
             hash: string;
@@ -1421,12 +1425,14 @@ export interface components {
         GameFolderPlaceRequest: {
             dataFolder: string;
             files: components["schemas"]["GameFileRequest"][];
+            depots?: components["schemas"]["GameDepotRequest"][] | null;
         };
         GameFolderRequest: {
             name: string;
             dataFolder: string;
             files: components["schemas"]["GameFileRequest"][];
             elsewhere?: components["schemas"]["GameFolderPlaceRequest"][] | null;
+            depots?: components["schemas"]["GameDepotRequest"][] | null;
         };
         GridPosition: {
             /** Format: int32 */

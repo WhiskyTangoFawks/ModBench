@@ -121,11 +121,11 @@ internal static class ManifestText
     {
         try
         {
-            Known(line, $"its manifest's package {index + 1}", "installationFile", "size", "hash", "page", "gameFolder", "submodule", "repository", "version");
+            Known(line, $"its manifest's package {index + 1}", "installationFile", "size", "hash", "page", "gameFolder", "depots", "submodule", "repository", "version");
             var version = line.TryGetProperty("version", out var held) ? Text(held) : null;
             if (version is not null && index > 0) throw new InvalidDataException($"its manifest's package {index + 1} holds a version, which belongs to the first package");
             if (line.TryGetProperty("installationFile", out _)) return (InstallationFileIn(line), version);
-            if (line.TryGetProperty("gameFolder", out var game)) return (new ManifestPackage.GameFolder(Text(game), Text(line.GetProperty("hash"))), version);
+            if (line.TryGetProperty("gameFolder", out var game)) return (new ManifestPackage.GameFolder(Text(game), Text(line.GetProperty("hash")), DepotsIn(line)), version);
             if (line.TryGetProperty("submodule", out var submodule)) return (new ManifestPackage.SourceRepository(Text(submodule), IsSubmodule: true), version);
             return (new ManifestPackage.SourceRepository(Text(line.GetProperty("repository")), IsSubmodule: false), version);
         }
@@ -134,6 +134,9 @@ internal static class ManifestText
             throw new InvalidDataException($"its manifest cannot be read at its package {index + 1}", e);
         }
     }
+
+    private static List<GameDepot> DepotsIn(JsonElement line) =>
+        line.TryGetProperty("depots", out var depots) ? [.. depots.EnumerateObject().Select(depot => new GameDepot(depot.Name, Text(depot.Value)))] : [];
 
     private static ManifestPackage.InstallationFile InstallationFileIn(JsonElement line) =>
         new(Text(line.GetProperty("installationFile")), line.GetProperty("size").GetInt64(), Text(line.GetProperty("hash")),
@@ -226,6 +229,12 @@ internal static class ManifestText
             case ManifestPackage.GameFolder gameFolder:
                 writer.WriteString("gameFolder", gameFolder.Name);
                 writer.WriteString("hash", gameFolder.Hash);
+                if (gameFolder.Depots.Count > 0)
+                {
+                    writer.WriteStartObject("depots");
+                    foreach (var depot in gameFolder.Depots.OrderBy(depot => depot.Id, StringComparer.Ordinal)) writer.WriteString(depot.Id, depot.Version);
+                    writer.WriteEndObject();
+                }
                 break;
             case ManifestPackage.SourceRepository repository:
                 writer.WriteString(repository.IsSubmodule ? "submodule" : "repository", repository.Name);
