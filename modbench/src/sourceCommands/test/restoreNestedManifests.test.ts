@@ -40,7 +40,7 @@ async function instanceWithANestedPair() {
 }
 
 const sentNames = (client: InMemoryMEditClient, method: 'restoreFromManifest' | 'updateManifest'): string[][] =>
-  client.calls.filter((call) => call.method === method).map((call) => (call.args[0] as { name: string }[]).map(({ name }) => name));
+  client.calls.filter((call) => call.method === method).map((call) => (Array.isArray(call.args[0]) ? call.args[0] : []).map((mod: { name: string }) => mod.name));
 
 describe('manifests outside mods/ over an instance on disk, one nested in the folder of another', () => {
   const NESTED = [
