@@ -478,19 +478,12 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect(client.calls).toEqual([{
-      method: 'restoreFromManifest',
-      args: [
-        [
-          { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
-          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
-        ],
-        { statCache: '/instance/stat-cache', exclusionMark: fakeInstanceAdapter().adapter.exclusionMark, archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER, asksWhatItLacks: true,
-          tasks: ['Zip'],
-        },
-        { onProgress: expect.any(Function) as unknown, signal: undefined },
-      ],
-    }]);
+    const facts = { statCache: '/instance/stat-cache', exclusionMark: fakeInstanceAdapter().adapter.exclusionMark, archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER, asksWhatItLacks: true, tasks: ['Zip'] };
+    const options = { onProgress: expect.any(Function) as unknown, signal: undefined };
+    expect(client.calls).toEqual([
+      { method: 'restoreFromManifest', args: [[{ name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] }], facts, options] },
+      { method: 'restoreFromManifest', args: [[{ name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' }], facts, options] },
+    ]);
   });
 
   it('sends a mod skipped for game files the call did not hand again, with the game files of those paths, and answers both sends as one', async () => {
@@ -877,19 +870,52 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   describe('in mod order', () => {
-    const winningFirst = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
+    const winningFirst = ['ModA', 'ModB', 'ModC'].map((name) => ({ kind: 'mod', name, enabled: true }) as const);
+    const steps = [{ task: 'Zip', args: [] }];
 
-    it('hands mEdit the mods from the losing end of mod order, the winning mod last, and runs their steps in that order', async () => {
+    function restoring(sources: Record<string, string>) {
+      const log: string[] = [];
       const tasks = recordingTasks(['Zip']);
-      const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf(), mods: [...winningFirst] }, { tasks });
-      const steps = [{ task: 'Zip', args: [] }];
-      client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', steps }), restoredMod({ mod: 'ModB', steps })], refused: [], notFound: [] });
+      const logging = { ...tasks, whyStepsFailed: (ran: typeof steps, folder: string) => { log.push(`steps ${folder}`); return tasks.whyStepsFailed(ran, folder); } };
+      const wired = commandsOver({}, new InMemoryMEditClient(), {}, { ...readingOf(sources), mods: [...winningFirst] }, { tasks: logging });
+      wired.client.setCommandHandler('restoreFromManifest', (mods) => {
+        const names = sentNamesOf(mods);
+        log.push(`restore ${names.join('+')}`);
+        return Promise.resolve({ landed: names.map((mod) => restoredMod({ mod, steps })), refused: [], notFound: [] });
+      });
+      return { ...wired, log };
+    }
+
+    it('restores each source mod whole, its steps run, before it hands mEdit the next, from the losing end of mod order', async () => {
+      const { commands, log } = restoring({ ModA: '/source/ModA', ModB: '/source/ModB' });
 
       const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-      expect(sentNamesOf(client.calls[0]?.args[0])).toEqual(['ModB', 'ModA']);
-      expect(tasks.runs.map(({ folder }) => folder)).toEqual(['/mods/ModB', '/mods/ModA']);
-      expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+      expect(log).toEqual(['restore ModB', 'steps /mods/ModB', 'restore ModA', 'steps /mods/ModA']);
+      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
+    });
+
+    it('restores the run of mods that are not source mods between two source mods in one send, in mod order', async () => {
+      const { commands, log } = restoring({ ModA: '/source/ModA', ModC: '/source/ModC' });
+
+      await commands.restoreFromManifest(['ModA', 'ModB', 'ModC']);
+
+      expect(log).toEqual(['restore ModC', 'steps /mods/ModC', 'restore ModB', 'steps /mods/ModB', 'restore ModA', 'steps /mods/ModA']);
+    });
+
+    it('reports the mods that restored when a later send fails, and names the mods it did not finish', async () => {
+      const { commands, client } = restoring({ ModA: '/source/ModA', ModB: '/source/ModB' });
+      let sends = 0;
+      client.setCommandHandler('restoreFromManifest', (mods) => {
+        sends += 1;
+        return Promise.resolve(sends === 1
+          ? { landed: [restoredMod({ mod: sentNamesOf(mods)[0] ?? '' })], refused: [], notFound: [] }
+          : { refused: true as const, message: 'mEdit stopped' });
+      });
+
+      const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
+
+      expect(outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: expect.stringContaining('mEdit stopped') }] });
     });
   });
 

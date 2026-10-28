@@ -130,6 +130,16 @@ describe('sourceCommands build, in mod order', () => {
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
   });
 
+  it('reports the mods that built when mEdit refuses a later mod, and refuses that mod and the rest, naming why', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', (mods: readonly BuildMod[]) =>
+      Promise.resolve(mods[0]?.name === 'ModB' ? { landed: [builtOf('ModB')], refused: [] } : { refused: true as const, message: 'mEdit stopped' }));
+
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+
+    expect(outcome).toEqual({ landed: [builtOf('ModB')], refused: [{ item: 'ModA', reason: 'was not built: mEdit stopped' }] });
+  });
+
   it('runs a mod\'s steps and has its manifest written before the next mod builds', async () => {
     const steps: ManifestStep[] = [{ task: 'Patch', args: [] }];
     const log: string[] = [];

@@ -255,6 +255,32 @@ const leftDetachedBy = (landed: Restored, sourceMods: SourceMods, cloned: Cloned
     return why === undefined || mod.leftDetached ? mod : { ...mod, leftDetached: why };
   });
 
+// mods.md, Build, story 12: a source mod is built whole, its steps included, before the next mod in mod order. The mods
+// that are not source mods are only written from their packages, so a run of them between source mods is one send.
+function chunksOf(mods: readonly string[], isSource: (mod: string) => boolean): string[][] {
+  const chunks: string[][] = [];
+  for (const mod of mods) {
+    const last = chunks.at(-1);
+    if (last !== undefined && !isSource(mod) && !isSource(last[0] ?? mod)) last.push(mod);
+    else chunks.push([mod]);
+  }
+  return chunks;
+}
+
+async function restoreChunk(
+  deps: ModlistRepositoryCommandsDeps, chunk: readonly string[], rank: (mod: string) => number, sourceMods: SourceMods, cloned: Cloned,
+  options: ModlistCallOptions<RestoreStatus>,
+) {
+  const restored = await restoreFolders(deps, chunk, sourceMods, options);
+  const landed = [...restored.landed].sort((a, b) => rank(a.mod) - rank(b.mod));
+  const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(landed, sourceMods, cloned));
+  const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
+  return { restored, finished: stepped.finished, unfinished: [...trashed.unfinished, ...stepped.unfinished] };
+}
+
+const notFinishedAfter = (why: string) => (item: string): ItemRefusal<string> =>
+  ({ item, reason: `was not finished: ${why.replace(/\.$/, '')}. Restoring it again finishes it.` });
+
 async function restoreFromManifest(
   deps: ModlistRepositoryCommandsDeps, asked: readonly string[], options: ModlistCallOptions<RestoreStatus>, everyManifest: boolean,
 ): Promise<RestoreResult> {
@@ -262,23 +288,36 @@ async function restoreFromManifest(
   const cloned = await submodulesCloned(deps, options.onProgress);
   const sourceMods = await deps.adapter.sourceMods();
   const mods = await inModOrder(deps.adapter, everyManifest ? withEverySourceMod(asked, sourceMods) : asked);
-  const restored = await restoreFolders(deps, mods, sourceMods, options);
-  const landedInOrder = (await inModOrder(deps.adapter, restored.landed.map(({ mod }) => mod)))
-    .flatMap((name) => restored.landed.filter(({ mod }) => mod === name));
-  const trashed = await withFilesNoLineNamesTrashed(deps, leftDetachedBy(landedInOrder, sourceMods, cloned));
-  const stepped = await withRestoredStepsRun(deps, trashed.finished, options.signal);
-  const finished = stepped.finished;
-  const unfinished = [...trashed.unfinished, ...stepped.unfinished];
-  if (restored.applied) {
-    const refused = [...cloned.refused, ...restored.refused, ...unfinished];
-    const pushRefusalNotWritten = await pushRefusalWrittenOrWhy(deps.adapter);
-    return {
-      ...restored, landed: finished, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, restored)] : refused,
-      ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
-      ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),
-    };
+  const place = new Map(mods.map((mod, at) => [mod, at]));
+  const rank = (mod: string): number => place.get(mod) ?? 0;
+  const chunks = chunksOf(mods, (mod) => sourceMods.folderOf(mod) !== undefined);
+
+  const landed: Restored[number][] = [];
+  const refused: ItemRefusal<string>[] = [...cloned.refused];
+  let cancelRefusal: string | undefined;
+  for (const [at, chunk] of chunks.entries()) {
+    if (options.signal?.aborted) break;
+    const { restored, finished, unfinished } = await restoreChunk(deps, chunk, rank, sourceMods, cloned, options);
+    landed.push(...finished);
+    if (restored.applied) {
+      refused.push(...restored.refused, ...unfinished);
+      cancelRefusal = restored.cancelRefusal ?? cancelRefusal;
+      continue;
+    }
+    const later = chunks.slice(at + 1).flat();
+    const unfinishedNames = [...restored.unfinished, ...unfinished.map(({ item }) => item), ...later];
+    if (at === 0) return { applied: false, refusal: restored.refusal, unfinished: unfinishedNames };
+    refused.push(...unfinished, ...[...restored.unfinished, ...later].map(notFinishedAfter(restored.refusal)));
+    break;
   }
-  return { applied: false, refusal: restored.refusal, unfinished: [...restored.unfinished, ...unfinished.map(({ item }) => item)] };
+  const pushRefusalNotWritten = await pushRefusalWrittenOrWhy(deps.adapter);
+  const answered = { landed, refused };
+  return {
+    applied: true, landed, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, answered)] : refused,
+    ...(cancelRefusal === undefined ? {} : { cancelRefusal }),
+    ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
+    ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),
+  };
 }
 
 // modlist-repository.md, The repository, story 6: a hook does not travel with a clone, so restore writes it as git init does.
@@ -302,7 +341,7 @@ async function pathTokensWrittenOrWhy(adapter: Adapter): Promise<string | undefi
 }
 
 // modlist-repository.md, Restore from manifest, story 6: an interrupted restore names each mod it did not finish.
-function cancelledBefore(mods: readonly string[], { landed, refused }: Extract<RestoreResult, { applied: true }>): ItemRefusal<string>[] {
+function cancelledBefore(mods: readonly string[], { landed, refused }: Pick<Extract<RestoreResult, { applied: true }>, 'landed' | 'refused'>): ItemRefusal<string>[] {
   const answered = new Set([...landed.map(({ mod }) => mod), ...refused.map(({ item }) => item)]);
   return mods.filter((mod) => !answered.has(mod))
     .map((mod) => ({ item: mod, reason: 'was not finished: the restore was cancelled. Restoring it again finishes it.' }));

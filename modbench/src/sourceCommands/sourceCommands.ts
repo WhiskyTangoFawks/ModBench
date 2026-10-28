@@ -75,6 +75,13 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     return { landed: [...outcome.landed, ...second.landed], refused: [...outcome.refused.filter((refused) => !asking.includes(refused)), ...second.refused] };
   };
 
+  const builtWhole = async (mod: BuildMod, facts: BuildFacts): Promise<BuildOutcome | WriteRefused> => {
+    const first = await client.build([mod], facts);
+    if (isRefused(first)) return first;
+    const outcome = await withInstallationFiles(first, [mod], facts);
+    return isRefused(outcome) ? outcome : { ...outcome, landed: await withManifestsOnceStepsRan(outcome.landed, [mod], facts) };
+  };
+
   return {
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder or metadata
      *  the Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest with the release's archive variants. */
@@ -86,14 +93,17 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       };
       const landed: BuildOutcome['landed'][number][] = [];
       const refused: ItemRefusal<string>[] = [];
-      for (const mod of await inModOrder(adapter, mods)) {
+      const ordered = await inModOrder(adapter, mods);
+      for (const [at, mod] of ordered.entries()) {
         const decided = await buildMod(mod, sourceMods.folderOf(mod));
         if ('reason' in decided) { refused.push(decided); continue; }
-        const first = await client.build([decided], facts);
-        if (isRefused(first)) return first;
-        const outcome = await withInstallationFiles(first, [decided], facts);
-        if (isRefused(outcome)) return outcome;
-        landed.push(...await withManifestsOnceStepsRan(outcome.landed, [decided], facts));
+        const outcome = await builtWhole(decided, facts);
+        if (isRefused(outcome)) {
+          if (landed.length === 0 && refused.length === 0) return outcome;
+          refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${outcome.message}` })));
+          break;
+        }
+        landed.push(...outcome.landed);
         refused.push(...outcome.refused);
       }
       return { landed, refused };
