@@ -3,16 +3,17 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
-import type { BuildMod, LoadOrderProgress } from '../../client';
+import type { BuildMod } from '../../client';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 
 const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
 const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [] });
 const savedAll = () => Promise.resolve([]);
 
-const statusHolding = (...indexed: readonly { name: string; origin: string }[]): LoadOrderProgress =>
-  ({ state: 'Ready', totalPlugins: indexed.length, activePlugins: indexed.length, indexedPlugins: [...indexed], conflictsComputed: true, failures: [], version: 1 });
-const hear = (client: InMemoryMEditClient, status: LoadOrderProgress): void => { client.emit({ kind: 'load-order-status', loadOrderStatus: status }); };
+const hear = (client: InMemoryMEditClient, ...indexed: readonly { name: string; origin: string }[]): void => {
+  client.emit(loadOrderStatusEventFixture({ indexedPlugins: [...indexed] }));
+};
 
 const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const client = new InMemoryMEditClient();
@@ -33,7 +34,7 @@ describe('sourceCommands build, between mods', () => {
     const outcome = built();
     await pause();
     expect(builtMods(client)).toEqual(['ModB']);
-    hear(client, statusHolding({ name: 'B.esp', origin: 'ModB' }));
+    hear(client, { name: 'B.esp', origin: 'ModB' });
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
     expect(builtMods(client)).toEqual(['ModB', 'ModA']);
@@ -41,7 +42,7 @@ describe('sourceCommands build, between mods', () => {
 
   it('builds the next mod at once when the record index already holds the plugins, and when the built mod gives none', async () => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
-    hear(client, statusHolding({ name: 'B.esp', origin: 'ModB' }));
+    hear(client, { name: 'B.esp', origin: 'ModB' });
     expect(await built()).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
 
     const none = buildingModBThenModA(pluginFilesHeld());
@@ -50,7 +51,7 @@ describe('sourceCommands build, between mods', () => {
 
   it('does not take another origin\'s plugin of the same filename for the built mod\'s', async () => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
-    hear(client, statusHolding({ name: 'B.esp', origin: 'ModA' }));
+    hear(client, { name: 'B.esp', origin: 'ModA' });
 
     const outcome = await built(20);
 

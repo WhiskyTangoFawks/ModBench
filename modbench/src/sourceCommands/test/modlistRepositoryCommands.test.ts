@@ -11,6 +11,7 @@ import { archiveVariants } from '../sourceCommands';
 import type { HostGit } from '../../ports/repository';
 import { hostGitFailingToActivate, hostGitRecordingInits } from './hostGitDouble';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { restoredMod } from '../../test/restoredMod';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
 import type { Nexus } from '../../nexus/nexus';
@@ -938,10 +939,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       const outcome = commands.restoreFromManifest(['ModA', 'ModB']);
       await new Promise((resolve) => { setTimeout(resolve, 10); });
       expect(sent).toEqual(['ModB']);
-      client.emit({
-        kind: 'load-order-status',
-        loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }], conflictsComputed: true, failures: [], version: 1 },
-      });
+      client.emit(loadOrderStatusEventFixture({ indexedPlugins: [{ name: 'B.esp', origin: 'ModB' }] }));
 
       expect(await outcome).toMatchObject({ applied: true, landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
     });
