@@ -23,10 +23,9 @@ export interface PluginOrder {
   readonly entries: readonly PluginEntry[];
 }
 
-// `renamedTo` names the file deploy found where the game reads plugins.txt and renamed.
+// `renamed` names each file deploy found where the game reads plugins.txt and renamed, one a killed deploy renamed included.
 type PluginsTxtDeployed =
-  | { readonly kind: 'written'; readonly renamedTo?: string }
-  | { readonly kind: 'unchanged' }
+  | { readonly kind: 'written' | 'unchanged'; readonly renamed: readonly string[] }
   | { readonly kind: 'notWritten'; readonly why: string };
 
 interface Lost {
@@ -141,11 +140,8 @@ const asWritten = ({ path, ino }: Written): Written => ({ path, ino });
 
 interface PluginsPart {
   readonly steps: Step[];
-  /** Whether deploy has plugins.txt to write, or to record. */
-  readonly changes: boolean;
-  /** What the record holds of plugins.txt once the deploy lands. */
+  readonly recordChanged: boolean;
   recordAfter(): WrittenPluginsTxt | undefined;
-  /** Removes what plugins.txt kept for the deploy to undo itself. */
   settle(): Promise<string[]>;
   deployed(): PluginsTxtDeployed;
 }
@@ -153,14 +149,16 @@ interface PluginsPart {
 async function pluginsPartOf(place: PluginsTxtPlace, { release, entries }: PluginOrder, previous: WrittenPluginsTxt | undefined): Promise<PluginsPart> {
   const where = place(release);
   if ('why' in where) {
-    return { steps: [], changes: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
+    return { steps: [], recordChanged: false, recordAfter: () => previous, settle: () => Promise.resolve([]), deployed: () => ({ kind: 'notWritten', why: where.why }) };
   }
   const change = await pluginsTxtChange(where.folder, pluginsTextOf(entries), previous);
-  if (change.kind === 'unchanged') {
-    return { steps: [], changes: change.adopted !== undefined, recordAfter: () => change.adopted ?? previous, settle: () => change.settle(), deployed: () => ({ kind: 'unchanged' }) };
-  }
-  const renamedTo = (): PluginsTxtDeployed => ({ kind: 'written', ...(change.renamedTo() === undefined ? {} : { renamedTo: change.renamedTo() }) });
-  return { steps: [change.step], changes: true, recordAfter: () => change.written(), settle: () => change.settle(), deployed: renamedTo };
+  return {
+    steps: change.step === undefined ? [] : [change.step],
+    recordChanged: change.recordChanged,
+    recordAfter: () => change.written(),
+    settle: () => change.settle(),
+    deployed: () => ({ kind: change.step === undefined ? 'unchanged' : 'written', renamed: change.renamed() }),
+  };
 }
 
 async function deployTo(
@@ -177,7 +175,7 @@ async function deployTo(
     return record.write(folder, { files, ...(pluginsTxt === undefined ? {} : { pluginsTxt }) });
   };
   if (links.length + relinks.length + removals.length === 0 && !part.steps.length) {
-    if (after.length !== recorded.files.length || part.changes) await recordWith(after);
+    if (after.length !== recorded.files.length || part.recordChanged) await recordWith(after);
     return { wrote: false, leftOut, lost, leftAside: await part.settle(), pluginsTxt: part.deployed() };
   }
   // The record keeps each file set aside, so the next deploy removes one this deploy could not.

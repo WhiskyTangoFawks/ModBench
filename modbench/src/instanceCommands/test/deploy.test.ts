@@ -21,7 +21,7 @@ function deploymentAnswering(answer: () => Promise<Deployed>) {
   return { deployment, deployedTo };
 }
 
-const landed = (): Promise<Deployed> => Promise.resolve({ wrote: true, leftOut: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged' } });
+const landed = (): Promise<Deployed> => Promise.resolve({ wrote: true, leftOut: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } });
 
 describe('deploy', () => {
   it('deploys the load order to the workspace\'s deployment folder, and answers what deploy left out', async () => {
@@ -29,7 +29,7 @@ describe('deploy', () => {
 
     const result = await deployCommands({ deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
 
-    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged' } }, [['/deployed', FILES, { release: 'Fallout4', entries: [] }]]]);
+    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }, [['/deployed', FILES, { release: 'Fallout4', entries: [] }]]]);
   });
 
   it.each([

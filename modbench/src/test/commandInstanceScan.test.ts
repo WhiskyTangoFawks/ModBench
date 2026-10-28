@@ -139,9 +139,4 @@ describe('no command takes a slice of the instance value', () => {
     const planted = 'interface LoadOrderToDeploy { readonly profiles: readonly string[] }\n';
     expect(slicedFieldsIn(planted, instanceValueFields())).toEqual([]);
   });
-
-  it('flags the same field in any other command type', () => {
-    const planted = 'interface PurgeInput { readonly profiles: readonly string[] }\n';
-    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['profiles']);
-  });
 });

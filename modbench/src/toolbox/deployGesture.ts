@@ -30,8 +30,8 @@ export function registerDeployCommand({ commands, instance, reporter }: DeployGe
     if (result.pluginsTxt.kind === 'notWritten') {
       reporter.report('warning', 'Deploy wrote no plugins.txt:', result.pluginsTxt.why);
     }
-    if (result.pluginsTxt.kind === 'written' && result.pluginsTxt.renamedTo !== undefined) {
-      reporter.report('warning', 'Deploy renamed the plugins.txt it did not write, so the game reads the plugin order of this load order:', result.pluginsTxt.renamedTo);
+    if (result.pluginsTxt.kind !== 'notWritten' && result.pluginsTxt.renamed.length > 0) {
+      reporter.report('warning', 'Deploy renamed each plugins.txt it did not write, so the game reads the plugin order of this load order:', result.pluginsTxt.renamed.join(', '));
     }
     if (result.leftAside.length > 0) {
       reporter.report('warning', 'Deploy landed, and could not remove each file it set aside, which the next deploy removes:', result.leftAside.join(', '));

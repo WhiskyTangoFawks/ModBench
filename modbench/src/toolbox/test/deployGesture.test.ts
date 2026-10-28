@@ -24,7 +24,7 @@ import { present } from '../../ports/present';
 import type { DeployCommands, DeployResult } from '../../instanceCommands/deploy';
 
 const value = instanceValueFixture();
-const UNCHANGED = { kind: 'unchanged' } as const;
+const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 
 function deployAnswering(result: DeployResult, sequence = 1) {
   const reporter = recordingReporter();
@@ -116,14 +116,14 @@ describe('Deploy', () => {
 
   it('warns of the plugins.txt it renamed, naming its new name', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamedTo: 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed' },
+      applied: true, wrote: true, leftOut: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: ['C:\\Local\\Fallout4\\plugins.txt.modbench_renamed', 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2'] },
     });
 
     await run();
 
     expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Deploy renamed the plugins.txt it did not write, so the game reads the plugin order of this load order:',
-      detail: 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed',
+      severity: 'warning', message: 'Deploy renamed each plugins.txt it did not write, so the game reads the plugin order of this load order:',
+      detail: 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed, C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2',
     }]);
   });
 });

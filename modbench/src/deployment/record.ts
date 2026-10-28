@@ -11,11 +11,11 @@ export interface Written {
   readonly ino: string;
 }
 
-/** The `plugins.txt` deploy wrote: its absolute path and file ID, and where it renamed the file it found there. */
 export interface WrittenPluginsTxt {
   readonly path: string;
   readonly ino: string;
-  readonly renamedTo?: string;
+  /** Each file deploy found there and renamed, in order. */
+  readonly renamed: readonly string[];
 }
 
 interface Recorded {
@@ -28,9 +28,12 @@ type ByFolder = Partial<Record<string, Recorded>>;
 const isWritten = (entry: unknown): entry is Written =>
   typeof entry === 'object' && entry !== null && 'path' in entry && typeof entry.path === 'string' && 'ino' in entry && typeof entry.ino === 'string';
 
+const isWrittenPluginsTxt = (entry: unknown): entry is WrittenPluginsTxt =>
+  isWritten(entry) && 'renamed' in entry && Array.isArray(entry.renamed) && entry.renamed.every((name) => typeof name === 'string');
+
 const isRecorded = (entry: unknown): entry is Recorded =>
   typeof entry === 'object' && entry !== null && 'files' in entry && Array.isArray(entry.files) && entry.files.every(isWritten) &&
-  (!('pluginsTxt' in entry) || (isWritten(entry.pluginsTxt) && (!('renamedTo' in entry.pluginsTxt) || typeof entry.pluginsTxt.renamedTo === 'string')));
+  (!('pluginsTxt' in entry) || isWrittenPluginsTxt(entry.pluginsTxt));
 
 function parsed(text: string, file: string): ByFolder {
   const record: unknown = JSON.parse(text);

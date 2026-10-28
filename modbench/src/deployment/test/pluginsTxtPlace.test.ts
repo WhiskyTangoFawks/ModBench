@@ -15,14 +15,14 @@ describe('the folder the game reads plugins.txt from', () => {
   });
 
   it.each([
-    ['a release the tables hold no row for', 'Morrowind', { LOCALAPPDATA: LOCAL }],
-    ['no release', undefined, { LOCALAPPDATA: LOCAL }],
-    ['no local application data', 'Fallout4', {}],
-  ])('on Windows, for %s, is none, and says why', (_case, release, env) => {
-    expect(pluginsTxtPlace('win32', env)(release)).toHaveProperty('why');
+    ['a release the tables hold no row for', 'Morrowind', { LOCALAPPDATA: LOCAL }, 'Modbench knows no folder where this game reads plugins.txt'],
+    ['no release', undefined, { LOCALAPPDATA: LOCAL }, 'Modbench knows no folder where this game reads plugins.txt'],
+    ['no local application data', 'Fallout4', {}, 'LOCALAPPDATA is not set'],
+  ])('on Windows, for %s, is none, and says why', (_case, release, env, why) => {
+    expect(pluginsTxtPlace('win32', env)(release)).toEqual({ why });
   });
 
   it('on Linux is none, and says why', () => {
-    expect(pluginsTxtPlace('linux', { LOCALAPPDATA: LOCAL })('Fallout4')).toHaveProperty('why');
+    expect(pluginsTxtPlace('linux', { LOCALAPPDATA: LOCAL })('Fallout4')).toEqual({ why: 'deploy does not yet write plugins.txt on linux' });
   });
 });
