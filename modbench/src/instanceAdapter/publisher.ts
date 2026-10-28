@@ -6,7 +6,7 @@ import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
-export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher'> & {
+export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher' | 'scriptEnvironmentFile'> & {
   reading(): Promise<ManagerReading>;
   filesKept(): Promise<KeptFiles>;
 };
@@ -40,7 +40,7 @@ export interface Publisher {
   subscribe(listener: () => void): Subscription;
 }
 
-export function withPublisher(manager: ManagerAdapter, publisher: Publisher): InstanceAdapter {
+export function withPublisher(manager: ManagerAdapter, publisher: Publisher): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
   return {
     ...manager,
     publisherTags: publisher.tags,

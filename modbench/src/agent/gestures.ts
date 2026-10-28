@@ -165,6 +165,12 @@ const MODS_OR_EVERY_MOD = gestureInput(
   (value, { argument }) => new AgentCall(entryArguments(value, argument ?? []), {}),
 );
 
+const BUILD = gestureInput(
+  'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder',
+  EVERY_MOD_BY_DEFAULT,
+  (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {}),
+);
+
 const RESTORE_FROM_MANIFEST = gestureInput(
   `${EVERY_MOD_BY_DEFAULT_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, or the version or installation files in its metadata, each otherwise refused for that mod, listing what it would overwrite }`,
   EVERY_MOD_BY_DEFAULT.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
@@ -247,7 +253,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.move', MOVE_MODS],
   ['modbench.mod.uninstall', MODS],
   ['modbench.mod.decompileAndCommit', MODS],
-  ['modbench.mod.build', MODS],
+  ['modbench.mod.build', BUILD],
   ['modbench.mod.rename', RENAME_MOD],
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
   ['modbench.mod.excludeFile', FILES],

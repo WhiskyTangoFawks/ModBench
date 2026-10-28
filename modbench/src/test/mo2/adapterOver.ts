@@ -22,6 +22,7 @@ import { expectKind } from '../expectKind';
 
 /** What a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
+  pythonEnvFile?: string;
   /** Where the game is, for each read of the settings. */
   gameFolder?: GameFolder | (() => Promise<GameFolder>);
   downloadsFolder?: Awaited<ReturnType<DownloadsDirectoryResolver>>;
@@ -62,7 +63,7 @@ export const managerOver = (root: string, answers: AdapterAnswers = {}, publishe
 
 /** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE, context: contextOver(root, answers) });
+  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE, context: contextOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */
