@@ -482,6 +482,22 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AGameFolderModWhoseFilesTwoPlacesHold_AsUpdateManifestRecordedIt_ComesBackWithBothFiles()
+    {
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", [new GameFile("b.nif", "b")])]);
+        _folders.WithFile("data", "a.nif", "a").WithFile("steam", "b.nif", "b");
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b");
+        await TestEditService.UpdateManifestHandler(_folders, _notifications).UpdateManifestAsync(
+            [new ModToUpdate("Mod", Mod, null, [], SourceFolder: null, Version: null, GameFolder: game)], new InstanceToUpdate("stat-cache", []), null, CancellationToken.None);
+        _folders.WithFile(Mod, "a.nif", "stale").WithFile(Mod, "b.nif", "stale");
+
+        var restored = Assert.Single((await RestoreIn(Instance() with { GameFolder = game }, ModFrom(Mod))).Applied);
+
+        Assert.Equal(["a.nif", "b.nif"], restored.Written);
+        Assert.Equal(("a", "b"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "b.nif")));
+    }
+
+    [Fact]
     public async Task AGameFolderMod_NoPlaceHoldsWithItsPinnedBytes_IsSkippedNamingTheFirstPlacesLack()
     {
         _folders.WithFile(Mod, "a.nif", "stale");

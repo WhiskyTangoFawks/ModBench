@@ -3,17 +3,19 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod's manifest from the mod as it is. Each file is taken by its hash from the mod's installation file, then from
-/// one place of the game, then from another downloaded file.</summary>
+/// the game's places, then from another downloaded file.</summary>
 internal sealed class ManifestBuilder
 {
     private readonly DownloadedFile? _own;
     private readonly IReadOnlyList<DownloadedFile> _others;
     private readonly IReadOnlyList<(Holder Holder, IReadOnlyList<GameDepot> Depots)> _places;
+    private readonly Holder? _game;
 
     public ManifestBuilder((string Name, InstallationFile File)? installationFile, GameFolder? gameFolder, IReadOnlyList<DownloadedFile> downloadedFiles)
     {
         _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
         _others = [.. downloadedFiles.Where(other => other.Package.Name != _own?.Package.Name)];
+        _game = gameFolder is null ? null : new Holder(gameFolder.Name, [.. gameFolder.Places().SelectMany(place => place.Files.Select(game => (game.Path, game.Hash)))], keptBelowFolders: true);
         _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => (new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true), place.Depots ?? []))];
     }
 
@@ -46,19 +48,25 @@ internal sealed class ManifestBuilder
         var ordered = files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).ToList();
         var sourcing = new Sourcing(_own);
         sourcing.Take(_own?.Holder, ordered);
-        TakeFromAPlaceOfTheGame(sourcing, ordered);
+        TakeFromThePlacesOfTheGame(sourcing, ordered);
         TakeFromOtherDownloadedFiles(sourcing, ordered);
         sourcing.RecordUnsourced(ordered);
         return sourcing.Manifest(ordered, version);
     }
 
-    private void TakeFromAPlaceOfTheGame(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)
+    private void TakeFromThePlacesOfTheGame(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)
     {
         var wanting = sourcing.Unsourced(ordered);
-        if (_places.Count == 0) return;
-        var (holder, depots) = _places.MaxBy(place => wanting.Count(file => place.Holder.PathHolding(file) is not null));
-        var taken = sourcing.Take(holder, wanting);
-        if (taken.Count > 0) sourcing.Packages.Add((holder, new ManifestPackage.GameFolder(holder.Name, FileHash.OfFilesTaken(taken), depots)));
+        List<HashedFile> taken = [];
+        List<GameDepot> depots = [];
+        foreach (var (holder, placeDepots) in _places.OrderByDescending(place => wanting.Count(file => place.Holder.PathHolding(file) is not null)))
+        {
+            var takenHere = sourcing.Take(holder, sourcing.Unsourced(wanting));
+            if (takenHere.Count == 0) continue;
+            taken.AddRange(takenHere);
+            depots.AddRange(placeDepots.Except(depots));
+        }
+        if (taken.Count > 0 && _game is { } game) sourcing.Packages.Add((game, new ManifestPackage.GameFolder(game.Name, FileHash.OfFilesTaken(taken), depots)));
     }
 
     private void TakeFromOtherDownloadedFiles(Sourcing sourcing, IReadOnlyList<HashedFile> ordered)

@@ -50,12 +50,12 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     public Resolved Resolve()
     {
         var places = gameFolder?.Places().ToList() ?? [];
-        var first = ResolveIn(places.FirstOrDefault());
+        var first = ResolveIn(places);
         if (first.Lacks.Count == 0) return first;
-        return places.Skip(1).Select(ResolveIn).FirstOrDefault(resolved => resolved.Lacks.Count == 0) ?? first;
+        return places.Skip(1).Select((_, skipped) => ResolveIn([.. places.Skip(skipped + 1), .. places.Take(skipped + 1)])).FirstOrDefault(resolved => resolved.Lacks.Count == 0) ?? first;
     }
 
-    private Resolved ResolveIn(GameFolder? place)
+    private Resolved ResolveIn(IReadOnlyList<GameFolder> places)
     {
         List<PackagedFile> sourced = [];
         List<Lack> lacks = [];
@@ -66,7 +66,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         if (manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false }) lacks.Add(new Lack.NoHost());
         foreach (var file in manifest.Files)
         {
-            var (entry, lack) = EntryOf(file, place);
+            var (entry, lack) = EntryOf(file, places);
             if (entry is not null) sourced.Add(entry);
             if (lack is not null) lacks.Add(lack);
         }
@@ -84,13 +84,13 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
             ? null
             : new Lack.GameFolderOtherBytes(pinned.Name);
 
-    private (PackagedFile?, Lack?) EntryOf(ManifestFile file, GameFolder? place) => manifest.BytesOf(file) switch
+    private (PackagedFile?, Lack?) EntryOf(ManifestFile file, IReadOnlyList<GameFolder> places) => manifest.BytesOf(file) switch
     {
         FileBytes.NotHeld => (null, new Lack($"its package does not hold '{file.Path}'")),
         FileBytes.OtherBytes => (null, new Lack($"its package holds '{file.Path}' with other bytes")),
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
         FileBytes.InInstallationFile held => EntryOf(file.Path, manifest.Packages.OfType<ManifestPackage.InstallationFile>().Single(package => package.Name == held.Name), held),
-        FileBytes.InGameFolder held => EntryOf(file.Path, held, place),
+        FileBytes.InGameFolder held => EntryOf(file.Path, held, places),
         FileBytes.Built or FileBytes.MadeByStep => (null, null),
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
@@ -104,10 +104,15 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
             : (null, new Lack($"installation file '{held.Name}' holds no '{held.Path}'"));
     }
 
-    private (PackagedFile?, Lack?) EntryOf(string path, FileBytes.InGameFolder held, GameFolder? place) =>
-        place?.Files.FirstOrDefault(file => string.Equals(file.Path, held.Path, StringComparison.OrdinalIgnoreCase)) is { } game
-            ? (new PackagedFile.InGameFolder(path, game.Hash, place.DataFolder, game.Path), null)
-            : (null, GameFileLack(held.Path));
+    private (PackagedFile?, Lack?) EntryOf(string path, FileBytes.InGameFolder held, IReadOnlyList<GameFolder> places)
+    {
+        foreach (var place in places)
+        {
+            if (place.Files.FirstOrDefault(file => string.Equals(file.Path, held.Path, StringComparison.OrdinalIgnoreCase)) is { } game)
+                return (new PackagedFile.InGameFolder(path, game.Hash, place.DataFolder, game.Path), null);
+        }
+        return (null, GameFileLack(held.Path));
+    }
 
     private Lack GameFileLack(string path) =>
         _unreadableGameFiles.TryGetValue(path, out var why) ? new Lack.GameFileUnreadable(path, why) : new Lack.GameFileMissing(path);
