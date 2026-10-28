@@ -2,7 +2,7 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Each manifest line's entry in the mod's one package, with the hash that fixes its bytes, and what the package lacks.</summary>
+/// <summary>Each manifest line's entry in its package, with the hash that fixes its bytes, and what the package lacks.</summary>
 internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, IReadOnlyList<InstallationFile> installationFiles, GameFolder? gameFolder,
     IReadOnlyDictionary<string, string>? unreadableGameFiles = null, IReadOnlyDictionary<string, string>? unreadableInstallationFiles = null)
 {
@@ -46,7 +46,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     {
         var places = gameFolder?.Places().ToList() ?? [];
         var first = ResolveIn(places.FirstOrDefault());
-        if (first.Lacks.Count == 0 || manifest.Package is not ManifestPackage.GameFolder) return first;
+        if (first.Lacks.Count == 0) return first;
         return places.Skip(1).Select(ResolveIn).FirstOrDefault(resolved => resolved.Lacks.Count == 0) ?? first;
     }
 
@@ -65,7 +65,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
             if (entry is not null) sourced.Add(entry);
             if (lack is not null) lacks.Add(lack);
         }
-        if (lacks.Count == 0 && manifest.Package is ManifestPackage.GameFolder pinned && PinnedLack(pinned, sourced) is { } changed) lacks.Add(changed);
+        if (lacks.Count == 0) lacks.AddRange(manifest.Packages.OfType<ManifestPackage.GameFolder>().Select(pinned => PinnedLack(pinned, sourced)).OfType<Lack>());
         var built = manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: true } submodule ? submodule.Name : null;
         return new Resolved(sourced, [.. lacks.Distinct()], built);
     }
