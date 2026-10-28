@@ -194,17 +194,31 @@ internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, GameFolderRequest? GameFolder, string? Gesture);
 
 /// <summary>The game folder by the game's name and its Data folder, with the game files at the paths of the mods' files, none
-/// when the Instance adapter did not find it (ADR-0013).</summary>
-internal sealed record GameFolderRequest(string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files)
+/// when the Instance adapter did not find it. Elsewhere lists the other places that hold game files, the Steam install
+/// when it is not the game folder (ADR-0013).</summary>
+internal sealed record GameFolderRequest(string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null)
 {
     internal bool IsWhole =>
         !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(DataFolder) && Files is not null
-        && Files.All(file => !string.IsNullOrWhiteSpace(file.Path) && FileHash.IsHash(file.Hash ?? string.Empty));
+        && GameFileRequest.AreWhole(Files) && (Elsewhere ?? []).All(place => place.IsWhole);
 
-    internal GameFolder ToGameFolder() => new(Name, DataFolder, [.. Files.Select(file => new GameFile(file.Path, file.Hash))]);
+    internal GameFolder ToGameFolder() => new(Name, DataFolder, GameFileRequest.ToGameFiles(Files), Elsewhere?.Select(place => place.ToPlace()).ToList());
 }
 
-internal sealed record GameFileRequest(string Path, string Hash);
+internal sealed record GameFolderPlaceRequest(string DataFolder, IReadOnlyList<GameFileRequest> Files)
+{
+    internal bool IsWhole => !string.IsNullOrWhiteSpace(DataFolder) && Files is not null && GameFileRequest.AreWhole(Files);
+
+    internal GameFolderPlace ToPlace() => new(DataFolder, GameFileRequest.ToGameFiles(Files));
+}
+
+internal sealed record GameFileRequest(string Path, string Hash)
+{
+    internal static bool AreWhole(IReadOnlyList<GameFileRequest> files) =>
+        files.All(file => !string.IsNullOrWhiteSpace(file.Path) && FileHash.IsHash(file.Hash ?? string.Empty));
+
+    internal static IReadOnlyList<GameFile> ToGameFiles(IReadOnlyList<GameFileRequest> files) => [.. files.Select(file => new GameFile(file.Path, file.Hash))];
+}
 
 internal interface IModRequest
 {
