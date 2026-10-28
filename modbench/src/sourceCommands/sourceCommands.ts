@@ -10,7 +10,7 @@ import type { StepTasks } from './steps';
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
   adapter: Pick<InstanceAdapter,
-    'downloadedFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
+    'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -98,7 +98,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       return { ...outcome, landed: await withManifestsOnceStepsRan(outcome.landed, sent, facts), refused: [...outcome.refused, ...refused] };
     },
 
-    /** A mod whose name gives it no source folder is refused here, naming why, and mEdit decompiles and commits the rest. */
+    /** A mod whose name gives it no source folder, or whose installation file or metadata cannot be read, is refused here, naming why, and mEdit decompiles and commits the rest. */
     decompileAndCommit: async (
       mods: readonly string[], options: { onProgress?: (status: DecompileAndCommitProgress) => void } = {},
     ): Promise<DecompileAndCommitOutcome | WriteRefused> => {
@@ -106,8 +106,12 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
         const sourceFolder = adapter.sourceFolder(mod);
-        if (sourceFolder === undefined) refused.push({ item: mod, reason: 'its name gives it no source folder' });
-        else sent.push({ name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder] });
+        if (sourceFolder === undefined) { refused.push({ item: mod, reason: 'its name gives it no source folder' }); continue; }
+        const installation = await adapter.installationFile(mod);
+        const metadata = await adapter.modMetadata(mod);
+        if (installation.kind === 'unreadable') refused.push({ item: mod, reason: installation.reason });
+        else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) });
+        else sent.push({ name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder], installationFile: wireFile(installation.answer), version: metadata.answer.version });
       }
       if (sent.length === 0) return { landed: [], refused };
       const outcome = await client.decompileAndCommit(sent, options);

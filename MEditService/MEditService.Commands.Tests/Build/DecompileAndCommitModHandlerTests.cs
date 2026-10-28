@@ -1,6 +1,7 @@
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -95,6 +96,69 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
     }
 
+    [Fact]
+    public async Task Init_OfAModWithAnInstallationFile_CommitsAsAssetsOnlyTheFilesItDoesNotYield_AndItsManifestNamesTheFileAndWhatItYields()
+    {
+        WriteInModFolder("textures/a.dds", "from the pack");
+        WriteInModFolder("Scripts/Quest.pex", "mine");
+        var installationFile = PackHolding(("textures/a.dds", "from the pack"));
+
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], installationFile));
+
+        Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
+        var manifest = CommittedManifest();
+        Assert.Equal(
+            [new ManifestPackage.InstallationFile(DownloadedZip.PackName, installationFile.Size, installationFile.Hash)],
+            manifest.Packages);
+        Assert.Equal([new ManifestFile("textures/a.dds", new PackageEntry.Held())], manifest.Files);
+    }
+
+    [Fact]
+    public async Task Init_OfAFileTheInstallationFileHoldsWithOtherBytes_CommitsItAsAnAsset()
+    {
+        WriteInModFolder("textures/a.dds", "edited");
+        var installationFile = PackHolding(("textures/a.dds", "from the pack"));
+
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], installationFile));
+
+        Assert.Equal(["assets/textures/a.dds"], CommittedAssets());
+        Assert.Empty(CommittedManifest().Files);
+    }
+
+    [Fact]
+    public async Task Init_OfAModWhoseManifestHoldsSteps_CarriesThemAndTheFilesTheyMake_AndTheVersionTheMetadataSays()
+    {
+        WriteInModFolder("textures/a.dds", "from the pack");
+        WriteInModFolder("textures/made.dds", "made");
+        WriteInModFolder(
+            $"{Origin}.manifest.json",
+            "{\"packages\": [{\"installationFile\":\"Pack.zip\",\"size\":1,\"hash\":\"HASH\",\"version\":\"1.0\"}], "
+            + "\"steps\": [{\"task\": \"make\", \"args\": [\"x\"]}], \"files\": [{\"path\": \"textures/made.dds\", \"madeByStep\": true}]}");
+
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, [], PackHolding(("textures/a.dds", "from the pack")), "2.0"));
+
+        var manifest = CommittedManifest();
+        var step = Assert.Single(manifest.Steps);
+        Assert.Equal("make", step.Task);
+        Assert.Equal(["x"], step.Args);
+        Assert.Equal(
+            [new ManifestFile("textures/a.dds", new PackageEntry.Held()), new ManifestFile("textures/made.dds", new PackageEntry.MadeByStep())],
+            manifest.Files.OrderBy(file => file.Path, StringComparer.Ordinal));
+        Assert.Equal("2.0", manifest.Version);
+    }
+
+    [Fact]
+    public async Task Init_OfAModWhoseManifestCannotBeRead_RefusesTheMod_LeavingNoRepositoryAndTheManifestInPlace()
+    {
+        WriteInModFolder($"{Origin}.manifest.json", "not a manifest");
+
+        var refused = Assert.Single((await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []))).Refused);
+
+        Assert.Equal(DecompileAndCommitRefusal.ModFilesUnreadable, refused.Refusal);
+        Assert.False(Directory.Exists(SourceFolder));
+        Assert.True(File.Exists(Path.Combine(_mod.Folder, $"{Origin}.manifest.json")));
+    }
+
     [PosixFact]
     public async Task Init_WhoseModFoldersManifestCannotBeRemoved_RefusesTheMod_LeavingNoRepositoryAndTheManifestInPlace()
     {
@@ -137,6 +201,25 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
             FileModes.Set(held, "600");
         }
     }
+
+    private InstallationFile PackHolding(params (string Path, string Text)[] entries)
+    {
+        var downloaded = DownloadedZip.WritePack(Path.Combine(_instanceRoot, "downloads"), entries);
+        var pack = Directory.CreateDirectory(Path.Combine(_instanceRoot, "unpacked")).FullName;
+        foreach (var (path, text) in entries)
+        {
+            var file = Path.Combine(pack, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
+            File.WriteAllText(file, text);
+        }
+        var hashes = new ModFolderRepository(TimeProvider.System).Files(pack, "", new HashSet<string>(), null).Files.ToDictionary(file => file.Path, file => file.Hash);
+        return downloaded with { Entries = [.. entries.Select(entry => new HashedEntry(entry.Path, hashes[entry.Path]))] };
+    }
+
+    private Manifest CommittedManifest() =>
+        new ModFolderRepository(TimeProvider.System).ReadSourceManifest(SourceFolder).Holds(out var manifest, out var why) && manifest is not null
+            ? manifest
+            : throw new InvalidOperationException(why);
 
     private async Task<DecompileAndCommitResult> InitWith(ModToDecompileAndCommit mod)
     {
