@@ -36,13 +36,13 @@ const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
 const DECLARED = [INCLUDE, IGNORE, ALWAYS_ENABLED];
 
 const LISTED: Record<string, readonly PublisherTag[]> = {
-  '/mods/M': [INCLUDE, ALWAYS_ENABLED],
-  '/mods/M/a.dds': [INCLUDE],
-  '/mods/M/textures': [IGNORE],
+  '/instance/mods/M': [INCLUDE, ALWAYS_ENABLED],
+  '/instance/mods/M/a.dds': [INCLUDE],
+  '/instance/mods/M/textures': [IGNORE],
 };
 const value: InstanceValue = {
   ...instanceValueFixture({
-    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/mods/M'], ['N', '/mods/N']]), sourceDirs: new Map() },
+    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
   }),
   publisherTags: DECLARED,
   publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [] },
@@ -53,10 +53,10 @@ const instance = { ...instanceThatReads, value };
 const origin = { kind: 'mod', name: 'M' } as const;
 const modM = new ModNode({ kind: 'mod', name: 'M', enabled: true });
 const modN = new ModNode({ kind: 'mod', name: 'N', enabled: true });
-const fileA = new FileNode(modM, origin, fileIn('/mods/M', 'a.dds'), 'a.dds');
-const fileB = new FileNode(modM, origin, fileIn('/mods/M', 'b.dds'), 'b.dds');
-const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/mods/M/textures', excluded: false }, [], [], 'textures');
-const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, fileIn('/mods/M', 'a.dds'), 'a.dds');
+const fileA = new FileNode(modM, origin, fileIn('/instance/mods/M', 'a.dds'), 'a.dds');
+const fileB = new FileNode(modM, origin, fileIn('/instance/mods/M', 'b.dds'), 'b.dds');
+const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/instance/mods/M/textures', excluded: false }, [], [], 'textures');
+const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, fileIn('/instance/mods/M', 'a.dds'), 'a.dds');
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -72,7 +72,7 @@ const register = (selection: readonly ModlistNode[] = [], answers: InstanceAnswe
 };
 
 const tagChange = (change: 'add' | 'remove', tag: string, ...paths: string[]) => ({ verb: 'changePublisherTag', change, tag, paths });
-const inModM = (relativePath: string) => join('/mods/M', relativePath);
+const inModM = (relativePath: string) => join('/instance/mods/M', relativePath);
 
 let offered: string[];
 const pickByLabel = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => {
@@ -119,7 +119,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
     await invoke('modbench.mod.addPublisherTag', modM, [modM, modN, fileA]);
 
     expect(offered).toEqual(['Include', 'Ignore', 'Always Enabled']);
-    expect(fake.calls).toEqual([tagChange('add', 'Always Enabled', '/mods/M', '/mods/N')]);
+    expect(fake.calls).toEqual([tagChange('add', 'Always Enabled', '/instance/mods/M', '/instance/mods/N')]);
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'Instance loader: read every file again', 'progress closes']);
   });
 
@@ -178,7 +178,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
       [{ kind: 'mod', name: 'M' }, { kind: 'file', origin, relativePath: 'textures' }], { tag: 'Include' }));
 
     expect(createQuickPick).not.toHaveBeenCalled();
-    expect(fake.calls).toEqual([tagChange('add', 'Include', '/mods/M', inModM('textures'))]);
+    expect(fake.calls).toEqual([tagChange('add', 'Include', '/instance/mods/M', inModM('textures'))]);
   });
 });
 

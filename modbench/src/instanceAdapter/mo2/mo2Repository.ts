@@ -51,23 +51,19 @@ async function searchForOtherManifests(context: Mo2Context): Promise<ManifestSea
     }
     const name = folders.at(-1);
     const manifest = name === undefined ? undefined : entries.find((entry) => entry.isFile() && isOwnManifest(name, entry.name));
-    if (manifest !== undefined) {
-      found.push({ segments: [...folders, manifest.name], folder });
-      return;
-    }
+    if (manifest !== undefined) found.push({ segments: [...folders, manifest.name], folder });
     for (const child of entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {
       if (!isSkipped([...folders, child])) await search([...folders, child]);
     }
   };
   await search([]);
-  const holding = new Set(found.map(({ segments }) => nameOf(segments.slice(0, -1))));
   const unread = new Set(unsearched.map(({ name }) => name));
   const owns = (path: string): boolean => {
     const inInstance = relative(instanceRoot, path);
     const folders = inInstance.split(sep).slice(0, -1);
     const above = folders.map((_, at) => folders.slice(0, at + 1));
     return folders.length > 0 && folders[0] !== '..' && !isAbsolute(inInstance) && isOwnManifest(folders.at(-1) ?? '', inInstance.split(sep).at(-1) ?? '')
-      && !above.some((at, i) => isSkipped(at) || unread.has(nameOf(at)) || (i < above.length - 1 && holding.has(nameOf(at))));
+      && !above.some((at) => isSkipped(at) || unread.has(nameOf(at)));
   };
   return { found, unsearched, owns };
 }

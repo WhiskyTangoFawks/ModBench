@@ -26,6 +26,9 @@ public enum RestoreRefusal
 
     ManifestUnreadable,
 
+    /// <summary>Its manifest names another folder as its output, so restore builds nothing in this one.</summary>
+    OutputNotThisFolder,
+
     /// <summary>A file its package does not hold, or an installation file that has other bytes.</summary>
     Lacking,
 

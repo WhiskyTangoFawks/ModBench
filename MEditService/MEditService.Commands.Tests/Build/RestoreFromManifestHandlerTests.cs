@@ -399,6 +399,21 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal((RestoreRefusal.ManifestUnreadable, "was skipped: its manifest cannot be read at line 1."), (skipped.Refusal, skipped.Message));
     }
 
+    [Theory]
+    [InlineData("Elsewhere", false)]
+    [InlineData("mod", true)]
+    public async Task AManifestThatNamesAnOutputFolder_BuildsOnlyTheFolderItNames(string output, bool restored)
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        _folders.Manifests[Mod] = new Manifest([], []) { Output = output };
+
+        var result = await Restore(ModFrom(Mod));
+
+        Assert.Equal(
+            restored ? [] : [(RestoreRefusal.OutputNotThisFolder, "was skipped: its manifest names the output folder 'Elsewhere', not its folder 'Mod'.")],
+            result.Refused.Select(skipped => (skipped.Refusal, skipped.Message)));
+    }
+
     [Fact]
     public async Task AWriteThatFailsPartWay_SaysTheModWasNotFinished_AndTheOthersLand()
     {

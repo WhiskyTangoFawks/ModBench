@@ -2,6 +2,7 @@
 // instance keeps what.
 
 import { basename, dirname } from 'node:path';
+import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../downloadedFileContents/installationFileNames';
 import { effectiveModId } from './codecs/nexusFileName';
@@ -138,7 +139,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceMods'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceMods'> {
   const { instanceRoot } = context;
   const reads: ReturnType<typeof mo2Reads> = {
     profiles: () => source.profiles(ignoreSkippedLink),
@@ -159,6 +160,7 @@ export function mo2Reads(
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
     sourceMods: () => source.sourceMods(),
     modFolderPath: (name) => modFolderNamed(context, name, 'list'),
+    foldersRefused: (folders, asked) => foldersRefused(instanceRoot, folders, asked),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
     entryKey,
     fileStamp: (path) => readOrReason(() => stampOf(path)),

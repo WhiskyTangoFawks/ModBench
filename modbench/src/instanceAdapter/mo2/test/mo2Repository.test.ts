@@ -169,7 +169,7 @@ describe('the MO2 adapter\'s repository', () => {
     ['a manifest outside the mod folders named for another folder', ['plugins', 'rootbuilder', 'other.manifest.json'], false],
     ['a manifest in a profile\'s folder', ['profiles', 'P', 'P.manifest.json'], false],
     ['a manifest in the downloads folder', ['my downloads', 'D', 'D.manifest.json'], false],
-    ['a manifest below the folder of another', ['Stock Game', 'Data', 'Data.manifest.json'], false],
+    ['a manifest below the folder of another', ['Stock Game', 'Data', 'Data.manifest.json'], true],
   ])('owns %s: %s', async (_name, segments, owned) => {
     const adapter = await instance();
     await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
@@ -274,7 +274,7 @@ describe('the MO2 adapter\'s repository', () => {
     ];
     const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
-    it('is each folder outside the mod folders, profiles, Overwrite, downloads, source mods and repository that holds a manifest named for it, and none inside one that does', async () => {
+    it('is each folder outside the mod folders, profiles, Overwrite, downloads, source mods and repository that holds a manifest named for it, one inside another folder that holds one too', async () => {
       const adapter = await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await Promise.all([
@@ -285,6 +285,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect(await adapter.otherManifests()).toEqual({
         manifests: [
           { name: 'Stock Game/', folder: join(root, 'Stock Game') },
+          { name: 'Stock Game/Data/', folder: join(root, 'Stock Game', 'Data') },
           { name: 'downloads/D/', folder: join(root, 'downloads', 'D') },
           { name: 'plugins/rootbuilder/', folder: join(root, 'plugins', 'rootbuilder') },
         ],

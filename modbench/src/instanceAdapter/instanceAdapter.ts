@@ -9,6 +9,7 @@ import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
+import type { FolderRefusal } from './foldersRefused';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { SteamDepot } from './gameFolder/steamAppManifest';
@@ -340,6 +341,8 @@ export interface SourceMods {
   builds(mod: string): boolean;
   /** The output the manifest in `folder` names, though the repository builds no mod for it: a manifest not named for its output, or an output another repository builds too. */
   claimedOutput(folder: string): string | undefined;
+  /** Every source folder whose manifest names `mod` as its output, when two or more do; none otherwise. */
+  buildersOf(mod: string): readonly string[];
   readonly notes: readonly string[];
 }
 
@@ -640,6 +643,9 @@ export interface InstanceAdapter {
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
    *  name gives none. */
   modFolderPath(mod: string): Promise<string | undefined>;
+  /** The manifests among `asked` whose folder restore refuses (modlist-repository.md, Restore from manifest, stories 13 and
+   *  14). `folders` is every manifest's folder by its name. */
+  foldersRefused(folders: ReadonlyMap<string, string>, asked: readonly string[]): Promise<readonly FolderRefusal[]>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
   /** The downloaded file the mod manager records `mod` as installed from; undefined when it records none. */

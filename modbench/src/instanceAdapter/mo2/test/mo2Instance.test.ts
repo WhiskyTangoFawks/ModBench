@@ -1668,10 +1668,11 @@ describe('the MO2 Instance adapter', () => {
         await repository('Second', '{ "output": "SHARED" }', 'SHARED');
         await repository('First', '{ "output": "Shared" }', 'Shared');
 
-        const { folders, notes } = await source.sourceMods();
+        const sources = await source.sourceMods();
 
-        expect(folders).toEqual(new Map([['Shared', join(root, 'source', 'First')]]));
-        expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Second'))]);
+        expect(sources.folders).toEqual(new Map([['Shared', join(root, 'source', 'First')]]));
+        expect(sources.notes).toEqual([expect.stringContaining(join(root, 'source', 'Second'))]);
+        expect([sources.buildersOf('shared'), sources.buildersOf('Other')]).toEqual([[join(root, 'source', 'First'), join(root, 'source', 'Second')], []]);
       });
 
       it('lists none when the instance has no source folder', async () => {
