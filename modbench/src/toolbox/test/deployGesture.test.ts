@@ -171,7 +171,6 @@ describe('Deploy', () => {
       [['modbench.instance.moveToOverwrite', ['Data/MCM/settings.ini', 'game.exe']]],
     ]);
   });
-
 });
 
 describe('Move to Overwrite', () => {

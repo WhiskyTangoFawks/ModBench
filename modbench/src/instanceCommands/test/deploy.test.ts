@@ -99,6 +99,26 @@ describe('deploy', () => {
   });
 });
 
+describe('a game folder that cannot be read', () => {
+  const UNREADABLE = { moveIntoOverwrite: () => Promise.resolve(undefined), gameFolderOverlapping: () => Promise.reject(new Error('ModOrganizer.ini: EACCES')) };
+
+  it('refuses deploy before it writes anything', async () => {
+    const { deployment, deployedTo } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: UNREADABLE, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
+
+    expect([result, deployedTo]).toEqual([{ applied: false, refusal: 'ModOrganizer.ini: EACCES' }, []]);
+  });
+
+  it('refuses purge before it removes anything', async () => {
+    const { deployment, purgedFrom } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: UNREADABLE, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).purge();
+
+    expect([result, purgedFrom]).toEqual([{ applied: false, refusal: 'ModOrganizer.ini: EACCES' }, []]);
+  });
+});
+
 describe('move to Overwrite', () => {
   function moving(folder = '/deployed', gameRoot = '/games/Fallout4') {
     const fake = fakeInstanceAdapter(readingFixture({ gameFolder: { kind: 'found', root: gameRoot, dataFolder: `${gameRoot}/Data` } }), {});
