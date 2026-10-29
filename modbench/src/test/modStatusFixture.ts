@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import type { ManifestFile, ModStatus } from '../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../manifestAdapter/manifestAdapter';
 

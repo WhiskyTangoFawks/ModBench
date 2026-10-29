@@ -337,7 +337,7 @@ describe('update manifest', () => {
 
       expect([result.refused, result.landed.map(({ mod }) => mod), (await heldIn(folder))]).toEqual([
         [], ['ModA', 'Stock Game/'],
-        { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: expect.any(String) as unknown as string, depots: [] }], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
+        { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: expect.any(String), depots: [] }], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
       ]);
     });
   });
