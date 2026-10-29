@@ -108,7 +108,9 @@ public sealed record SchemaAnnotations(
     // reflected, not rows.
     IReadOnlyList<ContainmentMember> ContainmentMembers,
     // xEdit's name for a record type the game spells differently from the other games, by table name.
-    IReadOnlyDictionary<string, string> DisplayNameOverrides)
+    IReadOnlyDictionary<string, string> DisplayNameOverrides,
+    // No Mutagen type says which members a template flag covers.
+    ActorTemplating ActorTemplates)
 {
     // Rows several games share are named once here; a row of one game is written inline in that
     // game's table.
@@ -215,6 +217,51 @@ public sealed record SchemaAnnotations(
     };
 
     public const string PartialFormName = "PartialForm";
+
+    /// <summary>Each member and the flag that hands it to a template; a member named twice throws.</summary>
+    public static IReadOnlyDictionary<string, string> FlagOfMember(IEnumerable<(string Flag, string[] Members)> flags) =>
+        flags.SelectMany(f => f.Members.Select(member => (member, f.Flag))).ToDictionary(StringComparer.Ordinal);
+
+    // Mutagen's TemplateActors slot for each flag, alike in Fallout 4 and Starfield.
+    public static readonly IReadOnlyDictionary<string, string> TemplateActorSlots = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["Traits"] = "TemplateActors.TraitTemplate",
+        ["Stats"] = "TemplateActors.StatsTemplate",
+        ["Factions"] = "TemplateActors.FactionsTemplate",
+        ["SpellList"] = "TemplateActors.SpellListTemplate",
+        ["AiData"] = "TemplateActors.AiDataTemplate",
+        ["AiPackages"] = "TemplateActors.AiPackagesTemplate",
+        ["ModelOrAnimation"] = "TemplateActors.ModelOrAnimationTemplate",
+        ["BaseData"] = "TemplateActors.BaseDataTemplate",
+        ["Inventory"] = "TemplateActors.InventoryTemplate",
+        ["Script"] = "TemplateActors.ScriptTemplate",
+        ["DefPackList"] = "TemplateActors.DefPackListTemplate",
+        ["AttackData"] = "TemplateActors.AttackDataTemplate",
+        ["Keywords"] = "TemplateActors.KeywordsTemplate",
+    };
+
+    // The members Fallout 4 and Starfield share, under the flag whose Creation Kit tab holds each
+    // (falloutck.uesp.net, Actor); the Sounds and Character Gen tabs as UESP's Skyrim NPC_ page gives them.
+    public static readonly IReadOnlyList<(string Flag, string[] Members)> TemplatedMembersOfFallout4AndStarfield =
+    [
+        ("Traits",
+        [
+            "DispositionBase", "DeathItem", "Voice", "Race", "Skin", "AttachParentSlots", "ObjectTemplates", "FarAwayModelDistance",
+            "HeightMin", "HeightMax", "Weight", "BodyMorphRegionValues", "HeadParts", "HairColor", "FacialHairColor", "FaceMorphs",
+            "Sounds", "InheritsSoundsFrom",
+        ]),
+        ("Stats", ["XpValueOffset", "Level", "CalcMinLevel", "CalcMaxLevel", "Properties", "Class", "CalculatedHealth", "CalculatedActionPoints"]),
+        ("Factions", ["Factions", "CrimeFaction"]),
+        ("SpellList", ["ActorEffect", "Perks"]),
+        ("AiData", ["Aggression", "Confidence", "EnergyLevel", "Responsibility", "Mood", "Assistance"]),
+        ("AiPackages", ["Packages"]),
+        ("BaseData", ["Name", "ShortName", "ActivateTextOverride"]),
+        ("Inventory", ["Items", "GearedUpWeapons", "DefaultOutfit"]),
+        ("Script", ["VirtualMachineAdapter"]),
+        ("DefPackList", ["DefaultPackageList", "SpectatorOverridePackageList", "CombatOverridePackageList"]),
+        ("AttackData", ["AttackRace"]),
+        ("Keywords", ["Keywords"]),
+    ];
 
     // PlacedObject.cs's per-base-type enums in every game, as wbREFRRecordFlagsDecider chooses them.
     public static readonly IReadOnlyList<(string, string)> PlacedObjectRecordFlagEnums =
@@ -503,6 +550,31 @@ public sealed record SchemaAnnotations(
         }
     }
 
+    // A path the type does not reach templates nothing, and a flag the enum lacks is never set.
+    private IEnumerable<string> UnresolvedActorTemplates(ILookup<string, Type> typesByName)
+    {
+        var label = $"{nameof(ActorTemplates)}: {ActorTemplates.TypeName}";
+        if (typesByName[ActorTemplates.TypeName].FirstOrDefault(t => t.IsInterface) is not { } actor)
+        {
+            yield return $"{label} names no type of this game";
+            yield break;
+        }
+        var flagsEnum = ReflectedTypes.PropertyAt(actor, ActorTemplates.FlagsMember) is { } flagsMember ? ReflectedTypes.CoreOf(flagsMember).Core : null;
+        if (flagsEnum is not { IsEnum: true })
+        {
+            yield return $"{label} reaches no flags enum at {ActorTemplates.FlagsMember}";
+            yield break;
+        }
+        var flags = Enum.GetNames(flagsEnum);
+        foreach (var flag in ActorTemplates.Slots.Keys.Concat(ActorTemplates.FlagOfMember.Values).Distinct().Where(f => !flags.Contains(f)).Order(StringComparer.Ordinal))
+            yield return $"{label} names flag {flag}, which {flagsEnum.Name} does not define";
+        foreach (var link in ActorTemplates.Slots.Values.Append(ActorTemplates.DefaultTemplate)
+                     .Where(path => ReflectedTypes.PropertyAt(actor, path) is not { } p || !ReflectedTypes.IsFormLink(p.PropertyType)))
+            yield return $"{label} reaches no form link at {link}";
+        foreach (var member in ActorTemplates.FlagOfMember.Keys.Where(path => ReflectedTypes.PropertyAt(actor, path) is null).Order(StringComparer.Ordinal))
+            yield return $"{label} reaches no member at {member}";
+    }
+
     private static PropertyInfo? Property(ILookup<string, Type> typesByName, (string TypeName, string MemberName) entry) =>
         typesByName[entry.TypeName]
             .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
@@ -580,6 +652,7 @@ public sealed record SchemaAnnotations(
                 .Select(p => $"{nameof(PartialFormCellsDefinedIn)}: {p} is no base master of {category}"),
             .. UnresolvedMembers(typesByName, nameof(PluginHeaderMembers), PluginHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
             .. UnresolvedContainmentMembers(gameAssembly, typesByName),
+            .. UnresolvedActorTemplates(typesByName),
         ];
 
         if (missing.Length > 0)

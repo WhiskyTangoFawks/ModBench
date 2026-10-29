@@ -171,11 +171,11 @@ export function DiffRow({
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const { meta: cellMeta, holds, value: own, shown, editPath, dropAddsTo } = cell;
+        const { meta: cellMeta, holds, value: own, shown, editPath, dropAddsTo, template } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
-        const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
+        const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason, template?.tooltip]
           .filter(Boolean).join('\n') || undefined;
         const edit = editPath && ((value: unknown) => onEdit(key, editPath, value));
         const drag: CellDrag | undefined = diff.values[key] != null
@@ -193,7 +193,8 @@ export function DiffRow({
         };
         const resolution = diff.resolutions?.[key];
         if (hasChildren) {
-          const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, stringsLanguage, isLastElement?.(key), keyMembers);
+          const collapsed = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, stringsLanguage, isLastElement?.(key), keyMembers);
+          const reading = template ? { text: template.reading, isPlaceholder: false } : collapsed;
           return (
             <DiskCell
               key={key}
@@ -226,7 +227,8 @@ export function DiffRow({
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
-            {holds && (
+            {holds && template && template.reading}
+            {holds && !template && (
               renderCell(shown ?? defaultOf(cellMeta), cellMeta, {
                 checkError, resolution,
                 onCommit: edit,

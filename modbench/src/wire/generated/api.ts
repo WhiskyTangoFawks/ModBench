@@ -1153,6 +1153,9 @@ export interface components {
             recordType: string;
             isPartialForm: boolean;
             parseDiagnosis?: string | null;
+            templated?: {
+                [key: string]: components["schemas"]["TemplatedBy"];
+            } | null;
             conflictThis?: components["schemas"]["ConflictThis"] | null;
             loadIndex?: string | null;
             isInOverwrite: boolean;
@@ -1803,6 +1806,9 @@ export interface components {
             recordType: string;
             isPartialForm: boolean;
             parseDiagnosis?: string | null;
+            templated?: {
+                [key: string]: components["schemas"]["TemplatedBy"];
+            } | null;
         };
         RecordEditChangesRequest: {
             edit: components["schemas"]["RecordEditRequest"];
@@ -1984,6 +1990,11 @@ export interface components {
             folder: string;
             pin: string;
             branch?: string | null;
+        };
+        TemplatedBy: {
+            flag: string;
+            template: string;
+            resolution: components["schemas"]["FormKeyResolution"];
         };
         UnreadableSource: {
             reason: string;

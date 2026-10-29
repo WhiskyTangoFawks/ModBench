@@ -77,5 +77,8 @@ internal static class GameAnnotations
             PartialFormCellsDefinedIn: null,
             DisplayNameOverrides: new Dictionary<string, string> { ["idle"] = "Animation" },
             PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetterName),
-            ContainmentMembers: [CellGridInEveryGame]);
+            ContainmentMembers: [CellGridInEveryGame],
+            // xEdit gives Combat Style a flag of its own, which Mutagen's enum does not name, so CombatStyle stays unmapped.
+            ActorTemplates: new("INpcGetter", "UseTemplateActors", "DefaultTemplate", TemplateActorSlots,
+                FlagOfMember(TemplatedMembersOfFallout4AndStarfield)));
 }

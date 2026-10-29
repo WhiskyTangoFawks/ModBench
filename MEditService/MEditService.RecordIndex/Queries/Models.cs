@@ -68,7 +68,9 @@ public record RecordDetail(
     string? ParseDiagnosis = null,
     // The strings file this copy's plugin looked for and did not find; reads into each translated
     // text's check error, never onto the wire as a field of its own.
-    [property: JsonIgnore] string? MissingStringsFile = null);
+    [property: JsonIgnore] string? MissingStringsFile = null,
+    // The members this copy hands to a template, by dotted member path.
+    IReadOnlyDictionary<string, TemplatedBy>? Templated = null);
 
 public record CompareOverride(
     string FormKey,
@@ -91,10 +93,11 @@ public record CompareOverride(
     // The key this copy's cells carry in each FieldDiff map when it is not the plugin's own
     // ColumnKey: several records compared may hold two copies from one plugin.
     string? Column = null,
-    string? MissingStringsFile = null)
+    string? MissingStringsFile = null,
+    IReadOnlyDictionary<string, TemplatedBy>? Templated = null)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
-        ParseDiagnosis, MissingStringsFile);
+        ParseDiagnosis, MissingStringsFile, Templated);
 
 public record FieldDiff(
     string FieldName,

@@ -82,5 +82,27 @@ internal static class GameAnnotations
             PartialFormCellsDefinedIn: "Fallout4.esm",
             DisplayNameOverrides: new Dictionary<string, string>(),
             PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetterName),
-            ContainmentMembers: [CellGridInEveryGame]);
+            ContainmentMembers: [CellGridInEveryGame],
+            ActorTemplates: new("INpcGetter", "UseTemplateActors", "DefaultTemplate", TemplateActorSlots, FlagOfMember(
+            [
+                .. TemplatedMembersOfFallout4AndStarfield,
+                ("Traits",
+                [
+                    "FarAwayModel", "HeadTexture", "TextureLighting", "Morphs", "FaceTintingLayers", "FacialMorphIntensity", "SoundLevel",
+                    "SoundsFinalize",
+                ]),
+                ("Stats", ["BleedoutOverride"]),
+                ("AiData",
+                [
+                    "AggroRadiusBehaviorEnabled", "AggroRadiusWarn", "AggroRadiusWarnOrAttack", "AggroRadiusAttack", "NoSlowApproach",
+                    "CombatStyle", "GiftFilter",
+                ]),
+                ("Inventory", ["PowerArmorStand", "SleepingOutfit"]),
+                ("DefPackList",
+                [
+                    "ObserveDeadBodyOverridePackageList", "GuardWarnOverridePackageList", "FollowerCommandPackageList",
+                    "FollowerElevatorPackageList",
+                ]),
+                ("AttackData", ["Attacks"]),
+            ])));
 }

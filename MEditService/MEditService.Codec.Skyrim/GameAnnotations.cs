@@ -75,5 +75,35 @@ internal static class GameAnnotations
             PartialFormCellsDefinedIn: null,
             DisplayNameOverrides: new Dictionary<string, string>(),
             PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetterName),
-            ContainmentMembers: [CellGridInEveryGame]);
+            ContainmentMembers: [CellGridInEveryGame],
+            // UESP's Skyrim NPC_ page, ACBS Template Data Flags.
+            ActorTemplates: new("INpcGetter", "Configuration.TemplateFlags", "Template", new Dictionary<string, string>(), FlagOfMember(
+            [
+                ("Traits",
+                [
+                    "Destructible", "Race", "WornArmor", "FarAwayModel", "Height", "Weight", "Voice", "DeathItem", "SoundLevel", "Sound",
+                    "HeadParts", "HairColor", "HeadTexture", "TextureLighting", "FaceMorph", "FaceParts", "TintLayers",
+                ]),
+                ("Stats",
+                [
+                    "Configuration.MagickaOffset", "Configuration.StaminaOffset", "Configuration.Level", "Configuration.CalcMinLevel",
+                    "Configuration.CalcMaxLevel", "Configuration.SpeedMultiplier", "Configuration.HealthOffset",
+                    "Configuration.BleedoutOverride", "Class", "PlayerSkills.SkillValues", "PlayerSkills.SkillOffsets",
+                    "PlayerSkills.Health", "PlayerSkills.Magicka", "PlayerSkills.Stamina",
+                ]),
+                ("Factions", ["Factions", "CrimeFaction"]),
+                ("SpellList", ["ActorEffect", "Perks"]),
+                ("AIData", ["AIData", "CombatStyle", "GiftFilter"]),
+                ("AIPackages", ["Packages"]),
+                ("BaseData", ["Name", "ShortName"]),
+                ("Inventory", ["Items", "DefaultOutfit", "SleepingOutfit", "PlayerSkills.GearedUpWeapons"]),
+                ("Script", ["VirtualMachineAdapter"]),
+                ("DefPackList",
+                [
+                    "DefaultPackageList", "SpectatorOverridePackageList", "ObserveDeadBodyOverridePackageList",
+                    "GuardWarnOverridePackageList", "CombatOverridePackageList",
+                ]),
+                ("AttackData", ["AttackRace", "Attacks"]),
+                ("Keywords", ["Keywords"]),
+            ])));
 }

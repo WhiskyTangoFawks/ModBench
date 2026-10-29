@@ -51,6 +51,8 @@ public sealed class RecordTableSchema
     /// record-header flags.</summary>
     public bool IsHeader { get; init; }
 
+    public ActorTemplating? Templating { get; init; }
+
     /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
     /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
     /// (ADR-0008), so their column reads null here.</summary>
@@ -71,6 +73,10 @@ public sealed class RecordTableSchema
         }
         return fields;
     }
+
+    /// <summary>The members <paramref name="document"/> hands to a template, by path; null where it hands over none.</summary>
+    public IReadOnlyDictionary<string, TemplatedBy>? TemplatedIn(Document document, Func<string, ResolvedFormKey?> resolve, GameRelease release) =>
+        Templating?.In(document, resolve, release);
 
     /// <summary>The records of this table the mod holds. Mutagen's enumeration by one placed-trap variant
     /// yields every variant a cell holds, so each record is checked. Lazy: Mutagen's group
