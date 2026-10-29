@@ -67,7 +67,7 @@ describe('a mod row says its status against its manifest after its version (mods
     expect((await row(provider, 'ModA')).tooltip).toBe('ModA · 1.0 · its folder lacks 2 files its manifest names');
   });
 
-  it('shows the status mEdit answers next', async () => {
+  it('shows the status Mod status derives next', async () => {
     const { provider, byMod, changed } = providerOver([]);
     const fired = vi.fn();
     provider.onDidChangeTreeData(fired);

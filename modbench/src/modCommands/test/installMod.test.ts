@@ -125,7 +125,7 @@ describe('installMod', () => {
   it.each([
     ['an upgrade over a mod with no manifest, forced', UPGRADED, true],
     ['a new mod, unforced', NEW_MOD, false],
-  ] as const)('installs %s, reading no status', async (_, target, force) => {
+  ] as const)('installs %s, losing what it may', async (_, target, force) => {
     const { result } = await install(INSTALLATION_FILE, target, {}, force);
 
     expect(result).toEqual({ applied: true });

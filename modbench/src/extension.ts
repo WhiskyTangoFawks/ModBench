@@ -167,8 +167,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
   own(instance.subscribe((value) => { modStatuses.derive(value); }));
   const { modSync, pluginSync } = own(instanceSyncs({
-    instance, syncMods: modSyncOver(adapter), channel: outputChannel, modStatuses,
-    syncPlugins: pluginSyncOver(adapter, modStatuses),
+    instance, syncMods: modSyncOver(adapter), channel: outputChannel, syncPlugins: pluginSyncOver(adapter),
   }));
   ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
   const sourceGestureRows = selectionInFocusedView(

@@ -150,8 +150,6 @@ interface ManifestsRead {
 
 const NOTHING_NAMED: ManifestsRead = { goneFrom: () => [], unread: () => undefined };
 
-const lastAnswered = (last: Pick<LastModStatuses, 'of'>): ManifestsRead => ({ goneFrom: (mod) => last.of(mod)?.gone ?? [], unread: () => undefined });
-
 // A plugin the game loads with no line has a row of its own, so earns no line (plugins.md, The tree, story 2). A
 // plugin a manifest names is on no disk until restore (story 10).
 function pluginLinesDelta(
@@ -202,32 +200,22 @@ function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, ma
   };
 }
 
-const dropsFromDisk = (order: readonly PluginEntry[], provided: PluginsProvided): boolean =>
-  provided.kind === 'listed' && order.some(({ name }) => !provided.plugins.has(pluginKey(name)));
-
 const synced = (wrote: boolean, decided: SyncDecision): PluginSyncResult =>
   ('gameFolderNotFound' in decided ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote, ...decided });
 
-// An add waits safely on the statuses Mod status last derived, since their next change runs the sync again. A drop loses
-// the line's place, so it waits on the manifests as the adapters read them now.
-async function syncPlugins(adapter: InstanceAdapter, last: Pick<LastModStatuses, 'of'>): Promise<PluginSyncResult> {
-  const repository = await adapter.repositoryOnDisk();
-  const lastRead = repository ? lastAnswered(last) : NOTHING_NAMED;
-  const first = await changeDeciding(overProvided(adapter), (order, provided): Decision<SyncDecision | { askNow: true }> =>
-    (repository && dropsFromDisk(order, provided) ? { changes: [], decided: { askNow: true } } : decideSync(order, provided, lastRead)));
-  if (!first.applied) return first;
-  if (!('askNow' in first.decided)) return synced(first.wrote, first.decided);
-  const now = await askedManifests(adapter);
-  const second = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, now));
-  return second.applied ? synced(second.wrote, second.decided) : second;
+// A sync reads the manifests it decides on through the adapters, never the Mod status box (ADR-0015).
+async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> {
+  const manifests = await adapter.repositoryOnDisk() ? await askedManifests(adapter) : NOTHING_NAMED;
+  const decided = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, manifests));
+  return decided.applied ? synced(decided.wrote, decided.decided) : decided;
 }
 
 /** Plugin sync over the active profile. */
 export type PluginSyncRun = () => Promise<PluginSyncResult>;
 
-/** `syncPlugins` bound to one instance and to the statuses Mod status last derived. */
-export function pluginSyncOver(adapter: InstanceAdapter, last: Pick<LastModStatuses, 'of'>): PluginSyncRun {
-  return () => syncPlugins(adapter, last);
+/** `syncPlugins` bound to one instance. */
+export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
+  return () => syncPlugins(adapter);
 }
 
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */

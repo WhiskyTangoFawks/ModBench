@@ -10,9 +10,8 @@ import { pluginSyncOver, type PluginsDrop } from '../plugins';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
-import type { ManifestFile, ModStatus } from '../../manifestAdapter/manifestAdapter';
-import { manifestedIn, status } from '../../test/modStatusFixture';
-import { NO_MOD_STATUSES } from '../../test/noModStatuses';
+import type { ManifestFile } from '../../manifestAdapter/manifestAdapter';
+import { manifestedIn } from '../../test/modStatusFixture';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 
 const PROFILE = 'Default';
@@ -206,7 +205,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
   interface Run {
     order?: readonly string[]; provided?: readonly string[]; inData?: DataFolderPlugins; gameRelease?: string; creationClubList?: readonly string[];
     profile?: string;
-    repository?: { manifests: Readonly<Record<string, readonly ManifestFile[] | 'unreadable'>>; lastAnswered?: readonly ModStatus[] };
+    repository?: { manifests: Readonly<Record<string, readonly ManifestFile[] | 'unreadable'>> };
     otherMod?: { name: string; enabled: boolean };
   }
   const sync = async ({
@@ -224,8 +223,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     }), { repositoryOnDisk: repository !== undefined });
     const asked: string[] = [];
     const reading = { ...fake.adapter, modMetadata: (mod: string) => { asked.push(mod); return fake.adapter.modMetadata(mod); } };
-    const lastStatus = (mod: string) => repository?.lastAnswered?.find((answered) => answered.mod === mod);
-    const result = await pluginSyncOver(reading, { of: lastStatus })();
+    const result = await pluginSyncOver(reading)();
     return { fake, result, asked };
   };
   const handedChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
@@ -241,27 +239,16 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     expect(handedChanges(fake)).toEqual([{ kind: 'drop', plugin: 'Gone.esp' }]);
   });
 
-  it('appends a line for a plugin Mod status last named in a manifest with none, and none for a file named below the folder\'s root', async () => {
+  it('appends a line for a plugin a manifest names with none, and none for a file named below the folder\'s root', async () => {
     const { result } = await sync({
-      order: ['Base.esp'], provided: ['Base.esp'],
-      repository: { manifests: {}, lastAnswered: [status('Unrestored', { gone: ['Unrestored.esp', 'optional/Nested.esp'] })] },
+      order: ['Base.esp'], provided: ['Base.esp'], repository: { manifests: { Unrestored: naming('Unrestored.esp', 'optional/Nested.esp') } },
     });
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['Unrestored.esp'], dropped: [] });
   });
 
-  it('reads no manifest when what is on disk drops no line', async () => {
-    const { result, asked } = await sync({ order: ['Base.esp'], provided: ['Base.esp', 'New.esp'], repository: { manifests: { Provider: [] } } });
-
-    expect(result).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
-    expect(asked).toEqual([]);
-  });
-
-  it('decides a drop on the manifests as they read now, not on the statuses Mod status last derived', async () => {
-    const { result } = await sync({
-      order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp'],
-      repository: { manifests: { Unrestored: [] }, lastAnswered: [status('Unrestored', { gone: ['Unrestored.esp'] })] },
-    });
+  it('drops the line of a plugin no manifest names and nothing provides', async () => {
+    const { result } = await sync({ order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp'], repository: { manifests: { Unrestored: [] } } });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Unrestored.esp'] });
   });
@@ -301,7 +288,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       },
     };
 
-    const result = await pluginSyncOver(enablingLate, NO_MOD_STATUSES)();
+    const result = await pluginSyncOver(enablingLate)();
 
     expect(result).toEqual({ applied: false, refusal: 'the manifest of "Late" was not read' });
   });

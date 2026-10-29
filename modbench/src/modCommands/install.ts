@@ -9,7 +9,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
-import { statusesNow } from '../manifestAdapter/manifestAdapter';
+import { statusOf } from '../manifestAdapter/manifestAdapter';
 
 /** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
  *  installation file that is one of the downloaded files installs as that file. */
@@ -74,10 +74,10 @@ const statusUnread = (mod: string, why: string): string => `"${mod}" status coul
 export async function upgradeLoss({ adapter }: { adapter: InstanceAdapter }, target: InstallTarget): Promise<string | undefined> {
   if (target.kind !== 'upgrade') return undefined;
   const mod = target.name;
-  const { modFolders } = await adapter.modOrder();
-  if (!modFolders?.some((folder) => sameEntry(adapter, folder, { kind: 'mod', name: mod }))) return undefined;
-  const [status] = await statusesNow(adapter, [mod]);
-  if (status === undefined) return undefined;
+  const folder = (await adapter.modOrder()).modFolders?.find((held) => sameEntry(adapter, held, { kind: 'mod', name: mod }));
+  if (folder === undefined) return undefined;
+  const sourceFolder = (await adapter.sourceMods()).folderOf(mod);
+  const status = await statusOf({ name: mod, folder: folder.path, ...(sourceFolder === undefined ? {} : { sourceFolder }) }, adapter);
   if (status.unreadable !== undefined) return statusUnread(mod, status.unreadable);
   const loss = lossOf(status);
   return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}.`;

@@ -1,5 +1,4 @@
-// The Mod status box (target-architecture.d2): each mod's status against its manifest, derived whole from each instance
-// value (mod-status trace).
+// target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, ModFolder } from '../instanceAdapter/instanceAdapter';
 import { statusOf, type FolderReads, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';

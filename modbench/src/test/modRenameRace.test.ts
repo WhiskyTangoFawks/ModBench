@@ -1,5 +1,4 @@
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
-import { NO_MOD_STATUSES } from './noModStatuses';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -73,7 +72,7 @@ describe('a rename while a recompute is reading', () => {
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { modSync } = instanceSyncs({
-      modStatuses: NO_MOD_STATUSES, instance, syncMods: modSyncOver(writer),
+      instance, syncMods: modSyncOver(writer),
       syncPlugins: () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
