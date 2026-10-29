@@ -85,6 +85,7 @@ As a user, I want:
 7. A file whose stat matches Modbench's last read not hashed again, so an update after an update reads nothing. Cites: Status, story 3
 8. One line when it lands: how many mods were unchanged, updated and refused, how many files their packages do not hold, and how many files their packages hold with other bytes, with each refused mod and each such file in the Output. This report is the modlist's validation. Cites: common, Reporting
 9. Each source mod with a remote to become a submodule of the repository, and I run no submodule command. Update manifest writes the source mod's entry in `.gitmodules`, with its remote and its branch, and its line in the ignore list. Source Control then shows the source mod as a change, and my stage and commit record it. A source mod that is gone loses its entry and its line. Cites: ADR-0022
+10. Update manifest, with downloaded files the hash index lacks, to show progress naming how many are left, and to stop when I cancel, keeping each hash it took. Hashing them is slow, and runs once for each file.
 
 ## Restore from manifest
 
