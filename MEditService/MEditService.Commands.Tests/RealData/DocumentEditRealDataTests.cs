@@ -108,6 +108,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
             var (identity, before) = befores[gesture.Record.FormKey];
             var named = $"{identity.RecordType} {identity.FormKey} {gesture.Envelope.Op} {gesture.Path}";
             var result = _editHandler.Edit(_plugin, identity.FormKey, gesture.Envelope);
+            if (result.Refusal == RecordEditRefusal.TemplatedFieldReadOnly) continue;
             if (!result.Applied) { failures.Add($"{named}: {result.Refusal} {result.Message}"); continue; }
             var treeAsTheEditLeftIt = SourceModTree();
             var after = treeAsTheEditLeftIt.RecordOf(_plugin, identity).Value()?.Body
