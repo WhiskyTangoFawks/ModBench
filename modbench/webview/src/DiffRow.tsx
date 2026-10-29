@@ -179,9 +179,9 @@ export function DiffRow({
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason, template?.tooltip]
           .filter(Boolean).join('\n') || undefined;
         const edit = editPath && ((value: unknown) => onEdit(key, editPath, value));
-        const dragged = template ? template.formKey : diff.values[key];
-        const drag: CellDrag | undefined = dragged != null
-          ? { row: rowKey, arrayRow: row.elementOf, value: dragged }
+        const dragValue = template ? template.formKey : diff.values[key];
+        const drag: CellDrag | undefined = dragValue != null
+          ? { row: rowKey, arrayRow: row.elementOf, value: dragValue }
           : undefined;
         const landing = (dragged: CellDrag): (() => void) | undefined => {
           if (dragged.row === rowKey) {

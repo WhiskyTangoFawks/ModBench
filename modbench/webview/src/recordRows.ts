@@ -31,7 +31,7 @@ export interface ValueCell extends GridCell {
   shown: unknown;
   editPath?: PathHop[];
   dropAddsTo?: ArrayParentContext;
-  // What a cell the game fills from a template reads, and its tooltip (editor-fields.md, Templated fields).
+  // What a cell the game fills from a template reads, its tooltip, and the template it copies and drags as (editor-fields.md, Templated fields).
   template?: { reading: string; tooltip: string; copyText: string; formKey: string };
 }
 
@@ -115,12 +115,13 @@ function goToTarget(
 }
 
 function templateReading(template: TemplatedBy, ownValue: string | undefined, editable: boolean): NonNullable<ValueCell['template']> {
+  const copyText = formKeyLabel(template.template, template.resolution);
   return {
     reading: `from ${template.resolution.editorId || template.template}`,
-    copyText: formKeyLabel(template.template, template.resolution),
+    copyText,
     formKey: template.template,
     tooltip: [
-      `Templated by ${template.flag} from ${formKeyLabel(template.template, template.resolution)}`,
+      `Templated by ${template.flag} from ${copyText}`,
       ...(ownValue === undefined ? [] : [`Its own value: ${ownValue}`]),
       ...(editable ? [`Clearing ${template.flag} makes it editable.`] : []),
     ].join('\n'),

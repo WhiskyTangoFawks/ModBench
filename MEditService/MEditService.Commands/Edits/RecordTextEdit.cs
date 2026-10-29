@@ -191,7 +191,7 @@ internal static class RecordTextEdit
             "Form flag on its header first.");
     }
 
-    // A templated field's own value is never seen by the game (editor-fields.md, Templated fields).
+    // editor-fields.md, Templated fields.
     private static RecordEditResult? RefuseIfTemplated(RecordTextEditRequest request, string spelled)
     {
         if (request.Schema.TemplatedIn(request.Record, _ => null, request.Release) is not { } templated) return null;

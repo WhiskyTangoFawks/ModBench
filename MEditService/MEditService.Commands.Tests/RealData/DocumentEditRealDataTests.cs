@@ -87,8 +87,11 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield break;
         }
         yield return new(record, SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
+        var templated = schema.TemplatedIn(Document.Parse(record.Text), _ => null, GameRelease.Fallout4);
         foreach (var (envelope, path) in EveryGestureWithThePathItMayChange(schema, JsonDocument.Parse(record.Text).RootElement))
-            yield return new(record, envelope, path);
+        {
+            if (templated?.ContainsKey(path) != true) yield return new(record, envelope, path);
+        }
     }
 
     private void RunSweep(IReadOnlyList<Gesture> gestures)
@@ -108,7 +111,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
             var (identity, before) = befores[gesture.Record.FormKey];
             var named = $"{identity.RecordType} {identity.FormKey} {gesture.Envelope.Op} {gesture.Path}";
             var result = _editHandler.Edit(_plugin, identity.FormKey, gesture.Envelope);
-            if (result.Refusal == RecordEditRefusal.TemplatedFieldReadOnly) continue;
             if (!result.Applied) { failures.Add($"{named}: {result.Refusal} {result.Message}"); continue; }
             var treeAsTheEditLeftIt = SourceModTree();
             var after = treeAsTheEditLeftIt.RecordOf(_plugin, identity).Value()?.Body

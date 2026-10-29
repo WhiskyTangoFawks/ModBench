@@ -154,13 +154,13 @@ describe('RecordPanel — a templated field', () => {
     expect(contextOf(cellAt('Level', 1)).copyText).toBe('5');
   });
 
-  it('leaves Paste, Cut and Delete to reach mEdit, which refuses them naming the field and the flag', async () => {
+  it('keeps the editable cell section, so Paste, Cut and Delete reach mEdit to refuse', async () => {
     renderPanel(levelPanel([null, byTraits()]));
     await screen.findByText('Level');
     expect(contextOf(cellAt('Level', 2)).webviewSection).toEqual(expect.stringMatching(/\beditableCell\b/));
   });
 
-  it('is dragged as its template, and a drop on it is left to mEdit to refuse', async () => {
+  it('is dragged as its template, so a drop of it writes the template', async () => {
     const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' });
     renderPanel(compareResultFixture({
       overrides: [MOD, SECOND].map(plugin => compareOverride({
