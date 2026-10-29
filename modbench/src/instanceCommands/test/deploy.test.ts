@@ -41,27 +41,19 @@ describe('deploy', () => {
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
 
-    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: [{ path: 'Data/mine.ini', winner: '/instance/mods/Mod/mine.ini' }], unmanaged: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] }, canMoveToOverwrite: true }, [['/deployed', FILES, { release: 'Fallout4', entries: [] }]]]);
+    expect([result, deployedTo]).toEqual([{ applied: true, wrote: true, leftOut: [{ path: 'Data/mine.ini', winner: '/instance/mods/Mod/mine.ini' }], unmanaged: ['Data/mine.ini'], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }, [['/deployed', FILES, { release: 'Fallout4', entries: [] }]]]);
   });
 
   it.each([
     ['is the game folder', '/games/Fallout4'],
     ['holds the game folder', '/games'],
     ['sits inside the game folder', '/games/Fallout4/Data'],
-  ])('answers that moving to Overwrite does not apply when the deployment folder %s', async (_case, folder) => {
+  ])('names no file it does not manage when the deployment folder %s, whose files are the game\'s own, and still names what it left out', async (_case, folder) => {
     const { deployment } = deploymentAnswering(landed);
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) }).deploy(LOAD);
 
-    expect(result).toMatchObject({ applied: true, canMoveToOverwrite: false });
-  });
-
-  it('answers that moving to Overwrite does not apply when deploy manages every file', async () => {
-    const { deployment } = deploymentAnswering(() => Promise.resolve({ wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } }));
-
-    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
-
-    expect(result).toMatchObject({ applied: true, canMoveToOverwrite: false });
+    expect(result).toMatchObject({ applied: true, unmanaged: [], leftOut: [{ path: 'Data/mine.ini', winner: '/instance/mods/Mod/mine.ini' }] });
   });
 
   it.each([
@@ -104,6 +96,26 @@ describe('deploy', () => {
     await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy({ ...LOAD, plugins });
 
     expect(deployedTo.map(([, , order]) => order)).toEqual([{ release: 'Fallout4', entries: [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: false }] }]);
+  });
+});
+
+describe('a game folder that cannot be read', () => {
+  const UNREADABLE = { moveIntoOverwrite: () => Promise.resolve(undefined), gameFolderOverlapping: () => Promise.reject(new Error('ModOrganizer.ini: EACCES')) };
+
+  it('refuses deploy before it writes anything', async () => {
+    const { deployment, deployedTo } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: UNREADABLE, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(LOAD);
+
+    expect([result, deployedTo]).toEqual([{ applied: false, refusal: 'ModOrganizer.ini: EACCES' }, []]);
+  });
+
+  it('refuses purge before it removes anything', async () => {
+    const { deployment, purgedFrom } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: UNREADABLE, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).purge();
+
+    expect([result, purgedFrom]).toEqual([{ applied: false, refusal: 'ModOrganizer.ini: EACCES' }, []]);
   });
 });
 
@@ -181,6 +193,15 @@ describe('purge', () => {
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).purge();
 
     expect([result, purgedFrom]).toEqual([{ applied: true, ...PURGED }, ['/deployed']]);
+  });
+
+  it('names no file it did not remove when the deployment folder overlaps the game folder, whose files are the game\'s own', async () => {
+    const { deployment } = deploymentAnswering(landed);
+    deployment.purge = () => Promise.resolve({ ...PURGED, unmanaged: ['Fallout4.exe'] });
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/games/Fallout4' }) }).purge();
+
+    expect(result).toEqual({ applied: true, ...PURGED, unmanaged: [] });
   });
 
   it('is refused, naming the setting, while the setting holds no value', async () => {

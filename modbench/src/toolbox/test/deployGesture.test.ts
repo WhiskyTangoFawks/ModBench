@@ -28,7 +28,7 @@ import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult }
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
-const NOTHING_DEPLOYED = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true } as const;
+const NOTHING_DEPLOYED = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED } as const;
 
 const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
 
@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe('Deploy', () => {
   it('deploys the files the instance value says the game gets, under the Toolbox\'s progress, and says nothing', async () => {
-    const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false });
+    const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
 
     await run();
 
@@ -101,7 +101,7 @@ describe('Deploy', () => {
   });
 
   it('warns of each file it left out, naming it and the path that holds a file deploy did not write', async () => {
-    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [{ path: 'Data/MCM/settings.ini', winner: '/instance/mods/A/MCM/settings.ini' }, { path: 'Data/a.esp', winner: '/instance/mods/B/a.esp' }], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false });
+    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [{ path: 'Data/MCM/settings.ini', winner: '/instance/mods/A/MCM/settings.ini' }, { path: 'Data/a.esp', winner: '/instance/mods/B/a.esp' }], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
 
     await run();
 
@@ -112,7 +112,7 @@ describe('Deploy', () => {
 
   it('warns of each file it left out for another the game gets at its path, naming both', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [{ path: 'Data/x.ini', winner: '/instance/mods/Lower/Root/Data/x.ini' }], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true,
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [{ path: 'Data/x.ini', winner: '/instance/mods/Lower/Root/Data/x.ini' }], leftAside: [], pluginsTxt: UNCHANGED,
     });
 
     await run();
@@ -124,7 +124,7 @@ describe('Deploy', () => {
 
   it('warns of each file it set aside and could not remove, which the next deploy removes', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: ['Data/b.esp.modbench_aside_7_0 (EBUSY: resource busy or locked)'], pluginsTxt: UNCHANGED, canMoveToOverwrite: true,
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: ['Data/b.esp.modbench_aside_7_0 (EBUSY: resource busy or locked)'], pluginsTxt: UNCHANGED,
     });
 
     await run();
@@ -137,7 +137,7 @@ describe('Deploy', () => {
 
   it('warns that it wrote no plugins.txt, saying why', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'notWritten', why: 'no prefix' }, canMoveToOverwrite: false,
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'notWritten', why: 'no prefix' },
     });
 
     await run();
@@ -147,7 +147,7 @@ describe('Deploy', () => {
 
   it('warns of the plugins.txt it renamed, naming its new name', async () => {
     const { reporter, run } = deployAnswering({
-      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: ['C:\\Local\\Fallout4\\plugins.txt.modbench_renamed', 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2'] }, canMoveToOverwrite: false,
+      applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'written', renamed: ['C:\\Local\\Fallout4\\plugins.txt.modbench_renamed', 'C:\\Local\\Fallout4\\plugins.txt.modbench_renamed_2'] },
     });
 
     await run();
@@ -159,7 +159,7 @@ describe('Deploy', () => {
   });
 
   it('warns of each file in the deployment folder it does not manage, and offers to move them to Overwrite', async () => {
-    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: ['Data/MCM/settings.ini', 'game.exe'], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: true });
+    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: ['Data/MCM/settings.ini', 'game.exe'], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
 
     await run();
     const [report] = reporter.reports;
@@ -170,14 +170,6 @@ describe('Deploy', () => {
       1, 'warning', 'The deployment folder holds 2 files deploy does not manage, each named in the Output.', undefined, 'Move to Overwrite',
       [['modbench.instance.moveToOverwrite', ['Data/MCM/settings.ini', 'game.exe']]],
     ]);
-  });
-
-  it('offers no move to Overwrite where it does not apply', async () => {
-    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: ['Data/a.esp'], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false });
-
-    await run();
-
-    expect(reporter.reports.map((r) => [r.message, r.action])).toEqual([['The deployment folder holds 1 files deploy does not manage, each named in the Output.', undefined]]);
   });
 });
 
