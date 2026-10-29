@@ -120,7 +120,7 @@ public record FieldDiff(
     // one, keyed by the focused column and then the cell's column. The panel picks the entry for the
     // column it has focused.
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>>? CellStatesByFocus = null,
-    // True where the last copy templates this field: the game takes it from a template, so no copy wins it.
+    // True where the last copy templates this field, so no copy wins it (editor-conflicts.md, What takes part, story 7).
     bool NoWinner = false);
 
 internal sealed record ClassifyResult(

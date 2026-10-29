@@ -130,5 +130,7 @@ public sealed class TemplatedConflictTests : IDisposable
         var race = _index.Queries.GetCompareRecords(copies).Compared().Diffs.Single(d => d.FieldName == "Race");
 
         Assert.Equal(ConflictAll.NoConflict, race.ConflictAll);
+        var focusStates = race.CellStatesByFocus.Require().Values;
+        Assert.All(focusStates, states => Assert.DoesNotContain(states.Keys, column => column.Contains("Middle.esp", StringComparison.Ordinal)));
     }
 }

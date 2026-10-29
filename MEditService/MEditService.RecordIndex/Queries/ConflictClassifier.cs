@@ -86,8 +86,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             ColumnOrder: OrderOf(records, columns),
             ComparedOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
             PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
-            Templated: records.Select((r, i) => (Templated: r.Templated, Column: columns[i])).Where(t => t.Templated is not null)
-                .ToDictionary(t => t.Column, t => t.Templated ?? new Dictionary<string, TemplatedBy>(), StringComparer.Ordinal),
+            Templated: records.Zip(columns).ToDictionary(t => t.Second, t => t.First.Templated ?? NoneTemplated, StringComparer.Ordinal),
             MissingStringsFiles: records.Select((r, i) => (File: r.MissingStringsFile, Column: columns[i]))
                 .Where(t => t.File is not null)
                 .ToDictionary(t => t.Column, t => t.File ?? "", StringComparer.Ordinal),
@@ -103,6 +102,8 @@ internal sealed class ConflictClassifier(ILogger logger)
     private static string Column(RecordDetail record) => ColumnKey.Of(record.Plugin, record.Origin);
 
     private const int MaxArrayChildCount = 500;
+
+    private static readonly IReadOnlyDictionary<string, TemplatedBy> NoneTemplated = new Dictionary<string, TemplatedBy>();
 
     // MasterColumn (ADR-0012) is the compound ColumnKey.Of identity, so no plain-plugin comparison
     // can match the wrong column.
@@ -129,6 +130,14 @@ internal sealed class ConflictClassifier(ILogger logger)
         // The columns whose copy hands the member at this dotted path, or one above it, to a template.
         public HashSet<string> TemplatedAt(string path) =>
             [.. Templated.Where(t => t.Value.Keys.Any(member => path == member || path.StartsWith(member + ".", StringComparison.Ordinal))).Select(t => t.Key)];
+
+        // The templated members inside the node at this dotted path, relative to it: a struct is
+        // compared with them left out.
+        public List<string[]> TemplatedWithin(string path) =>
+            [.. Templated.Values.SelectMany(t => t.Keys)
+                .Where(member => member.StartsWith(path + ".", StringComparison.Ordinal))
+                .Distinct()
+                .Select(member => member[(path.Length + 1)..].Split('.'))];
     }
 
     // How a node's cells take their conflict state: ComputeCellStates. A comparison of several
@@ -154,8 +163,12 @@ internal sealed class ConflictClassifier(ILogger logger)
         var noWinner = !ctx.Compares && templatedColumns.Contains(winnerColumn);
 
         var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
+        var templatedWithin = ctx.TemplatedWithin(path);
+        var compared = templatedWithin.Count == 0
+            ? values
+            : values.ToDictionary(v => v.Key, v => WithoutMembers(v.Value, templatedWithin));
         var cellStates = ctx.StatesOf is { } statesOf && !ignoredInConflicts && !noWinner
-            ? statesOf(values, templatedColumns, same)
+            ? statesOf(compared, templatedColumns, same)
             : new Dictionary<string, ConflictThis>();
 
         List<FieldDiff>? children = null;
@@ -165,7 +178,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         // Worst is a maximum over a severity order, so folding children equals reducing the whole
         // subtree at once.
         var ownState = ctx.Compares && !ignoredInConflicts && !ConflictRules.AllSame(
-                values.Where(v => !templatedColumns.Contains(v.Key) && (partialFormTakesPart || !ctx.PartialFormColumns.Contains(v.Key))).Select(v => v.Value), same)
+                compared.Where(v => !templatedColumns.Contains(v.Key) && (partialFormTakesPart || !ctx.PartialFormColumns.Contains(v.Key))).Select(v => v.Value), same)
             ? ConflictAll.ConflictBenign
             : ConflictRules.Reduce(cellStates.Values);
         var conflictAll = ConflictRules.Worst(ownState, (children ?? []).Select(child => child.ConflictAll));
@@ -173,8 +186,20 @@ internal sealed class ConflictClassifier(ILogger logger)
         var links = LinkFacts(shapes, values, ctx);
         return new FieldDiff(
             label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors,
-            CellStatesByFocus: ctx.Compares ? ConflictRules.StatesByFocus(values.Where(v => !templatedColumns.Contains(v.Key)).ToDictionary(v => v.Key, v => v.Value), same) : null,
+            CellStatesByFocus: ctx.Compares ? ConflictRules.StatesByFocus(compared.Where(v => !templatedColumns.Contains(v.Key)).ToDictionary(v => v.Key, v => v.Value), same) : null,
             NoWinner: noWinner);
+    }
+
+    private static object? WithoutMembers(object? value, IEnumerable<string[]> members)
+    {
+        if (value is not JsonElement { ValueKind: JsonValueKind.Object } element) return value;
+        var node = System.Text.Json.Nodes.JsonNode.Parse(element.GetRawText());
+        foreach (var member in members)
+        {
+            var owner = member[..^1].Aggregate(node, (at, name) => at?[name]);
+            (owner as System.Text.Json.Nodes.JsonObject)?.Remove(member[^1]);
+        }
+        return JsonSerializer.SerializeToElement(node);
     }
 
     // A table of several record classes carries the document's discriminator as a column, and a
