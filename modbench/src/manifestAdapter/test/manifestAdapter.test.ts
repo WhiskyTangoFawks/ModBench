@@ -30,8 +30,6 @@ const sourceMod = (
   + '{"installationFile":"Zed.7z","size":7,"hash":"ZZZZ"},\n'
   + '{"installationFile":"Alpha.zip","size":5,"hash":"AAAA","page":"https://www.nexusmods.com/fallout4/mods/1"}\n'
   + '],\n'
-  + '"exclude": ["a/b.txt","B.txt"],\n'
-  + '"archives": {\n"mod.ba2": ["a.nif","b.nif"]\n},\n'
   + '"files": [\n'
   + '{"path":"a.nif"},\n'
   + '{"path":"b.nif","package":"Zed.7z"},\n'
@@ -43,16 +41,49 @@ const sourceMod = (
   + '}\n'
 );
 
+const builtSourceMod = (
+  '{\n'
+  + '"output": "The Mod",\n'
+  + '"packages": [\n{"submodule":"Mod","version":"1.0"}\n],\n'
+  + '"exclude": ["a.esp","docs"],\n'
+  + '"archives": {\n'
+  + '"Mod - Main.ba2": ["meshes/a.nif","meshes/b.nif"],\n'
+  + '"Mod - Textures.ba2": ["textures/a.dds"]\n'
+  + '},\n'
+  + '"files": [\n'
+  + '{"path":"Mod - Main.ba2"},\n'
+  + '{"path":"Mod.esp"}\n'
+  + ']\n'
+  + '}\n'
+);
+
+const sourceModWithoutFiles = '{\n"output": "Mod",\n"files": []\n}\n';
+
 const gameFolder = (
-  '{\n"packages": [\n{"gameFolder":"Fallout 4","hash":"GGGG","depots":{"377161":"1","377162":"2"},"version":"9"}\n],\n"files": []\n}\n'
+  '{\n"packages": [\n{"gameFolder":"Fallout 4","hash":"AAAA","depots":{"377161":"11","377162":"22"},"version":"2"}\n],\n"files": []\n}\n'
+);
+
+const depotsOfUnequalLength = (
+  '{\n"packages": [\n{"gameFolder":"Fallout 4","hash":"AAAA","depots":{"1234567":"22","377161":"11"}}\n],\n"files": []\n}\n'
+);
+
+const sourceModWithExclusionsAndArchives = (
+  '{\n"output": "mod",\n"packages": [\n{"submodule":"Mod"}\n],\n'
+  + '"exclude": ["a/b.txt","B.txt"],\n'
+  + '"archives": {\n"mod.ba2": ["a.nif","b.nif"]\n},\n'
+  + '"files": []\n}\n'
 );
 
 describe('a manifest the adapter reads and writes', () => {
   it.each([
     ['a version, and a file in each place', modWithVersion],
     ['steps, tools and a file a step makes', withSteps],
-    ['a source mod with its packages, exclusions and archives', sourceMod],
+    ['a source mod with its packages', sourceMod],
+    ['a built source mod with its exclusions and archives', builtSourceMod],
+    ['a source mod naming no file', sourceModWithoutFiles],
     ['a game folder with its depots', gameFolder],
+    ['depots whose ids differ in length, in ordinal order', depotsOfUnequalLength],
+    ['exclusions and archives in a source mod', sourceModWithExclusionsAndArchives],
   ])('round-trips %s byte for byte', (_name, text) => {
     const read = readManifest(text);
     if (!('manifest' in read)) throw new Error(read.refused);
@@ -90,8 +121,10 @@ describe('a manifest the adapter reads and writes', () => {
 
 describe('a manifest the adapter refuses', () => {
   it.each([
-    ['<<<<<<< HEAD\n', 'its manifest cannot be read'],
-    ['{\n"files": [\n{"path":"a.txt"}\n{"path":"b.txt"}\n]\n}\n', 'cannot be read'],
+    ['<<<<<<< HEAD\n', 'line 1'],
+    ['{\n"files": [\n{"path":"a.txt"}\n{"path":"b.txt"}\n]\n}\n', 'line 4'],
+    ['{\n"files": [],\n<<<<<<< HEAD\n}\n', 'line 3'],
+    ['line 5 {', 'line 1'],
     ['{"files": [{"path":"a.txt"},{"path":7}]}', 'its file 2'],
     ['{"files": [{"path":"a.txt"},{"path":"b.txt","packagePath":7}]}', 'its file 2'],
     ['{"files": [{"path":"a.txt","otherBytes":false}]}', 'its file 1: its otherBytes is false'],
@@ -105,7 +138,7 @@ describe('a manifest the adapter refuses', () => {
     ['{"packages": [{"submodule":"Mod"}, {"installationFile":"A.zip","size":1,"hash":"H","version":"2"}], "files": []}', "its manifest's package 2 holds a version"],
     ['{"packages": [{"installationFile":"A.zip"}], "files": []}', 'its manifest cannot be read at its package 1'],
     ['{"packages": [{"installationFile":"A.zip","size":1,"hash":"H","path":"C:/A.zip"}], "files": []}', "its manifest's package 1 holds 'path'"],
-    ['{"files": []', 'its manifest cannot be read'],
+    ['{"files": []', 'line 1'],
     ['{"packages": [{"remote":"https://example.com/mod.git"}], "files": []}', "holds 'remote'"],
     ['{"packages": [{"version": 7}], "files": []}', 'cannot be read'],
     ['{}', 'cannot be read'],
@@ -128,7 +161,6 @@ describe('a manifest the adapter refuses', () => {
     ['{"extra": 1, "files": []}', "holds 'extra'"],
   ])('refuses %j naming where', (text, where) => {
     const read = readManifest(text);
-    expect(read).toHaveProperty('refused');
-    expect((read as { refused: string }).refused).toContain(where);
+    expect('refused' in read ? read.refused : '').toContain(where);
   });
 });

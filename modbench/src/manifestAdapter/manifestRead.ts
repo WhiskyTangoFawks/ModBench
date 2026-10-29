@@ -30,7 +30,7 @@ const arrayOf = (value: unknown, where: string): unknown[] => {
 const stringsOf = (value: unknown, where: string): string[] => arrayOf(value, where).map((item) => textOf(item, where));
 
 const required = (line: Json, key: string, where: string): unknown => {
-  if (!(key in line)) throw unreadable(where);
+  if (!Object.hasOwn(line, key)) throw unreadable(where);
   return line[key];
 };
 
@@ -55,25 +55,25 @@ const packageOf = (index: number, line: unknown): { pkg: ManifestPackage; versio
   known(members, `its manifest's package ${index + 1}`, [
     'installationFile', 'size', 'hash', 'page', 'gameFolder', 'depots', 'submodule', 'repository', 'version',
   ]);
-  const version = 'version' in members ? textOf(members.version, where) : undefined;
+  const version = Object.hasOwn(members, 'version') ? textOf(members.version, where) : undefined;
   if (version !== undefined && index > 0) {
     throw new Unreadable(`its manifest's package ${index + 1} holds a version, which belongs to the first package`);
   }
   const withVersion = (pkg: ManifestPackage): { pkg: ManifestPackage; version?: string } => (version === undefined ? { pkg } : { pkg, version });
-  if ('installationFile' in members) {
+  if (Object.hasOwn(members, 'installationFile')) {
     const size = required(members, 'size', where);
     if (typeof size !== 'number' || !Number.isSafeInteger(size)) throw unreadable(where);
     const name = textOf(members.installationFile, where);
     const hash = textOf(required(members, 'hash', where), where);
-    return withVersion('page' in members ? { kind: 'installationFile', name, size, hash, page: textOf(members.page, where) } : { kind: 'installationFile', name, size, hash });
+    return withVersion(Object.hasOwn(members, 'page') ? { kind: 'installationFile', name, size, hash, page: textOf(members.page, where) } : { kind: 'installationFile', name, size, hash });
   }
-  if ('gameFolder' in members) {
-    const depots: GameDepot[] = 'depots' in members
+  if (Object.hasOwn(members, 'gameFolder')) {
+    const depots: GameDepot[] = Object.hasOwn(members, 'depots')
       ? Object.entries(objectOf(members.depots, where)).map(([id, depotVersion]) => ({ id, version: textOf(depotVersion, where) }))
       : [];
     return withVersion({ kind: 'gameFolder', name: textOf(members.gameFolder, where), hash: textOf(required(members, 'hash', where), where), depots });
   }
-  if ('submodule' in members) return withVersion({ kind: 'sourceRepository', name: textOf(members.submodule, where), isSubmodule: true });
+  if (Object.hasOwn(members, 'submodule')) return withVersion({ kind: 'sourceRepository', name: textOf(members.submodule, where), isSubmodule: true });
   return withVersion({ kind: 'sourceRepository', name: textOf(required(members, 'repository', where), where), isSubmodule: false });
 };
 
@@ -95,7 +95,7 @@ const stepOf = (index: number, line: unknown): ManifestStep => {
   known(members, `its manifest's step ${index + 1}`, ['task', 'args']);
   const task = textOf(required(members, 'task', where), where);
   if (task.trim() === '') throw unreadable(where, 'it names no task');
-  return { task, args: 'args' in members ? stringsOf(members.args, where) : [] };
+  return { task, args: Object.hasOwn(members, 'args') ? stringsOf(members.args, where) : [] };
 };
 
 const toolOf = (index: number, line: unknown): ManifestTool => {
@@ -112,7 +112,7 @@ const toolOf = (index: number, line: unknown): ManifestTool => {
 const fileProblem = (index: number, why: string): Unreadable => unreadable(`its file ${index + 1}`, why);
 
 const flagOf = (index: number, line: Json, key: string, written: boolean): boolean => {
-  if (!(key in line)) return false;
+  if (!Object.hasOwn(line, key)) return false;
   const flag = line[key];
   if (typeof flag !== 'boolean') throw unreadable(`its file ${index + 1}`);
   if (flag !== written) throw fileProblem(index, `its ${key} is ${written ? 'false' : 'true'}`);
@@ -130,8 +130,8 @@ const fileOf = (index: number, line: unknown): ManifestFile => {
     { set: flagOf(index, members, 'madeByStep', true), says: 'a step makes it', entry: { kind: 'madeByStep' } },
   ];
   const says = flags.filter((flag) => flag.set);
-  const movedTo = 'packagePath' in members ? textOf(members.packagePath, where) : undefined;
-  const named = 'package' in members ? textOf(members.package, where) : undefined;
+  const movedTo = Object.hasOwn(members, 'packagePath') ? textOf(members.packagePath, where) : undefined;
+  const named = Object.hasOwn(members, 'package') ? textOf(members.package, where) : undefined;
   const withPackage = (entry: PackageEntry): ManifestFile => (named === undefined ? { path, entry } : { path, entry, package: named });
   const [only, other] = says;
   if (only && other) throw fileProblem(index, `it says both that ${only.says} and that ${other.says}`);
@@ -161,30 +161,53 @@ const manifestOf = (text: string): Manifest => {
   const root = objectOf(JSON.parse(text), '');
   known(root, 'its manifest', [MANIFEST_OUTPUT_KEY, 'packages', 'exclude', 'archives', 'steps', 'tools', 'files']);
   const files = arrayOf(required(root, 'files', ''), 'its files').map((line, index) => fileOf(index, line));
-  const steps = 'steps' in root ? arrayOf(root.steps, 'its steps').map((line, index) => stepOf(index, line)) : [];
-  const tools = 'tools' in root ? arrayOf(root.tools, 'its tools').map((line, index) => toolOf(index, line)) : [];
-  const { packages, version } = 'packages' in root ? packagesOf(root.packages) : { packages: [] as ManifestPackage[], version: undefined };
+  const steps = Object.hasOwn(root, 'steps') ? arrayOf(root.steps, 'its steps').map((line, index) => stepOf(index, line)) : [];
+  const tools = Object.hasOwn(root, 'tools') ? arrayOf(root.tools, 'its tools').map((line, index) => toolOf(index, line)) : [];
+  const { packages, version } = Object.hasOwn(root, 'packages') ? packagesOf(root.packages) : { packages: [] as ManifestPackage[], version: undefined };
   const unnamed = files.findIndex((file) => file.package !== undefined && packages.every((pkg) => pkg.name !== file.package));
   if (unnamed >= 0) throw fileProblem(unnamed, 'it names a package the manifest does not name');
   const madeByStep = files.findIndex((file) => file.entry.kind === 'madeByStep');
   if (steps.length === 0 && madeByStep >= 0) throw fileProblem(madeByStep, 'it says a step makes the file, and the manifest holds no step');
-  const exclude = 'exclude' in root ? stringsOf(root.exclude, 'its exclude') : [];
+  const exclude = Object.hasOwn(root, 'exclude') ? stringsOf(root.exclude, 'its exclude') : [];
   inTheFolder('exclude', exclude);
   return {
     packages,
     ...(version === undefined ? {} : { version }),
-    ...(MANIFEST_OUTPUT_KEY in root ? { output: outputOf(root[MANIFEST_OUTPUT_KEY]) } : {}),
+    ...(Object.hasOwn(root, MANIFEST_OUTPUT_KEY) ? { output: outputOf(root[MANIFEST_OUTPUT_KEY]) } : {}),
     exclude,
-    archives: 'archives' in root ? archivesOf(root.archives) : [],
+    archives: Object.hasOwn(root, 'archives') ? archivesOf(root.archives) : [],
     steps,
     tools,
     files,
   };
 };
 
-const lineOf = (problem: SyntaxError): string => {
-  const line = /line (\d+)/.exec(problem.message)?.[1];
-  return line === undefined ? '' : ` at line ${line}`;
+const leavesTheTextIncomplete = (prefix: string): boolean => {
+  try {
+    JSON.parse(prefix);
+    return false;
+  } catch (problem) {
+    const message = problem instanceof Error ? problem.message : '';
+    const position = /at position (\d+)/.exec(message)?.[1];
+    return /end of JSON input/.test(message) || (position !== undefined && Number(position) >= prefix.length);
+  }
+};
+
+const firstUnparsableLength = (text: string): number => {
+  let [low, high] = [0, text.length];
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (leavesTheTextIncomplete(text.slice(0, middle))) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+};
+
+const lineOf = (problem: SyntaxError, text: string): string => {
+  const reported = /\(line (\d+) column/.exec(problem.message)?.[1];
+  if (reported !== undefined) return ` at line ${reported}`;
+  const offending = firstUnparsableLength(text) - 1;
+  return offending < 0 ? '' : ` at line ${text.slice(0, offending).split('\n').length}`;
 };
 
 export function readManifest(text: string): ManifestRead {
@@ -192,7 +215,7 @@ export function readManifest(text: string): ManifestRead {
     return { manifest: manifestOf(text) };
   } catch (problem) {
     if (problem instanceof Unreadable) return { refused: problem.message };
-    if (problem instanceof SyntaxError) return { refused: `its manifest cannot be read${lineOf(problem)}` };
+    if (problem instanceof SyntaxError) return { refused: `its manifest cannot be read${lineOf(problem, text)}` };
     throw problem;
   }
 }

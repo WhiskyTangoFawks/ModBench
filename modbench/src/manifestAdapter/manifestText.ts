@@ -10,24 +10,24 @@ const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
   ordinal(upperUnits(a), upperUnits(b)) || ordinal(a, b);
 
-const packageLine = (pkg: ManifestPackage, version: string | undefined): object => {
-  const members: Record<string, unknown> = {};
+const objectText = (members: readonly (readonly [string, string])[]): string =>
+  `{${members.map(([key, value]) => `${JSON.stringify(key)}:${value}`).join(',')}}`;
+
+const packageLine = (pkg: ManifestPackage, version: string | undefined): string => {
+  const members: [string, string][] = [];
   if (pkg.kind === 'installationFile') {
-    members.installationFile = pkg.name;
-    members.size = pkg.size;
-    members.hash = pkg.hash;
-    if (pkg.page !== undefined) members.page = pkg.page;
+    members.push(['installationFile', JSON.stringify(pkg.name)], ['size', JSON.stringify(pkg.size)], ['hash', JSON.stringify(pkg.hash)]);
+    if (pkg.page !== undefined) members.push(['page', JSON.stringify(pkg.page)]);
   } else if (pkg.kind === 'gameFolder') {
-    members.gameFolder = pkg.name;
-    members.hash = pkg.hash;
+    members.push(['gameFolder', JSON.stringify(pkg.name)], ['hash', JSON.stringify(pkg.hash)]);
     if (pkg.depots.length > 0) {
-      members.depots = Object.fromEntries([...pkg.depots].sort((a, b) => ordinal(a.id, b.id)).map((depot) => [depot.id, depot.version]));
+      members.push(['depots', objectText([...pkg.depots].sort((a, b) => ordinal(a.id, b.id)).map((depot) => [depot.id, JSON.stringify(depot.version)]))]);
     }
   } else {
-    members[pkg.isSubmodule ? 'submodule' : 'repository'] = pkg.name;
+    members.push([pkg.isSubmodule ? 'submodule' : 'repository', JSON.stringify(pkg.name)]);
   }
-  if (version !== undefined) members.version = version;
-  return members;
+  if (version !== undefined) members.push(['version', JSON.stringify(version)]);
+  return objectText(members);
 };
 
 const fileLine = (file: ManifestFile, first: string | undefined): object => {
@@ -52,8 +52,8 @@ const fileLine = (file: ManifestFile, first: string | undefined): object => {
   return members;
 };
 
-const lineEach = (key: string, items: readonly object[]): string[] =>
-  items.length === 0 ? [] : [`"${key}": [\n${items.map((item) => JSON.stringify(item)).join(',\n')}\n]`];
+const lineEach = (key: string, items: readonly (object | string)[]): string[] =>
+  items.length === 0 ? [] : [`"${key}": [\n${items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(',\n')}\n]`];
 
 export function manifestText(manifest: Manifest): string {
   const first = manifest.packages[0]?.name;
