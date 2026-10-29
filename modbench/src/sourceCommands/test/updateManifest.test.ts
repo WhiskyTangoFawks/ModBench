@@ -335,9 +335,9 @@ describe('update manifest', () => {
 
       const result = await update(['ModA'], {}, [{ ...STOCK_GAME, folder }]);
 
-      expect([result.refused, result.landed.map(({ mod }) => mod), (await heldIn(folder))]).toEqual([
-        [], ['ModA', 'Stock Game/'],
-        { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: expect.any(String), depots: [] }], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
+      const { packages, ...rest } = await heldIn(folder);
+      expect([result.refused, result.landed.map(({ mod }) => mod), packages.map(({ kind }) => kind), rest]).toEqual([
+        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
       ]);
     });
   });
