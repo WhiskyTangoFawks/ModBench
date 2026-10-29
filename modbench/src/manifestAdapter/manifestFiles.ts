@@ -1,8 +1,9 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { MANIFEST_SUFFIX } from '../wire/sourceMod';
-import type { ManifestRead } from './manifest';
+import type { Manifest, ManifestRead } from './manifest';
+import { manifestText } from './manifestText';
 import { readManifest } from './manifestRead';
 
 const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -19,13 +20,36 @@ async function fileNamesIn(folder: string): Promise<string[]> {
 // An editor may write a byte order mark, which JSON does not allow.
 const read = async (path: string): Promise<ManifestRead> => readManifest((await readFile(path, 'utf8')).replace(/^\uFEFF/, ''));
 
+const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
+
 /** The manifest named for `folder` in it, its name in any case, so a folder reads alike on Windows and Linux
  *  (modlist-repository.md, The manifest, story 16); undefined when it holds none. */
 export async function manifestIn(folder: string): Promise<ManifestRead | undefined> {
   const named = `${basename(folder)}${MANIFEST_SUFFIX}`.toLowerCase();
   const [one, other] = (await fileNamesIn(folder)).filter((name) => name.toLowerCase() === named);
-  if (other !== undefined) return { refused: `its folder holds two manifests, '${one}' and '${other}'` };
+  if (other !== undefined) return { refused: twoManifests(one ?? '', other) };
   return one === undefined ? undefined : read(join(folder, one));
+}
+
+// The temp carries the name the Instance adapter's listings skip.
+/** Writes `manifest` as the manifest `folder` holds, in the spelling it holds it in, else named for the folder; true
+ *  when the file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
+export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
+  const named = `${basename(folder)}${MANIFEST_SUFFIX}`;
+  const [one, other] = (await fileNamesIn(folder)).filter((name) => name.toLowerCase() === named.toLowerCase());
+  if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
+  const path = join(folder, one ?? named);
+  const text = manifestText(manifest);
+  if (one !== undefined && await readFile(path, 'utf8') === text) return false;
+  // The Instance adapter's listings skip this name.
+  const temp = join(folder, `.medit_tmp_${process.pid}_manifest`);
+  try {
+    await writeFile(temp, text);
+    await rename(temp, path);
+  } finally {
+    await rm(temp, { force: true });
+  }
+  return true;
 }
 
 /** The manifest at the root of the source mod's repository in `sourceFolder`, which names the folder it builds

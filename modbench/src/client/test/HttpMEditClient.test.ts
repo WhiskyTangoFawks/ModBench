@@ -177,8 +177,6 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 
 const modToDecompileAndCommit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSubmodule: true });
-const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
-const updateFacts = { statCache: '/instance/stat-cache' };
 const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
 const restoreFacts = { statCache: '/instance/stat-cache', exclusionMark: '.mohidden', archives: null, asksWhatItLacks: false };
 const buildFacts = {
@@ -287,16 +285,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         ],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
-    { name: 'updateManifest', verb: (c) => c.updateManifest([modToUpdate('ModA'), modToUpdate('ModC')], updateFacts),
-      answer: {
-        applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
-        refused: [{ item: 'ModC', refusal: 'InstallationFileMissing', message: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
-      },
-      reads: {
-        landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
-        refused: [{ item: 'ModC', reason: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
-      },
-      path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts, gesture: expect.any(String) as unknown } },
     { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], restoreFacts),
       answer: {
         applied: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] })],
@@ -471,7 +459,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
-      { name: 'updateManifest', verb: (c) => c.updateManifest([modToUpdate('ModA'), modToUpdate('ModB')], updateFacts), status: 503, body: detail, text: detail, refusal: 'Could not update the manifest of 2 mods' },
       { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts), status: 503, body: detail, text: detail,
         refusal: 'Could not restore 1 mod' },
       { name: 'decompile', verb: (c) => c.decompile([first, second], true), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
@@ -1028,9 +1015,8 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 });
 
 describe('HttpMEditClient — a modlist gesture the user cancels', () => {
-  type ProgressKind = 'update-manifest-progress' | 'restore-from-manifest-progress';
+  type ProgressKind = 'restore-from-manifest-progress';
   const gestures: [string, string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
-    ['updateManifest', '/update-manifest', 'update-manifest-progress', (c, signal) => c.updateManifest([modToUpdate('ModA')], updateFacts, { signal })],
     ['restoreFromManifest', '/restore-from-manifest', 'restore-from-manifest-progress',
       (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
   ];

@@ -6,7 +6,7 @@ import { modCommands, type ModPackage } from '../modCommands';
 import type { DownloadedFile, DownloadedFileMeta, InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ManifestFile } from '../../manifestAdapter/manifestAdapter';
-import { manifestText } from '../../test/manifestText';
+import { manifestText } from '../../manifestAdapter/manifestAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';

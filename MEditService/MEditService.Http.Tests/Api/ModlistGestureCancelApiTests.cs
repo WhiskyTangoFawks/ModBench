@@ -51,15 +51,13 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
         [.. body.GetProperty("applied").EnumerateArray().Concat(body.GetProperty("refused").EnumerateArray())
             .Select(item => (item.TryGetProperty("mod", out var mod) ? mod : item.GetProperty("item")).GetString() ?? "")];
 
-    [Theory]
-    [InlineData("/update-manifest")]
-    [InlineData("/restore-from-manifest")]
-    public async Task AGestureCancelledWhileItsFirstModIsInHand_AnswersThatModAlone(string route)
+    [Fact]
+    public async Task AGestureCancelledWhileItsFirstModIsInHand_AnswersThatModAlone()
     {
         HttpStatusCode? cancelled = null;
         _notifications.OnFirstMod = () => cancelled = Cancel(Gesture).GetAwaiter().GetResult().StatusCode;
 
-        var body = await Post(route, Gesture);
+        var body = await Post("/restore-from-manifest", Gesture);
 
         Assert.Equal(HttpStatusCode.NoContent, cancelled);
         Assert.Equal(["ModA"], Answered(body));
@@ -69,10 +67,10 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
     public async Task ACancelForNoRunningGesture_Is404_EvenForOneThatHasEnded_WhoseIdANewGestureThenRunsUnder()
     {
         var never = await Cancel("never-ran");
-        await Post("/update-manifest", Gesture);
+        await Post("/restore-from-manifest", Gesture);
 
         var late = await Cancel(Gesture);
-        var again = await Post("/update-manifest", Gesture);
+        var again = await Post("/restore-from-manifest", Gesture);
 
         Assert.Equal((HttpStatusCode.NotFound, HttpStatusCode.NotFound), (never.StatusCode, late.StatusCode));
         Assert.Equal(["ModA", "ModB"], Answered(again));
@@ -86,7 +84,6 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
         {
             var progress = notification switch
             {
-                UpdateManifestProgressNotification n => n.Progress,
                 RestoreFromManifestProgressNotification n => n.Progress,
                 _ => null,
             };

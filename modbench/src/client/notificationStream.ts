@@ -19,7 +19,7 @@ class NotificationListenerRegistry {
   constructor(protected readonly log: Log, private readonly throws: ListenerThrows) {}
 
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
-    'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
+    'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
 
@@ -54,7 +54,6 @@ class NotificationListenerRegistry {
       case 'decompile-and-commit-progress':
         if (event.modlistProgress) this.deliver(kind, { ...event.modlistProgress, phase: event.decompileAndCommitPhase });
         break;
-      case 'update-manifest-progress':
       case 'restore-from-manifest-progress':
         if (event.modlistProgress) this.deliver(kind, event.modlistProgress);
         break;

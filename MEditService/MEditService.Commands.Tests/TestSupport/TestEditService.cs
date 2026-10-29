@@ -61,9 +61,6 @@ internal static class TestEditService
     internal static BuildModHandler BuildModHandler(LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
         Over(holder, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();
 
-    internal static UpdateManifestHandler UpdateManifestHandler(IModFolderRepository modFolders, INotificationPublisher notifications) =>
-        Over(new LoadOrderHolder(), notifications: notifications, modFolders: modFolders).GetRequiredService<UpdateManifestHandler>();
-
     internal static CloneSubmodulesHandler CloneSubmodulesHandler() => Over(new LoadOrderHolder()).GetRequiredService<CloneSubmodulesHandler>();
 
     internal static ChangeSourceManifestHandler ChangeSourceManifestHandler(IModFolderRepository modFolders) =>

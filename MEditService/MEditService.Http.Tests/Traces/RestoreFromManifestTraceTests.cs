@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.ModFolderAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,7 +36,17 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "[General]");
     }
 
-    private void ChangedSinceItsUpdate()
+    private void ManifestWrittenAsTheExtensionWritesIt()
+    {
+        var manifest = new Manifest(
+            [new ManifestPackage.InstallationFile("Mod.zip", 7, DownloadedMod.HashOfTheZip, null)],
+            [new ManifestFile("edited.txt", new PackageEntry.Held()), new ManifestFile("kept.txt", new PackageEntry.Held())],
+            _versionUpdated)
+        { Output = Mod };
+        File.WriteAllBytes(Path.Combine(ModFolder, $"{Mod}.manifest.json"), new ModFolderRepository(TimeProvider.System).SpellSourceManifest(manifest).Text);
+    }
+
+    private void ChangedSinceItsManifestWasWritten()
     {
         File.WriteAllText(Path.Combine(ModFolder, "edited.txt"), "edited");
         File.Delete(Path.Combine(ModFolder, "kept.txt"));
@@ -112,7 +123,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     public async Task AModWhoseManifestHoldsAStep_LandsNamingItWhenTheRequestNamesItsTask_AndIsSkippedWhenItDoesNot(bool namesTheTask, string answered)
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
+        ManifestWrittenAsTheExtensionWritesIt();
         var manifestPath = Path.Combine(ModFolder, $"{Mod}.manifest.json");
         var manifest = JsonNode.Parse(File.ReadAllText(manifestPath)).Require().AsObject();
         manifest["steps"] = new JsonArray(new JsonObject { ["task"] = "Zip" });
@@ -130,28 +141,11 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AModJustUpdated_RestoreDestroysNothing_AndRestoringItOpensNoFileTheUpdateRead_AndWritesNoFile()
-    {
-        ModInstalledFromADownload();
-        await Post("update-manifest");
-        using var held = new FileStream(Path.Combine(ModFolder, "kept.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
-
-        var destroys = await WhatRestoreDestroys();
-        var body = await Post("restore-from-manifest");
-
-        Assert.Empty(destroys.EnumerateArray());
-        var restored = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.Equal(Mod, restored.GetProperty("mod").GetString());
-        Assert.Empty(restored.GetProperty("written").EnumerateArray());
-        Assert.Empty(body.GetProperty("refused").EnumerateArray());
-    }
-
-    [Fact]
     public async Task AModWhoseMetadataDiffersFromItsManifests_IsListed_AndEachManifestsMetadataIsAnswered()
     {
         ModInstalledFromADownload();
         _versionUpdated = "1.0";
-        await Post("update-manifest");
+        ManifestWrittenAsTheExtensionWritesIt();
 
         var response = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(Metadata("2.0")));
         response.EnsureSuccessStatusCode();
@@ -167,20 +161,20 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     public async Task AVersionTheManifestLacks_RestoreOverwritesNothing()
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
+        ManifestWrittenAsTheExtensionWritesIt();
 
         var destroys = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(Metadata("2.0")));
 
         var listed = (await destroys.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray();
-        Assert.Empty(listed);
+        Assert.DoesNotContain(listed, mod => mod.GetProperty("metadataDiffers").GetBoolean());
     }
 
     [Fact]
-    public async Task AModChangedSinceItsUpdate_ListsWhatRestoreDestroys_ButTheMetadataFiles()
+    public async Task AModChangedSinceItsManifestWasWritten_ListsWhatRestoreDestroys_ButTheMetadataFiles()
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
-        ChangedSinceItsUpdate();
+        ManifestWrittenAsTheExtensionWritesIt();
+        ChangedSinceItsManifestWasWritten();
 
         var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
 
@@ -190,11 +184,11 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAModChangedSinceItsUpdate_BringsEveryFileBack_NamesEachFileNoLineNames_AndReportsItsProgressUnderItsGesture()
+    public async Task RestoringAModChangedSinceItsManifestWasWritten_BringsEveryFileBack_NamesEachFileNoLineNames_AndReportsItsProgressUnderItsGesture()
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
-        ChangedSinceItsUpdate();
+        ManifestWrittenAsTheExtensionWritesIt();
+        ChangedSinceItsManifestWasWritten();
         using var stream = await Client.NotificationStream();
 
         var body = await Post("restore-from-manifest");
@@ -214,7 +208,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     public async Task ARequestThatAsksWhatEachModLacks_LogsNoSkipForAModThatLacksAFile(bool asksWhatItLacks, int logged)
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
+        ManifestWrittenAsTheExtensionWritesIt();
 
         await Client.PostAsJsonAsync(
             "/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false, asksWhatItLacks: asksWhatItLacks));
@@ -226,8 +220,8 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     public async Task AModJustRestored_RestoreDestroysOnlyTheFilesNoLineNames()
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
-        ChangedSinceItsUpdate();
+        ManifestWrittenAsTheExtensionWritesIt();
+        ChangedSinceItsManifestWasWritten();
         await Post("restore-from-manifest");
 
         var destroys = Assert.Single((await WhatRestoreDestroys()).EnumerateArray());
@@ -256,8 +250,8 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     public async Task AModWhoseManifestCannotBeRead_IsSkippedAsUnreadable_AndEveryOtherModIsListed()
     {
         ModInstalledFromADownload();
-        await Post("update-manifest");
-        ChangedSinceItsUpdate();
+        ManifestWrittenAsTheExtensionWritesIt();
+        ChangedSinceItsManifestWasWritten();
         var locked = Path.Combine(_instance, "mods", "Locked");
         Directory.CreateDirectory(locked);
         File.WriteAllText(Path.Combine(locked, "Locked.manifest.json"), "");

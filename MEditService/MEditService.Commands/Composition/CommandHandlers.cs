@@ -159,10 +159,6 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<INotificationPublisher>()));
 
-        services.AddSingleton(sp => new UpdateManifestHandler(
-            sp.GetRequiredService<IModFolderRepository>(),
-            sp.GetRequiredService<INotificationPublisher>()));
-
         services.AddSingleton(sp => new RestoreFromManifestHandler(
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),

@@ -1,16 +1,17 @@
-import type { NotFound, RestoreFacts, UpdateManifestMod } from '../client';
+import type { NotFound, RestoreFacts } from '../client';
 import type { Depot, GameFile, GamePlace, InstanceAdapter, SourceMods } from '../instanceAdapter/instanceAdapter';
+import type { GameHeld, GamePlaceHeld } from './manifestBuilder';
 
 type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy'>;
 
-type WireDepots = NonNullable<NonNullable<UpdateManifestMod['gameFolder']>['depots']>;
+type WireDepots = NonNullable<NonNullable<RestoreFacts['gameFolder']>['depots']>;
 
 export interface NamedGameFolder {
   readonly name: string;
   readonly places: readonly [GamePlace, ...GamePlace[]];
 }
 
-export type HeldGameFiles = ReadonlyMap<GamePlace, readonly GameFile[]>;
+export type HeldGameFiles = ReadonlyMap<GamePlace, GamePlaceHeld['files']>;
 
 export const NONE_HELD: HeldGameFiles = new Map();
 
@@ -41,6 +42,14 @@ export const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameF
   });
   return { name, root: first.root, files: [...held.get(first) ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
 };
+
+/** The game folder with the files each place holds of a mod's, none when the game folder was not found. */
+export function gameHeld(folder: NamedGameFolder | string, held: HeldGameFiles): GameHeld | undefined {
+  if (typeof folder === 'string') return undefined;
+  const placeHeld = (place: GamePlace): GamePlaceHeld => ({ files: held.get(place) ?? [], depots: place.depots });
+  const [first, ...others] = folder.places;
+  return { name: folder.name, places: [placeHeld(first), ...others.map(placeHeld)] };
+}
 
 export async function gameFilesOf(
   adapter: GameAdapter, { mod, folder }: { mod: string; folder: string }, game: GameToHand | undefined, installed: boolean,

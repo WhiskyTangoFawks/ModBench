@@ -33,7 +33,6 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/decompile-and-commit", typeof(DecompileAndCommitModHandler), "DecompileAndCommit"),
         ("POST", "/source-manifest", typeof(ChangeSourceManifestHandler), "ChangeSourceManifest"),
         ("POST", "/clone-submodules", typeof(CloneSubmodulesHandler), "CloneSubmodules"),
-        ("POST", "/update-manifest", typeof(UpdateManifestHandler), "UpdateManifest"),
         ("POST", "/restore-from-manifest", typeof(RestoreFromManifestHandler), "RestoreFromManifest"),
     ];
 

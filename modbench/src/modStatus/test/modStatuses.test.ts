@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EntryRef, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import type { FolderReads, Manifest } from '../../manifestAdapter/manifestAdapter';
-import { manifestText } from '../../test/manifestText';
+import { manifestText } from '../../manifestAdapter/manifestAdapter';
 import { ModStatuses, type StatusSource } from '../modStatuses';
 
 let root: string;

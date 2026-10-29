@@ -445,7 +445,7 @@ export interface GameFile {
   readonly hash: string;
 }
 
-interface GameFileTaken extends GameFile {
+export interface GameFileTaken extends GameFile {
   readonly pathInFolder: string;
 }
 
@@ -743,6 +743,11 @@ export interface InstanceAdapter {
   filesIn(folder: string): Promise<readonly string[]>;
   /** Each entry's hash, by its path, of the downloaded file whose hash is `hash`; undefined when the index holds none. */
   packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
+  /** Keeps `entries`, each package path's hash, under the hash of a game folder package a manifest pins, so
+   *  `packageEntries` answers them; answers why they could not be written, if so. */
+  keepPackageEntries(hash: string, entries: ReadonlyMap<string, string>): Promise<string | undefined>;
+  /** The hash of `text`'s UTF-8 bytes, as a manifest carries a hash. */
+  textHash(text: string): Promise<string>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

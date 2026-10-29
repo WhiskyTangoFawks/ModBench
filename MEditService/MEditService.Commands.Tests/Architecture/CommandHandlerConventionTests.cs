@@ -32,7 +32,6 @@ public sealed class CommandHandlerConventionTests
         typeof(EditRecordChanges),
         typeof(ModBuilt),
         typeof(ModRestored),
-        typeof(ModUpdated),
         typeof(MoveLastWrittenResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateRefused),
@@ -51,8 +50,6 @@ public sealed class CommandHandlerConventionTests
         typeof(RepairPreviewsResult),
         typeof(RestoreFromManifestResult),
         typeof(RestoreRefused),
-        typeof(UpdateManifestRefused),
-        typeof(UpdateManifestResult),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

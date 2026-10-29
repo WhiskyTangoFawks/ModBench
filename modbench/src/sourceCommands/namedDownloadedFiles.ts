@@ -1,4 +1,4 @@
-import type { ManifestInstallationFile, NotFound, UpdateManifestMod } from '../client';
+import type { ManifestInstallationFile, NotFound, RestoreMod } from '../client';
 import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
@@ -10,7 +10,7 @@ type Downloading = {
 
 type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
 
-export const wireFile = (file: InstallationFile | undefined): UpdateManifestMod['installationFile'] =>
+export const wireFile = (file: InstallationFile | undefined): RestoreMod['installationFile'] =>
   (file === undefined ? undefined : { path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] });
 
 interface Found {

@@ -191,17 +191,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public Stream OpenGameFile(string root, string path) => File.OpenRead(Path.Combine(root, path));
 
-    public bool WriteManifest(string modFolder, Manifest manifest)
-    {
-        var name = ManifestOf(modFolder);
-        var path = Path.Combine(modFolder, name);
-        var text = ManifestText.Of(manifest);
-        if (File.Exists(path) && File.ReadAllText(path, Encoding.UTF8) == text) return false;
-
-        WriteFile(modFolder, name, content => content.Write(new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text)));
-        return true;
-    }
-
     public SpelledManifest? RemoveManifest(string modFolder, string sourceFolder)
     {
         var name = ManifestOf(modFolder);
