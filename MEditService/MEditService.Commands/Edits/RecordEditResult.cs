@@ -78,6 +78,10 @@ public enum RecordEditRefusal
     /// flag. EditorID is exempt: xEdit's <c>CanAssignInternal</c> allows EDID on a Partial Form (ADR-0018).</summary>
     PartialFormFieldReadOnly,
 
+    /// <summary>A field a template flag hands to a template is never seen by the game; the way out is clearing
+    /// the flag (editor-fields.md, Templated fields).</summary>
+    TemplatedFieldReadOnly,
+
     /// <summary>xEdit's GetCanBePartial refuses the cell a Partial Form: it is temporary and exterior, or
     /// a plugin the game's rule excludes defines it, or neither it nor a copy to its left says which.</summary>
     CannotBePartialForm,

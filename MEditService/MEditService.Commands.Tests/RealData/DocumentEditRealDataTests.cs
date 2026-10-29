@@ -87,8 +87,11 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield break;
         }
         yield return new(record, SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
+        var templated = schema.TemplatedIn(Document.Parse(record.Text), _ => null, GameRelease.Fallout4);
         foreach (var (envelope, path) in EveryGestureWithThePathItMayChange(schema, JsonDocument.Parse(record.Text).RootElement))
-            yield return new(record, envelope, path);
+        {
+            if (templated?.ContainsKey(path) != true) yield return new(record, envelope, path);
+        }
     }
 
     private void RunSweep(IReadOnlyList<Gesture> gestures)

@@ -234,6 +234,34 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void ATemplatedField_IsRefusedNamingItsFlag_WhileAnOwnFieldAndTheFlagStillEdit()
+    {
+        var template = _mod.Npcs.AddNew("Template");
+        var npc = new Npc(_mod)
+        {
+            EditorID = "Copy",
+            HeightMax = 1f,
+            UseTemplateActors = Npc.TemplateActorType.Traits,
+        };
+        npc.DefaultTemplate.SetTo(template.FormKey);
+        var formKey = _fixture.Seed(npc, "npc_");
+        var before = _fixture.Document(formKey);
+
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("2.0"), Member("HeightMax")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
+        Assert.Contains("HeightMax", result.Message);
+        Assert.Contains("Traits", result.Message);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
+
+        Assert.True(_fixture.Apply(formKey, SetAt(Json("\"Renamed\""), Member("EditorID"))).Result.Applied);
+        Assert.True(_fixture.Apply(formKey, SetAt(Json("null"), Member("UseTemplateActors"))).Result.Applied);
+        Assert.True(_fixture.Apply(formKey, SetAt(Json("2.0"), Member("HeightMax"))).Result.Applied);
+    }
+
+    [Fact]
     public void AChildOfAPartialFormCell_IsEdited()
     {
         var cell = new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialFormFlag.Bit };
