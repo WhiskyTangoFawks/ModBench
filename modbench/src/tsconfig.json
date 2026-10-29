@@ -17,6 +17,7 @@
     { "path": "./instanceLoader" },
     { "path": "./modCommands" },
     { "path": "./pluginCommands" },
+    { "path": "./sortingRules" },
     { "path": "./instanceCommands" },
     { "path": "./sourceCommands" },
     { "path": "./downloadedFileCommands" },
