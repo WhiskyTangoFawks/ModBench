@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -71,6 +71,15 @@ describe('RecordPanel — a templated field', () => {
     expect(editable).toContain('Clearing Traits makes it editable.');
     expect(immutable).toContain('Its own value: 5');
     expect(immutable).not.toContain('Clearing');
+  });
+
+  it('keeps its own check error beside the reading', async () => {
+    renderPanel(panelOf(
+      levelMeta, [5, 7],
+      diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 }, winnerColumn: MOD, checkErrors: { [MOD]: 'Level: out of range' } }),
+      [null, byTraits()]));
+    await screen.findByText('Level');
+    expect(within(cellAt('Level', 2)).getByRole('img', { name: 'warning' })).toHaveAttribute('title', 'Level: out of range');
   });
 
   it('offers go to record on its template', async () => {

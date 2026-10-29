@@ -89,7 +89,6 @@ type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'de
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
-// A copy hands whole members to a template, so a row is templated by its own member or the nearest one above it.
 function templateOf(
   copy: CompareOverride, rootField: string, path: readonly PathSegment[],
 ): { by: TemplatedBy; isMembersRow: boolean } | undefined {
@@ -108,7 +107,6 @@ function templateOf(
 const resolves = (resolution: FormKeyResolution | undefined): resolution is FormKeyResolution =>
   resolution !== undefined && resolution.state !== 'Unresolved';
 
-// Go to record follows a reference, and a templated field's template, wherever either resolves.
 function goToTarget(
   templatedBy: TemplatedBy | undefined, shown: unknown, meta: FieldMetadata, resolution: FormKeyResolution | undefined,
 ): string | undefined {

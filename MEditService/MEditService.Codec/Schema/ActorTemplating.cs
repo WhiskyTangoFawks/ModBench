@@ -47,8 +47,7 @@ public sealed record ActorTemplating(
         return templated.Count > 0 ? templated : null;
     }
 
-    // A flags enum spells an array of names; an enum Mutagen does not mark as flags spells one name,
-    // or the number where no name is the whole value.
+    // NewtonsoftJsonSerializationWriterKernel.WriteEnum (mutagen-serialization).
     private IEnumerable<string> FlagsSetIn(Document document) => document.At(FlagsMember.Split('.')) switch
     {
         { ValueKind: JsonValueKind.Array } names => names.EnumerateArray().Select(name => name.GetString()).OfType<string>(),
