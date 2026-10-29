@@ -445,7 +445,6 @@ export interface GameFile {
   readonly hash: string;
 }
 
-/** A game file looked up for the file of a folder at `pathInFolder`. */
 interface GameFileTaken extends GameFile {
   readonly pathInFolder: string;
 }
