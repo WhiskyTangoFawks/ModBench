@@ -99,6 +99,18 @@ describe('RecordPanel — a templated field', () => {
     expect(cellAt('Aggression', 1)).toHaveTextContent(/^1$/);
   });
 
+  it('reads from its template where its copy holds no value of its own', async () => {
+    const destructibleMeta = fieldMeta({ name: 'Destructible', type: 'struct', allowsNull: true, fields: [fieldMeta({ name: 'Health', type: 'int' })] });
+    const health = diffNode({ fieldName: 'Health', values: { [MASTER]: 9 }, winnerColumn: MASTER });
+    renderPanel(panelOf(
+      destructibleMeta, [{ Health: 9 }, undefined],
+      diffNode({ fieldName: 'Destructible', values: { [MASTER]: { Health: 9 } }, winnerColumn: MASTER, children: [health] }),
+      [null, { Destructible: { flag: 'Traits', template: TEMPLATE, resolution: RESOLVED } }]));
+    await screen.findByText('Health');
+    expect(cellAt('Destructible', 2)).toHaveTextContent(/^from EncRaider01$/);
+    expect(cellAt('Health', 2)).toHaveTextContent(/^$/);
+  });
+
   it('reads from its template on a struct member\'s row, and leaves the struct\'s own row its own', async () => {
     const configMeta = fieldMeta({ name: 'Configuration', type: 'struct', fields: [levelMeta] });
     const level = diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 }, winnerColumn: MOD });

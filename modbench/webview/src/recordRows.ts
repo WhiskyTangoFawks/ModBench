@@ -90,17 +90,19 @@ type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'de
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
 // A copy hands whole members to a template, so a row is templated by its own member or the nearest one above it.
-function templateOf(copy: CompareOverride, rootField: string, path: readonly PathSegment[]): TemplatedBy | undefined {
+function templateOf(
+  copy: CompareOverride, rootField: string, path: readonly PathSegment[],
+): { by: TemplatedBy; isMembersRow: boolean } | undefined {
   const templated = copy.templated;
   if (!templated) return undefined;
   let member = rootField;
-  if (templated[member]) return templated[member];
-  for (const seg of path) {
-    if (seg.kind !== 'member') return undefined;
+  for (let depth = 0; ; depth++) {
+    const by = templated[member];
+    if (by) return { by, isMembersRow: depth === path.length };
+    const seg = path[depth];
+    if (seg?.kind !== 'member') return undefined;
     member = `${member}.${seg.name}`;
-    if (templated[member]) return templated[member];
   }
-  return undefined;
 }
 
 const resolves = (resolution: FormKeyResolution | undefined): resolution is FormKeyResolution =>
@@ -142,7 +144,8 @@ function fieldRow(
     const held = holds ? value ?? defaultOf(cellMeta) : undefined;
     const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];
-    const templatedBy = templateOf(o, at.rootField, at.path);
+    const templated = templateOf(o, at.rootField, at.path);
+    const templatedBy = templated && (holds || templated.isMembersRow) ? templated.by : undefined;
     const template = templatedBy && templateReading(templatedBy, copiedText(shown, cellMeta, resolution), editable.has(key));
     const goesTo = goToTarget(templatedBy, shown, cellMeta, resolution);
     const hops = wirePath(at.rootField, at.path, key);

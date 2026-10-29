@@ -59,11 +59,10 @@ public class TemplatedFieldTests
     }
 
     [Fact]
-    public void EveryFlagOfSeveralSet_TemplatesItsMembers()
+    public void EveryFlagOfSeveralSet_TemplatesItsMembers_FromTheNumberAnEnumWithoutFlagsSpellsThem()
     {
         var npc = new Fo4.Npc(Fallout4Mod())
         {
-            // Mutagen's enum carries no [Flags], so the document spells the sum as a number.
             UseTemplateActors = (Fo4.Npc.TemplateActorType)((int)Fo4.Npc.TemplateActorType.Traits | (int)Fo4.Npc.TemplateActorType.Factions),
             DefaultTemplate = new FormLinkNullable<Fo4.INpcSpawnGetter>(Default),
         };
@@ -139,16 +138,46 @@ public class TemplatedFieldTests
         Assert.Equal(Slotted.ToString(), Templated(GameRelease.Starfield, npc).Require()["Items"].Template);
     }
 
-    [Theory]
-    [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    [InlineData(GameRelease.Starfield)]
-    public void TheTemplateFlagsAndTheirTemplates_AreNeverTemplated(GameRelease release)
-    {
-        var templating = SharedSchemaReflector.Instance.GetSchemas(release)["npc_"].Templating.Require();
-        string[] links = [templating.FlagsMember, templating.DefaultTemplate, .. templating.Slots.Values];
+    private const int EveryFlag = 0x1FFF;
 
-        Assert.All(templating.FlagOfMember.Keys, member =>
+    public static TheoryData<GameRelease, IMajorRecordGetter, string[]> EveryFlagSetWithATemplate => new()
+    {
+        {
+            GameRelease.Fallout4,
+            new Fo4.Npc(Fallout4Mod())
+            {
+                UseTemplateActors = (Fo4.Npc.TemplateActorType)EveryFlag,
+                DefaultTemplate = new FormLinkNullable<Fo4.INpcSpawnGetter>(Default),
+            },
+            ["UseTemplateActors", "DefaultTemplate", "TemplateActors", "LegendaryTemplate"]
+        },
+        {
+            GameRelease.Starfield,
+            new Sf.Npc(new Sf.StarfieldMod(ModKey.FromFileName("Templated.esp"), Sf.StarfieldRelease.Starfield))
+            {
+                UseTemplateActors = (Sf.Npc.TemplateActorType)EveryFlag,
+                DefaultTemplate = new FormLinkNullable<Sf.INpcTemplateTargetGetter>(Default),
+            },
+            ["UseTemplateActors", "DefaultTemplate", "TemplateActors", "LegendaryTemplate"]
+        },
+        {
+            GameRelease.SkyrimSE,
+            new Tes5.Npc(new Tes5.SkyrimMod(ModKey.FromFileName("Templated.esp"), Tes5.SkyrimRelease.SkyrimSE))
+            {
+                Configuration = new Tes5.NpcConfiguration { TemplateFlags = (Tes5.NpcConfiguration.TemplateFlag)EveryFlag },
+                Template = new FormLinkNullable<Tes5.INpcSpawnGetter>(Default),
+            },
+            ["Configuration.TemplateFlags", "Template"]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(EveryFlagSetWithATemplate))]
+    public void TheTemplateFlagsAndTheirTemplates_AreNeverTemplated(GameRelease release, IMajorRecordGetter npc, string[] links)
+    {
+        var templated = Templated(release, npc).Require().Keys;
+
+        Assert.All(templated, member =>
             Assert.DoesNotContain(links, link => link == member || link.StartsWith(member + ".", StringComparison.Ordinal)));
     }
 }

@@ -206,7 +206,7 @@ export function DiffRow({
               drag={drag}
               landing={landing}
             >
-              {reading && holds && (
+              {reading && (holds || template) && (
                 <span style={{ opacity: reading.isPlaceholder ? 0.5 : undefined, display: 'inline-flex', alignItems: 'center' }}>
                   {reading.text}<CheckErrorIcon checkError={checkError} />
                 </span>
@@ -227,7 +227,7 @@ export function DiffRow({
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
-            {holds && template && template.reading}
+            {template?.reading}
             {holds && !template && (
               renderCell(shown ?? defaultOf(cellMeta), cellMeta, {
                 checkError, resolution,

@@ -51,7 +51,7 @@ public sealed class RecordTableSchema
     /// record-header flags.</summary>
     public bool IsHeader { get; init; }
 
-    public ActorTemplating? Templating { get; init; }
+    internal ActorTemplating? Templating { get; init; }
 
     /// <summary>Every column's node in <paramref name="document"/>, null where the document omits it,
     /// checked against what <paramref name="resolve"/> answers. No document holds a header's masters
