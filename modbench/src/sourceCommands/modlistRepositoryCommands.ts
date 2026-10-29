@@ -41,8 +41,7 @@ interface ModlistRepositoryCommandsDeps {
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
 export interface ModNote { readonly mod: string; readonly note: string }
 
-/** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
- *  whole gesture refused, as a message to show. `cancelled`: the signal aborted, so the mods listed are those that landed first. */
+/** What update manifest answers. `cancelled`: the signal aborted, so the landed mods are those before it. */
 export type UpdateManifestResult = ({ applied: true; cancelled?: true; notes: readonly ModNote[]; repositoryNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files or hashing downloaded files, or mEdit updating manifests. */
