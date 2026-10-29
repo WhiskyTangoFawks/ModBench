@@ -49,7 +49,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
     private const string AMod = """ "name": "UpdatedMod", "folder": "/mods/UpdatedMod" """;
     private const string AnEntry = """{"path": "kept.txt", "hash": "gO3vE0ddOto="}""";
-    private const string AGameFile = """{"path": "A.nif", "hash": "E46vZ8f023k="}""";
+    private const string AGameFile = """{"path": "Data/A.nif", "hash": "E46vZ8f023k="}""";
 
     public static TheoryData<string, string> NotARequestToUpdate => new()
     {
@@ -67,10 +67,10 @@ public sealed class UpdateManifestTraceTests : HostedTests
         { "a game folder with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game"} }], "statCache": "/cache"}""" },
         { "an elsewhere place with no root", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"files": [{{AGameFile}}]}]} }], "statCache": "/cache"}""" },
         { "an elsewhere place with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"root": "/steam"}]} }], "statCache": "/cache"}""" },
-        { "an elsewhere game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"root": "/steam", "files": [{"path": "A.nif", "hash": "WHOLE"}]}]} }], "statCache": "/cache"}""" },
+        { "an elsewhere game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"root": "/steam", "files": [{"path": "Data/A.nif", "hash": "WHOLE"}]}]} }], "statCache": "/cache"}""" },
         { "a depot with no version", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "depots": [{"id": "377162"}]} }], "statCache": "/cache"}""" },
         { "an elsewhere depot with no id", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"root": "/steam", "files": [], "depots": [{"version": "1"}]}]} }], "statCache": "/cache"}""" },
-        { "a game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [{"path": "A.nif", "hash": "WHOLE"}]} }], "statCache": "/cache"}""" },
+        { "a game file whose hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [{"path": "Data/A.nif", "hash": "WHOLE"}]} }], "statCache": "/cache"}""" },
     };
 
     [Theory]
@@ -128,7 +128,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
                     {
                         name = "Fallout4",
                         root = Path.Combine(_instance, "game"),
-                        files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } },
+                        files = new[] { new { path = "Data/A.nif", hash = "E46vZ8f023k=", pathInFolder = "a.nif" } },
                     },
                 },
             },
@@ -137,7 +137,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\n\"packages\": [\n{\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"}\n],\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n",
+            "{\n\"packages\": [\n{\"gameFolder\":\"Fallout4\",\"hash\":\"o3vrBOqOSww=\"}\n],\n\"files\": [\n{\"path\":\"a.nif\",\"packagePath\":\"Data/A.nif\"}\n]\n}\n",
             File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 
@@ -158,7 +158,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
                     {
                         name = "Fallout4",
                         root = Path.Combine(_instance, "game"),
-                        files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } },
+                        files = new[] { new { path = "Data/A.nif", hash = "E46vZ8f023k=", pathInFolder = "a.nif" } },
                         depots = new[] { new { id = "377162", version = "22" } },
                     },
                 },
@@ -214,7 +214,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
                         files = Array.Empty<object>(),
                         elsewhere = new[]
                         {
-                            new { root = Path.Combine(_instance, "steam"), files = new[] { new { path = "A.nif", hash = "E46vZ8f023k=" } } },
+                            new { root = Path.Combine(_instance, "steam"), files = new[] { new { path = "Data/A.nif", hash = "E46vZ8f023k=", pathInFolder = "a.nif" } } },
                         },
                     },
                 },

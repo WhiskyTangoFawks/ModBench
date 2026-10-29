@@ -61,12 +61,17 @@ internal sealed class ManifestBuilder
         var wanting = sourcing.Unsourced(ordered);
         List<HashedFile> taken = [];
         List<GameDepot> depots = [];
-        foreach (var (holder, placeDepots) in _places.OrderByDescending(place => wanting.Count(file => place.Holder.PathHolding(file) is not null)))
+        var places = _places
+            .OrderByDescending(place => wanting.Count(file => place.Holder.PathHolding(file) is not null)).ThenByDescending(place => place.Depots.Count > 0).ToList();
+        foreach (var ownPathOnly in (bool[])[true, false])
         {
-            var takenHere = sourcing.Take(holder, sourcing.Unsourced(wanting));
-            if (takenHere.Count == 0) continue;
-            taken.AddRange(takenHere);
-            depots.AddRange(placeDepots.Except(depots));
+            foreach (var (holder, placeDepots) in places)
+            {
+                var takenHere = sourcing.Take(holder, sourcing.Unsourced(wanting), ownPathOnly);
+                if (takenHere.Count == 0) continue;
+                taken.AddRange(takenHere);
+                depots.AddRange(placeDepots.Except(depots));
+            }
         }
         if (taken.Count > 0 && _game is { } game) sourcing.Packages.Add((game, new ManifestPackage.GameFolder(game.Name, FileHash.OfFilesTaken(taken), depots)));
     }
@@ -98,12 +103,13 @@ internal sealed class ManifestBuilder
 
         public List<HashedFile> Unsourced(IEnumerable<HashedFile> files) => [.. files.Where(file => !Lines.ContainsKey(file.Path))];
 
-        public List<HashedFile> Take(Holder? holder, IEnumerable<HashedFile> files)
+        public List<HashedFile> Take(Holder? holder, IEnumerable<HashedFile> files, bool ownPathOnly = false)
         {
             List<HashedFile> taken = [];
+            if (holder is null) return taken;
             foreach (var file in files)
             {
-                if (holder?.PathHolding(file) is not { } path) continue;
+                if ((ownPathOnly ? holder.OwnPathHolding(file) : holder.PathHolding(file)) is not { } path) continue;
                 Lines[file.Path] = ManifestFile.In(holder.Name, file.Path, path);
                 taken.Add(file);
             }

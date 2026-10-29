@@ -10,7 +10,7 @@ public sealed record ModToUpdate(
     string? Version, GameFolder? GameFolder = null);
 
 /// <summary>A game file by its forward-slash path in the game folder, with its hash as the Instance adapter knows it
-/// (ADR-0013), and the path of the folder's file it may be, when not its own.</summary>
+/// (ADR-0013), and the path of the folder's file it was looked up for, none when looked up by its own path.</summary>
 public sealed record GameFile(string Path, string Hash, string? PathInFolder = null);
 
 /// <summary>Another game folder holding the same game, such as the Steam install, at <paramref name="Root"/>, with the game files a

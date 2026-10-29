@@ -587,31 +587,29 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("Data/Fallout4.esm", new PackageEntry.OtherBytes())], manifest.Files);
     }
 
-    [Fact]
-    public async Task AStockGameFoldersManifest_NamesEachFileAtItsPathInTheInstallation_ItsRootFilesIncluded()
+    public static TheoryData<string, string, string> FoldersOfTheInstallationsFiles => new()
     {
-        const string stockGame = "Stock Game";
-        _folders.WithFile(stockGame, "Fallout4.exe", "exe").WithFile(stockGame, "Data/Fallout4.esm", "esm");
-        var installation = new GameFolder("Fallout 4", Root: stockGame, [new GameFile("Fallout4.exe", "exe"), new GameFile("Data/Fallout4.esm", "esm")]);
+        { "Stock Game", "Fallout4.exe", "Data/Fallout4.esm" },
+        { Mod, "Root/Fallout4.exe", "Fallout4.esm" },
+    };
 
-        await Update([new ModToUpdate("Stock Game", stockGame, null, [], SourceFolder: null, Version: null, installation)]);
+    [Theory]
+    [MemberData(nameof(FoldersOfTheInstallationsFiles))]
+    public async Task AFolderNamesEachFileFromTheInstallation_AtItsPathThere_ItsRootFilesIncluded(string folder, string program, string master)
+    {
+        _folders.WithFile(folder, program, "exe").WithFile(folder, master, "esm");
+        var installation = new GameFolder("Fallout 4", "game", [new GameFile("Fallout4.exe", "exe", program), new GameFile("Data/Fallout4.esm", "esm", master)]);
 
-        var manifest = _folders.Manifests[stockGame];
-        Assert.Equal([new FileBytes.InGameFolder("Data/Fallout4.esm"), new FileBytes.InGameFolder("Fallout4.exe")], manifest.Files.Select(manifest.BytesOf));
+        await Update([new ModToUpdate("Folder", folder, null, [], SourceFolder: null, Version: null, installation)]);
+
+        var manifest = _folders.Manifests[folder];
+        Assert.Equal(
+            [new FileBytes.InGameFolder("Data/Fallout4.esm"), new FileBytes.InGameFolder("Fallout4.exe")],
+            manifest.Files.Select(manifest.BytesOf));
     }
 
     private static readonly GameFolder Installation =
         new("Fallout 4", "game", [new GameFile("Fallout4.exe", "exe", "Root/Fallout4.exe"), new GameFile("Data/Fallout4.esm", "esm", "Fallout4.esm")]);
-
-    [Fact]
-    public async Task AGameFolderModsRootFile_IsNamedFromTheInstallationsRoot_AndItsOtherFilesFromItsData()
-    {
-        _folders.WithFile(Mod, "Root/Fallout4.exe", "exe").WithFile(Mod, "Fallout4.esm", "esm");
-
-        var manifest = await UpdatedWith(Installation);
-
-        Assert.Equal([new FileBytes.InGameFolder("Data/Fallout4.esm"), new FileBytes.InGameFolder("Fallout4.exe")], manifest.Files.Select(manifest.BytesOf));
-    }
 
     public static TheoryData<string, GameFile, PackageEntry> FilesOfOtherBytes => new()
     {
@@ -630,14 +628,26 @@ public sealed class UpdateManifestHandlerTests
         Assert.True(expected == manifest.Files.Single(file => file.Path == "c.nif").Entry, says);
     }
 
-    [Fact]
-    public async Task AGameFolderModsFile_IsNamedFromTheGameFileHandedForItsPath_WhenAnotherHoldsTheSameBytes()
+    private static readonly GameFile SameAtA = new("Data/a.nif", "same", "a.nif");
+    private static readonly GameFile SameAtB = new("Data/b.nif", "same", "b.nif");
+
+    public static TheoryData<string, GameFolder> PlacesHoldingTheSameBytes => new()
+    {
+        { "one place", new GameFolder("Fallout 4", "game", [SameAtA, SameAtB]) },
+        { "another place", new GameFolder("Fallout 4", "game", [SameAtA], [new GameFolderPlace("steam", [SameAtA, SameAtB])]) },
+    };
+
+    [Theory]
+    [MemberData(nameof(PlacesHoldingTheSameBytes))]
+    public async Task AGameFolderModsFile_IsNamedFromTheGameFileHandedForItsPath_WhenAnotherHoldsTheSameBytes(string holding, GameFolder game)
     {
         _folders.WithFile(Mod, "a.nif", "same").WithFile(Mod, "b.nif", "same");
 
-        var manifest = await UpdatedWith(new GameFolder("Fallout 4", "game", [new GameFile("Data/a.nif", "same", "a.nif"), new GameFile("Data/b.nif", "same", "b.nif")]));
+        var manifest = await UpdatedWith(game);
 
-        Assert.Equal([new FileBytes.InGameFolder("Data/a.nif"), new FileBytes.InGameFolder("Data/b.nif")], manifest.Files.Select(manifest.BytesOf));
+        Assert.True(
+            new FileBytes[] { new FileBytes.InGameFolder("Data/a.nif"), new FileBytes.InGameFolder("Data/b.nif") }.SequenceEqual(manifest.Files.Select(manifest.BytesOf)),
+            $"its own path's in {holding}");
     }
 
     [Fact]
@@ -675,15 +685,22 @@ public sealed class UpdateManifestHandlerTests
         Assert.True(expected.SequenceEqual(Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots), says);
     }
 
-    [Fact]
-    public async Task AFileSeveralPlacesHold_IsTakenFromThePlaceHoldingMostOfTheFilesWanted()
+    public static TheoryData<string, GameFile[], GameDepot[]> PlacesHoldingAFile => new()
     {
-        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b");
-        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", [new GameFile("a.nif", "a"), new GameFile("b.nif", "b")], SteamDepots)], [new GameDepot("1", "1")]);
+        { "the place holding most of the files wanted", [new("a.nif", "a"), new("b.nif", "b")], [new GameDepot("1", "1")] },
+        { "of places holding as many, one that records depots", [new("a.nif", "a")], [] },
+    };
+
+    [Theory]
+    [MemberData(nameof(PlacesHoldingAFile))]
+    public async Task AFileSeveralPlacesHold_IsTakenFrom(string says, GameFile[] steamFiles, GameDepot[] primaryDepots)
+    {
+        WithFiles(steamFiles.Select(file => (file.Path, file.Hash)));
+        var game = new GameFolder("Fallout 4", "data", [new GameFile("a.nif", "a")], [new GameFolderPlace("steam", steamFiles, SteamDepots)], primaryDepots);
 
         var manifest = await UpdatedWith(game);
 
-        Assert.Equal(SteamDepots, Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots);
+        Assert.True(SteamDepots.SequenceEqual(Assert.IsType<ManifestPackage.GameFolder>(manifest.Package).Depots), says);
     }
 
     [Fact]

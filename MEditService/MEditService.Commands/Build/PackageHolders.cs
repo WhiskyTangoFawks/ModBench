@@ -11,11 +11,11 @@ internal sealed class Holder(string name, IReadOnlyCollection<(string Path, stri
 
     public string Name { get; } = name;
 
-    public string? PathHolding(HashedFile held)
-    {
-        var holding = _byHash[held.Hash];
-        return holding.Where(file => string.Equals(file.PathInFolder, held.Path, StringComparison.OrdinalIgnoreCase)).Concat(holding).Select(file => file.Path).FirstOrDefault();
-    }
+    public string? PathHolding(HashedFile held) => OwnPathHolding(held) ?? _byHash[held.Hash].Select(file => file.Path).FirstOrDefault();
+
+    /// <summary>The path of the file held for <paramref name="held"/>'s path, when it has its bytes.</summary>
+    public string? OwnPathHolding(HashedFile held) =>
+        _byHash[held.Hash].Where(file => string.Equals(file.PathInFolder, held.Path, StringComparison.OrdinalIgnoreCase)).Select(file => file.Path).FirstOrDefault();
 
     public bool HoldsAPathOf(HashedFile held) => _pathsInFolder.Contains(held.Path);
 }
