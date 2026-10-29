@@ -203,7 +203,7 @@ export type ManifestStep = components['schemas']['ManifestStep'];
  *  commits itself (ADR-0013). */
 export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
 
-/** The instance's facts every mod's manifest needs: the stat cache's folder and the downloaded files already hashed. */
+/** The instance's facts every mod's manifest needs: the stat cache's folder and every downloaded file. */
 export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
 
 /** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The

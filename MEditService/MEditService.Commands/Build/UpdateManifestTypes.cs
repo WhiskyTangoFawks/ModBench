@@ -26,7 +26,7 @@ public sealed record GameFolder(
         [this with { Elsewhere = null }, .. (Elsewhere ?? []).Select(place => new GameFolder(Name, place.DataFolder, place.Files, Depots: place.Depots))];
 }
 
-/// <summary>The instance's facts beyond its mods: the stat cache's folder and the downloaded files already hashed.</summary>
+/// <summary>The instance's facts beyond its mods: the stat cache's folder and every downloaded file.</summary>
 public sealed record InstanceToUpdate(string StatCache, IReadOnlyList<InstallationFile> DownloadedFiles);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

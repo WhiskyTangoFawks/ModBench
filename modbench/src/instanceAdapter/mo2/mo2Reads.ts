@@ -27,12 +27,15 @@ import { sourceModsIn } from './sourceMods';
 import { errorMessage } from '../../ports/errorMessage';
 import { holdsPathToken } from '../pathTokens';
 
-async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLink): Promise<DownloadedFile[] | undefined> {
+/** The names of the downloaded files in `downloadsDir`; undefined when it is absent. */
+export async function downloadedFileNames(downloadsDir: string, skippedLink: SkippedLink): Promise<string[] | undefined> {
   const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
-  if (dirents === undefined) return undefined;
-  const names = dirents
-    .filter((d) => d.isFile && isInstallationFileName(d.name) && !isOwnTemp(d.name))
-    .map((d) => d.name);
+  return dirents?.filter((d) => d.isFile && isInstallationFileName(d.name) && !isOwnTemp(d.name)).map((d) => d.name);
+}
+
+async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLink): Promise<DownloadedFile[] | undefined> {
+  const names = await downloadedFileNames(downloadsDir, skippedLink);
+  if (names === undefined) return undefined;
   return Promise.all(names.map(async (name) => {
     const path = downloadedFilePath(downloadsDir, name);
     const metadataPath = downloadedFileMetadataPath(downloadsDir, name);

@@ -21,7 +21,7 @@ import { gameToHand, gameFilesOf, namedGameFolder, namedGameFiles, wireGameFolde
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter, 'foldersRefused' |
-  'reading' | 'gamePlaces' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'indexedDownloadedFiles' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'otherManifests' | 'writeOtherManifestLines' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'reading' | 'gamePlaces' | 'gameRelease' | 'modOrder' | 'entryKey' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'otherManifests' | 'writeOtherManifestLines' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashFileIn' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
@@ -42,8 +42,11 @@ export interface ModNote { readonly mod: string; readonly note: string }
  *  whole gesture refused, as a message to show. */
 export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[]; repositoryNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
-/** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */
-export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & ModlistProgress);
+/** Where update manifest is: the Instance adapter reading a mod's files or hashing downloaded files, or mEdit updating manifests. */
+export type UpdateManifestStatus =
+  | { readonly phase: 'ReadingFiles'; readonly mod: string }
+  | { readonly phase: 'Hashing'; readonly left: number }
+  | ({ readonly phase: 'Updating' } & ModlistProgress);
 
 /** pushRefusalNotWritten: why the instance repository does not refuse a push of a pin its source mod's remote lacks.
  *  pathTokensNotWritten: why a path token stays in the working tree. */
@@ -638,7 +641,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const { sent, refused: unread, notes } = await readMods(
         adapter, namesOf(mods, others), folders, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
       const refused = [...unread];
-      if (sent.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
+      const nothingUpdated = async (): Promise<UpdateManifestResult> => ({ applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) });
+      if (sent.length === 0) return nothingUpdated();
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
         if (!folders.isMod(mod.name)) { versioned.push(mod); continue; }
@@ -646,8 +650,9 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
         else versioned.push({ ...mod, version: metadata.answer.version });
       }
-      if (versioned.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
-      const downloaded = await adapter.indexedDownloadedFiles();
+      if (versioned.length === 0) return nothingUpdated();
+      const downloaded = await adapter.downloadedFilesHashed({ onHashing: (left) => onProgress?.({ phase: 'Hashing', left }), signal });
+      if (signal?.aborted) return nothingUpdated();
       const outcome = await client.updateManifest(
         versioned,
         { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.files.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },
