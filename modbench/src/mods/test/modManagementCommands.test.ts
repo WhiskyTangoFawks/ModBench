@@ -42,7 +42,6 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { modCommands, type ModCommands } from '../../modCommands/modCommands';
 import type { InstanceReading, ModlistEntry, ModOrderChange, OriginFile } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { unreadStatus } from '../../test/unreadStatus';
 import type { Argument } from '../../wire/argument';
 import { file, folder, mod } from './indexedValue';
 
@@ -58,7 +57,7 @@ const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('
 
 function commandsOver(mods: readonly ModlistEntry[], answers: InstanceAnswers = {}, reading: Partial<InstanceReading> = {}) {
   const fake = fakeInstanceAdapter(readingFixture({ mods: [...mods], modFolders: modFoldersOf(...mods), ...reading }), answers);
-  return { fake, commands: modCommands(fake.adapter, unscriptedMEdit, unreadStatus) };
+  return { fake, commands: modCommands(fake.adapter, unscriptedMEdit) };
 }
 
 const instanceOf = (mods: readonly ModlistEntry[] = []) => ({ ...instanceThatReads, value: instanceValueFixture({ mods: [...mods] }) });

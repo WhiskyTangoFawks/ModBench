@@ -13,6 +13,7 @@ import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
+import { filesBelow } from './mo2Files';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2Repository } from './mo2Repository';
@@ -25,7 +26,7 @@ import { mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from '../processes';
 import type { FileProblems } from '../../ports/fileProblems';
-import { hashIndex } from '../downloadedFileContents/hashIndex';
+import { hashIndex } from '../fileContents/hashIndex';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 import { parseModlist } from './codecs/modlistText';
 import { get } from '../files';
@@ -80,6 +81,8 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,
+    packageEntries: hashes.packageEntries,
+    filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),
   };

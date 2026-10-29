@@ -15,7 +15,7 @@ const REFUSED: LoadOrderSource = { refusal: 'a.esp has no mod folder' };
 
 function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
-  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache', dataFolder: '/game/Data', gameRelease: 'Fallout4' };
+  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], dataFolder: '/game/Data', gameRelease: 'Fallout4' };
 }
 
 type Told = PutLoadOrderResult;

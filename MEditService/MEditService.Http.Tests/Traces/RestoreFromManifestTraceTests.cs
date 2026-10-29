@@ -164,36 +164,14 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.Equal((Mod, "1.0"), (manifest.GetProperty("mod").GetString(), manifest.GetProperty("metadata").GetProperty("version").GetString()));
     }
 
-    private async Task<JsonElement> ModStatus(JsonObject request)
-    {
-        var response = await Client.PostAsJsonAsync("/mod-status", request);
-        response.EnsureSuccessStatusCode();
-        return Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray());
-    }
-
     [Fact]
-    public async Task AModWhoseMetadataDiffersFromItsManifests_SaysSoInItsStatus_AndAnswersNoManifestMetadata()
-    {
-        ModInstalledFromADownload();
-        _versionUpdated = "1.0";
-        await Post("update-manifest");
-
-        var status = await ModStatus(WhatRestoreDestroysRequest(Metadata("2.0")));
-
-        Assert.True(status.GetProperty("metadataDiffers").GetBoolean());
-        Assert.False(status.TryGetProperty("manifestMetadata", out _));
-    }
-
-    [Fact]
-    public async Task AVersionTheManifestLacks_MakesAModDiffer_ButRestoreOverwritesNothing()
+    public async Task AVersionTheManifestLacks_RestoreOverwritesNothing()
     {
         ModInstalledFromADownload();
         await Post("update-manifest");
 
-        var status = await ModStatus(WhatRestoreDestroysRequest(Metadata("2.0")));
         var destroys = await Client.PostAsJsonAsync("/what-restore-destroys", WhatRestoreDestroysRequest(Metadata("2.0")));
 
-        Assert.True(status.GetProperty("metadataDiffers").GetBoolean());
         var listed = (await destroys.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray();
         Assert.Empty(listed);
     }
@@ -335,9 +313,8 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         { "/what-restore-destroys", "no mod", """{"mods": [], "statCache": "/cache"}""" },
         { "/what-restore-destroys", "a mod with no folder", """{"mods": [{"name": "RestoredMod"}], "statCache": "/cache"}""" },
         { "/what-restore-destroys", "no stat cache", $$"""{"mods": [{ {{AMod}} }]}""" },
-        { "/mod-status", "no mod", """{"mods": [], "statCache": "/cache"}""" },
         {
-            "/mod-status", "a mod handed both its metadata and why it could not be read",
+            "/what-restore-destroys", "a mod handed both its metadata and why it could not be read",
             $$"""{"mods": [{ {{AMod}}, "metadata": {"version": "2.0"}, "metadataUnreadable": "access denied"}], "statCache": "/cache"}"""
         },
     };

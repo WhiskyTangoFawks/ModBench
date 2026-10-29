@@ -1,6 +1,5 @@
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { NO_MOD_STATUSES } from './noModStatuses';
-import { unreadStatus } from './unreadStatus';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -92,7 +91,7 @@ describe('a rename while a recompute is reading', () => {
     };
     showInputBox.mockResolvedValue(RENAMED);
     registerModContextCommands({
-      commands: modCommands({ ...writer, renameModFolder: folderRenamed }, { changeSourceManifest: () => Promise.reject(new Error('unscripted')) }, unreadStatus),
+      commands: modCommands({ ...writer, renameModFolder: folderRenamed }, { changeSourceManifest: () => Promise.reject(new Error('unscripted')) }),
       instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn(),
     });
     await present(handlers.get('modbench.mod.rename'), 'the rename mod command')(new ModNode({ kind: 'mod', name: MOD, enabled: true }));

@@ -57,17 +57,6 @@ internal static class ManifestEndpoints
             .Produces<WhatRestoreDestroysResponse>()
             .ProducesProblem(400);
 
-        app.MapPost("/mod-status", ModStatusOf)
-            .WithName("ModStatus")
-            .WithTags("Modlist")
-            .WithDescription(
-                "Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and " +
-                "the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each " +
-                "file a line names that is gone and each file its package does not hold, whether its package has no host, or that " +
-                "it has no manifest or why it cannot be read.")
-            .Produces<IReadOnlyList<ModStatus>>()
-            .ProducesProblem(400);
-
         app.MapPost("/modlist-gestures/{gesture}/cancel", (string gesture, ModlistGestureCancels cancels) =>
                 cancels.Cancel(gesture)
                     ? Results.NoContent()
@@ -158,9 +147,6 @@ internal static class ManifestEndpoints
         }
         return Results.Ok(new WhatRestoreDestroysResponse(destroying, refused, manifests));
     }
-
-    internal static IResult ModStatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
-        MalformedFolders(req) ?? Results.Ok(StatusOf(req, repository));
 
     private static IResult? MalformedFolders(ModFoldersRequest req)
     {

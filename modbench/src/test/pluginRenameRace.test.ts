@@ -1,6 +1,5 @@
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { NO_MOD_STATUSES } from './noModStatuses';
-import { unreadStatus } from './unreadStatus';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -79,7 +78,7 @@ describe('a rename while a recompute is reading', () => {
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { pluginSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
-      instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer, unreadStatus, NO_MOD_STATUSES), channel: { error: () => {}, info: () => {} },
+      instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer, NO_MOD_STATUSES), channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
     await pluginSync.settled();

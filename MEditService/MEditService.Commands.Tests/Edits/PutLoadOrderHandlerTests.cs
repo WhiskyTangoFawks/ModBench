@@ -18,7 +18,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}", new PluginProvider.FromMod("ModA", "C:\\Instance\\mods\\ModA", "C:\\Instance\\mods\\ModA"), Line: null, PluginStrings.None);
 
     private Answer<PutLoadOrderApplied, PutLoadOrderRefused> Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        Handler.Put(_dataFolder, _instanceRoot, release, plugins, [.. active.Select(p => p.Key)], [], [], [], [], Language.English, TestEditService.NoMods);
+        Handler.Put(_dataFolder, _instanceRoot, release, plugins, [.. active.Select(p => p.Key)], [], [], [], [], Language.English);
 
     private static PutLoadOrderRefused Refused(Answer<PutLoadOrderApplied, PutLoadOrderRefused> answer)
     {
@@ -76,7 +76,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
-        var result = Refused(Handler.Put(gone, _instanceRoot, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods));
+        var result = Refused(Handler.Put(gone, _instanceRoot, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], Language.English));
 
         Assert.Equal(PutLoadOrderRefusal.DataFolderNotFound, result.Refusal);
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
@@ -88,7 +88,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
-        var result = Refused(Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods));
+        var result = Refused(Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], [], [], [], [], Language.English));
 
         Assert.Equal(PutLoadOrderRefusal.DataFolderNotFound, result.Refusal);
     }

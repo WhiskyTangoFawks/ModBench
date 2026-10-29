@@ -14,7 +14,7 @@ import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusF
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
 import { ensureDir, exists, putIfChanged, putStreamedIf, remove, withLock, write } from '../files';
-import { digestOf } from '../downloadedFileContents/contentDigest';
+import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
 import { outputUnset, sourceModsIn } from './sourceMods';

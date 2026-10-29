@@ -23,8 +23,6 @@ public sealed class LoadOrderApiTests : HostedTests
     [InlineData("archives")]
     [InlineData("stringsFiles")]
     [InlineData("places")]
-    [InlineData("mods")]
-    [InlineData("statCache")]
     [InlineData("stringsLanguage")]
     [InlineData("gameRelease")]
     public async Task PutLoadOrder_WithAFieldItNeverDefaultsLeftOut_Returns400(string omitted)

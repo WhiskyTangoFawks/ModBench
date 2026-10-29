@@ -28,7 +28,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. Every archive and strings file carries its stamp. It names each mod, by its folder with its metadata files and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. Every archive and strings file carries its stamp. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -179,23 +179,6 @@ export interface paths {
         put?: never;
         /** @description What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, before anything is written: each file whose bytes the stat cache cannot vouch are its package's, and each file no line names. A mod with no manifest destroys nothing, and a mod whose manifest or a file cannot be read is skipped. */
         post: operations["WhatRestoreDestroys"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/mod-status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file its package does not hold, whether its package has no host, or that it has no manifest or why it cannot be read. */
-        post: operations["ModStatus"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1500,8 +1483,6 @@ export interface components {
             instanceRoot: string;
             gameRelease: string;
             stringsLanguage: string;
-            mods: components["schemas"]["ModByFolder"][];
-            statCache: string;
         };
         /** @enum {string} */
         LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere" | "Failed";
@@ -1574,23 +1555,6 @@ export interface components {
             uncommitted: boolean;
             leftDetached?: string | null;
         };
-        ModStatus: {
-            mod: string;
-            noManifest: boolean;
-            differing: string[];
-            namedByNoLine: string[];
-            gone: string[];
-            notInPackage: string[];
-            otherBytes: string[];
-            unreadable?: components["schemas"]["ModUnreadable"] | null;
-            statCacheNotWritten?: string | null;
-            metadataDiffers: boolean;
-            noHost: boolean;
-        };
-        ModUnreadable: {
-            manifest: boolean;
-            why: string;
-        };
         ModUpdated: {
             mod: string;
             manifestWritten: boolean;
@@ -1634,7 +1598,6 @@ export interface components {
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             decompileAndCommitPhase?: components["schemas"]["DecompileAndCommitPhase"] | null;
-            mods?: string[] | null;
         };
         PathHop: {
             kind: string;
@@ -2484,39 +2447,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WhatRestoreDestroysResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    ModStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModFoldersRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModStatus"][];
                 };
             };
             /** @description Bad Request */

@@ -7,7 +7,7 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
 }));
 
-import type { ModStatus } from '../../client';
+import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { status } from '../../test/modStatusFixture';
 import { ModListProvider, type ModlistNode } from '../ModListProvider';

@@ -1,14 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { pluginSyncOver, type PluginsDrop } from '../plugins';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter, fileIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
-import type { ModStatus, PluginMetadata, ReadModStatus } from '../../client';
-import type { ReadFailed } from '../../wire/readFailed';
-import { status } from '../../test/modStatusFixture';
+import { fakeInstanceAdapter, fileIn, modFoldersIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
+import type { PluginMetadata } from '../../client';
+import type { ManifestFile, ModStatus } from '../../manifestAdapter/manifestAdapter';
+import { manifestedIn, status } from '../../test/modStatusFixture';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 
@@ -190,29 +193,39 @@ describe('plugin participation is a change for each plugin the order lists', () 
 
 describe('syncPlugins decides the lines plugins.txt converges on, from what the Instance adapter says is provided', () => {
   const inData = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
+  const naming = (...paths: string[]): ManifestFile[] => paths.map((path) => ({ path, entry: { kind: 'held' } }));
+  let mods: string;
+
+  beforeEach(async () => {
+    mods = await mkdtemp(join(tmpdir(), 'modbench-plugin-sync-'));
+  });
+  afterEach(async () => {
+    await rm(mods, { recursive: true, force: true });
+  });
 
   interface Run {
     order?: readonly string[]; provided?: readonly string[]; inData?: DataFolderPlugins; gameRelease?: string; creationClubList?: readonly string[];
     profile?: string;
-    repository?: { statuses: readonly ModStatus[] | ReadFailed; lastAnswered?: readonly ModStatus[] };
+    repository?: { manifests: Readonly<Record<string, readonly ManifestFile[] | 'unreadable'>>; lastAnswered?: readonly ModStatus[] };
     otherMod?: { name: string; enabled: boolean };
   }
   const sync = async ({
     order = [], provided = [], inData: data = inData(), gameRelease = 'Fallout4', creationClubList = [], profile = PROFILE, repository,
     otherMod = { name: 'Unrestored', enabled: true },
   }: Run) => {
+    for (const [mod, held] of Object.entries(repository?.manifests ?? {})) {
+      await manifestedIn(join(mods, mod), held === 'unreadable' ? [] : held);
+      if (held === 'unreadable') await writeFile(join(mods, mod, `${mod}.manifest.json`), '<<<<<<< HEAD\n');
+    }
     const fake = fakeInstanceAdapter(readingFixture({
       profile, gameRelease, creationClubList, pluginOrder: lines(...order), dataFolderPlugins: data,
-      mods: [{ kind: 'mod', name: 'Provider', enabled: true }, { kind: 'mod', ...otherMod }],
+      mods: [{ kind: 'mod', name: 'Provider', enabled: true }, { kind: 'mod', ...otherMod }], modFolders: modFoldersIn(mods, 'Provider', otherMod.name),
       modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: provided.map((name) => fileIn('/mods/Provider', name)), folders: [], notes: [] }]]),
     }), { repositoryOnDisk: repository !== undefined });
-    const asked: string[][] = [];
-    const readStatus: ReadModStatus = (mods) => {
-      asked.push([...mods]);
-      return Promise.resolve(repository?.statuses ?? []);
-    };
+    const asked: string[] = [];
+    const reading = { ...fake.adapter, modMetadata: (mod: string) => { asked.push(mod); return fake.adapter.modMetadata(mod); } };
     const lastStatus = (mod: string) => repository?.lastAnswered?.find((answered) => answered.mod === mod);
-    const result = await pluginSyncOver(fake.adapter, readStatus, { of: lastStatus })();
+    const result = await pluginSyncOver(reading, { of: lastStatus })();
     return { fake, result, asked };
   };
   const handedChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
@@ -221,33 +234,33 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
   it('keeps the line of a plugin an enabled mod\'s manifest names and its folder lacks', async () => {
     const { fake, result } = await sync({
       order: ['Base.esp', 'Unrestored.esp', 'Gone.esp'], provided: ['Base.esp'],
-      repository: { statuses: [status('Provider'), status('Unrestored', { gone: ['Unrestored.esp'] })] },
+      repository: { manifests: { Provider: [], Unrestored: naming('Unrestored.esp') } },
     });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
     expect(handedChanges(fake)).toEqual([{ kind: 'drop', plugin: 'Gone.esp' }]);
   });
 
-  it('appends a line for a plugin mEdit last named in a manifest with none, and none for a file named below the folder\'s root', async () => {
+  it('appends a line for a plugin Mod status last named in a manifest with none, and none for a file named below the folder\'s root', async () => {
     const { result } = await sync({
       order: ['Base.esp'], provided: ['Base.esp'],
-      repository: { statuses: [], lastAnswered: [status('Unrestored', { gone: ['Unrestored.esp', 'optional/Nested.esp'] })] },
+      repository: { manifests: {}, lastAnswered: [status('Unrestored', { gone: ['Unrestored.esp', 'optional/Nested.esp'] })] },
     });
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['Unrestored.esp'], dropped: [] });
   });
 
-  it('asks mEdit nothing when what is on disk drops no line', async () => {
-    const { result, asked } = await sync({ order: ['Base.esp'], provided: ['Base.esp', 'New.esp'], repository: { statuses: [status('Provider')] } });
+  it('reads no manifest when what is on disk drops no line', async () => {
+    const { result, asked } = await sync({ order: ['Base.esp'], provided: ['Base.esp', 'New.esp'], repository: { manifests: { Provider: [] } } });
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
     expect(asked).toEqual([]);
   });
 
-  it('decides a drop on the manifests mEdit names now, not on its last answer', async () => {
+  it('decides a drop on the manifests as they read now, not on the statuses Mod status last derived', async () => {
     const { result } = await sync({
       order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp'],
-      repository: { statuses: [status('Unrestored')], lastAnswered: [status('Unrestored', { gone: ['Unrestored.esp'] })] },
+      repository: { manifests: { Unrestored: [] }, lastAnswered: [status('Unrestored', { gone: ['Unrestored.esp'] })] },
     });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Unrestored.esp'] });
@@ -256,38 +269,39 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
   it('drops the line of a plugin only a disabled mod\'s manifest names', async () => {
     const { result } = await sync({
       order: ['Base.esp', 'Off.esp'], provided: ['Base.esp'], otherMod: { name: 'Off', enabled: false },
-      repository: { statuses: [status('Off', { gone: ['Off.esp'] })] },
+      repository: { manifests: { Off: naming('Off.esp') } },
     });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Off.esp'] });
   });
 
-  it('asks mEdit nothing while the instance holds no repository', async () => {
+  it('reads no manifest while the instance holds no repository', async () => {
     const { result, asked } = await sync({ order: ['Base.esp', 'Gone.esp'], provided: ['Base.esp'] });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
     expect(asked).toEqual([]);
   });
 
-  it.each<[string, readonly ModStatus[] | ReadFailed, string]>([
-    ['mEdit could not read the manifests', { failed: 'unreachable' }, "the mods' manifests could not be read: mEdit could not be reached."],
-    ['the status of one enabled mod could not be read', [status('Provider'), status('Unrestored', { unreadable: { manifest: true, why: 'bad line 3' } })],
-      'the status of "Unrestored" could not be read: bad line 3'],
-  ])('refuses, handing over no change, when a line nothing on disk provides waits on a manifest and %s', async (_, statuses, refusal) => {
-    const { fake, result } = await sync({ order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp', 'New.esp'], repository: { statuses } });
+  it('refuses, handing over no change, when a line nothing on disk provides waits on a manifest and the status of one enabled mod could not be read', async () => {
+    const { fake, result } = await sync({
+      order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp', 'New.esp'], repository: { manifests: { Provider: [], Unrestored: 'unreadable' } },
+    });
 
-    expect(result).toEqual({ applied: false, refusal });
+    expect(result).toEqual({ applied: false, refusal: 'the status of "Unrestored" could not be read: its manifest cannot be read at line 1' });
     expect(handedChanges(fake)).toEqual([]);
   });
 
   it('refuses when a line nothing on disk provides waits on a mod enabled after the manifests were asked', async () => {
     const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines('Late.esp'), dataFolderPlugins: inData(), mods: [] }), { repositoryOnDisk: true });
-    const enablingLate: ReadModStatus = () => {
-      fake.read({ mods: [{ kind: 'mod', name: 'Late', enabled: true }] });
-      return Promise.resolve([]);
+    const enablingLate = {
+      ...fake.adapter,
+      sourceMods: () => {
+        fake.read({ mods: [{ kind: 'mod', name: 'Late', enabled: true }] });
+        return fake.adapter.sourceMods();
+      },
     };
 
-    const result = await pluginSyncOver(fake.adapter, enablingLate, NO_MOD_STATUSES)();
+    const result = await pluginSyncOver(enablingLate, NO_MOD_STATUSES)();
 
     expect(result).toEqual({ applied: false, refusal: 'the manifest of "Late" was not read' });
   });

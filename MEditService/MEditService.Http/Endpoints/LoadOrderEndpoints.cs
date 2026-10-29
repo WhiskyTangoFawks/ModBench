@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using MEditService.Commands;
-using MEditService.Commands.Build;
 using MEditService.LoadOrder;
 
 namespace MEditService.Http.Endpoints;
@@ -19,8 +18,7 @@ internal static class LoadOrderEndpoints
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, " +
                 "the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. " +
-                "Every archive and strings file carries its stamp. It names each mod, by its folder with its metadata files " +
-                "and the stat cache's folder, and each mod whose status then changed is pushed as mod-status-changed. " +
+                "Every archive and strings file carries its stamp. " +
                 "Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
@@ -50,16 +48,14 @@ internal static class LoadOrderEndpoints
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
             || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles)
-            || req.Places is not { } places || places.Any(place => string.IsNullOrEmpty(place?.Name) || string.IsNullOrEmpty(place.Folder))
-            || !ModsByFolder.AreWhole(req.Mods) || string.IsNullOrWhiteSpace(req.StatCache))
+            || req.Places is not { } places || places.Any(place => string.IsNullOrEmpty(place?.Name) || string.IsNullOrEmpty(place.Folder)))
         {
-            return EndpointMapping.BadRequest("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its places, its mods and the stat cache's folder.");
+            return EndpointMapping.BadRequest("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files and its places.");
         }
 
         var result = handler.Put(
             req.DataFolder, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage,
-            new SnapshotMods(req.Mods, req.StatCache));
+            registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage);
         return EndpointMapping.Answered("Put load order", logger, result);
     }
 
@@ -89,7 +85,7 @@ internal static class LoadOrderEndpoints
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles,
-    IReadOnlyList<PluginPlace> Places, string DataFolder, string InstanceRoot, string GameRelease, string StringsLanguage, IReadOnlyList<ModByFolder> Mods, string StatCache);
+    IReadOnlyList<PluginPlace> Places, string DataFolder, string InstanceRoot, string GameRelease, string StringsLanguage);
 
 internal sealed record LoadOrderPlugin(
     string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,

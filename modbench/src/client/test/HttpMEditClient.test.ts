@@ -233,7 +233,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
   const skipped = "'ModB' was skipped: a file could not be read: denied";
   const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
-  const modStatus = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [] }];
 
   const posts: {
     name: string; verb: Verb; answer: unknown; reads: unknown; path: string; body: unknown;
@@ -349,8 +348,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped }], manifests },
       reads: { destroys, refused: [{ item: 'ModB', reason: skipped }], manifests },
       path: '/what-restore-destroys', body: { mods: modsOnDisk, statCache: '/instance/stat-cache' } },
-    { name: 'getModStatus', verb: (c) => c.getModStatus(modsOnDisk, '/instance/stat-cache'), ...same(modStatus),
-      path: '/mod-status', body: { mods: modsOnDisk, statCache: '/instance/stat-cache' } },
     { name: 'selectRows', verb: (c) => c.selectRows('SELECT 1'), answer: { rows: [{ n: 1 }] }, reads: [{ n: 1 }],
       path: '/records/select', body: { sql: 'SELECT 1' } },
   ];
@@ -733,7 +730,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('announces every plugin and mod it put again as changed once a reopened stream\'s process has applied it, since views read them again on a change and never on a reconnect', async () => {
+  it('announces every plugin it put again as changed once a reopened stream\'s process has applied it, since views read it again on a change and never on a reconnect', async () => {
     const { streams, open } = reopeningStreams();
     const fetch = routedFetch([
       ['/notifications/stream', open],
@@ -746,13 +743,12 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await client.start();
     const heard: unknown[] = [];
     client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin));
-    client.onNotification('mod-status-changed', ({ mods }) => heard.push(mods));
-    await client.sendLoadOrder({ ...snapshot, mods: [{ name: 'ModA', folder: '/mods/ModA', metadataFiles: [] }] });
+    await client.sendLoadOrder(snapshot);
     expect(heard).toEqual([]);
 
     streams[0]?.end();
 
-    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
+    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }]));
   });
 
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {

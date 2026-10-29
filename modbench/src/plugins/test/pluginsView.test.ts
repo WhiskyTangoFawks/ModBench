@@ -295,7 +295,7 @@ function snapshotOf(...names: string[]): LoadOrderSnapshot {
       name, path: `/mods/A/${name}`, origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' },
       lineNamesIt: true, archives: [], stringsFiles: [],
     })),
-    active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
+    active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [],
     dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
   };
 }

@@ -4,7 +4,7 @@
 import { basename, dirname } from 'node:path';
 import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
-import { isInstallationFileName } from '../downloadedFileContents/installationFileNames';
+import { isInstallationFileName } from '../fileContents/installationFileNames';
 import { effectiveModId } from './codecs/nexusFileName';
 import { METADATA_FILE_SUFFIX, parseDownloadedFileMeta } from './codecs/downloads';
 import { type MetaIni, modMetaOf, parseMetaIni } from './codecs/metaIni';

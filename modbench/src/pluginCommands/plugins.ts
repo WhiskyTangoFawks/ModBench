@@ -6,7 +6,9 @@ import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 import { refuse } from '../coreLib/refuse';
 import { present } from '../ports/present';
-import type { MEditClient, ModStatus, PluginAddress, ReadModStatus } from '../client';
+import type { MEditClient, PluginAddress } from '../client';
+import type { ModStatus } from '../manifestAdapter/manifestAdapter';
+import { statusesNow } from '../manifestAdapter/manifestAdapter';
 import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
@@ -17,7 +19,7 @@ import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginsNotRestored } from './pluginsNotRestored';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import { isReadFailed } from '../wire/readFailed';
 
 interface Decision<T> {
   readonly changes: readonly PluginOrderChange[];
@@ -135,7 +137,7 @@ type PluginSyncResult =
   | { applied: false; refusal: string }
   | { applied: false; toldAsInstanceState: true };
 
-/** Each mod's status as mEdit last answered it, and each time a new answer lands. */
+/** Each mod's status as Mod status last derived it, and each time that changes. */
 export interface LastModStatuses {
   of(mod: string): ModStatus | undefined;
   onDidChange(listener: () => void): { dispose(): void };
@@ -170,19 +172,14 @@ function pluginLinesDelta(
 }
 
 // The mod order is read apart from the plugins provided, so a mod it did not list was not asked.
-async function askedManifests(adapter: InstanceAdapter, readStatus: ReadModStatus): Promise<ManifestsRead> {
+async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> {
   const asked = new Set((await adapter.modOrder()).mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])));
-  const answer = await readStatus([...asked]);
-  if (isReadFailed(answer)) {
-    const why = `the mods' manifests could not be read: ${failureReason(answer)}`;
-    return { goneFrom: () => [], unread: () => why };
-  }
-  const statusOf = new Map(answer.map((status) => [status.mod, status]));
+  const statusOf = new Map((await statusesNow(adapter, [...asked])).map((status) => [status.mod, status]));
   return {
     goneFrom: (mod) => statusOf.get(mod)?.gone ?? [],
     unread: (mod) => {
       if (!asked.has(mod)) return `the manifest of "${mod}" was not read`;
-      const why = statusOf.get(mod)?.unreadable?.why;
+      const why = statusOf.get(mod)?.unreadable;
       return why === undefined ? undefined : `the status of "${mod}" could not be read: ${why}`;
     },
   };
@@ -211,16 +208,16 @@ const dropsFromDisk = (order: readonly PluginEntry[], provided: PluginsProvided)
 const synced = (wrote: boolean, decided: SyncDecision): PluginSyncResult =>
   ('gameFolderNotFound' in decided ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote, ...decided });
 
-// An add waits safely on mEdit's last answer, since its next answer runs the sync again. A drop loses the line's place,
-// so it waits on the manifests as mEdit reads them now.
-async function syncPlugins(adapter: InstanceAdapter, readStatus: ReadModStatus, last: Pick<LastModStatuses, 'of'>): Promise<PluginSyncResult> {
+// An add waits safely on the statuses Mod status last derived, since their next change runs the sync again. A drop loses
+// the line's place, so it waits on the manifests as the adapters read them now.
+async function syncPlugins(adapter: InstanceAdapter, last: Pick<LastModStatuses, 'of'>): Promise<PluginSyncResult> {
   const repository = await adapter.repositoryOnDisk();
   const lastRead = repository ? lastAnswered(last) : NOTHING_NAMED;
   const first = await changeDeciding(overProvided(adapter), (order, provided): Decision<SyncDecision | { askNow: true }> =>
     (repository && dropsFromDisk(order, provided) ? { changes: [], decided: { askNow: true } } : decideSync(order, provided, lastRead)));
   if (!first.applied) return first;
   if (!('askNow' in first.decided)) return synced(first.wrote, first.decided);
-  const now = await askedManifests(adapter, readStatus);
+  const now = await askedManifests(adapter);
   const second = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, now));
   return second.applied ? synced(second.wrote, second.decided) : second;
 }
@@ -228,9 +225,9 @@ async function syncPlugins(adapter: InstanceAdapter, readStatus: ReadModStatus, 
 /** Plugin sync over the active profile. */
 export type PluginSyncRun = () => Promise<PluginSyncResult>;
 
-/** `syncPlugins` bound to one instance, to mEdit's read of each mod's status, and to its last answer. */
-export function pluginSyncOver(adapter: InstanceAdapter, readStatus: ReadModStatus, last: Pick<LastModStatuses, 'of'>): PluginSyncRun {
-  return () => syncPlugins(adapter, readStatus, last);
+/** `syncPlugins` bound to one instance and to the statuses Mod status last derived. */
+export function pluginSyncOver(adapter: InstanceAdapter, last: Pick<LastModStatuses, 'of'>): PluginSyncRun {
+  return () => syncPlugins(adapter, last);
 }
 
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */

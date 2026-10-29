@@ -1,4 +1,3 @@
-import { unreadStatus } from '../../test/unreadStatus';
 import { FOMOD_PAGE, VIEW_ANSWER } from '../../test/fomodDialogDouble';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
@@ -28,16 +27,18 @@ import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { modCommands } from '../../modCommands/modCommands';
-import type { ReadModStatus } from '../../client';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import {
-  downloadedFilesOf, fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
+  downloadedFilesOf, fakeInstanceAdapter, modFoldersIn, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
 } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
-import { status } from '../../test/modStatusFixture';
+import { manifestedIn } from '../../test/modStatusFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const [, handler] = present(registerCommand.mock.calls.find((c) => c[0] === commandId), `the ${commandId} handler`);
@@ -45,19 +46,17 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
-const nothingToLose: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod)));
-const noManifest: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod, { noManifest: true })));
 
 let fake: FakeInstanceAdapter;
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 
 function register(
-  over: Partial<ModInstallDeps> = {}, answers: InstanceAnswers = {}, readStatus: ReadModStatus = unreadStatus,
+  over: Partial<ModInstallDeps> = {}, answers: InstanceAnswers = {}, modFolders = modFoldersOf('Harder VATS'),
 ): void {
-  fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('Harder VATS'), downloadedFiles: downloadedFilesOf('foo.7z') }), answers);
+  fake = fakeInstanceAdapter(readingFixture({ modFolders, downloadedFiles: downloadedFilesOf('foo.7z') }), answers);
   registerModInstallCommands({
-    commands: modCommands(fake.adapter, unscriptedMEdit, readStatus),
+    commands: modCommands(fake.adapter, unscriptedMEdit),
     instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     ask: vi.fn(),
@@ -248,15 +247,18 @@ describe('modbench.mod.install called by the agent', () => {
   });
 
   it('installs over the target mod named, as an upgrade', async () => {
-    register({}, {}, nothingToLose);
+    const mods = await mkdtemp(join(tmpdir(), 'modbench-upgrade-'));
+    await manifestedIn(join(mods, 'Harder VATS'));
+    register({}, {}, modFoldersIn(mods, 'Harder VATS'));
     const answered = await install([outsideInstallationFile], { target: 'Harder VATS' });
 
     expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
+    await rm(mods, { recursive: true });
   });
 
   it('installs over a target that would lose files when the options carry force', async () => {
-    register({}, {}, noManifest);
+    register();
     await install([outsideInstallationFile], { target: 'Harder VATS', force: true });
 
     expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
@@ -282,7 +284,7 @@ describe('modbench.mod.install called by the agent', () => {
 
   it.each<[string, object, InstanceAnswers, string, string]>([
     ['refused by install', { name: 'Bar' }, { refusals: refusing('install', 'folder taken') }, 'Failed to install "Bar".', 'folder taken'],
-    ['that throws', { target: 'Harder VATS' }, {}, 'Failed to install "Harder VATS".', 'unscripted'],
+    ['that throws', { target: 'Harder VATS' }, { unreadReads: { modOrder: 'modlist.txt is locked' } }, 'Failed to install "Harder VATS".', 'modlist.txt is locked'],
   ])('answers an install %s as the failure the view reports, reporting nothing itself', async (_case, options, answers, refusal, detail) => {
     const reporter = recordingReporter();
 

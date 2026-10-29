@@ -67,8 +67,7 @@ internal sealed record NotificationEvent(
     IReadOnlyList<PluginWithUnreadableSource>? PluginWithUnreadableSources = null,
     RecordFilterClearedNotification? RecordFilterCleared = null,
     ModlistProgress? ModlistProgress = null,
-    DecompileAndCommitPhase? DecompileAndCommitPhase = null,
-    IReadOnlyList<string>? Mods = null)
+    DecompileAndCommitPhase? DecompileAndCommitPhase = null)
 {
     public static NotificationEvent From(INotification notification) => notification switch
     {
@@ -82,7 +81,6 @@ internal sealed record NotificationEvent(
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
         PluginSourceUnreadableNotification n => new("plugin-source-unreadable", "", n.Origin, [], 0, PluginWithUnreadableSources: n.Plugins),
         RecordFilterClearedNotification n => new("record-filter-cleared", "", "", [], 0, RecordFilterCleared: n),
-        ModStatusChangedNotification n => new("mod-status-changed", "", "", [], 0, Mods: n.Mods),
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
     };
 }

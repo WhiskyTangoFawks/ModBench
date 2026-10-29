@@ -10,7 +10,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { isRefused, type MEditClient, type ReadModStatus } from '../client';
+import { isRefused, type MEditClient } from '../client';
 import { installMod, upgradeLoss } from './install';
 export type { SelectionResult };
 export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
@@ -598,7 +598,7 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadModStatus) {
+export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit']) {
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
@@ -615,8 +615,8 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusalInInstance>) => newModNameRefusalInInstance(adapter, ...args),
     names: adapter.names,
-    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus, listMod: (name) => listMod(adapter, name) }, ...args),
-    upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter, readStatus }, ...args),
+    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, listMod: (name) => listMod(adapter, name) }, ...args),
+    upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter }, ...args),
   };
 }
 

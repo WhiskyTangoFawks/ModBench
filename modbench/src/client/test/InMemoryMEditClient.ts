@@ -11,7 +11,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
-  | 'getRecords' | 'searchRecords' | 'getWhatRestoreDestroys' | 'getModStatus'
+  | 'getRecords' | 'searchRecords' | 'getWhatRestoreDestroys'
   | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
@@ -379,9 +379,6 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getWhatRestoreDestroys(...args: Parameters<MEditClient['getWhatRestoreDestroys']>): ReturnType<MEditClient['getWhatRestoreDestroys']> {
     return this.query('getWhatRestoreDestroys', args);
-  }
-  getModStatus(...args: Parameters<MEditClient['getModStatus']>): ReturnType<MEditClient['getModStatus']> {
-    return this.query('getModStatus', args);
   }
   selectRows(...args: Parameters<MEditClient['selectRows']>): ReturnType<MEditClient['selectRows']> {
     return this.query('selectRows', args);

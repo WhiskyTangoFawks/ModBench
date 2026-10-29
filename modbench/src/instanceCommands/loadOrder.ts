@@ -5,7 +5,7 @@ import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client
 
 /** What the loader read of the instance for put load order to send. */
 export type LoadOrderSource =
-  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache' | 'gameRelease'> & { readonly dataFolder: string })
+  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'gameRelease'> & { readonly dataFolder: string })
   | { readonly refusal: string }
   | undefined;
 
@@ -21,9 +21,9 @@ export async function putLoadOrder(
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
   if (stringsLanguage === undefined) throw new Error('The strings language has no value: package.json declares its default.');
-  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameRelease, dataFolder } = source;
+  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, gameRelease, dataFolder } = source;
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder, instanceRoot, gameRelease, stringsLanguage,
+    plugins, active, loadedWithNoLine, archives, stringsFiles, places, dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }

@@ -49,7 +49,3 @@ public sealed record UnreadableSource(string Reason, bool DecompileRepairs);
 /// <summary>The record filter could not apply again after a change to the record index, so the Index
 /// cleared it. Source names the filter's source; Reason is the database's.</summary>
 public sealed record RecordFilterClearedNotification(string Source, string Reason) : INotification;
-
-/// <summary>At a snapshot: each mod whose status against its manifest changed since the last push (mod-status
-/// trace).</summary>
-public sealed record ModStatusChangedNotification(IReadOnlyList<string> Mods) : INotification;

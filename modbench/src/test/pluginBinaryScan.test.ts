@@ -149,7 +149,7 @@ function byteReaderOffences(reader: ByteReader, sourceText: string, fileName: st
 }
 
 const BYTE_READERS: readonly (readonly [string, ByteReader])[] = [
-  [join('instanceAdapter', 'downloadedFileContents', 'contentDigest.ts'), DIGEST],
+  [join('instanceAdapter', 'fileContents', 'contentDigest.ts'), DIGEST],
   [join('instanceAdapter', 'gameFolder', 'versionResource.ts'), VERSION_READ],
   [join('instanceAdapter', 'fomodInstaller', 'releaseXml.ts'), FOMOD_XML_READ],
   [join('instanceAdapter', 'gameFolder', 'steamShortcuts.ts'), STEAM_SHORTCUTS_READ],

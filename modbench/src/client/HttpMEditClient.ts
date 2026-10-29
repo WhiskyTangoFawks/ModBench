@@ -16,7 +16,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type SourceManifestChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
+  type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -766,11 +766,6 @@ class HttpMEditClient implements MEditClient {
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {
     return this.read('getWhatRestoreDestroys', (api, signal) => api.POST('/what-restore-destroys', { body: { mods: [...mods], statCache }, signal }),
       (data) => (data ? { destroys: data.mods, refused: itemRefusals(data.refused), manifests: data.manifests } : NO_ANSWER));
-  }
-
-  getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed> {
-    return this.read('getModStatus', (api, signal) => api.POST('/mod-status', { body: { mods: [...mods], statCache }, signal }),
-      (data) => (data ?? NO_ANSWER));
   }
 
   selectRows(sql: string): Promise<unknown[] | ReadFailed> {
