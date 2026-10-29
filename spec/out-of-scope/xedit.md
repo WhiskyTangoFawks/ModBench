@@ -61,6 +61,7 @@ Gestures Modbench does differently.
 | 37 | Columns identical to the master | Collapse No Conflict also collapses a column whose copy is identical to the master, except the master's and the file's | No rule hides a column | Ruling: a copy identical to the master adds only noise to a record that many plugins override. |
 | 38 | Colour reading | The colour's text, with a swatch of the colour beside it | No swatch | Ruling: hex text does not show the colour. |
 | 39 | Placed reference rotation | Radians, with degrees beside them; edits and copies in radians | Reads and edits in degrees | Mutagen decides the data: Mutagen holds radians. The degrees are xEdit's reading. |
+| 40 | Templated fields | Read-only and dimmed, read as the template they come from, and left out of the conflict (editor-fields.md, Templated fields) | Edits, shows and compares the copy's own value, or hides the field | Principle: Never silently wrong. The game takes a templated field's value from the template, so the copy's own value misleads. The Creation Kit greys the field out too. |
 
 ## Omissions by object
 
