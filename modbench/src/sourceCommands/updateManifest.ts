@@ -30,9 +30,8 @@ interface ModUpdated {
   readonly otherBytes: readonly string[];
 }
 
-/** What update manifest answers. `cancelled`: the signal aborted, so the landed mods are those before it. A landed mod's
- *  `manifestWritten` is false when its manifest already was so; `notInPackage` names each file no package holds, `otherBytes`
- *  each a package holds with other bytes. */
+/** What update manifest answers. `cancelled`: the signal aborted, so the landed mods are those before it. `manifestWritten`
+ *  is false when a manifest already was so; `notInPackage` and `otherBytes` name the files no package holds. */
 export interface UpdateManifestResult {
   readonly cancelled?: true;
   readonly landed: readonly ModUpdated[];
