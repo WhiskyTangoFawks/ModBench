@@ -411,6 +411,16 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(await adapter.pathsOutsideFolders()).toEqual([{ file: 'mods/Plain/Plain.manifest.json', line: 1, path: 'C:/Modding/x.zip' }]);
   });
 
+  it('answers a path once for each line that holds it, and once for a line that holds it twice', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'mods/Plain/Plain.manifest.json', '{"a": "C:/Modding/x", "b": "C:/Modding/x"}\n{"c": "C:/Modding/x"}');
+
+    expect(await adapter.pathsOutsideFolders()).toEqual([
+      { file: 'mods/Plain/Plain.manifest.json', line: 1, path: 'C:/Modding/x' },
+      { file: 'mods/Plain/Plain.manifest.json', line: 2, path: 'C:/Modding/x' },
+    ]);
+  });
+
   it('writes nothing in an instance folder that holds no repository, and finds no path in it', async () => {
     const root = await folder('instance');
     await put(root, 'ModOrganizer.ini', SETTINGS(['1\\binary=C:/Modding/x.exe']));

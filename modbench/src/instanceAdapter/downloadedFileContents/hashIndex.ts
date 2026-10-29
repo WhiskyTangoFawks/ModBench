@@ -119,8 +119,8 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     }
   });
 
-  // A downloaded file that cannot be hashed is kept so for the session, as hashing it again costs a whole extraction to
-  // fail again; a reload hashes it again, so a tool the user fixes takes effect.
+  // Kept so for the session, as hashing it again costs a whole extraction to fail again (modlist-repository.md, Update manifest, story 10).
+
   async function keep(kind: Kind, path: string, entry: Kept, read: FileRead<HashedDownloadedFile>, readFromMs: number): Promise<void> {
     if (kept[kind].get(path) !== entry) return;
     if ((read.kind === 'unreadable' && kind !== 'downloadedFile') || !settledBefore(entry.stamp, readFromMs)) {
@@ -132,7 +132,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
   }
 
   const shown = (path: string, read: FileRead<unknown>): void => {
-    problems.set(path, read.kind === 'read' ? [] : [{ message: read.reason }]);
+    problems.set(path, read.kind === 'read' ? [] : [{ line: 1, message: `could not be hashed: ${read.reason}` }]);
   };
 
   const heldAt = (kind: Kind, path: string, stamp: FileStamp): Promise<FileRead<HashedDownloadedFile>> | undefined => {
@@ -163,7 +163,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       const stamp = await stampOf(path);
       return { kind: 'read', answer: stamp };
     } catch (err) {
-      problems.set(path, errnoCode(err) === 'ENOENT' ? [] : [{ message: errorMessage(err) }]);
+      problems.set(path, errnoCode(err) === 'ENOENT' ? [] : [{ line: 1, message: `could not be hashed: ${errorMessage(err)}` }]);
       return { kind: 'unreadable', reason: errorMessage(err) };
     }
   }

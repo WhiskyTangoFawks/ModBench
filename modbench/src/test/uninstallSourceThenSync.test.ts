@@ -33,7 +33,7 @@ async function instanceWithSourceMod(): Promise<{ root: string; adapter: Instanc
   runGit(source, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');
   runGit(root, 'init', '--quiet');
   await managerOver(root).writeIgnoreList();
-  await managerOver(root).writeSubmodules(['Mod A'], true);
+  await managerOver(root).writeSubmodules('every');
   await mkdir(join(root, 'mods', MOD), { recursive: true });
   await writeFile(join(root, 'mods', MOD, 'a.txt'), 'x');
   const adapter = adapterOver(root);

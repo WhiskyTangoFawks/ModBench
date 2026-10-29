@@ -16,7 +16,7 @@ import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { restoredMod } from '../../test/restoredMod';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
 import type { Nexus } from '../../nexus/nexus';
-import type { FileProblem } from '../../ports/fileProblems';
+import { fileProblemsFake } from '../../test/fileProblemsFake';
 
 
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'E' }] };
@@ -49,11 +49,11 @@ function commandsOver(
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
-  const pathProblems = new Map<string, readonly FileProblem[]>();
+  const pathProblems = fileProblemsFake();
   const commands = modlistRepositoryCommands({
     client, adapter: { ...adapter.adapter, ...adapterOver }, nexus, instanceRoot: '/instance',
     hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks,
-    pathProblems: { set: (file, list) => { pathProblems.set(file, list); }, clearAll: () => { pathProblems.clear(); } },
+    pathProblems,
   });
   return { commands, client, adapter, repositories, pathProblems };
 }
@@ -215,16 +215,16 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules', acted: ['ModA'], everyMod: false }, { verb: 'writeOtherManifestLines' }, { verb: 'keepOutOfPublisher' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
+    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules', acted: ['ModA'] }, { verb: 'writeOtherManifestLines' }, { verb: 'keepOutOfPublisher' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
   });
 
-  it('sweeps the entries of source mods that are gone only when it acts on every mod', async () => {
-    const { commands, client, adapter } = commandsOver();
+  it('gives the submodules of every source mod to the Instance adapter when it acts on every mod, though a mod was refused', async () => {
+    const { commands, client, adapter } = commandsOver({ unreadableMetadata: new Map([['ModB', 'EISDIR: meta.ini']]) });
     client.setCommandResult('updateManifest', UPDATED);
 
-    await commands.updateManifest(['ModA'], {}, [], true);
+    const outcome = await commands.updateManifest(['ModA', 'ModB'], {}, [], true);
 
-    expect(adapter.calls).toContainEqual({ verb: 'writeSubmodules', acted: ['ModA'], everyMod: true });
+    expect([adapter.calls, outcome]).toMatchObject([expect.arrayContaining([{ verb: 'writeSubmodules', acted: 'every' }]), { refused: [{ item: 'ModB' }] }]);
   });
 
   it('shows each path no path token names as a problem on its line in its file, not in its report', async () => {
@@ -233,7 +233,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([pathProblems, outcome]).toMatchObject([
+    expect([pathProblems.held, outcome]).toMatchObject([
       new Map([['/instance/ModOrganizer.ini', [{ line: 7, message: 'holds a path no path token names: C:/Modding/x.exe' }]]]), { applied: true, repositoryNotes: [] },
     ]);
   });
@@ -245,7 +245,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     await commands.updateManifest(['ModA']);
 
-    expect(pathProblems).toEqual(new Map());
+    expect(pathProblems.held).toEqual(new Map());
   });
 
   it('names the failure to read the paths beside the manifests that landed', async () => {
@@ -266,7 +266,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     await commands.updateManifest(['ModA']);
 
-    expect([...pathProblems.keys()]).toEqual(['/instance/ModOrganizer.ini']);
+    expect([...pathProblems.held.keys()]).toEqual(['/instance/ModOrganizer.ini']);
   });
 
   it('names the failure to keep Modbench\'s files out of the publisher beside the manifests that landed', async () => {

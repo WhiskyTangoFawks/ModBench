@@ -703,9 +703,9 @@ export interface InstanceAdapter {
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;
-  /** Makes each source mod of `acted` with a remote a submodule: its entry in `.gitmodules` and its ignore line. The
-   *  others keep theirs; only `everyMod` removes those of a source mod that is gone. */
-  writeSubmodules(acted: readonly string[], everyMod: boolean): Promise<SubmoduleReport>;
+  /** Makes each source mod of `acted`, or of every source mod, with a remote a submodule: its entry in `.gitmodules` and its
+   *  ignore line. The others keep theirs; only `every` removes those of a source mod that is gone. */
+  writeSubmodules(acted: readonly string[] | 'every'): Promise<SubmoduleReport>;
   /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
    *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
   otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[]; readonly nested: readonly { readonly name: string; readonly reason: string }[] }>;

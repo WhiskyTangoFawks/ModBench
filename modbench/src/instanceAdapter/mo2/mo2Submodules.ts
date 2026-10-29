@@ -139,7 +139,7 @@ export const pushRefusalWritten = (instanceRoot: string): Promise<boolean> =>
 
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
-    async writeSubmodules(acted, everyMod) {
+    async writeSubmodules(acted) {
       if (!(await isRepository(instanceRoot))) return { notes: [], other: [] };
       const file = submodulesFile(instanceRoot);
       const sources = await sourceModsIn(instanceRoot);
@@ -154,7 +154,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
         other.push(`${file} could not be read, so no source mod's entry is changed: ${errorMessage(err)}`);
       }
       for (const [mod, folder] of sources.folders) {
-        if (!acted.includes(mod)) continue;
+        if (acted !== 'every' && !acted.includes(mod)) continue;
         const found = await submoduleOf(folder);
         const name = basename(folder);
         if (found !== undefined && 'note' in found) {
@@ -171,7 +171,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       }
       for (const name of existing) {
         if (kept.has(name)) continue;
-        if (!everyMod) {
+        if (acted !== 'every') {
           kept.add(name);
           continue;
         }

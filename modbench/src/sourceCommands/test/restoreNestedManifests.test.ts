@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
+import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -35,7 +35,7 @@ async function instanceWithANestedPair() {
   client.setCommandResult('updateManifest', { landed: [], refused: [] });
   const commands = modlistRepositoryCommands({
     client, adapter: adapterOver(root), nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: root, hostGit: hostGitRecordingInits([]),
-    trash: () => Promise.resolve(), tasks: recordingTasks(), pathProblems: NO_FILE_PROBLEMS,
+    trash: () => Promise.resolve(), tasks: recordingTasks(), pathProblems: fileProblemsFake(),
   });
   return { client, commands, found: await commands.otherManifests() };
 }

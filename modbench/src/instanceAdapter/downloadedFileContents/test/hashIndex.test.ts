@@ -7,7 +7,7 @@ import type { InstallationFileReader } from '../installationFileReader';
 import { digestOf } from '../contentDigest';
 import { stampOf } from '../../files';
 import { hashIndex as hashIndexWith } from '../hashIndex';
-import type { FileProblem, FileProblems } from '../../../ports/fileProblems';
+import { fileProblemsFake } from '../../../test/fileProblemsFake';
 
 vi.mock('../contentDigest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../contentDigest')>();
@@ -24,18 +24,14 @@ const ENTRIES = ['a.esp', 'textures/b.dds'];
 
 let root: string;
 let folder: string;
-let problems: Map<string, readonly FileProblem[]>;
+let fileProblems: ReturnType<typeof fileProblemsFake>;
 
-const hashIndex = (at: string, reader: InstallationFileReader) => hashIndexWith(at, reader, problemsPanel);
-const problemsPanel: FileProblems = {
-  set: (file, list) => { if (list.length === 0) problems.delete(file); else problems.set(file, list); },
-  clearAll: () => { problems.clear(); },
-};
+const hashIndex = (at: string, reader: InstallationFileReader) => hashIndexWith(at, reader, fileProblems);
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-hashes-'));
   folder = join(root, 'index');
-  problems = new Map();
+  fileProblems = fileProblemsFake();
   vi.mocked(digestOf).mockClear();
   vi.mocked(stampOf).mockClear();
 });
@@ -308,15 +304,15 @@ describe('the sizes and hashes of the record index', () => {
       const reading: InstallationFileReader = { ...fakeInstallationFileReader(ENTRIES), list: () => Promise.reject(new Error('Can not open the file as archive')) };
       const file = await fileHolding('Mod.7z', 'archive');
       await hashIndex(folder, reading).downloadedFilesHashed([file]);
-      const whileBroken = new Map(problems);
+      const whileBroken = new Map(fileProblems.held);
       await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFilesHashed([file]);
-      const afterFix = new Map(problems);
+      const afterFix = new Map(fileProblems.held);
       const session = hashIndex(folder, reading);
       await session.downloadedFilesHashed([file]);
       await rm(file);
       await session.downloadedFilesHashed([file]);
 
-      expect([whileBroken, afterFix, problems]).toEqual([new Map([[file, [{ message: 'Can not open the file as archive' }]]]), new Map(), new Map()]);
+      expect([whileBroken, afterFix, fileProblems.held]).toEqual([new Map([[file, [{ line: 1, message: 'could not be hashed: Can not open the file as archive' }]]]), new Map(), new Map()]);
     });
 
     it('says why the hash index could not be written, as the next run hashes those files again', async () => {
@@ -339,7 +335,7 @@ describe('the sizes and hashes of the record index', () => {
       const answer = await hashIndex(folder, refusing).downloadedFilesHashed([gone, notAnInstallationFile]);
 
       expect(answer).toEqual({ files: [], notes: [] });
-      expect([...problems.keys()]).toEqual([notAnInstallationFile]);
+      expect([...fileProblems.held.keys()]).toEqual([notAnInstallationFile]);
     });
   });
 });

@@ -1,7 +1,7 @@
 import type {
   InstallationFileReader, DownloadedFile, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
 } from '../../instanceAdapter/instanceAdapter';
-import { NO_FILE_PROBLEMS } from '../noFileProblems';
+import { fileProblemsFake } from '../fileProblemsFake';
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
@@ -60,12 +60,12 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined);
 
 export const managerOver = (root: string, answers: AdapterAnswers = {}, publisherFile?: ConfigurationFile): ManagerAdapter => mo2InstanceAdapter({
-  instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: NO_FILE_PROBLEMS, fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers),
+  instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers),
 }, publisherFile);
 
 /** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: NO_FILE_PROBLEMS, fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
+  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers), scriptEnvironmentFileSetting: () => answers.pythonEnvFile });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */

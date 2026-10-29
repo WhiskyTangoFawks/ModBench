@@ -563,9 +563,9 @@ async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly str
   }
 }
 
-async function submodulesWritten(adapter: Adapter, acted: readonly string[], everyMod: boolean): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
+async function submodulesWritten(adapter: Adapter, acted: readonly string[] | 'every'): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
   try {
-    const { notes, other } = await adapter.writeSubmodules(acted, everyMod);
+    const { notes, other } = await adapter.writeSubmodules(acted);
     return { notes, repositoryNotes: other };
   } catch (err) {
     return { notes: [], repositoryNotes: [errorMessage(err)] };
@@ -666,7 +666,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.files.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },
         { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
-      const submodules = await submodulesWritten(adapter, versioned.map(({ name }) => name), everyMod);
+      const submodules = await submodulesWritten(adapter, everyMod ? 'every' : versioned.map(({ name }) => name));
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
         repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsShown(deps)],
