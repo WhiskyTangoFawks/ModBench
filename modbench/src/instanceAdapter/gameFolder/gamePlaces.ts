@@ -5,11 +5,11 @@ const sameFolder = async (one: string, other: string): Promise<boolean> => await
 
 export async function gamePlacesOf(game: GameFolder, steam: SteamInstall | undefined): Promise<readonly GamePlace[]> {
   if (game.kind !== 'found') return [];
-  const gamePlace = { root: game.root, dataFolder: game.dataFolder, depots: [], depotProblems: [] };
+  const gamePlace = { root: game.root, holdsDataFiles: true, depots: [], depotProblems: [] };
   if (steam === undefined) return [gamePlace];
   const { root, dataFolder, depots, depotProblems } = steam;
   if (await sameFolder(game.root, root)) return [{ ...gamePlace, depots, depotProblems }];
   // A Data folder linked to the Steam install's holds the files its depots do, and the game folder's root its own.
-  const dataElsewhere = await sameFolder(game.dataFolder, dataFolder);
-  return [dataElsewhere ? { ...gamePlace, dataFolder: undefined } : gamePlace, { root, dataFolder, depots, depotProblems }];
+  const holdsDataFiles = !await sameFolder(game.dataFolder, dataFolder);
+  return [{ ...gamePlace, holdsDataFiles }, { root, holdsDataFiles: true, depots, depotProblems }];
 }

@@ -1,14 +1,15 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import type { Dirent } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
-import type { FileRead, GameFile, GamePlace, InstanceAdapter, UnsearchedFolder } from '../instanceAdapter';
+import type { DeployedPath, FileRead, GameFile, GamePlace, InstanceAdapter, UnsearchedFolder } from '../instanceAdapter';
 import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
+import { isWithin } from '../gameFolder/pathWithin';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
   sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceModLines,
@@ -101,7 +102,7 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
-function caseBlindFinder({ root, dataFolder }: GamePlace) {
+function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
   const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
   const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
     const kept = listings.get(folder) ?? listOwnEntries(folder, ignoreLink).then(
@@ -127,9 +128,9 @@ function caseBlindFinder({ root, dataFolder }: GamePlace) {
   return async (path: string): Promise<FileRead<string[] | undefined>> => {
     const [first = '', ...below] = path.split('/');
     if (below.length === 0 || first.toLowerCase() !== DATA_FOLDER.toLowerCase()) return walk(root, path.split('/'));
-    if (dataFolder === undefined) return { kind: 'read', answer: undefined };
-    const found = await walk(dataFolder, below);
-    return found.kind === 'read' && found.answer !== undefined ? { kind: 'read', answer: [basename(dataFolder), ...found.answer] } : found;
+    if (!holdsDataFiles) return { kind: 'read', answer: undefined };
+    const found = await walk(join(root, DATA_FOLDER), below);
+    return found.kind === 'read' && found.answer !== undefined ? { kind: 'read', answer: [DATA_FOLDER, ...found.answer] } : found;
   };
 }
 
@@ -146,10 +147,11 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
 }
 
 // MO2 reads a mod folder as the game reads its Data folder.
-const isModFolder = (instanceRoot: string, folder: string): boolean => dirname(folder) === modsDir(instanceRoot);
+const isModFolder = async (instanceRoot: string, folder: string): Promise<boolean> =>
+  await isWithin(dirname(folder), modsDir(instanceRoot)) && await isWithin(modsDir(instanceRoot), dirname(folder));
 
 export function mo2Repository(
-  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined,
+  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath,
 ): Mo2Repository {
   const { instanceRoot } = context;
   const whitelist = whitelistIgnoreList(publisherFile?.name);
@@ -215,9 +217,9 @@ export function mo2Repository(
 
     gameFiles,
 
-    async gameFilesTakenBy(place, folder, landing) {
+    async gameFilesTakenBy(place, folder) {
       const { files, notes } = await filesBelow(folder);
-      const inGameFolder = isModFolder(instanceRoot, folder) ? landing : (path: string) => path;
+      const inGameFolder = await isModFolder(instanceRoot, folder) ? deployedPath : (path: string) => path;
       const asked = files.flatMap(({ relativePath }) => {
         const path = inGameFolder(relativePath);
         return path === undefined ? [] : [{ path, pathInFolder: relativePath }];

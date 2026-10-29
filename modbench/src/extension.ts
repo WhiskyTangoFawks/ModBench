@@ -60,7 +60,7 @@ import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { deployCommands } from './instanceCommands/deploy';
-import { hardlinkDeployment } from './deployment/deployment';
+import { deployedPath, hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
@@ -145,7 +145,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile'), installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
+        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile'), installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri), deployedPath,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,

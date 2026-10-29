@@ -7,7 +7,6 @@
   "references": [
     { "path": "../client" },
     { "path": "../coreLib" },
-    { "path": "../deployment" },
     { "path": "../instanceAdapter" },
     { "path": "../nexus" },
     { "path": "../ports" },

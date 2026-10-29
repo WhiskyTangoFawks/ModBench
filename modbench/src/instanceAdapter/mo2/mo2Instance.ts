@@ -7,7 +7,7 @@ import { steamRootOn } from '../gameFolder/gamePathDetector';
 import { nonSteamPrefixRunning } from '../gameFolder/steamPrefix';
 import { gameFolderResolver, steamInstallResolver, STEAM } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
-import type { GameFolder, InstallationFileReader, GameFolderSetting } from '../instanceAdapter';
+import type { DeployedPath, GameFolder, InstallationFileReader, GameFolderSetting } from '../instanceAdapter';
 import type { FomodEngine } from '../fomodInstaller/fomodInstaller';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { mo2Changes } from './mo2Changes';
@@ -43,6 +43,7 @@ export type Mo2InstanceOptions = {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
   fomodEngine: FomodEngine;
+  deployedPath: DeployedPath;
 } & ({ gameFolderSetting: GameFolderSetting } | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -53,7 +54,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {
-  const { instanceRoot, installationFileReader, fomodEngine } = options;
+  const { instanceRoot, installationFileReader, fomodEngine, deployedPath } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
     resolveGameFolder: gameFolderResolver(options.gameFolderSetting),
@@ -75,7 +76,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
     nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
     gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

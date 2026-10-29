@@ -66,8 +66,11 @@ interface PlaceDepots {
 /** The game's install in Steam's library. */
 export type SteamInstall = FoundGameFolder & PlaceDepots;
 
-/** A place of the game. `dataFolder` is undefined when its Data folder is another place's. */
-export type GamePlace = PlaceDepots & { readonly root: string; readonly dataFolder: string | undefined };
+/** A place of the game. It holds no Data file when its Data folder is another place's. */
+export type GamePlace = PlaceDepots & { readonly root: string; readonly holdsDataFiles: boolean };
+
+/** Where deploy puts a mod's file in the game folder, none for a file it does not deploy. */
+export type DeployedPath = (pathInMod: string) => string | undefined;
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
@@ -440,8 +443,11 @@ export interface HashedFile {
 export interface GameFile {
   readonly path: string;
   readonly hash: string;
-  /** The path of the file of a folder that it may be, when it was looked up for one. */
-  readonly pathInFolder?: string;
+}
+
+/** A game file looked up for the file of a folder at `pathInFolder`. */
+export interface GameFileTaken extends GameFile {
+  readonly pathInFolder: string;
 }
 
 interface GameFilesRead {
@@ -451,7 +457,7 @@ interface GameFilesRead {
 
 // The game files a mod's files take, and each entry of its folder the listing skipped, one line apiece.
 interface GameFilesTaken {
-  readonly gameFiles: readonly GameFile[];
+  readonly gameFiles: readonly GameFileTaken[];
   readonly notes: readonly string[];
 }
 
@@ -693,8 +699,8 @@ export interface InstanceAdapter {
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
   /** The game files of `place` that the files below `folder`, a mod's or any folder a manifest builds, may be: a mod's
-   *  file at the path `landing` gives it, another folder's at its own path. */
-  gameFilesTakenBy(place: GamePlace, folder: string, landing: (pathInMod: string) => string | undefined): Promise<FileRead<GameFilesTaken>>;
+   *  file where deploy puts it, another folder's at its own path. */
+  gameFilesTakenBy(place: GamePlace, folder: string): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;

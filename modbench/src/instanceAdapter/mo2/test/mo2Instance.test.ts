@@ -39,6 +39,7 @@ import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
+import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter } from '../../publisher';
 import type { Mo2Context } from '../mo2Context';
 import type { ReadingSource } from '../../instanceReading';
@@ -124,8 +125,8 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, dataFolder: join(game, 'Data'), depots: [], depotProblems: [] },
-            { root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] },
+            { root: game, holdsDataFiles: true, depots: [], depotProblems: [] },
+            { root: '/steam/Fallout 4', holdsDataFiles: true, depots: [], depotProblems: [] },
           ]);
         } finally {
           await rm(game, { recursive: true, force: true });
@@ -143,7 +144,7 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, dataFolder: join(game, 'Data'), depots: [INSTALLED_DEPOT], depotProblems: [] },
+            { root: game, holdsDataFiles: true, depots: [INSTALLED_DEPOT], depotProblems: [] },
           ]);
         } finally {
           await rm(linked, { force: true });
@@ -162,8 +163,8 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(steam, 'Data') }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, dataFolder: undefined, depots: [], depotProblems: [] },
-            { root: steam, dataFolder: join(steam, 'Data'), depots: [INSTALLED_DEPOT], depotProblems: [] },
+            { root: game, holdsDataFiles: false, depots: [], depotProblems: [] },
+            { root: steam, holdsDataFiles: true, depots: [INSTALLED_DEPOT], depotProblems: [] },
           ]);
         } finally {
           await rm(game, { recursive: true, force: true });
@@ -176,7 +177,7 @@ describe('the MO2 Instance adapter', () => {
         try {
           await mkdir(join(game, 'Data'));
 
-          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ root: game, dataFolder: join(game, 'Data'), depots: [], depotProblems: [] }]);
+          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ root: game, holdsDataFiles: true, depots: [], depotProblems: [] }]);
         } finally {
           await rm(game, { recursive: true, force: true });
         }
@@ -385,7 +386,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
         const onThisMachine = mo2InstanceAdapter({
-          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
+          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
         }, undefined);
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
