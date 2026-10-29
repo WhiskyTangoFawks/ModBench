@@ -117,23 +117,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/update-manifest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes in its repository: that one is refused when its folder differs from what the build wrote. A mod takes each file its installation file lacks, by hash, from the game files its own request hands, all from one place of the game, or from a downloaded file the request hands, and names each as a package. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, which names the request's gesture. */
-        post: operations["UpdateManifest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/restore-from-manifest": {
         parameters: {
             query?: never;
@@ -1558,13 +1541,6 @@ export interface components {
             uncommitted: boolean;
             leftDetached?: string | null;
         };
-        ModUpdated: {
-            mod: string;
-            manifestWritten: boolean;
-            notInPackage: string[];
-            otherBytes: string[];
-            statCacheNotWritten?: string | null;
-        };
         ModlistProgress: {
             gesture?: string | null;
             mod?: string | null;
@@ -1966,32 +1942,6 @@ export interface components {
         UnsavedDocumentsRequest: {
             documents: components["schemas"]["DocumentChange"][];
         };
-        UpdateManifestModRequest: {
-            name: string;
-            folder: string;
-            installationFile?: components["schemas"]["InstallationFileRequest"] | null;
-            metadataFiles: string[];
-            sourceFolder?: string | null;
-            version?: string | null;
-            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
-        };
-        /** @enum {string} */
-        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "GameFolderNotFound" | "ModFilesUnreadable" | "ManifestUnreadable" | "NotWritten" | "LeftToItsBuild";
-        UpdateManifestRefused: {
-            item: string;
-            refusal: components["schemas"]["UpdateManifestRefusal"];
-            message: string;
-        };
-        UpdateManifestRequest: {
-            mods: components["schemas"]["UpdateManifestModRequest"][];
-            statCache: string;
-            gesture?: string | null;
-            downloadedFiles?: components["schemas"]["InstallationFileRequest"][] | null;
-        };
-        UpdateManifestResult: {
-            applied: components["schemas"]["ModUpdated"][];
-            refused: components["schemas"]["UpdateManifestRefused"][];
-        };
         WhatRestoreDestroysResponse: {
             mods: components["schemas"]["ModRestoreDestroys"][];
             refused: components["schemas"]["RestoreRefused"][];
@@ -2330,39 +2280,6 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    UpdateManifest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateManifestRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UpdateManifestResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };
