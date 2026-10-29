@@ -1,27 +1,17 @@
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { tmpdir } from 'node:os';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { dirname, join } from 'node:path';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { adapterOver } from '../../test/mo2/adapterOver';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { recordingTasks } from '../../test/recordingTasks';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { hostGitRecordingInits } from './hostGitDouble';
-import { NO_FILE_PROBLEMS } from '../../test/noFileProblems';
 import { nexusAnswering, answeringFrom } from '../../nexus/test/nexusDouble';
 
 let root: string;
