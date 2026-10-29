@@ -35,7 +35,7 @@ As a user, I want:
 
 Cites: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11, 12, 38 and 39; mEdit's answer; Never silently wrong
 
-A struct or array row pastes, and takes a drop, of a whole value copied from the same field. Cites: xEdit
+A struct or array row pastes a whole value copied from the same field, in place of its own. Cites: xEdit
 
 The strings language setting chooses the language a translated text shows in, English by default. The source keeps every language the plugin's strings hold. Cites: xEdit, Localization > Language; commands.md, VS Code provides it
 
@@ -70,6 +70,7 @@ As a user, I want:
 3. Add on an array's row, whether it is collapsed or expanded, to append a new element as xEdit adds one: the first kind the field lists, with the members a plugin needs to keep the element, at their defaults. Cites: xEdit; ADR-0005
 4. A key another element holds to be accepted, on add and on edit: the game uses a repeated key, as a leveled list weights an entry by repeating it. Story 2 shows each on a row of its own. Cites: xEdit
 5. Move up absent on the first element, and move down on the last. Cites: No dead entries
+6. One element pasted on an array's row to be added to that array, where the array can hold it. Cites: xEdit's drop; editor.md, Drag and drop, story 1
 
 ## A field of several kinds
 
@@ -133,11 +134,11 @@ An NPC's copy can set a template flag, such as Traits, and name a template for t
 As a user, I want:
 
 1. A templated field to read `from EncRaider01`: `from` and its template, read as a reference reads (By type), with Go to record on it. It never reads as its own value. Its tooltip names the flag, the template and the copy's own value. In a column that can be edited, the tooltip also says that clearing the flag makes the field editable. Cites: Never silently wrong
-2. A templated field dimmed and read-only, as Every field, story 7 says. Its menu offers no add, remove or move. Paste, a drop, cut and Delete are refused, naming the field and the flag. This is an exception to editor.md, Columns, story 4: the cell is marked ahead of time, since no header can say why. Cites: Never silently wrong; Respect the user; commands.md, No dead entries
+2. A templated field dimmed and read-only, as Every field, story 7 says. Its menu offers no add, remove or move. Paste, cut and Delete are refused, naming the field and the flag. This is an exception to editor.md, Columns, story 4: the cell is marked ahead of time, since no header can say why. Cites: Never silently wrong; Respect the user; commands.md, No dead entries
 3. Only the part a flag covers templated: a row, or one flag in a Flags row's check boxes. The template flags are never templated.
 4. A flag set with no template named for it to template nothing.
 5. Clearing the flag to be the only way to edit a templated field. Its fields then read and edit as their own values, at once. Setting or clearing a flag asks nothing and changes no other field. Cites: Minimal by default; Never silently wrong
-6. Ctrl+C and a drag on a templated field to carry what it reads: its template, as a reference copies. A drop is a paste: a template dropped on a field that cannot hold it is refused, as a paste is. This is an exception to editor.md, Drag and drop, story 5. Cites: Never silently wrong
+6. Ctrl+C on a templated field to copy what it reads: its template, as a reference copies. Cites: Never silently wrong
 
 ## A plugin's header
 

@@ -109,11 +109,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. To drag a cell onto a cell of the same field in another column, to copy its value there. The cell I drag from can be in any column; the one I drop on must be in a column that can be edited. Cites: xEdit; catalog `edit field`, Options
-2. A struct or array row to drag its whole value. Cites: xEdit
-3. An element dropped on an array's row to be added to that array. Cites: xEdit
-4. Nothing to advertise a drag: the pointer stays an arrow. Cites: xEdit
-5. A drop that cannot land, on a column that cannot be edited, on another field, or from outside the panel, to change nothing and say nothing. Cites: Doing nothing is not an error
+1. Drag and drop to work as copy and paste with the mouse. A drag carries what Ctrl+C on the cell copies. A drop does what Ctrl+V on the cell I drop on does, and is refused where a paste is refused. A drop from outside the panel lands wherever VS Code hands it to the panel. Cites: Never silently wrong; xEdit; VS Code's interaction; catalog `edit field`
+2. Nothing to advertise a drag: the pointer stays an arrow. Cites: xEdit
 
 ## States
 

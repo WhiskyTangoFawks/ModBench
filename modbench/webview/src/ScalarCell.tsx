@@ -88,7 +88,7 @@ export function ScalarCell({
 
   if (!active) {
     // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it. No
-    // cursor override (editor.md, Drag and drop, story 4): a text caret would falsely imply editing
+    // cursor override (editor.md, Drag and drop, story 2): a text caret would falsely imply editing
     // is the only thing a click can start.
     return (
       <span

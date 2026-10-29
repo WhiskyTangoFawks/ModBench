@@ -204,8 +204,8 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| edit field | edits | `modbench.record.editField` | record, plugin, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. | edit-record |
-| add element | edits | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
+| edit field | edits | `modbench.record.editField` | record, plugin, field path | value: set, or paste by keys or by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. | edit-record |
+| add element | edits | `modbench.record.addElement` | array | value (a paste by keys or by drag and drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
 | remove element | edits | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | move element | edits | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an array field. | edit-record |
 | create | edits | `modbench.record.create` | plugin, or a container record | record type; grid position, for an exterior cell | xEdit navigator | Add a record to a plugin, or a child record to a record. | edit-record |
