@@ -25,7 +25,7 @@ export const fieldMeta = (
 export const diffNode = (
   d: Partial<FieldDiff> & Pick<FieldDiff, 'fieldName'>,
 ): FieldDiff => ({
-  values: {}, winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', ...d,
+  values: {}, winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', noWinner: false, ...d,
 });
 
 /** A compare override with every required wire member at its neutral value: `OnlyOne` is the

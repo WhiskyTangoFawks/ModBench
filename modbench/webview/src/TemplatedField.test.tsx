@@ -210,4 +210,19 @@ describe('RecordPanel — a templated field', () => {
     expect(contextOf(cellAt('Level', 2)).copyText).toBe(`EncRaider01 [${TEMPLATE}]`);
     expect(cellAt('Configuration', 2)).not.toHaveStyle({ opacity: DIMMED_OPACITY });
   });
+
+  it('dims every cell of a field no copy wins, the copies that do not template it too', async () => {
+    renderPanel(panelOf(
+      levelMeta, [5, 7], diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 }, winnerColumn: MOD, noWinner: true }),
+      [null, byTraits()]));
+    await screen.findByText('Level');
+    expect(cellAt('Level', 1)).toHaveStyle({ opacity: DIMMED_OPACITY });
+    expect(cellAt('Level', 2)).toHaveStyle({ opacity: DIMMED_OPACITY });
+  });
+
+  it('leaves a field with a winner undimmed in a copy that does not template it', async () => {
+    renderPanel(levelPanel([null, byTraits()]));
+    await screen.findByText('Level');
+    expect(cellAt('Level', 1)).not.toHaveStyle({ opacity: DIMMED_OPACITY });
+  });
 });

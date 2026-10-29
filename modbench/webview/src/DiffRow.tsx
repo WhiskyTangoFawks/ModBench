@@ -167,7 +167,7 @@ export function DiffRow({
         const cell = row.cells.get(key);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),
-          ...(cell?.template ? { opacity: DIMMED_OPACITY } : {}),
+          ...(cell?.template || diff.noWinner ? { opacity: DIMMED_OPACITY } : {}),
         };
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
