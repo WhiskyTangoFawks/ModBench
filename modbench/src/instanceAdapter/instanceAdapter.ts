@@ -446,7 +446,7 @@ export interface GameFile {
 }
 
 /** A game file looked up for the file of a folder at `pathInFolder`. */
-export interface GameFileTaken extends GameFile {
+interface GameFileTaken extends GameFile {
   readonly pathInFolder: string;
 }
 

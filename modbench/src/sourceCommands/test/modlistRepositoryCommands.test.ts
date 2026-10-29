@@ -4,7 +4,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ManifestInstallationFile, ManifestStep } from '../../client';
 import type { SubmodulesCloned } from '../../client/MEditClient';
-import type { FileRead, FoundGameFolder, GameFileTaken, GameFolder, GamePlace, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles, OtherManifest } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, FoundGameFolder, GameFolder, GamePlace, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles, OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { foldersRefused } from '../../instanceAdapter/foldersRefused';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
@@ -284,7 +284,7 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('hands mEdit a folder outside the mod folders by its name, with its folder, the game files its files may be, and none of what a mod manager holds of a mod', async () => {
-    const stockGameFiles: FileRead<{ gameFiles: GameFileTaken[]; notes: string[] }> =
+    const stockGameFiles: Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>> =
       { kind: 'read', answer: { gameFiles: [{ path: 'Data/Meshes/A.nif', hash: '#a', pathInFolder: 'Data/Meshes/A.nif' }], notes: [] } };
     const { commands, client } = commandsOver({ ...WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD, gameFilesTaken: new Map([['Stock Game', stockGameFiles]]) });
     client.setCommandResult('updateManifest', UPDATED);
@@ -309,7 +309,7 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('hands mEdit, with each mod, the game files that mod\'s files may take, whether or not it has an installation file', async () => {
-    const taken = (path: string): FileRead<{ gameFiles: GameFileTaken[]; notes: string[] }> =>
+    const taken = (path: string): Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>> =>
       ({ kind: 'read', answer: { gameFiles: [{ path: `Data/${path}`, hash: `#${path}`, pathInFolder: path }], notes: [] } });
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
@@ -1479,7 +1479,7 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
   });
 
   it('does not refuse a mod the game folder holds when another place cannot be read, and notes which place', async () => {
-    const taken: FileRead<{ gameFiles: GameFileTaken[]; notes: string[] }> =
+    const taken: Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>> =
       { kind: 'read', answer: { gameFiles: [{ path: 'Data/Meshes/B.nif', hash: '#b', pathInFolder: 'Data/Meshes/B.nif' }], notes: [] } };
     const { commands, client } = commandsOver({
       places: [
