@@ -1,7 +1,4 @@
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
-import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
-import { NO_MOD_STATUSES } from './noModStatuses';
-import { unreadStatus } from './unreadStatus';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,10 +22,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
 import { modSyncOver, type ModSyncRun } from '../modCommands/modCommands';
-import { ModStatuses } from '../mods/modStatuses';
-import type { ModStatus } from '../client';
-import type { ReadFailed } from '../wire/readFailed';
-import { status } from './modStatusFixture';
+import { manifestedIn } from './modStatusFixture';
 import { NO_DEPLOYMENT_FOLDER } from './noDeploymentFolder';
 
 const noModSync: ModSyncRun = () => Promise.resolve({ applied: true, added: [], dropped: [] });
@@ -77,10 +71,10 @@ async function wiredInstance(): Promise<{
   instances.push(instance);
 
   const syncs: ReturnType<PluginSyncRun>[] = [];
-  instanceSyncs({ modStatuses: NO_MOD_STATUSES,
+  instanceSyncs({
     instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
     syncPlugins: () => {
-      const run = pluginSyncOver(adapter, unreadStatus, NO_MOD_STATUSES)();
+      const run = pluginSyncOver(adapter)();
       syncs.push(run);
       return run;
     },
@@ -128,7 +122,7 @@ describe('plugin sync and the Instance close a loop that settles', () => {
 });
 
 describe('a clone opened before its mods are restored (plugins.md, The tree, story 10)', () => {
-  it('keeps plugins.txt and loadorder.txt byte for byte, before mEdit answers and after', async () => {
+  it('keeps plugins.txt and loadorder.txt byte for byte', async () => {
     const root = await mkdtemp(join(tmpdir(), 'plugins-clone-'));
     roots.push(root);
     const profile = join(root, 'profiles', PROFILE);
@@ -142,30 +136,20 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     await writeFile(join(profile, 'plugins.txt'), '*Unrestored.esp\r\n*Base.esp\r\n');
     await writeFile(join(profile, 'loadorder.txt'), 'Unrestored.esp\r\nBase.esp\r\n');
     await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
-    await writeFile(join(root, 'mods', 'Unrestored', 'Unrestored.manifest'), 'its manifest');
+    await manifestedIn(join(root, 'mods', 'Unrestored'), [{ path: 'Unrestored.esp', entry: { kind: 'held' } }]);
     const pluginFiles = () => Promise.all(['plugins.txt', 'loadorder.txt'].map((file) => readFile(join(profile, file), 'utf8')));
     const committed = await pluginFiles();
     const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
     instances.push(instance);
-    let answer: readonly ModStatus[] | ReadFailed = { failed: 'unreachable' };
-    const readStatus = () => Promise.resolve(answer);
-    const push = new InMemoryMEditClient();
-    const modStatuses = new ModStatuses(push, readStatus, () => undefined);
     const { pluginSync } = instanceSyncs({
-      instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync, modStatuses,
-      syncPlugins: pluginSyncOver(adapter, readStatus, modStatuses),
+      instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync, syncPlugins: pluginSyncOver(adapter),
     });
 
     await instance.refresh();
     await pluginSync.settled();
-    const beforeMEdit = { files: await pluginFiles(), refused: pluginSync.message() !== undefined };
-    answer = [status('Provider'), status('Unrestored', { gone: ['Unrestored.esp'] })];
-    push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['Provider', 'Unrestored'] });
-    await vi.waitFor(() => { expect(pluginSync.message()).toBeUndefined(); });
 
-    expect(beforeMEdit).toEqual({ files: committed, refused: true });
-    expect(await pluginFiles()).toEqual(committed);
+    expect([await pluginFiles(), pluginSync.message()]).toEqual([committed, undefined]);
   });
 });
 
@@ -191,8 +175,8 @@ describe('the game folder not found, across the whole instance', () => {
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) }));
-    const { pluginSync, modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
-      instance, channel, syncMods: modSyncOver(fake.adapter), syncPlugins: pluginSyncOver(fake.adapter, unreadStatus, NO_MOD_STATUSES),
+    const { pluginSync, modSync } = instanceSyncs({
+      instance, channel, syncMods: modSyncOver(fake.adapter), syncPlugins: pluginSyncOver(fake.adapter),
     });
 
     await instance.refresh();
@@ -214,7 +198,7 @@ describe('plugin sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
     const syncPlugins = vi.fn<PluginSyncRun>(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
-    const { pluginSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES, instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
+    const { pluginSync } = instanceSyncs({ instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
 
     instance.publish(instanceValueFixture());
     instance.publish(instanceValueFixture());
@@ -223,18 +207,4 @@ describe('plugin sync, as each landed value drives it', () => {
     expect(syncPlugins).toHaveBeenCalledTimes(2);
   });
 
-  it('runs again each time mEdit\'s answer of a mod\'s status lands, for what a manifest names may have changed', async () => {
-    const syncPlugins = vi.fn<PluginSyncRun>(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }));
-    const statusesLanded = new EventEmitter<void>();
-    const { pluginSync } = instanceSyncs({
-      instance: new FakeInstance(instanceValueFixture()), syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins,
-      modStatuses: { onDidChange: statusesLanded.event },
-    });
-
-    statusesLanded.fire();
-    statusesLanded.fire();
-    await pluginSync.settled();
-
-    expect(syncPlugins).toHaveBeenCalledTimes(2);
-  });
 });

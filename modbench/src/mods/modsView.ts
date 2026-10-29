@@ -20,7 +20,7 @@ import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { publisherKeyContext, registerPublisherTagCommands } from './publisherTagCommands';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
-import type { ModStatuses } from './modStatuses';
+import type { ModStatuses } from '../modStatus/modStatuses';
 import { registerModDecorations } from './modDecorations';
 import { OpenRows } from './openRows';
 import { registerModInstallCommands } from './installCommands';

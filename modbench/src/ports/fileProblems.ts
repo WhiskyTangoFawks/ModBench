@@ -1,7 +1,7 @@
 import type { Log } from './log';
 
-/** A problem on a file, shown in the Problems panel on `line` (1-based). */
-export interface FileProblem { readonly message: string; readonly line: number }
+// A problem on a file, shown in the Problems panel on `line` (1-based).
+interface FileProblem { readonly message: string; readonly line: number }
 
 /** common.md, Reporting: a problem in the Problems panel on that file, and a line in the Output. */
 export interface FileProblems {

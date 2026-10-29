@@ -28,7 +28,6 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modCommands } from '../../modCommands/modCommands';
-import { unreadStatus } from '../../test/unreadStatus';
 
 const INCLUDE: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
 const ALWAYS_ENABLED: PublisherTag = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
@@ -67,7 +66,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 const register = (selection: readonly ModlistNode[] = [], answers: InstanceAnswers = {}) => {
   const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('M', 'N') }), { publisherTags: DECLARED, ...answers });
   const reporter = recordingReporter();
-  registerPublisherTagCommands(modCommands(fake.adapter, { changeSourceManifest: () => Promise.reject(new Error('unscripted')) }, unreadStatus), instance, () => selection, reporter);
+  registerPublisherTagCommands(modCommands(fake.adapter, { changeSourceManifest: () => Promise.reject(new Error('unscripted')) }), instance, () => selection, reporter);
   return { fake, reporter };
 };
 

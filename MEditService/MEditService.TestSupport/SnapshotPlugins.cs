@@ -31,7 +31,7 @@ public static class SnapshotPlugins
     /// <summary>The PUT /load-order body.</summary>
     public static Dictionary<string, object> Body(
         string dataFolder, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
-        object? mods = null, object? places = null, string statCache = "stat-cache", string stringsLanguage = "English")
+        object? places = null, string stringsLanguage = "English")
     {
         var list = entries.ToList();
         return new()
@@ -44,8 +44,6 @@ public static class SnapshotPlugins
             ["archives"] = Array.Empty<string>(),
             ["stringsFiles"] = Array.Empty<string>(),
             ["places"] = places ?? Array.Empty<object>(),
-            ["mods"] = mods ?? Array.Empty<object>(),
-            ["statCache"] = statCache,
             ["gameRelease"] = gameRelease,
             ["stringsLanguage"] = stringsLanguage,
         };

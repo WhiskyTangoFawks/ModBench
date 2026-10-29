@@ -29,4 +29,14 @@ describe('the MO2 adapter\'s hashes', () => {
 
     expect(await readdir(join(root, 'hash-index'))).toEqual(['hashes.jsonl']);
   });
+
+  it('lists a folder\'s files below it, neither its metadata, the manifest named for it nor a temp among them, and none of a folder not there', async () => {
+    root = await mkdtemp(join(tmpdir(), 'modbench-mo2-files-'));
+    const folder = join(root, 'mods', 'Mod');
+    await mkdir(join(folder, 'textures'), { recursive: true });
+    await Promise.all(['meta.ini', 'Mod.manifest.json', 'a.esp', 'textures/b.dds', '.medit_tmp_1_x.tmp'].map((name) => writeFile(join(folder, name), '')));
+    const adapter = managerOver(root);
+
+    expect([[...await adapter.filesIn(folder)].sort(), await adapter.filesIn(join(root, 'mods', 'Gone'))]).toEqual([['a.esp', 'textures/b.dds'], []]);
+  });
 });

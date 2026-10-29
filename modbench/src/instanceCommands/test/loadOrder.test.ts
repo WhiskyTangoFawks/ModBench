@@ -16,11 +16,10 @@ const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Base Mod' }];
 const SENT_ARCHIVES = [{ path: '/game/Data/Master - Main.ba2', stamp: '1/2/3' }];
 const SENT_STRINGS_FILES = [{ path: '/instance/mods/TestMod/Strings/TestMod_en.STRINGS', stamp: '4/5/6' }];
 const SENT_PLACES = [{ name: 'TestMod', folder: '/instance/mods/TestMod' }];
-const SENT_MODS = [{ name: 'TestMod', folder: '/instance/mods/TestMod', metadataFiles: ['meta.ini'] }];
 
 const SOURCE: LoadOrderSource = {
   plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-  places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data', gameRelease: 'Fallout4',
+  places: SENT_PLACES, dataFolder: '/game/Data', gameRelease: 'Fallout4',
 };
 
 function attachedClient(): InMemoryMEditClient {
@@ -38,13 +37,13 @@ describe('put load order', () => {
 
     expect(client.puts()).toEqual([{
       plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-      places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
+      places: SENT_PLACES, dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
     }]);
     expect(result).toEqual({
       sent: true,
       snapshot: {
         plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-        places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
+        places: SENT_PLACES, dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
       },
       outcome: APPLIED,
     });

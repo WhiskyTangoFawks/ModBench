@@ -14,7 +14,7 @@ internal static class ExternalChanges
         var put = TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications).Put(
             loadOrder.DataFolderPath, loadOrder.InstanceRoot, loadOrder.GameRelease,
             loadOrder.Plugins, [.. loadOrder.Active.Select(p => p.Key)], [.. loadOrder.LoadedWithNoLine.Select(p => p.Key)], loadOrder.Archives, loadOrder.StringsFiles,
-            loadOrder.Places, loadOrder.StringsLanguage, TestEditService.NoMods);
+            loadOrder.Places, loadOrder.StringsLanguage);
         Assert.True(put.Holds(out _, out _));
         return notifications.Notifications.OfType<ExternalChangeNotification>().SelectMany(notice => notice.Plugins).ToList();
     }

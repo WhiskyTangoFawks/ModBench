@@ -1,4 +1,3 @@
-import { unreadStatus } from '../../test/unreadStatus';
 import { FOMOD_PAGE, VIEW_ANSWER } from '../../test/fomodDialogDouble';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -27,16 +26,16 @@ import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../te
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import {
-  downloadedFilesOf, fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
+  downloadedFilesOf, fakeInstanceAdapter, modFoldersIn, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
 } from '../../test/fakeInstanceAdapter';
 import { modCommands } from '../../modCommands/modCommands';
-import type { ReadModStatus } from '../../client';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { status } from '../../test/modStatusFixture';
+import { manifestedIn } from '../../test/modStatusFixture';
 
 const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
-const nothingToLose: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod)));
-const notInPackage: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => status(mod, { notInPackage: ['a.esp'] })));
 
 const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }),
@@ -58,7 +57,7 @@ const installDeps = (over: Partial<DownloadedFileInstallDeps> = {}): DownloadedF
 
 interface Scripted {
   readonly answers?: InstanceAnswers;
-  readonly readStatus?: ReadModStatus;
+  readonly loses?: 'nothing' | 'a file its package does not hold';
   readonly ask?: ScriptedDialog;
 }
 
@@ -66,11 +65,13 @@ let fake: FakeInstanceAdapter;
 
 const installDownloadedFile = async (
   file: LocatedDownloadedFileRow, listed: readonly LocatedDownloadedFileRow[], deps: DownloadedFileInstallDeps,
-  { answers = {}, readStatus = unreadStatus, ask = scriptedDialog() }: Scripted = {},
+  { answers = {}, loses, ask = scriptedDialog() }: Scripted = {},
 ): Promise<void> => {
-  fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf('Harder VATS'), downloadedFiles: downloadedFilesOf('foo.7z') }), answers);
+  const modFolders = loses === undefined ? modFoldersOf('Harder VATS') : await upgradableIn(loses);
+  const folderFiles = new Map(modFolders.all.map(({ path }) => [path, loses === 'nothing' ? [] : ['a.esp']]));
+  fake = fakeInstanceAdapter(readingFixture({ modFolders, downloadedFiles: downloadedFilesOf('foo.7z') }), { folderFiles, ...answers });
   registerModInstallCommands({
-    commands: modCommands(fake.adapter, unscriptedMEdit, readStatus), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
+    commands: modCommands(fake.adapter, unscriptedMEdit), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
     fomodDialog: () => FOMOD_PAGE, downloadedFileInstallReporting: deps,
   });
   const [, handler] = present(registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install'), 'the install handler');
@@ -94,8 +95,18 @@ const stepOnInstall: InstanceAnswers['refusals'] = (call) => {
 
 let downloadsLogLines: string[] = [];
 
-afterEach(() => {
+let mods: string | undefined;
+
+async function upgradableIn(loses: NonNullable<Scripted['loses']>) {
+  mods = await mkdtemp(join(tmpdir(), 'modbench-upgrade-'));
+  await manifestedIn(join(mods, 'Harder VATS'), loses === 'nothing' ? [] : [{ path: 'a.esp', entry: { kind: 'notHeld' } }]);
+  return modFoldersIn(mods, 'Harder VATS');
+}
+
+afterEach(async () => {
   downloadsLogLines = [];
+  if (mods !== undefined) await rm(mods, { recursive: true });
+  mods = undefined;
 });
 
 describe('modbench.mod.install over a downloaded file', () => {
@@ -178,7 +189,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
   it('choosing an upgrade that loses nothing installs over that mod, asking nothing and no name', async () => {
     const ask = scriptedDialog();
 
-    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { readStatus: nothingToLose, ask });
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { loses: 'nothing', ask });
 
     expect(installs()).toEqual(AS_UPGRADE);
     expect(ask.asked).toEqual([]);
@@ -188,14 +199,14 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
   it('an upgrade that would lose files asks once, listing them, and installs forced on the yes', async () => {
     const ask = scriptedDialog('Upgrade');
 
-    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { readStatus: notInPackage, ask });
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { loses: 'a file its package does not hold', ask });
 
     expect(ask.asked).toEqual([{ message: 'Upgrade "Harder VATS"?', detail: LOSS, buttons: ['Upgrade'] }]);
     expect(installs()).toEqual(AS_UPGRADE);
   });
 
   it('Esc at the question installs nothing', async () => {
-    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { readStatus: notInPackage, ask: scriptedDialog(undefined) });
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM), { loses: 'a file its package does not hold', ask: scriptedDialog(undefined) });
 
     expect(fake.calls).toEqual([]);
   });

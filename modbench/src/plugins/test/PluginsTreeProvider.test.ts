@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PluginsDrop } from '../../pluginCommands/plugins';
+import type { LastModStatuses, PluginsDrop } from '../../pluginCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type InteriorCellBlock, type RecordSummary,
-  type CellSummary, type ChildRecordSummary, type ModStatus,
+  type CellSummary, type ChildRecordSummary,
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import {
@@ -45,6 +45,8 @@ import { parseRowResourceUri } from '../recordResourceUri';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { listsForThePluginAsked, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
 import { browserClient } from './browserRows';
+
+type ModStatus = NonNullable<ReturnType<LastModStatuses['of']>>;
 
 function plugin(
   overrides: Partial<Omit<LoadOrderPlugin, 'path'>> & { name: string; path?: string },

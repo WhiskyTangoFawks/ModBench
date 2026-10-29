@@ -2,9 +2,6 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>The snapshot's mods, and the folder of the stat cache (mod-status trace).</summary>
-public sealed record SnapshotMods(IReadOnlyList<ModByFolder> Mods, string StatCache);
-
 /// <summary>A mod by its folder, with its metadata files, which no line names, the metadata the mod manager holds or why
 /// it could not read it, when asked, and a source mod's source folder.</summary>
 public sealed record ModByFolder(

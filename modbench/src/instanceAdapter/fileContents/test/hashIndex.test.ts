@@ -91,22 +91,40 @@ describe('the sizes and hashes of the record index', () => {
     expect(await readdir(folder)).toEqual(['hashes.jsonl']);
   });
 
-  it('keeps a downloaded file\'s hash and a game file\'s in the record index, and an origin file\'s nowhere but this session', async () => {
+  it('keeps a downloaded file\'s hash, a game file\'s and an origin file\'s in the record index, so the next session reads none again', async () => {
     clockAnHourPastEveryWrite();
     const downloadedFile = await fileHolding('Mod.7z', 'archive');
     const gameFile = await fileHolding('Game.esm', 'aaaa');
     const copy = await fileHolding('copy.dds', 'bbbb');
     const session = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
     await Promise.all([session.downloadedFileHash(downloadedFile), session.gameFileHash(gameFile), session.originFileHash(copy)]);
-    await session.originFileHash(copy);
-    const readsInSession = vi.mocked(digestOf).mock.calls.filter(([path]) => path === copy).length;
 
-    await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).originFileHash(copy);
+    const next = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    await Promise.all([next.downloadedFileHash(downloadedFile), next.gameFileHash(gameFile), next.originFileHash(copy)]);
 
     const text = await indexText();
     const written = (path: string): boolean => text.includes(JSON.stringify(path));
-    expect([written(downloadedFile), written(gameFile), written(copy)]).toEqual([true, true, false]);
-    expect([readsInSession, vi.mocked(digestOf).mock.calls.filter(([path]) => path === copy).length]).toEqual([1, 2]);
+    expect([written(downloadedFile), written(gameFile), written(copy)]).toEqual([true, true, true]);
+    expect(vi.mocked(digestOf).mock.calls.filter(([path]) => path === copy)).toHaveLength(1);
+  });
+
+  it('answers a downloaded file\'s entries by its hash, in the next session too, after the file is gone', async () => {
+    clockAnHourPastEveryWrite();
+    const path = await fileHolding('Mod.7z', 'archive');
+    await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFileHash(path);
+    await rm(path);
+
+    const next = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+
+    expect(await next.packageEntries('7R3YJUWF5oA=')).toEqual(new Map([['a.esp', '+rJPuyOy4u8='], ['textures/b.dds', 'uXAXn9wLC0k=']]));
+    expect(await next.packageEntries(HASH_OF_AAAA)).toBeUndefined();
+  });
+
+  it('answers the entries of a downloaded file it hashed this session by its hash', async () => {
+    const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    await index.downloadedFileHash(await fileHolding('Mod.7z', 'archive'));
+
+    expect(await index.packageEntries('7R3YJUWF5oA=')).toEqual(new Map([['a.esp', '+rJPuyOy4u8='], ['textures/b.dds', 'uXAXn9wLC0k=']]));
   });
 
   it('hashes a downloaded file\'s entries though its hash alone was asked before', async () => {

@@ -1,5 +1,5 @@
 import { MANIFEST_OUTPUT_KEY } from '../wire/sourceMod';
-import type { Manifest, ManifestFile, ManifestPackage } from './manifest';
+import type { Manifest, ManifestFile, ManifestPackage } from '../manifestAdapter/manifestAdapter';
 
 const upperUnit = (unit: string): string => {
   const upper = unit.toUpperCase();

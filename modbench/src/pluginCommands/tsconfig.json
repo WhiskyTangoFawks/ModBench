@@ -8,6 +8,7 @@
     { "path": "../loadOrderFileCodec" },
     { "path": "../sortingRules" },
     { "path": "../instanceAdapter" },
+    { "path": "../manifestAdapter" },
     { "path": "../tables" },
     { "path": "../coreLib" },
     { "path": "../client" },

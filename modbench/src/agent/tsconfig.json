@@ -9,6 +9,8 @@
     { "path": "../client" },
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
+    { "path": "../manifestAdapter" },
+    { "path": "../modStatus" },
     { "path": "../instanceLoader" },
     { "path": "../pluginCommands" },
     { "path": "../ports" },

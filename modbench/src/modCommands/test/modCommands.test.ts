@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { unreadStatus } from '../../test/unreadStatus';
 import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
 import { fileInFolder } from '../../instanceAdapter/instanceAdapter';
 import type {
@@ -25,7 +24,7 @@ function over(
   order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient(), reading: Partial<InstanceReading> = {},
 ) {
   const fake = fakeInstanceAdapter(readingFixture({ mods: order, modFolders: modFoldersOf(...order), ...reading }), answers);
-  return { fake, mEdit, commands: modCommands(fake.adapter, mEdit, unreadStatus) };
+  return { fake, mEdit, commands: modCommands(fake.adapter, mEdit) };
 }
 
 const orderWrite = (changes: readonly ModOrderChange[], profile = 'Default'): AdapterCall => ({ verb: 'changeModOrder', profile, changes });

@@ -15,8 +15,9 @@ import {
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 import type { OpenRows } from './openRows';
-import { countsInBadge, differingFiles, lackedLine, separatorDescription, statusDescription, type ModStatuses } from './modStatuses';
-import type { ModStatus } from '../client';
+import { countsInBadge, differingFiles, lackedLine, separatorDescription, statusDescription } from './statusText';
+import type { ModStatuses } from '../modStatus/modStatuses';
+import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import { blankIcon } from '../drivingLib/blankIcon';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 
@@ -32,7 +33,7 @@ interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count. */
   instance: InstanceView;
-  /** Each mod's status against its manifest, which mEdit answers. */
+  /** Each mod's status against its manifest, as Mod status derives it. */
   statuses: Pick<ModStatuses, 'of' | 'onDidChange'>;
   /** The rows the view shows open. */
   open: OpenRows;

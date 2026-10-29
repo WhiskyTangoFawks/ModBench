@@ -48,7 +48,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
-  'plugin-source-unreadable', 'record-filter-cleared', 'mod-status-changed',
+  'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
 /** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed `onNotification` call
@@ -67,7 +67,6 @@ export interface NotificationPayloads {
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
-  'mod-status-changed': { mods: string[] };
 }
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
@@ -240,11 +239,6 @@ export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
  *  far, the mod manager's exclusion mark and the archives a build packs. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
-
-/** A mod's folder against its manifest (modlist-repository.md, Status), or why it could not be read. */
-export type ModStatus = components['schemas']['ModStatus'];
-export type ReadModStatus = (mods: readonly string[]) => Promise<readonly ModStatus[] | ReadFailed>;
-
 /** A mod restore would destroy files in: each file whose bytes differ from what its package fixes, and each file no line
  *  names, by its path in the mod folder, or a version or page in its metadata. */
 export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
@@ -388,8 +382,6 @@ export interface MEditClient {
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
   /** Each mod restore from manifest would destroy files in, from the stat cache in `statCache`, before anything is written. */
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed>;
-  /** Each mod's folder against its manifest, from the stat cache in `statCache`, which keeps what the read found. */
-  getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed>;
   /** The rows one SQL SELECT over the record index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

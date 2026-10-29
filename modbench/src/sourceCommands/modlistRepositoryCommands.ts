@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import {
   isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type ModRestoreDestroys, type NotFound, type ManifestMetadata,
-  type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
+  type ModByFolder, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
@@ -11,8 +11,8 @@ import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { HostGit } from '../ports/repository';
 import type { MoveToTrash } from '../ports/trash';
-import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
-import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import { modWithMetadata } from '../wire/modByFolder';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 import { inModOrder } from './inModOrder';
 import { whyNotIndexed } from './whyNotIndexed';
 import { initRepositoryIn } from './initRepositoryIn';
@@ -28,7 +28,7 @@ type Adapter = Pick<InstanceAdapter, 'foldersRefused' |
   | 'statCacheFolder' | 'trashFileIn' | 'exclusionMark' | 'submodule' | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile'>;
 
 interface ModlistRepositoryCommandsDeps {
-  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getModStatus' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Adapter;
   nexus: Pick<Nexus, 'download'>;
   instanceRoot: string;
@@ -703,12 +703,6 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options, everyManifest, others),
 
     otherManifests: (): Promise<OtherManifests> => otherManifestsOf(adapter),
-
-    /** Each mod's folder against its manifest (modlist-repository.md, Status). */
-    modStatus: async (mods: readonly string[]): Promise<readonly ModStatus[] | ReadFailed> => {
-      const asked = await withMetadataRead(await byFolder(adapter, mods, foldersOf(adapter, [])), (mod) => adapter.modMetadata(mod));
-      return asked.length === 0 ? [] : client.getModStatus(asked, adapter.statCacheFolder);
-    },
   };
 }
 

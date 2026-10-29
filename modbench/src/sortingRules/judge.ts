@@ -1,4 +1,4 @@
-export interface PluginFacts {
+interface PluginFacts {
   origin: string;
   masters: readonly string[];
   blueprint: boolean;
@@ -7,7 +7,7 @@ export interface PluginFacts {
 /** `undefined` while mEdit cannot say, and a rule that needs the answer is not judged. */
 export type PluginFactsOf = (filename: string) => PluginFacts | undefined;
 
-export interface PluginRef {
+interface PluginRef {
   origin: string;
   filename: string;
 }

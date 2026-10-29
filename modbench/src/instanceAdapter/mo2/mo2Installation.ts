@@ -6,8 +6,8 @@ import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/
 import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, ignoreSkippedLink, readOrReason, withLock, write } from '../files';
-import type { HashIndex } from '../downloadedFileContents/hashIndex';
-import { md5Of } from '../downloadedFileContents/contentDigest';
+import type { HashIndex } from '../fileContents/hashIndex';
+import { md5Of } from '../fileContents/contentDigest';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata, NexusModFile } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settingsFile } from './layout';

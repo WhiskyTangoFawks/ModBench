@@ -1,4 +1,3 @@
-import { unreadStatus } from './unreadStatus';
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString } from './vscodeMock';
 
@@ -32,7 +31,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
-      commands: modCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient(), unreadStatus), instance,
+      commands: modCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient()), instance,
       reporterFor: () => recordingReporter(), ask: vi.fn(), fomodDialog: () => FOMOD_PAGE,
       downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });

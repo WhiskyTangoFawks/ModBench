@@ -15,6 +15,7 @@
     { "path": "./instanceAdapter" },
     { "path": "./coreLib" },
     { "path": "./instanceLoader" },
+    { "path": "./modStatus" },
     { "path": "./modCommands" },
     { "path": "./pluginCommands" },
     { "path": "./sortingRules" },

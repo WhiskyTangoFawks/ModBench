@@ -114,6 +114,10 @@ export interface InstanceAnswers {
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
+  /** Each folder's files by forward-slash path; a folder not there holds none. */
+  folderFiles?: ReadonlyMap<string, readonly string[]>;
+  /** Each downloaded file's entries by its hash; a hash not there has none in the index. */
+  packageEntries?: ReadonlyMap<string, ReadonlyMap<string, string>>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -198,9 +202,14 @@ const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${e
 
 /** The folders of the given entries, a bare name being a mod, held as the fake's `entryKey` folds names. */
 export function modFoldersOf(...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
+  return modFoldersIn('/instance/mods', ...entries);
+}
+
+/** As `modFoldersOf`, each folder in `mods`. */
+export function modFoldersIn(mods: string, ...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
   return foldersHolding(entries.map((entry) => {
     const ref = typeof entry === 'string' ? { kind: 'mod' as const, name: entry } : entry;
-    return { kind: ref.kind, name: ref.name, path: `/instance/mods/${ref.name}`, modName: ref.modName ?? ref.name };
+    return { kind: ref.kind, name: ref.name, path: `${mods}/${ref.name}`, modName: ref.modName ?? ref.name };
   }));
 }
 
@@ -390,6 +399,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       hashed.push(path);
       return answer(answers.hashes?.get(path), path);
     },
+    filesIn: (folder) => Promise.resolve(answers.folderFiles?.get(folder) ?? []),
+    packageEntries: (hash) => Promise.resolve(answers.packageEntries?.get(hash)),
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
       return write({ verb: 'changeModOrder', profile, changes }, () => {

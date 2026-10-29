@@ -19,7 +19,9 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
-import type { MEditClient, ModStatus } from '../../client/MEditClient';
+import type { MEditClient } from '../../client/MEditClient';
+import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
+import { status } from '../../test/modStatusFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -29,8 +31,6 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
-import { localFailure } from '../../wire/readFailed';
-import type { ReadModStatus } from '../../client';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -63,10 +63,8 @@ afterEach(async () => {
 
 const NO_ENVIRONMENT = { forEach: () => undefined };
 
-const statusRead: { asked: (readonly string[])[]; answer: Awaited<ReturnType<ReadModStatus>> } = { asked: [], answer: [] };
-const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, ...over });
-const readStatus: ReadModStatus = (mods) => { statusRead.asked.push(mods); return Promise.resolve(statusRead.answer); };
+const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
+const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {
   const reporter = recordingReporter();
@@ -74,7 +72,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, readStatus,
+    port, instance, mEdit, terminalEnvironment, reporter, statuses,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -210,7 +208,7 @@ describe('the agent server, given an instance value', () => {
     });
 
     it('answers in part when a mod\'s status cannot be read, naming each line it could not place', async () => {
-      statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'], unreadable: { manifest: true, why: 'git is gone' } })];
+      statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'], unreadable: 'git is gone' })];
       const { client } = await clientOf(cloned('AccC.esp', 'Other.esp'));
 
       const { isError, text } = await call(client, 'list_plugins');
@@ -225,7 +223,7 @@ describe('the agent server, given an instance value', () => {
     });
 
     it('answers in part for a line a lower mod names when the mod above it cannot be read', async () => {
-      statusRead.answer = [status('Acc Mod B', { unreadable: { manifest: true, why: 'git is gone' } }), status('Acc Mod C', { gone: ['AccC.esp'] })];
+      statusRead.answer = [status('Acc Mod B', { unreadable: 'git is gone' }), status('Acc Mod C', { gone: ['AccC.esp'] })];
       const { client } = await clientOf(cloned('AccC.esp'));
 
       const { isError, text } = await call(client, 'list_plugins');
@@ -235,35 +233,14 @@ describe('the agent server, given an instance value', () => {
       });
     });
 
-    it('refuses a plugin named by an origin it could not read the manifests for, giving that reason', async () => {
-      statusRead.answer = localFailure('mEdit is down');
-      const { client } = await clientOf(cloned('AccC.esp'));
-
-      const { isError, text } = await call(client, 'plugin_enable', { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }] });
-
-      expect(isError).toBe(true);
-      expect(text).toContain('The mods\' status could not be read: ');
-    });
-
     it('asks for the manifests only when a plugin is named with its origin', async () => {
-      statusRead.asked = [];
+      statusRead.asked = 0;
       fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
       const { client } = await clientOf(cloned('AccC.esp'));
 
       await call(client, 'plugin_enable', { argument: [{ name: 'AccC.esp' }] });
 
-      expect(statusRead.asked).toEqual([]);
-    });
-
-    it('answers in part when mEdit cannot be asked, so the read does not depend on it', async () => {
-      statusRead.answer = localFailure('mEdit is down');
-      const { client } = await clientOf(cloned('AccC.esp'));
-
-      const { isError, text } = await call(client, 'list_plugins');
-
-      expect({ isError, answer: JSON.parse(text) as unknown }).toMatchObject({
-        isError: true, answer: { plugins: [{ name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN }], notRestoredUndecided: { lines: ['AccC.esp'] } },
-      });
+      expect(statusRead.asked).toBe(0);
     });
 
     it.each([
@@ -289,9 +266,9 @@ describe('the agent server, given an instance value', () => {
         { kind: 'mod', name: 'InAnotherProfile', path: '/i/mods/InAnotherProfile', modName: 'InAnotherProfile' },
       ],
     });
-    beforeEach(() => { statusRead.asked = []; });
+    beforeEach(() => { statusRead.asked = 0; });
 
-    it('asks for every mod folder and separator folder in every profile, and answers each status', async () => {
+    it('answers each status Mod status derived, by the kind and name of its mod or separator', async () => {
       statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], notInPackage: ['b.nif'], otherBytes: ['c.nif'] }), status('Textures_separator', { noManifest: true })];
       const { client } = await clientOf(inRepository);
 
@@ -299,7 +276,6 @@ describe('the agent server, given an instance value', () => {
         { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], metadataDiffers: false, noHost: false },
         { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false },
       ]);
-      expect(statusRead.asked).toEqual([['Big Rocks', 'Textures_separator', 'InAnotherProfile']]);
     });
 
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
@@ -309,14 +285,7 @@ describe('the agent server, given an instance value', () => {
 
       expect(refusal.isError).toBe(true);
       expect(refusal.text).toContain('repository');
-      expect(statusRead.asked).toEqual([]);
-    });
-
-    it('refuses a read that failed, with why', async () => {
-      statusRead.answer = localFailure('git is gone');
-      const { client } = await clientOf(inRepository);
-
-      expect(await call(client, 'list_mod_statuses')).toEqual({ isError: true, text: "The mods' status could not be read: git is gone" });
+      expect(statusRead.asked).toBe(0);
     });
   });
 

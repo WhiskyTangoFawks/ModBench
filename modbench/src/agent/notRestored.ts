@@ -1,10 +1,8 @@
-import type { ReadModStatus } from '../client';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
+import type { ModStatuses } from '../modStatus/modStatuses';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { pluginNameKey } from '../wire/pluginAddress';
-import { isReadFailed } from '../wire/readFailed';
-import { statusUnreadable } from './modStatuses';
 
 interface NotRestoredRead {
   readonly origins: ReadonlyMap<string, string>;
@@ -29,17 +27,12 @@ function undecidedLines(value: InstanceValue, mods: readonly string[], origins: 
   });
 }
 
-export async function withNotRestored(value: InstanceValue, readStatus: ReadModStatus): Promise<AgentValue> {
+export async function withNotRestored(value: InstanceValue, statuses: Pick<ModStatuses, 'current'>): Promise<AgentValue> {
   const mods = modsWithManifests(value);
   if (mods.length === 0 || linesWithoutFile(value).length === 0) return value;
-  const answer = await readStatus(mods);
-  if (isReadFailed(answer)) {
-    const origins = new Map<string, string>();
-    return { ...value, notRestored: { origins, undecided: undecidedLines(value, mods, origins, new Set(mods)), unread: statusUnreadable(answer) } };
-  }
-  const gone = new Map(answer.map((status) => [status.mod, status.gone]));
-  const origins = originsOfLinesNotRestored(mods, linesWithoutFile(value), (mod) => gone.get(mod) ?? []);
-  const unreadable = answer.filter((status) => status.unreadable);
-  const unread = unreadable.map(({ mod, unreadable: why }) => `the status of "${mod}" could not be read: ${why?.why}`).join('; ');
+  const derived = await statuses.current();
+  const origins = originsOfLinesNotRestored(mods, linesWithoutFile(value), (mod) => derived.get(mod)?.gone ?? []);
+  const unreadable = [...derived.values()].filter((status) => status.unreadable !== undefined);
+  const unread = unreadable.map(({ mod, unreadable: why }) => `the status of "${mod}" could not be read: ${why}`).join('; ');
   return { ...value, notRestored: { origins, undecided: undecidedLines(value, mods, origins, new Set(unreadable.map(({ mod }) => mod))), unread } };
 }

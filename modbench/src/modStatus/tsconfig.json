@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/modStatus"
+  },
+  "references": [
+    { "path": "../instanceAdapter" },
+    { "path": "../manifestAdapter" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

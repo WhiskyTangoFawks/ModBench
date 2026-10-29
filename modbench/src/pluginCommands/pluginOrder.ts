@@ -19,5 +19,5 @@ export function moveOrderRefusal(
 ): string | undefined {
   const already = new Set(judge(order, factsOf).map(identity));
   return judge(movedOrder(order, moved, drop), factsOf)
-    .find((broken) => broken.level === 'error' && !already.has(identity(broken)))?.reason;
+    .find((broken) => !already.has(identity(broken)))?.reason;
 }

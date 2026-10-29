@@ -12,6 +12,3 @@ export function modWithMetadata(mod: ModByFolder, held: HeldMetadata): ModByFold
     ? { ...mod, metadataUnreadable: held.reason }
     : { ...mod, metadata: { version: held.answer.version, installationFile: held.answer.installationFile } };
 }
-
-export const withMetadataRead = (mods: readonly ModByFolder[], readOf: (mod: string) => Promise<HeldMetadata>): Promise<ModByFolder[]> =>
-  Promise.all(mods.map(async (mod) => modWithMetadata(mod, await readOf(mod.name))));

@@ -1,3 +1,2 @@
 export type * from './manifest';
-export { readManifest } from './manifestRead';
-export { manifestText } from './manifestText';
+export { statusOf, statusesNow, type FolderReads, type ModAt, type ModStatus } from './modStatus';

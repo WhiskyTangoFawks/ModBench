@@ -21,7 +21,6 @@ class NotificationListenerRegistry {
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
-    'mod-status-changed': new Set(),
   };
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
@@ -34,10 +33,9 @@ class NotificationListenerRegistry {
     return Promise.resolve();
   }
 
-  /** Every plugin and mod a snapshot holds, announced changed as any change to them is. */
+  /** Every plugin a snapshot holds, announced changed as any change to it is. */
   announceChanged(snapshot: LoadOrderSnapshot): void {
     for (const { name, origin } of snapshot.plugins) this.deliver('plugin-changed', { plugin: { name, origin } });
-    this.deliver('mod-status-changed', { mods: snapshot.mods.map(({ name }) => name) });
   }
 
   dispatch(event: NotificationEvent): void {
@@ -76,9 +74,6 @@ class NotificationListenerRegistry {
         break;
       case 'plugin-changed':
         this.deliver('plugin-changed', { plugin: { name: plugin, origin } });
-        break;
-      case 'mod-status-changed':
-        this.deliver('mod-status-changed', { mods: event.mods ?? [] });
         break;
     }
   }
@@ -148,7 +143,6 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     changedPlugins?: NotificationEvent['changedPlugins'];
     pluginWithUnreadableSources?: NotificationEvent['pluginWithUnreadableSources'];
     recordFilterCleared?: NotificationEvent['recordFilterCleared'];
-    mods?: NotificationEvent['mods'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
   if (!isString(w.plugin)) throw new Error('Expected a notification event to carry a string plugin.');
@@ -158,7 +152,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
     loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, decompileAndCommitPhase: w.decompileAndCommitPhase, changedPlugins: w.changedPlugins,
-    pluginWithUnreadableSources: w.pluginWithUnreadableSources, recordFilterCleared: w.recordFilterCleared, mods: w.mods,
+    pluginWithUnreadableSources: w.pluginWithUnreadableSources, recordFilterCleared: w.recordFilterCleared,
   };
 }
 

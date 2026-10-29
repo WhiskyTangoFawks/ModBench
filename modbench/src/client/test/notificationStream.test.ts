@@ -55,19 +55,6 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  it('carries the mods a mod-status-changed frame names through the stream', async () => {
-    const event = rowsChanged([], { kind: 'mod-status-changed', mods: ['ModA'] });
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: vi.fn().mockResolvedValue(streamResponse([sseFrame(event)])) });
-    const received: unknown[] = [];
-    subscriber.onNotification('mod-status-changed', (p) => received.push(p));
-
-    subscriber.start();
-    await vi.waitFor(() => expect(received).toHaveLength(1));
-
-    expect(received).toEqual([{ mods: ['ModA'] }]);
-    subscriber.stop();
-  });
-
   it.each([
     ['the stream ends', () => Promise.resolve(streamResponse([]))],
     ['a malformed frame, without dispatching it', () => Promise.resolve(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))],
@@ -308,7 +295,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['record-filter-cleared', rowsChanged([], { kind: 'record-filter-cleared', recordFilterCleared: { source: 'a.sql', reason: 'boom' } }), { source: 'a.sql', reason: 'boom' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
-    ['mod-status-changed', rowsChanged([], { kind: 'mod-status-changed', mods: ['ModA', 'ModB'] }), { mods: ['ModA', 'ModB'] }],
   ];
 
   function listenToEveryKind(subscriber: SseNotificationSubscriber): unknown[] {
@@ -323,7 +309,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     subscriber.onNotification('record-filter-cleared', hear('record-filter-cleared'));
     subscriber.onNotification('rows-changed', hear('rows-changed'));
     subscriber.onNotification('plugin-changed', hear('plugin-changed'));
-    subscriber.onNotification('mod-status-changed', hear('mod-status-changed'));
     return heard;
   }
 

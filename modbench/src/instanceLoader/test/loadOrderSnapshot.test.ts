@@ -306,11 +306,10 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
     filesByOrigin: new Map(),
   };
-  const NO_MODLIST = { mods: [], metadataFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
-    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES });
+    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, places: [], archives: NO_ARCHIVES });
   const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginWithNoLine[] = [], archives = NO_ARCHIVES) => {
-    const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives });
+    const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs, places: [], archives });
     return outcome !== undefined && 'refusal' in outcome ? undefined : outcome;
   };
   const landed = (outcome: ReturnType<typeof loadOrderSnapshotOf>) =>
@@ -327,7 +326,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
     ['the game folder\'s archives cannot be listed, as a snapshot lacking the game\'s strings is not sent', { archives: { ...NO_ARCHIVES, inData: { kind: 'unreadable', reason: 'EACCES' } } }],
   ])('is undefined — no put at all — while %s', (_, withheld) => {
     expect(loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES, ...withheld,
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [], archives: NO_ARCHIVES, ...withheld,
     })).toBeUndefined();
   });
 
@@ -426,8 +425,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
     };
     const value: Parameters<typeof stampedSnapshot>[0] = {
       dataFolder: '/game/Data', gameRelease: 'Fallout4',
-      places: [], mods: [],
-      statCache: '/mo2/stat-cache',
+      places: [],
       plugins: [{
         name: 'A.esp', path: '/a/A.esp', origin: 'ModA', provider: { kind: 'Game' }, line: 0, lineNamesIt: true,
         archives: ['/a/A - Main.ba2'], stringsFiles: ['/a/A_en.STRINGS'],
@@ -541,35 +539,10 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
     expect(providers).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' }, { kind: 'Game' }, { kind: 'None' }]);
   });
 
-  it('names each mod and separator of the mod order that has a folder, a separator by the mod manager\'s name for it, with their metadata files, and the stat cache\'s folder', () => {
-    const withSeparator = modFoldersOf('ModA');
-    const all = [...withSeparator.all, { kind: 'separator' as const, name: 'Weapons', path: '/mo2/mod-folders/Weapons_separator', modName: 'Weapons_separator' }];
-    const outcome = loadOrderSnapshotOf({
-      plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: { all, holding: (entry) => all.find((f) => f.kind === entry.kind && f.name === entry.name) },
-      sourceDirs, places: [], archives: NO_ARCHIVES,
-      modlist: {
-        ...NO_MODLIST,
-        mods: [
-          { kind: 'mod', name: 'ModA', enabled: false }, { kind: 'separator', name: 'Weapons', enabled: true },
-          { kind: 'separator', name: 'Gone', enabled: true }, { kind: 'mod', name: 'ModGone', enabled: true },
-        ],
-      },
-    });
-
-    const { mods, statCache } = landed(outcome);
-    expect({ mods, statCache }).toEqual({
-      mods: [
-        { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'], sourceFolder: '/mo2/source/ModA' },
-        { name: 'Weapons_separator', folder: '/mo2/mod-folders/Weapons_separator', metadataFiles: ['meta.ini'] },
-      ],
-      statCache: '/mo2/stat-cache',
-    });
-  });
-
   it('carries the places it is handed', () => {
     const place = { name: 'ModA', folder: '/mo2/mod-folders/ModA' };
     const outcome = loadOrderSnapshotOf({
-      plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [place], modlist: NO_MODLIST, archives: NO_ARCHIVES,
+      plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [place], archives: NO_ARCHIVES,
     });
 
     expect(landed(outcome).places).toEqual([place]);
@@ -577,7 +550,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
 
   it('names no source folder for a mod that is no source mod', () => {
     const outcome = loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES,
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), places: [], archives: NO_ARCHIVES,
     });
 
     expect(landed(outcome).plugins.map((p) => p.provider)).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }]);
