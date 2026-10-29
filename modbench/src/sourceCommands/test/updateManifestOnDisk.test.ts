@@ -45,7 +45,7 @@ describe('update manifest over an instance on disk', () => {
 
   it('names no line for a metadata file of the mod', async () => {
     const { update } = await instanceTakingFromTheGame();
-    await put('mods/Mod/meta.ini', '[General]');
+    await put('mods/Mod/meta.ini', 'what the mod manager holds');
 
     await update();
 
