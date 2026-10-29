@@ -136,12 +136,12 @@ function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<U
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
   const unchanged = outcome.landed.length - updated;
-  const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
+  const line = `Update manifest${outcome.cancelled ? ' cancelled' : ''}: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; their packages do not hold ${counted(notHeld.length, 'file', 'files')} and hold ${counted(otherBytes.length, 'file', 'files')} with other bytes.`;
   const warnings = [...notHeld, ...otherBytes, ...notesOf(label, outcome.notes), ...outcome.repositoryNotes, ...statCacheNotWritten(outcome.landed)];
   const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
-  else if (warnings.length > 0) reporter.report('warning', line, detail);
+  else if (warnings.length > 0 || outcome.cancelled) reporter.report('warning', line, detail);
   else reporter.landed(line);
 }
 

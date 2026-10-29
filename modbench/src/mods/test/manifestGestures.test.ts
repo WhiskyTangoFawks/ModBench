@@ -182,6 +182,22 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect([signal?.aborted, reporter.landings]).toEqual([true, ['Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.']]);
   });
 
+  it('update manifest, cancelled, says it was cancelled and the counts of what landed before, and does not report a landing', async () => {
+    updateManifest.mockResolvedValueOnce({
+      applied: true, cancelled: true, notes: [], repositoryNotes: [], refused: [],
+      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }],
+    });
+    const { reporter, run } = register();
+
+    await run(UPDATE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
+
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{
+      severity: 'warning',
+      message: 'Update manifest cancelled: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.',
+      detail: '',
+    }]]);
+  });
+
   it('restore from manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
     let signal: AbortSignal | undefined;
     restoreFromManifest.mockImplementationOnce((_mods, options) => {

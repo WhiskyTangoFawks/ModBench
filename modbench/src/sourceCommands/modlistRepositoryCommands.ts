@@ -43,7 +43,7 @@ export interface ModNote { readonly mod: string; readonly note: string }
 
 /** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
  *  whole gesture refused, as a message to show. */
-export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[]; repositoryNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
+export type UpdateManifestResult = ({ applied: true; cancelled?: true; notes: readonly ModNote[]; repositoryNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files or hashing downloaded files, or mEdit updating manifests. */
 export type UpdateManifestStatus =
@@ -629,6 +629,8 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
   };
 }
 
+const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
+
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
   const { client, adapter } = deps;
@@ -649,7 +651,9 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const { sent, refused: unread, notes } = await readMods(
         adapter, namesOf(mods, others), folders, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
       const refused = [...unread];
-      const nothingUpdated = async (): Promise<UpdateManifestResult> => ({ applied: true, landed: [], refused, notes, repositoryNotes: await pathsShown(deps) });
+      const nothingUpdated = async (): Promise<UpdateManifestResult> => ({
+        applied: true, ...cancelledIf(signal), landed: [], refused, notes, repositoryNotes: await pathsShown(deps),
+      });
       if (sent.length === 0) return nothingUpdated();
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
@@ -668,7 +672,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
       const submodules = await submodulesWritten(adapter, everyMod ? 'every' : versioned.map(({ name }) => name));
       return {
-        applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
+        applied: true, ...cancelledIf(signal), ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
         repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsShown(deps)],
       };
     },
