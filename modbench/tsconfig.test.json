@@ -9,6 +9,7 @@
   "references": [
     { "path": "./src" },
     { "path": "./src/loadOrderFileCodec" },
+    { "path": "./src/manifestAdapter" },
     { "path": "./src/tables" },
     { "path": "./src/wire" },
     { "path": "./src/ports" },
