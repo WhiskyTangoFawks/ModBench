@@ -582,7 +582,7 @@ public sealed class UpdateManifestHandlerTests
     {
         _folders.WithFile(Mod, "Data/Fallout4.esm", "edited").WithFile(Mod, "a.nif", "a");
 
-        var manifest = await UpdatedWith(GameFolderHolding(("Fallout4.esm", "original"), ("a.nif", "a")));
+        var manifest = await UpdatedWith(GameFolderHolding(("Data/Fallout4.esm", "original"), ("a.nif", "a")));
 
         Assert.Equal([new ManifestFile("a.nif", new PackageEntry.Held()), new ManifestFile("Data/Fallout4.esm", new PackageEntry.OtherBytes())], manifest.Files);
     }
@@ -601,7 +601,7 @@ public sealed class UpdateManifestHandlerTests
     }
 
     private static readonly GameFolder Installation =
-        new("Fallout 4", "game", [new GameFile("Fallout4.exe", "exe"), new GameFile("Data/Fallout4.esm", "esm"), new GameFile("Data/c.nif", "c")]);
+        new("Fallout 4", "game", [new GameFile("Fallout4.exe", "exe", "Root/Fallout4.exe"), new GameFile("Data/Fallout4.esm", "esm", "Fallout4.esm")]);
 
     [Fact]
     public async Task AGameFolderModsRootFile_IsNamedFromTheInstallationsRoot_AndItsOtherFilesFromItsData()
@@ -613,14 +613,31 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal([new FileBytes.InGameFolder("Data/Fallout4.esm"), new FileBytes.InGameFolder("Fallout4.exe")], manifest.Files.Select(manifest.BytesOf));
     }
 
-    [Fact]
-    public async Task AGameFolderModsFile_ThatTheInstallationsDataHoldsWithOtherBytes_IsRecordedAsSuch()
+    public static TheoryData<string, GameFile, PackageEntry> FilesOfOtherBytes => new()
     {
-        _folders.WithFile(Mod, "Fallout4.esm", "esm").WithFile(Mod, "c.nif", "edited");
+        { "a file the game file handed for its path holds with other bytes", new GameFile("Data/c.nif", "c", "c.nif"), new PackageEntry.OtherBytes() },
+        { "a file at the path of a game file handed for another", new GameFile("c.nif", "c", "Root/c.nif"), new PackageEntry.NotHeld() },
+    };
 
-        var manifest = await UpdatedWith(Installation);
+    [Theory]
+    [MemberData(nameof(FilesOfOtherBytes))]
+    public async Task AGameFolderModsFile_HasOtherBytes_OnlyWhenTheGameFileHandedForItsPathHoldsOtherBytes(string says, GameFile handed, PackageEntry expected)
+    {
+        _folders.WithFile(Mod, "Fallout4.esm", "esm").WithFile(Mod, "c.nif", "edited").WithFile(Mod, "Root/c.nif", "c");
 
-        Assert.Equal(new ManifestFile("c.nif", new PackageEntry.OtherBytes()), manifest.Files.Single(file => file.Path == "c.nif"));
+        var manifest = await UpdatedWith(Installation with { Files = [.. Installation.Files, handed] });
+
+        Assert.True(expected == manifest.Files.Single(file => file.Path == "c.nif").Entry, says);
+    }
+
+    [Fact]
+    public async Task AGameFolderModsFile_IsNamedFromTheGameFileHandedForItsPath_WhenAnotherHoldsTheSameBytes()
+    {
+        _folders.WithFile(Mod, "a.nif", "same").WithFile(Mod, "b.nif", "same");
+
+        var manifest = await UpdatedWith(new GameFolder("Fallout 4", "game", [new GameFile("Data/a.nif", "same", "a.nif"), new GameFile("Data/b.nif", "same", "b.nif")]));
+
+        Assert.Equal([new FileBytes.InGameFolder("Data/a.nif"), new FileBytes.InGameFolder("Data/b.nif")], manifest.Files.Select(manifest.BytesOf));
     }
 
     [Fact]

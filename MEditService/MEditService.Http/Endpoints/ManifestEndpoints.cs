@@ -226,12 +226,12 @@ internal sealed record GameDepotRequest(string Id, string Version)
     internal static IReadOnlyList<GameDepot>? ToGameDepots(IReadOnlyList<GameDepotRequest>? depots) => depots?.Select(depot => new GameDepot(depot.Id, depot.Version)).ToList();
 }
 
-internal sealed record GameFileRequest(string Path, string Hash)
+internal sealed record GameFileRequest(string Path, string Hash, string? PathInFolder = null)
 {
     internal static bool AreWhole(IReadOnlyList<GameFileRequest> files) =>
         files.All(file => !string.IsNullOrWhiteSpace(file.Path) && FileHash.IsHash(file.Hash ?? string.Empty));
 
-    internal static IReadOnlyList<GameFile> ToGameFiles(IReadOnlyList<GameFileRequest> files) => [.. files.Select(file => new GameFile(file.Path, file.Hash))];
+    internal static IReadOnlyList<GameFile> ToGameFiles(IReadOnlyList<GameFileRequest> files) => [.. files.Select(file => new GameFile(file.Path, file.Hash, file.PathInFolder))];
 }
 
 internal interface IModRequest

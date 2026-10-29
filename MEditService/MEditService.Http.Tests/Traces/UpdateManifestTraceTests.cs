@@ -63,7 +63,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
         { "a downloaded file with no size", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "downloadedFiles": [{"path": "/d/Mod.zip", "hash": "AAECAwQFBgc=", "entries": [{{AnEntry}}]}]}""" },
         { "a downloaded file whose entry hash is no hash", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [] }], "statCache": "/cache", "downloadedFiles": [{"path": "/d/Mod.zip", "size": 7, "hash": "AAECAwQFBgc=", "entries": [{"path": "kept.txt", "hash": "WHOLE"}]}]}""" },
         { "a game folder with no name", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"root": "/game", "files": [{{AGameFile}}]} }], "statCache": "/cache"}""" },
-        { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "files": [{{AGameFile}}]} }], "statCache": "/cache"}""" },
+        { "a game folder with no root", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "files": [{{AGameFile}}]} }], "statCache": "/cache"}""" },
         { "a game folder with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game"} }], "statCache": "/cache"}""" },
         { "an elsewhere place with no root", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"files": [{{AGameFile}}]}]} }], "statCache": "/cache"}""" },
         { "an elsewhere place with no files", $$"""{"mods": [{ {{AMod}}, "metadataFiles": [], "gameFolder": {"name": "Fallout4", "root": "/game", "files": [], "elsewhere": [{"root": "/steam"}]} }], "statCache": "/cache"}""" },

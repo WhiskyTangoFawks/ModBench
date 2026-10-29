@@ -15,9 +15,11 @@ internal sealed class ManifestBuilder
     {
         _own = installationFile is var (name, file) ? new DownloadedFile(name, file) : null;
         _others = [.. downloadedFiles.Where(other => other.Package.Name != _own?.Package.Name)];
-        _game = gameFolder is null ? null : new Holder(gameFolder.Name, [.. gameFolder.Places().SelectMany(place => place.Files.Select(game => (game.Path, game.Hash)))], keptBelowFolders: true);
-        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => (new Holder(gameFolder.Name, [.. place.Files.Select(game => (game.Path, game.Hash))], keptBelowFolders: true), place.Depots ?? []))];
+        _game = gameFolder is null ? null : new Holder(gameFolder.Name, [.. gameFolder.Places().SelectMany(place => place.Files.Select(HeldFor))]);
+        _places = gameFolder is null ? [] : [.. gameFolder.Places().Select(place => (new Holder(gameFolder.Name, [.. place.Files.Select(HeldFor)]), place.Depots ?? []))];
     }
+
+    private static (string Path, string Hash, string PathInFolder) HeldFor(GameFile game) => (game.Path, game.Hash, game.PathInFolder ?? game.Path);
 
     /// <summary>What <paramref name="held"/> says that no folder shows, its steps and the files they make, kept as written
     /// (ADR-0022).</summary>
