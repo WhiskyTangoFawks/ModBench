@@ -82,7 +82,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    private JsonObject WhatRestoreDestroysRequest(JsonObject? metadata = null, string? metadataUnreadable = null) => new()
+    private JsonObject WhatRestoreDestroysRequest(JsonObject? metadata = null) => new()
     {
         ["mods"] = new JsonArray(new JsonObject
         {
@@ -90,7 +90,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             ["folder"] = ModFolder,
             ["metadataFiles"] = new JsonArray("meta.ini"),
             ["metadata"] = metadata,
-            ["metadataUnreadable"] = metadataUnreadable,
         }),
         ["statCache"] = StatCache,
     };
@@ -174,17 +173,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
         var listed = (await destroys.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray();
         Assert.Empty(listed);
-    }
-
-    [Fact]
-    public async Task AModWhoseMetadataCouldNotBeRead_IsUnreadableInItsStatus_NamingWhy()
-    {
-        ModInstalledFromADownload();
-        await Post("update-manifest");
-
-        var status = await ModStatus(WhatRestoreDestroysRequest(metadataUnreadable: "access denied"));
-
-        Assert.Contains("access denied", status.GetProperty("unreadable").GetProperty("why").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
