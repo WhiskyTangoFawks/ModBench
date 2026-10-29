@@ -9,7 +9,9 @@ import {
   type CellContext, type Column,
 } from './recordUtils';
 import type { FocusedCell, NavRow } from './gridNavigation';
-import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PathSegment } from './types';
+import type {
+  ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, FormKeyResolution, PathHop, PathSegment, TemplatedBy,
+} from './types';
 import type { ArrayParentContext } from '../../src/wire/messages';
 
 export const RECORD_HEADER_ROW = 'Record Header';
@@ -29,6 +31,8 @@ export interface ValueCell extends GridCell {
   shown: unknown;
   editPath?: PathHop[];
   dropAddsTo?: ArrayParentContext;
+  // What a cell the game fills from a template reads, and its tooltip (editor-fields.md, Templated fields).
+  template?: { reading: string; tooltip: string };
 }
 
 interface RowBase {
@@ -85,6 +89,42 @@ type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'de
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
+function templateOf(
+  copy: CompareOverride, rootField: string, path: readonly PathSegment[],
+): { by: TemplatedBy; isMembersRow: boolean } | undefined {
+  const templated = copy.templated;
+  if (!templated) return undefined;
+  let member = rootField;
+  for (let depth = 0; ; depth++) {
+    const by = templated[member];
+    if (by) return { by, isMembersRow: depth === path.length };
+    const seg = path[depth];
+    if (seg?.kind !== 'member') return undefined;
+    member = `${member}.${seg.name}`;
+  }
+}
+
+const resolves = (resolution: FormKeyResolution | undefined): resolution is FormKeyResolution =>
+  resolution !== undefined && resolution.state !== 'Unresolved';
+
+function goToTarget(
+  templatedBy: TemplatedBy | undefined, shown: unknown, meta: FieldMetadata, resolution: FormKeyResolution | undefined,
+): string | undefined {
+  if (templatedBy) return resolves(templatedBy.resolution) ? templatedBy.template : undefined;
+  return isString(shown) && meta.type === 'formKey' && resolves(resolution) ? shown : undefined;
+}
+
+function templateReading(template: TemplatedBy, ownValue: string | undefined, editable: boolean): NonNullable<ValueCell['template']> {
+  return {
+    reading: `from ${template.resolution.editorId || template.template}`,
+    tooltip: [
+      `Templated by ${template.flag} from ${formKeyLabel(template.template, template.resolution)}`,
+      ...(ownValue === undefined ? [] : [`Its own value: ${ownValue}`]),
+      ...(editable ? [`Clearing ${template.flag} makes it editable.`] : []),
+    ].join('\n'),
+  };
+}
+
 function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
   stringsLanguage: string,
@@ -102,6 +142,10 @@ function fieldRow(
     const held = holds ? value ?? defaultOf(cellMeta) : undefined;
     const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];
+    const templated = templateOf(o, at.rootField, at.path);
+    const templatedBy = templated && (holds || templated.isMembersRow) ? templated.by : undefined;
+    const template = templatedBy && templateReading(templatedBy, holds ? copiedText(shown, cellMeta, resolution) : undefined, editable.has(key));
+    const goesTo = goToTarget(templatedBy, shown, cellMeta, resolution);
     const hops = wirePath(at.rootField, at.path, key);
     const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
     const dropAddsTo = editPath && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
@@ -118,11 +162,9 @@ function fieldRow(
       hops && meta.type === 'string'
         ? stringValueContext(o.formKey, o.plugin, o.origin, recordLabel(o), name, modelValue(value, meta), !editPath, hops)
         : undefined,
-      isString(shown) && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
-        ? referenceContext(shown)
-        : undefined,
+      goesTo === undefined ? undefined : referenceContext(goesTo),
     );
-    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo }];
+    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo, template }];
   }));
   return {
     kind: 'field', diff, meta, ...place, expandable: (diff.children?.length ?? 0) > 0 || readsAsFlags(meta),

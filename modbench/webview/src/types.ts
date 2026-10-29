@@ -13,6 +13,7 @@ export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 export type CompareOverride = Schemas['CompareOverride'];
 export type FieldDiff = Schemas['FieldDiff'];
 export type CompareResult = Schemas['CompareResult'];
+export type TemplatedBy = Schemas['TemplatedBy'];
 
 export type { ColumnKey } from '../../src/wire/columnKey';
 export type { PathHop, PathSegment, RecordEditEnvelope } from '../../src/wire/messages';

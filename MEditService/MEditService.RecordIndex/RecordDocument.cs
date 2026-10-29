@@ -18,7 +18,8 @@ internal sealed record RecordDocument(
     // Non-null when ingest could not produce this record's own document; the body is then the stub
     // ParseFailedDocument wrote, and no write may land on it.
     string? ParseDiagnosis = null,
-    string? MissingStringsFile = null);
+    string? MissingStringsFile = null,
+    IReadOnlyDictionary<string, TemplatedBy>? Templated = null);
 
 internal sealed record OverrideStackEntry(
     PluginAddress Plugin,

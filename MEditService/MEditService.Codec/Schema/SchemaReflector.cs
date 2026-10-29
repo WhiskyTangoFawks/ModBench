@@ -163,6 +163,9 @@ public sealed class SchemaReflector
         return new RecordTableSchema(getterType, RecordDisplayNames.For(game.Annotations, tableName))
         {
             TableName = tableName,
+            Templating = game.Annotations.ActorTemplates is var templates && templates.TypeName == getterType.Name
+                ? templates.WithFlagBitsOf(getterType)
+                : null,
             RecordColumns = [.. columns
                 .Where(column => !IsChildSlot(column, siblingGetterTypes))
                 .Select(column => ContainmentReadOnly.Marked(column, siblingGetterTypes, game.Annotations))],

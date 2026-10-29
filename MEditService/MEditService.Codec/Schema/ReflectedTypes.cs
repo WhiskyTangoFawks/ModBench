@@ -53,6 +53,19 @@ internal static class ReflectedTypes
     internal static bool IsAssetLink(Type type) =>
         typeof(IAssetLinkGetter).IsAssignableFrom(type);
 
+    /// <summary>The member a dotted path reaches from <paramref name="owner"/>, or null.</summary>
+    internal static PropertyInfo? PropertyAt(Type owner, string dottedPath)
+    {
+        PropertyInfo? prop = null;
+        foreach (var hop in dottedPath.Split('.'))
+        {
+            if (prop is not null) owner = prop.PropertyType;
+            prop = GetAllInterfaceProperties(owner).FirstOrDefault(p => p.Name == hop);
+            if (prop is null) return null;
+        }
+        return prop;
+    }
+
     internal static bool IsFormLink(Type type) =>
         typeof(IFormLinkGetter).IsAssignableFrom(type);
 

@@ -723,14 +723,16 @@ internal sealed class RelationReads(
         var missingStrings = OpenedPlugins.GetValueOrDefault(address)?.MissingStringsFiles is { Count: > 0 } files
             ? string.Join(", ", files)
             : null;
-        var fields = schema.FieldsOf(root, RecordLookupEntry.Resolver(resolveFormKey), store.Release, indexed(), missingStrings);
+        var resolve = RecordLookupEntry.Resolver(resolveFormKey);
+        var fields = schema.FieldsOf(root, resolve, store.Release, indexed(), missingStrings);
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
             body, schema.IsHeader ? RequiredMasters.InHeader(fields, context, address) : fields,
             IsPartialForm: schema.IsPartialForm(root),
             ParseDiagnosis: parseDiagnosis,
-            MissingStringsFile: missingStrings);
+            MissingStringsFile: missingStrings,
+            Templated: schema.TemplatedIn(root, resolve, store.Release));
     }
 
     // Callers say both "NPC_" and "npc_", and as a column value the comparison is case-sensitive.
