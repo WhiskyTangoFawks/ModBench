@@ -1005,15 +1005,9 @@ describe('modlistRepositoryCommands other manifests', () => {
   });
 });
 
-const firstModSent = (client: InMemoryMEditClient): unknown => {
-  const mods: unknown = client.calls[0]?.args[0];
-  return Array.isArray(mods) ? (mods as readonly unknown[])[0] : undefined;
-};
-
 describe('modlistRepositoryCommands with another place of the game beside the game folder', () => {
   const GAME_PLACE: GamePlace = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
   const STEAM_PLACE: GamePlace = { root: '/steam', holdsDataFiles: true, depots: [], depotProblems: [] };
-  const UPDATED = { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] };
   type Places = NonNullable<InstanceAnswers['places']>;
   const besideHolding = (files: [string, string][], unreadable: [string, string][] = [], place: Partial<GamePlace> = {}): Places => [
     GAME_PLACE,

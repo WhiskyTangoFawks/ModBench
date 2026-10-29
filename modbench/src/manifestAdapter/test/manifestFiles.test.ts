@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { manifestText, writeManifestIn, type Manifest } from '../manifestAdapter';
+import { writeManifestIn, type Manifest } from '../manifestAdapter';
+import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
 

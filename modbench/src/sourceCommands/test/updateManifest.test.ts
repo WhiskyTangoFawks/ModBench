@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FileRead, FoundGameFolder, GamePlace, InstallationFile, InstanceAdapter, OtherManifest } from '../../instanceAdapter/instanceAdapter';
-import { manifestIn, manifestText, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -46,7 +46,18 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
     update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false) =>
       updateManifest(deps, mods, options, others, everyMod),
     manifestOf: (mod: string) => manifestIn(join(modsDir, mod)),
+    manifestHeld: async (mod: string): Promise<Manifest> => {
+      const read = await manifestIn(join(modsDir, mod));
+      if (read === undefined || 'refused' in read) throw new Error(`${mod} holds no manifest`);
+      return read.manifest;
+    },
   };
+}
+
+async function heldIn(folder: string): Promise<Manifest> {
+  const read = await manifestIn(folder);
+  if (read === undefined || 'refused' in read) throw new Error(`${folder} holds no manifest`);
+  return read.manifest;
 }
 
 describe('update manifest', () => {
@@ -90,9 +101,9 @@ describe('update manifest', () => {
 
   it('keeps the steps of a manifest and each file a step makes, whether the file is there or not', async () => {
     const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': 'HA' } } });
-    await writeFile(join(modsDir, 'ModA', 'ModA.manifest.json'), manifestText({
+    await writeManifestIn(join(modsDir, 'ModA'), {
       ...EMPTY, steps: [{ task: 'Optimise', args: ['--in', 'textures'] }], files: [{ path: 'textures/made.dds', entry: { kind: 'madeByStep' } }],
-    }));
+    });
 
     const result = await update(['ModA']);
 
@@ -130,8 +141,8 @@ describe('update manifest', () => {
     });
 
     it('whose manifest names the game folder when the game folder was not found', async () => {
-      const { result } = await refusedBy({ gameFolder: GAME_FOLDER_NOT_FOUND }, () => writeFile(
-        join(modsDir, 'ModA', 'ModA.manifest.json'), manifestText({ ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'H', depots: [] }] })));
+      const { result } = await refusedBy({ gameFolder: GAME_FOLDER_NOT_FOUND }, () => writeManifestIn(
+        join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'H', depots: [] }] }));
 
       expect(result.refused).toEqual([{ item: 'ModA', reason: 'was not updated: its manifest names the game folder, and the game folder was not found.' }]);
     });
@@ -186,7 +197,7 @@ describe('update manifest', () => {
 
     const sourced = async (manifest: Manifest | undefined, files: Record<string, string> = {}) => {
       await mkdir(SOURCE(), { recursive: true });
-      if (manifest !== undefined) await writeFile(join(SOURCE(), 'ModB.manifest.json'), manifestText({ ...manifest, output: 'ModB' }));
+      if (manifest !== undefined) await writeManifestIn(SOURCE(), { ...manifest, output: 'ModB' });
       return over({ files: { ModB: files }, sourceFolders: { ModB: SOURCE() } });
     };
 
@@ -252,11 +263,11 @@ describe('update manifest', () => {
 
     it('names the depots of the places it takes from, and notes why a place gave fewer depots than it holds', async () => {
       const place: GamePlace = { root: '/game', holdsDataFiles: true, depots: [{ id: '1', version: 'v' }], depotProblems: ['appmanifest_377160.acf records no installed depot'] };
-      const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': 'HA' } }, answers: { places: [{ ...place, gameFilesTaken: taken('a.nif', 'HA') }] } });
+      const { update, manifestHeld } = await over({ files: { ModA: { 'a.nif': 'HA' } }, answers: { places: [{ ...place, gameFilesTaken: taken('a.nif', 'HA') }] } });
 
       const result = await update(['ModA']);
 
-      expect([result.repositoryNotes, (await manifestOf('ModA') as { manifest: Manifest }).manifest.packages]).toEqual([
+      expect([result.repositoryNotes, (await manifestHeld('ModA')).packages]).toEqual([
         place.depotProblems, [expect.objectContaining({ kind: 'gameFolder', depots: place.depots })],
       ]);
     });
@@ -296,14 +307,14 @@ describe('update manifest', () => {
   describe('a mod\'s files that its installation file lacks', () => {
     it('are taken from another downloaded file, whose entries the hash index kept, which is named a package', async () => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'HO', entries: [{ path: 'b.nif', hash: 'HB' }] };
-      const { update, manifestOf } = await over({
+      const { update, manifestHeld } = await over({
         files: { ModA: { 'a.nif': 'HA', 'b.nif': 'HB' } },
         answers: { installations: new Map([['ModA', read(INSTALLED)]]), downloadedFilesHashed: { files: [INSTALLED, OTHER], notes: [] } },
       });
 
       await update(['ModA']);
 
-      expect(((await manifestOf('ModA')) as { manifest: Manifest }).manifest.files).toEqual([{ path: 'a.nif', entry: { kind: 'held' } }, { path: 'b.nif', entry: { kind: 'held' }, package: 'Other.7z' }]);
+      expect((await manifestHeld('ModA')).files).toEqual([{ path: 'a.nif', entry: { kind: 'held' } }, { path: 'b.nif', entry: { kind: 'held' }, package: 'Other.7z' }]);
     });
   });
 
@@ -324,9 +335,9 @@ describe('update manifest', () => {
 
       const result = await update(['ModA'], {}, [{ ...STOCK_GAME, folder }]);
 
-      expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestIn(folder) as { manifest: Manifest }).manifest]).toEqual([
+      expect([result.refused, result.landed.map(({ mod }) => mod), (await heldIn(folder))]).toEqual([
         [], ['ModA', 'Stock Game/'],
-        { ...EMPTY, packages: [expect.objectContaining({ kind: 'gameFolder' }) as unknown as Manifest['packages'][number]], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
+        { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: expect.any(String) as unknown as string, depots: [] }], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
       ]);
     });
   });

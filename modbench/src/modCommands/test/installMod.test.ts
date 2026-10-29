@@ -6,7 +6,7 @@ import { modCommands, type ModPackage } from '../modCommands';
 import type { DownloadedFile, DownloadedFileMeta, InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ManifestFile } from '../../manifestAdapter/manifestAdapter';
-import { manifestText } from '../../manifestAdapter/manifestAdapter';
+import { writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
@@ -40,13 +40,14 @@ function install(
 const upgradedFolder = (): string => `${mods}/${UPGRADED.name}`;
 const upgraded = (path: string): string => `${upgradedFolder()}/${path}`;
 
-async function manifested(text: string): Promise<void> {
+async function manifested(held: string | Manifest): Promise<void> {
   await mkdir(join(mods, UPGRADED.name), { recursive: true });
-  await writeFile(upgraded(`${UPGRADED.name}.manifest.json`), text);
+  if (typeof held === 'string') await writeFile(upgraded(`${UPGRADED.name}.manifest.json`), held);
+  else await writeManifestIn(join(mods, UPGRADED.name), held);
 }
 
-const holding = (...files: ManifestFile[]): string =>
-  manifestText({ packages: [{ kind: 'installationFile', name: 'Vats.7z', size: 1, hash: 'PACK' }], exclude: [], archives: [], steps: [], tools: [], files });
+const holding = (...files: ManifestFile[]): Manifest =>
+  ({ packages: [{ kind: 'installationFile', name: 'Vats.7z', size: 1, hash: 'PACK' }], exclude: [], archives: [], steps: [], tools: [], files });
 
 const folderHoldingFixedBytesBut = (onDisk: readonly string[], edited: readonly string[] = []): InstanceAnswers => ({
   folderFiles: new Map([[upgradedFolder(), onDisk]]),
@@ -57,7 +58,7 @@ const folderHoldingFixedBytesBut = (onDisk: readonly string[], edited: readonly 
 
 describe('installMod', () => {
   describe('an upgrade without force', () => {
-    it.each<[string, string | undefined, readonly string[], readonly string[], string]>([
+    it.each<[string, Manifest | undefined, readonly string[], readonly string[], string]>([
       ['differs from its manifest', holding({ path: 'a.esp', entry: { kind: 'held' } }), ['a.esp'], ['a.esp'], 'files whose bytes differ from its manifest: a.esp'],
       ['holds a file no line names', holding(), ['stray.txt'], [], 'files no line of its manifest names: stray.txt'],
       ['has no manifest', undefined, [], [], 'it has no manifest'],

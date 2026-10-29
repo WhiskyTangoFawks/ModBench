@@ -83,7 +83,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,
     packageEntries: hashes.packageEntries,
-    keepPackageEntries: hashes.keepPackageEntries,
+    keepPackageEntries: (hash, entries) => hashes.keepPackageEntries(hash, entries),
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     statCacheFolder: statCacheDir(instanceRoot),

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EntryRef, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import type { FolderReads, Manifest } from '../../manifestAdapter/manifestAdapter';
-import { manifestText } from '../../manifestAdapter/manifestAdapter';
+import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { ModStatuses, type StatusSource } from '../modStatuses';
 
 let root: string;
@@ -49,12 +49,13 @@ const statusesLogging = (): ModStatuses => new ModStatuses(reads, (line) => { lo
 
 describe('Mod status, derived from each instance value (mod-status trace)', () => {
   it('derives each listed mod\'s and separator\'s status by its folder\'s mod name, a source mod\'s from its repository, and none for an entry with no folder', async () => {
-    const mod = await folderOf('ModA', { 'ModA.manifest.json': manifestText(EMPTY), 'mine.txt': '' });
+    const mod = await folderOf('ModA', { 'mine.txt': '' });
+    await writeManifestIn(mod, EMPTY);
     const separator = await folderOf('Tools_separator');
     const built = await folderOf('Built');
     const source = join(root, 'source', 'Built');
     await mkdir(source, { recursive: true });
-    await writeFile(join(source, 'Built.manifest.json'), manifestText({ ...EMPTY, output: 'Built' }));
+    await writeManifestIn(source, { ...EMPTY, output: 'Built' });
     const statuses = statusesLogging();
 
     statuses.derive(valueOf(
@@ -99,7 +100,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await statuses.current();
     statuses.derive(value);
     await statuses.current();
-    await writeFile(join(mod, 'ModA.manifest.json'), manifestText(EMPTY));
+    await writeManifestIn(mod, EMPTY);
     statuses.derive(value);
     await statuses.current();
 
@@ -120,7 +121,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await writeFile(join(mod, 'ModA.manifest.json'), '<<<<<<< HEAD\n\n');
     statuses.derive(value);
     await statuses.current();
-    await writeFile(join(mod, 'ModA.manifest.json'), manifestText(EMPTY));
+    await writeManifestIn(mod, EMPTY);
     statuses.derive(value);
     await statuses.current();
 

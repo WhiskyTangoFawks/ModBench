@@ -84,7 +84,7 @@ interface ByteReader {
 
 const DIGEST: ByteReader = {
   imports: { 'node:fs': new Set(['createReadStream']), 'node:crypto': new Set(['createHash']), 'xxhash-wasm': new Set(['default']) },
-  exports: new Set(['digestOf', 'md5Of']),
+  exports: new Set(['digestOf', 'md5Of', 'textHash']),
   exportReturns: 'Promise<string>',
 };
 

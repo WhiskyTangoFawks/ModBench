@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { ManifestFile, ModStatus } from '../manifestAdapter/manifestAdapter';
-import { manifestText } from '../manifestAdapter/manifestAdapter';
+import { writeManifestIn } from '../manifestAdapter/manifestAdapter';
 
 /** A mod whose folder matches its manifest, but for what `over` says. */
 export const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
@@ -10,5 +10,5 @@ export const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
 /** Writes into `folder` the manifest named for it, holding `files` and no package. */
 export async function manifestedIn(folder: string, files: readonly ManifestFile[] = []): Promise<void> {
   await mkdir(folder, { recursive: true });
-  await writeFile(join(folder, `${basename(folder)}.manifest.json`), manifestText({ packages: [], exclude: [], archives: [], steps: [], tools: [], files }));
+  await writeManifestIn(folder, { packages: [], exclude: [], archives: [], steps: [], tools: [], files });
 }

@@ -25,7 +25,7 @@ export interface ModNote { readonly mod: string; readonly note: string }
 
 /** A mod whose manifest is as its folder says; `manifestWritten` is false when it already was. `notInPackage` names each
  *  file no package holds, `otherBytes` each a package holds with other bytes. */
-export interface ModUpdated {
+interface ModUpdated {
   readonly mod: string;
   readonly manifestWritten: boolean;
   readonly notInPackage: readonly string[];
