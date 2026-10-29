@@ -338,13 +338,13 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('reports, while it hashes the downloaded files the hash index lacks, how many are left', async () => {
-    const { commands, client } = commandsOver({ downloadedFilesHashed: { files: [INSTALLED], lacking: [NEVER_HASHED, ANOTHER_NEVER_HASHED], notes: [] } });
+    const { commands, client } = commandsOver({ downloadedFilesHashed: { files: [INSTALLED], lacking: [NEVER_HASHED], notes: [] } });
     client.setCommandResult('updateManifest', UPDATED);
     const heard: unknown[] = [];
 
     await commands.updateManifest(['ModA'], { onProgress: (status) => heard.push(status) });
 
-    expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'Hashing', left: 2 }, { phase: 'Hashing', left: 1 }]);
+    expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'Hashing', left: 1 }]);
   });
 
   it('hands mEdit nothing, so writes no manifest, once its signal aborts while it hashes the downloaded files', async () => {

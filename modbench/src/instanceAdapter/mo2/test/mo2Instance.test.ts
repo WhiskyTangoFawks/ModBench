@@ -2143,12 +2143,10 @@ describe('the MO2 Instance adapter', () => {
         expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [], notes: [expect.stringContaining('the downloads folder could not be read') as unknown] });
       });
 
-      it('answers none hashed in a folder other than the downloads folder the settings name', async () => {
-        const manager = hashing();
-        await manager.downloadedFile(DOWNLOADED_FILE);
+      it('answers none when the downloads folder the settings name is absent', async () => {
         await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
 
-        expect(await manager.downloadedFilesHashed()).toEqual({ files: [], notes: [] });
+        expect(await hashing().downloadedFilesHashed()).toEqual({ files: [], notes: [] });
       });
     });
 

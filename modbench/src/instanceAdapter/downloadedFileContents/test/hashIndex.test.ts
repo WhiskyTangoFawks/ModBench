@@ -270,13 +270,39 @@ describe('the sizes and hashes of the record index', () => {
       const paths = await Promise.all(['A.7z', 'B.7z', 'C.7z'].map((name) => fileHolding(name, 'archive')));
       const cancel = new AbortController();
       await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFilesHashed(paths, {
-        signal: cancel.signal, onHashing: (left) => { if (left === 3) cancel.abort(); },
+        signal: cancel.signal, onHashing: () => { cancel.abort(); },
       });
       const next = counting(fakeInstallationFileReader(ENTRIES));
 
       await hashIndex(folder, next).downloadedFilesHashed(paths);
 
       expect(next.extracted).toEqual(paths.slice(1));
+    });
+
+    it('hashes no file again that it could not hash while its stamp holds, and still says why each run', async () => {
+      clockAnHourPastEveryWrite();
+      const listed: string[] = [];
+      const refusing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: (path) => { listed.push(path); return Promise.reject(new Error('Can not open the file as archive')); } };
+      const corrupt = await fileHolding('Corrupt.7z', 'archive');
+      await hashIndex(folder, refusing).downloadedFilesHashed([corrupt]);
+      const left: number[] = [];
+
+      const answer = await hashIndex(folder, refusing).downloadedFilesHashed([corrupt], { onHashing: (count) => left.push(count) });
+
+      expect([answer, listed, left]).toEqual([{ files: [], notes: [`${corrupt} could not be read: Can not open the file as archive`] }, [corrupt], []]);
+    });
+
+    it('says why the hash index could not be written, as the next run hashes those files again', async () => {
+      clockAnHourPastEveryWrite();
+      await mkdir(join(folder, 'hashes.jsonl'), { recursive: true });
+      const path = await fileHolding('Mod.7z', 'archive');
+
+      const answer = await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFilesHashed([path]);
+
+      expect(answer).toEqual({
+        files: [{ path, size: 7, hash: '7R3YJUWF5oA=', entries: MOD_ENTRIES }],
+        notes: [expect.stringMatching(/^the hash index could not be written, so the next run hashes these files again: .*EISDIR/) as unknown],
+      });
     });
 
     it('says why each it could not read', async () => {

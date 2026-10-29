@@ -641,7 +641,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const { sent, refused: unread, notes } = await readMods(
         adapter, namesOf(mods, others), folders, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
       const refused = [...unread];
-      if (sent.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
+      const nothingUpdated = async (): Promise<UpdateManifestResult> => ({ applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) });
+      if (sent.length === 0) return nothingUpdated();
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
         if (!folders.isMod(mod.name)) { versioned.push(mod); continue; }
@@ -649,9 +650,9 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
         else versioned.push({ ...mod, version: metadata.answer.version });
       }
-      if (versioned.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
+      if (versioned.length === 0) return nothingUpdated();
       const downloaded = await adapter.downloadedFilesHashed({ onHashing: (left) => onProgress?.({ phase: 'Hashing', left }), signal });
-      if (signal?.aborted) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
+      if (signal?.aborted) return nothingUpdated();
       const outcome = await client.updateManifest(
         versioned,
         { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.files.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },

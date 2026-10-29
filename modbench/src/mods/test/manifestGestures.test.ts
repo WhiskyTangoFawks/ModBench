@@ -279,6 +279,7 @@ describe('Update manifest', () => {
   it('says its phase on the Toolbox\'s message line while it runs, and gives the line back when it ends', async () => {
     updateManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
+      options?.onProgress?.({ phase: 'Hashing', left: 3 });
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] });
     });
@@ -286,7 +287,9 @@ describe('Update manifest', () => {
 
     await run(UPDATE);
 
-    expect(said).toEqual(['Update manifest — reading the files of "ModA"…', 'Update manifest — "ModA", 0 of 2 mods done…', undefined]);
+    expect(said).toEqual([
+      'Update manifest — reading the files of "ModA"…', 'Update manifest — hashing downloaded files, 3 left…', 'Update manifest — "ModA", 0 of 2 mods done…', undefined,
+    ]);
   });
 
   it('gives the message line back when update manifest throws', async () => {
