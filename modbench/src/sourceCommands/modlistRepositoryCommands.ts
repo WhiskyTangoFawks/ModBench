@@ -19,7 +19,7 @@ import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import { namedGameFolder, namedGameFiles, wireGameFolder, NONE_HELD } from './gameFolderFacts';
-import { foldersOf, namesOf, type Folders } from './folders';
+import { foldersOf, namesOf, sourceFolderOf, type Folders } from './folders';
 import { updateManifest, type UpdateManifestDeps, type UpdateManifestResult, type UpdateManifestStatus } from './updateManifest';
 import type { StepTasks } from './steps';
 
@@ -53,12 +53,6 @@ export type RestoreStatus =
   | { readonly phase: 'ReadingFiles'; readonly mod: string }
   | { readonly phase: 'Downloading'; readonly file: string }
   | ({ readonly phase: 'Restoring' } & ModlistProgress);
-
-// A source mod's manifest is in its repository (modlist-repository.md, The manifest, story 1).
-const sourceFolderOf = (sourceMods: SourceMods, mod: string): { sourceFolder?: string } => {
-  const sourceFolder = sourceMods.folderOf(mod);
-  return sourceFolder === undefined ? {} : { sourceFolder };
-};
 
 const metadataFilesOf = (adapter: Adapter, folders: Folders, name: string): string[] => (folders.isMod(name) ? [...adapter.metadataFilesInModFolder] : []);
 

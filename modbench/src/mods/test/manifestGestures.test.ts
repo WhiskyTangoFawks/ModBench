@@ -346,7 +346,7 @@ describe('Update manifest', () => {
     updateManifest.mockResolvedValueOnce({
       notes: [], repositoryNotes: [],
       landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }],
-      refused: [{ item: 'ModB', reason: "was not updated: 'B.zip' not in the downloads folder." }],
+      refused: [{ item: 'ModB', reason: "was not updated: its folder does not exist." }],
     });
     const { reporter, run } = register();
 
@@ -354,7 +354,7 @@ describe('Update manifest', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Update manifest: 1 mod unchanged, 0 updated, 1 refused; their packages do not hold 1 file and hold 0 files with other bytes.',
-      detail: `"ModB" (was not updated: 'B.zip' not in the downloads folder.)\nModA: a.nif`,
+      detail: `"ModB" (was not updated: its folder does not exist.)\nModA: a.nif`,
     }]);
   });
 

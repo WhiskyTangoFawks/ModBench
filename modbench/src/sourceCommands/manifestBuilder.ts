@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { ordinalIgnoreCaseThenOrdinal, pinText } from '../manifestAdapter/manifestAdapter';
+import { ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from '../manifestAdapter/manifestAdapter';
 import type { GameDepot, Manifest, ManifestFile, ManifestPackage, PackageEntry } from '../manifestAdapter/manifestAdapter';
 import type { Depot, GameFileTaken, InstallationFile } from '../instanceAdapter/instanceAdapter';
 
@@ -23,8 +23,6 @@ export interface GameHeld {
 type Held = { readonly path: string; readonly hash: string; readonly pathInFolder: string };
 
 const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
-
-const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 const entryAt = (filePath: string, packagePath: string): PackageEntry =>
   (sameIgnoringCase(filePath, packagePath) ? { kind: 'held' } : { kind: 'heldAt', path: packagePath });

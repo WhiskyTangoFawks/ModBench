@@ -228,7 +228,10 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     downloadedFilesHashed,
     keepPackageEntries: async (hash, entries) => {
       await load();
+      const held = entriesByHash.get(hash);
+      const alreadyKept = held?.size === entries.size && [...entries].every(([path, entryHash]) => held.get(path) === entryHash);
       entriesByHash.set(hash, entries);
+      if (alreadyKept) return undefined;
       const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
       const line = lineOf('package', hash, stamp, { size: 0, hash, entries: [...entries].map(([path, entryHash]) => ({ path, hash: entryHash })) });
       return ensureDir(folder).then(() => append(indexFile, line)).then(() => undefined, (err: unknown) => errorMessage(err));

@@ -4,7 +4,7 @@ import { manifestIn, statusOf, writeManifestIn, type Manifest, type ModStatus } 
 import type { FileProblems } from '../ports/fileProblems';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import { foldersOf, namesOf, type Folders } from './folders';
+import { foldersOf, namesOf, sourceFolderOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFilesOf, type GameHeld, type HashedModFile, type PackageEntries } from './manifestBuilder';
 import { metadataUnreadable } from './sourceCommands';
@@ -59,12 +59,6 @@ interface UpdateOptions {
   readonly onProgress?: (status: UpdateManifestStatus) => void;
   readonly signal?: AbortSignal;
 }
-
-// A source mod's manifest is in its repository (modlist-repository.md, The manifest, story 1).
-const sourceFolderOf = (sourceMods: SourceMods, mod: string): { sourceFolder?: string } => {
-  const sourceFolder = sourceMods.folderOf(mod);
-  return sourceFolder === undefined ? {} : { sourceFolder };
-};
 
 async function readMod(
   adapter: Adapter, mod: string, folders: Folders, game: GameToHand, sourceMods: SourceMods,
@@ -246,7 +240,7 @@ export async function updateManifest(
   const refused: ItemRefusal<string>[] = [];
   const notes: ModNote[] = [];
   const read: Omit<ModToUpdate, 'version'>[] = [];
-  for (const mod of namesOf(mods, others)) {
+  for (const mod of new Set(namesOf(mods, others))) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
     const answer = await readMod(adapter, mod, folders, game, sourceMods);

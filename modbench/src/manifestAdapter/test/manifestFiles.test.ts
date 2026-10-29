@@ -33,6 +33,14 @@ describe('writeManifestIn', () => {
     expect([wrote, (await stat(join(folder, 'Mod.manifest.json'))).mtimeMs]).toEqual([false, before]);
   });
 
+  it('writes nothing when the manifest holds that text behind a byte order mark', async () => {
+    await writeFile(join(folder, 'Mod.manifest.json'), `\uFEFF${manifestText(manifest)}`);
+
+    const wrote = await writeManifestIn(folder, manifest);
+
+    expect([wrote, (await readFile(join(folder, 'Mod.manifest.json'), 'utf8')).startsWith('\uFEFF')]).toEqual([false, true]);
+  });
+
   it('writes no byte order mark, and keeps a non-ASCII name readable', async () => {
     await writeManifestIn(folder, { ...manifest, files: [{ path: 'meshes/café.nif', entry: { kind: 'notHeld' } }] });
 

@@ -143,7 +143,18 @@ describe('the sizes and hashes of the record index', () => {
 
     const why = await index.keepPackageEntries('PIN', entries);
 
-    expect([why === undefined, await index.packageEntries('PIN')]).toEqual([false, entries]);
+    expect([why, await index.packageEntries('PIN')]).toEqual([expect.stringContaining('EEXIST') as unknown, entries]);
+  });
+
+  it('appends the entries of a package to the index once, however often they are kept', async () => {
+    const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    const entries = new Map([['meshes/a.nif', HASH_OF_AAAA]]);
+
+    await index.keepPackageEntries('PIN', entries);
+    await index.keepPackageEntries('PIN', new Map(entries));
+    await index.keepPackageEntries('PIN', new Map([['meshes/a.nif', HASH_OF_BBBB]]));
+
+    expect((await indexText()).trim().split('\n')).toHaveLength(2);
   });
 
   it('hashes a downloaded file\'s entries though its hash alone was asked before', async () => {

@@ -93,6 +93,14 @@ describe('update manifest', () => {
     expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }]);
   });
 
+  it('updates a mod named twice once', async () => {
+    const { update } = await over({ files: { ModA: { 'a.nif': 'HA' } } });
+
+    const result = await update(['ModA', 'ModA']);
+
+    expect(result.landed).toEqual([{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }]);
+  });
+
   it('names each file a package holds with other bytes apart from each nothing holds', async () => {
     const { update } = await over({ files: { ModA: { 'a.nif': 'HX', 'z.txt': 'HZ' } }, answers: { installations: new Map([['ModA', read(INSTALLED)]]) } });
 
@@ -242,7 +250,7 @@ describe('update manifest', () => {
       ]);
     });
 
-    it('keeps the entries again when its manifest is unchanged, as a session that never built it reads them', async () => {
+    it('hands the entries to the hash index again when its manifest is unchanged, as a session that never built it reads them', async () => {
       const { update, fake } = await over({ files: { ModA: { 'a.nif': 'HA' } }, answers: { gameFilesTaken: taken('a.nif', 'HA') } });
       await update(['ModA']);
 

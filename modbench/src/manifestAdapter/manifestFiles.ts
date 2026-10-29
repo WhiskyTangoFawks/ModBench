@@ -3,10 +3,8 @@ import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { MANIFEST_SUFFIX } from '../wire/sourceMod';
 import type { Manifest, ManifestRead } from './manifest';
-import { manifestText } from './manifestText';
+import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
-
-const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 async function fileNamesIn(folder: string): Promise<string[]> {
   try {
@@ -18,7 +16,9 @@ async function fileNamesIn(folder: string): Promise<string[]> {
 }
 
 // An editor may write a byte order mark, which JSON does not allow.
-const read = async (path: string): Promise<ManifestRead> => readManifest((await readFile(path, 'utf8')).replace(/^\uFEFF/, ''));
+const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
+
+const read = async (path: string): Promise<ManifestRead> => readManifest(await textAt(path));
 
 const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
@@ -31,7 +31,6 @@ export async function manifestIn(folder: string): Promise<ManifestRead | undefin
   return one === undefined ? undefined : read(join(folder, one));
 }
 
-// The temp carries the name the Instance adapter's listings skip.
 /** Writes `manifest` as the manifest `folder` holds, in the spelling it holds it in, else named for the folder; true
  *  when the file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
 export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
@@ -40,7 +39,7 @@ export async function writeManifestIn(folder: string, manifest: Manifest): Promi
   if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
   const path = join(folder, one ?? named);
   const text = manifestText(manifest);
-  if (one !== undefined && await readFile(path, 'utf8') === text) return false;
+  if (one !== undefined && await textAt(path) === text) return false;
   // The Instance adapter's listings skip this name.
   const temp = join(folder, `.medit_tmp_${process.pid}_manifest`);
   try {

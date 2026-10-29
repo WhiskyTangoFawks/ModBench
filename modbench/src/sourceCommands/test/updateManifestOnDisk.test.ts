@@ -43,6 +43,15 @@ describe('update manifest over an instance on disk', () => {
       '{\n"packages": [\n{"gameFolder":"Fallout4","hash":"1z6VjVzj28w="}\n],\n"files": [\n{"path":"a.nif","packagePath":"Data/a.nif"},\n{"path":"b.nif","packagePath":"Data/b.nif"}\n]\n}\n');
   });
 
+  it('names no line for a metadata file of the mod', async () => {
+    const { update } = await instanceTakingFromTheGame();
+    await put('mods/Mod/meta.ini', '[General]');
+
+    await update();
+
+    expect(await readFile(join(root, 'mods/Mod/Mod.manifest.json'), 'utf8')).not.toContain('meta.ini');
+  });
+
   it('leaves the mod it updated with no file differing from its game folder package', async () => {
     const { adapter, update } = await instanceTakingFromTheGame();
     await update();

@@ -6,7 +6,7 @@ const upperUnit = (unit: string): string => {
   return upper.length === 1 ? upper : unit;
 };
 const upperUnits = (text: string): string => Array.from(text, upperUnit).join('');
-const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+export const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 /** The order a manifest lists paths in, and a pin hashes them in. */
 export const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
   ordinal(upperUnits(a), upperUnits(b)) || ordinal(a, b);

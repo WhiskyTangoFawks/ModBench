@@ -85,6 +85,12 @@ describe('a mod\'s files that the installation file lacks', () => {
     ]);
   });
 
+  it('are taken from a second download when the installation file holds their path with other bytes', async () => {
+    const lines = await linesOf({ 'a.nif': 'HA' }, { installationFile: download('Own.7z', { 'a.nif': 'HX' }), downloads: [download('Other.7z', { 'a.nif': 'HA' })] });
+
+    expect(lines).toEqual([{ path: 'a.nif', entry: { kind: 'held' }, package: 'Other.7z' }]);
+  });
+
   it('are taken, with no installation file, from each downloaded file in the order they first serve, preferring one already a package', async () => {
     const { manifest } = await built(
       { 'a.nif': 'H', 'b.nif': 'H2' }, { downloads: [download('Z.7z', { 'a.nif': 'H', 'b.nif': 'H2' }), download('A.7z', { 'a.nif': 'H' })] });
@@ -126,6 +132,18 @@ describe('a mod\'s files that the game folder holds', () => {
 
   it('are recorded as not held when no package holds their path', async () => {
     expect(await linesOf({ 'a.nif': 'HX' }, { game: gameOf(place({ 'a.nif': 'HA' })) })).toEqual([{ path: 'a.nif', entry: { kind: 'notHeld' } }]);
+  });
+
+  it('are named from the game file handed for their path when another holds the same bytes', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, { game: gameOf(place({ 'Data/zz.nif': 'HA', 'Data/a.nif': 'HA' }, [], { 'Data/zz.nif': 'zz.nif', 'Data/a.nif': 'a.nif' })) });
+
+    expect(manifest.files).toEqual([{ path: 'a.nif', entry: { kind: 'heldAt', path: 'Data/a.nif' } }]);
+  });
+
+  it('are recorded with other bytes when a later place of the game holds their path with other bytes', async () => {
+    const lines = await linesOf({ 'a.nif': 'HA', 'b.nif': 'HB' }, { game: gameOf(place({ 'a.nif': 'HA' }), place({ 'b.nif': 'HX' })) });
+
+    expect(lines).toEqual([{ path: 'a.nif', entry: { kind: 'held' } }, { path: 'b.nif', entry: { kind: 'otherBytes' } }]);
   });
 
   it('are all taken, from every place of the game, under the one package', async () => {
