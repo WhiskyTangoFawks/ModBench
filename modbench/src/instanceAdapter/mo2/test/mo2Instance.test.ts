@@ -2111,63 +2111,44 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    describe('the downloaded files already hashed', () => {
-      afterEach(() => { vi.useRealTimers(); });
+    describe('every downloaded file', () => {
+      const hashing = () => managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
 
-      it('lists a downloaded file once it is hashed, and none before', async () => {
-        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
-        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
-        const before = await manager.indexedDownloadedFiles();
-        await manager.downloadedFile(DOWNLOADED_FILE);
-
-        const after = await manager.indexedDownloadedFiles();
-
-        expect([before, after]).toEqual([
-          { files: [], notes: [] },
-          { files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }], notes: [] },
-        ]);
+      it('answers each file of the downloads folder, never hashed before, with its page, its size and hash and each entry\'s', async () => {
+        expect(await hashing().downloadedFilesHashed()).toEqual({
+          files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }],
+          notes: [],
+        });
       });
 
-      it('gives a listed file the page its metadata names, with the file, else the mod its name carries', async () => {
-        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+      it('gives a file the page its metadata names, with the file, else the mod its name carries', async () => {
         await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=Fallout4\r\nmodID=7\r\nfileID=78\r\n');
-        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
-        await manager.downloadedFile(DOWNLOADED_FILE);
 
-        const listed = await manager.indexedDownloadedFiles();
-
-        expect(listed).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
       });
 
-      it('costs a listed file its page alone, saying why, when its metadata cannot be read', async () => {
-        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
-        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
-        await manager.downloadedFile(DOWNLOADED_FILE);
+      it('costs a file its page alone, saying why, when its metadata cannot be read', async () => {
         await rm(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
         await mkdir(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
 
-        const listed = await manager.indexedDownloadedFiles();
-
-        expect(listed).toMatchObject({
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({
           files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: undefined, hash: 'yMPjZVarjmw=' }],
           notes: [expect.stringContaining(`the page of ${DOWNLOADED_FILE} could not be read`) as unknown],
         });
       });
 
-      it('lists none, saying why, when the downloads folder cannot be resolved', async () => {
-        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+      it('answers none, saying why, when the downloads folder cannot be resolved', async () => {
         await rm(join(root, INI));
 
-        expect(await manager.indexedDownloadedFiles()).toMatchObject({ files: [], notes: [expect.stringContaining('the downloads folder could not be read') as unknown] });
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [], notes: [expect.stringContaining('the downloads folder could not be read') as unknown] });
       });
 
-      it('lists none of the files indexed in a folder other than the downloads folder the settings name', async () => {
-        vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
-        const manager = managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+      it('answers none hashed in a folder other than the downloads folder the settings name', async () => {
+        const manager = hashing();
         await manager.downloadedFile(DOWNLOADED_FILE);
         await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
 
-        expect(await manager.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
+        expect(await manager.downloadedFilesHashed()).toEqual({ files: [], notes: [] });
       });
     });
 

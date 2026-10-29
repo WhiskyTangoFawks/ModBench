@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute } from 'node:path';
 import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
-import { ensureDir, exists, get, readOrReason, withLock, write } from '../files';
+import { ensureDir, exists, get, ignoreSkippedLink, readOrReason, withLock, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import { md5Of } from '../downloadedFileContents/contentDigest';
 import { errorMessage } from '../../ports/errorMessage';
@@ -14,7 +14,7 @@ import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settings
 import { parseDownloadedFileMeta } from './codecs/downloads';
 import { effectiveModId } from './codecs/nexusFileName';
 import { currentDownloadsDir, folderHolding, newModFolder, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
-import { readMetaIni } from './mo2Reads';
+import { downloadedFileNames, readMetaIni } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
 
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
@@ -116,8 +116,8 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 }
 
 export function mo2Installation(
-  context: Mo2Context, { downloadedFileHash, indexedDownloadedFiles }: Pick<HashIndex, 'downloadedFileHash' | 'indexedDownloadedFiles'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'indexedDownloadedFiles' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+  context: Mo2Context, { downloadedFileHash, downloadedFilesHashed }: Pick<HashIndex, 'downloadedFileHash' | 'downloadedFilesHashed'>,
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -170,15 +170,19 @@ export function mo2Installation(
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
 
-    indexedDownloadedFiles: async () => {
-      const downloads = await readOrReason(() => currentDownloadsDir(context));
-      if (downloads.kind === 'unreadable') return { files: [], notes: [`the downloads folder could not be read: ${downloads.reason}`] };
-      const indexed = await indexedDownloadedFiles();
-      const paged = await Promise.all(indexed.files.filter(({ path }) => dirname(path) === downloads.answer).map(async (file) => {
-        const { page, note } = await pageOfDownloadedFile(context, downloads.answer, basename(file.path));
+    downloadedFilesHashed: async (options) => {
+      const listed = await readOrReason(async () => {
+        const downloadsDir = await currentDownloadsDir(context);
+        return { downloadsDir, names: await downloadedFileNames(downloadsDir, ignoreSkippedLink) ?? [] };
+      });
+      if (listed.kind === 'unreadable') return { files: [], notes: [`the downloads folder could not be read: ${listed.reason}`] };
+      const { downloadsDir, names } = listed.answer;
+      const hashed = await downloadedFilesHashed(names.map((name) => downloadedFilePath(downloadsDir, name)), options);
+      const paged = await Promise.all(hashed.files.map(async (file) => {
+        const { page, note } = await pageOfDownloadedFile(context, downloadsDir, basename(file.path));
         return { file: { ...file, page }, notes: note === undefined ? [] : [note] };
       }));
-      return { files: paged.map(({ file }) => file), notes: [...indexed.notes, ...paged.flatMap(({ notes }) => notes)] };
+      return { files: paged.map(({ file }) => file), notes: [...hashed.notes, ...paged.flatMap(({ notes }) => notes)] };
     },
 
     nexusFileAt: parseNexusPage,

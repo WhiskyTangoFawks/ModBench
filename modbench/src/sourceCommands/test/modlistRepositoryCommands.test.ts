@@ -325,20 +325,42 @@ describe('modlistRepositoryCommands update manifest', () => {
     ]);
   });
 
-  it('hands mEdit the downloaded files already hashed, with their entries, once for the whole call', async () => {
-    const { commands, client } = commandsOver({ indexedDownloadedFiles: { files: [INSTALLED, { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' }], notes: [] } });
+  const NEVER_HASHED: InstallationFile = { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' };
+  const ANOTHER_NEVER_HASHED: InstallationFile = { ...INSTALLED, path: '/downloads/Another.7z' };
+
+  it('hands mEdit every downloaded file with its entries, one the hash index never hashed among them, once for the whole call', async () => {
+    const { commands, client } = commandsOver({ downloadedFilesHashed: { files: [INSTALLED], lacking: [NEVER_HASHED], notes: [] } });
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModA', 'ModB']);
 
-    expect(client.calls[0]?.args[1]).toEqual({
-      statCache: '/instance/stat-cache',
-      downloadedFiles: [INSTALLED, { ...INSTALLED, path: '/downloads/Other.7z', page: 'https://example.test/other' }],
+    expect(client.calls.map((call) => call.args[1])).toEqual([{ statCache: '/instance/stat-cache', downloadedFiles: [INSTALLED, NEVER_HASHED] }]);
+  });
+
+  it('reports, while it hashes the downloaded files the hash index lacks, how many are left', async () => {
+    const { commands, client } = commandsOver({ downloadedFilesHashed: { files: [INSTALLED], lacking: [NEVER_HASHED, ANOTHER_NEVER_HASHED], notes: [] } });
+    client.setCommandResult('updateManifest', UPDATED);
+    const heard: unknown[] = [];
+
+    await commands.updateManifest(['ModA'], { onProgress: (status) => heard.push(status) });
+
+    expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'Hashing', left: 2 }, { phase: 'Hashing', left: 1 }]);
+  });
+
+  it('hands mEdit nothing, so writes no manifest, once its signal aborts while it hashes the downloaded files', async () => {
+    const cancel = new AbortController();
+    const { commands, client } = commandsOver({ downloadedFilesHashed: { files: [], lacking: [NEVER_HASHED, ANOTHER_NEVER_HASHED], notes: [] } });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA'], {
+      signal: cancel.signal, onProgress: (status) => { if (status.phase === 'Hashing') cancel.abort(); },
     });
+
+    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [], notes: [], repositoryNotes: [] }]);
   });
 
   it('updates every mod and reports why a downloaded file could not be read', async () => {
-    const { commands, client } = commandsOver({ indexedDownloadedFiles: { files: [], notes: ['/downloads/Bad.7z could not be read: EIO'] } });
+    const { commands, client } = commandsOver({ downloadedFilesHashed: { files: [], notes: ['/downloads/Bad.7z could not be read: EIO'] } });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA', 'ModB']);

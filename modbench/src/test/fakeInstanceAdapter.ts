@@ -118,8 +118,8 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloadedFiles?: ReadonlyMap<string, FileRead<InstallationFile>>;
-  /** The downloaded files already hashed, and why any could not be read; none when not said. */
-  indexedDownloadedFiles?: { readonly files: readonly InstallationFile[]; readonly notes: readonly string[] };
+  /** The downloaded files, those the hash index holds and those it lacks, and why any could not be read; none when not said. */
+  downloadedFilesHashed?: { readonly files: readonly InstallationFile[]; readonly lacking?: readonly InstallationFile[]; readonly notes: readonly string[] };
   /** Why each downloaded file cannot be queried, by name. */
   unreadableQueries?: ReadonlyMap<string, string>;
   /** What each downloaded file's query holds beyond its MD5 and the game, by name. */
@@ -331,7 +331,16 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
-    indexedDownloadedFiles: () => Promise.resolve(answers.indexedDownloadedFiles ?? { files: [], notes: [] }),
+    downloadedFilesHashed: ({ onHashing, signal } = {}) => {
+      const { files, lacking = [], notes } = answers.downloadedFilesHashed ?? { files: [], notes: [] };
+      const hashed: InstallationFile[] = [];
+      for (const [done, file] of lacking.entries()) {
+        if (signal?.aborted) break;
+        onHashing?.(lacking.length - done);
+        hashed.push(file);
+      }
+      return Promise.resolve({ files: [...files, ...hashed], notes });
+    },
     nexusFileAt: parseNexusPage,
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);

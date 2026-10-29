@@ -249,48 +249,43 @@ describe('the sizes and hashes of the record index', () => {
     expect(mostAtOnce).toBe(1);
   });
 
-  describe('the downloaded files it holds', () => {
-    it('lists the downloaded files hashed so far with their entries, from the record index of an earlier session, extracting none', async () => {
+  describe('every downloaded file asked', () => {
+    const MOD_ENTRIES = [{ path: 'a.esp', hash: '+rJPuyOy4u8=' }, { path: 'textures/b.dds', hash: 'uXAXn9wLC0k=' }];
+
+    it('answers each with its entries, hashing one at a time only those the index lacks, and hears how many are left before each', async () => {
       clockAnHourPastEveryWrite();
-      const path = await fileHolding('Mod.7z', 'archive');
-      await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFileHash(path);
+      const [held, lackedFirst, lackedNext] = await Promise.all([fileHolding('Held.7z', 'archive'), fileHolding('A.7z', 'archive'), fileHolding('B.7z', 'archive')]);
+      await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFileHash(held);
+      const next = counting(fakeInstallationFileReader(ENTRIES));
+      const left: number[] = [];
+
+      const answer = await hashIndex(folder, next).downloadedFilesHashed([held, lackedFirst, lackedNext], { onHashing: (count) => left.push(count) });
+
+      expect(answer).toEqual({ files: [held, lackedFirst, lackedNext].map((path) => ({ path, size: 7, hash: '7R3YJUWF5oA=', entries: MOD_ENTRIES })), notes: [] });
+      expect([next.extracted, left]).toEqual([[lackedFirst, lackedNext], [2, 1]]);
+    });
+
+    it('keeps each hash it finished when its signal aborts part way, so the next ask hashes none of those again', async () => {
+      clockAnHourPastEveryWrite();
+      const paths = await Promise.all(['A.7z', 'B.7z', 'C.7z'].map((name) => fileHolding(name, 'archive')));
+      const cancel = new AbortController();
+      await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFilesHashed(paths, {
+        signal: cancel.signal, onHashing: (left) => { if (left === 3) cancel.abort(); },
+      });
       const next = counting(fakeInstallationFileReader(ENTRIES));
 
-      const held = await hashIndex(folder, next).indexedDownloadedFiles();
+      await hashIndex(folder, next).downloadedFilesHashed(paths);
 
-      expect(held).toEqual({
-        files: [{ path, size: 7, hash: '7R3YJUWF5oA=', entries: [{ path: 'a.esp', hash: '+rJPuyOy4u8=' }, { path: 'textures/b.dds', hash: 'uXAXn9wLC0k=' }] }],
-        notes: [],
-      });
-      expect(next.extracted).toEqual([]);
+      expect(next.extracted).toEqual(paths.slice(1));
     });
 
-    it('omits a downloaded file whose stamp differs from the one it was hashed at, and one that is gone', async () => {
-      clockAnHourPastEveryWrite();
-      const changed = await fileHolding('Changed.7z', 'archive');
-      const gone = await fileHolding('Gone.7z', 'archive');
-      const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
-      await Promise.all([index.downloadedFileHash(changed), index.downloadedFileHash(gone)]);
-      await appendFile(changed, 'more');
-      await rm(gone);
+    it('says why each it could not read', async () => {
+      const refusing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: () => Promise.reject(new Error('Can not open the file as archive')) };
+      const [gone, notAnInstallationFile] = [join(root, 'Gone.7z'), await fileHolding('Mod.esp', 'aaaa')];
 
-      expect(await index.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
-    });
+      const answer = await hashIndex(folder, refusing).downloadedFilesHashed([gone, notAnInstallationFile]);
 
-    it('lists neither a game file nor an origin file', async () => {
-      clockAnHourPastEveryWrite();
-      const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
-      await Promise.all([index.gameFileHash(await fileHolding('Game.esm', 'aaaa')), index.originFileHash(await fileHolding('copy.dds', 'bbbb'))]);
-
-      expect(await index.indexedDownloadedFiles()).toEqual({ files: [], notes: [] });
-    });
-
-    it('says why when the index cannot be read, rather than listing none as though it held none', async () => {
-      await mkdir(join(folder, 'hashes.jsonl'), { recursive: true });
-
-      const held = await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).indexedDownloadedFiles();
-
-      expect(held).toMatchObject({ files: [], notes: [expect.stringMatching(/could not be read.*EISDIR/) as unknown] });
+      expect(answer).toEqual({ files: [], notes: [expect.stringMatching(/Gone\.7z could not be read: .*ENOENT/) as unknown, `${notAnInstallationFile} could not be read: Can not open the file as archive`] });
     });
   });
 });

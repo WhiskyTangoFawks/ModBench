@@ -2,8 +2,6 @@
 // each trusted while its file's stamp is the one it was hashed at.
 
 import { join } from 'node:path';
-import { errnoCode } from '../../ports/errno';
-import { errorMessage } from '../../ports/errorMessage';
 import type { InstallationFileReader } from './installationFileReader';
 import { digestOf } from './contentDigest';
 import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
@@ -71,22 +69,9 @@ function refuseCaseCollisions(entries: readonly string[]): void {
   }
 }
 
-interface IndexedDownloadedFiles {
+interface DownloadedFilesHashed {
   readonly files: readonly (HashedDownloadedFile & { readonly path: string })[];
   readonly notes: readonly string[];
-}
-
-// A file gone from disk, or changed since it was hashed, is not held; one that cannot be read is named.
-async function heldAtTheirStamps(held: ReadonlyMap<string, Kept>): Promise<IndexedDownloadedFiles> {
-  const listed = await Promise.all([...held].map(async ([path, known]): Promise<IndexedDownloadedFiles> => {
-    const stamped = await stampOf(path).then((stamp) => ({ stamp }), (err: unknown) => ({ err }));
-    if ('err' in stamped) return { files: [], notes: errnoCode(stamped.err) === 'ENOENT' ? [] : [`${path} could not be read: ${errorMessage(stamped.err)}`] };
-    if (!sameStamp(known.stamp, stamped.stamp)) return { files: [], notes: [] };
-    const read = await known.hashed;
-    if (read.kind === 'unreadable') return { files: [], notes: [`${path} could not be read: ${read.reason}`] };
-    return { files: held.get(path) === known ? [{ path, ...read.answer }] : [], notes: [] };
-  }));
-  return { files: listed.flatMap(({ files }) => files), notes: listed.flatMap(({ notes }) => notes) };
 }
 
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
@@ -96,16 +81,15 @@ export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
   /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the hash index. */
   downloadedFileHash(path: string): Promise<FileRead<HashedDownloadedFile>>;
-  /** The downloaded files the index holds at the stamp each was hashed at, with their entries, and why the index or a file
-   *  could not be read. It hashes and extracts nothing. */
-  indexedDownloadedFiles(): Promise<IndexedDownloadedFiles>;
+  /** As `downloadedFileHash`, each downloaded file at `paths`, and why any could not be read, as
+   *  `InstanceAdapter.downloadedFilesHashed` answers them. */
+  downloadedFilesHashed(paths: readonly string[], options?: Parameters<InstanceAdapter['downloadedFilesHashed']>[0]): Promise<DownloadedFilesHashed>;
 }
 
 export function hashIndex(folder: string, installationFileReader: InstallationFileReader): HashIndex {
   const indexFile = join(folder, INDEX_FILE);
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), downloadedFile: new Map() };
   let loaded: Promise<void> | undefined;
-  let unreadIndex: string | undefined;
 
   // The record index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
   const load = (): Promise<void> => (loaded ??= removeLeftoverExtractions(folder).then(() => get(indexFile, '')).then((text) => {
@@ -113,7 +97,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       const known = keptAt(line);
       if (known !== undefined) kept[known.kind].set(known.path, { stamp: known.stamp, hashed: Promise.resolve({ kind: 'read', answer: known.hashed }) });
     }
-  }, (err: unknown) => { unreadIndex = errorMessage(err); }));
+  }, () => undefined));
 
   const hashedAlone = async (path: string, stamp: FileStamp): Promise<HashedDownloadedFile> =>
     ({ size: Number(stamp.size), hash: await digestOf(path), entries: [] });
@@ -164,6 +148,15 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     return entry.hashed;
   }
 
+  // A file that cannot be stamped is answered unreadable at once, with nothing to hash.
+  const lacks = async (path: string): Promise<boolean> => {
+    const stamp = await stampOf(path).catch(() => undefined);
+    const known = kept.downloadedFile.get(path);
+    return stamp !== undefined && (known === undefined || !sameStamp(known.stamp, stamp));
+  };
+
+  const answered = async (path: string) => ({ path, read: await hashOf('downloadedFile', path) });
+
   const hashAlone = async (kind: Kind, path: string): Promise<FileRead<Omit<HashedDownloadedFile, 'entries'>>> => {
     const read = await hashOf(kind, path);
     return read.kind === 'read' ? { kind: 'read', answer: { size: read.answer.size, hash: read.answer.hash } } : read;
@@ -173,10 +166,20 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     originFileHash: (path) => hashAlone('origin', path),
     gameFileHash: (path) => hashAlone('game', path),
     downloadedFileHash: (path) => hashOf('downloadedFile', path),
-    indexedDownloadedFiles: async () => {
+    downloadedFilesHashed: async (paths, { onHashing, signal } = {}) => {
       await load();
-      const { files, notes } = await heldAtTheirStamps(kept.downloadedFile);
-      return { files, notes: unreadIndex === undefined ? notes : [`the downloaded files hashed before could not be read: ${unreadIndex}`, ...notes] };
+      const lacked = await Promise.all(paths.map(lacks));
+      const lacking = paths.filter((_path, i) => lacked[i]);
+      const answers = await Promise.all(paths.filter((_path, i) => !lacked[i]).map(answered));
+      for (const [done, path] of lacking.entries()) {
+        if (signal?.aborted) break;
+        onHashing?.(lacking.length - done);
+        answers.push(await answered(path));
+      }
+      return {
+        files: answers.flatMap(({ path, read }) => (read.kind === 'read' ? [{ path, ...read.answer }] : [])),
+        notes: answers.flatMap(({ path, read }) => (read.kind === 'unreadable' ? [`${path} could not be read: ${read.reason}`] : [])),
+      };
     },
   };
 }
