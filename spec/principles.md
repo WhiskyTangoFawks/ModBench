@@ -22,3 +22,6 @@ Mutagen decides the data: the format, what a record holds, and how it is read an
 
 ## Never break the instance for its owner
 Modbench never breaks the instance for the mod manager that made it. Modbench writes each file in place, in its owner's format, and a user switches between Modbench and the mod manager with no conversion.
+
+## Respect the user
+Modbench enforces no practice. The user keeps to best practice, and cleans up when they do not. Modbench restricts a gesture only to lock up a footgun that is not a useful tool, breaks the instance, or misleads the user.

@@ -42,7 +42,7 @@ As a user, I want:
 As a user, I want:
 
 1. A file in the deployment folder that deploy did not write to be mine: deploy and purge never delete, overwrite or revert it. A file deploy wrote that another program has since replaced, as MCM replaces its settings, is one deploy did not write. Cites: ADR-0025; ADR-0003
-2. Each deploy to notify me of the files in the deployment folder it does not manage, each named in the Output. Cites: Never silently wrong
+2. Each deploy to notify me of the files in the deployment folder it does not manage, each named in the Output. A deployment folder that is, holds or sits inside the game folder names none: the game's own files are there, and I picked it. Cites: Never silently wrong; Respect the user
 3. A file the game gets whose path holds a file deploy did not write to be left out, and the notification to name both. Cites: Never silently wrong
 4. The notification to offer move to Overwrite, which moves the files it names into Overwrite, so the next deploy links them back. Cites: catalog `move to Overwrite`; MO2: Overwrite holds what a program writes
 
