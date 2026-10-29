@@ -45,7 +45,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   class: band; grid-rows: 1
   modcommands: "mod commands\nowns: changes to mods and separators, their files,\nand the mod order" {class: core}
   sourcecommands: "source commands\nowns: changes to source mods and the modlist repository" {class: core}
-  plugincommands: "plugin commands\nowns: changes to plugins and the plugin order\nhides: the plugin-order rules" {class: core}
+  plugincommands: "plugin commands\nowns: changes to plugins and the plugin order\nhides: how a move is held to the sorting rules" {class: core}
   instancecommands: "instance commands\nowns: changes to the instance as a whole, its profiles\nand its deployment" {class: core}
   downloadedfilecommands: "downloaded file commands\nowns: changes to the downloaded files" {class: core}
 }
@@ -61,6 +61,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model 
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text\nhides: its format" {class: kernel}
   wire: "Wire\nowns: the API types, the webview protocol,\nand the shape of a source mod both processes read" {class: kernel}
   tables: "per-release tables\nowns: what differs per game release\nhides: every game name" {class: kernel}
+  sortingrules: "Sorting rules\nowns: whether a plugin order keeps the game's sorting rules\nhides: each rule" {class: kernel}
   ports: "Ports\nowns: how the core reaches the user and VS Code,\nand the idioms every band shares" {class: kernel}
 }
 
