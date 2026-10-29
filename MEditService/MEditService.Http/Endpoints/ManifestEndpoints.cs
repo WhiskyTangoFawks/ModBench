@@ -192,7 +192,7 @@ internal static class ManifestEndpoints
 }
 
 /// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013): the stat cache's folder, outside every
-/// mod folder, and the downloaded files already hashed. Gesture names it to a cancel.</summary>
+/// mod folder, and every downloaded file. Gesture names it to a cancel.</summary>
 internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, string? Gesture, IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
 

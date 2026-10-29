@@ -111,9 +111,11 @@ const warned = (message: string, lines: readonly string[]): PartialFailure[] =>
 const notesOf = (label: Label, notes: readonly ModNote[]): string[] => notes.map(({ mod, note }) => `${label(mod)}: ${note}`);
 
 function updateMessage(status: UpdateManifestStatus, label: Label): string {
-  return status.phase === 'ReadingFiles'
-    ? `Update manifest — reading the files of "${label(status.mod)}"…`
-    : `Update manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
+  switch (status.phase) {
+    case 'ReadingFiles': return `Update manifest — reading the files of "${label(status.mod)}"…`;
+    case 'Hashing': return `Update manifest — hashing downloaded files, ${status.left} left…`;
+    case 'Updating': return `Update manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
+  }
 }
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
