@@ -47,7 +47,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             GameRelease.Fallout4))
         {
             var mod = (IFallout4ModGetter)original;
-            var npc = mod.Npcs.First();
+            var npc = mod.Npcs.First(n => !n.UseTemplateActors.HasFlag(Mutagen.Bethesda.Fallout4.Npc.TemplateActorType.Traits));
             // The middle response: renaming an edge one would mask a renumbering bug that shifts
             // the responses after it.
             var (quest, topic) = mod.Quests

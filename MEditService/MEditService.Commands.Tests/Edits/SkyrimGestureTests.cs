@@ -55,6 +55,43 @@ public sealed class SkyrimGestureTests : TestInstance
     }
 
     [Fact]
+    public void ANestedTemplatedMember_IsRefused_NamingItsFlag()
+    {
+        var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
+        var template = mod.Npcs.AddNew("Template");
+        var copy = mod.Npcs.AddNew("Copy");
+        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats;
+        copy.Template.SetTo(template.FormKey);
+        var plugin = Add(mod, "TemplatedMod");
+
+        var result = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("3"), Member("Configuration"), Member("SpeedMultiplier")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
+        Assert.Contains("Configuration.SpeedMultiplier", result.Message);
+        Assert.Contains("Stats", result.Message);
+        Assert.True(EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("3"), Member("Configuration"), Member("DispositionBase"))).Applied);
+    }
+
+    [Fact]
+    public void ClearingTheLastTemplateFlag_ThroughTheFlagsWrite_MakesTheMembersEditableAtOnce()
+    {
+        var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
+        var template = mod.Npcs.AddNew("Template");
+        var copy = mod.Npcs.AddNew("Copy");
+        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats;
+        copy.Template.SetTo(template.FormKey);
+        var plugin = Add(mod, "TemplatedMod");
+        var level = SetAt(Json("3"), Member("Configuration"), Member("SpeedMultiplier"));
+
+        Assert.False(EditHandler.Edit(plugin, copy.FormKey.ToString(), level).Applied);
+        var cleared = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("[]"), Member("Configuration"), Member("TemplateFlags")));
+
+        Assert.True(cleared.Applied, cleared.Message);
+        Assert.True(EditHandler.Edit(plugin, copy.FormKey.ToString(), level).Applied);
+    }
+
+    [Fact]
     public async Task TheLightFlag_SetOnTheHeader_CompilesAsALightSkyrimPlugin()
     {
         var header = new FormKey(ModKey.FromFileName(CompiledPluginName), 0).ToString();
