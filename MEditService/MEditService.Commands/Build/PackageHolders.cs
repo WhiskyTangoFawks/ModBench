@@ -17,11 +17,12 @@ internal sealed class Holder(string name, IReadOnlyCollection<(string Path, stri
     }
 
     /// <summary>Whether the package has a file at the path of <paramref name="held"/>; a place of the game also below any of
-    /// its folders, as a copy of the game folder keeps the game's files below Data/.</summary>
+    /// its folders, in it or its Data, as a mod folder holds Data's files.</summary>
     public bool HoldsAPathOf(HashedFile held)
     {
+        if (!keptBelowFolders) return _paths.Contains(held.Path);
         var segments = held.Path.Split('/');
-        return keptBelowFolders ? segments.Select((_, skipped) => string.Join('/', segments.Skip(skipped))).Any(_paths.Contains) : _paths.Contains(held.Path);
+        return segments.Select((_, skipped) => string.Join('/', segments.Skip(skipped))).Any(below => _paths.Contains(below) || _paths.Contains($"Data/{below}"));
     }
 }
 

@@ -32,7 +32,7 @@ internal sealed class TakenFromPackages(IModFolderRepository repository, string 
     public IEnumerable<Asset> Extract()
     {
         List<Asset> extracted =
-            [.. _taken.OfType<PackageContents.PackagedFile.InGameFolder>().Select(game => new Asset(game.Path, () => repository.OpenGameFile(game.DataFolder, game.GamePath)))];
+            [.. _taken.OfType<PackageContents.PackagedFile.InGameFolder>().Select(game => new Asset(game.Path, () => repository.OpenGameFile(game.Root, game.GamePath)))];
         var rebuild = new ModRebuild(repository, modFolder);
         foreach (var fromOne in _taken.OfType<PackageContents.PackagedFile.InInstallationFile>().GroupBy(taken => taken.File))
         {

@@ -100,7 +100,7 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
-function caseBlindFinder(dataFolder: string) {
+function caseBlindFinder(root: string) {
   const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
   const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
     const kept = listings.get(folder) ?? listOwnEntries(folder, ignoreLink).then(
@@ -115,7 +115,7 @@ function caseBlindFinder(dataFolder: string) {
     const found: string[] = [];
     const segments = path.split('/');
     for (const [i, segment] of segments.entries()) {
-      const listing = await listingOf(join(dataFolder, ...found));
+      const listing = await listingOf(join(root, ...found));
       if (listing.kind === 'unreadable') return listing;
       const entry = listing.answer.get(segment.toLowerCase());
       if (entry === undefined || entry.isDirectory === (i === segments.length - 1)) return { kind: 'read', answer: undefined };
@@ -137,10 +137,11 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
   return separator + whitelist.replaceAll('\n', lineEnding);
 }
 
-// A folder that holds a copy of the game folder holds the game's files below a folder of its own, such as Data/.
+// A mod folder holds what the game reads from Data, and a folder that holds a copy of the game folder holds the game's files
+// below a folder of its own.
 const pathsBelowFolders = (path: string): string[] => {
   const segments = path.split('/');
-  return segments.map((_, skipped) => segments.slice(skipped).join('/'));
+  return segments.map((_, skipped) => segments.slice(skipped).join('/')).flatMap((below) => [below, `Data/${below}`]);
 };
 
 export function mo2Repository(
@@ -148,8 +149,8 @@ export function mo2Repository(
 ): Mo2Repository {
   const { instanceRoot } = context;
   const whitelist = whitelistIgnoreList(publisherFile?.name);
-  const gameFiles: InstanceAdapter['gameFiles'] = async (dataFolder, modFilePaths) => {
-    const find = caseBlindFinder(dataFolder);
+  const gameFiles: InstanceAdapter['gameFiles'] = async (root, modFilePaths) => {
+    const find = caseBlindFinder(root);
     const files = new Map<string, GameFile>();
     const unreadable: Record<string, string> = {};
     for (const modFilePath of modFilePaths) {
@@ -157,7 +158,7 @@ export function mo2Repository(
       if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
       const names = found.answer;
       if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(dataFolder, ...names));
+      const hashed = await gameFileHash(join(root, ...names));
       if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
       files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
     }
@@ -210,9 +211,9 @@ export function mo2Repository(
 
     gameFiles,
 
-    async gameFilesTakenBy(dataFolder, folder) {
+    async gameFilesTakenBy(root, folder) {
       const { files, notes } = await filesBelow(folder);
-      const taken = await gameFiles(dataFolder, [...new Set(files.flatMap((file) => pathsBelowFolders(file.relativePath)))]);
+      const taken = await gameFiles(root, [...new Set(files.flatMap((file) => pathsBelowFolders(file.relativePath)))]);
       const [reason] = Object.values(taken.unreadable);
       return reason === undefined ? { kind: 'read', answer: { gameFiles: taken.files, notes } } : { kind: 'unreadable', reason };
     },

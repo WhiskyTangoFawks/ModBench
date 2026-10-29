@@ -124,8 +124,8 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { dataFolder: join(game, 'Data'), depots: [], depotProblems: [] },
-            { dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] },
+            { root: game, depots: [], depotProblems: [] },
+            { root: '/steam/Fallout 4', depots: [], depotProblems: [] },
           ]);
         } finally {
           await rm(game, { recursive: true, force: true });
@@ -143,7 +143,7 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { dataFolder: join(game, 'Data'), depots: [INSTALLED_DEPOT], depotProblems: [] },
+            { root: game, depots: [INSTALLED_DEPOT], depotProblems: [] },
           ]);
         } finally {
           await rm(linked, { force: true });
@@ -156,7 +156,7 @@ describe('the MO2 Instance adapter', () => {
         try {
           await mkdir(join(game, 'Data'));
 
-          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ dataFolder: join(game, 'Data'), depots: [], depotProblems: [] }]);
+          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ root: game, depots: [], depotProblems: [] }]);
         } finally {
           await rm(game, { recursive: true, force: true });
         }

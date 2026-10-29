@@ -316,9 +316,9 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         { "no exclusion mark", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache"}""" },
         { "a submodule with no folder", $$"""{"mods": [{ {{AMod}}, "submodule": {"pin": "0123abc"} }], "statCache": "/cache", "exclusionMark": ".mohidden"}""" },
         { "a submodule with no pin", $$"""{"mods": [{ {{AMod}}, "submodule": {"folder": "/source/Mod"} }], "statCache": "/cache", "exclusionMark": ".mohidden"}""" },
-        { "a game folder with no name", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"dataFolder": "/Data", "files": []} }""" },
+        { "a game folder with no name", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"root": "/game", "files": []} }""" },
         { "a game folder with no data folder", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"name": "Fallout4", "files": []} }""" },
-        { "a game folder with no files", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"name": "Fallout4", "dataFolder": "/Data"} }""" },
+        { "a game folder with no files", $$"""{"mods": [{ {{AMod}} }], "statCache": "/cache", "exclusionMark": ".mohidden", "gameFolder": {"name": "Fallout4", "root": "/game"} }""" },
     };
 
     [Theory]

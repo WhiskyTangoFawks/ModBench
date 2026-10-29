@@ -588,6 +588,42 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
+    public async Task AStockGameFoldersManifest_NamesEachFileAtItsPathInTheInstallation_ItsRootFilesIncluded()
+    {
+        const string stockGame = "Stock Game";
+        _folders.WithFile(stockGame, "Fallout4.exe", "exe").WithFile(stockGame, "Data/Fallout4.esm", "esm");
+        var installation = new GameFolder("Fallout 4", Root: stockGame, [new GameFile("Fallout4.exe", "exe"), new GameFile("Data/Fallout4.esm", "esm")]);
+
+        await Update([new ModToUpdate("Stock Game", stockGame, null, [], SourceFolder: null, Version: null, installation)]);
+
+        var manifest = _folders.Manifests[stockGame];
+        Assert.Equal([new FileBytes.InGameFolder("Data/Fallout4.esm"), new FileBytes.InGameFolder("Fallout4.exe")], manifest.Files.Select(manifest.BytesOf));
+    }
+
+    private static readonly GameFolder Installation =
+        new("Fallout 4", "game", [new GameFile("Fallout4.exe", "exe"), new GameFile("Data/Fallout4.esm", "esm"), new GameFile("Data/c.nif", "c")]);
+
+    [Fact]
+    public async Task AGameFolderModsRootFile_IsNamedFromTheInstallationsRoot_AndItsOtherFilesFromItsData()
+    {
+        _folders.WithFile(Mod, "Root/Fallout4.exe", "exe").WithFile(Mod, "Fallout4.esm", "esm");
+
+        var manifest = await UpdatedWith(Installation);
+
+        Assert.Equal([new FileBytes.InGameFolder("Data/Fallout4.esm"), new FileBytes.InGameFolder("Fallout4.exe")], manifest.Files.Select(manifest.BytesOf));
+    }
+
+    [Fact]
+    public async Task AGameFolderModsFile_ThatTheInstallationsDataHoldsWithOtherBytes_IsRecordedAsSuch()
+    {
+        _folders.WithFile(Mod, "Fallout4.esm", "esm").WithFile(Mod, "c.nif", "edited");
+
+        var manifest = await UpdatedWith(Installation);
+
+        Assert.Equal(new ManifestFile("c.nif", new PackageEntry.OtherBytes()), manifest.Files.Single(file => file.Path == "c.nif"));
+    }
+
+    [Fact]
     public async Task AModsFilesFromTwoPlacesOfTheGame_AreAllTaken_UnderTheOneGameFolderPackage()
     {
         _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.nif", "b").WithFile(Mod, "c.nif", "c");

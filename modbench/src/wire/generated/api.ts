@@ -1429,13 +1429,13 @@ export interface components {
             hash: string;
         };
         GameFolderPlaceRequest: {
-            dataFolder: string;
+            root: string;
             files: components["schemas"]["GameFileRequest"][];
             depots?: components["schemas"]["GameDepotRequest"][] | null;
         };
         GameFolderRequest: {
             name: string;
-            dataFolder: string;
+            root: string;
             files: components["schemas"]["GameFileRequest"][];
             elsewhere?: components["schemas"]["GameFolderPlaceRequest"][] | null;
             depots?: components["schemas"]["GameDepotRequest"][] | null;

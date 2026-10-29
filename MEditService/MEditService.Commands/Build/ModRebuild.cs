@@ -13,7 +13,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, string modFold
         {
             repository.WriteFile(modFolder, game.Path, target =>
             {
-                using var taken = repository.OpenGameFile(game.DataFolder, game.GamePath);
+                using var taken = repository.OpenGameFile(game.Root, game.GamePath);
                 taken.CopyTo(target);
             });
         }

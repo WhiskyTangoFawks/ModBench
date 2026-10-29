@@ -37,9 +37,9 @@ export const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameF
   const { name, places: [first, ...others] } = folder;
   const elsewhere = others.flatMap((place) => {
     const files = held.get(place) ?? [];
-    return files.length === 0 ? [] : [{ dataFolder: place.dataFolder, files: [...files], ...wireDepots(place.depots, withDepots) }];
+    return files.length === 0 ? [] : [{ root: place.root, files: [...files], ...wireDepots(place.depots, withDepots) }];
   });
-  return { name, dataFolder: first.dataFolder, files: [...held.get(first) ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
+  return { name, root: first.root, files: [...held.get(first) ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
 };
 
 export async function gameFilesOf(
@@ -49,7 +49,7 @@ export async function gameFilesOf(
   if (typeof game.folder === 'string') {
     return { gameFiles: NONE_HELD, notes: installed ? [] : [`${game.folder}, so its manifest cannot name the game folder as its package`] };
   }
-  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(async (place) => ({ place, taken: await adapter.gameFilesTakenBy(place.dataFolder, folder) })));
+  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(async (place) => ({ place, taken: await adapter.gameFilesTakenBy(place.root, folder) })));
   if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
   if (inGame.taken.kind === 'unreadable') {
     return installed ? { gameFiles: NONE_HELD, notes: [`the game files its files may be could not be read: ${inGame.taken.reason}`] } : { refusal: inGame.taken.reason };
@@ -58,7 +58,7 @@ export async function gameFilesOf(
   const notes = new Set(inGame.taken.answer.notes);
   for (const { place, taken } of inOthers) {
     if (taken.kind === 'unreadable') {
-      notes.add(`the game files in ${place.dataFolder} could not be read: ${taken.reason}`);
+      notes.add(`the game files in ${place.root} could not be read: ${taken.reason}`);
     } else {
       held.set(place, taken.answer.gameFiles);
       for (const note of taken.answer.notes) notes.add(note);
@@ -80,7 +80,7 @@ export async function namedGameFiles(
     }
     const reasons: Record<string, string> = {};
     for (const place of folder.places) {
-      const read = await adapter.gameFiles(place.dataFolder, gameFiles);
+      const read = await adapter.gameFiles(place.root, gameFiles);
       Object.assign(reasons, read.unreadable, reasons);
       const foundHere = found.get(place) ?? new Map<string, GameFile>();
       for (const file of read.files) foundHere.set(file.path.toLowerCase(), file);

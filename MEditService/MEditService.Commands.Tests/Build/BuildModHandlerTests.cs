@@ -410,7 +410,7 @@ public sealed class BuildModHandlerTests : IDisposable
     {
         var edited = GameFolderOnDisk.Holding(_root, "edited", ("textures/a.dds", "edited"));
         var vanilla = GameFolderOnDisk.Holding(_root, "steam", ("textures/a.dds", "from the game"));
-        var game = edited with { Elsewhere = [new GameFolderPlace(vanilla.DataFolder, vanilla.Files)] };
+        var game = edited with { Elsewhere = [new GameFolderPlace(vanilla.Root, vanilla.Files)] };
         WriteSourceText(GameFolderOnDisk.ManifestTakingATextureFrom(vanilla));
 
         var built = await Landed(_noArchives with { GameFolder = game });

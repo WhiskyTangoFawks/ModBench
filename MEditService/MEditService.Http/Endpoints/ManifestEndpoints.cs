@@ -196,26 +196,26 @@ internal static class ManifestEndpoints
 internal sealed record UpdateManifestRequest(
     IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, string? Gesture, IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
 
-/// <summary>The game folder by the game's name and Data folder, with the game files a mod's files may be, none
+/// <summary>The game folder by the game's name and its root, with the game files a mod's files may be, none
 /// when not found. Elsewhere is the Steam install when it is another place (ADR-0013).</summary>
 internal sealed record GameFolderRequest(
-    string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null, IReadOnlyList<GameDepotRequest>? Depots = null)
+    string Name, string Root, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameFolderPlaceRequest>? Elsewhere = null, IReadOnlyList<GameDepotRequest>? Depots = null)
 {
-    internal const string NotWhole = "The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.";
+    internal const string NotWhole = "The game folder needs its name, its root, and each game file a path and an xxHash64 hash.";
 
     internal bool IsWhole =>
-        !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(DataFolder) && Files is not null
+        !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Root) && Files is not null
         && GameFileRequest.AreWhole(Files) && GameDepotRequest.AreWhole(Depots) && (Elsewhere ?? []).All(place => place.IsWhole);
 
     internal GameFolder ToGameFolder() =>
-        new(Name, DataFolder, GameFileRequest.ToGameFiles(Files), Elsewhere?.Select(place => place.ToPlace()).ToList(), GameDepotRequest.ToGameDepots(Depots));
+        new(Name, Root, GameFileRequest.ToGameFiles(Files), Elsewhere?.Select(place => place.ToPlace()).ToList(), GameDepotRequest.ToGameDepots(Depots));
 }
 
-internal sealed record GameFolderPlaceRequest(string DataFolder, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameDepotRequest>? Depots = null)
+internal sealed record GameFolderPlaceRequest(string Root, IReadOnlyList<GameFileRequest> Files, IReadOnlyList<GameDepotRequest>? Depots = null)
 {
-    internal bool IsWhole => !string.IsNullOrWhiteSpace(DataFolder) && Files is not null && GameFileRequest.AreWhole(Files) && GameDepotRequest.AreWhole(Depots);
+    internal bool IsWhole => !string.IsNullOrWhiteSpace(Root) && Files is not null && GameFileRequest.AreWhole(Files) && GameDepotRequest.AreWhole(Depots);
 
-    internal GameFolderPlace ToPlace() => new(DataFolder, GameFileRequest.ToGameFiles(Files), GameDepotRequest.ToGameDepots(Depots));
+    internal GameFolderPlace ToPlace() => new(Root, GameFileRequest.ToGameFiles(Files), GameDepotRequest.ToGameDepots(Depots));
 }
 
 internal sealed record GameDepotRequest(string Id, string Version)

@@ -464,6 +464,22 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal([(Mod, "meshes/a.nif")], WrittenIn(Mod));
     }
 
+    [Theory]
+    [InlineData("Stock Game", "Fallout4.exe")]
+    [InlineData(Mod, "Root/Fallout4.exe")]
+    public async Task AFileTheGameFolderHoldsAtItsRoot_ComesBackFromTheInstallation(string folder, string path)
+    {
+        _folders.WithFile("game", "Fallout4.exe", "exe").WithFile(folder, path, "stale");
+        _folders.Manifests[folder] = new Manifest(
+            [new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile(path, "exe")]))], [ManifestFile.In("Fallout 4", path, "Fallout4.exe")]);
+        var instance = Instance() with { GameFolder = new GameFolder("Fallout 4", Root: "game", [new GameFile("Fallout4.exe", "exe")]) };
+
+        var restored = Assert.Single((await RestoreIn(instance, ModFrom(folder))).Applied);
+
+        Assert.Equal([path], restored.Written);
+        Assert.Equal("exe", WrittenText(folder, path));
+    }
+
     [Fact]
     public async Task AGameFolderMod_WhoseGameFilesTheFirstPlaceHoldsWithOtherBytes_ComesBackFromAnotherPlaceThatHoldsThem()
     {
