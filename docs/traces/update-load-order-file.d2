@@ -26,8 +26,8 @@ checked: "a rename or an uninstall, with a publisher's configuration" {
   cmds -> instanceadapter: "is the configuration readable" {class: loadorder}
   instanceadapter -> cmds: "the reason it is not" {class: loadorder}
 }
-cmds -> client: "for a move: their masters" {class: query}
-client -> cmds: the masters {class: query}
+cmds -> client: "for a move: plugin facts" {class: query}
+client -> cmds: the plugin facts {class: query}
 cmds -> instanceadapter: "the change: lines, folders and file names" {class: loadorder}
 followed: "a rename or an uninstall, once the mod folder has moved or been trashed" {
   cmds -> instanceadapter: "each mod folder's new place, or gone" {class: loadorder}

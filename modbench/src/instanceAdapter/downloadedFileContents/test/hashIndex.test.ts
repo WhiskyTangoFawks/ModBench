@@ -6,7 +6,8 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 import type { InstallationFileReader } from '../installationFileReader';
 import { digestOf } from '../contentDigest';
 import { stampOf } from '../../files';
-import { hashIndex } from '../hashIndex';
+import { hashIndex as hashIndexWith } from '../hashIndex';
+import { fileProblemsFake } from '../../../test/fileProblemsFake';
 
 vi.mock('../contentDigest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../contentDigest')>();
@@ -23,10 +24,14 @@ const ENTRIES = ['a.esp', 'textures/b.dds'];
 
 let root: string;
 let folder: string;
+let fileProblems: ReturnType<typeof fileProblemsFake>;
+
+const hashIndex = (at: string, reader: InstallationFileReader) => hashIndexWith(at, reader, fileProblems);
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-hashes-'));
   folder = join(root, 'index');
+  fileProblems = fileProblemsFake();
   vi.mocked(digestOf).mockClear();
   vi.mocked(stampOf).mockClear();
 });
@@ -279,17 +284,35 @@ describe('the sizes and hashes of the record index', () => {
       expect(next.extracted).toEqual(paths.slice(1));
     });
 
-    it('hashes no file again that it could not hash while its stamp holds, and still says why each run', async () => {
+    it('hashes no file again that it could not hash while its stamp holds in this session, and a reload hashes it again', async () => {
       clockAnHourPastEveryWrite();
       const listed: string[] = [];
       const refusing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: (path) => { listed.push(path); return Promise.reject(new Error('Can not open the file as archive')); } };
       const corrupt = await fileHolding('Corrupt.7z', 'archive');
+      const session = hashIndex(folder, refusing);
+      await session.downloadedFilesHashed([corrupt]);
+
+      await session.downloadedFilesHashed([corrupt]);
+      const afterSecondAsk = listed.length;
       await hashIndex(folder, refusing).downloadedFilesHashed([corrupt]);
-      const left: number[] = [];
 
-      const answer = await hashIndex(folder, refusing).downloadedFilesHashed([corrupt], { onHashing: (count) => left.push(count) });
+      expect([afterSecondAsk, listed.length, await indexText()]).toEqual([1, 2, '']);
+    });
 
-      expect([answer, listed, left]).toEqual([{ files: [], notes: [`${corrupt} could not be read: Can not open the file as archive`] }, [corrupt], []]);
+    it('shows a file it could not hash as a problem on that file, until it hashes or is gone', async () => {
+      clockAnHourPastEveryWrite();
+      const reading: InstallationFileReader = { ...fakeInstallationFileReader(ENTRIES), list: () => Promise.reject(new Error('Can not open the file as archive')) };
+      const file = await fileHolding('Mod.7z', 'archive');
+      await hashIndex(folder, reading).downloadedFilesHashed([file]);
+      const whileBroken = new Map(fileProblems.held);
+      await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFilesHashed([file]);
+      const afterFix = new Map(fileProblems.held);
+      const session = hashIndex(folder, reading);
+      await session.downloadedFilesHashed([file]);
+      await rm(file);
+      await session.downloadedFilesHashed([file]);
+
+      expect([whileBroken, afterFix, fileProblems.held]).toEqual([new Map([[file, [{ line: 1, message: 'could not be hashed: Can not open the file as archive' }]]]), new Map(), new Map()]);
     });
 
     it('says why the hash index could not be written, as the next run hashes those files again', async () => {
@@ -305,13 +328,14 @@ describe('the sizes and hashes of the record index', () => {
       });
     });
 
-    it('says why each it could not read', async () => {
+    it('answers no file it could not read, and notes none of them', async () => {
       const refusing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: () => Promise.reject(new Error('Can not open the file as archive')) };
       const [gone, notAnInstallationFile] = [join(root, 'Gone.7z'), await fileHolding('Mod.esp', 'aaaa')];
 
       const answer = await hashIndex(folder, refusing).downloadedFilesHashed([gone, notAnInstallationFile]);
 
-      expect(answer).toEqual({ files: [], notes: [expect.stringMatching(/Gone\.7z could not be read: .*ENOENT/) as unknown, `${notAnInstallationFile} could not be read: Can not open the file as archive`] });
+      expect(answer).toEqual({ files: [], notes: [] });
+      expect([...fileProblems.held.keys()]).toEqual([notAnInstallationFile]);
     });
   });
 });

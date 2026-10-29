@@ -8,6 +8,7 @@
   },
   "references": [
     { "path": "./loadOrderFileCodec" },
+    { "path": "./manifestAdapter" },
     { "path": "./tables" },
     { "path": "./wire" },
     { "path": "./ports" },
@@ -16,6 +17,7 @@
     { "path": "./instanceLoader" },
     { "path": "./modCommands" },
     { "path": "./pluginCommands" },
+    { "path": "./sortingRules" },
     { "path": "./instanceCommands" },
     { "path": "./sourceCommands" },
     { "path": "./downloadedFileCommands" },

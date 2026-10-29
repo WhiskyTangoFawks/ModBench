@@ -79,7 +79,7 @@ async function updateManifest(deps: ManifestGestureDeps, { mods, refused, view, 
   await runWritingGesture(view, instance, async () => {
     const found = await othersOf(deps, everyMod);
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }, found.others));
+      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }, found.others, everyMod));
     if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
     reportCancelRefused(reporter, outcome);
     const answered = named(label, outcome);
@@ -94,7 +94,7 @@ async function updateManifestForAgent(
   const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others));
+  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0));
   if (!result.applied) return { applied: false, refusal: result.refusal };
   const outcome = named(label, result);
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
