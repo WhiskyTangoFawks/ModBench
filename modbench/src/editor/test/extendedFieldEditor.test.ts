@@ -53,7 +53,7 @@ import { recordingReporter, type RecordingReporter } from '../../test/surfacingD
 type Diff = CompareResult['diffs'][number];
 
 const diff = (fieldName: string, values: Record<string, unknown>, children?: Diff[]): Diff =>
-  ({ fieldName, values, winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', children });
+  ({ fieldName, values, winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', noWinner: false, children });
 
 const holder = (plugin: string, origin: string): CompareResult['overrides'][number] => ({
   formKey: '000123:Fallout4.esm', plugin, origin, isWinner: true, fields: [], recordType: 'Npc', isPartialForm: false,

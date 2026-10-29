@@ -5,19 +5,22 @@ namespace MEditService.RecordIndex.Queries;
 internal static class ConflictRules
 {
     // A plugin takes part with an absent value too, since a copy that drops a field changes it
-    // (xEdit); a Partial Form plugin takes part only where it holds a value.
+    // (xEdit); a Partial Form plugin takes part only where it holds a value, and a plugin whose
+    // copy templates the field never does.
     private static List<(string Plugin, int LoadOrderIndex)> TakingPart(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
-        IReadOnlySet<string> partialFormPlugins) =>
-        [.. pluginOrder.Where(p => valuesByPlugin.GetValueOrDefault(p.Plugin) != null || !partialFormPlugins.Contains(p.Plugin))];
+        IReadOnlySet<string> partialFormPlugins,
+        IReadOnlySet<string> templatedPlugins) =>
+        [.. pluginOrder.Where(p => !templatedPlugins.Contains(p.Plugin)
+            && (valuesByPlugin.GetValueOrDefault(p.Plugin) != null || !partialFormPlugins.Contains(p.Plugin)))];
 
     // The field winner: the highest load-order plugin taking part.
     public static string? WinnerOf(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
         IReadOnlySet<string> partialFormPlugins) =>
-        TakingPart(valuesByPlugin, pluginOrder, partialFormPlugins) is { Count: > 0 } taking
+        TakingPart(valuesByPlugin, pluginOrder, partialFormPlugins, new HashSet<string>()) is { Count: > 0 } taking
             ? taking.MaxBy(p => p.LoadOrderIndex).Plugin
             : null;
 
@@ -28,9 +31,10 @@ internal static class ConflictRules
         string masterPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
         IReadOnlySet<string> partialFormPlugins,
+        IReadOnlySet<string> templatedPlugins,
         Func<object?, object?, bool> valuesEqual)
     {
-        var taking = TakingPart(valuesByPlugin, pluginOrder, partialFormPlugins);
+        var taking = TakingPart(valuesByPlugin, pluginOrder, partialFormPlugins, templatedPlugins);
         if (taking.TrueForAll(p => valuesByPlugin.GetValueOrDefault(p.Plugin) == null)) return [];
 
         var ctx = new CellContext(

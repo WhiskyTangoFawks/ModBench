@@ -34,7 +34,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var ctx = ContextOf(
             shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds, indexed,
             shadowed: partialFormColumns,
-            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), partialFormColumns, same),
+            cellStates: (values, templated, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), partialFormColumns, templated, same),
             comparedCount: conflictingRecords.Count);
         var diffs = RecordChildren(shown, ctx);
 
@@ -86,6 +86,8 @@ internal sealed class ConflictClassifier(ILogger logger)
             ColumnOrder: OrderOf(records, columns),
             ComparedOrder: OrderOf([.. records.Take(comparedCount ?? records.Count)], columns),
             PartialFormColumns: records.Select((r, i) => (r, i)).Where(t => t.r.IsPartialForm).Select(t => columns[t.i]).ToHashSet(StringComparer.Ordinal),
+            Templated: records.Select((r, i) => (Templated: r.Templated, Column: columns[i])).Where(t => t.Templated is not null)
+                .ToDictionary(t => t.Column, t => t.Templated ?? new Dictionary<string, TemplatedBy>(), StringComparer.Ordinal),
             MissingStringsFiles: records.Select((r, i) => (File: r.MissingStringsFile, Column: columns[i]))
                 .Where(t => t.File is not null)
                 .ToDictionary(t => t.Column, t => t.File ?? "", StringComparer.Ordinal),
@@ -111,6 +113,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlyList<(string Column, int LoadOrderIndex)> ColumnOrder,
         IReadOnlyList<(string Column, int LoadOrderIndex)> ComparedOrder,
         IReadOnlySet<string> PartialFormColumns,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, TemplatedBy>> Templated,
         IReadOnlyDictionary<string, string> MissingStringsFiles,
         IReadOnlySet<string> ShadowedColumns,
         CellStatesOf? StatesOf,
@@ -122,17 +125,22 @@ internal sealed class ConflictClassifier(ILogger logger)
         bool Indexed)
     {
         public bool Compares => StatesOf is null;
+
+        // The columns whose copy hands the member at this dotted path, or one above it, to a template.
+        public HashSet<string> TemplatedAt(string path) =>
+            [.. Templated.Where(t => t.Value.Keys.Any(member => path == member || path.StartsWith(member + ".", StringComparison.Ordinal))).Select(t => t.Key)];
     }
 
     // How a node's cells take their conflict state: ComputeCellStates. A comparison of several
     // records has none, and its cells take theirs by focus.
     private delegate IReadOnlyDictionary<string, ConflictThis> CellStatesOf(
-        Dictionary<string, object?> values, Func<object?, object?, bool> same);
+        Dictionary<string, object?> values, IReadOnlySet<string> templatedColumns, Func<object?, object?, bool> same);
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
     private static FieldDiff DiffNode(
         string label,
+        string path,
         Dictionary<string, object?> values,
         Dictionary<string, FieldMetadata> shapes,
         bool absentMeansDefault,
@@ -142,20 +150,22 @@ internal sealed class ConflictClassifier(ILogger logger)
     {
         var winnerColumn = ConflictRules.WinnerOf(values, ctx.ComparedOrder, ctx.PartialFormColumns) ?? ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
+        var templatedColumns = ctx.TemplatedAt(path);
+        var noWinner = !ctx.Compares && templatedColumns.Contains(winnerColumn);
 
         var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
-        var cellStates = ctx.StatesOf is { } statesOf && !ignoredInConflicts
-            ? statesOf(values, same)
+        var cellStates = ctx.StatesOf is { } statesOf && !ignoredInConflicts && !noWinner
+            ? statesOf(values, templatedColumns, same)
             : new Dictionary<string, ConflictThis>();
 
         List<FieldDiff>? children = null;
-        if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
-        else if (shape.ElementType is { } shapeElement) children = ArrayChildren(shape, shapeElement, label, values, ctx);
+        if (shape.Fields is { } members) children = StructChildren(members, path, values, ctx);
+        else if (shape.ElementType is { } shapeElement) children = ArrayChildren(shape, shapeElement, label, path, values, ctx);
 
         // Worst is a maximum over a severity order, so folding children equals reducing the whole
         // subtree at once.
         var ownState = ctx.Compares && !ignoredInConflicts && !ConflictRules.AllSame(
-                values.Where(v => partialFormTakesPart || !ctx.PartialFormColumns.Contains(v.Key)).Select(v => v.Value), same)
+                values.Where(v => !templatedColumns.Contains(v.Key) && (partialFormTakesPart || !ctx.PartialFormColumns.Contains(v.Key))).Select(v => v.Value), same)
             ? ConflictAll.ConflictBenign
             : ConflictRules.Reduce(cellStates.Values);
         var conflictAll = ConflictRules.Worst(ownState, (children ?? []).Select(child => child.ConflictAll));
@@ -163,7 +173,8 @@ internal sealed class ConflictClassifier(ILogger logger)
         var links = LinkFacts(shapes, values, ctx);
         return new FieldDiff(
             label, values, winnerColumn, cellStates, conflictAll, children, links.Resolutions, links.CheckErrors,
-            CellStatesByFocus: ctx.Compares ? ConflictRules.StatesByFocus(values, same) : null);
+            CellStatesByFocus: ctx.Compares ? ConflictRules.StatesByFocus(values.Where(v => !templatedColumns.Contains(v.Key)).ToDictionary(v => v.Key, v => v.Value), same) : null,
+            NoWinner: noWinner);
     }
 
     // A table of several record classes carries the document's discriminator as a column, and a
@@ -187,13 +198,13 @@ internal sealed class ConflictClassifier(ILogger logger)
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
-            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
+            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
         }
         return diffs;
     }
 
     private static List<FieldDiff>? StructChildren(
-        IReadOnlyList<FieldMetadata> members, Dictionary<string, object?> owners, DiffContext ctx)
+        IReadOnlyList<FieldMetadata> members, string path, Dictionary<string, object?> owners, DiffContext ctx)
     {
         var children = new List<FieldDiff>();
         foreach (var member in members)
@@ -202,7 +213,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             if (values.Values.All(v => v == null)) continue;
             var shapes = owners.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.VariantFor(member, kv.Value as JsonElement?));
-            children.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
+            children.Add(DiffNode(member.Name, $"{path}.{member.Name}", values, shapes, absentMeansDefault: true, ctx));
         }
         return children.Count > 0 ? children : null;
     }
@@ -211,7 +222,7 @@ internal sealed class ConflictClassifier(ILogger logger)
 
     // An element one plugin lacks is an absence where it is missing, never a shift of the rest.
     private static List<FieldDiff>? ArrayChildren(
-        FieldMetadata array, FieldMetadata element, string label, Dictionary<string, object?> values, DiffContext ctx)
+        FieldMetadata array, FieldMetadata element, string label, string path, Dictionary<string, object?> values, DiffContext ctx)
     {
         var columns = new List<(string Column, List<JsonElement> Elements)>();
         foreach (var (column, _) in ctx.ColumnOrder)
@@ -235,6 +246,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var shapes = values.Keys.ToDictionary(column => column, _ => element);
         return [.. rows.Select(row => DiffNode(
             row.Label,
+            path,
             values.Keys.ToDictionary(column => column, column => row.Held.TryGetValue(column, out var held) ? (object?)held.Element : null),
             shapes, absentMeansDefault: false, ctx) with
         {
