@@ -378,7 +378,7 @@ describe('modlistRepositoryCommands update manifest', () => {
       signal: cancel.signal, onProgress: (status) => { if (status.phase === 'Hashing') cancel.abort(); },
     });
 
-    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [], notes: [], repositoryNotes: [] }]);
+    expect([client.calls, outcome]).toEqual([[], { applied: true, cancelled: true, landed: [], refused: [], notes: [], repositoryNotes: [] }]);
   });
 
   it('updates every mod and reports why a downloaded file could not be read', async () => {
@@ -522,7 +522,17 @@ describe('modlistRepositoryCommands update manifest', () => {
       signal: cancel.signal, onProgress: (status) => { if (status.phase === 'ReadingFiles') cancel.abort(); },
     });
 
-    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [], notes: [], repositoryNotes: [] }]);
+    expect([client.calls, outcome]).toEqual([[], { applied: true, cancelled: true, landed: [], refused: [], notes: [], repositoryNotes: [] }]);
+  });
+
+  it('answers cancelled when its signal aborts while mEdit updates', async () => {
+    const cancel = new AbortController();
+    const { commands, client } = commandsOver();
+    client.setCommandHandler('updateManifest', () => { cancel.abort(); return Promise.resolve(UPDATED); });
+
+    const outcome = await commands.updateManifest(['ModA'], { signal: cancel.signal });
+
+    expect([client.calls.length, outcome]).toEqual([1, expect.objectContaining({ cancelled: true }) as unknown]);
   });
 
   it('hands mEdit the signal, so a cancel stops it after the mod in hand', async () => {
