@@ -1,11 +1,11 @@
 # Mod Management hands Editing the load order
 
-Modbench's data is two layers. The file layer is the mods and their files, resolved by mod order. The record layer is the plugins and their records, resolved by plugin order. Mod Management owns the file layer and every file of the mod manager, and Editing reads none of them. So Mod Management alone decides which plugins are active, and hands Editing the load order as state, and each mod's installation files and the game folder for the build, which Editing reconciles and never re-derives ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
+Modbench's data is two layers. The file layer is the mods and their files, resolved by mod order. The record layer is the plugins and their records, resolved by plugin order. Mod Management owns the file layer and every file of the mod manager, and Editing reads none of them. So Mod Management alone decides which plugins are active, and hands Editing the load order as state, and what a build needs as values, which Editing reconciles and never re-derives ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
 
 ## Consequences
 
 - Mod Management interprets no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
-- Editing learns nothing about a downloaded file or a game file by reading it. It reads them only to write. What such a file is and what it holds arrive from Mod Management as state, because a second record of a file Editing does not own drifts from the first ([principles](../principles.md), Orthogonality).
+- Metadata about a file is managed by the adapter that owns the access to that file, and every other box asks that adapter. Editing reads and writes a plugin's binary, so the plugin's own hash, which detects a change made outside Modbench ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), is Editing's. Every other file in the instance, and its hash, is Mod Management's, because a second record of a file drifts from the first ([principles](../principles.md), Orthogonality).
 
 ## Alternatives rejected
 

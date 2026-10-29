@@ -38,7 +38,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views and the agent: rea
 medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side\nhides: the rules that decide a write" {
-    engine: "Build engine — one deep module\nowns: a folder from its source or its manifest,\nand a manifest from a folder\nhides: matching, extraction, packing" {class: core}
+    engine: "Build engine — one deep module\nowns: a source mod's plugins and archives, from its source\nhides: compiling and packing" {class: core}
   }
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through a repository and forgets" {
@@ -71,16 +71,17 @@ medit_readmodel: "MEDIT · Read model — the record index, a view over the repo
     store: "Store\nowns: every plugin's rows\nhides: DuckDB" {class: derived}
   }
 }
-modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and nothing else" {
+modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and the mod statuses derived from it, and nothing else" {
   class: band; grid-rows: 1
   instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change" {class: readmodel}
+  modstatus: "Mod status\nowns: each mod's status against its manifest,\nderived whole from each instance value" {class: readmodel}
 }
 
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets\nand repository\nhides: the layout inside plugin source, and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
-  modfolderadapter: "Mod folder adapter\nowns: a folder a manifest builds, its manifest wherever it lives,\nthe stat cache,\nand what it reads: downloaded files and the game folders\nhides: the manifest's text" {class: repositories}
+  modfolderadapter: "Mod folder adapter\nowns: the assets and archives of a source mod's output folder\nhides: the archive formats" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's and the publisher's files" {
   class: band; grid-rows: 1
@@ -88,9 +89,10 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
     mo2: "MO2 — one implementation\nowns: the mod manager's files\nhides: MO2's layout and formats" {class: repositories}
     wabbajack: "Wabbajack — one implementation\nowns: the publisher's configuration\nhides: Wabbajack's layout and formats" {class: repositories}
     gamefolder: "Game folder\nowns: where the game is and what it holds\nhides: Steam, Wine and the platform's Documents folder" {class: repositories}
-    downloadedfilecontents: "Downloaded file contents\nowns: what each downloaded file holds, entry by entry,\nand its hash\nhides: the extraction tool and the hash index" {class: repositories}
+    filecontents: "File contents\nowns: what each downloaded file holds, entry by entry,\nand the hash of every file the Instance adapter reads\nhides: the extraction tool and the hash index" {class: repositories}
     fomodinstaller: "FOMOD installer\nowns: the files a FOMOD installs for my choices\nhides: the engine" {class: repositories}
   }
+  manifestadapter: "Manifest adapter\nowns: the manifests\nhides: the manifest's text" {class: repositories}
   textdocuments: "Text documents\nowns: plugin source as VS Code holds it, saved and unsaved\nhides: open and unopened documents, and applying\none workspace edit at a time" {class: repositories}
   client: "mEdit client\nowns: Modbench's one reach to mEdit\nhides: mEdit's process and transport,\nand that it forgets on restart" {class: repositories}
   nexus: "Nexus\nowns: Modbench's one reach to Nexus\nhides: the API" {class: repositories}
@@ -101,12 +103,12 @@ medit_data: "MEDIT · Systems of record" {
   class: band; grid-rows: 1
   source: "Mod source\nthe source folder beside mods/, in git" {class: sor}
   plugin: "Plugin files" {class: sor}
-  modfolder: "Mod folders\nfiles · manifests · the stat cache ·\ndownloaded files and game files, read" {class: sor}
+  modfolder: "Mod folders\nthe assets a build is handed, read · the archives it packs" {class: sor}
   tools: "Other tools\nthe mod manager, xEdit, CK, the game — at any time" {class: other}
 }
 modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
   class: band; grid-rows: 1
-  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe manifests · the repository · the source folder ·\nthe publisher's configuration" {class: sor}
+  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe hash index · the manifests · the repository ·\nthe source folder · the publisher's configuration" {class: sor}
   gamedata: "Game folder\nthe game's own plugins and files" {class: sor}
   deployed: "Deployment\nthe deployment folder · the plugins.txt the game reads ·\nwhat other programs write there" {class: sor}
   tools: "Other tools\nthe mod manager, the user, the game — at any time" {class: other}

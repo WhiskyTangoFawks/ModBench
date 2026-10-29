@@ -6,6 +6,10 @@ sourcecommands: @../../spec/architecture/target-architecture.modbench_core.sourc
 sourcecommands.label: source commands
 textdocuments: @../../spec/architecture/target-architecture.modbench_repositories.textdocuments
 textdocuments.label: Text documents
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the hash index · the manifests"
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 tasks: "VS Code's tasks" {class: other}
@@ -24,9 +28,7 @@ commands.label: Commands
 modfolderadapter: @../../spec/architecture/target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
 modfolder: @../../spec/architecture/target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests"
-instance: @../../spec/architecture/target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the repository"
+modfolder.label: "Mod folders\nassets · archives"
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
@@ -34,36 +36,39 @@ views: "every view" {class: driving}
 driving -> sourcecommands: "build: the mods" {class: compile}
 sourcecommands -> textdocuments: "save: each mod's unsaved plugin source" {class: compile}
 textdocuments -> sourcecommands: "saved, or the file VS Code did not save" {class: compile}
-sourcecommands -> instanceadapter: "get: each mod's folder" {class: compile}
-instanceadapter -> sourcecommands: "each mod's folder" {class: compile}
+sourcecommands -> manifestadapter: "get: each mod's manifest" {class: compile}
+instance -> manifestadapter: manifests {class: compile}
+manifestadapter -> sourcecommands: "each mod's manifest" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder · each package, hashed" {class: compile}
+instance -> instanceadapter: "downloaded files" {class: compile}
+instanceadapter -> sourcecommands: "each mod's folder · each package, hashed" {class: compile}
 sourcecommands -> tasks: "get: each task's label" {class: outside}
 tasks -> sourcecommands: "each task's label" {class: outside}
-sourcecommands -> client: "build: each mod's folder · each task's label" {class: compile}
+sourcecommands."refused when the output folder is not the mod's, or a tool has no task"
+sourcecommands -> instanceadapter: "each file the manifest takes from a package" {class: compile}
+instanceadapter -> instance: "the files" {class: compile}
+sourcecommands -> client: "build: each mod's folder · the archives to pack and the files each takes" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}
 source -> sourceadapter: "each mod's source at its commit" {class: compile}
 sourceadapter -> engine: "the source" {class: compile}
-engine."refused when the output folder is not the mod's, or a tool has no task"
 engine -> commands: "compile-plugin, per plugin" {class: compile}
-engine -> modfolderadapter: "the mod's files · the manifest" {class: compile}
-modfolderadapter -> modfolder: "the folder · the manifest" {class: compile}
-engine -> http: "the outcome, per mod" {class: compile}
-http -> client: "the outcome, per mod" {class: compile}
-client -> sourcecommands: the outcome {class: compile}
+engine -> modfolderadapter: "the assets · the archives" {class: compile}
+modfolderadapter -> modfolder: "the folder" {class: compile}
+engine -> http: "the files it made, per mod" {class: compile}
+http -> client: "the files it made, per mod" {class: compile}
+client -> sourcecommands: "the files it made, per mod" {class: compile}
 
-withsteps: "a mod whose manifest holds steps: the engine wrote no manifest, and named its steps and the files it made" {
+withsteps: "a mod whose manifest holds steps" {
   sourcecommands -> tasks: "each step's task, with its arguments, in the mod's folder" {class: outside}
   tasks -> sourcecommands: "its exit code" {class: outside}
-  sourcecommands -> client: "build: each mod's folder · the files it made" {class: compile}
-  client -> http: envelope {class: compile}
-  http -> engine: envelope {class: compile}
-  engine -> modfolderadapter: "the manifest" {class: compile}
-  modfolderadapter -> modfolder: "the manifest" {class: compile}
-  engine -> http: "the outcome, per mod" {class: compile}
-  http -> client: "the outcome, per mod" {class: compile}
-  client -> sourcecommands: the outcome {class: compile}
 }
 
+sourcecommands -> instanceadapter: "get: the files the build made, hashed, as its repository's entries" {class: compile}
+instance -> instanceadapter: "each mod's files" {class: compile}
+instanceadapter -> sourcecommands: "the files, hashed" {class: compile}
+sourcecommands -> manifestadapter: "each mod's manifest" {class: compile}
+manifestadapter -> instance: manifests {class: compile}
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}

@@ -6,8 +6,8 @@ instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.
 instanceloader.label: Instance loader
 modcommands: @../../spec/architecture/target-architecture.modbench_core.modcommands
 modcommands.label: mod commands
-client: @../../spec/architecture/target-architecture.modbench_repositories.client
-client.label: mEdit client
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 instance: @../../spec/architecture/target-architecture.modbench_data.instance
@@ -18,9 +18,11 @@ instanceloader -> downloads: "value: mods with this Nexus id, their installed fi
 downloads."the target pick"
 downloads -> modcommands: "the downloaded file, and the target" {class: loadorder}
 upgrade: "an upgrade" {
-  modcommands -> client: "the mod's status" {class: query}
-  client -> modcommands: "the mod's status: differs, no manifest, a file its package does not hold, a file its package holds with other bytes, or none" {class: query}
-  modcommands."refused on any but none, unless the target pick forces it"
+  modcommands -> manifestadapter: "get: the mod's manifest" {class: query}
+  manifestadapter -> modcommands: "the mod's manifest" {class: query}
+  modcommands -> instanceadapter: "get: the mod's files, hashed, and its package's entries" {class: query}
+  instanceadapter -> modcommands: "the mod's files, hashed, and its package's entries" {class: query}
+  modcommands."refused when the folder or its metadata differs from the manifest, unless the target pick forces it"
 }
 modcommands -> instanceadapter: "install: the file, folder or downloaded file, the target, the mod's metadata" {class: loadorder}
 instanceadapter."a new folder, or the release into the mod's own; the root chosen inside"

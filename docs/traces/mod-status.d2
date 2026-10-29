@@ -1,45 +1,27 @@
-# Mod status, green: whether each mod's folder and metadata differ from its manifest, after each snapshot.
+# Mod status, green: whether each mod's folder and metadata differ from its manifest, after each instance value.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 activation: @../../spec/architecture/target-architecture.modbench_drivers.activation
 activation.label: Activation
-instancecommands: @../../spec/architecture/target-architecture.modbench_core.instancecommands
-instancecommands.label: instance commands
-client: @../../spec/architecture/target-architecture.modbench_repositories.client
-client.label: mEdit client
-http: @../../spec/architecture/target-architecture.medit_driving.http
-http.label: HTTP endpoints
-commands: @../../spec/architecture/target-architecture.medit_core.commands
-commands.label: Commands
-engine: @../../spec/architecture/target-architecture.medit_core.commands.engine
-engine.label: Build engine
-modfolder: @../../spec/architecture/target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
-modfolderadapter: @../../spec/architecture/target-architecture.medit_repositories.modfolderadapter
-modfolderadapter.label: Mod folder adapter
-port: @../../spec/architecture/target-architecture.medit_kernel.ports
-port.label: Ports
+modstatus: @../../spec/architecture/target-architecture.modbench_readmodel.modstatus
+modstatus.label: Mod status
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · the hash index · the manifests"
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
 mods: @../../spec/architecture/target-architecture.modbench_driving.mods
 mods.label: Mods
 
 instanceloader -> activation: value {class: loadorder}
-activation -> instancecommands: "put load order: the snapshot, with each mod's metadata" {class: loadorder}
-instancecommands -> client: snapshot {class: loadorder}
-client -> http: snapshot {class: loadorder}
-http -> commands: put load order {class: loadorder}
-commands -> engine: "the snapshot's mods and metadata" {class: loadorder}
-modfolder -> modfolderadapter: "manifests · each mod's files" {class: track}
-modfolderadapter -> engine: "each mod's status" {class: track}
-engine."only the mods that changed since the last push"
-engine -> port: "mod status changed: the mods" {class: push}
-port -> http: publish {class: push}
-http -> client: stream {class: push}
-client -> mods: "mod status changed" {class: push}
-mods -> client: "mod status: the mods" {class: query}
-client -> http: envelope {class: query}
-http -> engine: "mod status: the mods" {class: query}
-engine -> http: "per mod: its status" {class: query}
-http -> client: "per mod: its status" {class: query}
-client -> mods: "per mod: its status" {class: query}
+activation -> modstatus: value {class: loadorder}
+modstatus -> manifestadapter: "get: each mod's manifest" {class: track}
+instance -> manifestadapter: manifests {class: track}
+manifestadapter -> modstatus: "each mod's manifest" {class: track}
+modstatus -> instanceadapter: "get: each mod's files, hashed, its metadata, and each package's entries" {class: track}
+instance -> instanceadapter: "each mod's files · metadata · the hash index" {class: track}
+instanceadapter -> modstatus: "each mod's files, hashed, its metadata, and each package's entries" {class: track}
+modstatus -> mods: "the statuses" {class: track}

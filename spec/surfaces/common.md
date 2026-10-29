@@ -77,4 +77,5 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | A gesture over a selection landed for some items and failed for others | one notification naming each item that failed and why, and a line in the Output. The items that landed are not reported as failed. |
 | Something Modbench does on its own, such as a sync, fails, and every view stays true | the view's message line, and a line in the Output, once, and again only when the reason changes |
 | Something Modbench does on its own fails, and a view now shows something untrue, such as a record filter it cleared | a notification naming what changed and why, and a line in the Output |
+| Modbench could not hash a file it reads, such as a downloaded file, a game file or a file in a mod | a problem in the Problems panel, on that file, naming why, until Modbench hashes the file or the file is gone, and a line in the Output. A gesture's report does not repeat it. |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |

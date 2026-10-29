@@ -4,6 +4,10 @@ shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
 sourcecommands: @../../spec/architecture/target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the hash index · the manifests"
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 client: @../../spec/architecture/target-architecture.modbench_repositories.client
@@ -15,33 +19,37 @@ engine.label: Build engine
 commands: @../../spec/architecture/target-architecture.medit_core.commands
 commands.label: Commands
 modfolder: @../../spec/architecture/target-architecture.medit_data.modfolder
-modfolder.label: "Mod folders\nfiles · manifests"
+modfolder.label: "Mod folders\nassets"
 modfolderadapter: @../../spec/architecture/target-architecture.medit_repositories.modfolderadapter
 modfolderadapter.label: Mod folder adapter
 sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../../spec/architecture/target-architecture.medit_data.source
 source.label: Mod source
-instance: @../../spec/architecture/target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the repository"
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
 driving -> sourcecommands: "decompile and commit: the mods" {class: track}
-sourcecommands -> instanceadapter: "get: each mod's folder" {class: track}
-instanceadapter -> sourcecommands: "each mod's folder" {class: track}
-sourcecommands -> client: "init: each mod's folder" {class: track}
+sourcecommands -> manifestadapter: "get: each mod's manifest" {class: track}
+instance -> manifestadapter: manifests {class: track}
+manifestadapter -> sourcecommands: "each mod's manifest, when it has one" {class: track}
+sourcecommands -> instanceadapter: "get: each mod's folder, its files and package, hashed" {class: track}
+instance -> instanceadapter: "each mod's files · downloaded files" {class: track}
+instanceadapter -> sourcecommands: "each mod's folder · its files and package, hashed" {class: track}
+sourcecommands -> client: "init: each mod's folder · its assets · its manifest, as bytes" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
 engine -> commands: "decompile-plugin, every plugin of the mod" {class: track}
-modfolder -> modfolderadapter: "the mod's files" {class: track}
-modfolderadapter -> engine: "the mod's files" {class: track}
-engine -> sourceadapter: "the repository and its first commit" {class: track}
+modfolder -> modfolderadapter: "the assets" {class: track}
+modfolderadapter -> engine: "the assets" {class: track}
+engine -> sourceadapter: "the repository and its first commit: plugin source, assets, the manifest" {class: track}
 sourceadapter -> source: "the source folder" {class: track}
 engine -> http: "the outcome" {class: track}
 http -> client: "the outcome" {class: track}
 client -> sourcecommands: the outcome {class: track}
+sourcecommands -> manifestadapter: "the mod folder's manifest, removed" {class: track}
+manifestadapter -> instance: manifests {class: track}
 sourcecommands -> driving: "the outcome" {class: track}
 refused: "refused, before any write: nothing of the mod, and no repository" {
   engine -> http: "the refusal" {class: track}
