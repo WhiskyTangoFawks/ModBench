@@ -309,7 +309,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
     gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
-    gamePlaces: () => Promise.resolve(answers.places ?? (current.gameFolder.kind === 'found' ? [{ root: current.gameFolder.root, depots: [], depotProblems: [] }] : [])),
+    gamePlaces: () => Promise.resolve(answers.places ?? (current.gameFolder.kind === 'found' ? [{ root: current.gameFolder.root, dataFolder: current.gameFolder.dataFolder, depots: [], depotProblems: [] }] : [])),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
@@ -347,7 +347,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       if (reason !== undefined) return Promise.resolve({ kind: 'unreadable', reason });
       return Promise.resolve({ kind: 'read', answer: downloadedFileNamed(name) === undefined ? undefined : { games: ['fallout4'], md5: md5Of(name), ...answers.queries?.get(name) } });
     },
-    gameFiles: (root, paths) => {
+    gameFiles: ({ root }, paths) => {
       const held = placeAnswers(root);
       return Promise.resolve({
         files: paths.flatMap((path) => held.gameFiles?.get(path.toLowerCase()) ?? []),
@@ -357,7 +357,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         })),
       });
     },
-    gameFilesTakenBy: (root, folder) => Promise.resolve(placeAnswers(root).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
+    gameFilesTakenBy: ({ root }, folder) => Promise.resolve(placeAnswers(root).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });

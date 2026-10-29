@@ -1383,8 +1383,8 @@ const firstModSent = (client: InMemoryMEditClient): unknown => {
 };
 
 describe('modlistRepositoryCommands with another place of the game beside the game folder', () => {
-  const GAME_PLACE: GamePlace = { root: '/game', depots: [], depotProblems: [] };
-  const STEAM_PLACE: GamePlace = { root: '/steam', depots: [], depotProblems: [] };
+  const GAME_PLACE: GamePlace = { root: '/game', dataFolder: '/game/Data', depots: [], depotProblems: [] };
+  const STEAM_PLACE: GamePlace = { root: '/steam', dataFolder: '/steam/Data', depots: [], depotProblems: [] };
   const UPDATED = { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] };
   type Places = NonNullable<InstanceAnswers['places']>;
   const besideHolding = (files: [string, string][], unreadable: [string, string][] = [], place: Partial<GamePlace> = {}): Places => [

@@ -1,4 +1,5 @@
 import type { NotFound, RestoreFacts, UpdateManifestMod } from '../client';
+import { deployedPath } from '../deployment/deployment';
 import type { Depot, GameFile, GamePlace, InstanceAdapter, SourceMods } from '../instanceAdapter/instanceAdapter';
 
 type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy'>;
@@ -49,7 +50,7 @@ export async function gameFilesOf(
   if (typeof game.folder === 'string') {
     return { gameFiles: NONE_HELD, notes: installed ? [] : [`${game.folder}, so its manifest cannot name the game folder as its package`] };
   }
-  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(async (place) => ({ place, taken: await adapter.gameFilesTakenBy(place.root, folder) })));
+  const [inGame, ...inOthers] = await Promise.all(game.folder.places.map(async (place) => ({ place, taken: await adapter.gameFilesTakenBy(place, folder, deployedPath) })));
   if (inGame === undefined) return { gameFiles: NONE_HELD, notes: [] };
   if (inGame.taken.kind === 'unreadable') {
     return installed ? { gameFiles: NONE_HELD, notes: [`the game files its files may be could not be read: ${inGame.taken.reason}`] } : { refusal: inGame.taken.reason };
@@ -80,7 +81,7 @@ export async function namedGameFiles(
     }
     const reasons: Record<string, string> = {};
     for (const place of folder.places) {
-      const read = await adapter.gameFiles(place.root, gameFiles);
+      const read = await adapter.gameFiles(place, gameFiles);
       Object.assign(reasons, read.unreadable, reasons);
       const foundHere = found.get(place) ?? new Map<string, GameFile>();
       for (const file of read.files) foundHere.set(file.path.toLowerCase(), file);

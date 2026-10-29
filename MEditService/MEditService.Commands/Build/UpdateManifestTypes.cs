@@ -9,9 +9,8 @@ public sealed record ModToUpdate(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder,
     string? Version, GameFolder? GameFolder = null);
 
-/// <summary>A game file by its forward-slash path in the game folder as the game folder names it, such as
-/// <c>Data/Fallout4.esm</c>, with its hash as the Instance adapter knows it (ADR-0013), and the path in the mod's folder of
-/// the file it may be, when not its own path.</summary>
+/// <summary>A game file by its forward-slash path in the game folder, such as <c>Data/Fallout4.esm</c>, with its hash as the
+/// Instance adapter knows it (ADR-0013), and the path of the folder's file it may be, when not its own.</summary>
 public sealed record GameFile(string Path, string Hash, string? PathInFolder = null);
 
 /// <summary>Another game folder holding the same game, such as the Steam install, at <paramref name="Root"/>, with the game files a

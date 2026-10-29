@@ -1,13 +1,14 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import type { Dirent } from 'node:fs';
-import { isAbsolute, join, relative, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
-import type { FileRead, GameFile, InstanceAdapter, UnsearchedFolder } from '../instanceAdapter';
+import type { FileRead, GameFile, GamePlace, InstanceAdapter, UnsearchedFolder } from '../instanceAdapter';
+import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
   sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceModLines,
@@ -100,7 +101,7 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
-function caseBlindFinder(root: string) {
+function caseBlindFinder({ root, dataFolder }: GamePlace) {
   const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
   const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
     const kept = listings.get(folder) ?? listOwnEntries(folder, ignoreLink).then(
@@ -111,17 +112,24 @@ function caseBlindFinder(root: string) {
     listings.set(folder, kept);
     return kept;
   };
-  return async (path: string): Promise<FileRead<string[] | undefined>> => {
+  const walk = async (from: string, segments: readonly string[]): Promise<FileRead<string[] | undefined>> => {
     const found: string[] = [];
-    const segments = path.split('/');
     for (const [i, segment] of segments.entries()) {
-      const listing = await listingOf(join(root, ...found));
+      const listing = await listingOf(join(from, ...found));
       if (listing.kind === 'unreadable') return listing;
       const entry = listing.answer.get(segment.toLowerCase());
       if (entry === undefined || entry.isDirectory === (i === segments.length - 1)) return { kind: 'read', answer: undefined };
       found.push(entry.name);
     }
     return { kind: 'read', answer: found };
+  };
+  // The Data folder may be a link, as one on another drive is, where a link below it is a deployed file.
+  return async (path: string): Promise<FileRead<string[] | undefined>> => {
+    const [first = '', ...below] = path.split('/');
+    if (below.length === 0 || first.toLowerCase() !== DATA_FOLDER.toLowerCase()) return walk(root, path.split('/'));
+    if (dataFolder === undefined) return { kind: 'read', answer: undefined };
+    const found = await walk(dataFolder, below);
+    return found.kind === 'read' && found.answer !== undefined ? { kind: 'read', answer: [basename(dataFolder), ...found.answer] } : found;
   };
 }
 
@@ -137,20 +145,16 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
   return separator + whitelist.replaceAll('\n', lineEnding);
 }
 
-// A mod folder holds what the game reads from Data, and a folder that holds a copy of the game folder holds the game's files
-// below a folder of its own.
-const pathsBelowFolders = (path: string): string[] => {
-  const segments = path.split('/');
-  return segments.map((_, skipped) => segments.slice(skipped).join('/')).flatMap((below) => [below, `Data/${below}`]);
-};
+// MO2 reads a mod folder as the game reads its Data folder.
+const isModFolder = (instanceRoot: string, folder: string): boolean => dirname(folder) === modsDir(instanceRoot);
 
 export function mo2Repository(
   context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined,
 ): Mo2Repository {
   const { instanceRoot } = context;
   const whitelist = whitelistIgnoreList(publisherFile?.name);
-  const gameFiles: InstanceAdapter['gameFiles'] = async (root, modFilePaths) => {
-    const find = caseBlindFinder(root);
+  const gameFiles: InstanceAdapter['gameFiles'] = async (place, modFilePaths) => {
+    const find = caseBlindFinder(place);
     const files = new Map<string, GameFile>();
     const unreadable: Record<string, string> = {};
     for (const modFilePath of modFilePaths) {
@@ -158,7 +162,7 @@ export function mo2Repository(
       if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
       const names = found.answer;
       if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(root, ...names));
+      const hashed = await gameFileHash(join(place.root, ...names));
       if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
       files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
     }
@@ -211,11 +215,22 @@ export function mo2Repository(
 
     gameFiles,
 
-    async gameFilesTakenBy(root, folder) {
+    async gameFilesTakenBy(place, folder, landing) {
       const { files, notes } = await filesBelow(folder);
-      const taken = await gameFiles(root, [...new Set(files.flatMap((file) => pathsBelowFolders(file.relativePath)))]);
+      const inGameFolder = isModFolder(instanceRoot, folder) ? landing : (path: string) => path;
+      const asked = files.flatMap(({ relativePath }) => {
+        const path = inGameFolder(relativePath);
+        return path === undefined ? [] : [{ path, pathInFolder: relativePath }];
+      });
+      const taken = await gameFiles(place, asked.map(({ path }) => path));
       const [reason] = Object.values(taken.unreadable);
-      return reason === undefined ? { kind: 'read', answer: { gameFiles: taken.files, notes } } : { kind: 'unreadable', reason };
+      if (reason !== undefined) return { kind: 'unreadable', reason };
+      const found = new Map(taken.files.map((file) => [file.path.toLowerCase(), file]));
+      const gameFilesTaken = asked.flatMap(({ path, pathInFolder }) => {
+        const file = found.get(path.toLowerCase());
+        return file === undefined ? [] : [{ ...file, pathInFolder }];
+      });
+      return { kind: 'read', answer: { gameFiles: gameFilesTaken, notes } };
     },
   };
 }

@@ -1427,6 +1427,7 @@ export interface components {
         GameFileRequest: {
             path: string;
             hash: string;
+            pathInFolder?: string | null;
         };
         GameFolderPlaceRequest: {
             root: string;

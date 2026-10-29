@@ -94,7 +94,7 @@ describe('sourceCommands build', () => {
     const asksOnceThenBuilds = (client: InMemoryMEditClient): void => {
       client.setCommandHandler('build', (_mods, facts) => Promise.resolve((facts.gameFolder?.files ?? []).length === 0 ? NEEDING : BUILT));
     };
-    const place = { root: '/game', depots: [], depotProblems: [] };
+    const place = { root: '/game', dataFolder: '/game/Data', depots: [], depotProblems: [] };
 
     it('hands mEdit again the mod it refused for game files, with the files from every place of the game that holds them', async () => {
       const client = new InMemoryMEditClient();
@@ -294,7 +294,7 @@ describe('sourceCommands decompileAndCommit', () => {
     client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
     const file = { path: 'textures/a.dds', hash: 'G' };
     const adapter = fakeAdapter({
-      places: [{ root: '/game', depots: [{ id: '377162', version: '7' }], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) }],
+      places: [{ root: '/game', dataFolder: '/game/Data', depots: [{ id: '377162', version: '7' }], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) }],
     });
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC']);
@@ -310,7 +310,7 @@ describe('sourceCommands decompileAndCommit', () => {
   ])('refuses a mod whose game files %s, naming why, and commits the rest', async (_case, taken, reason) => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
-    const adapter = fakeAdapter({ places: [{ root: '/game', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', taken]]) }] });
+    const adapter = fakeAdapter({ places: [{ root: '/game', dataFolder: '/game/Data', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', taken]]) }] });
 
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC', 'ModF']);
 

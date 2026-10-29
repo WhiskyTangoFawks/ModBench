@@ -12,6 +12,8 @@ import { errorMessage } from '../../ports/errorMessage';
 import type { FoundGameFolder, GameFolder, GameFolderLook, GameFolderSetting, SteamInstall } from '../instanceAdapter';
 import { installedDepots } from './steamAppManifest';
 
+export const DATA_FOLDER = 'Data';
+
 // What the mod manager says about where the game is, read by the manager from its own configuration.
 export interface ManagerGamePath {
   // As the manager spells it, a Windows path under Wine; undefined when it names none.
@@ -79,7 +81,7 @@ export async function normalizeGamePath(
 
 async function hasDataFolder(root: string): Promise<boolean> {
   try {
-    return (await factsOf(join(root, 'Data'))).kind === 'directory';
+    return (await factsOf(join(root, DATA_FOLDER))).kind === 'directory';
   } catch {
     return false;
   }
@@ -151,7 +153,7 @@ export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDe
   const settingPlace = `the game folder setting, ${setting.id}`;
   return async (managed: ManagerGamePath): Promise<GameFolder> => {
     const facts = autodetectFacts(managed.release);
-    const at = (root: string): GameFolder => ({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    const at = (root: string): GameFolder => ({ kind: 'found', root, dataFolder: join(root, DATA_FOLDER) });
     const looked: GameFolderLook[] = [];
     const notFound = (): GameFolder => ({ kind: 'notFound', looked, setting: setting.id });
 
