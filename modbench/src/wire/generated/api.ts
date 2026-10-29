@@ -1363,6 +1363,7 @@ export interface components {
                     [key: string]: components["schemas"]["ConflictThis"];
                 };
             } | null;
+            noWinner: boolean;
         };
         FieldMetadata: {
             name: string;

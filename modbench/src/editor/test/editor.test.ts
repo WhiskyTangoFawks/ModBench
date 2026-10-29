@@ -400,7 +400,7 @@ describe('the Editor\'s file systems', () => {
       ...comparisonOf(FORM_KEY, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true }]),
       diffs: [{
         fieldName: 'Description', values: { [columnKey(plugin)]: 'a long description' },
-        winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict',
+        winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', noWinner: false,
       }],
     });
     return client;
