@@ -52,10 +52,11 @@ As a user, I want:
 
 1. Only the active plugins' copies compared. An overridden plugin's column, shown when I open its file, is left out of the comparison: the game never loads it. Cites: ADR-0012; [editor.md](editor.md)
 2. A Partial Form copy's own fields left out of the comparison, even where they differ: the game ignores them. Its children compare as any record does. Cites: xEdit
-3. A field's winner to be the last copy that takes part in it, whether or not that copy has the field: the game loads that copy whole. A Partial Form copy takes no part in its own fields (story 2), so the last copy before it wins them. Cites: xEdit
+3. A field's winner to be the last copy that takes part in it, whether or not that copy has the field: the game loads that copy whole. A Partial Form copy takes no part in its own fields (story 2), so the last copy before it wins them. A templated field is an exception (story 7). Cites: xEdit
 4. Arrays compared as they align ([editor-fields.md](editor-fields.md), Arrays). Cites: xEdit
 5. A container's conflict to be its own fields'. Its child records compare as records of their own, never as a list in the container: the game loads every plugin's children, not the winner's list. Cites: ruling; xEdit
 6. A panel opened on several records to compare the records with each other. A row is NoConflict where they agree on the field, and ConflictBenign where they do not. A cell is compared with its row's cell in the focused column: it is Master in the focused column, Override where it is the same, and ConflictLoses where it differs. This is an exception to The two axes: a cell compares with the focused column, not with the other copies. Cites: xEdit Compare Selected
+7. A templated field ([editor-fields.md](editor-fields.md), Templated fields) left out of the comparison, with no conflict colour. The rows that hold the template flags and name the templates show the conflict over it. Where the last copy's field is templated, no copy wins it: the row shows no conflict colour, and every cell in it dims. Cites: Never silently wrong; xedit.md, divergence 40
 
 ## The colours
 
