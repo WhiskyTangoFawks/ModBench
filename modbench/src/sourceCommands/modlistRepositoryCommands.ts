@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import {
   isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type ModRestoreDestroys, type NotFound, type ManifestMetadata,
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
@@ -5,6 +6,7 @@ import {
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, InstallationFile, InstanceAdapter, ModFolder, ModMetadata, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
+import type { FileProblems } from '../ports/fileProblems';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { HostGit } from '../ports/repository';
@@ -33,6 +35,7 @@ interface ModlistRepositoryCommandsDeps {
   hostGit: HostGit<unknown>;
   trash: MoveToTrash;
   tasks: StepTasks;
+  pathProblems: FileProblems;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -560,18 +563,23 @@ async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly str
   }
 }
 
-async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
+async function submodulesWritten(adapter: Adapter, acted: readonly string[], everyMod: boolean): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
   try {
-    const { notes, other } = await adapter.writeSubmodules();
+    const { notes, other } = await adapter.writeSubmodules(acted, everyMod);
     return { notes, repositoryNotes: other };
   } catch (err) {
     return { notes: [], repositoryNotes: [errorMessage(err)] };
   }
 }
 
-async function pathsReported(adapter: Adapter): Promise<readonly string[]> {
+async function pathsShown({ adapter, pathProblems, instanceRoot }: ModlistRepositoryCommandsDeps): Promise<readonly string[]> {
   try {
-    return (await adapter.pathsOutsideFolders()).map(({ file, path }) => `${file} holds a path no path token names: ${path}`);
+    const found = await adapter.pathsOutsideFolders();
+    pathProblems.clearAll();
+    for (const file of new Set(found.map((path) => path.file))) {
+      pathProblems.set(join(instanceRoot, file), found.filter((path) => path.file === file).map(({ line, path }) => ({ line, message: `holds a path no path token names: ${path}` })));
+    }
+    return [];
   } catch (err) {
     return [`the paths the instance repository's files hold could not be read: ${errorMessage(err)}`];
   }
@@ -631,9 +639,9 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     gitInit: (): Promise<GitInitResult> => gitInit(deps),
 
     /** A mod whose folder or installation files the Instance adapter cannot answer is refused here, naming why, and mEdit
-     *  updates the rest. */
+     *  updates the rest. `everyMod`: the mods are every mod, so a source mod that is gone loses its submodule entry. */
     updateManifest: async (
-      mods: readonly string[], { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {}, others: readonly OtherManifest[] = [],
+      mods: readonly string[], { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {}, others: readonly OtherManifest[] = [], everyMod = false,
     ): Promise<UpdateManifestResult> => {
       const sourceMods = await adapter.sourceMods();
       const game = await gameToHand(adapter, sourceMods);
@@ -641,7 +649,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const { sent, refused: unread, notes } = await readMods(
         adapter, namesOf(mods, others), folders, (mod) => adapter.installationFile(mod), game, sourceMods, { onProgress, signal });
       const refused = [...unread];
-      const nothingUpdated = async (): Promise<UpdateManifestResult> => ({ applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) });
+      const nothingUpdated = async (): Promise<UpdateManifestResult> => ({ applied: true, landed: [], refused, notes, repositoryNotes: await pathsShown(deps) });
       if (sent.length === 0) return nothingUpdated();
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
@@ -658,10 +666,10 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.files.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },
         { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
-      const submodules = await submodulesWritten(adapter);
+      const submodules = await submodulesWritten(adapter, versioned.map(({ name }) => name), everyMod);
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
-        repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
+        repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsShown(deps)],
       };
     },
 

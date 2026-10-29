@@ -381,8 +381,8 @@ export interface OtherManifest { readonly name: string; readonly folder: string 
 /** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
 export interface UnsearchedFolder { readonly name: string; readonly reason: string }
 
-// A path a file holds, the file by its path in the instance repository.
-interface PathInFile { readonly file: string; readonly path: string }
+// A path a file holds on a line (1-based), the file by its path in the instance repository.
+interface PathInFile { readonly file: string; readonly line: number; readonly path: string }
 
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
@@ -703,9 +703,10 @@ export interface InstanceAdapter {
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;
-  /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
-   *  it cannot read keeps the entry and line it has. */
-  writeSubmodules(): Promise<SubmoduleReport>;
+  /** Makes each source mod of `acted` with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list.
+   *  A source mod it cannot read keeps the entry and line it has, as does every source mod not in `acted`. Only `everyMod`
+   *  removes the entry and line of a source mod that is gone. */
+  writeSubmodules(acted: readonly string[], everyMod: boolean): Promise<SubmoduleReport>;
   /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
    *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
   otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[]; readonly nested: readonly { readonly name: string; readonly reason: string }[] }>;

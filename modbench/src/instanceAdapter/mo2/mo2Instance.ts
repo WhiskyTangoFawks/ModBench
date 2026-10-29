@@ -24,6 +24,7 @@ import { readInstance } from '../instanceReading';
 import { mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from '../processes';
+import type { FileProblems } from '../../ports/fileProblems';
 import { hashIndex } from '../downloadedFileContents/hashIndex';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 import { parseModlist } from './codecs/modlistText';
@@ -42,6 +43,7 @@ const MO2_PROGRAM = 'ModOrganizer.exe';
 export type Mo2InstanceOptions = {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
+  fileProblems: FileProblems;
   fomodEngine: FomodEngine;
   deployedPath: DeployedPath;
 } & ({ gameFolderSetting: GameFolderSetting } | { context: Mo2Context });
@@ -54,7 +56,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {
-  const { instanceRoot, installationFileReader, fomodEngine, deployedPath } = options;
+  const { instanceRoot, installationFileReader, fileProblems, fomodEngine, deployedPath } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
     resolveGameFolder: gameFolderResolver(options.gameFolderSetting),
@@ -64,7 +66,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
     mo2Running: () => programRunning(MO2_PROGRAM),
   };
-  const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader);
+  const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader, fileProblems);
   const source = readingSource(context, publisherFile);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   return {

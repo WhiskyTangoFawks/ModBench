@@ -161,10 +161,11 @@ const SHARE_PATH = String.raw`(?<=^|[=\s"(,])(?:\\{2}|\\{4}|//)(?=[A-Za-z0-9])[^
 const ROOT_PATH = String.raw`(?<=^|[=\s"(,:])/(?![/\s"}])[^\r\n"]*`;
 const PATH = new RegExp([DRIVE_PATH, SHARE_PATH, ROOT_PATH].join('|'), 'gm');
 
-const pathsIn = (text: string): string[] => [...text.matchAll(PATH)].map(({ 0: match, index }) => {
+const pathsIn = (text: string): { path: string; line: number }[] => [...text.matchAll(PATH)].map(({ 0: match, index }) => {
   const trimmed = match.trimEnd();
   const quoted = trimmed === match && text[index + match.length] === '"' ? trimmed.replace(/\\$/, '') : trimmed;
-  return text[index - 1] === '(' ? quoted.replace(/\)$/, '') : quoted;
+  const path = text[index - 1] === '(' ? quoted.replace(/\)$/, '') : quoted;
+  return { path, line: text.slice(0, index).split('\n').length };
 });
 
 // A manifest's hash is base64, which can start with a slash; the manifest holds a path only under "path".
@@ -296,7 +297,13 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
           if (GIT_PATTERN_FILES.has(basename(file))) continue;
           const text = covered ? await heldByGit(scratch, instanceRoot, file) : await readFile(join(instanceRoot, file), 'utf8').catch(absentAs(''));
           if (text.includes('\0')) continue;
-          found.push(...[...new Set(pathsIn(withoutHashes(file, text)))].map((path) => ({ file, path })));
+          const seen = new Set<string>();
+          for (const { path, line } of pathsIn(withoutHashes(file, text))) {
+            const key = `${line}:${path}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            found.push({ file, line, path });
+          }
         }
         return found;
       });

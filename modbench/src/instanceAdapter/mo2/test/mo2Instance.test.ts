@@ -1,4 +1,5 @@
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
+import { NO_FILE_PROBLEMS } from '../../../test/noFileProblems';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
@@ -386,7 +387,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
         const onThisMachine = mo2InstanceAdapter({
-          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
+          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fileProblems: NO_FILE_PROBLEMS, fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
         }, undefined);
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
