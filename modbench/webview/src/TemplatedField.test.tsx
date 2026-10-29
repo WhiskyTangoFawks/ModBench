@@ -197,4 +197,17 @@ describe('RecordPanel — a templated field', () => {
     expect(sections('Perks', 0)).not.toEqual(expect.stringMatching(/\barrayParent\b/));
     expect(sections('[0]', 0)).not.toEqual(expect.stringMatching(/\barrayElement\b/));
   });
+
+  it('is dimmed, and copies its template, on a nested member, leaving the struct\'s own row alone', async () => {
+    const configMeta = fieldMeta({ name: 'Configuration', type: 'struct', fields: [levelMeta] });
+    const level = diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 }, winnerColumn: MOD });
+    renderPanel(panelOf(
+      configMeta, [{ Level: 5 }, { Level: 7 }],
+      diffNode({ fieldName: 'Configuration', values: { [MASTER]: { Level: 5 }, [MOD]: { Level: 7 } }, winnerColumn: MOD, children: [level] }),
+      [null, { 'Configuration.Level': { flag: 'Stats', template: TEMPLATE, resolution: RESOLVED } }]));
+    await screen.findByText('Level');
+    expect(cellAt('Level', 2)).toHaveStyle({ opacity: DIMMED_OPACITY });
+    expect(contextOf(cellAt('Level', 2)).copyText).toBe(`EncRaider01 [${TEMPLATE}]`);
+    expect(cellAt('Configuration', 2)).not.toHaveStyle({ opacity: DIMMED_OPACITY });
+  });
 });
