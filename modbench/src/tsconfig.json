@@ -8,6 +8,7 @@
   },
   "references": [
     { "path": "./loadOrderFileCodec" },
+    { "path": "./manifestAdapter" },
     { "path": "./tables" },
     { "path": "./wire" },
     { "path": "./ports" },
