@@ -66,7 +66,11 @@ interface PlaceDepots {
 /** The game's install in Steam's library. */
 export type SteamInstall = FoundGameFolder & PlaceDepots;
 
-export type GamePlace = PlaceDepots & { readonly dataFolder: string };
+/** A place of the game. It holds no Data file when its Data folder is another place's. */
+export type GamePlace = PlaceDepots & { readonly root: string; readonly holdsDataFiles: boolean };
+
+/** Where deploy puts a mod's file in the game folder, none for a file it does not deploy. */
+export type DeployedPath = (pathInMod: string) => string | undefined;
 
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
@@ -441,6 +445,10 @@ export interface GameFile {
   readonly hash: string;
 }
 
+interface GameFileTaken extends GameFile {
+  readonly pathInFolder: string;
+}
+
 interface GameFilesRead {
   readonly files: readonly GameFile[];
   readonly unreadable: Readonly<Record<string, string>>;
@@ -448,7 +456,7 @@ interface GameFilesRead {
 
 // The game files a mod's files take, and each entry of its folder the listing skipped, one line apiece.
 interface GameFilesTaken {
-  readonly gameFiles: readonly GameFile[];
+  readonly gameFiles: readonly GameFileTaken[];
   readonly notes: readonly string[];
 }
 
@@ -686,12 +694,12 @@ export interface InstanceAdapter {
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
    *  (modlist-repository.md, Status, story 3). The repository never commits it. */
   readonly statCacheFolder: string;
-  /** The game files in `dataFolder` at the paths of a mod's files, named as the game folder names them, with their hashes.
-   *  A path that could not be read is `unreadable` as asked, with why: neither found nor absent. */
-  gameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files in `dataFolder` that the files below `folder`, a mod's or any folder a manifest builds, may be: each
-   *  file's path and its path below each folder. */
-  gameFilesTakenBy(dataFolder: string, folder: string): Promise<FileRead<GameFilesTaken>>;
+  /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that
+   *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
+  gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
+  /** The game files of `place` that the files below `folder`, a mod's or any folder a manifest builds, may be: a mod's
+   *  file where deploy puts it, another folder's at its own path. */
+  gameFilesTakenBy(place: GamePlace, folder: string): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;

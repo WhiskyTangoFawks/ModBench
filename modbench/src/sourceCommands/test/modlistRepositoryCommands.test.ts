@@ -24,7 +24,7 @@ const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kin
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const readingOf = (sourceFolders: Record<string, string> = {}, gameFolder: GameFolder = FOUND, modFolders?: ModFolders): Partial<InstanceReading> =>
   ({ gameFolder, sourceMods: sourceModsOf(sourceFolders), modFolders });
-const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
+const GAME_FOLDER = { name: 'Fallout4', root: '/game', files: [] };
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
   new Map(Object.entries(filesByMod).map(([mod, files]) => [mod, { origin: mod, folder: `/instance/mods/${mod}`, files, folders: [], notes: [] }]));
 
@@ -284,8 +284,8 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('hands mEdit a folder outside the mod folders by its name, with its folder, the game files its files may be, and none of what a mod manager holds of a mod', async () => {
-    const stockGameFiles: FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =
-      { kind: 'read', answer: { gameFiles: [{ path: 'Meshes/A.nif', hash: '#a' }], notes: [] } };
+    const stockGameFiles: Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>> =
+      { kind: 'read', answer: { gameFiles: [{ path: 'Data/Meshes/A.nif', hash: '#a', pathInFolder: 'Data/Meshes/A.nif' }], notes: [] } };
     const { commands, client } = commandsOver({ ...WHAT_A_MOD_MANAGER_WOULD_HOLD_OF_IT_AS_A_MOD, gameFilesTaken: new Map([['Stock Game', stockGameFiles]]) });
     client.setCommandResult('updateManifest', UPDATED);
 
@@ -293,7 +293,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     expect(client.calls[0]?.args[0]).toEqual([
       { name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'], gameFolder: GAME_FOLDER },
-      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [], gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] } },
+      { name: 'Stock Game/', folder: '/instance/Stock Game', metadataFiles: [], gameFolder: { ...GAME_FOLDER, files: [{ path: 'Data/Meshes/A.nif', hash: '#a', pathInFolder: 'Data/Meshes/A.nif' }] } },
     ]);
     expect(outcome).toMatchObject({ applied: true, refused: [], notes: [] });
   });
@@ -309,8 +309,8 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('hands mEdit, with each mod, the game files that mod\'s files may take, whether or not it has an installation file', async () => {
-    const taken = (path: string): FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =>
-      ({ kind: 'read', answer: { gameFiles: [{ path, hash: `#${path}` }], notes: [] } });
+    const taken = (path: string): Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>> =>
+      ({ kind: 'read', answer: { gameFiles: [{ path: `Data/${path}`, hash: `#${path}`, pathInFolder: path }], notes: [] } });
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
       gameFilesTaken: new Map([['ModA', taken('Textures/a.dds')], ['ModB', taken('Meshes/B.nif')]]),
@@ -320,8 +320,8 @@ describe('modlistRepositoryCommands update manifest', () => {
     await commands.updateManifest(['ModA', 'ModB']);
 
     expect(client.calls[0]?.args[0]).toMatchObject([
-      { name: 'ModA', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Textures/a.dds', hash: '#Textures/a.dds' }] } },
-      { name: 'ModB', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/B.nif', hash: '#Meshes/B.nif' }] } },
+      { name: 'ModA', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Data/Textures/a.dds', hash: '#Textures/a.dds' }] } },
+      { name: 'ModB', gameFolder: { ...GAME_FOLDER, files: [{ path: 'Data/Meshes/B.nif', hash: '#Meshes/B.nif' }] } },
     ]);
   });
 
@@ -1383,8 +1383,8 @@ const firstModSent = (client: InMemoryMEditClient): unknown => {
 };
 
 describe('modlistRepositoryCommands with another place of the game beside the game folder', () => {
-  const GAME_PLACE: GamePlace = { dataFolder: '/game/Data', depots: [], depotProblems: [] };
-  const STEAM_PLACE: GamePlace = { dataFolder: '/steam/Data', depots: [], depotProblems: [] };
+  const GAME_PLACE: GamePlace = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
+  const STEAM_PLACE: GamePlace = { root: '/steam', holdsDataFiles: true, depots: [], depotProblems: [] };
   const UPDATED = { landed: [{ mod: 'ModB', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] };
   type Places = NonNullable<InstanceAnswers['places']>;
   const besideHolding = (files: [string, string][], unreadable: [string, string][] = [], place: Partial<GamePlace> = {}): Places => [
@@ -1394,7 +1394,7 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
       ...place,
       gameFiles: new Map(files.map(([path, hash]) => [path.toLowerCase(), { path, hash }])),
       unreadableGameFiles: new Map(unreadable),
-      gameFilesTaken: new Map([['ModB', { kind: 'read', answer: { gameFiles: files.map(([path, hash]) => ({ path, hash })), notes: [] } }]]),
+      gameFilesTaken: new Map([['ModB', { kind: 'read', answer: { gameFiles: files.map(([path, hash]) => ({ path, hash, pathInFolder: path })), notes: [] } }]]),
     },
   ];
   const skippedForGameFile = (path: string) => ({
@@ -1402,23 +1402,23 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
   });
 
   it('hands update manifest the files of another place as another place', async () => {
-    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/B.nif', '#b']]) });
+    const { commands, client } = commandsOver({ places: besideHolding([['Data/Meshes/B.nif', '#b']]) });
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModB']);
 
-    expect(firstModSent(client)).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/B.nif', hash: '#b' }] }] } });
+    expect(firstModSent(client)).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ root: '/steam', files: [{ path: 'Data/Meshes/B.nif', hash: '#b' }] }] } });
   });
 
   it('hands update manifest the depots of a place on that place', async () => {
     const depots = [{ id: '377162', version: '2222' }];
-    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/B.nif', '#b']], [], { depots }) });
+    const { commands, client } = commandsOver({ places: besideHolding([['Data/Meshes/B.nif', '#b']], [], { depots }) });
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModB']);
 
     const sent = firstModSent(client);
-    expect(sent).toMatchObject({ gameFolder: { elsewhere: [{ dataFolder: '/steam/Data', depots }] } });
+    expect(sent).toMatchObject({ gameFolder: { elsewhere: [{ root: '/steam', depots }] } });
     expect(sent).not.toHaveProperty('gameFolder.depots');
   });
 
@@ -1434,7 +1434,7 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
 
   it('notes on the update why a place gave fewer depots than it holds', async () => {
     const depotProblems = ['appmanifest_377160.acf records no installed depot'];
-    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/B.nif', '#b']], [], { depotProblems }) });
+    const { commands, client } = commandsOver({ places: besideHolding([['Data/Meshes/B.nif', '#b']], [], { depotProblems }) });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModB']);
@@ -1452,8 +1452,8 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
   });
 
   it('hands restore no depots, which its manifest names', async () => {
-    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/A.nif', '#a']], [], { depots: [{ id: '377162', version: '2222' }] }) });
-    client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
+    const { commands, client } = commandsOver({ places: besideHolding([['Data/Meshes/A.nif', '#a']], [], { depots: [{ id: '377162', version: '2222' }] }) });
+    client.setCommandResult('restoreFromManifest', skippedForGameFile('data/meshes/a.nif'));
 
     await commands.restoreFromManifest(['ModA']);
 
@@ -1461,26 +1461,26 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
   });
 
   it('hands restore\'s retry the files of another place as another place', async () => {
-    const { commands, client } = commandsOver({ places: besideHolding([['Meshes/A.nif', '#a']]) });
-    client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
+    const { commands, client } = commandsOver({ places: besideHolding([['Data/Meshes/A.nif', '#a']]) });
+    client.setCommandResult('restoreFromManifest', skippedForGameFile('data/meshes/a.nif'));
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(client.calls[1]?.args[1]).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ dataFolder: '/steam/Data', files: [{ path: 'Meshes/A.nif', hash: '#a' }] }] } });
+    expect(client.calls[1]?.args[1]).toMatchObject({ gameFolder: { ...GAME_FOLDER, elsewhere: [{ root: '/steam', files: [{ path: 'Data/Meshes/A.nif', hash: '#a' }] }] } });
   });
 
   it('hands mEdit why a file of another place could not be read, so it is not shown as missing', async () => {
-    const { commands, client } = commandsOver({ places: besideHolding([], [['meshes/a.nif', 'EACCES']]) });
-    client.setCommandResult('restoreFromManifest', skippedForGameFile('meshes/a.nif'));
+    const { commands, client } = commandsOver({ places: besideHolding([], [['data/meshes/a.nif', 'EACCES']]) });
+    client.setCommandResult('restoreFromManifest', skippedForGameFile('data/meshes/a.nif'));
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(client.calls[1]?.args[0]).toMatchObject([{ unreadableGameFiles: { 'meshes/a.nif': 'EACCES' } }]);
+    expect(client.calls[1]?.args[0]).toMatchObject([{ unreadableGameFiles: { 'data/meshes/a.nif': 'EACCES' } }]);
   });
 
   it('does not refuse a mod the game folder holds when another place cannot be read, and notes which place', async () => {
-    const taken: FileRead<{ gameFiles: { path: string; hash: string }[]; notes: string[] }> =
-      { kind: 'read', answer: { gameFiles: [{ path: 'Meshes/B.nif', hash: '#b' }], notes: [] } };
+    const taken: Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>> =
+      { kind: 'read', answer: { gameFiles: [{ path: 'Data/Meshes/B.nif', hash: '#b', pathInFolder: 'Data/Meshes/B.nif' }], notes: [] } };
     const { commands, client } = commandsOver({
       places: [
         { ...GAME_PLACE, gameFilesTaken: new Map([['ModB', taken]]) },
@@ -1491,7 +1491,7 @@ describe('modlistRepositoryCommands with another place of the game beside the ga
 
     const outcome = await commands.updateManifest(['ModB']);
 
-    expect(firstModSent(client)).toMatchObject({ gameFolder: { files: [{ path: 'Meshes/B.nif', hash: '#b' }] } });
-    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModB', note: 'the game files in /steam/Data could not be read: EACCES' }] });
+    expect(firstModSent(client)).toMatchObject({ gameFolder: { files: [{ path: 'Data/Meshes/B.nif', hash: '#b' }] } });
+    expect(outcome).toMatchObject({ refused: [], notes: [{ mod: 'ModB', note: 'the game files in /steam could not be read: EACCES' }] });
   });
 });

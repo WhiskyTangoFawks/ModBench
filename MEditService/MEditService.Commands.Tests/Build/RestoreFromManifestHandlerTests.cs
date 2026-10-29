@@ -465,6 +465,20 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AFileTheGameFolderHoldsAtItsRoot_ComesBackFromTheInstallation()
+    {
+        _folders.WithFile("game", "Fallout4.exe", "exe").WithFile(Mod, "Root/Fallout4.exe", "stale");
+        _folders.Manifests[Mod] = new Manifest(
+            [new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([new HashedFile("Root/Fallout4.exe", "exe")]))], [ManifestFile.In("Fallout 4", "Root/Fallout4.exe", "Fallout4.exe")]);
+        var instance = Instance() with { GameFolder = new GameFolder("Fallout 4", "game", [new GameFile("Fallout4.exe", "exe")]) };
+
+        var restored = Assert.Single((await RestoreIn(instance, ModFrom(Mod))).Applied);
+
+        Assert.Equal(["Root/Fallout4.exe"], restored.Written);
+        Assert.Equal("exe", WrittenText(Mod, "Root/Fallout4.exe"));
+    }
+
+    [Fact]
     public async Task AGameFolderMod_WhoseGameFilesTheFirstPlaceHoldsWithOtherBytes_ComesBackFromAnotherPlaceThatHoldsThem()
     {
         _folders.WithFile("data", "a.nif", "edited").WithFile("steam", "a.nif", "a");

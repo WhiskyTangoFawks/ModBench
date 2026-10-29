@@ -68,7 +68,7 @@ export interface Deployment {
 }
 
 // A mod's Root folder holds what the game reads from beside its program; the rest is Data's.
-function deployedPath(relativePath: string): string | undefined {
+export function deployedPath(relativePath: string): string | undefined {
   const [first = '', ...below] = relativePath.split('/');
   if (first.startsWith('.')) return undefined;
   if (below.length === 0) return `Data/${relativePath}`;

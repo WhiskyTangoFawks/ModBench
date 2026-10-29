@@ -2,32 +2,27 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>The files a package holds, looked up by hash.</summary>
-internal sealed class Holder(string name, IReadOnlyCollection<(string Path, string Hash)> files, bool keptBelowFolders = false)
+/// <summary>The files a package holds, looked up by hash, each at its path in the package and the path in the folder it is for.</summary>
+internal sealed class Holder(string name, IReadOnlyCollection<(string Path, string Hash, string PathInFolder)> files)
 {
-    private readonly ILookup<string, string> _pathsByHash = files.ToLookup(file => file.Hash, file => file.Path, StringComparer.Ordinal);
-    private readonly HashSet<string> _paths = files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private readonly ILookup<string, (string Path, string PathInFolder)> _byHash =
+        files.ToLookup(file => file.Hash, file => (file.Path, file.PathInFolder), StringComparer.Ordinal);
+    private readonly HashSet<string> _pathsInFolder = files.Select(file => file.PathInFolder).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public string Name { get; } = name;
 
-    public string? PathHolding(HashedFile held)
-    {
-        var paths = _pathsByHash[held.Hash];
-        return paths.FirstOrDefault(path => string.Equals(path, held.Path, StringComparison.OrdinalIgnoreCase)) ?? paths.FirstOrDefault();
-    }
+    public string? PathHolding(HashedFile held) => OwnPathHolding(held) ?? _byHash[held.Hash].Select(file => file.Path).FirstOrDefault();
 
-    /// <summary>Whether the package has a file at the path of <paramref name="held"/>; a place of the game also below any of
-    /// its folders, as a copy of the game folder keeps the game's files below Data/.</summary>
-    public bool HoldsAPathOf(HashedFile held)
-    {
-        var segments = held.Path.Split('/');
-        return keptBelowFolders ? segments.Select((_, skipped) => string.Join('/', segments.Skip(skipped))).Any(_paths.Contains) : _paths.Contains(held.Path);
-    }
+    /// <summary>The path of the file held for <paramref name="held"/>'s path, when it has its bytes.</summary>
+    public string? OwnPathHolding(HashedFile held) =>
+        _byHash[held.Hash].Where(file => string.Equals(file.PathInFolder, held.Path, StringComparison.OrdinalIgnoreCase)).Select(file => file.Path).FirstOrDefault();
+
+    public bool HoldsAPathOf(HashedFile held) => _pathsInFolder.Contains(held.Path);
 }
 
 internal sealed class DownloadedFile(string name, InstallationFile file)
 {
-    public Holder Holder { get; } = new(name, [.. file.Entries.Select(entry => (entry.Path, entry.Hash))]);
+    public Holder Holder { get; } = new(name, [.. file.Entries.Select(entry => (entry.Path, entry.Hash, entry.Path))]);
 
     public ManifestPackage.InstallationFile Package { get; } = new(name, file.Size, file.Hash, file.Page);
 

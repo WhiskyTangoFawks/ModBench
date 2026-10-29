@@ -37,7 +37,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record InInstallationFile(string Path, string Hash, InstallationFile File, string EntryPath) : PackagedFile(Path, Hash);
 
         /// <summary>The game file, by its path as the game folder names it, that holds the bytes.</summary>
-        internal sealed record InGameFolder(string Path, string Hash, string DataFolder, string GamePath) : PackagedFile(Path, Hash);
+        internal sealed record InGameFolder(string Path, string Hash, string Root, string GamePath) : PackagedFile(Path, Hash);
     }
 
     /// <summary>Built names the submodule whose build writes the files, none when its package is no submodule.</summary>
@@ -109,7 +109,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         foreach (var place in places)
         {
             if (place.Files.FirstOrDefault(file => string.Equals(file.Path, held.Path, StringComparison.OrdinalIgnoreCase)) is { } game)
-                return (new PackagedFile.InGameFolder(path, game.Hash, place.DataFolder, game.Path), null);
+                return (new PackagedFile.InGameFolder(path, game.Hash, place.Root, game.Path), null);
         }
         return (null, GameFileLack(held.Path));
     }
