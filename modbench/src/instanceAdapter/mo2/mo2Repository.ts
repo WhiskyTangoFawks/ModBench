@@ -6,7 +6,7 @@ import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
-import type { HashIndex } from '../downloadedFileContents/hashIndex';
+import type { HashIndex } from '../fileContents/hashIndex';
 import type { DeployedPath, FileRead, GameFile, GamePlace, InstanceAdapter, UnsearchedFolder } from '../instanceAdapter';
 import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';

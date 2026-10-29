@@ -16,9 +16,6 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// tests.</summary>
 internal static class TestEditService
 {
-    /// <summary>A snapshot that names no mod, so no status is pushed.</summary>
-    internal static readonly SnapshotMods NoMods = new([], "stat-cache");
-
     /// <summary>Every handler, from the registration the service itself runs. One provider per call,
     /// so two holders get two independent write sides.</summary>
     internal static IServiceProvider Over(

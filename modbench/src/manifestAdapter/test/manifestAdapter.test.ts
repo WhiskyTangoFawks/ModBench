@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { manifestText, readManifest } from '../manifestAdapter';
+import { manifestText } from '../../test/manifestText';
+import { readManifest } from '../manifestRead';
 import type { Manifest } from '../manifestAdapter';
 
 const mod7z = { kind: 'installationFile', name: 'Mod.7z', size: 100, hash: 'AAAA', page: 'https://www.nexusmods.com/fallout4/mods/1' } as const;

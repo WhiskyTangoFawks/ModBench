@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, stopMEditClient, type MEditClient, type ReadModStatus } from './client';
+import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -31,7 +31,7 @@ import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import { fileProblemsOver } from './ports/fileProblems';
 import { problemsHostOver } from './problemsHost';
-import { ModStatuses } from './mods/modStatuses';
+import { ModStatuses } from './modStatus/modStatuses';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
@@ -79,7 +79,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'getModStatus' | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'repairPreviews' | 'decompileAndRepair' | 'getPluginDependants' | 'getCreatablePluginExtensions' | 'build' | 'decompileAndCommit' | 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'changeSourceManifest' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'repairPreviews' | 'decompileAndRepair' | 'getPluginDependants' | 'getCreatablePluginExtensions' | 'build' | 'decompileAndCommit' | 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getWhatRestoreDestroys' | 'changeSourceManifest' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -101,7 +101,7 @@ interface ViewsDeps {
 interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
-  readStatus?: ReadModStatus;
+  statuses?: ModStatuses;
   toolbox: ToolboxView;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
@@ -164,11 +164,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks), pathProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-paths'))), outputChannel) });
-  const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
-  const modStatuses = own(new ModStatuses(client, readStatus, (line) => outputChannel.warn(`[modList] ${line}`)));
+  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
+  own(instance.subscribe((value) => { modStatuses.derive(value); }));
   const { modSync, pluginSync } = own(instanceSyncs({
-    instance, syncMods: modSyncOver(adapter), channel: outputChannel, modStatuses,
-    syncPlugins: pluginSyncOver(adapter, readStatus, modStatuses),
+    instance, syncMods: modSyncOver(adapter), channel: outputChannel, syncPlugins: pluginSyncOver(adapter),
   }));
   ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
   const sourceGestureRows = selectionInFocusedView(
@@ -185,7 +184,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
   const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
-    instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter, client), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
     downloadedFileInstallReporting: {
       reporter: reporterFor('downloadedFiles'), log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
@@ -237,7 +236,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, reporter: reporterFor('deploy'),
   }));
   return {
-    instance, toolbox, readStatus,
+    instance, toolbox, statuses: modStatuses,
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
@@ -328,7 +327,7 @@ function start(context: vscode.ExtensionContext): void {
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,

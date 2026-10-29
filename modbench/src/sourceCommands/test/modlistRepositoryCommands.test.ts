@@ -1357,48 +1357,6 @@ describe('modlistRepositoryCommands other manifests', () => {
   });
 });
 
-describe('modlistRepositoryCommands mod status', () => {
-  const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false }];
-
-  it('asks mEdit for each mod\'s status by its folder, with its metadata files, the metadata the mod manager holds and the stat cache', async () => {
-    const { commands, client } = commandsOver({ metadata: new Map([['ModA', { version: '1.2.3', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }]]) });
-    client.setQueryAnswer('getModStatus', STATUS);
-
-    const answer = await commands.modStatus(['ModA']);
-
-    expect([client.calls, answer]).toEqual([
-      [{
-        method: 'getModStatus',
-        args: [[{
-          name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'],
-          metadata: { version: '1.2.3', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } },
-        }], '/instance/stat-cache'],
-      }], STATUS,
-    ]);
-  });
-
-  it('names a source mod\'s source folder, whose repository holds its manifest', async () => {
-    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({ ModA: '/source/Old ModA' }));
-    client.setQueryAnswer('getModStatus', STATUS);
-
-    await commands.modStatus(['ModA']);
-
-    expect(client.calls).toMatchObject([{ method: 'getModStatus', args: [[{ name: 'ModA', sourceFolder: '/source/Old ModA' }], '/instance/stat-cache'] }]);
-  });
-
-  it('says why a mod\'s metadata could not be read, and sends none of it', async () => {
-    const { commands, client } = commandsOver({ unreadableMetadata: new Map([['ModA', 'EACCES']]) });
-    client.setQueryAnswer('getModStatus', STATUS);
-
-    await commands.modStatus(['ModA']);
-
-    expect(client.calls).toEqual([{
-      method: 'getModStatus',
-      args: [[{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'], metadataUnreadable: 'EACCES' }], '/instance/stat-cache'],
-    }]);
-  });
-});
-
 const firstModSent = (client: InMemoryMEditClient): unknown => {
   const mods: unknown = client.calls[0]?.args[0];
   return Array.isArray(mods) ? (mods as readonly unknown[])[0] : undefined;

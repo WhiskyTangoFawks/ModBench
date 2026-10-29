@@ -1,4 +1,3 @@
-import { unreadStatus } from '../../test/unreadStatus';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -58,10 +57,10 @@ vi.mock('vscode', () => ({
 
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, mod } from './indexedValue';
-import { status } from '../../test/modStatusFixture';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
-import { ModStatuses } from '../modStatuses';
+import { ModStatuses } from '../../modStatus/modStatuses';
+import type { FolderReads } from '../../manifestAdapter/manifestAdapter';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
@@ -77,6 +76,14 @@ import { recordingTasks } from '../../test/recordingTasks';
 
 const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 
+const foldersHoldingNothing = (metadata: Awaited<ReturnType<FolderReads['modMetadata']>> = { kind: 'read', answer: {} }): FolderReads => ({
+  filesIn: () => Promise.resolve([]),
+  fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
+  originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
+  packageEntries: () => Promise.resolve(undefined),
+  modMetadata: () => Promise.resolve(metadata),
+});
+
 const treeViews = new FakeTreeViews();
 const currentBox = currentBoxOf(h.state);
 
@@ -84,9 +91,9 @@ const shownRows = async () => (await treeViews.view('modbench.modList').treeData
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
-  statuses: new ModStatuses(new InMemoryMEditClient(), () => Promise.resolve([]), () => undefined),
+  statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks() }), rows: () => [],
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
@@ -434,27 +441,27 @@ describe('the Mods view tells the indicator and publisher tag decorations when a
 });
 
 describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Reporting)', () => {
-  it('counts each mod mEdit pushes that has no manifest, once its status is read', async () => {
-    const push = new InMemoryMEditClient();
-    const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA'), mod('ModB')] }));
-    const read = (mods: readonly string[]) => Promise.resolve(mods.map((name) => status(name, { noManifest: true })));
-    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), statuses: new ModStatuses(push, read, () => undefined) });
+  const holdingModA = instanceValueFixture({
+    holdsRepository: true, mods: [mod('ModA'), mod('ModB')], modFolders: [{ kind: 'mod', name: 'ModA', path: '/nowhere/ModA', modName: 'ModA' }],
+  });
 
-    push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
+  it('counts each mod Mod status derives with no manifest', async () => {
+    const statuses = new ModStatuses(foldersHoldingNothing(), () => undefined);
+    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), log: () => undefined, ...noSync(), statuses });
+
+    statuses.derive(holdingModA);
 
     await vi.waitFor(() => { expect(view.badge).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' }); });
   });
 
-  it('says on the message line that a status read failed, while the instance holds a repository', async () => {
-    const push = new InMemoryMEditClient();
-    const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')] }));
-    const read = () => Promise.resolve({ failed: 'unreachable' as const });
-    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), statuses: new ModStatuses(push, read, () => undefined) });
+  it('says on the message line that a status could not be read, while the instance holds a repository', async () => {
+    const statuses = new ModStatuses(foldersHoldingNothing({ kind: 'unreadable', reason: 'EACCES' }), () => undefined);
+    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), log: () => undefined, ...noSync(), statuses });
 
-    push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
+    statuses.derive(holdingModA);
 
-    await waitForMessage(view, (message) => message?.startsWith('Showing the last good read: the mods\' status could not be read') === true,
-      'the failed status read');
+    await waitForMessage(view, (message) => message === 'Showing the last good read: the status of "ModA" could not be read: its metadata could not be read: EACCES.',
+      'the unreadable status');
   });
 });
 

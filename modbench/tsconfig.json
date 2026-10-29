@@ -9,6 +9,7 @@
     { "path": "./src/instanceAdapter" },
     { "path": "./src/coreLib" },
     { "path": "./src/instanceLoader" },
+    { "path": "./src/modStatus" },
     { "path": "./src/modCommands" },
     { "path": "./src/pluginCommands" },
     { "path": "./src/sortingRules" },

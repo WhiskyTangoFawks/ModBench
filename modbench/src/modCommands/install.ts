@@ -4,11 +4,12 @@ import { refuse } from '../coreLib/refuse';
 import type {
   FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
+import { sameEntry } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { ModStatus, ReadModStatus } from '../client';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import type { ModStatus } from '../manifestAdapter/manifestAdapter';
+import { statusOf } from '../manifestAdapter/manifestAdapter';
 
 /** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
  *  installation file that is one of the downloaded files installs as that file. */
@@ -68,22 +69,16 @@ const lossOf = (status: ModStatus): string | undefined => {
 
 const statusUnread = (mod: string, why: string): string => `"${mod}" status could not be read: ${why.replace(/\.$/, '')}.`;
 
-/** What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7). Nothing for a
- *  new mod and for an upgrade that loses nothing. */
-export async function upgradeLoss(
-  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadModStatus }, target: InstallTarget,
-): Promise<string | undefined> {
+/** What an upgrade over the mod would lose, or why its status could not say (agent.md, Any agent, story 7). Nothing for a
+ *  new mod, a mod no folder holds, or an upgrade that loses nothing. */
+export async function upgradeLoss({ adapter }: { adapter: InstanceAdapter }, target: InstallTarget): Promise<string | undefined> {
   if (target.kind !== 'upgrade') return undefined;
   const mod = target.name;
-  const answer = await readStatus([mod]);
-  if (isReadFailed(answer)) return statusUnread(mod, failureReason(answer));
-  const status = answer.find((read) => read.mod === mod);
-  if (status === undefined) {
-    const { modFolders } = await adapter.modOrder();
-    const wanted = adapter.entryKey({ kind: 'mod', name: mod });
-    return modFolders?.some((folder) => adapter.entryKey(folder) === wanted) ? `"${mod}" has no status in the answer.` : undefined;
-  }
-  if (status.unreadable) return statusUnread(mod, status.unreadable.why);
+  const folder = (await adapter.modOrder()).modFolders?.find((held) => sameEntry(adapter, held, { kind: 'mod', name: mod }));
+  if (folder === undefined) return undefined;
+  const sourceFolder = (await adapter.sourceMods()).folderOf(mod);
+  const status = await statusOf({ name: mod, folder: folder.path, ...(sourceFolder === undefined ? {} : { sourceFolder }) }, adapter);
+  if (status.unreadable !== undefined) return statusUnread(mod, status.unreadable);
   const loss = lossOf(status);
   return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}.`;
 }
@@ -100,7 +95,7 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
 /** `modbench.mod.install`, then a new mod's line, then its downloaded file marked installed. A refusal after the landing
  *  says why that step failed, and the install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
-  deps: { adapter: InstanceAdapter; readStatus: ReadModStatus; listMod: (name: string) => Promise<CommandResult> },
+  deps: { adapter: InstanceAdapter; listMod: (name: string) => Promise<CommandResult> },
   installed: ModPackage, target: InstallTarget, force: boolean, fomod?: FomodAnswer,
 ): Promise<CommandResult<{ cancelled?: true; fomod?: FomodLanded; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };

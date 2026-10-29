@@ -7,10 +7,8 @@ import {
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
-import { withMetadataRead } from '../wire/modByFolder';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
-import { modNameOf, modNamesOf } from './modName';
-import { present } from '../ports/present';
+import { modNamesOf } from './modName';
 import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from './downloadedFileRows';
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
@@ -492,7 +490,6 @@ export class Instance implements Subscription {
     this.tellArchivesNothingHolds(archiveSources);
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
-      modlist: { mods: entries, metadataFiles: adapter.metadataFilesInModFolder, statCache: adapter.statCacheFolder },
     });
     return {
       mods: entries,
@@ -527,7 +524,7 @@ export class Instance implements Subscription {
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
         ? loadOrderSnapshot
-        : await withMetadata(await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)), entries, modNames, adapter),
+        : await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)),
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,
@@ -535,16 +532,4 @@ export class Instance implements Subscription {
       publisherConfiguration: reading.publisherConfiguration,
     };
   }
-}
-
-async function withMetadata(
-  snapshot: LoadOrderSnapshotValue, entries: readonly ModlistEntry[], modNames: ReadonlyMap<string, string>,
-  { metadataOf }: Pick<InstanceAdapter, 'metadataOf'>,
-): Promise<LoadOrderSnapshotValue> {
-  const metaOf = new Map(entries.flatMap((entry) => {
-    const name = modNameOf(modNames, entry);
-    return name === undefined ? [] : [[name, entry.kind === 'mod' ? entry : {}] as const];
-  }));
-  const mods = await withMetadataRead(snapshot.mods, async (name) => ({ kind: 'read' as const, answer: await metadataOf(present(metaOf.get(name), name)) }));
-  return { ...snapshot, mods };
 }

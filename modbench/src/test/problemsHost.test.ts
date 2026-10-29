@@ -10,7 +10,7 @@ const FILE = '/instance/ModOrganizer.ini';
 describe('the Problems panel as VS Code gives it', () => {
   it('shows a warning on its line, zero-based, in the file\'s diagnostics', () => {
     const collection = new FakeDiagnosticCollection();
-    const host = problemsHostOver(collection as never);
+    const host = problemsHostOver(collection);
 
     host.publish(FILE, [host.diagnostic({ line: 4, message: 'a path' })]);
 
@@ -20,7 +20,7 @@ describe('the Problems panel as VS Code gives it', () => {
 
   it('holds no diagnostic for a file published none, and none for any file once cleared', () => {
     const collection = new FakeDiagnosticCollection();
-    const host = problemsHostOver(collection as never);
+    const host = problemsHostOver(collection);
     host.publish(FILE, [host.diagnostic({ line: 1, message: 'x' })]);
     host.publish('/other', [host.diagnostic({ line: 1, message: 'y' })]);
 

@@ -99,7 +99,6 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
-const putMods: string[][] = [];
 const putPlaces: string[][] = [];
 const handedUnsaved: unknown[][] = [];
 const comparedTexts: unknown[] = [];
@@ -136,7 +135,7 @@ function pluginNamesOf(body: string): string[] {
   if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
   return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
 }
-function namesIn(body: string, list: 'mods' | 'places'): string[] {
+function namesIn(body: string, list: 'places'): string[] {
   const parsed: unknown = JSON.parse(body);
   const entries = isRecord(parsed) ? parsed[list] : undefined;
   if (!Array.isArray(entries)) throw new Error(`expected a PUT /load-order body with a ${list} array, got: ${body}`);
@@ -206,7 +205,6 @@ function createMockBackend(): http.Server {
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
         putLoadOrders.push(pluginNamesOf(body));
-        putMods.push(namesIn(body, 'mods'));
         putPlaces.push(namesIn(body, 'places'));
         loadOrderVersion += 1;
         const version = loadOrderVersion;
@@ -1864,6 +1862,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
         let modlist = '';
 
         before(async () => {
+          const putsBefore = putPlaces.length;
           modlist = readFileSync(modlistPath, 'utf8');
           arrive(sourceDir, file);
           mkdirSync(modDir, { recursive: true });
@@ -1878,7 +1877,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
           await vscode.commands.executeCommand('modbench.instance.refresh');
           writeFileSync(modlistPath, `${modlist}-${origin}\r\n`);
           await waitFor('the put of the mod disabled, the one recompute left after the refresh drained the arrival\'s',
-            () => putMods.at(-1)?.includes(origin) && !putPlaces.at(-1)?.includes(origin));
+            () => putPlaces.slice(putsBefore).some((places) => places.includes(origin)) && !putPlaces.at(-1)?.includes(origin));
         });
 
         after(() => {

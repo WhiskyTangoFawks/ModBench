@@ -19,7 +19,7 @@ import { withNotRestored } from './notRestored';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 import { LIST_MOD_STATUSES } from './modStatuses';
-import type { ReadModStatus } from '../client';
+import type { ModStatuses } from '../modStatus/modStatuses';
 import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
@@ -31,7 +31,7 @@ export interface AgentServerOptions {
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
-  readStatus: ReadModStatus | undefined;
+  statuses: Pick<ModStatuses, 'current'> | undefined;
   reporter: Reporter;
   log: Log;
 }
@@ -42,7 +42,7 @@ export interface AgentServer {
 }
 
 type Instance = NonNullable<AgentServerOptions['instance']>;
-type OpenOptions = AgentServerOptions & { instance: Instance; readStatus: ReadModStatus };
+type OpenOptions = AgentServerOptions & { instance: Instance; statuses: Pick<ModStatuses, 'current'> };
 
 function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal(instance.readFailure === undefined ? 'The instance has not been read yet.' : `Failed to load: ${instance.readFailure}`);
@@ -97,13 +97,13 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: OpenOptions): McpServer {
+function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const standing = () => instanceMessages(instance).filter((message) => message !== undefined);
   for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
-  const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), readStatus) : Promise.resolve(currentValue(instance)));
-  register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), readStatus)));
-  register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), readStatus));
+  const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
+  register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses)));
+  register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
   register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
   register(server, log, standing, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, standing, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
@@ -154,9 +154,9 @@ async function handle(options: OpenOptions, request: IncomingMessage, response: 
 const NOT_SERVING: AgentServer = { listening: Promise.resolve(undefined), dispose: () => undefined };
 
 export function serveAgent(options: AgentServerOptions): AgentServer {
-  const { instance, readStatus, port, reporter, log } = options;
-  if (instance === undefined || readStatus === undefined) return NOT_SERVING;
-  const open = { ...options, instance, readStatus };
+  const { instance, statuses, port, reporter, log } = options;
+  if (instance === undefined || statuses === undefined) return NOT_SERVING;
+  const open = { ...options, instance, statuses };
   const http = createServer((request, response) => {
     handle(open, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);

@@ -21,9 +21,9 @@ export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
 export type { Depot } from './gameFolder/steamAppManifest';
 
-export type { InstallationFileReader } from './downloadedFileContents/installationFileReader';
-export { INSTALLATION_FILE_EXTENSIONS } from './downloadedFileContents/installationFileNames';
-export { downloadedFileReader } from './downloadedFileContents/downloadedFileReader';
+export type { InstallationFileReader } from './fileContents/installationFileReader';
+export { INSTALLATION_FILE_EXTENSIONS } from './fileContents/installationFileNames';
+export { downloadedFileReader } from './fileContents/downloadedFileReader';
 
 /** The setting that names the game folder outright: its id
  *  is what fixes a folder not found, its value is read fresh on each resolve, and a change is heard
@@ -735,9 +735,14 @@ export interface InstanceAdapter {
   pathsOutsideFolders(): Promise<readonly PathInFile[]>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
-  /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash
-   *  is the stat cache, mEdit's (ADR-0013). Two files with one hash hold the same bytes. */
+  /** An origin file's size and hash at the path it is read from, kept in the hash index (ADR-0013). Two files with one
+   *  hash hold the same bytes. */
   originFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** Each file below `folder`, a mod's or any folder a manifest builds, by forward-slash path, listed as a mod's files
+   *  are; none when the folder is not there. */
+  filesIn(folder: string): Promise<readonly string[]>;
+  /** Each entry's hash, by its path, of the downloaded file whose hash is `hash`; undefined when the index holds none. */
+  packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

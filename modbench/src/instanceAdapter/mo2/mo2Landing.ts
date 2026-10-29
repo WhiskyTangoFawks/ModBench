@@ -3,7 +3,7 @@
 
 import { effectiveModId } from './codecs/nexusFileName';
 import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
-import type { InstallationFileReader } from '../downloadedFileContents/installationFileReader';
+import type { InstallationFileReader } from '../fileContents/installationFileReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
 import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
 import { manifestFileIn, modMetaFileIn, modsDir, stagingPrefix } from './layout';

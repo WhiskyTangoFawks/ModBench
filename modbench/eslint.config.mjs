@@ -38,7 +38,7 @@ const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 
 const FS_IMPORT = {
     group: ['node:fs', 'node:fs/*', 'fs', 'fs/*'],
-    message: 'The Instance adapter is the one reader and writer of the instance, and Deployment of a deployment folder; every other box reaches a file through one of them.',
+    message: 'The Instance adapter is the one reader and writer of the instance, the Manifest adapter of a manifest, and Deployment of a deployment folder; every other box reaches a file through one of them.',
 };
 const PATH_IMPORT = {
     group: ['node:path', 'node:path/*', 'path', 'path/*'],
@@ -235,7 +235,7 @@ export default defineConfig(
                 path: PATHLESS_BOXES.includes(box),
                 client: box === 'toolbox',
                 inAdapter: box === 'instanceAdapter',
-                files: box === 'instanceAdapter' || box === 'deployment',
+                files: box === 'instanceAdapter' || box === 'manifestAdapter' || box === 'deployment',
                 clientSeam: box !== 'client',
             }),
         },
@@ -255,7 +255,7 @@ export default defineConfig(
         rules: { 'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, clientSeam: false }) },
     })),
     {
-        files: ['src/instanceAdapter/downloadedFileContents/contentDigest.ts'],
+        files: ['src/instanceAdapter/fileContents/contentDigest.ts'],
         rules: {
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, byteReads: false, extra: [DIGEST_PACKAGE_IMPORT],
