@@ -168,20 +168,6 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect([notification.cancellable, notification.messages]).toEqual([[true], [expect.stringContaining('"ModA", 0 of 2 mods done') as unknown]]);
   });
 
-  it('update manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
-    let signal: AbortSignal | undefined;
-    updateManifest.mockImplementationOnce((_mods, options) => {
-      notification.cancel();
-      signal = options?.signal;
-      return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }], refused: [] });
-    });
-    const { reporter, run } = register();
-
-    await run(UPDATE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
-
-    expect([signal?.aborted, reporter.landings]).toEqual([true, ['Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.']]);
-  });
-
   it('update manifest, cancelled, says it was cancelled and the counts of what landed before, and does not report a landing', async () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, cancelled: true, notes: [], repositoryNotes: [], refused: [],

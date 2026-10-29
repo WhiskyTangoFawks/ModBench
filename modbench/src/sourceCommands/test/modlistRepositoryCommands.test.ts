@@ -528,10 +528,11 @@ describe('modlistRepositoryCommands update manifest', () => {
   it('answers cancelled when its signal aborts while mEdit updates', async () => {
     const cancel = new AbortController();
     const { commands, client } = commandsOver();
-    client.setCommandResult('updateManifest', UPDATED);
-    cancel.abort();
+    client.setCommandHandler('updateManifest', () => { cancel.abort(); return Promise.resolve(UPDATED); });
 
-    expect(await commands.updateManifest(['ModA'], { signal: cancel.signal })).toMatchObject({ cancelled: true });
+    const outcome = await commands.updateManifest(['ModA'], { signal: cancel.signal });
+
+    expect([client.calls.length, outcome]).toEqual([1, expect.objectContaining({ cancelled: true }) as unknown]);
   });
 
   it('hands mEdit the signal, so a cancel stops it after the mod in hand', async () => {

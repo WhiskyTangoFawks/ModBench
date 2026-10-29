@@ -42,7 +42,7 @@ interface ModlistRepositoryCommandsDeps {
 export interface ModNote { readonly mod: string; readonly note: string }
 
 /** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
- *  whole gesture refused, as a message to show. */
+ *  whole gesture refused, as a message to show. `cancelled`: the signal aborted, so the mods listed are those that landed first. */
 export type UpdateManifestResult = ({ applied: true; cancelled?: true; notes: readonly ModNote[]; repositoryNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files or hashing downloaded files, or mEdit updating manifests. */
@@ -670,9 +670,10 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         { statCache: adapter.statCacheFolder, downloadedFiles: downloaded.files.map((file) => ({ path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] })) },
         { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
+      const cancelled = cancelledIf(signal);
       const submodules = await submodulesWritten(adapter, everyMod ? 'every' : versioned.map(({ name }) => name));
       return {
-        applied: true, ...cancelledIf(signal), ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
+        applied: true, ...outcome, ...cancelled, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
         repositoryNotes: [...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes, ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsShown(deps)],
       };
     },
