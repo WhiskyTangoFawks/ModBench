@@ -74,6 +74,15 @@ describe('a manifest the adapter reads and writes', () => {
     expect(manifestText(manifest)).toBe('{\n"files": [\n{"path":"a.nif"},\n{"path":"B.nif"},\n{"path":"b.nif"}\n]\n}\n');
   });
 
+  it('writes a file in the first package without naming it, and a file in another package naming it', () => {
+    const second = { kind: 'installationFile', name: 'Zed.7z', size: 7, hash: 'ZZZZ' } as const;
+    const manifest: Manifest = {
+      packages: [mod7z, second], exclude: [], archives: [], steps: [], tools: [],
+      files: [{ path: 'a.nif', entry: { kind: 'held' }, package: 'Mod.7z' }, { path: 'b.nif', entry: { kind: 'held' }, package: 'Zed.7z' }],
+    };
+    expect(manifestText(manifest)).toContain('"files": [\n{"path":"a.nif"},\n{"path":"b.nif","package":"Zed.7z"}\n]');
+  });
+
   it('writes a manifest of no file as an empty files array', () => {
     expect(manifestText({ packages: [], exclude: [], archives: [], steps: [], tools: [], files: [] })).toBe('{\n"files": []\n}\n');
   });
