@@ -2,7 +2,9 @@
 // each trusted while its file's stamp is the one it was hashed at.
 
 import { join } from 'node:path';
+import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
+import type { FileProblems } from '../../ports/fileProblems';
 import type { InstallationFileReader } from './installationFileReader';
 import { digestOf } from './contentDigest';
 import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
@@ -29,31 +31,23 @@ const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
 const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
   stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
-const UNREADABLE_DOWNLOADED_FILE = 'unreadableDownloadedFile';
+const lineOf = (kind: IndexedKind, path: string, stamp: FileStamp, hashed: HashedDownloadedFile): string =>
+  `${JSON.stringify([kind, path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs), hashed.hash, ...hashed.entries.flatMap((entry) => [entry.path, entry.hash])])}\n`;
 
-const lineOf = (kind: IndexedKind, path: string, stamp: FileStamp, read: FileRead<HashedDownloadedFile>): string => {
-  const stamped = [path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs)];
-  const fields = read.kind === 'read'
-    ? [kind, ...stamped, read.answer.hash, ...read.answer.entries.flatMap((entry) => [entry.path, entry.hash])]
-    : [UNREADABLE_DOWNLOADED_FILE, ...stamped, read.reason];
-  return `${JSON.stringify(fields)}\n`;
-};
-
-type Line = [IndexedKind | typeof UNREADABLE_DOWNLOADED_FILE, string, string, string, string, string, ...string[]];
+type Line = [IndexedKind, string, string, string, string, string, ...string[]];
 
 const isLine = (fields: unknown): fields is Line =>
   Array.isArray(fields) && fields.length >= 6 && fields.length % 2 === 0 && fields.every((field) => typeof field === 'string')
-  && (fields[0] === 'game' || fields[0] === 'downloadedFile' || fields[0] === UNREADABLE_DOWNLOADED_FILE);
+  && (fields[0] === 'game' || fields[0] === 'downloadedFile');
 
 function keptAt(line: string): { kind: IndexedKind; path: string; stamp: FileStamp; read: FileRead<HashedDownloadedFile> } | undefined {
   try {
     const fields: unknown = JSON.parse(line);
     if (!isLine(fields)) return undefined;
-    const [tag, path, size, modifiedNs, changedNs, hashOrReason, ...entries] = fields;
+    const [tag, path, size, modifiedNs, changedNs, hash, ...entries] = fields;
     const stamp = { size: BigInt(size), modifiedNs: BigInt(modifiedNs), changedNs: BigInt(changedNs) };
-    if (tag === UNREADABLE_DOWNLOADED_FILE) return { kind: 'downloadedFile', path, stamp, read: { kind: 'unreadable', reason: hashOrReason } };
     const pairs = entries.flatMap((entryPath, i) => (i % 2 === 0 ? [{ path: entryPath, hash: entries[i + 1] ?? '' }] : []));
-    return { kind: tag, path, stamp, read: { kind: 'read', answer: { size: Number(stamp.size), hash: hashOrReason, entries: pairs } } };
+    return { kind: tag, path, stamp, read: { kind: 'read', answer: { size: Number(stamp.size), hash, entries: pairs } } };
   } catch {
     return undefined;
   }
@@ -80,11 +74,6 @@ interface DownloadedFilesHashed {
   readonly notes: readonly string[];
 }
 
-const filesAndNotesOf = (reads: readonly { path: string; read: FileRead<HashedDownloadedFile> }[]): DownloadedFilesHashed => ({
-  files: reads.flatMap(({ path, read }) => (read.kind === 'read' ? [{ path, ...read.answer }] : [])),
-  notes: reads.flatMap(({ path, read }) => (read.kind === 'unreadable' ? [`${path} could not be read: ${read.reason}`] : [])),
-});
-
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
  *  its extraction there. */
 export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
@@ -97,7 +86,7 @@ export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
   downloadedFilesHashed(paths: readonly string[], options?: Parameters<InstanceAdapter['downloadedFilesHashed']>[0]): Promise<DownloadedFilesHashed>;
 }
 
-export function hashIndex(folder: string, installationFileReader: InstallationFileReader): HashIndex {
+export function hashIndex(folder: string, installationFileReader: InstallationFileReader, problems: FileProblems): HashIndex {
   const indexFile = join(folder, INDEX_FILE);
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), downloadedFile: new Map() };
   let loaded: Promise<void> | undefined;
@@ -130,16 +119,21 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     }
   });
 
-  // A downloaded file that cannot be hashed is kept so, as hashing it again costs a whole extraction to fail again.
+  // Kept so for the session, as hashing it again costs a whole extraction to fail again (modlist-repository.md, Update manifest, story 10).
+
   async function keep(kind: Kind, path: string, entry: Kept, read: FileRead<HashedDownloadedFile>, readFromMs: number): Promise<void> {
     if (kept[kind].get(path) !== entry) return;
     if ((read.kind === 'unreadable' && kind !== 'downloadedFile') || !settledBefore(entry.stamp, readFromMs)) {
       kept[kind].delete(path);
       return;
     }
-    if (kind === 'origin') return;
-    await ensureDir(folder).then(() => append(indexFile, lineOf(kind, path, entry.stamp, read))).catch((err: unknown) => { unwritten = errorMessage(err); });
+    if (kind === 'origin' || read.kind === 'unreadable') return;
+    await ensureDir(folder).then(() => append(indexFile, lineOf(kind, path, entry.stamp, read.answer))).catch((err: unknown) => { unwritten = errorMessage(err); });
   }
+
+  const shown = (path: string, read: FileRead<unknown>): void => {
+    problems.set(path, read.kind === 'read' ? [] : [{ line: 1, message: `could not be hashed: ${read.reason}` }]);
+  };
 
   const heldAt = (kind: Kind, path: string, stamp: FileStamp): Promise<FileRead<HashedDownloadedFile>> | undefined => {
     const known = kept[kind].get(path);
@@ -154,6 +148,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       stamp,
       hashed: readOrReason(() => (kind === 'downloadedFile' ? hashedWithEntries(path, stamp) : hashedAlone(path, stamp)))
         .then(async (read) => {
+          shown(path, read);
           await keep(kind, path, entry, read, readFromMs);
           return read;
         }),
@@ -162,10 +157,21 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     return entry.hashed;
   }
 
+  // A file that is gone is no problem, and a file that cannot be stamped is one.
+  async function stamped(path: string): Promise<FileRead<FileStamp>> {
+    try {
+      const stamp = await stampOf(path);
+      return { kind: 'read', answer: stamp };
+    } catch (err) {
+      problems.set(path, errnoCode(err) === 'ENOENT' ? [] : [{ line: 1, message: `could not be hashed: ${errorMessage(err)}` }]);
+      return { kind: 'unreadable', reason: errorMessage(err) };
+    }
+  }
+
   async function hashOf(kind: Kind, path: string): Promise<FileRead<HashedDownloadedFile>> {
     await load();
-    const stamped = await readOrReason(() => stampOf(path));
-    return stamped.kind === 'unreadable' ? stamped : hashAt(kind, path, stamped.answer);
+    const stamp = await stamped(path);
+    return stamp.kind === 'unreadable' ? stamp : hashAt(kind, path, stamp.answer);
   }
 
   async function downloadedFilesHashed(
@@ -175,18 +181,17 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     const answers: { path: string; read: FileRead<HashedDownloadedFile> }[] = [];
     const unhashed: { path: string; stamp: FileStamp }[] = [];
     for (const path of paths) {
-      const stamped = await readOrReason(() => stampOf(path));
-      const held = stamped.kind === 'unreadable' ? stamped : await heldAt('downloadedFile', path, stamped.answer);
+      const stamp = await stamped(path);
+      const held = stamp.kind === 'unreadable' ? stamp : await heldAt('downloadedFile', path, stamp.answer);
       if (held !== undefined) answers.push({ path, read: held });
-      else if (stamped.kind === 'read') unhashed.push({ path, stamp: stamped.answer });
+      else if (stamp.kind === 'read') unhashed.push({ path, stamp: stamp.answer });
     }
     for (const [done, { path, stamp }] of unhashed.entries()) {
       if (signal?.aborted) break;
       onHashing?.(unhashed.length - done);
       answers.push({ path, read: await hashAt('downloadedFile', path, stamp) });
     }
-    const { files, notes } = filesAndNotesOf(answers);
-    return { files, notes: [...notes, ...unwrittenNote()] };
+    return { files: answers.flatMap(({ path, read }) => (read.kind === 'read' ? [{ path, ...read.answer }] : [])), notes: unwrittenNote() };
   }
 
   function unwrittenNote(): string[] {

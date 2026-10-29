@@ -97,7 +97,7 @@ export type AdapterCall =
   | { readonly verb: 'takeBackPushRefusal' }
   | { readonly verb: 'removeRepository' }
   | { readonly verb: 'checkPushRefusalFree' }
-  | { readonly verb: 'writeSubmodules' }
+  | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
   | { readonly verb: 'writeOtherManifestLines' }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
@@ -379,7 +379,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     unclonedSubmodules: () => Promise.resolve(answers.uncloned ?? []),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
-    writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),
+    writeSubmodules: (acted) => record({ verb: 'writeSubmodules', acted }, answers.submodules ?? { notes: [], other: [] }),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),

@@ -324,7 +324,7 @@ describe('the MO2 adapter\'s path tokens', () => {
       await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, GamePath: game, Image: outside }));
       await adapter.writePathTokens();
 
-      expect(await adapter.pathsOutsideFolders()).toEqual([{ file: PUBLISHER_FILE, path: JSON.stringify(outside).slice(1, -1) }]);
+      expect(await adapter.pathsOutsideFolders()).toEqual([{ file: PUBLISHER_FILE, line: 1, path: JSON.stringify(outside).slice(1, -1) }]);
     });
   });
 
@@ -391,15 +391,15 @@ describe('the MO2 adapter\'s path tokens', () => {
     await adapter.writePathTokens();
 
     expect(await adapter.pathsOutsideFolders()).toEqual([
-      { file: 'ModOrganizer.ini', path: 'C:/Modding/Tools/CLASSIC.exe' },
-      { file: 'ModOrganizer.ini', path: 'C:\\\\Modding\\\\Tools' },
-      { file: 'ModOrganizer.ini', path: 'C:\\\\Modding\\\\Out' },
-      { file: 'ModOrganizer.ini', path: '\\\\\\\\nas\\\\share\\\\x.exe' },
-      { file: 'ModOrganizer.ini', path: '//nas/share/y.exe' },
-      { file: 'ModOrganizer.ini', path: 'o:\\\\\\\\nas\\\\share\\\\Inst\\\\out' },
-      { file: 'mods/Mod A/Mod A.manifest.json', path: 'C:/Modding/x' },
-      { file: 'mods/Mod A/Mod A.manifest.json', path: `${onWineDrive(root, '/')}/mods` },
-      { file: 'profiles/Default/Fallout4Custom.ini', path: '/home/me/Pictures/shot' },
+      { file: 'ModOrganizer.ini', line: 6, path: 'C:/Modding/Tools/CLASSIC.exe' },
+      { file: 'ModOrganizer.ini', line: 7, path: 'C:\\\\Modding\\\\Tools' },
+      { file: 'ModOrganizer.ini', line: 8, path: 'C:\\\\Modding\\\\Out' },
+      { file: 'ModOrganizer.ini', line: 10, path: '\\\\\\\\nas\\\\share\\\\x.exe' },
+      { file: 'ModOrganizer.ini', line: 11, path: '//nas/share/y.exe' },
+      { file: 'ModOrganizer.ini', line: 12, path: 'o:\\\\\\\\nas\\\\share\\\\Inst\\\\out' },
+      { file: 'mods/Mod A/Mod A.manifest.json', line: 1, path: 'C:/Modding/x' },
+      { file: 'mods/Mod A/Mod A.manifest.json', line: 1, path: `${onWineDrive(root, '/')}/mods` },
+      { file: 'profiles/Default/Fallout4Custom.ini', line: 1, path: '/home/me/Pictures/shot' },
     ]);
   });
 
@@ -408,7 +408,17 @@ describe('the MO2 adapter\'s path tokens', () => {
     await put(root, 'mods/Plain/Plain.manifest.json',
       '{"installationFile": {"path": "C:/Modding/x.zip", "hash": "/emUNYLj+Fc=", "entries": [{"path": "a.txt", "hash": "/AAECAwQFBgc="}]}}');
 
-    expect(await adapter.pathsOutsideFolders()).toEqual([{ file: 'mods/Plain/Plain.manifest.json', path: 'C:/Modding/x.zip' }]);
+    expect(await adapter.pathsOutsideFolders()).toEqual([{ file: 'mods/Plain/Plain.manifest.json', line: 1, path: 'C:/Modding/x.zip' }]);
+  });
+
+  it('answers a path once for each line that holds it, and once for a line that holds it twice', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'mods/Plain/Plain.manifest.json', '{"a": "C:/Modding/x", "b": "C:/Modding/x"}\n{"c": "C:/Modding/x"}');
+
+    expect(await adapter.pathsOutsideFolders()).toEqual([
+      { file: 'mods/Plain/Plain.manifest.json', line: 1, path: 'C:/Modding/x' },
+      { file: 'mods/Plain/Plain.manifest.json', line: 2, path: 'C:/Modding/x' },
+    ]);
   });
 
   it('writes nothing in an instance folder that holds no repository, and finds no path in it', async () => {

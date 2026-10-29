@@ -29,6 +29,8 @@ import { attachPort, deploymentFolderSetting, gameFolderSetting, onStringsLangua
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
+import { fileProblemsOver } from './ports/fileProblems';
+import { problemsHostOver } from './problemsHost';
 import { ModStatuses } from './mods/modStatuses';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
@@ -145,7 +147,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile'), installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri), deployedPath,
+        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile'), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri), deployedPath,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
@@ -161,7 +163,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
+  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks), pathProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-paths'))), outputChannel) });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const modStatuses = own(new ModStatuses(client, readStatus, (line) => outputChannel.warn(`[modList] ${line}`)));
   const { modSync, pluginSync } = own(instanceSyncs({
