@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EntryRef, ModFolder } from '../../instanceAdapter/instanceAdapter';
-import { manifestText, type FolderReads, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import type { FolderReads, Manifest } from '../../manifestAdapter/manifestAdapter';
+import { manifestText } from '../../test/manifestText';
 import { ModStatuses, type StatusSource } from '../modStatuses';
 
 let root: string;

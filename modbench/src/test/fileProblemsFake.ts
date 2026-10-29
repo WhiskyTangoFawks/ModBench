@@ -1,4 +1,6 @@
-import type { FileProblem, FileProblems } from '../ports/fileProblems';
+import type { FileProblems } from '../ports/fileProblems';
+
+type FileProblem = Parameters<FileProblems['set']>[1][number];
 
 /** The Problems panel as a test reads it: the problems each file holds, a file with none holding nothing. */
 export function fileProblemsFake(): FileProblems & { readonly held: Map<string, readonly FileProblem[]> } {

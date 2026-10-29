@@ -10,7 +10,7 @@ import { manifestIn, sourceManifestIn } from './manifestFiles';
 type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** A mod's version and installation file as its mod manager's metadata says them. */
-export interface HeldMetadata {
+interface HeldMetadata {
   readonly version?: string;
   readonly installationFile?: { readonly name: string; readonly page?: string };
 }
@@ -131,7 +131,7 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
 }
 
 /** What a status read now reads to find a mod's folder and source folder, as the Instance adapter answers them. */
-export interface ModReads extends FolderReads {
+interface ModReads extends FolderReads {
   modFolderPath(mod: string): Promise<string | undefined>;
   sourceMods(): Promise<{ folderOf(mod: string): string | undefined }>;
 }

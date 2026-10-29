@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { judge, type PluginFacts, type PluginFactsOf } from '../judge';
+import { judge, type PluginFactsOf } from '../judge';
+
+type PluginFacts = NonNullable<ReturnType<PluginFactsOf>>;
 
 const factsFrom = (table: Record<string, Partial<PluginFacts>>): PluginFactsOf => (filename) => {
   const row = table[filename];

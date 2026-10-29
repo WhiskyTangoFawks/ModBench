@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { manifestText, statusOf, statusesNow, type FolderReads, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { manifestText } from '../../test/manifestText';
+import { statusOf, statusesNow, type FolderReads, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 let root: string;
 let folder: string;
