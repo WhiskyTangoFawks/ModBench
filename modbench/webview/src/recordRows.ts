@@ -116,12 +116,12 @@ function goToTarget(
   return isString(shown) && meta.type === 'formKey' && resolves(resolution) ? shown : undefined;
 }
 
-function templateReading(template: TemplatedBy, ownValue: string, editable: boolean): NonNullable<ValueCell['template']> {
+function templateReading(template: TemplatedBy, ownValue: string | undefined, editable: boolean): NonNullable<ValueCell['template']> {
   return {
     reading: `from ${template.resolution.editorId || template.template}`,
     tooltip: [
       `Templated by ${template.flag} from ${formKeyLabel(template.template, template.resolution)}`,
-      `Its own value: ${ownValue}`,
+      ...(ownValue === undefined ? [] : [`Its own value: ${ownValue}`]),
       ...(editable ? [`Clearing ${template.flag} makes it editable.`] : []),
     ].join('\n'),
   };
@@ -146,7 +146,7 @@ function fieldRow(
     const resolution = diff.resolutions?.[key];
     const templated = templateOf(o, at.rootField, at.path);
     const templatedBy = templated && (holds || templated.isMembersRow) ? templated.by : undefined;
-    const template = templatedBy && templateReading(templatedBy, copiedText(shown, cellMeta, resolution), editable.has(key));
+    const template = templatedBy && templateReading(templatedBy, holds ? copiedText(shown, cellMeta, resolution) : undefined, editable.has(key));
     const goesTo = goToTarget(templatedBy, shown, cellMeta, resolution);
     const hops = wirePath(at.rootField, at.path, key);
     const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;

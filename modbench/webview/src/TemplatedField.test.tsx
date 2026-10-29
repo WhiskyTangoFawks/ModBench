@@ -109,6 +109,7 @@ describe('RecordPanel — a templated field', () => {
     await screen.findByText('Health');
     expect(cellAt('Destructible', 2)).toHaveTextContent(/^from EncRaider01$/);
     expect(cellAt('Health', 2)).toHaveTextContent(/^$/);
+    expect(cellAt('Destructible', 2).getAttribute('title')).not.toContain('Its own value');
   });
 
   it('reads from its template on a struct member\'s row, and leaves the struct\'s own row its own', async () => {
