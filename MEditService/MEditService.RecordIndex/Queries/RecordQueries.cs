@@ -240,7 +240,7 @@ internal sealed class RecordQueries(
             LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
             RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
             IsInOverwrite: snapshot.ProviderOf(new PluginAddress(o.Plugin, o.Origin)) == PluginProvider.NoMod,
-            Column: column, MissingStringsFile: o.MissingStringsFile);
+            Column: column, MissingStringsFile: o.MissingStringsFile, Templated: o.Templated);
 
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         List<RecordDetail> committedOverrides,
@@ -489,7 +489,8 @@ internal sealed class RecordQueries(
             document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm,
             ParseDiagnosis: document.ParseDiagnosis,
-            MissingStringsFile: document.MissingStringsFile);
+            MissingStringsFile: document.MissingStringsFile,
+            Templated: document.Templated);
 
     private bool Indexed => _index.Status.State == LoadOrderState.Ready;
 
