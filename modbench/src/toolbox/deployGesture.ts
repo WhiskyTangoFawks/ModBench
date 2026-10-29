@@ -30,7 +30,7 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
     if (unmanaged !== undefined) {
       reporter.shownOnSurface('warning', unmanaged.message, unmanaged.detail);
       reporter.report('warning', `The deployment folder holds ${result.unmanaged.length} files deploy does not manage, each named in the Output.`, undefined,
-        result.canMoveToOverwrite ? { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, result.unmanaged) } : undefined);
+        { title: 'Move to Overwrite', run: () => void vscode.commands.executeCommand(MOVE_TO_OVERWRITE, result.unmanaged) });
     }
     for (const { message, detail } of [...deployFailures(result), ...deployWarnings(result)]) reporter.report('warning', message, detail);
     return result;

@@ -11,7 +11,7 @@ import { registerDeployTask } from '../deployTask';
 const DEFINITION = { type: 'modbench.instance.deploy' };
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 const landed = (overrides: Partial<DeployResult & { applied: true }> = {}): DeployResult =>
-  ({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, canMoveToOverwrite: false, ...overrides });
+  ({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED, ...overrides });
 
 async function deploy(answered: DeployResult | { applied: false; refusal: string }) {
   const reporter = recordingReporter();

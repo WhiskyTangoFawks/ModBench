@@ -31,8 +31,12 @@ function pluginOrderOf({ plugins, gameName }: LoadOrderToDeploy): PluginOrder {
 
 type Adapter = Pick<InstanceAdapter, 'moveIntoOverwrite' | 'gameFolderOverlapping'>;
 
-/** `canMoveToOverwrite` is false when the deployment folder overlaps the game folder, whose files are not Overwrite's. */
-export type DeployResult = CommandResult<Deployed & { canMoveToOverwrite: boolean }>;
+// A deployment folder that overlaps the game folder holds the game's own files, which no report names (deployment-hardlink.md, Files deploy does not manage, story 2).
+async function unmanagedToName(adapter: Pick<InstanceAdapter, 'gameFolderOverlapping'>, folder: string, unmanaged: readonly string[]): Promise<readonly string[]> {
+  return await adapter.gameFolderOverlapping(folder) === undefined ? unmanaged : [];
+}
+
+export type DeployResult = CommandResult<Deployed>;
 
 async function deploy(
   { deployment, adapter }: { deployment: Deployment; adapter: Pick<InstanceAdapter, 'gameFolderOverlapping'> },
@@ -43,7 +47,7 @@ async function deploy(
   if (load === undefined) return { applied: false, refusal: 'The instance has not been read.' };
   try {
     const deployed = await deployment.deploy(folder, load.files, pluginOrderOf(load));
-    return { applied: true, ...deployed, canMoveToOverwrite: deployed.unmanaged.length > 0 && await adapter.gameFolderOverlapping(folder) === undefined };
+    return { applied: true, ...deployed, unmanaged: await unmanagedToName(adapter, folder, deployed.unmanaged) };
   } catch (err) {
     return refuse(err);
   }
@@ -51,11 +55,14 @@ async function deploy(
 
 export type PurgeResult = CommandResult<Purged>;
 
-async function purge({ deployment }: { deployment: Deployment }, setting: DeploymentFolderSetting): Promise<PurgeResult> {
+async function purge(
+  { deployment, adapter }: { deployment: Deployment; adapter: Pick<InstanceAdapter, 'gameFolderOverlapping'> }, setting: DeploymentFolderSetting,
+): Promise<PurgeResult> {
   const folder = deploymentFolderOf(setting);
   if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
   try {
-    return { applied: true, ...await deployment.purge(folder) };
+    const purged = await deployment.purge(folder);
+    return { applied: true, ...purged, unmanaged: await unmanagedToName(adapter, folder, purged.unmanaged) };
   } catch (err) {
     return refuse(err);
   }
@@ -94,7 +101,7 @@ export function deployCommands(
 ) {
   return {
     deploy: (load: LoadOrderToDeploy | undefined) => deploy({ deployment, adapter }, deploymentFolder, load),
-    purge: () => purge({ deployment }, deploymentFolder),
+    purge: () => purge({ deployment, adapter }, deploymentFolder),
     moveToOverwrite: (paths?: readonly string[]) => moveToOverwrite({ adapter, deployment }, deploymentFolder, paths),
   };
 }
