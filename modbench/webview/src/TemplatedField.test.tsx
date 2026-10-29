@@ -1,14 +1,17 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
+import { vscode } from './vscode';
+import { DIMMED_OPACITY } from './gridStyles';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, parseJsonRecord, required, type FixturePlugin,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, member, panelClient, parseJsonRecord, required,
+  type FixturePlugin,
 } from './test/fixtures';
 
 const FORM_KEY = '000001:Fallout4.esm';
@@ -35,10 +38,14 @@ function panelOf(
 }
 
 const byTraits = (resolution: FormKeyResolution = RESOLVED) => ({ Level: { flag: 'Traits', template: TEMPLATE, resolution } });
+const byTraitsOf = (member: string) => ({ [member]: { flag: 'Traits', template: TEMPLATE, resolution: RESOLVED } });
 const levelPanel = (templated: [CompareOverride['templated'], CompareOverride['templated']]) => panelOf(
   levelMeta, [5, 7], diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 }, winnerColumn: MOD }), templated);
 
-const renderPanel = (compare: CompareResult) => render(<RecordPanel client={panelClient(() => compare, { plugins: PLUGINS })} />);
+const renderPanel = (compare: CompareResult, plugins: FixturePlugin[] = PLUGINS) =>
+  render(<RecordPanel client={panelClient(() => compare, { plugins })} />);
+const SECOND = 'Second.esp';
+const BOTH_EDITABLE: FixturePlugin[] = [{ name: MOD, isCompiledPlugin: true }, { name: SECOND, isCompiledPlugin: true }];
 const cellAt = (label: string, index: number) =>
   required(required(screen.getByText(label).closest('tr'), `the ${label} row`).querySelectorAll('td')[index], `the ${label} row's cell ${index}`);
 const contextOf = (cell: Element) =>
@@ -131,5 +138,63 @@ describe('RecordPanel — a templated field', () => {
     await screen.findByText('Level');
     expect(cellAt('Level', 2)).toHaveTextContent(/^from EncRaider01$/);
     expect(cellAt('Configuration', 2)).not.toHaveTextContent(/from/);
+  });
+
+  it('is dimmed in a column that can be edited, and in one that cannot', async () => {
+    renderPanel(levelPanel([byTraits(), byTraits()]));
+    await screen.findByText('Level');
+    expect(cellAt('Level', 1)).toHaveStyle({ opacity: DIMMED_OPACITY });
+    expect(cellAt('Level', 2)).toHaveStyle({ opacity: DIMMED_OPACITY });
+  });
+
+  it('copies what it reads: its template, as a reference copies', async () => {
+    renderPanel(levelPanel([null, byTraits()]));
+    await screen.findByText('Level');
+    expect(contextOf(cellAt('Level', 2)).copyText).toBe(`EncRaider01 [${TEMPLATE}]`);
+    expect(contextOf(cellAt('Level', 1)).copyText).toBe('5');
+  });
+
+  it('leaves Paste, Cut and Delete to reach mEdit, which refuses them naming the field and the flag', async () => {
+    renderPanel(levelPanel([null, byTraits()]));
+    await screen.findByText('Level');
+    expect(contextOf(cellAt('Level', 2)).webviewSection).toEqual(expect.stringMatching(/\beditableCell\b/));
+  });
+
+  it('is dragged as its template, and a drop on it is left to mEdit to refuse', async () => {
+    const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' });
+    renderPanel(compareResultFixture({
+      overrides: [MOD, SECOND].map(plugin => compareOverride({
+        formKey: FORM_KEY, plugin, isWinner: plugin === SECOND, editorId: 'RaiderTemplated',
+        fields: [{ metadata: levelMeta, value: 7 }], templated: plugin === MOD ? byTraitsOf('Level') : null,
+      })),
+      diffs: [diffNode({ fieldName: 'Level', values: { [MOD]: 7, [SECOND]: 7 }, winnerColumn: SECOND })],
+    }), BOTH_EDITABLE);
+    await screen.findByText('Level');
+    fireEvent.dragStart(cellAt('Level', 1), { dataTransfer: dataTransfer() });
+    fireEvent.drop(cellAt('Level', 2), { dataTransfer: dataTransfer() });
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: TEMPLATE });
+  });
+
+  it('offers no add, remove or move on an element of a templated array, as it does on any other array', async () => {
+    const arrayMeta = (name: string) => fieldMeta({ name, type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'int' }) });
+    const arrayDiff = (name: string) => diffNode({
+      fieldName: name, values: { [MOD]: [1] }, winnerColumn: MOD,
+      children: [diffNode({ fieldName: '[0]', values: { [MOD]: 1 }, winnerColumn: MOD, indexes: { [MOD]: 0 } })],
+    });
+    renderPanel(compareResultFixture({
+      overrides: [compareOverride({
+        formKey: FORM_KEY, plugin: MOD, isWinner: true, editorId: 'RaiderTemplated',
+        fields: [{ metadata: arrayMeta('Perks'), value: [1] }, { metadata: arrayMeta('Others'), value: [1] }],
+        templated: byTraitsOf('Perks'),
+      })],
+      diffs: [arrayDiff('Perks'), arrayDiff('Others')],
+    }));
+    await screen.findByText('Perks');
+    const sections = (label: string, occurrence: number) => contextOf(
+      required(screen.getAllByText(label)[occurrence]?.closest('tr')?.querySelectorAll('td')[1], `the ${label} cell`)).webviewSection;
+    expect(sections('Others', 0)).toEqual(expect.stringMatching(/\barrayParent\b/));
+    expect(sections('[0]', 1)).toEqual(expect.stringMatching(/\barrayElement\b/));
+    expect(sections('Perks', 0)).not.toEqual(expect.stringMatching(/\barrayParent\b/));
+    expect(sections('[0]', 0)).not.toEqual(expect.stringMatching(/\barrayElement\b/));
   });
 });

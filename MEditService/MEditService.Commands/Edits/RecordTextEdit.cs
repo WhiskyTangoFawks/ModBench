@@ -41,6 +41,7 @@ internal static class RecordTextEdit
         var column = edit.Column;
 
         if (RefuseIfPartialForm(record, request.Schema, column, spelled) is { } partialForm) return partialForm;
+        if (RefuseIfTemplated(request, spelled) is { } templated) return templated;
 
         var requested = RecordFlagsWrite.Requested(request.Schema, column, envelope.Value);
         var emptying = RecordEmptying.Of(record, request.Schema, requested);
@@ -188,6 +189,23 @@ internal static class RecordTextEdit
             $"{record.StringAt(RecordMembers.FormKey)} is a Partial Form override — its own fields are ignored for conflict " +
             "resolution and read-only here. Editing this record requires clearing the Partial " +
             "Form flag on its header first.");
+    }
+
+    // A templated field's own value is never seen by the game (editor-fields.md, Templated fields).
+    private static RecordEditResult? RefuseIfTemplated(RecordTextEditRequest request, string spelled)
+    {
+        if (request.Schema.TemplatedIn(request.Record, _ => null, request.Release) is not { } templated) return null;
+        var members = request.Envelope.Path.Where(hop => hop.Kind == PathHop.MemberKind).Select(hop => hop.Name).ToList();
+        for (var length = 1; length <= members.Count; length++)
+        {
+            var member = string.Join('.', members.Take(length));
+            if (!templated.TryGetValue(member, out var by)) continue;
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.TemplatedFieldReadOnly, spelled,
+                $"'{member}' is templated by {by.Flag} from {by.Template} — the game ignores the copy's own value, so it is " +
+                $"read-only here. Clear the {by.Flag} flag to edit it. Nothing was written.");
+        }
+        return null;
     }
 
     // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that

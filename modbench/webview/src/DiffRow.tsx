@@ -8,7 +8,7 @@ import { readsAsFlags } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
 import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
-  INDENT_PER_LEVEL, baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
+  DIMMED_OPACITY, INDENT_PER_LEVEL, baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import { defaultOf, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
@@ -164,10 +164,11 @@ export function DiffRow({
         const cellState = diff.cellStatesByFocus
           ? diff.cellStatesByFocus[focusedCell?.plugin ?? '']?.[key]
           : diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
+        const cell = row.cells.get(key);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),
+          ...(cell?.template ? { opacity: DIMMED_OPACITY } : {}),
         };
-        const cell = row.cells.get(key);
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
@@ -178,8 +179,9 @@ export function DiffRow({
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason, template?.tooltip]
           .filter(Boolean).join('\n') || undefined;
         const edit = editPath && ((value: unknown) => onEdit(key, editPath, value));
-        const drag: CellDrag | undefined = diff.values[key] != null
-          ? { row: rowKey, arrayRow: row.elementOf, value: diff.values[key] }
+        const dragged = template ? template.formKey : diff.values[key];
+        const drag: CellDrag | undefined = dragged != null
+          ? { row: rowKey, arrayRow: row.elementOf, value: dragged }
           : undefined;
         const landing = (dragged: CellDrag): (() => void) | undefined => {
           if (dragged.row === rowKey) {

@@ -32,7 +32,7 @@ export interface ValueCell extends GridCell {
   editPath?: PathHop[];
   dropAddsTo?: ArrayParentContext;
   // What a cell the game fills from a template reads, and its tooltip (editor-fields.md, Templated fields).
-  template?: { reading: string; tooltip: string };
+  template?: { reading: string; tooltip: string; copyText: string; formKey: string };
 }
 
 interface RowBase {
@@ -117,6 +117,8 @@ function goToTarget(
 function templateReading(template: TemplatedBy, ownValue: string | undefined, editable: boolean): NonNullable<ValueCell['template']> {
   return {
     reading: `from ${template.resolution.editorId || template.template}`,
+    copyText: formKeyLabel(template.template, template.resolution),
+    formKey: template.template,
     tooltip: [
       `Templated by ${template.flag} from ${formKeyLabel(template.template, template.resolution)}`,
       ...(ownValue === undefined ? [] : [`Its own value: ${ownValue}`]),
@@ -148,14 +150,14 @@ function fieldRow(
     const goesTo = goToTarget(templatedBy, shown, cellMeta, resolution);
     const hops = wirePath(at.rootField, at.path, key);
     const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
-    const dropAddsTo = editPath && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
-    const element = editPath && isArrayElementHop(last)
+    const dropAddsTo = editPath && !template && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
+    const element = editPath && !template && isArrayElementHop(last)
       ? arrayElementContext(
         o.formKey, o.plugin, o.origin, editPath, arrayLength(getAtPath(rootFieldOf(o, at.rootField)?.value, editPath.slice(1, -1))),
         last?.kind === 'element' && last.keyed)
       : undefined;
     const context = cellContext(
-      copiedText(shown, cellMeta, resolution),
+      template?.copyText ?? copiedText(shown, cellMeta, resolution),
       dropAddsTo,
       element,
       editPath && editableCellContext(o.formKey, o.plugin, o.origin, editPath, value != null),
