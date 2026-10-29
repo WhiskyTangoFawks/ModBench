@@ -9,7 +9,8 @@ import { present } from '../ports/present';
 import type { MEditClient, ModStatus, PluginAddress, ReadModStatus } from '../client';
 import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
-import { moveOrderRefusal, type PluginOrderFactsOf } from './pluginOrder';
+import type { PluginFactsOf } from '../sortingRules/judge';
+import { moveOrderRefusal } from './pluginOrder';
 import { decompileAndRepair, type DecompileAndRepairClient } from './decompileAndRepair';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
@@ -90,14 +91,14 @@ type PluginMasters = Pick<MEditClient, 'getPlugins'>;
 
 // The game loads one copy of a name: the one in the load order (ADR-0012). Several copies with
 // none in it name no one copy, so none is judged; nor is anything while mEdit cannot answer.
-async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsOf> {
+async function orderFactsFrom(masters: PluginMasters): Promise<PluginFactsOf> {
   const answer = await masters.getPlugins().catch(() => undefined);
   const held = answer === undefined || isReadFailed(answer) ? [] : answer;
   return (name) => {
     const copies = held.filter((plugin) => pluginKey(plugin.name) === pluginKey(name));
     const loaded = copies.length === 1 ? copies : copies.filter((copy) => copy.inLoadOrder);
     const [copy] = loaded;
-    return loaded.length === 1 && copy !== undefined ? { masters: copy.masters, blueprint: copy.isBlueprint } : undefined;
+    return loaded.length === 1 && copy !== undefined ? { origin: copy.origin, masters: copy.masters, blueprint: copy.isBlueprint } : undefined;
   };
 }
 

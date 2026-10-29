@@ -1,17 +1,5 @@
-// The plugin-order rules a move keeps: masters above their dependants, blueprint plugins last
-// (plugins.md, Drag and drop, story 3; the reference tool's PluginList::setPluginPriority,
-// pluginlist.cpp).
-
-import { pluginKey } from '../loadOrderFileCodec/pluginsText';
+import { judge, type PluginFactsOf } from '../sortingRules/judge';
 import { dropIndexIn, type Drop } from './dropIndex';
-
-interface PluginOrderFacts {
-  masters: readonly string[];
-  blueprint: boolean;
-}
-
-/** `undefined` while mEdit cannot say, and a rule that needs the answer is not judged. */
-export type PluginOrderFactsOf = (name: string) => PluginOrderFacts | undefined;
 
 function movedOrder(order: readonly string[], moved: readonly string[], drop: Drop): string[] {
   const movedSet = new Set(moved);
@@ -21,52 +9,15 @@ function movedOrder(order: readonly string[], moved: readonly string[], drop: Dr
   return rest;
 }
 
-function positions(order: readonly string[]): Map<string, number> {
-  return new Map(order.map((name, at) => [name, at] as const));
-}
+const identity = (broken: { rule: string; plugins: readonly { origin: string; filename: string }[] }): string =>
+  [broken.rule, ...broken.plugins.map((plugin) => `${plugin.origin}/${plugin.filename.toLowerCase()}`)].join('|');
 
-type MovesBehind = (first: string, second: string) => boolean;
-
-function movesBehindIn(before: readonly string[], after: readonly string[]): MovesBehind {
-  const was = positions(before);
-  const is = positions(after);
-  return (first, second) =>
-    (was.get(first) ?? 0) < (was.get(second) ?? 0) && (is.get(first) ?? 0) > (is.get(second) ?? 0);
-}
-
-// The reference tool holds master order only within one blueprint class; across the two, blueprint
-// last decides.
-function sameClassMasters(order: readonly string[], factsOf: PluginOrderFactsOf): [master: string, plugin: string][] {
-  const listedByFolded = new Map(order.map((name) => [pluginKey(name), name] as const));
-  return order.flatMap((plugin) => {
-    const facts = factsOf(plugin);
-    return (facts?.masters ?? [])
-      .map((masterName) => listedByFolded.get(pluginKey(masterName)))
-      .filter((master): master is string => master !== undefined && factsOf(master)?.blueprint === facts?.blueprint)
-      .map((master): [string, string] => [master, plugin]);
-  });
-}
-
-function masterRefusal(order: readonly string[], factsOf: PluginOrderFactsOf, movesBehind: MovesBehind): string | undefined {
-  const broken = sameClassMasters(order, factsOf).find(([master, plugin]) => movesBehind(master, plugin));
-  return broken && `"${broken[0]}" is a master of "${broken[1]}", so it must load before it.`;
-}
-
-function blueprintRefusal(order: readonly string[], factsOf: PluginOrderFactsOf, movesBehind: MovesBehind): string | undefined {
-  for (const blueprint of order.filter((name) => factsOf(name)?.blueprint === true)) {
-    const other = order.find((name) => factsOf(name)?.blueprint === false && movesBehind(name, blueprint));
-    if (other !== undefined) return `"${blueprint}" is a blueprint plugin, so it must load after "${other}", which is not.`;
-  }
-  return undefined;
-}
-
-/** Why moving `moved` to `drop` breaks `order`, plugins.txt's names losing end first, naming both
- *  plugins. Only a pair the move turns round is refused: an order already broken is not the
- *  move's doing. */
+/** Why moving `moved` to `drop` breaks a sorting rule at Error, naming the plugins. Only a rule the move
+ *  breaks is refused: an order already broken is not the move's doing. */
 export function moveOrderRefusal(
-  order: readonly string[], moved: readonly string[], drop: Drop, factsOf: PluginOrderFactsOf,
+  order: readonly string[], moved: readonly string[], drop: Drop, factsOf: PluginFactsOf,
 ): string | undefined {
-  const after = movedOrder(order, moved, drop);
-  const movesBehind = movesBehindIn(order, after);
-  return masterRefusal(after, factsOf, movesBehind) ?? blueprintRefusal(after, factsOf, movesBehind);
+  const already = new Set(judge(order, factsOf).map(identity));
+  return judge(movedOrder(order, moved, drop), factsOf)
+    .find((broken) => broken.level === 'error' && !already.has(identity(broken)))?.reason;
 }

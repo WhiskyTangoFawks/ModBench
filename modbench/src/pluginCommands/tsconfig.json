@@ -6,6 +6,7 @@
   },
   "references": [
     { "path": "../loadOrderFileCodec" },
+    { "path": "../sortingRules" },
     { "path": "../instanceAdapter" },
     { "path": "../tables" },
     { "path": "../coreLib" },

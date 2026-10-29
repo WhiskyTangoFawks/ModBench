@@ -416,6 +416,7 @@ export default defineConfig(
                     './src/instanceLoader/tsconfig.json',
                     './src/modCommands/tsconfig.json',
                     './src/pluginCommands/tsconfig.json',
+                    './src/sortingRules/tsconfig.json',
                     './src/instanceCommands/tsconfig.json',
                     './src/sourceCommands/tsconfig.json',
                     './src/downloadedFileCommands/tsconfig.json',
