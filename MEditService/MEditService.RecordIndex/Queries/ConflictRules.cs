@@ -5,8 +5,7 @@ namespace MEditService.RecordIndex.Queries;
 internal static class ConflictRules
 {
     // A plugin takes part with an absent value too, since a copy that drops a field changes it
-    // (xEdit); a Partial Form plugin takes part only where it holds a value, and a plugin whose
-    // copy templates the field never does.
+    // (xEdit); a Partial Form plugin takes part only where it holds a value; a templating plugin never.
     private static List<(string Plugin, int LoadOrderIndex)> TakingPart(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
