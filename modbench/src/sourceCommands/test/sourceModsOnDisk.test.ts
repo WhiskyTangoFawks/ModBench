@@ -8,7 +8,8 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { BuildMod, DecompileAndCommitMod } from '../../client';
+import type { DecompileAndCommitMod } from '../../client';
+import type { BuildMod } from '../../client/MEditClient';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';

@@ -10,7 +10,6 @@ type Downloading = {
 
 type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
 
-/** An installation file as a manifest names it: by name, with its hash and its page on its host. */
 type ManifestInstallationFile = Pick<Extract<ManifestPackage, { kind: 'installationFile' }>, 'name' | 'hash' | 'page'>;
 
 interface Found {

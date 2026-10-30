@@ -260,12 +260,11 @@ export interface MEditClient {
   decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // Each plugin's repair preview, or why it has none. Nothing is written.
   repairPreviews(plugins: readonly PluginAddress[]): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused>;
-  // Each plugin's source is written as two commits, or refused on its own. `metadataFiles`: the mod manager's files,
-  // a new repository leaves out. `force` waives every loss, `agreedDrops` only the dropped data.
+  // Each plugin's source is written as two commits, or refused on its own. `force` waives every loss, `agreedDrops` only
+  // the dropped data.
   decompileAndRepair(
     plugins: readonly PluginToRepair[], force: boolean, agreedDrops: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  // Rename's and exclude's half in mEdit: the manifest in the repository in `sourceFolder`, written in its working tree.
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;

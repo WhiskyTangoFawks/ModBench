@@ -29,7 +29,6 @@ function over(order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceA
   return { fake, commands: modCommands(fake.adapter) };
 }
 
-// A source mod's manifest is read and written on disk.
 const SOURCE_ROOT = mkdtempSync(join(tmpdir(), 'mod-commands-source-'));
 afterAll(() => { rmSync(SOURCE_ROOT, { recursive: true, force: true }); });
 const SOURCE = join(SOURCE_ROOT, 'Harder VATS');
@@ -592,7 +591,6 @@ describe('markFiles', () => {
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
-    // The source folder refuses writes once the exclusion is written, so its take-back fails.
     const { commands } = over(FIXTURE_ORDER, {
       refusals: (call) => {
         if (call.verb !== 'markOriginFile') return undefined;

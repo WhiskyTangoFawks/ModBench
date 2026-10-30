@@ -7,7 +7,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
-import type { BuildMod } from '../../client';
+import type { BuildMod } from '../../client/MEditClient';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 
 let root: string;

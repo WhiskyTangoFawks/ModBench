@@ -9,7 +9,8 @@ import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 import { writeSourceManifestIn, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
 import { readManifest } from '../../manifestAdapter/manifestRead';
-import type { BuildMod, DecompileAndCommitMod } from '../../client';
+import type { DecompileAndCommitMod } from '../../client';
+import type { BuildMod } from '../../client/MEditClient';
 
 let root: string;
 let SOURCES: { ModA: string; ModB: string };

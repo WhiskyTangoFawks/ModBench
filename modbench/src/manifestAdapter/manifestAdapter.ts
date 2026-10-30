@@ -4,4 +4,4 @@ export {
 } from './modStatus';
 export { ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from './manifestText';
 export { manifestIn, removeManifestIn, sourceManifestFile, sourceManifestIn, writeManifestIn, writeSourceManifestIn } from './manifestFiles';
-export { atFolderPath, lineAtFolderPath } from './folderPaths';
+export { lineAtFolderPath } from './folderPaths';
