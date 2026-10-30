@@ -33,8 +33,8 @@ A statement about a plugin's place in plugin order, or about the plugins it need
 
 Avoid: plugin rule, load-order rule
 
-# Group
-LOOT's named set of plugins, placed in plugin order after the groups it names.
+# LOOT group
+LOOT's named set of plugins, placed in plugin order after the LOOT groups it names.
 
 Avoid: separator (a mod entry), category
 
@@ -71,7 +71,7 @@ Avoid: plugin, package (that is what a mod is made from)
 ## Mod separator
 A mod entry that groups other mods in the list and holds no files. A mod belongs to its separator whichever way the list is displayed. A separator is not a priority position.
 
-Avoid: group (LOOT's set of plugins), category
+Avoid: LOOT group, category
 
 ## Source mod
 A mod whose folder is a build artifact: the build writes it from the mod's repository in the source folder and the installation files its manifest names. With a remote, the repository is a submodule of the instance's repository. It follows one git workflow.
