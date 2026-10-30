@@ -210,7 +210,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
   });
 });
 
-const NO_CHOICES = { kind: 'choices', steps: [] };
+const NO_CHOICES = { kind: 'choices', steps: [], installAnyway: false };
 
 describe('modbench.mod.install called by the agent', () => {
   const outsideInstallationFile = { kind: 'archive' as const, path: '/elsewhere/bar.zip' };
@@ -319,7 +319,8 @@ describe('modbench.mod.install called by the agent', () => {
 
   it.each([
     ['its choices', { choices: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }] },
-      { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }] }],
+      { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }], installAnyway: false }],
+    ['its choices, with install anyway', { installAnyway: true, choices: [] }, { kind: 'choices', steps: [], installAnyway: true }],
     ['Manual', { manual: true }, { kind: 'manual' }],
   ])('hands the install %s, for a FOMOD', async (_, options, answer) => {
     register();
