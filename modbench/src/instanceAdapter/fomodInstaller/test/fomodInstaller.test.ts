@@ -7,7 +7,7 @@ import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice } from '../
 import type { FomodMove, FomodState, ReleaseImage } from '../../../wire/fomodPage';
 import { present } from '../../../ports/present';
 import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
-import { FOMOD_PAGE } from '../../../test/fomodDialogDouble';
+import { FOMOD_PAGE, refusingPage } from '../../../test/fomodDialogDouble';
 
 const SCHEMA = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd"';
 
@@ -72,7 +72,7 @@ describe('the FOMOD installer', () => {
   }
 
   async function install(choices: readonly FomodStepChoice[], engine: FomodEngine = FOMOD_ENGINE): Promise<FomodLanded> {
-    const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'choices', steps: choices }, () => Promise.resolve(KNOWN));
+    const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'choices', steps: choices, installAnyway: true }, () => Promise.resolve(KNOWN));
     if (landing.kind === 'cancelled') throw new Error('The installer was cancelled.');
     landedIn = landing.root;
     return landing.fomod;
@@ -186,7 +186,7 @@ describe('the FOMOD installer', () => {
     expect(await filesLanded()).toEqual(['Textures/Core.esp', 'Textures/Other.esp']);
   });
 
-  it('refuses a FOMOD whose module dependencies do not hold, naming which, and lands nothing', async () => {
+  it('names which module dependency does not hold, and not one that does', async () => {
     await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/>'
       + '<fileDependency file="Active.esp" state="Active"/></moduleDependencies>'
       + `<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
@@ -195,24 +195,7 @@ describe('the FOMOD installer', () => {
 
     await expect(refusal).rejects.toThrow(/needed\.esm/i);
     await expect(refusal).rejects.not.toThrow(/active\.esp/i);
-    await expect(refusal).rejects.toThrow(/Request it again with manual to install it as a plain copy\.$/);
     await releaseLeftAsItWas(['core/Core.esp']);
-  });
-
-  it.each([
-    ['takes Manual', true, 'plainCopy'],
-    ['declines it', false, 'cancelled'],
-  ] as const)('refuses a FOMOD whose module dependencies do not hold to the page, naming which, which %s', async (_, manual, ended) => {
-    await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'
-      + `<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
-    const refused: string[] = [];
-    const dialog: FomodDialog = { ...FOMOD_PAGE, refuse: (why) => { refused.push(why); return Promise.resolve(manual); } };
-
-    const landing = await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
-
-    expect(refused).toHaveLength(1);
-    expect(refused[0]).toMatch(/needed\.esm/i);
-    expect(landing.kind === 'cancelled' ? 'cancelled' : landing.fomod.kind).toBe(ended);
   });
 
   it('names each folder the options chosen name and its archive lacks, and no folder of an option not chosen', async () => {
@@ -248,50 +231,53 @@ describe('the FOMOD installer', () => {
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'))).toEqual(unnamed);
   });
 
-  it.each([
-    ['never closed', '<config><moduleName>Never closed</moduleName>', 'line 1, column 175'],
-    ['not XML', 'not xml', 'line 1, column 1'],
-  ])('refuses a FOMOD whose module config is %s, saying the config is not well-formed XML and where, and tells an agent to ask for manual', async (_, config, where) => {
-    await release(config, ['core/Core.esp']);
+  describe.each([
+    ['its installer is a script', 'script', undefined, /its installer is a script, which Modbench does not run/],
+    ['its module config is never closed', 'xml', '<config><moduleName>Never closed</moduleName>',
+      /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 175/],
+    ['its module config is not XML', 'xml', 'not xml', /its installer cannot be read: fomod\/ModuleConfig\.xml is not well-formed XML, at line 1, column 1/],
+    ['its module dependencies do not hold', 'xml', config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'),
+      /needed\.esm/i],
+  ] as const)('a FOMOD whose %s', (_, fomod, moduleConfig, why) => {
+    const landing = async (answer: FomodAnswer) => {
+      if (moduleConfig !== undefined) await release(moduleConfig, ['core/Core.esp']);
+      return fomodLanding(FOMOD_ENGINE, { root, fomod }, answer, () => Promise.resolve(KNOWN));
+    };
 
-    await expect(install([])).rejects.toThrow(
-      `its installer cannot be read: fomod/ModuleConfig.xml is not well-formed XML, at ${where}. Request it again with manual to install it as a plain copy.`);
-    await releaseLeftAsItWas(['core/Core.esp']);
-  });
+    it('is refused to an agent, who is told to ask for manual, and lands nothing', async () => {
+      const refusal = landing({ kind: 'choices', steps: [] });
 
-  it.each([
-    ['takes Manual', true, { kind: 'plainCopy', why: 'Manual was asked for' }],
-    ['declines it', false, { kind: 'cancelled' }],
-  ] as const)('refuses a FOMOD whose module config cannot be read to the page, which %s', async (_, manual, ended) => {
-    await release('not xml', ['core/Core.esp']);
-    const refused: string[] = [];
-    const dialog: FomodDialog = { ...FOMOD_PAGE, refuse: (why) => { refused.push(why); return Promise.resolve(manual); } };
-
-    const landing = await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
-
-    expect(refused).toEqual(['its installer cannot be read: fomod/ModuleConfig.xml is not well-formed XML, at line 1, column 1']);
-    expect(landing).toEqual(ended.kind === 'cancelled' ? ended : { kind: 'landing', root, fomod: ended });
-  });
-
-  describe('a FOMOD whose installer is a script', () => {
-    const SCRIPT = 'its installer is a script, which Modbench does not run';
-    const scripted = (answer: FomodAnswer) => fomodLanding(FOMOD_ENGINE, { root, fomod: 'script' }, answer, () => Promise.resolve(KNOWN));
-
-    it('is refused to an agent, who is told to ask for manual', async () => {
-      await expect(scripted({ kind: 'choices', steps: [] })).rejects.toThrow(`${SCRIPT}. Request it again with manual to install it as a plain copy.`);
+      await expect(refusal).rejects.toThrow(why);
+      await expect(refusal).rejects.toThrow('Request it again with manual');
     });
 
-    it('is refused to the page, which lands the plain copy only on Manual', async () => {
-      const refused: string[] = [];
-      const dialog: FomodDialog = { ...FOMOD_PAGE, refuse: (why) => { refused.push(why); return Promise.resolve(false); } };
+    it.each([
+      ['takes Manual', 'manual', { kind: 'landing', fomod: { kind: 'plainCopy', why: 'Manual was asked for' } }],
+      ['declines it', 'cancelled', { kind: 'cancelled' }],
+    ] as const)('is refused to the page, which %s, while the install waits on the user', async (__, reply, ended) => {
+      const { dialog, events } = refusingPage(reply);
 
-      expect(await scripted({ kind: 'dialog', dialog })).toEqual({ kind: 'cancelled' });
-      expect(refused).toEqual([SCRIPT]);
+      expect(await landing({ kind: 'dialog', dialog })).toMatchObject(ended);
+      expect(events).toEqual(['asking true', expect.stringMatching(why), 'asking false']);
     });
 
     it('lands as a plain copy when Manual is asked for, without refusing', async () => {
-      expect(await scripted({ kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await landing({ kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
     });
+  });
+
+  it('refuses a FOMOD given no answer, saying how to ask for a plain copy', async () => {
+    await release(TWO_STEPS, TWO_STEPS_FILES);
+
+    await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, undefined, () => Promise.resolve(KNOWN))).rejects.toThrow('manual');
+  });
+
+  it('refuses an agent a FOMOD that names files its archive lacks, naming each, unless it asks for force', async () => {
+    await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}<folder source="gone" destination=""/></requiredInstallFiles>`), ['core/Core.esp']);
+    const asked = (installAnyway: boolean) => fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'choices', steps: [], installAnyway }, () => Promise.resolve(KNOWN));
+
+    await expect(asked(false)).rejects.toThrow(/gone.*force/);
+    expect(await asked(true)).toMatchObject({ kind: 'landing', fomod: { kind: 'installer', missing: ['gone'] } });
   });
 
   it('refuses a FOMOD that installs outside the mod\'s folder, naming where, and writes nothing there', async () => {
@@ -672,15 +658,14 @@ describe('the FOMOD installer', () => {
       });
     });
 
-    it('closes the page after it refuses, when the module dependencies do not hold', async () => {
+    it('closes the page after it refuses', async () => {
       await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'), ['core/Core.esp']);
       const close = vi.fn();
-      const refuse = vi.fn(() => Promise.resolve(false));
+      const { dialog } = refusingPage('cancelled');
 
-      expect(await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...FOMOD_PAGE, close, refuse } }, () => Promise.resolve(KNOWN)))
-        .toEqual({ kind: 'cancelled' });
+      await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...dialog, close } }, () => Promise.resolve(KNOWN));
+
       expect(close).toHaveBeenCalledTimes(1);
-      expect(refuse).toHaveBeenCalledTimes(1);
     });
   });
 });

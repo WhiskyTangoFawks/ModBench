@@ -250,8 +250,7 @@ export interface FomodDialog {
   readonly show: (state: FomodState<ReleaseImage>, release: string) => void;
   readonly onMove: (handler: (move: FomodMove) => void) => void;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
-  /** Refuses the installer, saying why; whether the user took Manual. */
-  readonly refuse: (why: string) => Promise<boolean>;
+  readonly refuse: (why: string) => Promise<'manual' | 'cancelled'>;
   /** Whether the install now waits on the user, and not on itself. */
   readonly asking: (asking: boolean) => void;
   readonly close: () => void;
@@ -260,7 +259,7 @@ export interface FomodDialog {
 /** How a FOMOD's installer is answered: its choices, step by step; the user's moves on its page; or Manual, which
  *  installs a plain copy. */
 export type FomodAnswer =
-  | { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[] }
+  | { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[]; readonly installAnyway?: boolean }
   | { readonly kind: 'dialog'; readonly dialog: FomodDialog }
   | { readonly kind: 'manual' };
 

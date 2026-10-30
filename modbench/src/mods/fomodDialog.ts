@@ -55,7 +55,7 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress
     },
     confirmMissing: async (missing) => await ask(
       'This FOMOD names files its archive does not hold.', { modal: true, detail: missing.join('\n') }, INSTALL_ANYWAY) === INSTALL_ANYWAY,
-    refuse: async (why) => await ask("This FOMOD's installer cannot run.", { modal: true, detail: why }, MANUAL) === MANUAL,
+    refuse: async (why) => (await ask("This FOMOD's installer cannot run.", { modal: true, detail: why }, MANUAL) === MANUAL ? 'manual' : 'cancelled'),
     asking: (asking) => {
       if (asking) progress.waiting();
       else progress.working();

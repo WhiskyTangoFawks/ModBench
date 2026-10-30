@@ -151,8 +151,8 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     const ask = scriptedDialog('Manual', undefined);
     const dialog = fomodDialog(EXTENSION, ask, PROGRESS);
 
-    expect(await dialog.refuse('its installer is a script')).toBe(true);
-    expect(await dialog.refuse('its installer is a script')).toBe(false);
+    expect(await dialog.refuse('its installer is a script')).toBe('manual');
+    expect(await dialog.refuse('its installer is a script')).toBe('cancelled');
 
     expect(ask.asked[0]).toEqual({ message: 'This FOMOD\'s installer cannot run.', detail: 'its installer is a script', buttons: ['Manual'] });
   });

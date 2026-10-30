@@ -131,13 +131,12 @@ const UNATTENDED = {
   opened: () => undefined,
   released: () => Promise.resolve(),
   finish: () => Promise.resolve(),
-  confirmMissing: () => Promise.resolve(true),
   ended: () => undefined,
 };
 
 // Each step shown takes the first untaken choice of its name. The engine reports a step once per move to it, so a
 // step reported again is one it would not leave.
-function choosing(choices: readonly FomodStepChoice[]): Driver {
+function choosing({ steps: choices, installAnyway }: Extract<FomodAnswer, { readonly kind: 'choices' }>): Driver {
   const taken = new Set<number>();
   const answered = new Set<number>();
   const answer = ({ steps, current, cause }: StepReport): readonly EngineRequest[] => {
@@ -152,7 +151,11 @@ function choosing(choices: readonly FomodStepChoice[]): Driver {
     taken.add(at);
     return answerFor(step, choice);
   };
-  return { ...UNATTENDED, step: answer, untaken: () => choices.filter((_, i) => !taken.has(i)) };
+  const confirmMissing = (missing: readonly string[]): Promise<boolean> => {
+    if (installAnyway !== true) throw new Error(`The FOMOD names files its archive does not hold: ${missing.join(', ')}. Request it again with force to install anyway.`);
+    return Promise.resolve(true);
+  };
+  return { ...UNATTENDED, step: answer, confirmMissing, untaken: () => choices.filter((_, i) => !taken.has(i)) };
 }
 
 // The user answers on a page. An installer with no step to show finishes at once, and the page then shows its header
@@ -367,9 +370,6 @@ async function land(root: string, files: readonly string[], into: string, instru
   }
 }
 
-// Rejects, landing nothing, when the choices do not answer the installer, a
-// fact its conditions read is unknown, or it installs outside the mod's folder; resolves refused when its module
-// dependencies do not hold.
 async function installFomod(engine: FomodEngine, { root, into, facts, driver }: FomodInstall): Promise<FomodInstalled> {
   const files = await filesUnder(root);
   await driver.released({ root, files });
@@ -396,7 +396,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
 }
 
 const driverFor = (answer: Extract<FomodAnswer, { readonly kind: 'choices' | 'dialog' }>): Driver =>
-  (answer.kind === 'choices' ? choosing(answer.steps) : conversing(answer.dialog));
+  (answer.kind === 'choices' ? choosing(answer) : conversing(answer.dialog));
 
 const SCRIPT = 'its installer is a script, which Modbench does not run';
 const MANUAL_ASKED = 'Manual was asked for';
@@ -412,7 +412,13 @@ export async function fomodLanding(
   if (answer?.kind === 'manual') return asIs(MANUAL_ASKED);
   const refused = async (why: string): Promise<FomodLanding> => {
     if (answer?.kind !== 'dialog') throw new Error(`${why}. Request it again with manual to install it as a plain copy.`);
-    return await answer.dialog.refuse(why) ? asIs(MANUAL_ASKED) : { kind: 'cancelled' };
+    const { dialog } = answer;
+    dialog.asking(true);
+    try {
+      return await dialog.refuse(why) === 'manual' ? asIs(MANUAL_ASKED) : { kind: 'cancelled' };
+    } finally {
+      dialog.asking(false);
+    }
   };
   if (release.fomod === 'script') return refused(SCRIPT);
   if (answer === undefined) return refused('no choices were given for its steps');
