@@ -14,8 +14,7 @@ interface FlagCellProps {
   // all columns collapse together): collapsed shows the compact set-name summary, xEdit's own
   // at-rest render.
   collapsed?: boolean;
-  // The flags the game fills from a template: each reads from its template, dimmed, in place of its
-  // check box, and a toggle of another flag leaves it as the document has it (editor-fields.md, Templated fields).
+  // editor-fields.md, Templated fields.
   templated?: Readonly<Record<string, TemplateReading>>;
 }
 
@@ -27,7 +26,7 @@ export function FlagCell({ value, meta, onCommit, collapsed, templated = {} }: F
 
   if (collapsed) {
     const own = names.filter(name => !templated[name]);
-    const fromTemplate = meta.enumMembers.filter(({ value: name }) => templated[name]).map(({ value: name }) => `${name} ${templated[name]?.reading}`);
+    const fromTemplate = meta.enumMembers.filter(({ value: name }) => templated[name]).map(({ value: name }) => `${name} ${templated[name].reading}`);
     return <span>{[...own, ...fromTemplate].join(', ')}</span>;
   }
 
