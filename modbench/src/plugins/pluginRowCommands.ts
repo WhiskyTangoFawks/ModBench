@@ -14,6 +14,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { previewLines } from '../pluginCommands/decompileAndRepair';
 import { isPluginAddress } from '../wire/messages';
+import { isReadFailed } from '../wire/readFailed';
 
 /** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
  *  view while the work runs, and the view's own message line. */
@@ -24,10 +25,10 @@ export interface PluginsViewProgress {
   say: (message: string | undefined) => void;
 }
 
-/** What decompile needs: the call, the Instance loader's refresh, its one confirmation, and how the user
+/** What decompile needs: the call, the Instance loader's refresh, its confirmation of a replaced change, and how the user
  *  is told. */
 export interface DecompileDeps {
-  client: Pick<MEditClient, 'decompile'>;
+  client: Pick<MEditClient, 'decompile' | 'getWorkingTreeStatesBeneath'>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
@@ -36,9 +37,12 @@ export interface DecompileDeps {
 interface DecompileGiven {
   readonly plugins: readonly PluginAddress[];
   readonly force: boolean;
+  readonly agreesToReplace?: (plugins: readonly PluginAddress[]) => Promise<boolean>;
 }
 
-interface DecompileAndRepairGiven extends DecompileGiven {
+interface DecompileAndRepairGiven {
+  readonly plugins: readonly PluginAddress[];
+  readonly force: boolean;
   readonly agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>;
 }
 
@@ -48,15 +52,21 @@ export function registerDecompileCommand(
   deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
-    fromView: async (entry, _option, clicked) => {
+    fromView: (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
       const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? { plugins, force: true } : undefined;
+      return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, replaced) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
-    run: ({ plugins, force }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
-      const outcome = await deps.client.decompile(plugins, force);
-      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
+    run: ({ plugins, force, agreesToReplace }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async (progress) => {
+      const replacing = agreesToReplace === undefined || force ? [] : await withChangesGitDoesNotHold(deps.client, plugins);
+      if (replacing.length === 0) return decompileBatches(deps.client, [{ plugins, force }]);
+      progress.waiting();
+      const agreed = await agreesToReplace?.(replacing);
+      progress.working();
+      if (agreed !== true) return { applied: true, outcome: { landed: [], refused: [] } };
+      const rest = plugins.filter((plugin) => !replacing.includes(plugin));
+      return decompileBatches(deps.client, [{ plugins: replacing, force: true }, { plugins: rest, force: false }]);
     }),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
@@ -103,16 +113,46 @@ async function confirmDrops(ask: AskQuestion, dropping: readonly PluginRepairPre
   return answer === 'Repair';
 }
 
-// plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces
-// what the working tree holds (commands.md, Confirm what destroys).
-async function confirmDecompile(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
+async function confirmReplace(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
   const [only] = plugins;
   const answer = plugins.length === 1 && only !== undefined
-    ? await ask(`Decompile "${only.name}" in ${only.origin}? Decompile replaces its source in the working tree from its bytes.`,
+    ? await ask(`Decompile "${only.name}" in ${only.origin}? It replaces changes to its source that git does not hold.`,
       { modal: true }, 'Decompile')
-    : await ask(`Decompile ${plugins.length} plugins? Decompile replaces their source in the working tree from their bytes.`,
+    : await ask(`Decompile ${plugins.length} plugins? They replace changes to their source that git does not hold.`,
       { modal: true, detail: plugins.map(pluginRowName).join('\n') }, 'Decompile');
   return answer === 'Decompile';
+}
+
+async function withChangesGitDoesNotHold(
+  client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>, plugins: readonly PluginAddress[],
+): Promise<PluginAddress[]> {
+  const states = await Promise.all(plugins.map((plugin) => client.getWorkingTreeStatesBeneath(plugin)));
+  return plugins.filter((_, index) => {
+    const beneath = states[index];
+    return beneath !== undefined && !isReadFailed(beneath) && beneath.plugin.some((state) => state !== 'None');
+  });
+}
+
+interface DecompileBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }
+
+async function decompileBatches(
+  client: Pick<MEditClient, 'decompile'>, batches: readonly DecompileBatch[],
+): Promise<SelectionResult<PluginAddress>> {
+  const answered: { batch: DecompileBatch; answer: Awaited<ReturnType<MEditClient['decompile']>> }[] = [];
+  for (const batch of batches.filter(({ plugins }) => plugins.length > 0)) {
+    const answer = await client.decompile(batch.plugins, batch.force);
+    if (isRefused(answer) && answered.length === 0) return { applied: false, refusal: answer.message };
+    answered.push({ batch, answer });
+  }
+  return {
+    applied: true,
+    outcome: {
+      landed: answered.flatMap(({ answer }) => isRefused(answer) ? [] : answer.landed),
+      refused: answered.flatMap(({ batch, answer }) => isRefused(answer)
+        ? batch.plugins.map((item) => ({ item, reason: answer.message }))
+        : answer.refused),
+    },
+  };
 }
 
 function reportSelection(
