@@ -1,10 +1,10 @@
 // commands.md, decompile and commit: a repository holding the mod's plugin source, a build file naming this folder as the
 // output, and as its assets only the files its installation file does not yield with their bytes (ADR-0016).
 
-import { basename, join, resolve } from 'node:path';
+import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, manifestNameOf, manifestText, packageOf, removeManifestIn, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
+import { manifestIn, manifestNameOf, manifestText, packageOf, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
@@ -15,10 +15,9 @@ type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceMods'>;
 
-/** The repository a mod's decompile and commit makes, and the mod's folder. */
+/** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
   readonly repository: NewRepository;
-  readonly folder: string;
 }
 
 function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
@@ -95,26 +94,12 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     output: basename(folder), packages: recorded.packages, exclude: recorded.exclude, archives: recorded.archives, steps: recorded.steps, tools: recorded.tools,
     files: kept,
   };
-  return { folder, repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
-}
-
-/** Why the manifest a mod's folder held could not be removed once its repository is made; a
- *  repository in the mod's folder keeps its own. */
-export async function folderManifestRemovedOrWhy({ folder, repository }: MadeRepository): Promise<string | undefined> {
-  if (resolve(folder) === resolve(repository.sourceFolder)) return undefined;
-  try {
-    await removeManifestIn(folder);
-    return undefined;
-  } catch (err) {
-    return `the manifest in its folder could not be removed: ${errorMessage(err)}`;
-  }
+  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
 /** The repository decompile and commit makes for each mod decompile and repair asks for, read as the instance is now. */
 export const newRepositoriesOver = (adapter: Adapter): {
   readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
-  readonly folderManifestRemovedOrWhy: typeof folderManifestRemovedOrWhy;
 } => ({
   of: async (mod) => newRepositoryOf(adapter, mod, await gameToHand(adapter, await adapter.sourceMods())),
-  folderManifestRemovedOrWhy,
 });

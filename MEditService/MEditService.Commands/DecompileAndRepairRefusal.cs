@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands;
 
-/// <summary>Why decompile and repair, or its preview, refused a plugin (ADR-0019): each value is a different way out.</summary>
+/// <summary>Why decompile and repair refused a plugin (ADR-0019): each value is a different way out.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DecompileAndRepairRefusal
 {
@@ -26,14 +26,8 @@ public enum DecompileAndRepairRefusal
     /// <summary>No malformed record is diagnosed in the plugin; the way out is decompile.</summary>
     NotMalformed,
 
-    /// <summary>The plugin's bytes are not the ones the preview read; the way out is a new preview.</summary>
-    ChangedSincePreview,
-
     /// <summary>A diagnosis of the plugin that no repair answers.</summary>
     NoRepair,
-
-    /// <summary>A repair that drops data, and the request did not force. Nothing was written.</summary>
-    DropsData,
 
     /// <summary>The repaired plugin is not the original with its repairs, or cannot become source without losing meaning.</summary>
     RoundTripFailed,

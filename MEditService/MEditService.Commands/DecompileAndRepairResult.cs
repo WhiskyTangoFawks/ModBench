@@ -1,19 +1,10 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter.Repair;
 
 namespace MEditService.Commands;
 
-/// <summary>Each plugin's preview, or why there is none.</summary>
-public sealed record RepairPreviewsResult(IReadOnlyList<PluginRepairPreview> Applied, IReadOnlyList<DecompileAndRepairRefused> Refused)
-    : ISelectionAnswer<DecompileAndRepairRefused>;
-
-/// <summary>A malformed plugin's diagnoses, each with the change that repairs it, and the hash of the bytes they came from,
-/// which its repair is handed.</summary>
-public sealed record PluginRepairPreview(PluginAddress Plugin, string Hash, IReadOnlyList<RepairPreview> Diagnoses);
-
-/// <summary>A plugin to repair as its preview read it, and the repository made for its mod when it has none.</summary>
-public sealed record PluginToRepair(PluginAddress Plugin, string Hash, NewRepository? NewRepository = null);
+/// <summary>A plugin to repair, and the repository made for its mod when it has none.</summary>
+public sealed record PluginToRepair(PluginAddress Plugin, NewRepository? NewRepository = null);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): the
 /// assets, by their paths in the mod folder, and the build file.</summary>

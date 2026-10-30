@@ -206,7 +206,7 @@ const DECOMPILE = gestureInput(
 );
 
 const DECOMPILE_AND_REPAIR = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to repair a plugin whose repair drops data or whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to repair a plugin whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
   z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
 );

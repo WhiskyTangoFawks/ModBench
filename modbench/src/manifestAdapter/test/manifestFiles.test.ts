@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { buildFileIn, manifestIn, removeManifestIn, writeBuildFileIn, writeManifestIn, type Manifest } from '../manifestAdapter';
+import { buildFileIn, manifestIn, writeBuildFileIn, writeManifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
@@ -142,22 +142,5 @@ describe('writeBuildFileIn', () => {
     await writeBuildFileIn(folder, buildFile);
 
     expect([await readdir(folder), await readFile(join(folder, BUILD_FILE.toUpperCase()), 'utf8')]).toEqual([[BUILD_FILE.toUpperCase()], manifestText(buildFile)]);
-  });
-});
-
-describe('removeManifestIn', () => {
-  it('removes the manifest named for the folder in any case, and leaves the rest', async () => {
-    await writeFile(join(folder, 'MOD.manifest.json'), '{}');
-    await writeFile(join(folder, 'a.nif'), 'a');
-
-    await removeManifestIn(folder);
-
-    expect(await readdir(folder)).toEqual(['a.nif']);
-  });
-
-  it('does nothing when the folder holds none', async () => {
-    await removeManifestIn(folder);
-
-    expect(await readdir(folder)).toEqual([]);
   });
 });
