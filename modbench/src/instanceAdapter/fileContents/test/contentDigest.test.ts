@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { digestOf, md5Of } from '../contentDigest';
+import { digestOf, md5Of, textHash } from '../contentDigest';
 
 describe('a file\'s hash, as mEdit\'s manifest carries it', () => {
   it.each([
@@ -22,6 +22,12 @@ describe('a file\'s hash, as mEdit\'s manifest carries it', () => {
 
   it('rejects with the reason when the file cannot be read, so the caller answers the reason', async () => {
     await expect(digestOf(join(tmpdir(), 'medit-digest-missing', 'none.dds'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('a text\'s hash', () => {
+  it('is the hash of its UTF-8 bytes, as a game folder package\'s pin is in a manifest', async () => {
+    expect(await textHash('a.dds\nM5WSec/sW34=\nmeshes/b.nif\nMr+EvxoNp0I=\n')).toBe('U6/ScIuKmyg=');
   });
 });
 

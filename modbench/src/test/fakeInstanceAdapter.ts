@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { textHash } from '../instanceAdapter/fileContents/contentDigest';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
@@ -71,6 +72,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
 export const md5Of = (name: string): string => `md5-of-${name}`;
 
 export type AdapterCall =
+  | { readonly verb: 'keepPackageEntries'; readonly hash: string; readonly entries: ReadonlyMap<string, string> }
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
   | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
@@ -118,6 +120,8 @@ export interface InstanceAnswers {
   folderFiles?: ReadonlyMap<string, readonly string[]>;
   /** Each downloaded file's entries by its hash; a hash not there has none in the index. */
   packageEntries?: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  /** Why the entries of a game folder package cannot be written to the hash index. */
+  packageEntriesNotWritten?: string;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -401,6 +405,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve(answers.folderFiles?.get(folder) ?? []),
     packageEntries: (hash) => Promise.resolve(answers.packageEntries?.get(hash)),
+    keepPackageEntries: (hash, entries) => record({ verb: 'keepPackageEntries', hash, entries }, answers.packageEntriesNotWritten),
+    textHash,
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
       return write({ verb: 'changeModOrder', profile, changes }, () => {

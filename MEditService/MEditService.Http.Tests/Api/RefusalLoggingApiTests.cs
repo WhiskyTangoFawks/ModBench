@@ -100,20 +100,6 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AnUpdateManifestItemRefused_IsLoggedOnce_NamingTheModAndWhy()
-    {
-        using var instance = new ScratchDirectory("refusal-logging-update-manifest-");
-
-        await Client.PostAsJsonAsync("/update-manifest", new
-        {
-            mods = new[] { new { name = "Gone", folder = Path.Combine(instance, "Gone"), metadataFiles = Array.Empty<string>() } },
-            statCache = Path.Combine(instance, "stat-cache"),
-        });
-
-        AssertLoggedOnce("Refused Update manifest of Gone:", "ModFolderMissing");
-    }
-
-    [Fact]
     public async Task ARestoreFromManifestItemSkipped_IsLoggedOnce_NamingTheModAndWhy()
     {
         using var instance = new ScratchDirectory("refusal-logging-restore-");

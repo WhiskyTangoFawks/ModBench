@@ -55,10 +55,6 @@ public interface IModFolderRepository
     /// <summary>The game file at the forward-slash <paramref name="path"/> in the game folder at <paramref name="root"/>.</summary>
     Stream OpenGameFile(string root, string path);
 
-    /// <summary>Writes the manifest into the folder it builds, named for that folder, and only when its text differs from the
-    /// one there. True when it wrote.</summary>
-    bool WriteManifest(string modFolder, Manifest manifest);
-
     /// <summary>Deletes the manifest in the mod's folder, as the source mod's repository in <paramref name="sourceFolder"/>
     /// holds its manifest instead, and answers what it deleted. A repository in the mod's folder keeps its own.</summary>
     SpelledManifest? RemoveManifest(string modFolder, string sourceFolder);

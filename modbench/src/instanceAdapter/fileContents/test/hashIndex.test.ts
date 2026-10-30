@@ -127,6 +127,36 @@ describe('the sizes and hashes of the record index', () => {
     expect(await index.packageEntries('7R3YJUWF5oA=')).toEqual(new Map([['a.esp', '+rJPuyOy4u8='], ['textures/b.dds', 'uXAXn9wLC0k=']]));
   });
 
+  it('answers the entries kept under a game folder package\'s pin, in the next session too', async () => {
+    const entries = new Map([['meshes/a.nif', HASH_OF_AAAA]]);
+
+    expect(await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).keepPackageEntries('PIN', entries)).toBeUndefined();
+
+    const next = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    expect([await next.packageEntries('PIN'), await next.packageEntries('OTHER')]).toEqual([entries, undefined]);
+  });
+
+  it('answers why the entries of a package could not be written, and still answers them this session', async () => {
+    await writeFile(folder, 'a file where the index folder belongs');
+    const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    const entries = new Map([['meshes/a.nif', HASH_OF_AAAA]]);
+
+    const why = await index.keepPackageEntries('PIN', entries);
+
+    expect([why, await index.packageEntries('PIN')]).toEqual([expect.stringContaining('EEXIST') as unknown, entries]);
+  });
+
+  it('appends the entries of a package to the index once, however often they are kept', async () => {
+    const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    const entries = new Map([['meshes/a.nif', HASH_OF_AAAA]]);
+
+    await index.keepPackageEntries('PIN', entries);
+    await index.keepPackageEntries('PIN', new Map(entries));
+    await index.keepPackageEntries('PIN', new Map([['meshes/a.nif', HASH_OF_BBBB]]));
+
+    expect((await indexText()).trim().split('\n')).toHaveLength(2);
+  });
+
   it('hashes a downloaded file\'s entries though its hash alone was asked before', async () => {
     clockAnHourPastEveryWrite();
     const path = await fileHolding('Mod.7z', 'archive');

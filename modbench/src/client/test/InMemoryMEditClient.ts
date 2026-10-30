@@ -19,7 +19,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'updateManifest' | 'restoreFromManifest' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'restoreFromManifest' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile' | 'repairPreviews' | 'decompileAndRepair' | 'changeSourceManifest';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -322,9 +322,6 @@ export class InMemoryMEditClient implements MEditClient {
   }
   build(...args: Parameters<MEditClient['build']>): ReturnType<MEditClient['build']> {
     return this.command('build', args);
-  }
-  updateManifest(...args: Parameters<MEditClient['updateManifest']>): ReturnType<MEditClient['updateManifest']> {
-    return this.command('updateManifest', args);
   }
 
   restoreFromManifest(...args: Parameters<MEditClient['restoreFromManifest']>): ReturnType<MEditClient['restoreFromManifest']> {

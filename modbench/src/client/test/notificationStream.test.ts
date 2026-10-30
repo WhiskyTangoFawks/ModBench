@@ -287,7 +287,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
       totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false,
     }],
     ['decompile-and-commit-progress', rowsChanged([], { kind: 'decompile-and-commit-progress', modlistProgress, decompileAndCommitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
-    ['update-manifest-progress', rowsChanged([], { kind: 'update-manifest-progress', modlistProgress }), modlistProgress],
     ['restore-from-manifest-progress', rowsChanged([], { kind: 'restore-from-manifest-progress', modlistProgress }), modlistProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
     ['plugin-source-unreadable', rowsChanged([], { kind: 'plugin-source-unreadable', pluginWithUnreadableSources: [{ name: 'A.esp', source: { reason: 'Gone.', decompileRepairs: true } }] }),
@@ -302,7 +301,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     const hear = (kind: NotificationKind) => (payload: unknown) => { heard.push([kind, payload]); };
     subscriber.onNotification('load-order-status', hear('load-order-status'));
     subscriber.onNotification('decompile-and-commit-progress', hear('decompile-and-commit-progress'));
-    subscriber.onNotification('update-manifest-progress', hear('update-manifest-progress'));
     subscriber.onNotification('restore-from-manifest-progress', hear('restore-from-manifest-progress'));
     subscriber.onNotification('external-change', hear('external-change'));
     subscriber.onNotification('plugin-source-unreadable', hear('plugin-source-unreadable'));
@@ -331,7 +329,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     expect(heard).toEqual([{ origin: 'ModA', changedPlugins: [] }]);
   });
 
-  it.each(['load-order-status', 'decompile-and-commit-progress', 'update-manifest-progress', 'restore-from-manifest-progress'] as const)('skips a %s frame missing its payload', (kind) => {
+  it.each(['load-order-status', 'decompile-and-commit-progress', 'restore-from-manifest-progress'] as const)('skips a %s frame missing its payload', (kind) => {
     const subscriber = unopened();
     const heard: unknown[] = [];
     subscriber.onNotification(kind, (p) => heard.push(p));

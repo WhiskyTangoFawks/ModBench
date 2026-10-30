@@ -8,9 +8,8 @@ import { everyModHere, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDep
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
-import type {
-  ModlistRepositoryCommands, ModNote, OtherManifests, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
-} from '../sourceCommands/modlistRepositoryCommands';
+import type { ModlistRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/modlistRepositoryCommands';
+import type { ModNote, UpdateManifestResult, UpdateManifestStatus } from '../sourceCommands/updateManifest';
 
 const RESTORE = 'Restore';
 
@@ -80,8 +79,6 @@ async function updateManifest(deps: ManifestGestureDeps, { mods, refused, view, 
     const found = await othersOf(deps, everyMod);
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }, found.others, everyMod));
-    if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
-    reportCancelRefused(reporter, outcome);
     const answered = named(label, outcome);
     reportUpdated(reporter, label, { ...answered, refused: [...answered.refused, ...refused, ...found.refused] });
   });
@@ -89,19 +86,18 @@ async function updateManifest(deps: ManifestGestureDeps, { mods, refused, view, 
 
 async function updateManifestForAgent(
   deps: ManifestGestureDeps, { argument }: ModlistCall,
-): Promise<AgentOutcome<Extract<UpdateManifestResult, { applied: true }>['landed'][number]>> {
+): Promise<AgentOutcome<UpdateManifestResult['landed'][number]>> {
   const { commands, instance } = deps;
   const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
   const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0));
-  if (!result.applied) return { applied: false, refusal: result.refusal };
   const outcome = named(label, result);
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: [...outcome.refused, ...found.refused] },
-    partial: warned('Update manifest:', [...notHeld, ...otherBytes, ...notesOf(label, result.notes), ...result.repositoryNotes, ...statCacheNotWritten(outcome.landed)]),
+    partial: warned('Update manifest:', [...notHeld, ...otherBytes, ...notesOf(label, result.notes), ...result.repositoryNotes]),
   };
 }
 
@@ -114,7 +110,7 @@ function updateMessage(status: UpdateManifestStatus, label: Label): string {
   switch (status.phase) {
     case 'ReadingFiles': return `Update manifest — reading the files of "${label(status.mod)}"…`;
     case 'Hashing': return `Update manifest — hashing downloaded files, ${status.left} left…`;
-    case 'Updating': return `Update manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
+    case 'Updating': return `Update manifest — "${label(status.mod)}", ${status.modsDone} of ${status.modsTotal} mods done…`;
   }
 }
 
@@ -132,13 +128,13 @@ const gapsOf = (
 });
 
 // modlist-repository.md, Update manifest, story 8
-function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<UpdateManifestResult, { applied: true }>, 'applied'>): void {
+function reportUpdated(reporter: Reporter, label: Label, outcome: UpdateManifestResult): void {
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest${outcome.cancelled ? ' cancelled' : ''}: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; their packages do not hold ${counted(notHeld.length, 'file', 'files')} and hold ${counted(otherBytes.length, 'file', 'files')} with other bytes.`;
-  const warnings = [...notHeld, ...otherBytes, ...notesOf(label, outcome.notes), ...outcome.repositoryNotes, ...statCacheNotWritten(outcome.landed)];
+  const warnings = [...notHeld, ...otherBytes, ...notesOf(label, outcome.notes), ...outcome.repositoryNotes];
   const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
   else if (warnings.length > 0 || outcome.cancelled) reporter.report('warning', line, detail);

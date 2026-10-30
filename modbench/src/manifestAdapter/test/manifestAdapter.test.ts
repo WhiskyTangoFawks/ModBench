@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { manifestText } from '../../test/manifestText';
+import { manifestText } from '../manifestText';
 import { readManifest } from '../manifestRead';
 import type { Manifest } from '../manifestAdapter';
 

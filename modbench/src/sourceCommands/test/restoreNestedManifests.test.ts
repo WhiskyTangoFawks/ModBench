@@ -32,7 +32,6 @@ async function instanceWithANestedPair() {
   await Promise.all(['Stock Game/Stock Game.manifest.json', 'Stock Game/Data/Data.manifest.json', 'plugins/rb/rb.manifest.json'].map((path) => put(path)));
   const client = new InMemoryMEditClient();
   client.setCommandResult('restoreFromManifest', { landed: [], refused: [], notFound: [] });
-  client.setCommandResult('updateManifest', { landed: [], refused: [] });
   const commands = modlistRepositoryCommands({
     client, adapter: adapterOver(root), nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: root, hostGit: hostGitRecordingInits([]),
     trash: () => Promise.resolve(), tasks: recordingTasks(), pathProblems: fileProblemsFake(),
@@ -40,7 +39,7 @@ async function instanceWithANestedPair() {
   return { client, commands, found: await commands.otherManifests() };
 }
 
-const sentNames = (client: InMemoryMEditClient, method: 'restoreFromManifest' | 'updateManifest'): string[][] =>
+const sentNames = (client: InMemoryMEditClient, method: 'restoreFromManifest'): string[][] =>
   client.calls.filter((call) => call.method === method).map((call) => (Array.isArray(call.args[0]) ? call.args[0] : []).map((mod: { name: string }) => mod.name));
 
 describe('manifests outside mods/ over an instance on disk, one nested in the folder of another', () => {
@@ -63,11 +62,11 @@ describe('manifests outside mods/ over an instance on disk, one nested in the fo
     expect(sentNames(client, 'restoreFromManifest')).toEqual([['plugins/rb/']]);
   });
 
-  it('updates the manifest beside them and sends mEdit neither of the pair', async () => {
-    const { client, commands, found } = await instanceWithANestedPair();
+  it('updates the manifest beside them and acts on neither of the pair', async () => {
+    const { commands, found } = await instanceWithANestedPair();
 
-    await commands.updateManifest([], {}, found.others);
+    const outcome = await commands.updateManifest([], {}, found.others);
 
-    expect(sentNames(client, 'updateManifest')).toEqual([['plugins/rb/']]);
+    expect([...outcome.landed.map(({ mod }) => mod), ...outcome.refused.map(({ item }) => item)]).toEqual(['plugins/rb/']);
   });
 });
