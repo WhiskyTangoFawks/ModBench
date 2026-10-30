@@ -9,7 +9,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
-import { statusOf } from '../manifestAdapter/manifestAdapter';
+import { sourceModsOf, statusOf } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../wire/sourceMod';
 
 /** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
@@ -104,7 +104,9 @@ export async function installMod(
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   if (target.kind === 'upgrade') {
     try {
-      if ((await deps.adapter.sourceMods()).builds(target.name)) return { applied: false, refusal: sourceModRefusal(target.name) };
+      const { adapter } = deps;
+      const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+      if (sourceMods.builds(target.name)) return { applied: false, refusal: sourceModRefusal(target.name) };
     } catch (err) {
       return refuse(err);
     }

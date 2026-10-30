@@ -1,4 +1,5 @@
-import type { GamePlace, InstanceAdapter, SourceMods } from '../instanceAdapter/instanceAdapter';
+import type { GamePlace, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { SourceMods } from '../manifestAdapter/manifestAdapter';
 import type { GameHeld, GamePlaceHeld } from './manifestBuilder';
 
 type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy'>;

@@ -26,7 +26,7 @@ const withSteps = (
 );
 
 const sourceMod = (
-  '{\n"output": "mod",\n"packages": [\n'
+  '{\n"packages": [\n'
   + '{"submodule":"Mod"},\n'
   + '{"installationFile":"Zed.7z","size":7,"hash":"ZZZZ"},\n'
   + '{"installationFile":"Alpha.zip","size":5,"hash":"AAAA","page":"https://www.nexusmods.com/fallout4/mods/1"}\n'
@@ -44,7 +44,6 @@ const sourceMod = (
 
 const builtSourceMod = (
   '{\n'
-  + '"output": "The Mod",\n'
   + '"packages": [\n{"submodule":"Mod","version":"1.0"}\n],\n'
   + '"exclude": ["a.esp","docs"],\n'
   + '"archives": {\n'
@@ -58,7 +57,7 @@ const builtSourceMod = (
   + '}\n'
 );
 
-const sourceModWithoutFiles = '{\n"output": "Mod",\n"files": []\n}\n';
+const sourceModWithoutFiles = '{\n"files": []\n}\n';
 
 const gameFolder = (
   '{\n"packages": [\n{"gameFolder":"Fallout 4","hash":"AAAA","depots":{"377161":"11","377162":"22"},"version":"2"}\n],\n"files": []\n}\n'
@@ -69,7 +68,7 @@ const depotsOfUnequalLength = (
 );
 
 const sourceModWithExclusionsAndArchives = (
-  '{\n"output": "mod",\n"packages": [\n{"submodule":"Mod"}\n],\n'
+  '{\n"packages": [\n{"submodule":"Mod"}\n],\n'
   + '"exclude": ["a/b.txt","B.txt"],\n'
   + '"archives": {\n"mod.ba2": ["a.nif","b.nif"]\n},\n'
   + '"files": []\n}\n'
@@ -156,7 +155,6 @@ describe('a manifest the adapter refuses', () => {
     ['{"tools": [{"task":"Zip","page":" "}], "files": []}', 'its manifest cannot be read at its tool 1: it names no page'],
     ['{"tools": [{"task":"","page":"https://example.com"}], "files": []}', 'its manifest cannot be read at its tool 1: it names no task'],
     ['{"tools": [{"task":"Zip","page":"https://example.com","path":"C:/zip.exe"}], "files": []}', "its manifest's tool 1 holds 'path', which Modbench does not read"],
-    ['{"output": "a/b", "files": []}', 'is not a folder name'],
     ['{"exclude": ["../a"], "files": []}', "its manifest's 'exclude' names '../a', which is not a path in the folder"],
     ['{"archives": {"a.ba2": ["C:/x"]}, "files": []}', "its manifest's 'archives' names 'C:/x'"],
     ['{"extra": 1, "files": []}', "holds 'extra'"],

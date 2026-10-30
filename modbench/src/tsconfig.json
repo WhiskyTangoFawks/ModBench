@@ -8,6 +8,7 @@
   },
   "references": [
     { "path": "./loadOrderFileCodec" },
+    { "path": "./repositoriesLib" },
     { "path": "./manifestAdapter" },
     { "path": "./tables" },
     { "path": "./wire" },

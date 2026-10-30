@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { manifestIn, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import type { FileProblems } from '../ports/fileProblems';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -10,7 +10,7 @@ import { buildManifest, downloadedFilesOf, type GameHeld, type HashedModFile, ty
 import { metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceMods' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile' | 'modMetadata'
+  'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile' | 'modMetadata'
   | 'downloadedFilesHashed' | 'filesIn' | 'originFileHash' | 'fileStamp' | 'packageEntries' | 'textHash' | 'keepPackageEntries'
   | 'writeSubmodules' | 'writeOtherManifestLines' | 'keepOutOfPublisher' | 'pathsOutsideFolders'>;
 
@@ -190,9 +190,11 @@ async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly str
   }
 }
 
-async function submodulesWritten(adapter: Adapter, acted: readonly string[] | 'every'): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
+async function submodulesWritten(
+  adapter: Adapter, acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>,
+): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
   try {
-    const { notes, other } = await adapter.writeSubmodules(acted);
+    const { notes, other } = await adapter.writeSubmodules(acted, sourceMods);
     return { notes, repositoryNotes: other };
   } catch (err) {
     return { notes: [], repositoryNotes: [errorMessage(err)] };
@@ -220,7 +222,7 @@ export async function updateManifest(
   deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
 ): Promise<UpdateManifestResult> {
   const { adapter } = deps;
-  const sourceMods = await adapter.sourceMods();
+  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const game = await gameToHand(adapter, sourceMods);
   const folders = foldersOf(adapter, others);
   const refused: ItemRefusal<string>[] = [];
@@ -238,7 +240,7 @@ export async function updateManifest(
   }
   const nothingUpdated = async (): Promise<UpdateManifestResult> => {
     const cancelled = cancelledIf(signal);
-    const submodules = passedOver.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, passedOver);
+    const submodules = passedOver.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, passedOver, sourceMods.folders);
     return {
       ...cancelled, landed: [], refused, notes: [...notes, ...submodules.notes],
       repositoryNotes: [...submodules.repositoryNotes, ...await pathsShown(deps)],
@@ -270,7 +272,7 @@ export async function updateManifest(
     landed.push(answer.landed);
     notes.push(...answer.notes.map((note) => ({ mod: mod.name, note })));
   }
-  const submodules = await submodulesWritten(adapter, everyMod ? 'every' : acted);
+  const submodules = await submodulesWritten(adapter, everyMod ? 'every' : acted, sourceMods.folders);
   return {
     ...cancelledIf(signal), landed, refused, notes: [...notes, ...submodules.notes],
     repositoryNotes: [

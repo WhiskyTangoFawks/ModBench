@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
 import { textHash } from '../../instanceAdapter/fileContents/contentDigest';
-import { pinText, writeBuildFileIn, writeManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
+import { pinText, writeManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
+import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
-import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
@@ -46,7 +47,6 @@ interface Setup {
   readonly manifests?: Readonly<Record<string, Manifest>>;
   readonly answers?: InstanceAnswers;
   readonly sourceFolders?: Record<string, string>;
-  readonly shared?: Record<string, readonly string[]>;
   readonly reading?: Partial<InstanceReading>;
   readonly gameFolder?: GameFolder;
   readonly tasks?: readonly string[];
@@ -54,14 +54,14 @@ interface Setup {
   readonly nexus?: Nexus;
 }
 
-async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = {}, shared = {}, reading = {}, gameFolder = FOUND, tasks = [], failures = {}, nexus }: Setup = {}) {
+async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = {}, reading = {}, gameFolder = FOUND, tasks = [], failures = {}, nexus }: Setup = {}) {
   const mods = [...new Set([...Object.keys(files), ...Object.keys(manifests)])];
   for (const mod of mods) await mkdir(join(modsDir, mod), { recursive: true });
   for (const [mod, manifest] of Object.entries(manifests)) await writeManifestIn(join(modsDir, mod), manifest);
   const hashes = new Map<string, HashedFile>(Object.entries(files).flatMap(([mod, inFolder]) =>
     Object.entries(inFolder).map(([path, hash]) => [join(modsDir, mod, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceMods: sourceModsOf(sourceFolders, [], [], {}, shared), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
+    readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
     { folderFiles: new Map(Object.entries(files).map(([mod, inFolder]) => [join(modsDir, mod), Object.keys(inFolder)])), hashes, ...answers });
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);
@@ -181,12 +181,12 @@ describe('restore from manifest', () => {
     ['this machine has no task for a tool its steps run',
       { manifests: { ModA: { ...EMPTY, steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://tools.example/optimise' }] } } },
       "was skipped: this machine has no task for its tool 'Optimise' (https://tools.example/optimise)."],
-    ['its package has no host',
+    ['its repository is not in the source folder and has no host',
       { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }] } } },
-      'was skipped: its package has no host.'],
-    ['its manifest names another output folder',
-      { manifests: { ModA: { ...EMPTY, output: 'Elsewhere' } } },
-      "was skipped: its manifest names the output folder 'Elsewhere', not its folder 'ModA'."],
+      "was skipped: the source folder holds no repository 'ModA', and its package has no host."],
+    ['its submodule is not cloned',
+      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }] } } },
+      "was skipped: its submodule 'ModA' is not cloned."],
     ['it has no manifest', { files: { ModA: { 'a.nif': 'HA' } } }, 'was skipped: it has no manifest.'],
   ])('skips a mod, writing nothing, when %s', async (_case, setup, reason) => {
     const { restore, fake } = await over(setup);
@@ -337,12 +337,13 @@ describe('restore from manifest', () => {
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
     const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [{ path: 'a.esp', vouchedFor: true }] };
 
-    async function sourceMod(answers: InstanceAnswers = {}) {
+    async function sourceMod(answers: InstanceAnswers = {}, recorded: { isSubmodule?: boolean; files?: ManifestFile[] } = {}) {
       await mkdir(source(), { recursive: true });
-      await writeBuildFileIn(source(), { ...EMPTY, output: 'ModA', packages: [MOD_7Z], files: [held('b.nif')] });
+      await writeBuildFile(source(), buildFileOf({ packages: [MOD_7Z], files: [held('b.nif')] }));
+      const { isSubmodule = true, files = [held('a.esp'), held('b.nif')] } = recorded;
       const setup = await over({
         files: { ModA: { 'a.esp': 'old', 'b.nif': 'HB', 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
-        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }], files: [held('a.esp'), held('b.nif')] } },
+        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule }], files } },
         answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), ...answers },
       });
       setup.client.setCommandResult('cloneSubmodules', { applied: [{ folder: source(), leftDetached: "its branch 'main' is at def" }], refused: [] });
@@ -366,6 +367,23 @@ describe('restore from manifest', () => {
         { verb: 'keepPackageEntries', hash: 'ModA', entries: new Map([['a.esp', 'compiled'], ['b.nif', 'HB']]) }, { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
       ]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
+    });
+
+    it('is built from a repository with no host that the source folder holds, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
+      const { restore, client } = await sourceMod({}, { isSubmodule: false });
+
+      const outcome = await restore(['ModA']);
+
+      expect([client.calls.map(({ method }) => method), outcome.landed.map(({ mod }) => mod)]).toEqual([['build'], ['ModA']]);
+    });
+
+    it('is built with the exclusions its manifest records, whatever its folder holds', async () => {
+      const MARK = fakeInstanceAdapter().adapter.exclusionMark;
+      const { restore, client } = await sourceMod({}, { files: [held(`a.esp${MARK}`), held('b.nif')] });
+
+      await restore(['ModA']);
+
+      expect(client.calls.find(({ method }) => method === 'build')?.args[0]).toMatchObject([{ name: 'ModA', exclude: ['a.esp'] }]);
     });
 
     it('is skipped, naming the commit, and not built when its submodule is at another commit', async () => {
@@ -406,16 +424,6 @@ describe('restore from manifest', () => {
     });
   });
 
-  it('skips a mod two repositories both build, writing nothing', async () => {
-    const { restore, fake } = await over({ manifests: { ModA: EMPTY }, shared: { ModA: ['/instance/source/A', '/instance/source/B'] } });
-
-    const outcome = await restore(['ModA']);
-
-    expect([outcome, writes(fake.calls)]).toEqual([
-      { landed: [], refused: [{ item: 'ModA', reason: "was skipped: the repositories '/instance/source/A' and '/instance/source/B' both build it." }] }, [],
-    ]);
-  });
-
   describe('before a source mod', () => {
     const MODS = ['ModA', 'ModB', 'ModC'].map((name) => ({ kind: 'mod', name, enabled: true }) as const);
     const C_ESP = { origin: { kind: 'mod', name: 'ModC' }, name: 'C.esp' } as const;
@@ -425,8 +433,13 @@ describe('restore from manifest', () => {
     async function aSourceModAfterTwoMods() {
       const source = join(root, 'source', 'ModA');
       await mkdir(source, { recursive: true });
-      await writeBuildFileIn(source, { ...EMPTY, output: 'ModA' });
-      return over({ manifests: { ModA: EMPTY, ModB: EMPTY, ModC: EMPTY }, sourceFolders: { ModA: source }, reading: { mods: [...MODS], ...pluginFilesHeld(C_ESP) } });
+      await writeBuildFile(source);
+      const setup = await over({
+        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }] }, ModB: EMPTY, ModC: EMPTY },
+        sourceFolders: { ModA: source }, reading: { mods: [...MODS], ...pluginFilesHeld(C_ESP) },
+      });
+      setup.client.setCommandResult('build', { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [] }], refused: [] });
+      return setup;
     }
 
     const waiting = (client: InMemoryMEditClient) => vi.waitFor(() => { expect(client.calls.map(({ method }) => method)).toContain('getPluginIndexing'); });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 
@@ -8,9 +8,10 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { adapterOver, managerOver, readModlistEntries } from './mo2/adapterOver';
+import { adapterOver, readModlistEntries } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
-import { BUILD_FILE } from '../wire/sourceMod';
+import { writeBuildFile } from './buildFiles';
+import { manifestText } from '../manifestAdapter/manifestAdapter';
 
 const MOD = 'Built Mod';
 const roots: string[] = [];
@@ -21,34 +22,32 @@ afterEach(async () => {
 
 const runGit = (cwd: string, ...args: string[]): void => { execFileSync('git', args, { cwd }); };
 
-async function instanceWithSourceMod(): Promise<{ root: string; adapter: InstanceAdapter }> {
+async function instanceWithSourceMod(): Promise<{ root: string; source: string; adapter: InstanceAdapter }> {
   const root = cloneCorpusFixture();
   roots.push(root);
   const source = join(root, 'source', 'Built Mod source');
   await mkdir(source, { recursive: true });
-  await writeFile(join(source, BUILD_FILE), JSON.stringify({ output: MOD, packages: [] }));
+  await writeBuildFile(source);
   runGit(source, 'init', '--quiet', '--initial-branch=main');
-  runGit(source, 'remote', 'add', 'origin', 'https://example.test/built.git');
-  runGit(source, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');
-  runGit(root, 'init', '--quiet');
-  await managerOver(root).writeIgnoreList();
-  await managerOver(root).writeSubmodules('every');
   await mkdir(join(root, 'mods', MOD), { recursive: true });
-  await writeFile(join(root, 'mods', MOD, 'a.txt'), 'x');
+  await writeFile(join(root, 'mods', MOD, `${MOD}.manifest.json`), manifestText({
+    packages: [{ kind: 'sourceRepository', name: 'Built Mod source', isSubmodule: false }], exclude: [], archives: [], steps: [], tools: [], files: [],
+  }));
   const adapter = adapterOver(root);
   const added = await modSyncOver(adapter)();
   expect(added.applied && added.added).toContain(MOD);
-  return { root, adapter };
+  return { root, source, adapter };
 }
 
 describe('an uninstall whose line write fails', () => {
-  it('leaves a line that mod sync then drops, since the trashed source builds nothing', async () => {
-    const { root, adapter } = await instanceWithSourceMod();
+  it('trashes the repository its manifest names, and leaves a line that mod sync then drops', async () => {
+    const { root, source, adapter } = await instanceWithSourceMod();
     const lineWriteFails: InstanceAdapter = { ...adapter, changeModOrder: () => Promise.reject(new Error('disk full')) };
     const trash = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
 
     const outcome = await modCommands(lineWriteFails).uninstallMods([MOD], trash);
     expect(outcome).toMatchObject({ applied: true, outcome: { landed: [{ name: MOD, lineRefusal: 'disk full' }] } });
+    await expect(stat(source)).rejects.toThrow('ENOENT');
     expect((await readModlistEntries(root)).some((entry) => entry.name === MOD)).toBe(true);
     const synced = await modSyncOver(adapter)();
 

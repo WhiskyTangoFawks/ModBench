@@ -23,7 +23,7 @@ import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
-import { sourceModsIn } from './sourceMods';
+import { sourceRepositoriesIn } from './sourceRepositories';
 import { errorMessage } from '../../ports/errorMessage';
 import { holdsPathToken } from '../pathTokens';
 
@@ -128,7 +128,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     originRootFiles: (origin, folders) => originFilesIn(context, origin, true, folders),
 
-    sourceMods: () => sourceModsIn(instanceRoot),
+    sourceRepositories: () => sourceRepositoriesIn(instanceRoot),
 
     holdsRepository: () => isRepository(instanceRoot),
     repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile),
@@ -149,7 +149,7 @@ const indexed = (listing: readonly ModFolder[]): ModFolders => {
 
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceMods'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceRepositories'> {
   const { instanceRoot } = context;
   const reads: ReturnType<typeof mo2Reads> = {
     profiles: () => source.profiles(ignoreSkippedLink),
@@ -168,7 +168,7 @@ export function mo2Reads(
       return undefined;
     }),
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
-    sourceMods: () => source.sourceMods(),
+    sourceRepositories: () => source.sourceRepositories(),
     modFolderPath: (name, among) => modFolderNamed(context, name, among === undefined ? 'list' : indexed(among)),
     foldersRefused: (folders, asked) => foldersRefused(instanceRoot, folders, asked),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),

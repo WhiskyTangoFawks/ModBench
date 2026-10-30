@@ -6,7 +6,8 @@ import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeys
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
 import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
-import { manifestFileIn, modMetaFileIn, modsDir, stagingPrefix } from './layout';
+import { isManifestPath } from '../../repositoriesLib/manifestPath';
+import { modMetaFileIn, modsDir, stagingPrefix } from './layout';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
@@ -63,12 +64,11 @@ const landNewMod = (context: Mo2Context, mod: string): Land => async (root, keys
   }
 };
 
-const landUpgrade = (mod: string, folder: string, manifest: string): Land => async (root, keys) => {
+const landUpgrade = (mod: string, folder: string): Land => async (root, keys) => {
   try {
     const carried = await get(modMetaFileIn(folder), '');
-    for (const { name } of await listDir(folder)) {
-      const entry = fileInFolder(folder, name);
-      if (entry !== manifest) await remove(entry);
+    for (const entry of await listDir(folder)) {
+      if (!(entry.isFile() && isManifestPath(entry.name))) await remove(fileInFolder(folder, entry.name));
     }
     await settleInto(folder, root, setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
   } catch (err) {
@@ -137,7 +137,7 @@ export function mo2Landing(
             if (!(await claimHolds(target, claimed.holding))) return { landed: false as const };
             const land = claimed.holding === undefined
               ? landNewMod(context, target.name)
-              : landUpgrade(target.name, claimed.holding.path, manifestFileIn(claimed.holding.path, claimed.holding.modName));
+              : landUpgrade(target.name, claimed.holding.path);
             await land(landing.root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
             return landing.fomod === undefined ? { landed: true as const } : { landed: true as const, fomod: landing.fomod };
           });

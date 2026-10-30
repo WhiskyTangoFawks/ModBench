@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterAll, describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
@@ -14,8 +17,12 @@ import { present } from '../../ports/present';
 import { ModNode } from '../ModListProvider';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
+
+const MODS = mkdtempSync(join(tmpdir(), 'decompile-and-commit-mods-'));
+for (const mod of ['ModA', 'ModB', 'ModC']) mkdirSync(join(MODS, mod));
+afterAll(() => { rmSync(MODS, { recursive: true, force: true }); });
 
 beforeEach(() => {
   handlers.clear();
@@ -45,7 +52,9 @@ describe('modbench.mod.decompileAndCommit', () => {
       return Promise.resolve(answer);
     });
     return {
-      ...sourceCommands({ client, adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks() }),
+      ...sourceCommands({
+        client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') })).adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(),
+      }),
       answers: (next: DecompileAndCommitOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,
       progressListeners: () => progressListeners,

@@ -1,11 +1,13 @@
 import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, GameFolder, InstanceAdapter, InstanceReading, Mod,
   OriginFiles, Separator, PublisherTag, ProgramVersions,
 } from '../../instanceAdapter/instanceAdapter';
-import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
+import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { leveledLog } from '../../test/leveledLog';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, instanceMessages, type InstanceValue } from '../instance';
@@ -177,11 +179,10 @@ describe('Instance — the value', () => {
   });
 
   it('carries each mod a repository builds as a source mod, with that repository as its source folder, and each repository alone as a source mod', async () => {
-    const { instance, logs } = loader({
+    const { instance } = loader({
       mods: [mod('Harder VATS'), mod('[NODELETE] Radfall'), mod('Plain')],
-      sourceMods: sourceModsOf(
+      sourceRepositories: repositoriesOf(
         { 'Harder VATS': '/source/Harder VATS', '[nodelete] radfall': '/source/Renamed From', 'Cloned And Unlisted': '/source/Cloned And Unlisted' },
-        ['/source/No Configuration builds no mod'],
       ),
     });
 
@@ -191,11 +192,21 @@ describe('Instance — the value', () => {
     expect([...instance.value.sourceMods].sort()).toEqual(['Cloned And Unlisted', 'Harder VATS', '[NODELETE] Radfall']);
     expect(instance.value.paths.sourceDirs.get('[NODELETE] Radfall')).toBe('/source/Renamed From');
     expect(instance.value.paths.sourceDirs.get('Cloned And Unlisted')).toBe('/source/Cloned And Unlisted');
-    expect(logs).toContain('[instance] /source/No Configuration builds no mod');
+  });
+
+  it('tells which mod folder builds from no repository, as its manifest cannot be read', async () => {
+    const mods = await mkdtemp(join(tmpdir(), 'loader-source-mods-'));
+    await mkdir(join(mods, 'Harder VATS'));
+    await writeFile(join(mods, 'Harder VATS', 'Harder VATS.manifest.json'), '{');
+    const { instance, logs } = loader({ mods: [mod('Harder VATS')], modFolders: modFoldersIn(mods, 'Harder VATS') });
+
+    await instance.refresh().finally(() => rm(mods, { recursive: true }));
+
+    expect(logs).toContain(`[instance] ${join(mods, 'Harder VATS')} builds from no repository, as its manifest cannot be read at line 1.`);
   });
 
   it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build names', async () => {
-    const { instance } = loader({ mods: [mod('Harder VATS')], sourceMods: sourceModsOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
+    const { instance } = loader({ mods: [mod('Harder VATS')], sourceRepositories: repositoriesOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
 
     await instance.refresh();
 
@@ -205,17 +216,18 @@ describe('Instance — the value', () => {
   });
 
   it('tells once, until it changes or clears, each note of the reading', async () => {
-    const note = 'no mod is built by /source/No Configuration';
-    const { instance, logs, fake } = loader({ sourceMods: sourceModsOf({}, [note]) });
+    const note = 'a file was removed mid-read';
+    const noted = { runtimeOutput: { ...readingFixture().runtimeOutput, notes: [note] } };
+    const { instance, logs, fake } = loader(noted);
     const told = (): number => logs.filter((line) => line.includes(note)).length;
 
     await instance.refresh();
     await instance.refresh();
     expect(told()).toBe(1);
 
-    fake.read({ sourceMods: sourceModsOf({}) });
+    fake.read({ runtimeOutput: readingFixture().runtimeOutput });
     await instance.refresh();
-    fake.read({ sourceMods: sourceModsOf({}, [note]) });
+    fake.read(noted);
     await instance.refresh();
     expect(told()).toBe(2);
   });
@@ -692,7 +704,7 @@ describe('Instance — game folder and the archives the game loads', () => {
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
-    const { instance } = loader({ mods: [mod('Radfall')], sourceMods: sourceModsOf({ Radfall: '/source/Radfall' }) });
+    const { instance } = loader({ mods: [mod('Radfall')], sourceRepositories: repositoriesOf({ Radfall: '/source/Radfall' }) });
 
     await instance.refresh();
 
@@ -812,7 +824,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     const { instance } = loader({
       ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
       modFiles: new Map([['Consumer', filesOfMod('Consumer', 'DLCCoast.esm')]]),
-      sourceMods: sourceModsOf({ Consumer: '/source/Consumer Source' }),
+      sourceRepositories: repositoriesOf({ Consumer: '/source/Consumer Source' }),
     });
 
     await instance.refresh();

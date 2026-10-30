@@ -450,8 +450,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       expect(await snapshotTree(repository)).toEqual(before);
     });
 
-    it('keeps the mod\'s manifest, which the release does not replace', async () => {
-      const manifest = `${UPGRADED}.manifest.json`;
+    it.each([`${UPGRADED}.manifest.json`, 'Old Name.manifest.json'])('keeps the mod\'s manifest %s, which the release does not replace', async (manifest) => {
       await writeFile(join(folder(UPGRADED), manifest), '{"kept":true}');
 
       await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS);

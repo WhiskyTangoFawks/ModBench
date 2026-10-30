@@ -63,7 +63,7 @@ internal static class Wire
     internal static Task<HttpResponseMessage> DecompileAndCommit(this HttpClient client, string mod) =>
         client.DecompileAndCommit([mod]);
 
-    /// <summary>Each mod with no asset, and a build file naming it as its output.</summary>
+    /// <summary>Each mod with no asset, and a build file that takes nothing.</summary>
     internal static Task<HttpResponseMessage> DecompileAndCommit(this HttpClient client, IEnumerable<string> mods) =>
         client.PostAsJsonAsync("/decompile-and-commit", new
         {
@@ -74,7 +74,7 @@ internal static class Wire
                 {
                     sourceFolder = client.SourceFolderSentFor(name),
                     assets = Array.Empty<string>(),
-                    buildFile = $"{{\"output\": \"{name}\"}}",
+                    buildFile = "{\"files\": []}",
                 },
             }),
         });

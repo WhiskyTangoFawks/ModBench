@@ -7,6 +7,8 @@ instanceadapter: @../../spec/architecture/target-architecture.modbench_repositor
 instanceadapter.label: Instance adapter
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
 activation: @../../spec/architecture/target-architecture.modbench_drivers.activation
 activation.label: Activation
@@ -20,7 +22,9 @@ toolbox.label: Toolbox
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> instanceadapter: "get: the instance's files" {class: loadorder}
-instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list, the sorting rule files" {class: loadorder}
+instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list, the sorting rule files, the source folder's repositories" {class: loadorder}
+instanceloader -> manifestadapter: "get: the repository each mod folder's manifest names" {class: loadorder}
+manifestadapter -> instanceloader: "the source mods: each repository by the mod it builds" {class: loadorder}
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> activation: value {class: loadorder}

@@ -14,8 +14,9 @@ import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths'
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
-  type PublisherTag, type SourceMods, type Subscription,
+  type PublisherTag, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
+import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -43,8 +44,7 @@ interface InstancePaths {
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
   readonly modDirs: ReadonlyMap<string, string>;
-  /** Each source mod's source folder, by mod name: the repository whose manifest names it as its output,
-   *  listed in the mod order or not. */
+  /** Each source mod's source folder, by mod name: the repository its manifest names, listed in the mod order or not. */
   readonly sourceDirs: ReadonlyMap<string, string>;
 }
 
@@ -191,7 +191,7 @@ interface InstanceOptions {
   log: Log;
 }
 
-// A listed source mod under its name in the mod order, an unlisted one under the output its repository names.
+// A listed source mod under its name in the mod order, an unlisted one under the name its folder gives it.
 function sourceDirsOf(entries: readonly ModlistEntry[], sourceMods: SourceMods): Map<string, string> {
   const listed = entries.flatMap((entry) => {
     const folder = entry.kind === 'mod' ? sourceMods.folderOf(entry.name) : undefined;
@@ -383,9 +383,9 @@ export class Instance implements Subscription {
   }
 
   private tellReading({
-    linkNotes, archiveListNotes, orderNotes, sourceMods, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
     publisherConfiguration, programVersions,
-  }: InstanceReading): void {
+  }: InstanceReading, sourceMods: SourceMods): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
     const listingNotes = [...modFiles].flatMap(([name, listing]) => listing.notes.map((note) => `[instance] ${name}: ${note}`));
@@ -468,9 +468,10 @@ export class Instance implements Subscription {
     const reading = await adapter.reading();
     const {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
-      creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
+      creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles,
     } = reading;
-    this.tellReading(reading);
+    const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceRepositories, (name) => adapter.entryKey({ kind: 'mod', name }));
+    this.tellReading(reading, sourceMods);
     const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles);
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins, gameFolder);

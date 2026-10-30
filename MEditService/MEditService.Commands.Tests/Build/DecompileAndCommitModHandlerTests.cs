@@ -80,10 +80,10 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         WriteInModFolder($"{Origin}.manifest.json", "the mod folder's own");
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
-        Assert.Single((await InitWith(["Scripts/Quest.pex"], "{\"output\": \"FixtureMod\"}")).Applied);
+        Assert.Single((await InitWith(["Scripts/Quest.pex"], "{\"files\": []}")).Applied);
 
         Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
-        Assert.Equal("{\"output\": \"FixtureMod\"}", GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", "main:build.json"));
+        Assert.Equal("{\"files\": []}", GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", "main:build.json"));
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
 

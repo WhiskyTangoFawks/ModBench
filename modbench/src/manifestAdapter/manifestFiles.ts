@@ -1,10 +1,11 @@
 import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
-import { BUILD_FILE, MANIFEST_SUFFIX } from '../wire/sourceMod';
+import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
+import { BUILD_FILE } from '../wire/sourceMod';
 import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
-import { readManifest } from './manifestRead';
+import { readBuildFile, readManifest } from './manifestRead';
 
 async function fileNamesIn(folder: string): Promise<string[]> {
   try {
@@ -19,22 +20,25 @@ async function fileNamesIn(folder: string): Promise<string[]> {
 const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
   (await fileNamesIn(folder)).filter((held) => held.toLowerCase() === name.toLowerCase());
 
-export const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
+const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
+
+const manifestsIn = async (folder: string): Promise<string[]> => (await fileNamesIn(folder)).filter(isManifestPath);
+
+/** The path of the manifest `folder` holds, else of the one named for it. */
+export const manifestFileIn = async (folder: string): Promise<string> => join(folder, (await manifestsIn(folder))[0] ?? manifestNameOf(folder));
 
 // An editor may write a byte order mark, which JSON does not allow.
 const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
-
-const read = async (path: string, file?: string): Promise<ManifestRead> => readManifest(await textAt(path), file);
 
 const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
 const twoBuildFiles = (one: string, other: string): string => `its repository holds two build files, '${one}' and '${other}'`;
 
-/** The manifest named for `folder` in it, its name in any case; undefined when it holds none. */
+/** The one manifest `folder` holds, whatever its name; undefined when it holds none. */
 export async function manifestIn(folder: string): Promise<ManifestRead | undefined> {
-  const [one, other] = await spellingsIn(folder, manifestNameOf(folder));
+  const [one, other] = await manifestsIn(folder);
   if (other !== undefined) return { refused: twoManifests(one ?? '', other) };
-  return one === undefined ? undefined : read(join(folder, one));
+  return one === undefined ? undefined : readManifest(await textAt(join(folder, one)));
 }
 
 // The Instance adapter's listings skip the temp's name.
@@ -48,34 +52,23 @@ async function writeWhole(folder: string, path: string, text: string): Promise<v
   }
 }
 
-// `text` as the file of `name` in `folder`, in the spelling it holds it in; true when the file changed.
-async function writeNamed(folder: string, name: string, text: string, two: (one: string, other: string) => string): Promise<boolean> {
-  const [one, other] = await spellingsIn(folder, name);
-  if (other !== undefined) throw new Error(two(one ?? '', other));
-  const path = join(folder, one ?? name);
-  if (one !== undefined && await textAt(path) === text) return false;
+/** Writes `manifest` as the manifest named for `folder`, in the spelling it holds it in, and removes one named otherwise;
+ *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
+export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
+  const [one, other] = await manifestsIn(folder);
+  if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
+  const named = one?.toLowerCase() === manifestNameOf(folder).toLowerCase() ? one : undefined;
+  const path = join(folder, named ?? manifestNameOf(folder));
+  const text = manifestText(manifest);
+  if (named !== undefined && await textAt(path) === text) return false;
   await writeWhole(folder, path, text);
+  if (one !== undefined && named === undefined) await rm(join(folder, one));
   return true;
 }
 
-/** Writes `manifest` as the manifest `folder` holds, in the spelling it holds it in, else named for the folder; true
- *  when the file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
-export const writeManifestIn = (folder: string, manifest: Manifest): Promise<boolean> =>
-  writeNamed(folder, manifestNameOf(folder), manifestText(manifest), twoManifests);
-
-/** Writes `buildFile` at the root of the source mod's repository in `sourceFolder`, in the spelling it holds it in. Rejects,
- *  writing nothing, when the repository holds two. */
-export async function writeBuildFileIn(sourceFolder: string, buildFile: Manifest): Promise<void> {
-  await writeNamed(sourceFolder, BUILD_FILE, manifestText(buildFile), twoBuildFiles);
-}
-
-/** The build file at the root of the source mod's repository in `sourceFolder`, which names the folder it builds; undefined
- *  when it holds none. */
+/** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */
 export async function buildFileIn(sourceFolder: string): Promise<ManifestRead | undefined> {
   const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
   if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
-  if (one === undefined) return undefined;
-  const held = await read(join(sourceFolder, one), 'build file');
-  if ('refused' in held) return held;
-  return held.manifest.output === undefined ? { refused: 'its build file names no output folder' } : held;
+  return one === undefined ? undefined : readBuildFile(await textAt(join(sourceFolder, one)));
 }

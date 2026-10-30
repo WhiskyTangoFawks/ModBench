@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FileRead, FoundGameFolder, GamePlace, InstallationFile, InstanceAdapter, OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { updateManifest, type UpdateManifestStatus } from '../updateManifest';
@@ -37,7 +37,7 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const folderFiles = new Map(Object.entries(files).map(([mod, held]) => [join(modsDir, mod), Object.keys(held)]));
   const hashes = new Map(Object.entries(files).flatMap(([mod, held]) => Object.entries(held).map(([path, hash]) => [join(modsDir, mod, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceMods: sourceModsOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
+    readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
     { folderFiles, hashes, ...answers });
   const pathProblems = fileProblemsFake();
   const deps = { adapter: { ...fake.adapter, ...adapterOver }, pathProblems, instanceRoot: root };

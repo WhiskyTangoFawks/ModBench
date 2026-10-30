@@ -343,21 +343,6 @@ export type OriginFileMarked =
   | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
-/** Every repository in the source folder, listed in the mod order or not, by the mod its build file
- *  names as its output (ADR-0007). A note names each repository left out, and why. */
-export interface SourceMods {
-  readonly folders: ReadonlyMap<string, string>;
-  /** The source folder that builds `mod`, its name matched as the manager matches names. */
-  folderOf(mod: string): string | undefined;
-  /** Whether a build file builds `mod`: one in a cloned repository, or the output `.gitmodules` records for a repository not cloned yet. */
-  builds(mod: string): boolean;
-  /** The output the build file in `folder` names, though another repository may build that mod. */
-  claimedOutput(folder: string): string | undefined;
-  /** Every source folder whose build file names `mod` as its output, when two or more do; none otherwise. */
-  buildersOf(mod: string): readonly string[];
-  readonly notes: readonly string[];
-}
-
 /** A source mod's repository as the instance repository holds it (ADR-0022): the folder git checks it out in, the commit
  *  the instance repository pins and the branch it follows. */
 export interface Submodule { readonly folder: string; readonly pin: string; readonly branch?: string }
@@ -598,8 +583,8 @@ export interface InstanceReading extends InstanceGame {
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
   /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
-  /** Every repository in the source folder. */
-  readonly sourceMods: SourceMods;
+  /** Every repository in the source folder, its folder by its name. */
+  readonly sourceRepositories: ReadonlyMap<string, string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
   /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
@@ -641,8 +626,8 @@ export interface InstanceAdapter {
   downloadedFiles(): Promise<DownloadedFiles>;
   /** The downloaded file `path` names, however the path is spelled; undefined when it names none; or why the downloaded files could not be read. */
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
-  /** Every source mod now. */
-  sourceMods(): Promise<SourceMods>;
+  /** Every repository in the source folder now, its folder by its name. */
+  sourceRepositories(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. */
   readonly publisherTags: readonly PublisherTag[];
@@ -705,9 +690,9 @@ export interface InstanceAdapter {
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;
-  /** Makes each source mod of `acted`, or of every source mod, with a remote a submodule: its entry in `.gitmodules` and its
-   *  ignore line. The others keep theirs; only `every` removes those of a source mod that is gone. */
-  writeSubmodules(acted: readonly string[] | 'every'): Promise<SubmoduleReport>;
+  /** Makes each source mod of `acted`, or of every one, with a remote a submodule: its `.gitmodules` entry and ignore line.
+   *  Only `every` removes those of a source mod that is gone. `sourceMods`: each repository's folder by its mod. */
+  writeSubmodules(acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>): Promise<SubmoduleReport>;
   /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
    *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
   otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[]; readonly nested: readonly { readonly name: string; readonly reason: string }[] }>;
@@ -810,8 +795,8 @@ export interface InstanceAdapter {
   /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes. Rejects a
    *  path that leaves the folder, its links resolved; a write that fails leaves the files before it written. */
   writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[]): Promise<void>;
-  /** Moves the source folder that builds the mod into the trash; false when none does. */
-  trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
+  /** Moves a source mod's repository folder into the trash. */
+  trashSourceFolder(sourceFolder: string, trash: MoveToTrash): Promise<void>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a
    *  new mod's folder goes, and a failed upgrade is not rolled back. */
   install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, fomod?: FomodAnswer): Promise<InstallOutcome>;

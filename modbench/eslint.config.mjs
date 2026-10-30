@@ -411,6 +411,7 @@ export default defineConfig(
                     './src/tables/tsconfig.json',
                     './src/wire/tsconfig.json',
                     './src/ports/tsconfig.json',
+                    './src/repositoriesLib/tsconfig.json',
                     './src/instanceAdapter/tsconfig.json',
                     './src/coreLib/tsconfig.json',
                     './src/instanceLoader/tsconfig.json',

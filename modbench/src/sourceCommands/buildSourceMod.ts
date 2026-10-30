@@ -19,11 +19,12 @@ export interface BuildDeps {
   readonly tasks: StepTasks;
 }
 
-/** A source mod to build: its folder, the repository that builds it and the build file it holds, where this machine holds
- *  its packages, and the version and host its manifest records. */
+/** A source mod to build: its folder and the paths the modlist excludes from it, the repository that builds it and the
+ *  build file it holds, where this machine holds its packages, and the version and host its manifest records. */
 export interface SourceModToBuild {
   readonly name: string;
   readonly folder: string;
+  readonly exclude: readonly string[];
   readonly sourceFolder: string;
   readonly buildFile: Manifest;
   readonly packages: PackagesRead;
@@ -66,7 +67,7 @@ interface Taken {
 // mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
 // those bytes, before mEdit packs it or compiles beside it.
 async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<Taken> {
-  const { buildFile, packages, folder } = mod;
+  const { buildFile, packages, folder, exclude } = mod;
   const packed = new Set(buildFile.archives.flatMap(({ files }) => files).map((path) => path.toLowerCase()));
   const at: string[] = [];
   const overwritten: string[] = [];
@@ -74,7 +75,7 @@ async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<Ta
   for (const line of buildFile.files) {
     const from = packages.packageFiles.get(line.path);
     if (from === undefined) continue;
-    const path = lineAtFolderPath(buildFile, line, adapter.exclusionMark).path;
+    const path = lineAtFolderPath({ ...buildFile, exclude }, line, adapter.exclusionMark).path;
     at.push(path);
     const there = await adapter.originFileHash(join(folder, path));
     if (there.kind === 'read' && there.answer.hash === packages.hashes.get(line.path)) continue;
@@ -122,11 +123,8 @@ type Built = { readonly landed: ModBuilt } | { readonly refusal: BuildRefusal } 
 const refusedAs = (mod: string, why: string, lacksATask = false): { readonly refusal: BuildRefusal } =>
   ({ refusal: { item: mod, reason: notBuilt(why), ...lacksATask ? { lacksATask: true } : {} } });
 
-// mods.md, Build, stories 4 and 13: what refuses the mod is checked before its first write.
-function refusedBeforeWriting({ name, folder, buildFile, packages }: SourceModToBuild, pass: BuildPass): { readonly refusal: BuildRefusal } | undefined {
-  if (buildFile.output?.toLowerCase() !== basename(folder).toLowerCase()) {
-    return refusedAs(name, `its build file names the output folder '${buildFile.output ?? ''}', not its folder '${basename(folder)}'`);
-  }
+// mods.md, Build, story 13: what refuses the mod is checked before its first write.
+function refusedBeforeWriting({ name, buildFile, packages }: SourceModToBuild, pass: BuildPass): { readonly refusal: BuildRefusal } | undefined {
   const noTask = toolsWithoutTask(buildFile, pass.tasks);
   if (noTask !== undefined) return refusedAs(name, noTask, true);
   return packages.lacks.length > 0 ? refusedAs(name, packages.lacks.join('; ')) : undefined;
@@ -145,7 +143,7 @@ async function finished(
 
 /** The mod built, refused before anything was written, or mEdit's refusal of the whole call. */
 export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built> {
-  const { name, folder, buildFile } = mod;
+  const { name, folder, buildFile, exclude } = mod;
   const refusal = refusedBeforeWriting(mod, pass);
   if (refusal !== undefined) return refusal;
   let taken: Taken;
@@ -155,7 +153,7 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
     return { landed: { mod: name, compiled: [], refused: [], archivesRefused: [], overwritten: [], failure: `The build stopped before compiling, as a file its packages give could not be written: ${errorMessage(err)}` } };
   }
   const answer = await deps.client.build([{
-    name, sourceFolder: mod.sourceFolder, folder, exclude: [...buildFile.exclude], taken: [...taken.at],
+    name, sourceFolder: mod.sourceFolder, folder, exclude: [...exclude], taken: [...taken.at],
     archives: buildFile.archives.map(({ path, files }) => ({ path, files: [...files] })),
   }], pass.facts);
   if (isRefused(answer)) return answer;

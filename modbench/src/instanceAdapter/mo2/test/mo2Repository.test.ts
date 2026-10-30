@@ -8,7 +8,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { adapterOver, managerOver } from '../../../test/mo2/adapterOver';
+import { managerOver } from '../../../test/mo2/adapterOver';
 import type { GamePlace } from '../../instanceAdapter';
 import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
@@ -25,6 +25,9 @@ async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
   return managerOver(root);
 }
+
+const everySourceModNamedForItsRepository = async (adapter: Awaited<ReturnType<typeof instance>>): ReturnType<typeof adapter.writeSubmodules> =>
+  adapter.writeSubmodules('every', await adapter.sourceRepositories());
 
 const gamePlace = (): GamePlace => ({ root: join(root, 'game'), holdsDataFiles: true, depots: [], depotProblems: [] });
 
@@ -374,16 +377,16 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       await writeFile(join(root, '.gitignore'), `${await ignoreList()}!/plugins/\n/plugins/*\n!/plugins/mine.py\n!/source/\n/source/*\n!/source/notes.md\n`);
       await Promise.all(['plugins/mine.py', 'plugins/x.dll', 'plugins/rootbuilder/rootbuilder.manifest.json', 'source/notes.md'].map((path) => put(path)));
-      await put(`source/Mod A/${BUILD_FILE}`, JSON.stringify({ output: 'Mod A', files: [] }));
+      await put(`source/Mod A/${BUILD_FILE}`, '{"files": []}');
       const repository = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' });
       repository(join(root, 'source', 'Mod A'), 'init', '--quiet', '--initial-branch=main');
       repository(join(root, 'source', 'Mod A'), 'remote', 'add', 'origin', 'https://example.test/a.git');
       repository(join(root, 'source', 'Mod A'), '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');
 
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
       await adapter.writeOtherManifestLines();
       const written = await ignoreList();
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
       const rewrittenOnce = await ignoreList();
       await adapter.writeOtherManifestLines();
 
@@ -458,10 +461,8 @@ describe('the MO2 adapter\'s repository', () => {
 
   describe('a source mod with a remote is a submodule', () => {
     const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-    const BUILD_FILE_OF = (output: string): string => JSON.stringify({ output, files: [] });
-
-    async function sourceMod(folder: string, output: string, remote?: string): Promise<string> {
-      await put(`source/${folder}/${BUILD_FILE}`, BUILD_FILE_OF(output));
+    async function sourceMod(folder: string, remote?: string): Promise<string> {
+      await put(`source/${folder}/${BUILD_FILE}`, '{"files": []}');
       const path = join(root, 'source', folder);
       git(path, 'init', '--quiet', '--initial-branch=main');
       if (remote !== undefined) git(path, 'remote', 'add', 'origin', remote);
@@ -476,16 +477,15 @@ describe('the MO2 adapter\'s repository', () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
-      await sourceMod('Local', 'Local');
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await sourceMod('Local');
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       runGit('add', '-A', '--', '.');
       expect(report).toEqual({ notes: [], other: [] });
       expect(submodulesNamed()).toEqual(['submodule.Mod A.url https://example.test/a.git']);
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.branch').trim()).toBe('main');
-      expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.output').trim()).toBe('Mod A');
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.path').trim()).toBe('source/Mod A');
       expect(runGit('ls-files', '-s', 'source').trim().split('\n').map((line) => line.slice(0, 6) + line.slice(line.indexOf('\t')))).toEqual(['160000\tsource/Mod A']);
       expect(runGit('ls-files', '.gitmodules')).toBe('.gitmodules\n');
@@ -495,13 +495,13 @@ describe('the MO2 adapter\'s repository', () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
-      await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
-      await adapter.writeSubmodules(['Mod A']);
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await sourceMod('Mod B', 'https://example.test/b.git');
+      await adapter.writeSubmodules(['Mod A'], await adapter.sourceRepositories());
       const afterA = submodulesNamed();
       await rm(join(root, 'source', 'Mod A'), { recursive: true });
 
-      await adapter.writeSubmodules(['Mod B']);
+      await adapter.writeSubmodules(['Mod B'], await adapter.sourceRepositories());
 
       expect([afterA, submodulesNamed(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A')]).toEqual([
         ['submodule.Mod A.url https://example.test/a.git'],
@@ -509,64 +509,27 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
-    it('records the output of a repository whose folder is not cloned, so its mod is built before the clone', async () => {
+    it('keeps the entry and the line of a repository the source folder holds that builds no source mod, though it acts on every one', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      const path = await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
-      await adapter.writeSubmodules('every');
-      await rm(path, { recursive: true });
-      await rm(join(root, 'source', 'Other'), { recursive: true, force: true });
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await everySourceModNamedForItsRepository(adapter);
 
-      const sources = await adapter.sourceMods();
+      await adapter.writeSubmodules('every', new Map());
 
-      expect([sources.builds('mod a'), sources.builds('Mod B'), sources.folderOf('Mod A')]).toEqual([true, false, undefined]);
-    });
-
-    it('lets the build file of a cloned repository speak, not the output .gitmodules recorded before a rename', async () => {
-      const adapter = await instance();
-      runGit('init', '--quiet');
-      await adapter.writeIgnoreList();
-      await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
-      await adapter.writeSubmodules('every');
-      await put(`source/Mod A source/${BUILD_FILE}`, BUILD_FILE_OF('Mod B'));
-
-      const sources = await adapter.sourceMods();
-
-      expect([sources.builds('Mod A'), sources.builds('Mod B')]).toEqual([false, true]);
-    });
-
-    it('takes back the output when the source is trashed, uncloned or not, and keeps the entry for update manifest', async () => {
-      const adapter = await instance();
-      runGit('init', '--quiet');
-      await adapter.writeIgnoreList();
-      await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
-      await adapter.writeSubmodules('every');
-
-      await adapterOver(root).trashSourceFolder('Mod A', (path) => rm(path, { recursive: true }));
-
-      const sources = await adapter.sourceMods();
-      expect([sources.builds('Mod A'), runGit('config', '-f', '.gitmodules', 'submodule.Mod A source.url').trim()]).toEqual([false, 'https://example.test/a.git']);
-    });
-
-    it('notes a .gitmodules it cannot read, rather than naming no uncloned source mod in silence', async () => {
-      const adapter = await instance();
-      await put('.gitmodules', '[submodule "A"\n');
-
-      const { notes } = await adapter.sourceMods();
-
-      expect(notes).toEqual([expect.stringContaining('.gitmodules could not be read')]);
+      expect([submodulesNamed(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A')]).toEqual([['submodule.Mod A.url https://example.test/a.git'], true]);
     });
 
     it('changes nothing when the source mods are as the last call left them', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
-      await adapter.writeSubmodules('every');
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await everySourceModNamedForItsRepository(adapter);
       const before = [await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')];
 
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
 
       expect([await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')]).toEqual(before);
     });
@@ -576,26 +539,26 @@ describe('the MO2 adapter\'s repository', () => {
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}mine/\n`);
-      const gone = await sourceMod('Gone', 'Gone', 'https://example.test/g.git');
-      const unlinked = await sourceMod('Unlinked', 'Unlinked', 'https://example.test/u.git');
-      await sourceMod('Kept', 'Kept', 'https://example.test/k.git');
-      await adapter.writeSubmodules('every');
+      const gone = await sourceMod('Gone', 'https://example.test/g.git');
+      const unlinked = await sourceMod('Unlinked', 'https://example.test/u.git');
+      await sourceMod('Kept', 'https://example.test/k.git');
+      await everySourceModNamedForItsRepository(adapter);
       await rm(gone, { recursive: true });
       git(unlinked, 'remote', 'remove', 'origin');
 
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
 
       expect(submodulesNamed()).toEqual(['submodule.Kept.url https://example.test/k.git']);
       const ignoreList = await readFile(join(root, '.gitignore'), 'utf8');
       expect([ignoreList.includes('Gone'), ignoreList.includes('Unlinked'), ignoreList.includes('Kept'), ignoreList.includes('mine/')]).toEqual([false, false, true, true]);
     });
 
-    it('writes the entry of a source mod by the folder it is in, whatever mod its build names', async () => {
+    it('writes the entry of a source mod by its repository\'s folder, whatever the mod is called', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      await sourceMod('Old Name', 'New Name', 'https://example.test/n.git');
+      const path = await sourceMod('Old Name', 'https://example.test/n.git');
 
-      await adapter.writeSubmodules('every');
+      await adapter.writeSubmodules('every', new Map([['New Name', path]]));
 
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Old Name.path').trim()).toBe('source/Old Name');
     });
@@ -604,8 +567,8 @@ describe('the MO2 adapter\'s repository', () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      const folder = await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
-      await adapter.writeSubmodules('every');
+      const folder = await sourceMod('Mod A', 'https://example.test/a.git');
+      await everySourceModNamedForItsRepository(adapter);
       return { adapter, folder };
     }
 
@@ -614,9 +577,9 @@ describe('the MO2 adapter\'s repository', () => {
     it('writes its remote with no credential', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      await sourceMod('Mod A', 'Mod A', 'https://user:token@example.test/a.git');
+      await sourceMod('Mod A', 'https://user:token@example.test/a.git');
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([report.notes, urlOf()]).toEqual([[], 'https://example.test/a.git']);
     });
@@ -628,7 +591,7 @@ describe('the MO2 adapter\'s repository', () => {
       const { adapter, folder } = await submoduleOfOne();
       git(folder, 'remote', 'set-url', 'origin', remote);
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([
         report.notes, runGit('config', '-f', '.gitmodules', '--list').trim(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A'),
@@ -653,7 +616,7 @@ describe('the MO2 adapter\'s repository', () => {
         ['file:///srv/a.git', { kind: 'noHost', why: LOCAL }],
       ])('reads the remote %s as %j', async (remote, host) => {
         const adapter = await instance();
-        const folder = await sourceMod('Mod A', 'Mod A', remote);
+        const folder = await sourceMod('Mod A', remote);
 
         expect(await adapter.sourceHost(folder)).toEqual({ kind: 'read', answer: host });
       });
@@ -663,7 +626,7 @@ describe('the MO2 adapter\'s repository', () => {
         ['upstream', 'fork', 'fork'],
       ])('reads origin, else the first remote by name, of %s and %s', async (first, second, read) => {
         const adapter = await instance();
-        const folder = await sourceMod('Mod A', 'Mod A');
+        const folder = await sourceMod('Mod A');
         git(folder, 'remote', 'add', first, `https://example.test/${first}.git`);
         git(folder, 'remote', 'add', second, `https://example.test/${second}.git`);
 
@@ -673,17 +636,17 @@ describe('the MO2 adapter\'s repository', () => {
       it('reads a repository with no remote as having none', async () => {
         const adapter = await instance();
 
-        expect(await adapter.sourceHost(await sourceMod('Mod A', 'Mod A'))).toEqual({ kind: 'read', answer: { kind: 'noRemote' } });
+        expect(await adapter.sourceHost(await sourceMod('Mod A'))).toEqual({ kind: 'read', answer: { kind: 'noRemote' } });
       });
     });
 
     it('names a source mod with a remote and no branch checked out, and writes no entry for it', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
-      const detached = await sourceMod('Detached', 'Detached', 'https://example.test/d.git');
+      const detached = await sourceMod('Detached', 'https://example.test/d.git');
       git(detached, 'checkout', '--quiet', '--detach');
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([report.notes, existsSync(join(root, '.gitmodules'))]).toEqual([[{ mod: 'Detached', note: expect.stringContaining('branch') as unknown }], false]);
     });
@@ -692,17 +655,17 @@ describe('the MO2 adapter\'s repository', () => {
       const { adapter, folder } = await submoduleOfOne();
       git(folder, 'checkout', '--quiet', '--detach');
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([report.notes.map(({ mod }) => mod), urlOf(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A')]).toEqual([['Mod A'], 'https://example.test/a.git', true]);
     });
 
     it('names a source mod whose remote it cannot read, writes the others, and keeps its entry', async () => {
       const { adapter, folder } = await submoduleOfOne();
-      await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
+      await sourceMod('Mod B', 'https://example.test/b.git');
       await writeFile(join(folder, '.git', 'config'), '[remote "origin"\n');
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([report.notes.map(({ mod }) => mod), urlOf(), submodulesNamed().length]).toEqual([['Mod A'], 'https://example.test/a.git', 2]);
     });
@@ -711,42 +674,31 @@ describe('the MO2 adapter\'s repository', () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      const bracketed = await sourceMod('[NoDelete] Foo', '[NoDelete] Foo', 'https://example.test/f.git');
-      await sourceMod('Kept', 'Kept', 'https://example.test/k.git');
-      await adapter.writeSubmodules('every');
+      const bracketed = await sourceMod('[NoDelete] Foo', 'https://example.test/f.git');
+      await sourceMod('Kept', 'https://example.test/k.git');
+      await everySourceModNamedForItsRepository(adapter);
       await rm(bracketed, { recursive: true });
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([report, submodulesNamed()]).toEqual([{ notes: [], other: [] }, ['submodule.Kept.url https://example.test/k.git']]);
       expect(await readFile(join(root, '.gitignore'), 'utf8')).not.toContain('NoDelete');
-    });
-
-    it('keeps the entry and the line of a source mod whose build file it cannot read, and says which', async () => {
-      const { adapter, folder } = await submoduleOfOne();
-      await writeFile(join(folder, BUILD_FILE), 'not json');
-
-      const report = await adapter.writeSubmodules('every');
-
-      expect([report.other, urlOf(), (await readFile(join(root, '.gitignore'), 'utf8')).includes('Mod A')]).toEqual([
-        [expect.stringContaining('Mod A') as unknown], 'https://example.test/a.git', true,
-      ]);
     });
 
     it('writes the lines that let it in after every line written after them, and changes nothing when nothing changed', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
-      await adapter.writeSubmodules('every');
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await everySourceModNamedForItsRepository(adapter);
       await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}after/\n`);
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
       const before = await readFile(join(root, '.gitignore'), 'utf8');
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
       const unchanged = await readFile(join(root, '.gitignore'), 'utf8');
-      await sourceMod('Mod B', 'Mod B', 'https://example.test/b.git');
+      await sourceMod('Mod B', 'https://example.test/b.git');
 
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
 
       expect([unchanged, lines.indexOf('after/') < lines.indexOf('!/source/Mod A'), lines.at(-3), lines.at(-2)])
@@ -762,9 +714,9 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}${block}mine/\n`);
       const before = await readFile(join(root, '.gitignore'), 'utf8');
-      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await sourceMod('Mod A', 'https://example.test/a.git');
 
-      const report = await adapter.writeSubmodules('every');
+      const report = await everySourceModNamedForItsRepository(adapter);
 
       expect([await readFile(join(root, '.gitignore'), 'utf8'), report.other]).toEqual([before, [expect.stringContaining(join(root, '.gitignore')) as unknown]]);
     });
@@ -775,10 +727,10 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       const mine = `${await readFile(join(root, '.gitignore'), 'utf8')}\n!/source/\n/source/*\n!/source/Mine\n\nnotes/\n`;
       await put('.gitignore', mine);
-      await sourceMod('Mod A', 'Mod A', 'https://example.test/a.git');
+      await sourceMod('Mod A', 'https://example.test/a.git');
 
-      await adapter.writeSubmodules('every');
-      await adapter.writeSubmodules('every');
+      await everySourceModNamedForItsRepository(adapter);
+      await everySourceModNamedForItsRepository(adapter);
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n').slice(0, -1);
 
       expect([lines.filter((line) => line === '!/source/Mine').length, lines.includes('notes/'), lines.includes('!/source/Mod A'), lines.filter((line) => line === '').length]).toEqual([1, true, true, 2]);
@@ -883,8 +835,8 @@ describe('the MO2 adapter\'s repository', () => {
         runGit('config', 'user.email', 't@t');
         await adapter.writeIgnoreList();
         const hosted = (name: string): string => `https://example.test/${encodeURIComponent(name)}.git`;
-        const mods = await Promise.all(names.map((name) => sourceMod(name, name, hosted(name))));
-        await adapter.writeSubmodules('every');
+        const mods = await Promise.all(names.map((name) => sourceMod(name, hosted(name))));
+        await everySourceModNamedForItsRepository(adapter);
         const pinned = await Promise.all(mods.map(async (mod) => ({ mod, modRemote: await bareRepository() })));
         for (const { mod } of pinned) {
           for (const [index, { modRemote }] of pinned.entries()) git(mod, 'config', `url.${modRemote}.insteadOf`, hosted(names[index] ?? ''));

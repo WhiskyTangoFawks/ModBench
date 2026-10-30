@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { buildFileIn, manifestIn, writeBuildFileIn, writeManifestIn, type Manifest } from '../manifestAdapter';
+import { buildFileIn, manifestIn, writeManifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
@@ -30,6 +30,19 @@ describe('manifestIn', () => {
     await holdingTwoManifestsThatDifferInCase();
 
     expect(await manifestIn(folder)).toEqual({ refused: "its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'" });
+  });
+
+  it('reads the one manifest a folder renamed outside Modbench holds, under the name it had (mods.md, Build, story 4)', async () => {
+    await writeFile(join(folder, 'Old Name.manifest.json'), manifestText(manifest));
+
+    expect(await manifestIn(folder)).toEqual({ manifest });
+  });
+
+  it('refuses a folder that holds manifests of two names, naming both', async () => {
+    await writeFile(join(folder, 'Mod.manifest.json'), '{}');
+    await writeFile(join(folder, 'Old Name.manifest.json'), '{}');
+
+    expect(await manifestIn(folder)).toEqual({ refused: "its folder holds two manifests, 'Mod.manifest.json' and 'Old Name.manifest.json'" });
   });
 });
 
@@ -72,6 +85,14 @@ describe('writeManifestIn', () => {
     expect([wrote, await readdir(folder), await readFile(join(folder, 'MOD.manifest.json'), 'utf8')]).toEqual([true, ['MOD.manifest.json'], manifestText(manifest)]);
   });
 
+  it('writes the manifest under the folder\'s name, and removes the one named as the folder was before a rename', async () => {
+    await writeFile(join(folder, 'Old Name.manifest.json'), '{}');
+
+    const wrote = await writeManifestIn(folder, manifest);
+
+    expect([wrote, await readdir(folder), await readFile(join(folder, 'Mod.manifest.json'), 'utf8')]).toEqual([true, ['Mod.manifest.json'], manifestText(manifest)]);
+  });
+
   it('rejects, writing nothing, when the folder holds two manifests', async () => {
     await holdingTwoManifestsThatDifferInCase();
 
@@ -86,7 +107,7 @@ describe('writeManifestIn', () => {
 });
 
 describe('buildFileIn', () => {
-  const buildFile: Manifest = { ...manifest, output: 'Mod' };
+  const buildFile = manifest;
 
   it('reads the build file at the root of the repository, in any case', async () => {
     await writeFile(join(folder, BUILD_FILE.toUpperCase()), manifestText(buildFile));
@@ -108,39 +129,15 @@ describe('buildFileIn', () => {
     expect(await buildFileIn(folder)).toEqual({ refused: `its repository holds two build files, '${BUILD_FILE.toUpperCase()}' and '${BUILD_FILE}'` });
   });
 
-  it('refuses a build file that names no output folder', async () => {
-    await writeFile(join(folder, BUILD_FILE), manifestText(manifest));
-
-    expect(await buildFileIn(folder)).toEqual({ refused: 'its build file names no output folder' });
-  });
-
   it('names the build file as what cannot be read', async () => {
-    await writeFile(join(folder, BUILD_FILE), '{"output": "Mod", "files": [{"path": "a.nif", "package": "Gone"}]}');
+    await writeFile(join(folder, BUILD_FILE), '{"files": [{"path": "a.nif", "package": "Gone"}]}');
 
     expect(await buildFileIn(folder)).toEqual({ refused: 'its build file cannot be read at its file 1: it names a package the build file does not name' });
   });
 
-  it('quotes what the build file says as it says it', async () => {
-    await writeFile(join(folder, BUILD_FILE), '{"output": "manifest/x", "files": []}');
+  it('refuses a build file that holds exclusions, which the modlist holds', async () => {
+    await writeFile(join(folder, BUILD_FILE), '{"exclude": [], "files": []}');
 
-    expect(await buildFileIn(folder)).toEqual({ refused: "its build file's output 'manifest/x' is not a folder name" });
-  });
-});
-
-describe('writeBuildFileIn', () => {
-  const buildFile: Manifest = { ...manifest, output: 'Mod' };
-
-  it('writes the build file at the root of the repository', async () => {
-    await writeBuildFileIn(folder, buildFile);
-
-    expect([await readdir(folder), await readFile(join(folder, BUILD_FILE), 'utf8')]).toEqual([[BUILD_FILE], manifestText(buildFile)]);
-  });
-
-  it('keeps the spelling of the build file the repository holds', async () => {
-    await writeFile(join(folder, BUILD_FILE.toUpperCase()), '{}');
-
-    await writeBuildFileIn(folder, buildFile);
-
-    expect([await readdir(folder), await readFile(join(folder, BUILD_FILE.toUpperCase()), 'utf8')]).toEqual([[BUILD_FILE.toUpperCase()], manifestText(buildFile)]);
+    expect(await buildFileIn(folder)).toEqual({ refused: "its build file holds 'exclude', which Modbench does not read" });
   });
 });

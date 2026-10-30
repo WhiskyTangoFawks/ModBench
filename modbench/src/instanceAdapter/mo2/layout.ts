@@ -12,7 +12,7 @@ import { GIT_DIR, ownTempPrefix } from '../files';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import { anyCase, isBareName, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
 import { PLUGIN_EXTENSIONS } from '../../tables/pluginFile';
-import { MANIFEST_SUFFIX } from '../../wire/sourceMod';
+import { MANIFEST_SUFFIX } from '../../repositoriesLib/manifestPath';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
@@ -49,8 +49,7 @@ export function mo2FolderName(name: string): string {
 }
 
 // Another tool can write a mod line with a `/`; a name that reaches outside `mods/` builds no path.
-/** The folder a mod's name gives it; `undefined` when it gives none. */
-export const modFolderName = (modName: string): string | undefined => (isBareName(modName) ? modName : undefined);
+const modFolderName = (modName: string): string | undefined => (isBareName(modName) ? modName : undefined);
 
 // Another tool can write a separator name MO2 never gives a folder; such a separator builds no path.
 const separatorFolderName = (separatorName: string): string | undefined =>
@@ -91,8 +90,8 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
-/** A mod's manifest, in its folder, named for the mod. */
-export const manifestFileName = (modName: string): string => `${modName}${MANIFEST_SUFFIX}`;
+// A mod's manifest, in its folder, named for the mod.
+const manifestFileName = (modName: string): string => `${modName}${MANIFEST_SUFFIX}`;
 export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, manifestFileName(modName));
 
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */

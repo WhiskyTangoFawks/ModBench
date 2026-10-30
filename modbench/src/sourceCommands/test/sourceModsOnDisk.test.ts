@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -15,7 +15,7 @@ import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
 import { manifestText } from '../../manifestAdapter/manifestText';
 import { readManifest } from '../../manifestAdapter/manifestRead';
-import { manifestIn, statusOf, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, sourceModsOf, statusOf, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
 
@@ -50,7 +50,7 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<Manifes
   const pack = await adapter.downloadedFile('Mod.7z');
   if (pack.kind !== 'read' || pack.answer === undefined) throw new Error('no installation file');
   await put(`source/Mod/${BUILD_FILE}`, manifestText({
-    output: 'Mod', exclude: [], archives: [], steps: [], tools: [],
+    exclude: [], archives: [], steps: [], tools: [],
     packages: [{ kind: 'installationFile', name: 'Mod.7z', size: pack.answer.size, hash: pack.answer.hash }],
     files: [{ path: 'b.nif', entry: { kind: 'held' } }, { path: 'textures/c.dds', entry: { kind: 'held' } }],
     ...buildFile,
@@ -70,7 +70,7 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<Manifes
     const read = await manifestIn(join(root, 'mods', 'Mod'));
     return read === undefined || 'refused' in read ? undefined : read.manifest;
   };
-  return { build: () => commands.build(['Mod']), sent, status, recorded };
+  return { build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter };
 }
 
 describe('build over an instance on disk', () => {
@@ -125,13 +125,31 @@ describe('build over an instance on disk', () => {
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: ['mine.txt'] });
   });
 
-  it('writes a file its packages give where the folder holds it under the exclusion mark, and reads its folder as its manifest says', async () => {
-    const { build, status } = await aSourceModTakingFromAnInstallationFile({ exclude: ['textures'] });
+  it('keeps the folder\'s exclusion: writes a file its packages give where the folder holds it under the mark, and reads its folder as its manifest says', async () => {
+    const { build, status } = await aSourceModTakingFromAnInstallationFile();
+    await put('mods/Mod/textures.mohidden/c.dds', 'old');
 
     await build();
 
     expect(await readFile(join(root, 'mods', 'Mod', 'textures.mohidden', 'c.dds'), 'utf8')).toBe('bytes of textures/c.dds');
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
+  });
+});
+
+describe('build over an instance on disk, of a source mod renamed outside Modbench', () => {
+  it('reads the manifest it holds under the name it had, builds where it is, and names the manifest for the folder (mods.md, Build, story 4)', async () => {
+    const { build, sent, commands, adapter } = await aSourceModTakingFromAnInstallationFile();
+    await build();
+    const renamed = join(root, 'mods', 'Renamed');
+    await rename(join(root, 'mods', 'Mod'), renamed);
+    const before = { status: await statusOf({ name: 'Renamed', folder: renamed }, adapter), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
+
+    const outcome = await commands.build(['Renamed']);
+
+    expect([before.status.noManifest, before.sourceMods]).toEqual([false, ['Renamed']]);
+    expect(outcome).toMatchObject({ refused: [] });
+    expect(sent.at(-1)).toMatchObject({ name: 'Renamed', sourceFolder: join(root, 'source', 'Mod'), folder: renamed });
+    expect((await readdir(renamed)).filter((name) => name.endsWith('.manifest.json'))).toEqual(['Renamed.manifest.json']);
   });
 });
 
@@ -162,7 +180,7 @@ describe('decompile and commit over an instance on disk', () => {
     return { client, decompileAndCommit: () => commands.decompileAndCommit(['Mod']) };
   }
 
-  it('hands mEdit the repository with its build file, and leaves the manifest the mod folder holds to the first build', async () => {
+  it('hands mEdit the repository with its build file, then names the repository in the manifest the mod folder holds, which its first build records', async () => {
     const { client, decompileAndCommit } = await aModWithItsManifest();
     const handed: DecompileAndCommitMod[] = [];
     client.setCommandHandler('decompileAndCommit', (mods) => {
@@ -176,6 +194,7 @@ describe('decompile and commit over an instance on disk', () => {
     expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'] });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'Mod.manifest.json', 'a.nif', 'meta.ini']));
+    expect(await manifestIn(join(root, 'mods', 'Mod'))).toMatchObject({ manifest: { packages: [{ kind: 'sourceRepository', name: 'Mod' }], files: [] } });
   });
 
   it('carries into the build file the steps its folder\'s manifest holds, and the files they make, which are no assets', async () => {

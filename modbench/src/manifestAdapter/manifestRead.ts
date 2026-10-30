@@ -1,4 +1,3 @@
-import { MANIFEST_OUTPUT_KEY } from '../wire/sourceMod';
 import type {
   GameDepot, Manifest, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
 } from './manifest';
@@ -51,8 +50,6 @@ const known = (line: Json, part: string | undefined, keys: readonly string[]): v
 
 const isPathInTheFolder = (path: string): boolean =>
   !path.includes('\\') && !/^([a-zA-Z]:|\/)/.test(path) && path.split('/').every((segment) => segment.trim() !== '' && segment !== '.' && segment !== '..');
-
-const isFolderName = (name: string): boolean => isPathInTheFolder(name) && !name.includes('/');
 
 const inTheFolder = (key: string, paths: readonly string[]): void => {
   const outside = paths.find((path) => !isPathInTheFolder(path));
@@ -161,15 +158,13 @@ const archivesOf = (value: unknown): ManifestArchive[] => {
   return archives;
 };
 
-const outputOf = (value: unknown): string => {
-  const output = textOf(value, 'its output');
-  if (!isFolderName(output)) throw new Unreadable((file) => `its ${file}'s output '${output}' is not a folder name`);
-  return output;
-};
+const BUILD_FILE_KEYS = ['packages', 'archives', 'steps', 'tools', 'files'];
 
-const manifestOf = (text: string): Manifest => {
+const MANIFEST_KEYS = [...BUILD_FILE_KEYS, 'exclude'];
+
+const manifestOf = (text: string, keys: readonly string[]): Manifest => {
   const root = objectOf(JSON.parse(text), '');
-  known(root, undefined, [MANIFEST_OUTPUT_KEY, 'packages', 'exclude', 'archives', 'steps', 'tools', 'files']);
+  known(root, undefined, keys);
   const files = arrayOf(required(root, 'files', ''), 'its files').map((line, index) => fileOf(index, line));
   const steps = Object.hasOwn(root, 'steps') ? arrayOf(root.steps, 'its steps').map((line, index) => stepOf(index, line)) : [];
   const tools = Object.hasOwn(root, 'tools') ? arrayOf(root.tools, 'its tools').map((line, index) => toolOf(index, line)) : [];
@@ -183,7 +178,6 @@ const manifestOf = (text: string): Manifest => {
   return {
     packages,
     ...(version === undefined ? {} : { version }),
-    ...(Object.hasOwn(root, MANIFEST_OUTPUT_KEY) ? { output: outputOf(root[MANIFEST_OUTPUT_KEY]) } : {}),
     exclude,
     archives: Object.hasOwn(root, 'archives') ? archivesOf(root.archives) : [],
     steps,
@@ -220,13 +214,19 @@ const lineOf = (problem: SyntaxError, text: string): string => {
   return offending < 0 ? '' : ` at line ${text.slice(0, offending).split('\n').length}`;
 };
 
-/** `text` read as a manifest, or as the file its caller names, such as a build file, which shares its form. */
-export function readManifest(text: string, file = 'manifest'): ManifestRead {
+const read = (text: string, file: string, keys: readonly string[]): ManifestRead => {
   try {
-    return { manifest: manifestOf(text) };
+    return { manifest: manifestOf(text, keys) };
   } catch (problem) {
     if (problem instanceof Unreadable) return { refused: problem.says(file) };
     if (problem instanceof SyntaxError) return { refused: `its ${file} cannot be read${lineOf(problem, text)}` };
     throw problem;
   }
-}
+};
+
+/** `text` read as a manifest. */
+export const readManifest = (text: string): ManifestRead => read(text, 'manifest', MANIFEST_KEYS);
+
+/** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A
+ *  source mod, story 2). */
+export const readBuildFile = (text: string): ManifestRead => read(text, 'build file', BUILD_FILE_KEYS);

@@ -23,7 +23,7 @@ public sealed class CloneSubmodulesApiTests : HostedTests
     [Fact]
     public async Task AnAbsentSubmodule_IsClonedAtItsPin_AndNamedCloned()
     {
-        var pin = _submodule.Commit(("build.json", "{\"output\": \"Mod\", \"files\": []}"));
+        var pin = _submodule.Commit(("build.json", "{\"files\": []}"));
         _submodule.Pin(pin);
 
         var response = await Client.PostAsJsonAsync("/clone-submodules", new { submodules = new[] { new { folder = _submodule.Folder, pin } } });
