@@ -16,7 +16,6 @@ interface DeployGestureDeps {
 
 const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
 
-// deployment-hardlink.md, Deploy, story 7: deploy asks nothing.
 export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
@@ -35,7 +34,6 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
     for (const { message, detail } of [...deployFailures(result), ...deployWarnings(result)]) reporter.report('warning', message, detail);
     return result;
   };
-  // deployment-hardlink.md, Purge, story 2: purge asks nothing.
   const purge = async (): Promise<void> => {
     const result = await commands.purge();
     if (!result.applied) {

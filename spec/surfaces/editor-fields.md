@@ -76,7 +76,7 @@ As a user, I want:
 
 Some fields hold one of several kinds of value, such as an alias that is a reference, a location or a collection. As a user, I want:
 
-1. A Kind row that chooses between them from VS Code's quick pick of the kinds, named as the schema names them, never a class name. Cites: xedit.md, Choose the next or previous member of a union
+1. A row that chooses between them from VS Code's quick pick of the kinds. Cites: xedit.md, Choose the next or previous member of a union
 2. Switching the kind to keep the members both kinds have, to drop the rest, and to fill the members a plugin needs to keep the new kind, at their defaults, as add does. Cites: Arrays, story 3
 
 ## Collapsed readings
@@ -105,7 +105,7 @@ A condition list is an array like any other. As a user, I want:
 
 1. A parameter the condition's function does not use to have no row, unless a column uses it, so an overridden record's data is never hidden. Cites: xedit.md, divergence 13
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value never reaches the plugin.
-3. The function chosen from VS Code's quick pick, in a row named Function, also where the schema holds one kind per function. Cites: xEdit; an exception to § A field of several kinds, story 1
+3. The function chosen from VS Code's quick pick. Cites: xEdit; § A field of several kinds, story 1
 
 ## Scripts
 
@@ -134,7 +134,7 @@ An NPC's copy can set a template flag, such as Traits, and name a template for t
 As a user, I want:
 
 1. A templated field to read `from EncRaider01`: `from` and its template, read as a reference reads (By type), with Go to record on it. It never reads as its own value. Its tooltip names the flag, the template and the copy's own value. In a column that can be edited, the tooltip also says that clearing the flag makes the field editable. Cites: Never silently wrong
-2. A templated field dimmed and read-only, as Every field, story 7 says. Its menu offers no add, remove or move. Paste, cut and Delete are refused, naming the field and the flag. This is an exception to editor.md, Columns, story 4: the cell is marked ahead of time, since no header can say why. Cites: Never silently wrong; Respect the user; commands.md, No dead entries
+2. A templated field dimmed and read-only, as Every field, story 7 says. Its menu offers no add, remove or move. Paste, cut and Delete are refused, naming the field and the flag. Cites: Never silently wrong; Respect the user; commands.md, No dead entries
 3. Only the part a flag covers templated: a row, or one flag in a Flags row's check boxes. The template flags are never templated.
 4. A flag set with no template named for it to template nothing.
 5. Clearing the flag to be the only way to edit a templated field. Its fields then read and edit as their own values, at once. Setting or clearing a flag asks nothing and changes no other field. Cites: Minimal by default; Never silently wrong

@@ -2,6 +2,8 @@
 
 Each surface spec holds what is particular to its view and points here for the rest. The gestures and their Arguments are in [commands.md](commands.md), with the Chrome rules for a view's title bar.
 
+A view here is one Modbench draws. A view VS Code owns, such as the References view, behaves as VS Code made it (Existing tools).
+
 Each story cites what decides it. A story that cites nothing is owned here.
 
 ## A view
@@ -12,7 +14,7 @@ As a user, I want:
 2. Every view to follow the disk: a change on disk, from Modbench, MO2 or any other tool, shows up with no action of mine. A view has no refresh of its own. Cites: ADR-0015; Chrome
 3. A row's icon, badge or colour to carry its status. The description repeats the status only when it is not the default, so an unmarked row reads as the ordinary case.
 4. View state (a sort, a toggle) to reset when the extension activates. It is a lens, not a setting.
-5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only while the tree has focus and no input box does, as VS Code's list keys do. Modbench adopts no key from xEdit or MO2. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
+5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: a key fires the gesture VS Code binds it to, on a row that offers it. Space toggles a check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only while the tree has focus and no input box does. Modbench adopts no key from xEdit or MO2. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 6. Every list to let me select several rows, and a gesture to act on the whole selection unless it only makes sense for one row, which its Argument in the catalog says.
 7. Every list to reverse its order from its title bar. The direction never changes what the order means, such as which item wins. Cites: GLOSSARY.md, Sort direction
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line, each as its surface says it copies. Cites: catalog `copy value`
@@ -67,6 +69,8 @@ As a user, I want:
 ## Reporting
 
 The Output is the log: a line for each thing that happened. The Problems panel is the dashboard: a problem for each state that is wrong, on the file it concerns, while the state holds.
+
+A notification is for what I started, or for a view left showing something untrue (ADR-0019). For anything else my script or my agent asked, the reason goes back to it, and the Output logs it.
 
 ADR-0019 decides the tier; this table is how each tier looks on a surface.
 

@@ -96,7 +96,7 @@ A source mod's folder is its build's output ([ADR-0007](../adr/0007-plugin-edits
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
 2. Rename and exclude or include to write the manifest and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes with the mod manager's exclusion mark. Cites: ADR-0007
 3. No gesture that changes content the build makes. A record edit goes to plugin source, a plugin created lands in it, and decompile reads the folder into it. Cites: ADR-0006; ADR-0007
-4. A file I change in the folder to show as differing from the manifest, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Cites: modlist-repository.md, Status; VS Code's interaction
+4. A file I change in the folder to show as differing from the manifest, and build to overwrite it and name it, after one confirmation naming the files. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Cites: modlist-repository.md, Status; Confirm what destroys; VS Code's interaction
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
 
 ## Order and view state
@@ -137,7 +137,6 @@ As a user, I want:
 5. Copy value to copy each selected mod's or separator's name, and each selected file's or folder's path in its mod. Cites: catalog `copy value`
 6. Go to mod to select, in this tree, the row it names. Cites: catalog `go to mod`; MO2's Go to...
 7. Exclude or include, over a selection that mixes both, to apply the right-clicked row's direction to every file, as enable or disable does. Cites: story 2
-8. Space, Delete and F2 to do nothing on a file or folder: the tree shows files, and the Explorer manages them. This is an exception to common, A view, story 5.
 
 ## Drag and drop
 
@@ -179,13 +178,13 @@ As a user, I want:
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Cites: MO2
 2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Cites: MO2 compares without case; Refuse, do not repair
 3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its metadata and its manifest, and its plugins keep their `plugins.txt` lines. For a source mod, rename changes the output folder in the manifest and renames the folder; the repository stays where it is. Cites: MO2; ADR-0007
-4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
+4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active.
 
 ### Build
 
 As a user, I want:
 
-1. Build to write the mod folder from its repository and the installation files its manifest names, without asking: the source's assets copied, each plugin compiled from its plugin source, its steps run in order, and the manifest's file lines written last. A compiled plugin's source is the truth, and build makes the folder from it. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
+1. Build to write the mod folder from its repository and the installation files its manifest names: the source's assets copied, each plugin compiled from its plugin source, its steps run in order, and the manifest's file lines written last. A compiled plugin's source is the truth, and build makes the folder from it. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
 2. The manifest to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Restore from manifest removes it. Cites: ADR-0022
 4. A build whose manifest names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Cites: ADR-0003
@@ -194,16 +193,15 @@ As a user, I want:
 7. From the palette with no mod, a pick of every source in the source folder, one with no folder included, so a clone builds its mods back. Cites: No dead entries
 8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case. The rest of the mod builds, and the refused plugin is left as it was.
 9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Cites: Never silently wrong
-10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it. This is an exception to A failed gesture writes nothing.
+10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it.
 11. A patcher to be a source mod whose step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
 12. Source mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
-13. No mod to say a patcher's output is stale. I rerun my patchers before I publish: whether a change before a patcher matters is mine to know, and most changes do not matter to a given patcher. This is an exception to Never silently wrong.
-14. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The repository, story 3
-15. Build as a task, so my chain builds before it deploys or publishes. No warning of build's fails it. Cites: commands.md, A task is an entry point for a chain
+13. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The repository, story 3
+14. Build as a task, so my chain builds before it deploys or publishes. No warning of build's fails it. Cites: commands.md, A task is an entry point for a chain
 
 ### Delete separator
 
-As a user, I want one confirmation for the selection that says the mods stay. Cites: MO2; Confirm what destroys
+As a user, I want one confirmation for the selection that says the mods stay, and which separator they join. Cites: MO2; Confirm what destroys
 
 ### Create empty mod and install
 
@@ -217,16 +215,16 @@ As a user, I want:
 
 Install is offered here and on [Downloads](downloads.md#the-install-target). As a user, I want:
 
-1. Install never to merge into an existing folder, or to replace one I did not confirm.
+1. Install never to merge into an existing folder.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/` does.
-3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Cites: ADR-0007; ADR-0022
+3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. One confirmation, only when the upgrade would lose what the mod's folder holds and the new file does not, naming it. Cites: ADR-0007; ADR-0022; Confirm what destroys
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
-5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
+5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git.
 6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2
 
 ### Uninstall
 
-As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash, and a source mod's source with them. Cites: Confirm what destroys; MO2's recycle bin; A source mod, story 5
+As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash, and a source mod's source with them, and that each mod loses its place in mod order. Cites: Confirm what destroys; MO2's recycle bin; A source mod, story 5
 
 ### Check for updates
 
@@ -244,9 +242,9 @@ As a user, I want a pick of the mods the file wins over, in mod order, when ther
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A FOMOD installed as a plain copy, by Manual or because its installer cannot run, to raise a notification that its files need arranging by hand, because the installer's own steps did not run, and why. Cites: ADR-0019
+1. A FOMOD installed as a plain copy by Manual to raise a notification that its files need arranging by hand, because the installer's own steps did not run, and why. Cites: ADR-0019
 2. When `mods/` cannot be listed, the mod order untouched, and the reason in the view's message line and the Output.
-3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line. This is an exception to A failed gesture writes nothing.
+3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed metadata write is a line in the Output.
 5. Check for updates to say in one line how many mods have an update, and how many it could not ask about.
 

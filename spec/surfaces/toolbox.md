@@ -45,7 +45,7 @@ As a user, I want a pick of the instance's profiles, the active one marked. Choo
 
 ### Refresh
 
-As a user, I want no confirmation, and the view's progress bar while it runs. Cites: Confirm what destroys: refresh deletes only derived state, and rebuilds it
+As a user, I want the view's progress bar while it runs.
 
 ### Log in
 
@@ -54,7 +54,7 @@ As a user, I want:
 1. A password prompt for my Nexus API key. Esc keeps nothing. Cites: MO2's Enter API Key Manually
 2. A key Nexus refuses to be refused in the prompt, so a key I keep is one that works. Cites: Refuse, do not repair
 3. The key kept in VS Code's secret storage, for every instance, and never in a setting or the instance, so no commit holds it. Cites: Existing tools
-4. Log out to forget the key with no confirmation. Nexus keeps the key, and I paste it again. This is an exception to Confirm what destroys.
+4. Log out to forget the key.
 
 ## Reporting
 

@@ -22,7 +22,7 @@ public interface IWriteSession
     SourceChanges ChangesAddedSince(SourceChanges before);
 
     /// <summary>Runs <paramref name="write"/>, which applies changes to this session. Changes that failed put back
-    /// what it applied, and the answer is why (commands.md, A failed gesture writes nothing).</summary>
+    /// what it applied, and the answer is why (commands.md, A failed gesture leaves nothing the user cannot make whole).</summary>
     SourceFailure? Atomically(Action write);
 
     /// <summary><see cref="Atomically(Action)"/>, answering what <paramref name="write"/> answers. A failure it answers

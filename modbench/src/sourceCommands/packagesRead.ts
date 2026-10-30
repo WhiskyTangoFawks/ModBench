@@ -138,7 +138,7 @@ async function gameFilesOf(adapter: Adapter, manifest: Manifest, lines: readonly
   return first;
 }
 
-/** Why this machine cannot run `manifest`'s steps: each tool it has no task for (mods.md, Build, story 14). */
+/** Why this machine cannot run `manifest`'s steps: each tool it has no task for (mods.md, Build, story 13). */
 export function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>): string | undefined {
   const pages = new Map<string, string>();
   for (const { task, page } of manifest.tools) if (!pages.has(task)) pages.set(task, page);

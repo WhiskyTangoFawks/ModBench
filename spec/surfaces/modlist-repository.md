@@ -54,10 +54,9 @@ As a user, I want:
 
 1. An update manifest gesture that writes the manifest of a folder, and creates it when the folder has none.
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
-3. No confirmation. The manifests are derived from the mods, and git holds what update manifest replaces. This is an exception to Confirm what destroys.
-4. It stages nothing and commits nothing. Cites: Existing tools
-5. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
-6. A mod refused, and its manifest left as it was, when a package it is made from is missing from this machine, so a missing download never reads as files no package holds. Cites: Never silently wrong
+3. It stages nothing and commits nothing. Cites: Existing tools
+4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
+5. A mod refused, and its manifest left as it was, when a package it is made from is missing from this machine, so a missing download never reads as files no package holds. Cites: Never silently wrong
 
 ## Restore from manifest
 
@@ -67,7 +66,7 @@ As a user, I want:
 2. One confirmation, only when the restore destroys a change no manifest holds, naming the mods or saying every mod. A restore after a fresh clone asks nothing. Cites: Confirm what destroys
 3. A source mod left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
 4. Each package taken from wherever this machine already holds it with the bytes the manifest pins, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the file the manifest names. A clone then restores with no file fetched by hand. Cites: Minimal by default
-5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Cites: mods.md, What install does, story 5
+5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
 
 ## Menus and keys
 

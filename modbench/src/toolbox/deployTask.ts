@@ -4,7 +4,7 @@ import type { Reporter } from '../ports/reporter';
 import type { DeployResult } from '../instanceCommands/deploy';
 import { deployFailures, deployWarnings, unmanagedWarning } from './deployProblems';
 
-/** deployment-hardlink.md, Deploy, story 8. */
+/** deployment-hardlink.md, Deploy, story 7. */
 export function registerDeployTask(reporter: Reporter): vscode.Disposable {
   return registerTaskGesture<DeployResult>({ label: 'Deploy', command: 'modbench.instance.deploy', reporter, argument: () => [], settle: deployVerdict });
 }

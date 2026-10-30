@@ -85,7 +85,7 @@ function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
 
-// mods.md, Build, story 14: a tool this machine has no task for is added as a user task.
+// mods.md, Build, story 13: a tool this machine has no task for is added as a user task.
 const OPEN_USER_TASKS: ReportAction = {
   title: 'Open User Tasks', run: () => { void vscode.commands.executeCommand('workbench.action.tasks.openUserTasks'); },
 };

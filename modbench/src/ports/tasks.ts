@@ -1,4 +1,4 @@
-/** VS Code's tasks, which the composition root reaches for every command that runs a step (mods.md, Build, story 14).
+/** VS Code's tasks, which the composition root reaches for every command that runs a step (mods.md, Build, story 13).
  *  The types are the host's own; the caller tells the kinds apart through the guards. */
 export interface HostTasks<Task, ProcessTask extends Task, ShellCommandTask extends Task, ShellLineTask extends Task, Run> {
   readonly fetch: () => PromiseLike<readonly Task[]>;

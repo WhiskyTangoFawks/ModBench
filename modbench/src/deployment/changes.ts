@@ -1,4 +1,4 @@
-// commands.md: "A failed gesture writes nothing." Each change deploy makes in the deployment folder is
+// commands.md: "A failed gesture leaves nothing the user cannot make whole." Each change deploy makes in the deployment folder is
 // undone when a later one fails, and a file it removes is set aside until the deploy lands.
 
 import type { BigIntStats } from 'node:fs';

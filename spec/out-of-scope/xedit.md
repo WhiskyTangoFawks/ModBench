@@ -62,6 +62,7 @@ Gestures Modbench does differently.
 | 38 | Colour reading | The colour's text, with a swatch of the colour beside it | No swatch | Ruling: hex text does not show the colour. |
 | 39 | Placed reference rotation | Radians, with degrees beside them; edits and copies in radians | Reads and edits in degrees | Mutagen decides the data: Mutagen holds radians. The degrees are xEdit's reading. |
 | 40 | Templated fields | Read-only and dimmed, read as the template they come from, and left out of the conflict (editor-fields.md, Templated fields) | Edits, shows and compares the copy's own value, or hides the field | Principle: Never silently wrong. The game takes a templated field's value from the template, so the copy's own value misleads. The Creation Kit greys the field out too. |
+| 41 | Remove a record | Asks nothing: Undo takes it back | Confirms each Remove | Principle: Minimal by default (commands.md, Confirm what destroys). |
 
 ## Omissions by object
 
