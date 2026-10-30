@@ -126,7 +126,7 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome), ...notRecorded(outcome)];
+  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
@@ -159,11 +159,6 @@ function builtUnpushed(outcome: BuildOutcome): PartialFailure[] {
     one: 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.',
     many: (count) => `Built ${count} mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.`,
   });
-}
-
-// modlist-repository.md, Status: a build that could not keep the hashes of what it made leaves its mod reading as differing, and says why.
-function notRecorded(outcome: BuildOutcome): PartialFailure[] {
-  return outcome.landed.flatMap(({ mod, notes }) => (notes ?? []).map((note) => ({ message: `Built "${mod}", and its status reads it as differing.`, detail: note, severity: 'warning' as const })));
 }
 
 function namedBuilt(mods: readonly { mod: string }[], message: { one: string; many: (count: number) => string }): PartialFailure[] {

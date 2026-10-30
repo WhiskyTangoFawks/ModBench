@@ -4,7 +4,7 @@
 import { basename, join, resolve } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, removeManifestIn, sourceManifestFile, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
+import { manifestIn, packageOf, removeManifestIn, sourceManifestFile, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
@@ -24,8 +24,7 @@ export interface MadeRepository {
 
 const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
-// Each file compile writes: the mod's plugins and their strings files, which its plugin source makes.
-function compiledBy(paths: readonly string[], gameRelease: string): Set<string> {
+function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
   const plugins = paths.filter(isPluginAtRoot);
   const rule = pluginCompanionRule(gameRelease);
   return new Set([...plugins, ...paths.filter((path) => plugins.some((plugin) => rule?.isStringsFileOf(plugin, path) === true))]);
@@ -53,7 +52,7 @@ async function heldManifest(folder: string): Promise<Manifest | undefined | { re
 // The package a line takes its file from, named, as the repository becomes the manifest's first.
 const takenFrom = (manifest: Manifest, line: ManifestFile): string | undefined => {
   if (line.entry.kind !== 'held' && line.entry.kind !== 'heldAt') return undefined;
-  return (line.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === line.package))?.name;
+  return packageOf(manifest, line)?.name;
 };
 
 interface ModRead {
@@ -95,7 +94,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const leftOut = new Set([...adapter.metadataFilesInModFolder, `${basename(folder)}${MANIFEST_SUFFIX}`].map((path) => path.toLowerCase()));
   const all = await hashed(adapter, folder, (await adapter.filesIn(folder)).filter((path) => !leftOut.has(path.toLowerCase())));
   if ('refusal' in all) return all;
-  const compiled = compiledBy(all.map(({ path }) => path), await adapter.gameRelease());
+  const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
   const { manifest: recorded } = await buildManifest(
     { downloadedFiles: [], ...installationFile === undefined ? {} : { installationFile }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), version, held, (text) => adapter.textHash(text));

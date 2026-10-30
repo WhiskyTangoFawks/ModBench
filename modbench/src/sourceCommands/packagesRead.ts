@@ -2,7 +2,7 @@
 // fix, and what it lacks.
 
 import type { FileRead, GameFile, GamePlace, InstallationFile, InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
-import { pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { packageOf, pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { NamedGameFolder } from './gameFolderFacts';
 
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
@@ -39,9 +39,6 @@ export interface PackagesRead {
 
 type InstallationFilePackage = Extract<ManifestPackage, { kind: 'installationFile' }>;
 type GameFolderPackage = Extract<ManifestPackage, { kind: 'gameFolder' }>;
-
-const packageOf = (manifest: Manifest, line: ManifestFile): ManifestPackage | undefined =>
-  (line.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === line.package));
 
 const pathInPackage = (line: ManifestFile): string => (line.entry.kind === 'heldAt' ? line.entry.path : line.path);
 

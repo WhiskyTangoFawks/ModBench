@@ -329,7 +329,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   return {
     landed: {
       mod, written: [...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path).sort(), namedByNoLine,
-      ...(built.uncommitted ? { uncommitted: true } : {}), ...(built.notes === undefined ? {} : { notes: built.notes }), ...cloned,
+      ...(built.uncommitted ? { uncommitted: true } : {}), ...cloned,
     },
   };
 }

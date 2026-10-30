@@ -5,3 +5,4 @@ export {
 export { ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from './manifestText';
 export { manifestIn, removeManifestIn, sourceManifestFile, sourceManifestIn, writeManifestIn, writeSourceManifestIn } from './manifestFiles';
 export { lineAtFolderPath } from './folderPaths';
+export { packageOf } from './packageOf';

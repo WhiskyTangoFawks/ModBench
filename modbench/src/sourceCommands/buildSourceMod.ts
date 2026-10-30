@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { lineAtFolderPath, writeSourceManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { lineAtFolderPath, packageOf, writeSourceManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
@@ -37,8 +37,8 @@ export interface BuildPass {
   readonly tasks: ReadonlySet<string>;
 }
 
-/** A mod that built, as mEdit answers it without the files it made. `notes`: each thing the build could not record. */
-export type ModBuilt = Omit<BuildOutcome['landed'][number], 'made'> & { readonly notes?: readonly string[] };
+/** A mod that built, as mEdit answers it without the files it made. */
+export type ModBuilt = Omit<BuildOutcome['landed'][number], 'made'>;
 
 /** A mod refused before anything was written; `lacksATask`: this machine has no task for a tool its steps run. */
 export type BuildRefusal = ItemRefusal<string> & { readonly lacksATask?: true };
@@ -57,9 +57,6 @@ export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
 }
 
 const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '')}.`;
-
-const packageOf = (manifest: Manifest, line: ManifestFile): ManifestPackage | undefined =>
-  (line.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === line.package));
 
 const isTaken = (pkg: ManifestPackage | undefined): pkg is Exclude<ManifestPackage, { kind: 'sourceRepository' }> =>
   pkg?.kind === 'installationFile' || pkg?.kind === 'gameFolder';
@@ -100,26 +97,22 @@ async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<Ta
 
 // A status on this machine reads a game folder package's entries, and the files a build made as its repository's entries,
 // from the hash index (modlist-repository.md, Status).
-async function entriesKept(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[]): Promise<string[]> {
-  const notes: string[] = [];
+async function entriesKept(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[]): Promise<void> {
   for (const pkg of mod.manifest.packages) {
     const entries = pkg.kind === 'gameFolder' ? mod.packages.entries.get(pkg.hash) : undefined;
-    const why = pkg.kind === 'gameFolder' && entries !== undefined ? await adapter.keepPackageEntries(pkg.hash, entries) : undefined;
-    if (why !== undefined) notes.push(`the files it takes from the game folder could not be recorded, so its status reads them as differing: ${why}`);
+    if (pkg.kind === 'gameFolder' && entries !== undefined) await adapter.keepPackageEntries(pkg.hash, entries);
   }
   const hashes = new Map<string, string>();
   for (const { path } of made.filter(({ vouchedFor }) => vouchedFor)) {
     const read = await adapter.originFileHash(join(mod.folder, path));
     if (read.kind === 'read') hashes.set(path, read.answer.hash);
   }
-  const why = await adapter.keepPackageEntries(basename(mod.sourceFolder), hashes);
-  if (why !== undefined) notes.push(`the files it made could not be recorded, so its status reads them as differing: ${why}`);
-  return notes;
+  await adapter.keepPackageEntries(basename(mod.sourceFolder), hashes);
 }
 
 // mods.md, Build, story 1: the manifest's file lines written last, naming each file the build made that the folder holds, each
 // file a package gives and each a step makes.
-async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[]): Promise<{ readonly notes: string[] } | { readonly failure: string }> {
+async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[]): Promise<string | undefined> {
   const { manifest } = mod;
   try {
     const held = new Set(await adapter.filesIn(mod.folder));
@@ -135,9 +128,10 @@ async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly 
       files: [...madeHeld.filter(({ path }) => !named.has(path)).map(({ path }): ManifestFile => ({ path, entry: { kind: 'held' } })), ...kept],
       ...mod.version === undefined ? {} : { version: mod.version },
     });
-    return { notes: await entriesKept(adapter, mod, madeHeld) };
+    await entriesKept(adapter, mod, madeHeld);
+    return undefined;
   } catch (err) {
-    return { failure: `The build could not write its manifest: ${errorMessage(err)}` };
+    return `The build could not write its manifest: ${errorMessage(err)}`;
   }
 }
 
@@ -161,9 +155,8 @@ async function finished({ adapter, tasks }: BuildDeps, mod: SourceModToBuild, la
   if (landed.failure !== undefined) return landed;
   const stepFailed = mod.manifest.steps.length === 0 ? undefined : await tasks.whyStepsFailed(mod.manifest.steps, mod.folder);
   if (stepFailed !== undefined) return { ...landed, failure: `The build stopped as its ${stepFailed}, so its manifest was not written.` };
-  const record = await recorded(adapter, mod, made);
-  if ('failure' in record) return { ...landed, failure: record.failure };
-  return record.notes.length === 0 ? landed : { ...landed, notes: record.notes };
+  const failure = await recorded(adapter, mod, made);
+  return failure === undefined ? landed : { ...landed, failure };
 }
 
 /** The mod built, refused before anything was written, or mEdit's refusal of the whole call. */

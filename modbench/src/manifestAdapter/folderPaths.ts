@@ -2,6 +2,7 @@
 // exclusion mark, and a line names the path the folder holds its file at.
 
 import type { Manifest, ManifestFile, PackageEntry } from './manifest';
+import { packageOf } from './packageOf';
 
 function atFolderPath(path: string, exclude: readonly string[], mark: string): string {
   const excluded = new Set(exclude.map((one) => one.toLowerCase()));
@@ -26,7 +27,7 @@ export function lineAtFolderPath(manifest: Manifest, line: ManifestFile, mark: s
   if (entry.kind !== 'held' && entry.kind !== 'heldAt') return line;
   const at = atFolderPath(unmarked(line.path, mark), manifest.exclude, mark);
   if (at === line.path) return line;
-  const pkg = line.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === line.package);
+  const pkg = packageOf(manifest, line);
   if (pkg === undefined) return line;
   const inPackage = entry.kind === 'heldAt' ? entry.path : line.path;
   const moved = pkg.kind === 'sourceRepository' ? { kind: 'held' as const } : entryAt(at, inPackage);

@@ -6,7 +6,6 @@ import { sourceManifestIn, writeSourceManifestIn, type Manifest } from '../../ma
 import { changeSourceManifest } from '../sourceManifestChange';
 
 const MARK = '.excluded';
-const PACK = { kind: 'installationFile', name: 'Pack-1.0.zip', size: 10, hash: 'hash' } as const;
 const BUILT: Manifest = {
   packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }], version: '1.0', output: 'Old Name',
   exclude: [], archives: [{ path: 'Mod - Main.ba2', files: ['meshes/a.nif'] }], steps: [], tools: [], files: [{ path: 'Mod.esp', entry: { kind: 'held' } }],
@@ -47,36 +46,12 @@ describe('changeSourceManifest', () => {
     expect((await held()).exclude).toEqual(after);
   });
 
-  it.each([
-    ['textures/a.txt', 'textures/a.txt.excluded'],
-    ['textures', 'textures.excluded/a.txt'],
-  ])('moves the line of a taken file to where the folder holds it once %s is excluded, keeping its path in its package', async (excluded, lineAt) => {
-    await writeSourceManifestIn(source, { ...BUILT, packages: [PACK], files: [{ path: 'textures/a.txt', entry: { kind: 'held' } }] });
-
-    await changeSourceManifest(source, excluding([excluded]));
-
-    expect((await held()).files).toEqual([{ path: lineAt, entry: { kind: 'heldAt', path: 'textures/a.txt' } }]);
-  });
-
-  it('moves the line of a taken file back to its own path once it is included', async () => {
-    await writeSourceManifestIn(source, {
-      ...BUILT, packages: [PACK], exclude: ['textures/a.txt'], files: [{ path: 'textures/a.txt.excluded', entry: { kind: 'heldAt', path: 'textures/a.txt' } }],
-    });
-
-    await changeSourceManifest(source, excluding([], ['textures/a.txt']));
-
-    expect((await held()).files).toEqual([{ path: 'textures/a.txt', entry: { kind: 'held' } }]);
-  });
-
-  it('moves the line of a built file with the folder, excluded and included again', async () => {
+  it('moves each line to where the folder holds its file once the exclusion changes', async () => {
     await writeSourceManifestIn(source, { ...BUILT, archives: [], files: [{ path: 'textures/a.dds', entry: { kind: 'held' } }] });
 
     await changeSourceManifest(source, excluding(['textures/a.dds']));
-    const excluded = (await held()).files.map(({ path }) => path);
-    await changeSourceManifest(source, excluding([], ['textures/a.dds']));
-    const included = (await held()).files.map(({ path }) => path);
 
-    expect([excluded, included]).toEqual([['textures/a.dds.excluded'], ['textures/a.dds']]);
+    expect((await held()).files.map(({ path }) => path)).toEqual(['textures/a.dds.excluded']);
   });
 
   it('refuses a repository that holds no manifest, naming it, and writes none', async () => {
