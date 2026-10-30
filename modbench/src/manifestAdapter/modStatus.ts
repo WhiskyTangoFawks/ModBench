@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import type { Manifest, ManifestFile } from './manifest';
 import { manifestIn, manifestNameOf } from './manifestFiles';
+import { installationFileLack } from './packageLack';
 import { packageOf } from './packageOf';
 
 type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
@@ -21,6 +22,8 @@ export interface FolderReads {
   originFileHash(path: string): Promise<Read<{ readonly hash: string }>>;
   packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
   modMetadata(mod: string): Promise<Read<HeldMetadata>>;
+  downloadedFile(name: string): Promise<Read<{ readonly hash: string } | undefined>>;
+  gameFolder(): Promise<{ readonly kind: 'found' | 'notFound' }>;
 }
 
 /** A mod by its name and the folder that holds it and its manifest. */
@@ -40,11 +43,15 @@ export interface ModStatus {
   readonly otherBytes: readonly string[];
   readonly metadataDiffers: boolean;
   readonly noHost: boolean;
+  /** Why this machine does not hold each package the manifest pins, as a clause. */
+  readonly packagesLacking: readonly string[];
+  /** The manifest's path as the folder spells it; none when the folder holds none or it cannot be read. */
+  readonly manifestFile?: string;
   readonly unreadable?: string;
 }
 
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, ...over });
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesLacking: [], ...over });
 
 const ordered = (paths: readonly string[]): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
@@ -75,7 +82,7 @@ export interface FolderAgainst {
 
 /** The folder's files against `manifest`'s lines. A file is hashed only where a package entry fixes its bytes, and a line
  *  whose package entry `reads` lacks does not hold its bytes. */
-export async function folderAgainst(manifest: Manifest, folder: string, reads: Omit<FolderReads, 'modMetadata'>): Promise<FolderAgainst> {
+export async function folderAgainst(manifest: Manifest, folder: string, reads: Pick<FolderReads, 'filesIn' | 'fileStamp' | 'originFileHash' | 'packageEntries'>): Promise<FolderAgainst> {
   const manifestName = folded(manifestNameOf(folder));
   const onDisk = new Set((await reads.filesIn(folder)).filter((path) => folded(path) !== manifestName));
   // A line names a file in another case only where the file system finds that file by the line's name.
@@ -135,6 +142,17 @@ function metadataDiffers(held: HeldMetadata, manifest: Manifest): boolean {
   return (first === undefined ? undefined : held.version) !== manifest.version || !sameInstallationFile(held.installationFile, says);
 }
 
+async function packagesLacking(manifest: Manifest, reads: Pick<FolderReads, 'downloadedFile' | 'gameFolder'>): Promise<string[]> {
+  const lacking: string[] = [];
+  for (const pkg of manifest.packages) {
+    if (pkg.kind === 'gameFolder' && (await reads.gameFolder()).kind === 'notFound') lacking.push('the game folder was not found');
+    if (pkg.kind !== 'installationFile') continue;
+    const lack = installationFileLack(pkg, await reads.downloadedFile(pkg.name));
+    if (lack !== undefined) lacking.push(lack);
+  }
+  return lacking;
+}
+
 /** The version and installation file the manifest holds, as a mod's metadata holds them. */
 export function metadataOf(manifest: Manifest): HeldMetadata {
   const [first] = manifest.packages;
@@ -165,9 +183,11 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
     if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
     const { manifest } = read;
     const [first] = manifest.packages;
+    const spelled = (await reads.filesIn(mod.folder)).find((held) => folded(held) === folded(manifestNameOf(mod.folder)));
     return {
-      ...nothing(mod.name), ...listsOf(manifest, await folderAgainst(manifest, mod.folder, reads)),
+      ...nothing(mod.name, { manifestFile: join(mod.folder, spelled ?? manifestNameOf(mod.folder)) }), ...listsOf(manifest, await folderAgainst(manifest, mod.folder, reads)),
       metadataDiffers: metadataDiffers(metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
+      packagesLacking: await packagesLacking(manifest, reads),
     };
   } catch (err) {
     return nothing(mod.name, { unreadable: `a file could not be read: ${errorMessage(err)}` });

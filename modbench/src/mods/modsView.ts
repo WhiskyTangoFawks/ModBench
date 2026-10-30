@@ -30,6 +30,7 @@ import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
+import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
@@ -142,6 +143,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view.onDidCollapseElement(({ element }) => { if (element.resourceUri) open.collapsedRow(element.resourceUri); }),
     ...registerModDecorations(instance, open, vscode.workspace),
     new PublisherProblems(vscode.languages.createDiagnosticCollection('modbench-publisher'), instance),
+    new ModProblems(vscode.languages.createDiagnosticCollection('modbench-mod-status'), instance, statuses),
     ...registerModContextCommands({
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,

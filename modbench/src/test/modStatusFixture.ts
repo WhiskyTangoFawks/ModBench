@@ -4,7 +4,7 @@ import { writeManifestIn } from '../manifestAdapter/manifestAdapter';
 
 /** A mod whose folder matches its manifest, but for what `over` says. */
 export const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, ...over });
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesLacking: [], ...over });
 
 /** Writes into `folder` the manifest named for it, holding `files` and no package. */
 export async function manifestedIn(folder: string, files: readonly ManifestFile[] = []): Promise<void> {

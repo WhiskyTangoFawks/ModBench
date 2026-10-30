@@ -15,7 +15,7 @@ import {
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 import type { OpenRows } from './openRows';
-import { countsInBadge, differingFiles, lackedLine, separatorDescription, statusDescription } from './statusText';
+import { countsInBadge, differingFiles, lackedLine, statusDescription } from './statusText';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import { blankIcon } from '../drivingLib/blankIcon';
@@ -80,7 +80,7 @@ export class SeparatorNode extends vscode.TreeItem {
     this.resourceUri = separatorRowUri(separator.name);
     this.iconPath = blankIcon();
     this.contextValue = 'separator';
-    this.description = status && separatorDescription(status);
+    this.description = status && statusDescription(status);
   }
 }
 

@@ -25,6 +25,8 @@ const reads: FolderReads = {
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'unhashed' }),
   packageEntries: () => Promise.resolve(undefined),
+  downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
+  gameFolder: () => Promise.resolve({ kind: 'found' }),
   modMetadata: (mod) => {
     asked.push(mod);
     return Promise.resolve({ kind: 'read', answer: {} });

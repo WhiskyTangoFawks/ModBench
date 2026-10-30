@@ -2,7 +2,7 @@
 // fix, and what it lacks.
 
 import type { FileRead, GameFile, GamePlace, InstallationFile, InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
-import { packageOf, pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { installationFileLack, packageOf, pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { NamedGameFolder } from './gameFolderFacts';
 
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
@@ -54,10 +54,9 @@ function installationFilesOf(manifest: Manifest, downloaded: PackagesHeld['downl
   const lacks: string[] = [];
   for (const named of manifest.packages.filter((pkg): pkg is InstallationFilePackage => pkg.kind === 'installationFile')) {
     const read = downloaded(named.name);
-    if (read.kind === 'unreadable') lacks.push(`installation file '${named.name}' could not be read: ${read.reason}`);
-    else if (read.answer === undefined) lacks.push(`installation file '${named.name}' is missing`);
-    else if (read.answer.hash !== named.hash) lacks.push(`installation file '${named.name}' has other bytes`);
-    else held.set(named.name, read.answer);
+    const lack = installationFileLack(named, read);
+    if (lack !== undefined) lacks.push(lack);
+    else if (read.kind === 'read' && read.answer !== undefined) held.set(named.name, read.answer);
   }
   return { held, lacks };
 }
