@@ -183,7 +183,7 @@ As a user, I want:
 
 1. Build to write the mod folder from its repository and the installation files its build file names: its assets, its plugins compiled from their plugin source, and its steps run in order. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
 2. The build file to name, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
-3. Build to record what it made in the mod's manifest, so a build that makes something else, here or after a clone, shows in Source Control as a change to the manifest. Cites: ADR-0022; Existing tools
+3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a step makes is recorded by its path alone, since a tool's output follows the tool and my load order, and is not checked. Cites: ADR-0022; Existing tools; Never silently wrong
 4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
