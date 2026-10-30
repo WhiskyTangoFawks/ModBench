@@ -341,15 +341,21 @@ describe('delete separator: the whole selection of separators, asked once', () =
     expect(reporter.reports).toEqual([]);
   });
 
-  it.each<[string, SeparatorNode[] | undefined, string]>([
-    ['naming the separator and saying its mods stay', undefined, 'Delete separator "Group A"? Its mods stay and join no separator.'],
-    ['naming the separator above, which the mods join', [groupB], 'Delete separator "Group B"? Its mods stay and join "Group A".'],
-    ['listing every separator of a selection of several', [groupA, groupB], 'Delete separators "Group A", "Group B"? Their mods stay: those of "Group A" join no separator, those of "Group B" join no separator.'],
-  ])('asks one modal %s', async (_case, selected, message) => {
+  const groupC = new SeparatorNode({ kind: 'separator', name: 'Group C', enabled: true }, []);
+  const winningFirst = [separator('Group A'), mod('Mod A'), separator('Group B'), separator('Group C')];
+
+  it.each<[string, SeparatorNode, SeparatorNode[] | undefined, string]>([
+    ['naming the separator after it that the mods join', groupA, undefined, 'Delete separator "Group A"? Its mods stay and join "Group B".'],
+    ['saying the mods become ungrouped when no separator follows, though one precedes', groupC, undefined, 'Delete separator "Group C"? Its mods stay and become ungrouped.'],
+    ['skipping an intermediate separator deleted in the same selection', groupA, [groupA, groupB],
+      'Delete separators "Group A", "Group B"? Their mods stay: those of "Group A" join "Group C", those of "Group B" join "Group C".'],
+    ['listing each separator with where its mods go', groupB, [groupB, groupC],
+      'Delete separators "Group B", "Group C"? Their mods stay: those of "Group B" become ungrouped, those of "Group C" become ungrouped.'],
+  ])('asks one modal %s', async (_case, clicked, selected, message) => {
     const ask = scriptedDialog(undefined);
 
-    registerSeparatorCommands(commandsOver(mods).commands, instance, recordingReporter(), ask, trash, () => []);
-    await invoke('modbench.separator.delete', groupA, selected);
+    registerSeparatorCommands(commandsOver(winningFirst).commands, instanceOf(winningFirst), recordingReporter(), ask, trash, () => []);
+    await invoke('modbench.separator.delete', clicked, selected);
 
     expect(ask.asked).toEqual([{ message, detail: undefined, buttons: ['Delete'] }]);
   });
@@ -1343,7 +1349,7 @@ describe('the separator gestures, called by the agent', () => {
       const { fake, commands } = commandsOver(mods);
       register(commands);
 
-      const answered = await invoke('modbench.separator.delete', new AgentCall([group('Group A'), group('Group B')], {}));
+      const answered = await invoke('modbench.separator.delete', new AgentCall([group('Group A')], {}));
 
       expect(fake.calls).toEqual([]);
       expect(answered).toEqual({
@@ -1351,8 +1357,7 @@ describe('the separator gestures, called by the agent', () => {
         outcome: {
           landed: [],
           refused: [
-            { item: { name: 'Group A' }, reason: 'its mods would join no separator. Request it again with force to delete it.' },
-            { item: { name: 'Group B' }, reason: 'its mods would join no separator. Request it again with force to delete it.' },
+            { item: { name: 'Group A' }, reason: 'its mods would join "Group B". Request it again with force to delete it.' },
           ],
         },
       });
