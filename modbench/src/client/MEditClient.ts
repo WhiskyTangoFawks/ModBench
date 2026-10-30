@@ -47,7 +47,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'restore-from-manifest-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -60,7 +60,6 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'decompile-and-commit-progress': DecompileAndCommitProgress;
-  'update-manifest-progress': ModlistProgress;
   'restore-from-manifest-progress': ModlistProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
@@ -198,13 +197,6 @@ export interface BuildOutcome {
 /** A step of a manifest: the VS Code task it runs, by label, and the arguments it hands the task. */
 export type ManifestStep = components['schemas']['ManifestStep'];
 
-/** A mod to update the manifest of: its folder, its installation files and the files in its folder the repository
- *  commits itself (ADR-0013). */
-export type UpdateManifestMod = components['schemas']['UpdateManifestModRequest'];
-
-/** The instance's facts every mod's manifest needs: the stat cache's folder and every downloaded file. */
-export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequest'], 'mods' | 'gesture'>;
-
 /** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The
  *  mod is none once it ends. */
 export type ModlistProgress = components['schemas']['ModlistProgress'];
@@ -216,16 +208,6 @@ export type DecompileAndCommitProgress = ModlistProgress & { phase?: components[
 export interface ModlistCallOptions<P = ModlistProgress> {
   readonly onProgress?: (progress: P) => void;
   readonly signal?: AbortSignal;
-}
-
-type UpdatedMod = components['schemas']['ModUpdated'];
-
-/** Update manifest's answer: each mod updated, or refused with its reason. */
-export interface UpdateManifestOutcome {
-  landed: readonly UpdatedMod[];
-  refused: readonly ItemRefusal<string>[];
-  /** Why mEdit refused the user's cancel. */
-  cancelRefusal?: string;
 }
 
 /** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
@@ -343,7 +325,6 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
-  updateManifest(mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options?: ModlistCallOptions): Promise<UpdateManifestOutcome | WriteRefused>;
   restoreFromManifest(mods: readonly RestoreMod[], facts: RestoreFacts, options?: ModlistCallOptions): Promise<RestoreOutcome | WriteRefused>;
   // modlist-repository.md, Restore from manifest, story 3: each submodule cloned at its pin, or named with why it was not.
   cloneSubmodules(submodules: readonly NonNullable<RestoreMod['submodule']>[]): Promise<SubmodulesCloned | WriteRefused>;

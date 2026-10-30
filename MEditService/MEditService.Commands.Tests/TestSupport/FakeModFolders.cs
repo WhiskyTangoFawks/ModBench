@@ -149,7 +149,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         return replaced;
     }
 
-    public bool WriteManifest(string modFolder, Manifest manifest)
+    private bool WriteManifest(string modFolder, Manifest manifest)
     {
         if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");
         var text = string.Join('\n', manifest.Files.Select(f => f.ToString()).Prepend(manifest.Package?.ToString()));

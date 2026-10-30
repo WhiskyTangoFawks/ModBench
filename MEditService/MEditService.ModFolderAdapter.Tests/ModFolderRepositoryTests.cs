@@ -288,34 +288,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["A.nif"], _repository.NamedByNoLine(_root, manifest, new HashSet<string>()));
     }
 
-    [Fact]
-    public void AManifest_IsNamedForTheFolderItBuilds_AndIsNoFileOfIt()
-    {
-        var folder = Directory.CreateDirectory(Path.Combine(_root, "plugins", "rootbuilder")).FullName;
-        File.WriteAllText(Path.Combine(folder, "a.txt"), "hello");
-
-        _repository.WriteManifest(folder, new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
-
-        Assert.Equal(["a.txt", "rootbuilder.manifest.json"], Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal));
-        Assert.Equal(["a.txt"], _repository.Files(folder, new HashSet<string>(), statCache: null).Files.Select(file => file.Path));
-        Assert.Single(Assert.IsType<Manifest>(_repository.ReadManifest(folder)).Files);
-    }
-
-    [Fact]
-    public void AManifestNamedForItsFolderInAnotherCase_IsItsManifest_WrittenUnderItsOwnName_AndIsNoFileOfIt()
-    {
-        Write("a.txt", "hello");
-        Write("MOD.manifest.json", "{\n\"files\": []\n}\n");
-
-        var held = _repository.ReadManifest(_root);
-        _repository.WriteManifest(_root, new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
-
-        Assert.NotNull(held);
-        Assert.Equal(["MOD.manifest.json", "a.txt"], Directory.GetFiles(_root).Select(Path.GetFileName).Order(StringComparer.Ordinal));
-        Assert.Equal(["a.txt"], _repository.Files(_root, new HashSet<string>(), statCache: null).Files.Select(file => file.Path));
-        Assert.Single(Assert.IsType<Manifest>(_repository.ReadManifest(_root)).Files);
-    }
-
     [PosixFact]
     public void OnAFileSystemThatTellsCaseApart_TwoManifestsWhoseNamesDifferInCaseAlone_AreRefusedNamingBoth()
     {
@@ -328,15 +300,13 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AManifestThatNamesNothing_IsWritten_ReadBack_AndAgreesWithAFolderOfItsMetadataAlone()
+    public void AManifestThatNamesNothing_IsReadBack_AndAgreesWithAFolderOfItsMetadataAlone()
     {
         Write("meta.ini", "[General]");
         var nothing = new Manifest([], []);
 
-        var written = _repository.WriteManifest(_root, nothing);
-        var writtenAgain = _repository.WriteManifest(_root, nothing);
+        ManifestOnDisk.Write(_repository, _root, nothing);
 
-        Assert.Equal([true, false, true], [written, writtenAgain, File.Exists(Path.Combine(_root, "mod.manifest.json"))]);
         var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root));
         Assert.Empty(read.Files);
         Assert.Null(read.Package);
@@ -424,7 +394,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         Write("made.dds", "whatever the step wrote");
         ManifestFile[] madeByStep = [new("made.dds", new PackageEntry.MadeByStep()), new("lacked.dds", new PackageEntry.MadeByStep())];
-        _repository.WriteManifest(_root, new Manifest([Package], madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
+        ManifestOnDisk.Write(_repository, _root, new Manifest([Package], madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
 
         var status = Status();
 
@@ -512,67 +482,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private static readonly ManifestPackage.InstallationFile Package = new("Mod.7z", 100, "AAAA", "https://www.nexusmods.com/fallout4/mods/1");
 
     [Fact]
-    public void WriteManifest_WritesAJsonFileWithALineForThePackageWithItsVersionAndOneForEachFile_InPathOrder()
-    {
-        var manifest = new Manifest(
-            [Package],
-            [
-                new ManifestFile("z.txt", new PackageEntry.NotHeld()),
-                new ManifestFile("y.esp", new PackageEntry.OtherBytes()),
-                ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
-                new ManifestFile("a.nif", new PackageEntry.Held()),
-            ],
-            "1.2.3");
-
-        Assert.True(_repository.WriteManifest(_root, manifest));
-
-        var text = File.ReadAllText(Path.Combine(_root, "mod.manifest.json"));
-        Assert.Equal(
-            "{\n"
-            + "\"packages\": [\n{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"}\n],\n"
-            + "\"files\": [\n"
-            + "{\"path\":\"a.nif\"},\n"
-            + "{\"path\":\"b.nif\",\"packagePath\":\"Data/b.nif\"},\n"
-            + "{\"path\":\"y.esp\",\"otherBytes\":true},\n"
-            + "{\"path\":\"z.txt\",\"inPackage\":false}\n"
-            + "]\n"
-            + "}\n",
-            text);
-        using var parsed = JsonDocument.Parse(text);
-        Assert.Equal(4, parsed.RootElement.GetProperty("files").GetArrayLength());
-    }
-
-    [Fact]
-    public void AManifest_HasALineForEachStep_InTheOrderTheyRun_ForEachTool_AndSaysWhichFileAStepMakes()
-    {
-        var manifest = new Manifest([Package], [new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep()), new ManifestFile("a.nif", new PackageEntry.Held())])
-        {
-            Steps = [new ManifestStep("Optimise textures", ["--in", "textures"]), new ManifestStep("Archive", [])],
-            Tools = [new ManifestTool("Optimise textures", "https://example.com/optimiser"), new ManifestTool("Archive", "https://example.com/archive")],
-        };
-
-        _repository.WriteManifest(_root, manifest);
-
-        Assert.Equal(
-            "{\n"
-            + "\"packages\": [\n{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\"}\n],\n"
-            + "\"steps\": [\n"
-            + "{\"task\":\"Optimise textures\",\"args\":[\"--in\",\"textures\"]},\n"
-            + "{\"task\":\"Archive\"}\n"
-            + "],\n"
-            + "\"tools\": [\n"
-            + "{\"task\":\"Optimise textures\",\"page\":\"https://example.com/optimiser\"},\n"
-            + "{\"task\":\"Archive\",\"page\":\"https://example.com/archive\"}\n"
-            + "],\n"
-            + "\"files\": [\n"
-            + "{\"path\":\"a.nif\"},\n"
-            + "{\"path\":\"textures/a.dds\",\"madeByStep\":true}\n"
-            + "]\n"
-            + "}\n",
-            File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Fact]
     public void ASourceManifest_NamesEachPackageOnce_AndAFileNamesItsPackageOnlyWhenItIsNotTheFirst_AndReadsThemBack()
     {
         var manifest = new Manifest(
@@ -635,78 +544,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(SourceModStatus().Gone);
     }
 
-    public static TheoryData<ManifestPackage, string> PackagesAndTheirLines => new()
-    {
-        { new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), "{\"submodule\":\"Mod\",\"version\":\"2\"}" },
-        { new ManifestPackage.SourceRepository("Mod", IsSubmodule: false), "{\"repository\":\"Mod\",\"version\":\"2\"}" },
-        { new ManifestPackage.GameFolder("Fallout 4", "AAAA"), "{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}" },
-        {
-            new ManifestPackage.GameFolder("Fallout 4", "AAAA", [new GameDepot("377162", "22"), new GameDepot("377161", "11")]),
-            "{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"depots\":{\"377161\":\"11\",\"377162\":\"22\"},\"version\":\"2\"}"
-        },
-    };
-
-    [Theory]
-    [MemberData(nameof(PackagesAndTheirLines))]
-    public void WriteManifest_NamesTheModsPackageByItsKind_WithTheVersion(ManifestPackage package, string line)
-    {
-        _repository.WriteManifest(_root, new Manifest([package], [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
-
-        Assert.Contains("\"packages\": [\n" + line + "\n]", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("1.2.3")]
-    public void WriteManifest_OfAModWithNoPackageAndNoFiles_WritesAnEmptyFileList_BecauseTheVersionBelongsToThePackage(string? version)
-    {
-        _repository.WriteManifest(_root, new Manifest([], [], version));
-
-        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Fact]
-    public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
-    {
-        var manifest = new Manifest([], [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
-        _repository.WriteManifest(_root, manifest);
-        var path = Path.Combine(_root, "mod.manifest.json");
-        File.SetLastWriteTimeUtc(path, LongAgo);
-
-        Assert.False(_repository.WriteManifest(_root, manifest));
-
-        Assert.Equal(LongAgo, File.GetLastWriteTimeUtc(path));
-    }
-
-    [Fact]
-    public void WriteManifest_WritesNoByteOrderMark_AndKeepsANonAsciiNameReadable()
-    {
-        var manifest = new Manifest([], [new ManifestFile("meshes/café.nif", new PackageEntry.NotHeld())]);
-
-        _repository.WriteManifest(_root, manifest);
-
-        var bytes = File.ReadAllBytes(Path.Combine(_root, "mod.manifest.json"));
-        Assert.Equal((byte)'{', bytes[0]);
-        Assert.Contains("café", System.Text.Encoding.UTF8.GetString(bytes));
-    }
-
-    [Fact]
-    public void WriteManifest_OrdersFilesAlphabetically_NotCapitalsFirst()
-    {
-        var manifest = new Manifest([], [
-            new ManifestFile("Textures/x.dds", new PackageEntry.Held()),
-            new ManifestFile("meshes/b.nif", new PackageEntry.Held()),
-            new ManifestFile("Meshes/a.nif", new PackageEntry.Held()),
-            new ManifestFile("meshes/a.nif", new PackageEntry.Held()),
-        ]);
-
-        _repository.WriteManifest(_root, manifest);
-
-        Assert.Equal(
-            ["Meshes/a.nif", "meshes/a.nif", "meshes/b.nif", "Textures/x.dds"],
-            _repository.ReadManifest(_root)?.Files.Select(file => file.Path));
-    }
-
     public static TheoryData<Manifest> Manifests => new()
     {
         new Manifest(
@@ -728,9 +565,9 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Manifests))]
-    public void ReadManifest_ReadsWhatWriteManifestWrote(Manifest manifest)
+    public void ReadManifest_ReadsWhatTheRepositorySpells(Manifest manifest)
     {
-        _repository.WriteManifest(_root, manifest);
+        ManifestOnDisk.Write(_repository, _root, manifest);
 
         var read = _repository.ReadManifest(_root);
 
@@ -743,7 +580,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void AManifestsSteps_ReadBackInTheirOrder_WithTheToolsAndTheFilesTheyMake()
     {
-        _repository.WriteManifest(_root, new Manifest([], [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
+        ManifestOnDisk.Write(_repository, _root, new Manifest([], [new ManifestFile("b.dds", new PackageEntry.MadeByStep())])
         {
             Steps = [new ManifestStep("Zip", ["a", "b"]), new ManifestStep("Archive", [])],
             Tools = [new ManifestTool("Zip", "https://example.com/zip")],
@@ -913,7 +750,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     private Manifest Manifested(string installationFile, ManifestFile[] lines)
     {
         var manifest = new Manifest([new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile)], lines);
-        _repository.WriteManifest(_root, manifest);
+        ManifestOnDisk.Write(_repository, _root, manifest);
         return manifest;
     }
 

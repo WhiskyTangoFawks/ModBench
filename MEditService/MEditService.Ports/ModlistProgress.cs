@@ -19,8 +19,6 @@ public enum DecompileAndCommitPhase
 /// rest) and the mods done.</summary>
 public sealed record ModlistProgress(string? Gesture, string? Mod, int ModsDone, int ModsTotal);
 
-public sealed record UpdateManifestProgressNotification(ModlistProgress Progress) : INotification;
-
 public sealed record RestoreFromManifestProgressNotification(ModlistProgress Progress) : INotification;
 
 public sealed record BuildProgressNotification(ModlistProgress Progress) : INotification;

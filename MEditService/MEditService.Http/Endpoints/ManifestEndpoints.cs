@@ -9,18 +9,6 @@ internal static class ManifestEndpoints
 {
     public static IEndpointRouteBuilder MapManifestEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/update-manifest", UpdateManifest)
-            .WithName("UpdateManifest")
-            .WithTags("Modlist")
-            .WithDescription(
-                "Writes each mod's manifest from the mod as it is (ADR-0022), but a source mod's, which its build writes in its " +
-                "repository: that one is refused when its folder differs from what the build wrote. A mod takes each file its installation file " +
-                "lacks, by hash, from the game files its own request hands, all from one place of the game, or from a downloaded file the request hands, " +
-                "and names each as a package. A mod lands or is refused on its own, and a landed mod names each file nothing provides. Progress is the update-manifest-progress notification, " +
-                "which names the request's gesture.")
-            .Produces<UpdateManifestResult>()
-            .ProducesProblem(400);
-
         app.MapPost("/restore-from-manifest", RestoreFromManifest)
             .WithName("RestoreFromManifest")
             .WithTags("Modlist")
@@ -72,29 +60,12 @@ internal static class ManifestEndpoints
         return app;
     }
 
-    internal static async Task<IResult> UpdateManifest(
-        UpdateManifestRequest req, UpdateManifestHandler handler, ModlistGestureCancels cancels, ILoggerFactory loggerFactory, CancellationToken aborted)
-    {
-        var mods = req.Mods ?? [];
-        var downloadedFiles = req.DownloadedFiles ?? [];
-        if (Malformed(mods, req.StatCache, mods.Select(mod => mod.GameFolder), downloadedFiles) is { } malformed) return malformed;
-
-        using var running = cancels.Run(req.Gesture, aborted);
-        var result = await handler.UpdateManifestAsync(
-            [.. mods.Select(mod => new ModToUpdate(
-                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.SourceFolder, mod.Version,
-                mod.GameFolder?.ToGameFolder()))],
-            new InstanceToUpdate(req.StatCache, [.. downloadedFiles.Select(file => file.ToInstallationFile())]), req.Gesture, running.Token);
-
-        return EndpointMapping.Answered("Update manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result);
-    }
-
     internal static async Task<IResult> RestoreFromManifest(
         RestoreFromManifestRequest req, RestoreFromManifestHandler handler, ModlistGestureCancels cancels, ILoggerFactory loggerFactory,
         CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.StatCache, [req.GameFolder], downloadedFiles: []) is { } malformed) return malformed;
+        if (Malformed(mods, req.StatCache, [req.GameFolder]) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
         var variants = req.Archives?.Variants();
@@ -159,11 +130,11 @@ internal static class ManifestEndpoints
         [.. req.Mods.Select(mod => mod.StatusIn(repository, req.StatCache))];
 
     private static IResult? Malformed(
-        IReadOnlyList<IModRequest> mods, string? statCache, IEnumerable<GameFolderRequest?> gameFolders, IReadOnlyList<InstallationFileRequest> downloadedFiles)
+        IReadOnlyList<IModRequest> mods, string? statCache, IEnumerable<GameFolderRequest?> gameFolders)
     {
         if (mods.Count == 0) return EndpointMapping.BadRequest("At least one mod is required.");
         if (string.IsNullOrWhiteSpace(statCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
-        var installationFiles = mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().Concat(downloadedFiles).ToList();
+        var installationFiles = mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().ToList();
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
             return EndpointMapping.BadRequest("Every mod needs a name and a folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.");
@@ -176,11 +147,6 @@ internal static class ManifestEndpoints
     }
 
 }
-
-/// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013): the stat cache's folder, outside every
-/// mod folder, and every downloaded file. Gesture names it to a cancel.</summary>
-internal sealed record UpdateManifestRequest(
-    IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, string? Gesture, IReadOnlyList<InstallationFileRequest>? DownloadedFiles = null);
 
 /// <summary>The game folder by the game's name and its root, with the game files a mod's files may be, none
 /// when not found. Elsewhere is the Steam install when it is another place (ADR-0013).</summary>
@@ -228,13 +194,6 @@ internal interface IModRequest
 
     InstallationFileRequest? InstallationFile { get; }
 }
-
-/// <summary>A mod, a source mod's source folder, whose repository holds the manifest its build writes, its version as its
-/// metadata says, and the game folder with the game files it may take from, none when not found.</summary>
-internal sealed record UpdateManifestModRequest(
-    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder, string? Version,
-    GameFolderRequest? GameFolder = null)
-    : IModRequest;
 
 /// <summary>The mods to restore, with the instance's facts (ADR-0013), each VS Code task this machine has among them.
 /// AsksWhatItLacks marks a request sent before the manifests' files are handed: its NotFound answers ask for them.</summary>

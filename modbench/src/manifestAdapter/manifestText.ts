@@ -1,13 +1,14 @@
 import { MANIFEST_OUTPUT_KEY } from '../wire/sourceMod';
-import type { Manifest, ManifestFile, ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import type { Manifest, ManifestFile, ManifestPackage } from './manifest';
 
 const upperUnit = (unit: string): string => {
   const upper = unit.toUpperCase();
   return upper.length === 1 ? upper : unit;
 };
 const upperUnits = (text: string): string => Array.from(text, upperUnit).join('');
-const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
+export const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+/** The order a manifest lists paths in, and a pin hashes them in. */
+export const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
   ordinal(upperUnits(a), upperUnits(b)) || ordinal(a, b);
 
 const objectText = (members: readonly (readonly [string, string])[]): string =>
@@ -71,3 +72,8 @@ export function manifestText(manifest: Manifest): string {
   ];
   return `{\n${members.join(',\n')}\n}\n`;
 }
+
+/** The text a game folder package's pin is the hash of (ADR-0022): each file the mod takes by its path and hash, in the
+ *  order a manifest lists paths. */
+export const pinText = (files: readonly { readonly path: string; readonly hash: string }[]): string =>
+  [...files].sort((a, b) => ordinalIgnoreCaseThenOrdinal(a.path, b.path)).map(({ path, hash }) => `${path}\n${hash}\n`).join('');

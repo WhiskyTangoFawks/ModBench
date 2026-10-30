@@ -16,7 +16,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type SourceManifestChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type WhatRestoreDestroys,
+  type ManifestInstallationFile, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -538,7 +538,7 @@ class HttpMEditClient implements MEditClient {
   // A cancel asks mEdit to stop after the mod in hand, and the request then answers what landed, so the read that
   // follows shows the disk. mEdit holds a gesture once begun, which its first progress naming it shows.
   private async modlistGesture<O extends object>(
-    kind: 'update-manifest-progress' | 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
+    kind: 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
     call: (gesture: string) => Promise<O | WriteRefused>,
   ): Promise<(O & { cancelRefusal?: string }) | WriteRefused> {
     const gesture = randomUUID();
@@ -566,17 +566,6 @@ class HttpMEditClient implements MEditClient {
       unsubscribe();
       signal?.removeEventListener('abort', cancelOnceBegun);
     }
-  }
-
-  updateManifest(
-    mods: readonly UpdateManifestMod[], facts: UpdateManifestFacts, options: ModlistCallOptions = {},
-  ): Promise<UpdateManifestOutcome | WriteRefused> {
-    return this.modlistGesture('update-manifest-progress', options, (gesture) => this.mutateEach({
-      verb: 'update the manifest of', noun: 'mod', items: mods,
-      op: (counted) => `updateManifest(${counted})`,
-      post: () => this.apiClient.POST('/update-manifest', { body: { mods: [...mods], ...facts, gesture } }),
-      outcome: (answer) => selectionOutcome(answer),
-    }));
   }
 
   cloneSubmodules(submodules: readonly NonNullable<RestoreMod['submodule']>[]): Promise<SubmodulesCloned | WriteRefused> {

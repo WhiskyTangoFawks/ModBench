@@ -21,6 +21,13 @@ export async function digestOf(path: string): Promise<string> {
   return digest.toString('base64');
 }
 
+/** The hash of `text`'s UTF-8 bytes, written as `digestOf` writes it. */
+export async function textHash(text: string): Promise<string> {
+  const digest = Buffer.alloc(8);
+  digest.writeBigUInt64LE((await hasher).h64Raw(Buffer.from(text, 'utf8')));
+  return digest.toString('base64');
+}
+
 /** MD5 in hex, the hash Nexus finds a file by. Streamed. */
 export async function md5Of(path: string): Promise<string> {
   const hash = createHash('md5');
