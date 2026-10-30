@@ -47,7 +47,7 @@ A FormKey is a symbol, and the record index answers for it ([ADR-0001](../adr/00
 As a user, I want:
 
 1. Go to Definition on a FormKey to open the record, as Opening in [editor.md](editor.md) opens a record given without a plugin. Cites: VS Code; xEdit Ctrl + click
-2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Cites: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 1 to 4
+2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Cites: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 2 to 4
 3. Hovering a FormKey to show `EditorID [FormKey]`, the record type, and the plugin whose copy wins. Cites: xedit.md, divergence 10
 4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every compiled plugin, and to open it. Cites: VS Code; catalog `open` with no Argument
 5. Completion inside a reference field to offer records by EditorID and insert the FormKey, and inside an enum field to offer its values. Cites: VS Code; ADR-0001

@@ -1,12 +1,12 @@
 # Editor: conflict colours
 
-The record panel colours each row and each cell by the record order conflict it shows, so a conflict reads at a glance instead of by diffing each value. The classification is xEdit's two-axis model ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md); [the conflict-model notes](../../docs/research/xedit-conflict-model.md)). mEdit classifies; the panel only draws what it is given. Where the panel departs from xEdit, [xedit.md](../out-of-scope/xedit.md) says why. The rows, columns and cells are [editor.md](editor.md)'s.
+The record panel colours each row and each cell by the record order conflict it shows, so a conflict reads at a glance instead of by diffing each value. The classification is xEdit's two-axis model ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md); [the conflict-model notes](../../docs/research/xedit-conflict-model.md)). Where the panel departs from xEdit, [xedit.md](../out-of-scope/xedit.md) says why. The rows, columns and cells are [editor.md](editor.md)'s.
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
 ## The two axes
 
-- ConflictAll, one for each row: the state of that field across every copy.
+- ConflictAll, one for each row: the state of that field across every copy that takes part (What takes part).
 - ConflictThis, one for each cell: this cell against the other cells in its row that take part (What takes part).
 
 The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's benign and ignored states come from its priority table, which Modbench does not have, but for the version stamps (xedit.md, divergence 7). A compare of several records caps each row at ConflictBenign, as xEdit does (What takes part, story 6).
@@ -26,7 +26,7 @@ As a user, I want:
 
 1. Each row painted from its own field, so one changed field tints its own row and no other.
 2. A collapsed struct or array row to show the worst state beneath it, so collapsing hides nothing, and an expanded one to show no background, since its rows show their own. Cites: xedit.md, divergence 4
-3. Version Control Info 1, Form Version and Version Control Info 2 to show no conflict colour: the game ignores them. Cites: xEdit; xedit.md, divergence 7
+3. The version stamps to show no conflict colour (What takes part). Cites: xEdit; xedit.md, divergence 7
 
 ## Cells
 
@@ -42,16 +42,16 @@ Cites: ADR-0018
 
 As a user, I want:
 
-1. A copy that does not have a field the master has to read as a change to it, as xEdit reads it. A field no copy has shows no colour. Cites: xEdit; Never silently wrong
-2. Each column's header painted with the worst state among its cells, as a summary; the cells are what count.
+1. A copy that does not have a field the master has to read as a change to it, as xEdit reads it. Cites: xEdit; Never silently wrong
+2. Each column's header painted with the worst state among its cells.
 3. A collapsed column's cells to keep their colour without their text. The strip then shows where the copy differs, as VS Code's overview ruler shows where a file changes. Cites: VS Code's interaction
 
 ## What takes part
 
-As a user, I want:
+A value the game does not use takes part in no conflict. As a user, I want:
 
-1. Only the active plugins' copies compared. An overridden plugin's column, shown when I open its file, is left out of the comparison: the game never loads it. Cites: ADR-0012; [editor.md](editor.md)
-2. A Partial Form copy's own fields left out of the comparison, even where they differ: the game ignores them. Its children compare as any record does. Cites: xEdit
+1. Only the active plugins' copies compared, so an overridden plugin's column, shown when I open its file, is left out. Cites: ADR-0012; GLOSSARY.md, Overridden plugin; [editor.md](editor.md), Columns, story 2
+2. A Partial Form copy's own fields left out of the comparison, even where they differ. Its children compare as any record does. Cites: xEdit
 3. A field's winner to be the copy whose value the game uses, and no copy when the game uses none of theirs. Cites: xEdit
 4. Arrays compared as they align ([editor-fields.md](editor-fields.md), Arrays). Cites: xEdit
 5. A container's conflict to be its own fields'. Its child records compare as records of their own, never as a list in the container: the game loads every plugin's children, not the winner's list. Cites: ruling; xEdit
