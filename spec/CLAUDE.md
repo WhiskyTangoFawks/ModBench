@@ -8,7 +8,7 @@ A sentence earns its place here when it states intent: what must hold, and why. 
 
 Write a sentence for a developer who shares the goal, and leave the how to them. Read a sentence the same way: a case it does not name is decided by its intent. A rule a higher document holds is cited, never restated.
 
-When code work needs a sentence here changed, the sentence is too tactical. Relax it so the tactic is free, or raise the strategic decision the tactic falls out of. A sentence here never changes to match the code.
+When code work needs a sentence here changed, or a story needs an exception to one, the sentence is too tactical. Relax it so the tactic is free, or raise the strategic decision the tactic falls out of. A sentence here never changes to match the code.
 
 ## Where a decision lands
 
