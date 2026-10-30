@@ -23,8 +23,8 @@ export interface RecordFilterViews {
 
 export type ShowRecordFilter = ((filter: RecordFilter | null) => void) & { shownSource(): string | undefined };
 
-/** The record filter's single writer. Each surface names the filter by its source, never by its
- *  SQL (plugins.md, Order and view state, story 3). */
+/** The record filter's single writer. Each surface names the filter by its document, never by its
+ *  SQL (plugins.md, The view). */
 export function makeShowRecordFilter(
   lens: { setActiveSql(sql: string | null): void }, views: RecordFilterViews,
 ): ShowRecordFilter {

@@ -12,5 +12,5 @@ The user owns the plugin order, and a tool that sorts it takes that control away
 
 ## Alternatives rejected
 
-- libloot as the engine. It reads the Data folder and parses plugins itself. That is a second parser beside Mutagen ([ADR-0004](0004-mutagen-is-the-parser.md)), in Mod Management, which interprets no plugin binary ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)). It judges an order only by sorting it, and drops a broken group in silence. It has no .NET binding and no Linux release.
+- libloot as the engine. It reads the Data folder and parses plugins itself. That is a second parser beside Mutagen ([ADR-0004](0004-mutagen-is-the-parser.md)), in Mod Management, which interprets no plugin binary ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)). It judges an order only by sorting it, and drops a broken LOOT group in silence. It has no .NET binding and no Linux release.
 - A rule language of Modbench's own. LOOT, MO2 and Vortex share LOOT's, and a new one gives that up.

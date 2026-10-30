@@ -8,7 +8,7 @@ import { headerFormKeyOf } from '../wire/headerFormKey';
 import { rowResourceUri } from './recordResourceUri';
 import type { RecordBrowserNode } from './RecordBrowser';
 
-// plugins.md, A row, Identity: VS Code keeps expansion and selection across a rebuild by it, and
+// plugins.md, The tree, story 11: VS Code keeps expansion and selection across a rebuild by it, and
 // refuses two rows that share one.
 export function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): string {
   return [kind, exactPluginAddressKey(plugin), ...(formKey === undefined ? [] : [formKey])].join(':');
