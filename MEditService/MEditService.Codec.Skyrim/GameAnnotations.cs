@@ -83,6 +83,7 @@ internal static class GameAnnotations
                 [
                     "Destructible", "Race", "WornArmor", "FarAwayModel", "Height", "Weight", "Voice", "DeathItem", "SoundLevel", "Sound",
                     "HeadParts", "HairColor", "HeadTexture", "TextureLighting", "FaceMorph", "FaceParts", "TintLayers",
+                    "Configuration.Flags.Female",
                 ]),
                 ("Stats",
                 [
@@ -95,7 +96,11 @@ internal static class GameAnnotations
                 ("SpellList", ["ActorEffect", "Perks"]),
                 ("AIData", ["AIData", "CombatStyle", "GiftFilter"]),
                 ("AIPackages", ["Packages"]),
-                ("BaseData", ["Name", "ShortName"]),
+                ("BaseData",
+                [
+                    "Name", "ShortName", "Configuration.Flags.Essential", "Configuration.Flags.Protected", "Configuration.Flags.Respawn",
+                    "Configuration.Flags.Summonable", "Configuration.Flags.SimpleActor", "Configuration.Flags.DoesntAffectStealthMeter",
+                ]),
                 ("Inventory", ["Items", "DefaultOutfit", "SleepingOutfit", "PlayerSkills.GearedUpWeapons"]),
                 ("Script", ["VirtualMachineAdapter"]),
                 ("DefPackList",

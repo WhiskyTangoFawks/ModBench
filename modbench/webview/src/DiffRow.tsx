@@ -12,7 +12,7 @@ import {
 } from './gridStyles';
 import { defaultOf, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
-import type { FieldRow } from './recordRows';
+import type { FieldRow, TemplateReading } from './recordRows';
 import type { FocusedCell } from './gridNavigation';
 import { LABEL_COLUMN } from './labelColumn';
 import type { ArrayParentContext } from '../../src/wire/messages';
@@ -32,6 +32,7 @@ interface RenderCellExtras {
   rowCollapsed?: boolean;
   // What the cell reads at rest, where its reading takes more than its value and its schema.
   reading?: string;
+  templatedFlags?: Readonly<Record<string, TemplateReading>>;
 }
 
 // Leaves render read-only unless the caller supplies `onCommit`: the presence of somewhere to
@@ -40,7 +41,7 @@ interface RenderCellExtras {
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
-  { checkError, resolution, onCommit, rowCollapsed, reading }: RenderCellExtras = {},
+  { checkError, resolution, onCommit, rowCollapsed, reading, templatedFlags }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -73,6 +74,7 @@ function renderCell(
         meta={meta}
         onCommit={onCommit}
         collapsed={rowCollapsed}
+        templated={templatedFlags}
       />
     );
   }
@@ -172,7 +174,7 @@ export function DiffRow({
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const { meta: cellMeta, holds, value: own, shown, editPath, dropAddsTo, template } = cell;
+        const { meta: cellMeta, holds, value: own, shown, editPath, dropAddsTo, template, templatedFlags } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
@@ -239,6 +241,7 @@ export function DiffRow({
                 checkError, resolution,
                 onCommit: edit,
                 rowCollapsed: isFlagsRow && !rowExpanded,
+                templatedFlags,
                 reading: cellMeta.isVersionControlInfo1 ? versionControlInfo1(shown, override) : undefined,
               })
             )}

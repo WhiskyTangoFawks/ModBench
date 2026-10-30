@@ -226,3 +226,58 @@ describe('RecordPanel — a templated field', () => {
     expect(cellAt('Level', 1)).not.toHaveStyle({ opacity: DIMMED_OPACITY });
   });
 });
+
+describe('RecordPanel — a templated flag in a Flags row', () => {
+  const flagsMeta = fieldMeta({
+    name: 'Configuration', type: 'struct',
+    fields: [fieldMeta({
+      name: 'Flags', type: 'flags',
+      enumMembers: [{ value: 'Female', bitValue: '1' }, { value: 'Essential', bitValue: '2' }, { value: 'Respawn', bitValue: '8' }],
+    })],
+  });
+  const flagsPanel = (templated: CompareOverride['templated']) => {
+    const flags = diffNode({ fieldName: 'Flags', values: { [MOD]: ['Essential', 'Respawn'] }, winnerColumn: MOD });
+    return compareResultFixture({
+      overrides: [compareOverride({
+        formKey: FORM_KEY, plugin: MOD, isWinner: true, editorId: 'RaiderTemplated',
+        fields: [{ metadata: flagsMeta, value: { Flags: ['Essential', 'Respawn'] } }], templated,
+      })],
+      diffs: [diffNode({ fieldName: 'Configuration', values: { [MOD]: { Flags: ['Essential', 'Respawn'] } }, winnerColumn: MOD, children: [flags] })],
+    });
+  };
+  const bit = { 'Configuration.Flags.Essential': { flag: 'BaseData', template: TEMPLATE, resolution: RESOLVED } };
+
+  it('reads from its template in place of its check box, and leaves the other flags their check boxes', async () => {
+    renderPanel(flagsPanel(bit));
+    await screen.findByText('from EncRaider01');
+    const row = required(screen.getByText('Flags').closest('tr'), 'the Flags row');
+    expect(within(row).getAllByRole('checkbox').map(box => box.parentElement?.textContent)).toEqual(['Female', 'Respawn']);
+    expect(row).toHaveTextContent('Essential from EncRaider01');
+  });
+
+  it('is dimmed, and names the flag, the template and its own value in its tooltip', async () => {
+    renderPanel(flagsPanel(bit));
+    const flag = required((await screen.findByText('from EncRaider01')).closest('[title]'), 'the templated flag');
+    expect(flag).toHaveStyle({ opacity: DIMMED_OPACITY });
+    expect(flag).toHaveAttribute('title', expect.stringContaining('Templated by BaseData from EncRaider01'));
+    expect(flag).toHaveAttribute('title', expect.stringContaining('Its own value: set'));
+    expect(flag).toHaveAttribute('title', expect.stringContaining('Clearing BaseData makes it editable.'));
+  });
+
+  it('is left as it is by a toggle of another flag', async () => {
+    renderPanel(flagsPanel(bit));
+    await screen.findByText('from EncRaider01');
+    fireEvent.click(required(screen.getAllByRole('checkbox')[0], 'the Female check box'));
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({
+      op: 'set', path: [member('Configuration'), member('Flags')], value: ['Essential', 'Respawn', 'Female'],
+    });
+  });
+
+  it('reads the templated flag from its template in the collapsed summary too', async () => {
+    renderPanel(flagsPanel(bit));
+    await screen.findByText('from EncRaider01');
+    fireEvent.doubleClick(screen.getByText('Flags'));
+    const row = required(screen.getByText('Flags').closest('tr'), 'the Flags row');
+    expect(row).toHaveTextContent('Respawn, Essential from EncRaider01');
+  });
+});

@@ -571,8 +571,18 @@ public sealed record SchemaAnnotations(
         foreach (var link in ActorTemplates.Slots.Values.Append(ActorTemplates.DefaultTemplate)
                      .Where(path => ReflectedTypes.PropertyAt(actor, path) is not { } p || !ReflectedTypes.IsFormLink(p.PropertyType)))
             yield return $"{label} reaches no form link at {link}";
-        foreach (var member in ActorTemplates.FlagOfMember.Keys.Where(path => ReflectedTypes.PropertyAt(actor, path) is null).Order(StringComparer.Ordinal))
+        foreach (var member in ActorTemplates.FlagOfMember.Keys.Where(path => !ReachesMemberOrFlag(actor, path)).Order(StringComparer.Ordinal))
             yield return $"{label} reaches no member at {member}";
+    }
+
+    private static bool ReachesMemberOrFlag(Type actor, string path)
+    {
+        if (ReflectedTypes.PropertyAt(actor, path) is not null) return true;
+        var split = path.LastIndexOf('.');
+        return split > 0
+            && ReflectedTypes.PropertyAt(actor, path[..split]) is { } flags
+            && ReflectedTypes.CoreOf(flags).Core is { IsEnum: true } flagsEnum
+            && Enum.GetNames(flagsEnum).Contains(path[(split + 1)..]);
     }
 
     private static PropertyInfo? Property(ILookup<string, Type> typesByName, (string TypeName, string MemberName) entry) =>

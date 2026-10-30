@@ -144,6 +144,29 @@ public sealed class Document
     internal static JsonObject OwnerOf(JsonObject root, IEnumerable<string> path) =>
         OwnerAt(root, path, creating: true) ?? throw new InvalidOperationException("Expected a walk that makes what it lacks to reach its owner.");
 
+    /// <summary>The first of <paramref name="members"/> below <paramref name="path"/> that reads differently once
+    /// <paramref name="requestedJson"/> replaces the value there. A flag spelled as a number the member lacks reads as changed.</summary>
+    public string? FirstChangedBelow(IEnumerable<string> members, string requestedJson, params ReadOnlySpan<string> path)
+    {
+        var prefix = string.Join('.', path.ToArray()) + ".";
+        var requested = requestedJson == "null" ? Without(path) : With(JsonNode.Parse(requestedJson) ?? throw new InvalidOperationException("Expected JSON."), path);
+        return members.FirstOrDefault(member => member.StartsWith(prefix, StringComparison.Ordinal) && !JsonNode.DeepEquals(ReadingOf(this, member, this), ReadingOf(requested, member, this)));
+    }
+
+    private static JsonNode? ReadingOf(Document document, string member, Document held)
+    {
+        var hops = member.Split('.');
+        if (document.At(hops) is { } value) return JsonNode.Parse(value.GetRawText());
+        if (document.At(hops.AsSpan(..^1)) is not { ValueKind: JsonValueKind.Array } flags) return null;
+        var names = flags.EnumerateArray().Select(name => name.GetString()).ToList();
+        var heldNames = held.At(hops.AsSpan(..^1)) is { ValueKind: JsonValueKind.Array } heldFlags
+            ? heldFlags.EnumerateArray().Select(name => name.GetString()).ToList()
+            : [];
+        var newNumbers = names.Where(name => name is { Length: > 0 } && name.All(char.IsAsciiDigit) && !heldNames.Contains(name)).ToList();
+        JsonNode? bit = names.Contains(hops[^1]) ? JsonValue.Create(true) : null;
+        return newNumbers.Count == 0 ? bit : new JsonArray(bit, JsonValue.Create(string.Join(',', newNumbers)));
+    }
+
     internal JsonElement? At(params ReadOnlySpan<string> path)
     {
         var current = _root;

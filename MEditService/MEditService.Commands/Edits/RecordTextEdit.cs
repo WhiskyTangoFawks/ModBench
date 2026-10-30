@@ -195,17 +195,28 @@ internal static class RecordTextEdit
     private static RecordEditResult? RefuseIfTemplated(RecordTextEditRequest request, string spelled)
     {
         if (request.Schema.TemplatedIn(request.Record, _ => null, request.Release) is not { } templated) return null;
-        var members = request.Envelope.Path.Where(hop => hop.Kind == PathHop.MemberKind).Select(hop => hop.Name).ToList();
+        var members = request.Envelope.Path.Where(hop => hop.Kind == PathHop.MemberKind).Select(hop => hop.Name).OfType<string>().ToList();
         for (var length = 1; length <= members.Count; length++)
         {
             var member = string.Join('.', members.Take(length));
             if (!templated.TryGetValue(member, out var by)) continue;
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.TemplatedFieldReadOnly, spelled,
-                $"'{member}' is templated by {by.Flag} from {by.Template} — the game ignores the copy's own value, so it is " +
-                $"read-only here. Clear the {by.Flag} flag to edit it. Nothing was written.");
+            return TemplatedRefusal(spelled, member, by);
         }
-        return null;
+        return RefuseIfTemplatedChange(request, templated, [.. members], spelled);
+    }
+
+    private static RecordEditResult TemplatedRefusal(string spelled, string member, TemplatedBy by) =>
+        RecordEditResult.RefusedAt(
+            RecordEditRefusal.TemplatedFieldReadOnly, spelled,
+            $"'{member}' is templated by {by.Flag} from {by.Template} — the game ignores the copy's own value, so it is " +
+            $"read-only here. Clear the {by.Flag} flag to edit it. Nothing was written.");
+
+    private static RecordEditResult? RefuseIfTemplatedChange(
+        RecordTextEditRequest request, IReadOnlyDictionary<string, TemplatedBy> templated, string[] path, string spelled)
+    {
+        if (request.Envelope.Op != RecordEditEnvelope.Set || request.Envelope.Path.Any(hop => hop.Kind != PathHop.MemberKind)) return null;
+        var changed = request.Record.FirstChangedBelow(templated.Keys, request.Envelope.Value?.RawText ?? "null", path);
+        return changed is null ? null : TemplatedRefusal(spelled, changed, templated[changed]);
     }
 
     // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that

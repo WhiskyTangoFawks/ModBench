@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -71,6 +72,42 @@ public sealed class SkyrimGestureTests : TestInstance
         Assert.Contains("Configuration.SpeedMultiplier", result.Message);
         Assert.Contains("Stats", result.Message);
         Assert.True(EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json("3"), Member("Configuration"), Member("DispositionBase"))).Applied);
+    }
+
+    [Theory]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", "[]", "Configuration.Flags.Essential")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", """["Essential","Respawn"]""", "Configuration.Flags.Respawn")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", """["Essential","Female"]""", null)]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, (NpcConfiguration.Flag)0, "Flags", """["2"]""", "Configuration.Flags.Essential")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, (NpcConfiguration.Flag)0, "Flags", """["Female"]""", null)]
+    [InlineData(NpcConfiguration.TemplateFlag.Stats, NpcConfiguration.Flag.Essential, "MagickaOffset", "9", "Configuration.MagickaOffset")]
+    [InlineData(NpcConfiguration.TemplateFlag.Stats, NpcConfiguration.Flag.Essential, "Flags", """["Essential"]""", null)]
+    public void AWriteThatChangesATemplatedMemberOrBit_ThroughTheMemberOrItsStruct_IsRefused(
+        NpcConfiguration.TemplateFlag templateFlag, NpcConfiguration.Flag held, string member, string requested, string? refusedMember)
+    {
+        var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
+        var template = mod.Npcs.AddNew("Template");
+        var copy = mod.Npcs.AddNew("Copy");
+        copy.Configuration.TemplateFlags = templateFlag;
+        copy.Configuration.Flags = held;
+        copy.Template.SetTo(template.FormKey);
+        var plugin = Add(mod, "TemplatedMod");
+        var configuration = JsonNode.Parse(Document.Parse(RecordTextCodec.SerializeToText(copy, GameRelease.SkyrimSE)).DocumentAt("Configuration").Require().Text).Require();
+        configuration[member] = JsonNode.Parse(requested);
+
+        var throughMember = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json(requested), Member("Configuration"), Member(member)));
+        var throughStruct = EditHandler.Edit(plugin, copy.FormKey.ToString(), SetAt(Json(configuration.ToJsonString()), Member("Configuration")));
+
+        Assert.Equal(refusedMember is null, throughMember.Applied);
+        Assert.Equal(refusedMember is null, throughStruct.Applied);
+        if (refusedMember is not null)
+        {
+            Assert.All([throughMember, throughStruct], result =>
+            {
+                Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, result.Refusal);
+                Assert.Contains(refusedMember, result.Message);
+            });
+        }
     }
 
     [Fact]

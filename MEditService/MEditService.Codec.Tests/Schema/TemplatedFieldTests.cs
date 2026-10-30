@@ -127,6 +127,27 @@ public class TemplatedFieldTests
     }
 
     [Fact]
+    public void AFlagCoveringBitsOfAFlagsMember_TemplatesThoseBitsByTheirNames_AndNotTheMember()
+    {
+        var npc = new Tes5.Npc(new Tes5.SkyrimMod(ModKey.FromFileName("Templated.esp"), Tes5.SkyrimRelease.SkyrimSE))
+        {
+            Configuration = new Tes5.NpcConfiguration { TemplateFlags = Tes5.NpcConfiguration.TemplateFlag.BaseData | Tes5.NpcConfiguration.TemplateFlag.Traits },
+            Template = new FormLinkNullable<Tes5.INpcSpawnGetter>(Default),
+        };
+
+        var templated = Templated(GameRelease.SkyrimSE, npc).Require();
+
+        Assert.Equal(
+            ("BaseData", "BaseData", "BaseData", "BaseData", "BaseData", "BaseData", "Traits"),
+            (templated["Configuration.Flags.Essential"].Flag, templated["Configuration.Flags.Protected"].Flag,
+             templated["Configuration.Flags.Respawn"].Flag, templated["Configuration.Flags.Summonable"].Flag,
+             templated["Configuration.Flags.SimpleActor"].Flag, templated["Configuration.Flags.DoesntAffectStealthMeter"].Flag,
+             templated["Configuration.Flags.Female"].Flag));
+        Assert.DoesNotContain("Configuration.Flags", templated.Keys);
+        Assert.DoesNotContain("Configuration.Flags.Unique", templated.Keys);
+    }
+
+    [Fact]
     public void AStarfieldFlag_TemplatesFromItsOwnTemplate()
     {
         var npc = new Sf.Npc(new Sf.StarfieldMod(ModKey.FromFileName("Templated.esp"), Sf.StarfieldRelease.Starfield))

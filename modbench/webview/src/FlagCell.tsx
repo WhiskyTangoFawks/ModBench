@@ -1,5 +1,7 @@
 import React from 'react';
 import { flagNames, flagsValue } from './modelValue';
+import { DIMMED_OPACITY } from './gridStyles';
+import type { TemplateReading } from './recordRows';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -12,15 +14,24 @@ interface FlagCellProps {
   // all columns collapse together): collapsed shows the compact set-name summary, xEdit's own
   // at-rest render.
   collapsed?: boolean;
+  // editor-fields.md, Templated fields.
+  templated?: Readonly<Record<string, TemplateReading>>;
 }
 
 /** A `flags` member's checkbox list (xedit.md, divergence 5). There is no text state and nothing
  *  to open, so F2 is inert. */
-export function FlagCell({ value, meta, onCommit, collapsed }: FlagCellProps) {
+export function FlagCell({ value, meta, onCommit, collapsed, templated = {} }: FlagCellProps) {
   // Absent means default: no names set.
   const names = flagNames(value, meta);
 
-  if (collapsed) return <span>{names.join(', ')}</span>;
+  if (collapsed) {
+    const own = names.filter(name => !templated[name]);
+    const fromTemplate = meta.enumMembers.flatMap(({ value: name }) => {
+      const flag = templated[name];
+      return flag ? [`${name} ${flag.reading}`] : [];
+    });
+    return <span>{[...own, ...fromTemplate].join(', ')}</span>;
+  }
 
   // editor.md, Columns, story 4: a cell that cannot be written reads as one that can, and a click on
   // it changes nothing. A name the metadata does not list stays where the document put it.
@@ -30,7 +41,9 @@ export function FlagCell({ value, meta, onCommit, collapsed }: FlagCellProps) {
 
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {meta.enumMembers.map(({ value: name }) => (
+      {meta.enumMembers.map(({ value: name }) => templated[name] ? (
+        <span key={name} title={templated[name].tooltip} style={{ opacity: DIMMED_OPACITY }}>{name} <span>{templated[name].reading}</span></span>
+      ) : (
         <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
           <input
             type="checkbox"
