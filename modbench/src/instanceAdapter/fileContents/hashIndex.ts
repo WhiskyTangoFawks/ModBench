@@ -141,7 +141,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     }
   });
 
-  // Kept so for the session, as hashing it again costs a whole extraction to fail again (modlist-repository.md, Update manifest, story 10).
+  // Kept so for the session, as hashing it again costs a whole extraction to fail again (modlist-repository.md, Update manifest, story 5).
 
   async function keep(kind: Kind, path: string, entry: Kept, read: FileRead<HashedDownloadedFile>, readFromMs: number): Promise<void> {
     if (kept[kind].get(path) !== entry) return;

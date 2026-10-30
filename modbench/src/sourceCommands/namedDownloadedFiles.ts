@@ -19,7 +19,7 @@ interface Found {
 
 const notDownloaded = (reason: string): string => `it could not be downloaded from Nexus: ${reason.replace(/\.$/, '')}`;
 
-// modlist-repository.md, Restore from manifest, story 10: Nexus's file, put only when it is the one the manifest names.
+// modlist-repository.md, Restore from manifest, story 4: Nexus's file, put only when it is the one the manifest names.
 async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, page }: ManifestInstallationFile): Promise<string | undefined> {
   const at = page === undefined ? undefined : adapter.nexusFileAt(page);
   if (at?.fileId === undefined) return 'its manifest names no file on Nexus to download it from';

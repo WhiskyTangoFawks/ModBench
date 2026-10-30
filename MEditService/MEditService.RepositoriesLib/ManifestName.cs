@@ -1,6 +1,6 @@
 namespace MEditService.RepositoriesLib;
 
-/// <summary>A manifest's file name: the folder it builds, then the JSON suffix (modlist-repository.md, The manifest, story 16).</summary>
+/// <summary>A manifest's file name: the folder it builds, then the JSON suffix.</summary>
 public static class ManifestName
 {
     private const string Suffix = ".manifest.json";

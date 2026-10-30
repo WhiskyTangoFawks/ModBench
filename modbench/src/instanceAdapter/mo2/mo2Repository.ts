@@ -32,7 +32,7 @@ interface ManifestSearch {
 
 const nameOf = (folders: readonly string[]): string => `${folders.join('/')}/`;
 
-// A manifest's folder holds no other manifest (modlist-repository.md, Restore from manifest, story 14): each of a nested pair is refused, naming the other.
+// A manifest's folder holds no other manifest (ADR-0022): each of a nested pair is refused, naming the other.
 function nestedAmong(names: readonly string[]): Map<string, string> {
   const why = new Map<string, string[]>();
   const add = (name: string, reason: string): void => { why.set(name, [...why.get(name) ?? [], reason]); };
@@ -46,7 +46,7 @@ function nestedAmong(names: readonly string[]): Map<string, string> {
 }
 
 // modlist-repository.md, The repository, story 2. A link is not followed: the folder it reaches can be outside the instance.
-// A folder it cannot read is named, and the rest are searched (Every mod, story 4).
+// A folder it cannot read is named, and the rest are searched.
 async function searchForOtherManifests(context: Mo2Context): Promise<ManifestSearch> {
   const { instanceRoot } = context;
   const downloads = await currentDownloadsDir(context);

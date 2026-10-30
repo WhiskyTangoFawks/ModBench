@@ -1,5 +1,5 @@
 // The instance repository holds this machine's folders and accounts by a token (modlist-repository.md, The repository,
-// story 4).
+// stories 3 and 6).
 
 import { mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
