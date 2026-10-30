@@ -10,6 +10,7 @@ import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import { statusOf } from '../manifestAdapter/manifestAdapter';
+import { BUILD_FILE } from '../wire/sourceMod';
 
 /** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
  *  installation file that is one of the downloaded files installs as that file. */
@@ -52,6 +53,9 @@ function keysFor(installed: ModPackage, file: DownloadedFile | undefined): Insta
 const claimRefusal = (target: InstallTarget): string => (target.kind === 'new'
   ? modNameTakenRefusal(target.name)
   : `Cannot upgrade "${target.name}": there is no folder by that name under mods/.`);
+
+const sourceModRefusal = (mod: string): string =>
+  `Cannot upgrade "${mod}": it is a source mod, and its next build overwrites what an upgrade writes. Change its ${BUILD_FILE} instead.`;
 
 const listed = (what: string, files: readonly string[]): string | undefined =>
   (files.length > 0 ? `${what}: ${files.join(', ')}` : undefined);
@@ -98,6 +102,13 @@ export async function installMod(
   installed: ModPackage, target: InstallTarget, force: boolean, fomod?: FomodAnswer,
 ): Promise<CommandResult<{ cancelled?: true; fomod?: FomodLanded; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
+  if (target.kind === 'upgrade') {
+    try {
+      if ((await deps.adapter.sourceMods()).builds(target.name)) return { applied: false, refusal: sourceModRefusal(target.name) };
+    } catch (err) {
+      return refuse(err);
+    }
+  }
   const loss = force ? undefined : await upgradeLoss(deps, target);
   if (loss !== undefined) return { applied: false, refusal: `${loss} Request it again with force to replace its files.` };
   let outcome: InstallOutcome;

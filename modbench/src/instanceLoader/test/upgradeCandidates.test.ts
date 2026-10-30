@@ -20,8 +20,8 @@ const downloadedFile = (over: { modID?: string; installedKey?: string; name?: st
   };
 };
 
-const offered = (mods: InstanceValue['mods'], file: DownloadedFile) => {
-  const rows = buildDownloadedFileRows([file], new Map(), mods);
+const offered = (mods: InstanceValue['mods'], file: DownloadedFile, sourceMods: ReadonlySet<string> = new Set()) => {
+  const rows = buildDownloadedFileRows([file], new Map(), mods, sourceMods);
   expect(rows).toHaveLength(1);
   return rows.flatMap((row) => row.upgrades).map((c) => [c.modName, c.tier]);
 };
@@ -64,4 +64,10 @@ describe('the upgrade candidates of a downloaded file', () => {
   ])('%s', (_case, mods, file, expected) => {
     expect(offered(mods, file)).toEqual(expected);
   });
+});
+
+it('leaves a source mod out of the upgrades, though it shares the mod id', () => {
+  const mods = [mod({ name: 'Source', nexusId: '111', installationFileName: 'foo.7z' }), mod({ name: 'Plain', nexusId: '111' })];
+
+  expect(offered(mods, downloadedFile({ modID: '111', name: 'foo.7z' }), new Set(['Source']))).toEqual([['Plain', undefined]]);
 });
