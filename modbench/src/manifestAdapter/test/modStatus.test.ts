@@ -10,6 +10,7 @@ let folder: string;
 let hashed: string[];
 let entries: Map<string, ReadonlyMap<string, string>>;
 let notDownloaded: Set<string>;
+let downloadedHash: Map<string, string>;
 let gameFolderFound: boolean;
 let metadata: Awaited<ReturnType<FolderReads['modMetadata']>>;
 
@@ -20,6 +21,7 @@ beforeEach(async () => {
   hashed = [];
   entries = new Map();
   notDownloaded = new Set();
+  downloadedHash = new Map();
   gameFolderFound = true;
   metadata = { kind: 'read', answer: {} };
 });
@@ -48,7 +50,7 @@ const readsHashingAFileAsItsText = (fileSystemIgnoresCase = false): FolderReads 
   },
   packageEntries: (hash) => Promise.resolve(entries.get(hash)),
   modMetadata: () => Promise.resolve(metadata),
-  downloadedFile: (name) => Promise.resolve({ kind: 'read', answer: notDownloaded.has(name) ? undefined : {} }),
+  downloadedFile: (name) => Promise.resolve({ kind: 'read', answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? 'PACK1' } }),
   gameFolder: () => Promise.resolve({ kind: gameFolderFound ? 'found' : 'notFound' }),
 });
 
@@ -77,7 +79,9 @@ async function manifested(held: Manifest): Promise<void> {
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusOf({ name: 'mod', folder }, readsHashingAFileAsItsText(fileSystemIgnoresCase));
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesMissing: [], ...over });
+  ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesLacking: [], ...over });
+
+const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), ...over });
 
 describe('a mod\'s status against its manifest', () => {
   it('has no manifest, and lists nothing, when its folder holds none', async () => {
@@ -98,7 +102,14 @@ describe('a mod\'s status against its manifest', () => {
     await manifested(held);
     await write('mod.manifest.json', `\uFEFF${manifestText(held)}`);
 
-    expect(await status()).toEqual(nothing());
+    expect(await status()).toEqual(heldAs());
+  });
+
+  it('names the manifest as the folder spells it', async () => {
+    heldAsItSays(manifest([]));
+    await write('MOD.Manifest.json', manifestText(manifest([])));
+
+    expect((await status()).manifestFile).toBe(join(folder, 'MOD.Manifest.json'));
   });
 
   it('names each file no line names, but its metadata and its manifest in any case', async () => {
@@ -107,13 +118,13 @@ describe('a mod\'s status against its manifest', () => {
     await write('MOD.manifest.json', manifestText(manifest([line('a.nif')])));
     entries.set('PACK1', new Map([['a.nif', 'hello']]));
 
-    expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'] }));
+    expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json') }));
   });
 
   it('after a fresh clone, names every file its manifest names gone, and none differing or named by no line', async () => {
     await manifested(manifest([line('a.nif')]));
 
-    expect(await status()).toEqual(nothing({ gone: ['a.nif'] }));
+    expect(await status()).toEqual(heldAs({ gone: ['a.nif'] }));
   });
 
   it.each([
@@ -151,7 +162,7 @@ describe('a mod\'s status against its manifest', () => {
 
     const read = await status();
 
-    expect([read, hashed]).toEqual([nothing({ notInPackage: ['b.nif'], otherBytes: ['a.nif'], namedByNoLine: ['mine.txt'] }), []]);
+    expect([read, hashed]).toEqual([heldAs({ notInPackage: ['b.nif'], otherBytes: ['a.nif'], namedByNoLine: ['mine.txt'] }), []]);
   });
 
   it('names a file a step makes no gap and never differing, but gone when the folder lacks it', async () => {
@@ -161,7 +172,7 @@ describe('a mod\'s status against its manifest', () => {
       { steps: [{ task: 'Optimise textures', args: [] }] },
     ));
 
-    expect(await status()).toEqual(nothing({ gone: ['lacked.dds'] }));
+    expect(await status()).toEqual(heldAs({ gone: ['lacked.dds'] }));
   });
 
   it('names no file an archive of its manifest packs gone, though no loose copy is there', async () => {
@@ -190,25 +201,22 @@ describe('a mod\'s status against its manifest', () => {
     expect((await status()).noHost).toBe(noHost);
   });
 
-  it('lists each installation file it pins that the downloads folder lacks', async () => {
-    await manifested(manifest([], { packages: [MOD_ZIP, { kind: 'installationFile', name: 'Other.zip', size: 1, hash: 'PACK2' }] }));
-    notDownloaded.add('Mod.zip');
+  it.each([
+    ['an installation file the downloads folder lacks', (): void => { notDownloaded.add('Mod.zip'); }, "installation file 'Mod.zip' is missing"],
+    ['an installation file with other bytes', (): void => { downloadedHash.set('Mod.zip', 'OTHER'); }, "installation file 'Mod.zip' has other bytes"],
+    ['a game folder that is not found', (): void => { gameFolderFound = false; }, 'the game folder was not found'],
+  ])('lists a package it pins that this machine lacks: %s', async (_case, lackIt, lack) => {
+    await manifested(manifest([], { packages: [MOD_ZIP, { kind: 'gameFolder', name: 'Fallout4', hash: 'G1', depots: [] }] }));
+    lackIt();
 
-    expect((await status()).packagesMissing).toEqual(["installation file 'Mod.zip' is missing"]);
+    expect((await status()).packagesLacking).toEqual([lack]);
   });
 
   it('says why a downloaded file it pins cannot be looked up', async () => {
     await manifested(manifest([]));
     const reads = { ...readsHashingAFileAsItsText(), downloadedFile: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
 
-    expect((await statusOf({ name: 'mod', folder }, reads)).packagesMissing).toEqual(["installation file 'Mod.zip' could not be read: EACCES"]);
-  });
-
-  it('lists the game folder it pins when none is found', async () => {
-    await manifested(manifest([], { packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'G1', depots: [] }] }));
-    gameFolderFound = false;
-
-    expect((await status()).packagesMissing).toEqual(['the game folder was not found']);
+    expect((await statusOf({ name: 'mod', folder }, reads)).packagesLacking).toEqual(["installation file 'Mod.zip' could not be read: EACCES"]);
   });
 
   it('is unreadable, saying why, when its metadata cannot be read', async () => {
@@ -232,7 +240,7 @@ describe('a mod\'s status against its manifest', () => {
       modFolderPath: (mod: string) => Promise.resolve(mod === 'mod' ? folder : undefined),
     };
 
-    expect(await statusesNow(reads, ['mod', 'Nameless'])).toEqual([nothing({ gone: ['a.esp'] })]);
+    expect(await statusesNow(reads, ['mod', 'Nameless'])).toEqual([heldAs({ gone: ['a.esp'] })]);
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {

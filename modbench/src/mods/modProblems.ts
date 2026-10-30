@@ -11,7 +11,7 @@ export class ModProblems {
   constructor(
     private readonly collection: vscode.DiagnosticCollection,
     private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
-    private readonly statuses: Pick<ModStatuses, 'current' | 'onDidChange'>,
+    private readonly statuses: Pick<ModStatuses, 'current' | 'of' | 'onDidChange'>,
   ) {
     this.following = [instance.subscribe(() => { void this.show(); }), statuses.onDidChange(() => { void this.show(); })];
     void this.show();
@@ -26,9 +26,10 @@ export class ModProblems {
     const statuses = await this.statuses.current();
     const folders = new Map((this.instance.value.modFolders ?? []).map((folder) => [folder.modName, folder.path]));
     const range = new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER);
-    const problems = [...statuses.values()].flatMap((status) => {
-      const folder = folders.get(status.mod);
-      return folder === undefined ? [] : statusProblems(status, folder);
+    const problems = [...statuses.values()].flatMap((read) => {
+      const status = read.unreadable === undefined ? read : this.statuses.of(read.mod);
+      const folder = folders.get(read.mod);
+      return status === undefined || folder === undefined ? [] : statusProblems(status, folder);
     });
     const byFile = diagnosticsByPath(problems.map(({ file, message }) => [file, new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Warning)]));
     this.collection.clear();

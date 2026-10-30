@@ -7,13 +7,12 @@ const counted = (count: number, one: string, many: string): string => `${count} 
 // modlist-repository.md, Status, story 1.
 const differs = ({ differing, namedByNoLine, gone, metadataDiffers }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0 || metadataDiffers;
 
-function stateOf(status: ModStatus): string | undefined {
+/** What a mod or separator row's description says of its status (mods.md, A row). */
+export function statusDescription(status: ModStatus): string | undefined {
   if (status.noManifest) return 'no manifest';
   return differs(status) ? 'differs' : undefined;
 }
 
-/** What a mod or separator row's description says of its status (mods.md, A row). */
-export const statusDescription = stateOf;
 
 /** What a mod row's tooltip says of the files its folder lacks (mods.md, A row). */
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>
