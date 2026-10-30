@@ -210,6 +210,18 @@ describe('sourceCommands build, in mod order', () => {
     });
   });
 
+  it('notes a mod whose built files could not be recorded in the hash index, though its manifest is written', async () => {
+    const client = new InMemoryMEditClient();
+    buildingEach(client);
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ packageEntriesNotWritten: 'ENOSPC' }), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect(outcome).toEqual({
+      landed: [{ ...landedOf('ModA'), notes: ['the files it built could not be recorded, so its status reads them as differing: ENOSPC'] }], refused: [],
+    });
+    expect(await recorded('ModA')).toBeDefined();
+  });
+
   it('names a mod whose step failed, and writes no manifest', async () => {
     await writeBuildFileIn(SOURCES.ModA, buildFileOf('ModA', { steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }] }));
     const client = new InMemoryMEditClient();
