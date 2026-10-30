@@ -21,7 +21,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
-  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginRepairPreview, type PluginToRepair, type DecompileOutcome, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress,
+  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginRepairPreview, type PluginToRepair, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -469,17 +469,12 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async decompile(plugins: readonly PluginAddress[], force: boolean): Promise<DecompileOutcome | WriteRefused> {
+  async decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     return this.mutateEach({
       verb: 'decompile', noun: 'plugin', items: plugins,
       op: (counted) => `decompile(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins], force } }),
-      outcome: ({ applied, refused }) => ({
-        landed: applied,
-        refused: refused.map(({ item, message, refusal }) => ({
-          item, reason: message, ...(refusal === 'WorkingTreeChanges' && { replacesChanges: true as const }),
-        })),
-      }),
+      outcome: selectionOutcome,
     });
   }
 

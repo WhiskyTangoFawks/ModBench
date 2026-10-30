@@ -14,6 +14,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { previewLines } from '../pluginCommands/decompileAndRepair';
 import { isPluginAddress } from '../wire/messages';
+import { isReadFailed } from '../wire/readFailed';
 
 /** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
  *  view while the work runs, and the view's own message line. */
@@ -27,7 +28,7 @@ export interface PluginsViewProgress {
 /** What decompile needs: the call, the Instance loader's refresh, its confirmation of a replaced change, and how the user
  *  is told. */
 export interface DecompileDeps {
-  client: Pick<MEditClient, 'decompile'>;
+  client: Pick<MEditClient, 'decompile' | 'getWorkingTreeStatesBeneath'>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
@@ -58,18 +59,14 @@ export function registerDecompileCommand(
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
     run: ({ plugins, force, agreesToReplace }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async (progress) => {
-      const outcome = await deps.client.decompile(plugins, force);
-      if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
-      const replacing = outcome.refused.filter((refusal) => refusal.replacesChanges === true);
-      if (replacing.length === 0 || agreesToReplace === undefined) return { applied: true, outcome };
-      const others = outcome.refused.filter((refusal) => refusal.replacesChanges !== true);
+      const replacing = agreesToReplace === undefined || force ? [] : await withChangesGitDoesNotHold(deps.client, plugins);
+      if (replacing.length === 0) return decompileBatches(deps.client, [{ plugins, force }]);
       progress.waiting();
-      const agreed = await agreesToReplace(replacing.map(({ item }) => item));
+      const agreed = await agreesToReplace?.(replacing);
       progress.working();
-      if (!agreed) return { applied: true, outcome: { landed: outcome.landed, refused: others } };
-      const forced = await deps.client.decompile(replacing.map(({ item }) => item), true);
-      if (isRefused(forced)) return { applied: false, refusal: forced.message };
-      return { applied: true, outcome: { landed: [...outcome.landed, ...forced.landed], refused: [...others, ...forced.refused] } };
+      if (agreed !== true) return { applied: true, outcome: { landed: [], refused: [] } };
+      const rest = plugins.filter((plugin) => !replacing.includes(plugin));
+      return decompileBatches(deps.client, [{ plugins: replacing, force: true }, { plugins: rest, force: false }]);
     }),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
@@ -124,6 +121,39 @@ async function confirmReplace(ask: AskQuestion, plugins: readonly PluginAddress[
     : await ask(`Decompile ${plugins.length} plugins? They replace changes to their source that git does not hold.`,
       { modal: true, detail: plugins.map(pluginRowName).join('\n') }, 'Decompile');
   return answer === 'Decompile';
+}
+
+async function withChangesGitDoesNotHold(
+  client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>, plugins: readonly PluginAddress[],
+): Promise<PluginAddress[]> {
+  const states = await Promise.all(plugins.map((plugin) => client.getWorkingTreeStatesBeneath(plugin)));
+  return plugins.filter((_, index) => {
+    const beneath = states[index];
+    return beneath !== undefined && !isReadFailed(beneath) && beneath.plugin.some((state) => state !== 'None');
+  });
+}
+
+interface DecompileBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }
+
+// A batch mEdit refused whole refuses each of its plugins, so what the other batch landed or refused is still reported.
+async function decompileBatches(
+  client: Pick<MEditClient, 'decompile'>, batches: readonly DecompileBatch[],
+): Promise<SelectionResult<PluginAddress>> {
+  const answered: { batch: DecompileBatch; answer: Awaited<ReturnType<MEditClient['decompile']>> }[] = [];
+  for (const batch of batches.filter(({ plugins }) => plugins.length > 0)) {
+    answered.push({ batch, answer: await client.decompile(batch.plugins, batch.force) });
+  }
+  const [only] = answered;
+  if (answered.length === 1 && only !== undefined && isRefused(only.answer)) return { applied: false, refusal: only.answer.message };
+  return {
+    applied: true,
+    outcome: {
+      landed: answered.flatMap(({ answer }) => isRefused(answer) ? [] : answer.landed),
+      refused: answered.flatMap(({ batch, answer }) => isRefused(answer)
+        ? batch.plugins.map((item) => ({ item, reason: answer.message }))
+        : answer.refused),
+    },
+  };
 }
 
 function reportSelection(

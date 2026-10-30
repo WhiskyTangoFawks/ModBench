@@ -158,14 +158,6 @@ export type PluginRepairPreview = components['schemas']['PluginRepairPreview'];
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
-/** A decompile's refusal; `replacesChanges` marks the plugin source's working-tree changes that only force replaces. */
-export type DecompileRefusal = ItemRefusal<PluginAddress> & { readonly replacesChanges?: true };
-
-export interface DecompileOutcome {
-  landed: readonly PluginAddress[];
-  refused: readonly DecompileRefusal[];
-}
-
 /** A mod to decompile and commit, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
 export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
@@ -261,7 +253,7 @@ export interface MEditClient {
   ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
-  decompile(plugins: readonly PluginAddress[], force: boolean): Promise<DecompileOutcome | WriteRefused>;
+  decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // Each plugin's repair preview, or why it has none. Nothing is written.
   repairPreviews(plugins: readonly PluginAddress[]): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused>;
   // Each plugin's source is written as two commits, or refused on its own. `force` waives every loss, `agreedDrops` only
