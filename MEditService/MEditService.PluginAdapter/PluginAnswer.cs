@@ -148,7 +148,7 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
-    /// <summary>A diagnosis chosen for repair that no repair answers.</summary>
+    /// <summary>A malformation that no repair answers.</summary>
     public sealed record NoRepair : PluginFailure
     {
         private readonly string _reason;

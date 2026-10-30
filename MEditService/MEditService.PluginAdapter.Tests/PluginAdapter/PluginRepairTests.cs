@@ -172,11 +172,10 @@ public sealed class PluginRepairTests
         var adapter = TestAdapters.Mutagen();
         var malformed = Write(folder, fixture.Malformed);
         var previews = adapter.RepairsOf(malformed, Release).Answered();
-        var chosen = previews.Diagnoses.Select(d => d.Diagnosis).ToList();
-        var repairedPath = adapter.WriteRepaired(malformed, chosen, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
+        var repairedPath = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
         var loadOrder = EmptyLoadOrder.Of(Release);
         var repaired = (await adapter.ReadSourceOfAsync(Registered(repairedPath), loadOrder)).Answered();
-        var flagged = (await adapter.FlaggedSourceOfAsync(Registered(malformed), chosen, repaired, loadOrder)).Answered();
+        var flagged = (await adapter.FlaggedSourceOfAsync(Registered(malformed), repaired, loadOrder)).Answered();
         return (fixture.Malformed.Bytes, repaired, flagged);
     }
 
@@ -233,11 +232,11 @@ public sealed class PluginRepairTests
     {
         var adapter = TestAdapters.Mutagen();
         var previews = adapter.RepairsOf(malformed, Release).Answered();
-        return adapter.WriteRepaired(malformed, [.. previews.Diagnoses.Select(d => d.Diagnosis)], destination, Release);
+        return adapter.WriteRepaired(malformed, destination, Release);
     }
 
     private static RepositoriesLib.Answer<string, PluginFailure> VerifyEverything(string original, Repair.RepairPreviews previews, string repaired) =>
-        TestAdapters.Mutagen().VerifyRepaired(original, [.. previews.Diagnoses.Select(d => d.Diagnosis)], repaired, Release);
+        TestAdapters.Mutagen().VerifyRepaired(original, repaired, Release);
 
     private static string Write(ScratchDirectory folder, GeneratedPlugin plugin)
     {

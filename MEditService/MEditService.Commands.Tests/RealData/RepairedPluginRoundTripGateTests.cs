@@ -19,9 +19,7 @@ public sealed class RepairedPluginRoundTripGateTests
         fixture.Malformed.WriteInto(scratch);
         var malformed = Path.Combine(scratch, fixture.Malformed.FileName);
         var adapter = TestAdapters.Mutagen();
-        var previews = adapter.RepairsOf(malformed, GameRelease.Fallout4).Answered();
-        var repaired = adapter.WriteRepaired(malformed, [.. previews.Diagnoses.Select(p => p.Diagnosis)],
-            Path.Combine(modFolder, fixture.Malformed.FileName), GameRelease.Fallout4).Answered();
+        var repaired = adapter.WriteRepaired(malformed, Path.Combine(modFolder, fixture.Malformed.FileName), GameRelease.Fallout4).Answered();
 
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(EmptyMasterStubs.LoadOrderOver(repaired, Origin, dataFolder), Origin)).Only();
 

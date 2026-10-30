@@ -113,11 +113,11 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         PluginFailure.Answer(() => PluginRepair.Preview(File.ReadAllBytes(pluginPath), gameRelease));
 
     public Answer<string, PluginFailure> WriteRepaired(
-        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease)
+        string pluginPath, string destinationPath, GameRelease gameRelease)
     {
         try
         {
-            if (!PluginRepair.Repaired(File.ReadAllBytes(pluginPath), chosen, gameRelease).Holds(out var repaired, out var refused))
+            if (!PluginRepair.Repaired(File.ReadAllBytes(pluginPath), gameRelease).Holds(out var repaired, out var refused))
                 return refused;
             File.WriteAllBytes(destinationPath, repaired);
             return destinationPath;
@@ -129,13 +129,13 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     public async Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        RegisteredPlugin plugin, PluginSource repaired, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default)
     {
         try
         {
             var bytes = await File.ReadAllBytesAsync(plugin.Path, cancel);
-            if (!PluginRepair.Diagnosed(bytes, chosen, loadOrder.GameRelease).Holds(out var diagnosed, out var refused)) return refused;
+            var diagnosed = PluginRepair.Diagnosed(bytes, loadOrder.GameRelease);
             var masters = PluginBinaryWalk.MastersOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder);
             var flagged = diagnosed.Select(record => new FlaggedTrees.FlaggedRecord(
                 masters.GetFormKey(record[0].Record.FormID, reference: false).ToString(),
@@ -155,11 +155,11 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     public Answer<string, PluginFailure> VerifyRepaired(
-        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease)
+        string pluginPath, string repairedPath, GameRelease gameRelease)
     {
         try
         {
-            return PluginRepair.Unverified(File.ReadAllBytes(pluginPath), chosen, File.ReadAllBytes(repairedPath), gameRelease) is { } refused
+            return PluginRepair.Unverified(File.ReadAllBytes(pluginPath), File.ReadAllBytes(repairedPath), gameRelease) is { } refused
                 ? refused
                 : repairedPath;
         }

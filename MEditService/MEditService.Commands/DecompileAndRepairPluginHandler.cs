@@ -76,8 +76,7 @@ public sealed class DecompileAndRepairPluginHandler
                 workingTree.Message + " Nothing was written.");
         }
 
-        var chosen = previews.Diagnoses.Select(preview => preview.Diagnosis).ToList();
-        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, chosen, mod.Folder, cancel)).Holds(out var decompiled, out var failure))
+        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, cancel)).Holds(out var decompiled, out var failure))
             return RefusedAs(plugin, failure);
         if (decompiled.Source is not { } repaired)
         {
@@ -85,7 +84,7 @@ public sealed class DecompileAndRepairPluginHandler
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
-        if (!(await _adapter.FlaggedSourceOfAsync(plugin, chosen, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
+        if (!(await _adapter.FlaggedSourceOfAsync(plugin, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
             return RefusedAs(plugin, failure);
 
         var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, previews));

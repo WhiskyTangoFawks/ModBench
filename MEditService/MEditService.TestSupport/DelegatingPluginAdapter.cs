@@ -41,17 +41,17 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.RepairsOf(pluginPath, gameRelease);
 
     public virtual Answer<string, PluginFailure> WriteRepaired(
-        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease) =>
-        inner.WriteRepaired(pluginPath, chosen, destinationPath, gameRelease);
+        string pluginPath, string destinationPath, GameRelease gameRelease) =>
+        inner.WriteRepaired(pluginPath, destinationPath, gameRelease);
 
     public virtual Answer<string, PluginFailure> VerifyRepaired(
-        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease) =>
-        inner.VerifyRepaired(pluginPath, chosen, repairedPath, gameRelease);
+        string pluginPath, string repairedPath, GameRelease gameRelease) =>
+        inner.VerifyRepaired(pluginPath, repairedPath, gameRelease);
 
     public virtual Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        RegisteredPlugin plugin, PluginSource repaired, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        inner.FlaggedSourceOfAsync(plugin, chosen, repaired, loadOrder, cancel);
+        inner.FlaggedSourceOfAsync(plugin, repaired, loadOrder, cancel);
 
     public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.StringsPlacesOf(modPath, loadOrder, strings);

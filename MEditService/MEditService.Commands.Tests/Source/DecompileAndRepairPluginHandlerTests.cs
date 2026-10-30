@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -236,33 +235,43 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private static string Git(string mod, params string[] args) => GitProbe.Run(Path.Combine(mod, ".git"), mod, args);
 
     [Fact]
-    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsAtAnUnchosenRecord_RefusesWithoutNamingItself()
+    public async Task DecompileAndRepair_OfAPluginChangedAfterItsDiagnoses_RepairsWhatTheFileNowHolds()
     {
-        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
-        var previewed = ToRepair(plugin);
+        var plugin = AddToSourceMod(Lossless.Malformed);
+        var adapter = new ChangingAfterItsDiagnoses(TestAdapters.Mutagen(), Path.Combine(_sourceMod, Malformed), Lossy.Malformed.Bytes.ToArray());
 
-        var refused = Assert.Single((await Repair([previewed], adapter: new PreviewingOnlyTheRegion(TestAdapters.Mutagen()))).Refused);
+        var result = await Repair([ToRepair(plugin)], adapter: adapter);
 
-        Assert.Equal(DecompileAndRepairRefusal.RoundTripFailed, refused.Refusal);
-        Assert.Contains("HarborRace", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile and repair", refused.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal([plugin], result.Applied);
     }
 
-    private sealed class PreviewingOnlyTheRegion(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
+    [Fact]
+    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
+
+        var result = await Repair([ToRepair(plugin)]);
+
+        Assert.Equal([plugin], result.Applied);
+        Assert.Equal(2, Subjects(_sourceMod, 2).Length);
+    }
+
+    private sealed class ChangingAfterItsDiagnoses(IPluginAdapter inner, string path, byte[] changed) : DelegatingPluginAdapter(inner)
     {
         public override Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease)
         {
-            var previews = base.RepairsOf(pluginPath, gameRelease).Answered();
-            return previews with { Diagnoses = [.. previews.Diagnoses.Where(preview => preview.Diagnosis.Anchor?.StartsWith("REGN", StringComparison.Ordinal) == true)] };
+            var previews = base.RepairsOf(pluginPath, gameRelease);
+            File.WriteAllBytes(path, changed);
+            return previews;
         }
     }
 
     private sealed class RepairWrittenWithAnUnplannedRecord(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
     {
         public override Answer<string, PluginFailure> WriteRepaired(
-            string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease)
+            string pluginPath, string destinationPath, GameRelease gameRelease)
         {
-            var written = base.WriteRepaired(pluginPath, chosen, destinationPath, gameRelease);
+            var written = base.WriteRepaired(pluginPath, destinationPath, gameRelease);
             var mod = Fallout4Mod.CreateFromBinary(new ModPath(destinationPath), Fallout4Release.Fallout4);
             mod.Npcs.AddNew("Unplanned");
             mod.WriteToBinary(destinationPath);

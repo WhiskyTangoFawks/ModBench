@@ -48,20 +48,20 @@ public interface IPluginAdapter
     /// repairs it, or none.</summary>
     Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease);
 
-    /// <summary>The plugin with the repair of each of <paramref name="chosen"/> written to <paramref name="destinationPath"/>.
-    /// Refused, writing nothing, when no repair answers a chosen one.</summary>
+    /// <summary>The plugin with the repair of each malformation it holds written to <paramref name="destinationPath"/>.
+    /// Refused, writing nothing, when no repair answers a malformation it holds.</summary>
     Answer<string, PluginFailure> WriteRepaired(
-        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease);
+        string pluginPath, string destinationPath, GameRelease gameRelease);
 
     /// <summary>Refused unless the plugin at <paramref name="repairedPath"/> holds every record of the plugin,
-    /// and differs from it only by the repairs of <paramref name="chosen"/>. Answers the repaired path.</summary>
+    /// and differs from it only by the repairs of its malformations. Answers the repaired path.</summary>
     Answer<string, PluginFailure> VerifyRepaired(
-        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease);
+        string pluginPath, string repairedPath, GameRelease gameRelease);
 
-    /// <summary><paramref name="repaired"/> with each record a repair of <paramref name="chosen"/> changes flagged: its
+    /// <summary><paramref name="repaired"/> with each record a repair changes flagged: its
     /// diagnoses, and the plugin's own subrecords for each field the repair feeds.</summary>
     Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        RegisteredPlugin plugin, PluginSource repaired, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default);
 
     /// <summary>The loose strings files and archives a read of the localized plugin under <paramref name="loadOrder"/>

@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
@@ -17,13 +16,13 @@ internal sealed class PluginRepairer(IPluginAdapter adapter, PluginDecompiler de
     /// <summary>The repaired plugin's source, or the decompile gate's refusal of it; the port's failure when
     /// the repair itself is refused.</summary>
     internal async Task<Answer<Decompiled, PluginFailure>> DecompileRepairedAsync(
-        LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, IReadOnlyCollection<PluginDiagnosis> chosen, string modFolder,
+        LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder,
         CancellationToken cancel)
     {
         using var scratch = ScratchPlugin.For(plugin.Name);
         var release = loadOrder.GameRelease;
-        if (!adapter.WriteRepaired(plugin.Path, chosen, scratch.PluginPath, release).Holds(out var repaired, out var refused)
-            || !adapter.VerifyRepaired(plugin.Path, chosen, repaired, release).Holds(out _, out refused))
+        if (!adapter.WriteRepaired(plugin.Path, scratch.PluginPath, release).Holds(out var repaired, out var refused)
+            || !adapter.VerifyRepaired(plugin.Path, repaired, release).Holds(out _, out refused))
             return refused;
         return await decompiler.DecompileAsync(loadOrder, plugin with { Path = repaired }, modFolder, onParsed: () => { }, cancel, namesRepair: false);
     }
