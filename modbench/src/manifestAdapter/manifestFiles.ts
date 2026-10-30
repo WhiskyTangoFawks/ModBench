@@ -1,7 +1,7 @@
 import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
-import { MANIFEST_SUFFIX } from '../wire/sourceMod';
+import { BUILD_FILE, MANIFEST_SUFFIX } from '../wire/sourceMod';
 import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
@@ -15,6 +15,12 @@ async function fileNamesIn(folder: string): Promise<string[]> {
   }
 }
 
+// A name in any case, so a folder reads alike on Windows and Linux.
+const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
+  (await fileNamesIn(folder)).filter((held) => held.toLowerCase() === name.toLowerCase());
+
+const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
+
 // An editor may write a byte order mark, which JSON does not allow.
 const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
 
@@ -22,11 +28,11 @@ const read = async (path: string): Promise<ManifestRead> => readManifest(await t
 
 const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
-/** The manifest named for `folder` in it, its name in any case, so a folder reads alike on Windows and Linux;
- *  undefined when it holds none. */
+const twoBuildFiles = (one: string, other: string): string => `its repository holds two build files, '${one}' and '${other}'`;
+
+/** The manifest named for `folder` in it, its name in any case; undefined when it holds none. */
 export async function manifestIn(folder: string): Promise<ManifestRead | undefined> {
-  const named = `${basename(folder)}${MANIFEST_SUFFIX}`.toLowerCase();
-  const [one, other] = (await fileNamesIn(folder)).filter((name) => name.toLowerCase() === named);
+  const [one, other] = await spellingsIn(folder, manifestNameOf(folder));
   if (other !== undefined) return { refused: twoManifests(one ?? '', other) };
   return one === undefined ? undefined : read(join(folder, one));
 }
@@ -42,58 +48,44 @@ async function writeWhole(folder: string, path: string, text: string): Promise<v
   }
 }
 
-const manifestsNamedFor = async (folder: string): Promise<string[]> => {
-  const named = `${basename(folder)}${MANIFEST_SUFFIX}`.toLowerCase();
-  return (await fileNamesIn(folder)).filter((name) => name.toLowerCase() === named);
-};
-
-/** Writes `manifest` as the manifest `folder` holds, in the spelling it holds it in, else named for the folder; true
- *  when the file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
-export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
-  const [one, other] = await manifestsNamedFor(folder);
-  if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
-  const path = join(folder, one ?? `${basename(folder)}${MANIFEST_SUFFIX}`);
-  const text = manifestText(manifest);
+// `text` as the file of `name` in `folder`, in the spelling it holds it in; true when the file changed.
+async function writeNamed(folder: string, name: string, text: string, two: (one: string, other: string) => string): Promise<boolean> {
+  const [one, other] = await spellingsIn(folder, name);
+  if (other !== undefined) throw new Error(two(one ?? '', other));
+  const path = join(folder, one ?? name);
   if (one !== undefined && await textAt(path) === text) return false;
   await writeWhole(folder, path, text);
   return true;
 }
 
+/** Writes `manifest` as the manifest `folder` holds, in the spelling it holds it in, else named for the folder; true
+ *  when the file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
+export const writeManifestIn = (folder: string, manifest: Manifest): Promise<boolean> =>
+  writeNamed(folder, manifestNameOf(folder), manifestText(manifest), twoManifests);
+
 /** Removes the manifest named for `folder` in it, in any case; does nothing when it holds none. */
 export async function removeManifestIn(folder: string): Promise<void> {
-  for (const name of await manifestsNamedFor(folder)) await rm(join(folder, name));
+  for (const name of await spellingsIn(folder, manifestNameOf(folder))) await rm(join(folder, name));
 }
 
-/** The name and text a source mod's repository holds `manifest` as: named for the output folder it names. */
-export function sourceManifestFile(manifest: Manifest): { readonly name: string; readonly text: string } {
-  if (manifest.output === undefined) throw new Error('A source mod\'s manifest names no output folder.');
-  return { name: `${manifest.output}${MANIFEST_SUFFIX}`, text: manifestText(manifest) };
+/** The text a source mod's repository holds `buildFile` as. */
+export const buildFileText = (buildFile: Manifest): string => manifestText(buildFile);
+
+/** Writes `buildFile` at the root of the source mod's repository in `sourceFolder`, in the spelling it holds it in. Rejects,
+ *  writing nothing, when the repository holds two. */
+export async function writeBuildFileIn(sourceFolder: string, buildFile: Manifest): Promise<void> {
+  await writeNamed(sourceFolder, BUILD_FILE, buildFileText(buildFile), twoBuildFiles);
 }
 
-/** Writes `manifest` at the root of the source mod's repository in `sourceFolder`, named for its output folder, in place
- *  of the manifest there; true when the file changed. Rejects, writing nothing, a manifest that names no output folder. */
-export async function writeSourceManifestIn(sourceFolder: string, manifest: Manifest): Promise<boolean> {
-  const { name, text } = sourceManifestFile(manifest);
-  const held = (await fileNamesIn(sourceFolder)).filter((one) => one.toLowerCase().endsWith(MANIFEST_SUFFIX));
-  // A name that differs in case alone is the same file where the file system matches names without case.
-  const sameButCase = held.find((one) => one !== name && one.toLowerCase() === name.toLowerCase());
-  if (sameButCase !== undefined) await rename(join(sourceFolder, sameButCase), join(sourceFolder, name));
-  const others = held.filter((one) => one.toLowerCase() !== name.toLowerCase());
-  if (others.length === 0 && held.length > 0 && await textAt(join(sourceFolder, name)) === text) return false;
-  await writeWhole(sourceFolder, join(sourceFolder, name), text);
-  for (const other of others) await rm(join(sourceFolder, other), { force: true });
-  return true;
-}
+const asBuildFile = (refused: string): string => refused.replaceAll('manifest', 'build file');
 
-/** The manifest at the root of the source mod's repository in `sourceFolder`, which names the folder it builds
- *  (ADR-0022); undefined when it holds none. */
-export async function sourceManifestIn(sourceFolder: string): Promise<ManifestRead | undefined> {
-  const [one, other] = (await fileNamesIn(sourceFolder)).filter((name) => name.toLowerCase().endsWith(MANIFEST_SUFFIX));
+/** The build file at the root of the source mod's repository in `sourceFolder`, which names the folder it builds; undefined
+ *  when it holds none. */
+export async function buildFileIn(sourceFolder: string): Promise<ManifestRead | undefined> {
+  const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
+  if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
   if (one === undefined) return undefined;
-  if (other !== undefined) return { refused: `its repository holds two manifests, '${one}' and '${other}'` };
   const held = await read(join(sourceFolder, one));
-  if ('refused' in held) return held;
-  const { output } = held.manifest;
-  if (output === undefined) return { refused: 'its manifest names no output folder' };
-  return one === `${output}${MANIFEST_SUFFIX}` ? held : { refused: `its manifest '${one}' is not named for its output folder '${output}'` };
+  if ('refused' in held) return { refused: asBuildFile(held.refused) };
+  return held.manifest.output === undefined ? { refused: 'its build file names no output folder' } : held;
 }

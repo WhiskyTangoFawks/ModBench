@@ -58,9 +58,9 @@ public interface ISourceAdapter
     string ContentStamp(string text);
 
     /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree,
-    /// the assets and <paramref name="manifest"/> at its root, then any <paramref name="repair"/>.</summary>
+    /// the assets and <paramref name="buildFile"/> at its root, then any <paramref name="repair"/>.</summary>
     SourceFailure? Init(
-        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null);
 
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>

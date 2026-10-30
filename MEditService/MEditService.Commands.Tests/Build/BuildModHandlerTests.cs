@@ -263,7 +263,7 @@ public sealed class BuildModHandlerTests : IDisposable
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
         _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
-        Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, new NewRepository(SourceFolder, [], SourceInits.ManifestOf(ModName)))])).Value().Applied);
+        Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, new NewRepository(SourceFolder, [], SourceInits.BuildFile))])).Value().Applied);
     }
 
     private async Task<ModBuilt> Landed() => await Landed(new ModToBuild(ModName, SourceFolder, ModFolder));

@@ -13,7 +13,7 @@ export function foldersOf(adapter: Pick<InstanceAdapter, 'modFolderPath'>, other
   return { of: (name) => (other.has(name) ? Promise.resolve(other.get(name)) : adapter.modFolderPath(name, among)), isMod: (name) => !other.has(name) };
 }
 
-// A source mod's manifest is in its repository (ADR-0022).
+// A source mod's build records its manifest (ADR-0022).
 export const sourceFolderOf = (sourceMods: SourceMods, mod: string): { sourceFolder?: string } => {
   const sourceFolder = sourceMods.folderOf(mod);
   return sourceFolder === undefined ? {} : { sourceFolder };

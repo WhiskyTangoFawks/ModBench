@@ -3,7 +3,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { manifestIn, removeManifestIn, sourceManifestFile, writeManifestIn, writeSourceManifestIn, type Manifest } from '../manifestAdapter';
+import { BUILD_FILE } from '../../wire/sourceMod';
+import { buildFileIn, buildFileText, manifestIn, removeManifestIn, writeBuildFileIn, writeManifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
@@ -84,47 +85,57 @@ describe('writeManifestIn', () => {
   });
 });
 
-describe('writeSourceManifestIn', () => {
-  const built: Manifest = { ...manifest, output: 'Mod' };
+describe('buildFileIn', () => {
+  const buildFile: Manifest = { ...manifest, output: 'Mod' };
 
-  it('writes the manifest named for its output folder and says it wrote', async () => {
-    const wrote = await writeSourceManifestIn(folder, built);
+  it('reads the build file at the root of the repository, in any case', async () => {
+    await writeFile(join(folder, BUILD_FILE.toUpperCase()), buildFileText(buildFile));
 
-    expect([wrote, await readdir(folder), await readFile(join(folder, 'Mod.manifest.json'), 'utf8')]).toEqual([true, ['Mod.manifest.json'], manifestText(built)]);
+    expect(await buildFileIn(folder)).toEqual({ manifest: buildFile });
   });
 
-  it('writes nothing, and says so, when the manifest already holds that text', async () => {
-    await writeFile(join(folder, 'Mod.manifest.json'), manifestText(built));
+  it('is none when the repository holds none, whatever manifest it holds', async () => {
+    await writeFile(join(folder, 'Mod.manifest.json'), buildFileText(buildFile));
 
-    expect(await writeSourceManifestIn(folder, built)).toBe(false);
+    expect(await buildFileIn(folder)).toBeUndefined();
   });
 
-  it('replaces the manifest named for another output folder, as a rename of the output renames it', async () => {
-    await writeFile(join(folder, 'Old.manifest.json'), manifestText({ ...built, output: 'Old' }));
+  it('refuses a repository that holds two build files, naming both', async () => {
+    if (process.platform === 'win32') execFileSync('fsutil.exe', ['file', 'setCaseSensitiveInfo', folder, 'enable']);
+    await writeFile(join(folder, BUILD_FILE.toUpperCase()), buildFileText(buildFile));
+    await writeFile(join(folder, BUILD_FILE), buildFileText(buildFile));
 
-    const wrote = await writeSourceManifestIn(folder, built);
-
-    expect([wrote, await readdir(folder)]).toEqual([true, ['Mod.manifest.json']]);
+    expect(await buildFileIn(folder)).toEqual({ refused: `its repository holds two build files, '${BUILD_FILE.toUpperCase()}' and '${BUILD_FILE}'` });
   });
 
-  it('renames a manifest whose name differs from its output folder\'s in case alone', async () => {
-    await writeFile(join(folder, 'MOD.manifest.json'), manifestText(built));
+  it('refuses a build file that names no output folder', async () => {
+    await writeFile(join(folder, BUILD_FILE), buildFileText(manifest));
 
-    await writeSourceManifestIn(folder, built);
-
-    expect(await readdir(folder)).toEqual(['Mod.manifest.json']);
+    expect(await buildFileIn(folder)).toEqual({ refused: 'its build file names no output folder' });
   });
 
-  it('rejects, writing nothing, a manifest that names no output folder', async () => {
-    await expect(writeSourceManifestIn(folder, manifest)).rejects.toThrow('names no output folder');
+  it('names the build file as what cannot be read', async () => {
+    await writeFile(join(folder, BUILD_FILE), '{"output": "Mod", "files": [{"path": "a.nif", "package": "Gone"}]}');
 
-    expect(await readdir(folder)).toEqual([]);
+    expect(await buildFileIn(folder)).toEqual({ refused: 'its build file cannot be read at its file 1: it names a package the build file does not name' });
   });
 });
 
-describe('sourceManifestFile', () => {
-  it('is the name and text the source mod\'s repository holds its manifest as', () => {
-    expect(sourceManifestFile({ ...manifest, output: 'Mod' })).toEqual({ name: 'Mod.manifest.json', text: manifestText({ ...manifest, output: 'Mod' }) });
+describe('writeBuildFileIn', () => {
+  const buildFile: Manifest = { ...manifest, output: 'Mod' };
+
+  it('writes the build file at the root of the repository', async () => {
+    await writeBuildFileIn(folder, buildFile);
+
+    expect([await readdir(folder), await readFile(join(folder, BUILD_FILE), 'utf8')]).toEqual([[BUILD_FILE], buildFileText(buildFile)]);
+  });
+
+  it('keeps the spelling of the build file the repository holds', async () => {
+    await writeFile(join(folder, BUILD_FILE.toUpperCase()), '{}');
+
+    await writeBuildFileIn(folder, buildFile);
+
+    expect([await readdir(folder), await readFile(join(folder, BUILD_FILE.toUpperCase()), 'utf8')]).toEqual([[BUILD_FILE.toUpperCase()], buildFileText(buildFile)]);
   });
 });
 

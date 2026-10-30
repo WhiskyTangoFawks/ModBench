@@ -287,7 +287,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         return new PluginToRepair(preview.Plugin, preview.Hash, made);
     }
 
-    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.ManifestOf(NewModName));
+    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.BuildFile);
 
     private string StrayFile()
     {

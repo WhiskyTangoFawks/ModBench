@@ -12,6 +12,7 @@ import type { CompareResult, PluginMetadata, PluginProblems } from '../../client
 import { present } from '../../ports/present';
 import type { ReferencesViewInput } from '../../editor/referencesView';
 import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
+import { BUILD_FILE } from '../../wire/sourceMod';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
@@ -2162,7 +2163,7 @@ describe('The Problems panel on plugin source', () => {
     mkdirSync(modDir, { recursive: true });
     mkdirSync(path.dirname(file), { recursive: true });
     mkdirSync(path.join(sourceDir, '.git'));
-    writeFileSync(path.join(sourceDir, `${plugin.origin}.manifest.json`), JSON.stringify({ output: plugin.origin, files: [] }));
+    writeFileSync(path.join(sourceDir, BUILD_FILE), JSON.stringify({ output: plugin.origin, files: [] }));
     writeFileSync(file, JSON.stringify({ FormKey: HELD_FORM_KEY, Armor: NOT_HELD_FORM_KEY }, null, 2));
     await waitFor('mod sync to give the new folder its line', () => readFileSync(modlistPath, 'utf8').includes(plugin.origin));
   });

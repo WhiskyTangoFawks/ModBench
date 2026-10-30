@@ -31,14 +31,14 @@ public sealed class SourceRepositoryInitTests : IDisposable
     }
 
     [Fact]
-    public void AnInit_IsOneCommitNamedForTheMod_HoldingEveryPluginsSourceTheAssetsAndTheManifest()
+    public void AnInit_IsOneCommitNamedForTheMod_HoldingEveryPluginsSourceTheAssetsAndTheBuildFile()
     {
         TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.ManifestOf(TestMod.Name), [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [Asset("textures/a.dds", "texture")]);
+            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [Asset("textures/a.dds", "texture")]);
 
         Assert.Equal([$"Init {TestMod.Name}"], SubjectsOnMain());
         Assert.Equal(
-            [".gitignore", "TestMod.manifest.json", "assets/textures/a.dds", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json"],
+            [".gitignore", "assets/textures/a.dds", "build.json", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json"],
             PathsIn("main"));
     }
 
@@ -47,7 +47,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
     {
         var repaired = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"repaired\":1}"u8.ToArray())], "Repair A.esp");
 
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf(TestMod.Name), [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [], (A, repaired)));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [], (A, repaired)));
 
         Assert.Equal([$"Init {TestMod.Name}", "Repair A.esp"], SubjectsOnMain());
         Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
         TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [new("npc_", "{}"u8.ToArray()), new("npc_/A.esp/000002.json", "{}"u8.ToArray())];
 
         Assert.NotNull(TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.ManifestOf(TestMod.Name), [OneRecordOf("A.esp")], [], (A, new TreeCommit(secondFileNeedsADirectoryTheFirstOccupies, "Repair A.esp"))));
+            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], (A, new TreeCommit(secondFileNeedsADirectoryTheFirstOccupies, "Repair A.esp"))));
 
         Assert.Empty(Directory.EnumerateFileSystemEntries(_sourceFolder));
     }
@@ -71,18 +71,18 @@ public sealed class SourceRepositoryInitTests : IDisposable
     {
         byte[] bytes = [0x44, 0x44, 0x53, 0x20, 0x00, 0xFF, 0x0D, 0x0A];
 
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf(TestMod.Name), [], [new Asset("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))]));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [new Asset("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))]));
 
         Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(_sourceFolder, "assets", "Textures", "Sub Folder", "a.dds")));
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
     [Fact]
-    public void TheManifest_IsCommittedAtTheRootUnderItsName_WithItsText()
+    public void TheBuildFile_IsCommittedAtTheRootUnderItsName_WithItsText()
     {
-        TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf("The Output"), [OneRecordOf("A.esp")], []);
+        TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], []);
 
-        Assert.Equal("the manifest of The Output", Git("show", "main:The Output.manifest.json"));
+        Assert.Equal("the build file", Git("show", "main:build.json"));
     }
 
     [Fact]

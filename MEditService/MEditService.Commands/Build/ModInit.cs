@@ -3,7 +3,6 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +13,7 @@ namespace MEditService.Commands.Build;
 internal sealed record RepairedInInit(RegisteredPlugin Plugin, PluginSource Flagged, TreeCommit Repaired);
 
 /// <summary>Decompile and commit's init of a mod's repository, which decompile and repair makes too: each plugin through
-/// the round-trip gate, the assets and the manifest it is handed (ADR-0016), in one commit, or nothing.</summary>
+/// the round-trip gate, the assets and its build file (ADR-0016), in one commit, or nothing.</summary>
 internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderRepository modFolders, PluginDecompiler decompiler)
 {
     /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's
@@ -82,7 +81,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
 
         setPhase(DecompileAndCommitPhase.Committing);
         List<Asset> assets = [.. toCommit.Repository.Assets.Select(path => new Asset(path, () => modFolders.OpenFile(mod.Folder, path)))];
-        if (Commit(toCommit.Repository.SourceFolder, verified, toCommit.Repository.Manifest, assets, repair) is { } failure)
+        if (Commit(toCommit.Repository.SourceFolder, verified, toCommit.Repository.BuildFile, assets, repair) is { } failure)
         {
             logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", mod.Name, failure.Reason);
             return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}");
@@ -100,7 +99,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
 
     // The adapter writes nothing when any of it fails (plugins.md, Decompile and commit, story 5).
     private SourceFailure? Commit(
-        string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, SpelledManifest manifest,
+        string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, byte[] buildFile,
         List<Asset> assets, RepairedInInit? repair)
     {
         if (logger.IsEnabled(LogLevel.Information))
@@ -109,7 +108,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
                 sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, manifest,
+        return source.Init(sourceFolder, buildFile,
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Key, v.Source.BinarySha256)))], assets,
             repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
     }

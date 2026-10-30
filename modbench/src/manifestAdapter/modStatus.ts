@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { MANIFEST_SUFFIX } from '../wire/sourceMod';
 import type { Manifest, ManifestFile } from './manifest';
-import { manifestIn, sourceManifestIn } from './manifestFiles';
+import { manifestIn } from './manifestFiles';
 import { packageOf } from './packageOf';
 
 type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
@@ -24,11 +24,10 @@ export interface FolderReads {
   modMetadata(mod: string): Promise<Read<HeldMetadata>>;
 }
 
-/** A mod by its name and folder, and a source mod's source folder, which holds its manifest. */
+/** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
   readonly name: string;
   readonly folder: string;
-  readonly sourceFolder?: string;
 }
 
 /** A mod's folder against its manifest, each list by path on disk in ordinal order; `unreadable` is why it lists nothing. */
@@ -162,7 +161,7 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
   try {
     const metadata = await reads.modMetadata(mod.name);
     if (metadata.kind === 'unreadable') return nothing(mod.name, { unreadable: `its metadata could not be read: ${metadata.reason}` });
-    const read = mod.sourceFolder === undefined ? await manifestIn(mod.folder) : await sourceManifestIn(mod.sourceFolder);
+    const read = await manifestIn(mod.folder);
     if (read === undefined) return nothing(mod.name, { noManifest: true });
     if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
     const { manifest } = read;
@@ -178,17 +177,14 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
 
 interface ModReads extends FolderReads {
   modFolderPath(mod: string): Promise<string | undefined>;
-  sourceMods(): Promise<{ folderOf(mod: string): string | undefined }>;
 }
 
 /** Each mod's status as the adapters read it now, for a command, which never reads the Mod status box (ADR-0015). A mod
  *  its name gives no folder has none. */
 export async function statusesNow(reads: ModReads, mods: readonly string[]): Promise<ModStatus[]> {
-  const sourceMods = await reads.sourceMods();
   const statuses = await Promise.all(mods.map(async (name) => {
     const folder = await reads.modFolderPath(name);
-    const sourceFolder = sourceMods.folderOf(name);
-    return folder === undefined ? [] : [await statusOf({ name, folder, ...(sourceFolder === undefined ? {} : { sourceFolder }) }, reads)];
+    return folder === undefined ? [] : [await statusOf({ name, folder }, reads)];
   }));
   return statuses.flat();
 }

@@ -43,30 +43,25 @@ async function folderOf(name: string, files: Record<string, string> = {}): Promi
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, ...over });
+  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), ...over });
 
 const statusesLogging = (): ModStatuses => new ModStatuses(reads, (line) => { logged.push(line); });
 
 describe('Mod status, derived from each instance value (mod-status trace)', () => {
-  it('derives each listed mod\'s and separator\'s status by its folder\'s mod name, a source mod\'s from its repository, and none for an entry with no folder', async () => {
+  it('derives each listed mod\'s and separator\'s status by its folder\'s mod name, and none for an entry with no folder', async () => {
     const mod = await folderOf('ModA', { 'mine.txt': '' });
     await writeManifestIn(mod, EMPTY);
     const separator = await folderOf('Tools_separator');
-    const built = await folderOf('Built');
-    const source = join(root, 'source', 'Built');
-    await mkdir(source, { recursive: true });
-    await writeManifestIn(source, { ...EMPTY, output: 'Built' });
     const statuses = statusesLogging();
 
     statuses.derive(valueOf(
-      [{ kind: 'mod', name: 'MODA' }, { kind: 'separator', name: 'Tools' }, { kind: 'mod', name: 'Built' }, { kind: 'mod', name: 'Folderless' }],
-      [folder('mod', 'ModA', mod), folder('separator', 'Tools', separator, 'Tools_separator'), folder('mod', 'Built', built)],
-      { paths: { sourceDirs: new Map([['Built', source]]) } },
+      [{ kind: 'mod', name: 'MODA' }, { kind: 'separator', name: 'Tools' }, { kind: 'mod', name: 'Folderless' }],
+      [folder('mod', 'ModA', mod), folder('separator', 'Tools', separator, 'Tools_separator')],
     ));
     const derived = await statuses.current();
 
-    expect([...derived.keys()]).toEqual(['ModA', 'Tools_separator', 'Built']);
-    expect([derived.get('ModA')?.namedByNoLine, derived.get('Tools_separator')?.noManifest, derived.get('Built')?.noManifest]).toEqual([['mine.txt'], true, false]);
+    expect([...derived.keys()]).toEqual(['ModA', 'Tools_separator']);
+    expect([derived.get('ModA')?.namedByNoLine, derived.get('Tools_separator')?.noManifest]).toEqual([['mine.txt'], true]);
   });
 
   it('derives no status while the instance holds no repository', async () => {

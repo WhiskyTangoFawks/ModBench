@@ -46,9 +46,9 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
     public SourceFailure? Init(
-        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null) =>
-        SourceFailure.Answer(() => GitInit.Init(sourceFolder, manifest, plugins, assets, repair));
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, repair));
 
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) =>
         SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder));

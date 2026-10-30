@@ -1,7 +1,6 @@
 using System.Text;
 using MEditService.Commands;
 using MEditService.Commands.Build;
-using MEditService.RepositoriesLib;
 
 namespace MEditService.Http.Endpoints;
 
@@ -31,7 +30,7 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the assets it is handed, read from its folder, and the manifest it is handed, in one commit. " +
+                "plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, in one commit. " +
                 "A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
             .Produces<DecompileAndCommitResult>()
             .ProducesProblem(400)
@@ -146,17 +145,15 @@ internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommi
 internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
-/// assets by their forward-slash paths in its folder, and its manifest's file name and text.</summary>
-internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string ManifestName, string Manifest)
+/// assets by their forward-slash paths in its folder, and its build file's text.</summary>
+internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile)
 {
     internal const string NotWhole =
-        "A new repository needs its source folder, forward-slash paths in the mod folder for its assets, and its manifest with its file name.";
+        "A new repository needs its source folder, forward-slash paths in the mod folder for its assets, and its build file.";
 
     internal bool IsWhole =>
-        !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && Manifest is not null
-        && ManifestName is not null && FolderPaths.AreInTheFolder([ManifestName]) && !ManifestName.Contains('/', StringComparison.Ordinal)
-        && RepositoriesLib.ManifestName.Is(ManifestName);
+        !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null;
 
     internal NewRepository ToNewRepository() =>
-        new(SourceFolder, Assets ?? [], new SpelledManifest(ManifestName, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(Manifest)));
+        new(SourceFolder, Assets ?? [], new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(BuildFile));
 }

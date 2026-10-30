@@ -2,13 +2,13 @@ import {
   isRefused, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter, type SourceMods } from '../instanceAdapter/instanceAdapter';
-import { sourceManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { buildFileIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand, namedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
-import { folderManifestRemovedOrWhy, newRepositoryOf, type MadeRepository } from './newRepository';
+import { newRepositoryOf, type MadeRepository } from './newRepository';
 import { downloadedNow, packagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
@@ -37,18 +37,16 @@ type Adapter = SourceCommandsDeps['adapter'];
 function noRepositoryRefusal(adapter: Adapter, mod: string, sourceMods: SourceMods): ItemRefusal<string> {
   const own = adapter.sourceFolder(mod);
   const claimed = own === undefined || sourceMods.folderOf(mod) !== undefined ? undefined : sourceMods.claimedOutput(own);
-  if (claimed === undefined) return { item: mod, reason: 'no repository in the source folder builds it' };
-  const sameMod = adapter.entryKey({ kind: 'mod', name: mod }) === adapter.entryKey({ kind: 'mod', name: claimed });
-  return { item: mod, reason: sameMod ? `its repository's manifest is not named for its output "${claimed}"` : `its folder is "${mod}", but its repository's manifest builds "${claimed}"` };
+  return { item: mod, reason: claimed === undefined ? 'no repository in the source folder builds it' : `its folder is "${mod}", but its repository's build file builds "${claimed}"` };
 }
 
-async function heldSourceManifest(sourceFolder: string): Promise<Manifest | { readonly reason: string }> {
+async function heldBuildFile(sourceFolder: string): Promise<Manifest | { readonly reason: string }> {
   try {
-    const held = await sourceManifestIn(sourceFolder);
-    if (held === undefined) return { reason: `was not built: '${sourceFolder}' holds no manifest.` };
+    const held = await buildFileIn(sourceFolder);
+    if (held === undefined) return { reason: `was not built: '${sourceFolder}' holds no build file.` };
     return 'refused' in held ? { reason: `was not built: ${held.refused}.` } : held.manifest;
   } catch (err) {
-    return { reason: `was not built: its manifest could not be read: ${errorMessage(err)}.` };
+    return { reason: `was not built: its build file could not be read: ${errorMessage(err)}.` };
   }
 }
 
@@ -66,11 +64,11 @@ async function sourceModOf(
   if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
   if (metadata.kind === 'unreadable') return { item: mod, reason: metadataUnreadable(metadata.reason) };
   if (host.kind === 'unreadable') return { item: mod, reason: `its remote could not be read: ${host.reason}` };
-  const manifest = await heldSourceManifest(sourceFolder);
-  if ('reason' in manifest) return { item: mod, reason: manifest.reason };
+  const buildFile = await heldBuildFile(sourceFolder);
+  if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
   const game = await namedGameFolder(adapter, await adapter.gameRelease());
-  const packages = await packagesRead(adapter, manifest, { downloaded: await downloadedNow(adapter, manifest), game, tasks: pass.tasks });
-  return { name: mod, folder, sourceFolder, manifest, packages, version: metadata.answer.version, isSubmodule: host.answer.kind === 'host' };
+  const packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game, tasks: pass.tasks });
+  return { name: mod, folder, sourceFolder, buildFile, packages, version: metadata.answer.version, isSubmodule: host.answer.kind === 'host' };
 }
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
@@ -114,7 +112,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     },
 
     /** A mod whose name gives it no source folder, or whose files, installation file or metadata cannot be read, is refused
-     *  here, naming why, and mEdit decompiles and commits the rest; each that lands loses its folder's manifest. */
+     *  here, naming why, and mEdit decompiles and commits the rest. */
     decompileAndCommit: async (
       mods: readonly string[], options: { onProgress?: (status: DecompileProgress) => void } = {},
     ): Promise<DecompileAndCommitOutcome | WriteRefused> => {
@@ -131,13 +129,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       const sent: DecompileAndCommitMod[] = [...made].map(([name, { repository }]) => ({ name, repository }));
       const outcome = await client.decompileAndCommit(sent, options);
       if (isRefused(outcome)) return outcome;
-      const notRemoved: ItemRefusal<string>[] = [];
-      for (const { mod } of outcome.landed) {
-        const repository = made.get(mod);
-        const why = repository === undefined ? undefined : await folderManifestRemovedOrWhy(repository);
-        if (why !== undefined) notRemoved.push({ item: mod, reason: `was decompiled and committed, but ${why}` });
-      }
-      return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notRemoved] };
+      return { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
   };
 }

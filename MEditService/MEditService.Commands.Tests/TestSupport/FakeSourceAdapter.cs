@@ -73,7 +73,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public string ContentStamp(string text) => throw Unreached();
 
     public SourceFailure? Init(
-        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null)
     {
         if (IsSourceMod(sourceFolder) || HoldsAnotherRepository(sourceFolder))

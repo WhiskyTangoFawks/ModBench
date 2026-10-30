@@ -1,10 +1,10 @@
-// mods.md, Build: the extension writes what a source mod's packages give, mEdit compiles and packs what it is handed, and
-// the extension records the manifest from what mEdit made (ADR-0016).
+// mods.md, Build: the extension writes what a source mod's build file takes from its packages, mEdit compiles and packs what
+// it is handed, and the extension records in the mod's manifest what the build made (ADR-0016).
 
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { lineAtFolderPath, packageOf, writeSourceManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { lineAtFolderPath, writeManifestIn, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
@@ -19,13 +19,13 @@ export interface BuildDeps {
   readonly tasks: StepTasks;
 }
 
-/** A source mod to build: its folder, the repository that builds it and the manifest it holds, where this machine holds
+/** A source mod to build: its folder, the repository that builds it and the build file it holds, where this machine holds
  *  its packages, and the version and host its manifest records. */
 export interface SourceModToBuild {
   readonly name: string;
   readonly folder: string;
   readonly sourceFolder: string;
-  readonly manifest: Manifest;
+  readonly buildFile: Manifest;
   readonly packages: PackagesRead;
   readonly version: string | undefined;
   readonly isSubmodule: boolean;
@@ -58,33 +58,23 @@ export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
 
 const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '')}.`;
 
-const isTaken = (pkg: ManifestPackage | undefined): pkg is Exclude<ManifestPackage, { kind: 'sourceRepository' }> =>
-  pkg?.kind === 'installationFile' || pkg?.kind === 'gameFolder';
-
-// A taken line names its package, as the repository is the manifest's first.
-const keptLine = (manifest: Manifest, line: ManifestFile, mark: string): ManifestFile => {
-  const moved = lineAtFolderPath(manifest, line, mark);
-  const pkg = packageOf(manifest, line);
-  return isTaken(pkg) ? { ...moved, package: pkg.name } : moved;
-};
-
 interface Taken {
   readonly at: readonly string[];
   readonly overwritten: readonly string[];
 }
 
-// mods.md, Build, story 1: each file the manifest takes from a package, written where the folder holds it unless it holds
+// mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
 // those bytes, before mEdit packs it or compiles beside it.
 async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<Taken> {
-  const { manifest, packages, folder } = mod;
-  const packed = new Set(manifest.archives.flatMap(({ files }) => files).map((path) => path.toLowerCase()));
+  const { buildFile, packages, folder } = mod;
+  const packed = new Set(buildFile.archives.flatMap(({ files }) => files).map((path) => path.toLowerCase()));
   const at: string[] = [];
   const overwritten: string[] = [];
   const writes: Parameters<Adapter['writeFilesIn']>[1][number][] = [];
-  for (const line of manifest.files) {
+  for (const line of buildFile.files) {
     const from = packages.packageFiles.get(line.path);
     if (from === undefined) continue;
-    const path = lineAtFolderPath(manifest, line, adapter.exclusionMark).path;
+    const path = lineAtFolderPath(buildFile, line, adapter.exclusionMark).path;
     at.push(path);
     const there = await adapter.originFileHash(join(folder, path));
     if (there.kind === 'read' && there.answer.hash === packages.hashes.get(line.path)) continue;
@@ -95,40 +85,32 @@ async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<Ta
   return { at, overwritten };
 }
 
-// A status on this machine reads a game folder package's entries, and the files a build made as its repository's entries,
-// from the hash index (modlist-repository.md, Status).
-async function entriesKept(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[]): Promise<void> {
-  for (const pkg of mod.manifest.packages) {
-    const entries = pkg.kind === 'gameFolder' ? mod.packages.entries.get(pkg.hash) : undefined;
-    if (pkg.kind === 'gameFolder' && entries !== undefined) await adapter.keepPackageEntries(pkg.hash, entries);
-  }
+// A status on this machine reads each file the build made as its repository's entry in the hash index, but one mEdit made
+// that the source does not vouch for (modlist-repository.md, Status).
+async function entriesKept(adapter: Adapter, mod: SourceModToBuild, recorded: readonly string[], unvouched: ReadonlySet<string>): Promise<void> {
   const hashes = new Map<string, string>();
-  for (const { path } of made.filter(({ vouchedFor }) => vouchedFor)) {
+  for (const path of recorded.filter((one) => !unvouched.has(one))) {
     const read = await adapter.originFileHash(join(mod.folder, path));
     if (read.kind === 'read') hashes.set(path, read.answer.hash);
   }
   await adapter.keepPackageEntries(basename(mod.sourceFolder), hashes);
 }
 
-// mods.md, Build, story 1: the manifest's file lines written last, naming each file the build made that the folder holds, each
-// file a package gives and each a step makes.
-async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[]): Promise<string | undefined> {
-  const { manifest } = mod;
+// mods.md, Build, story 3: the manifest, written last, names the repository as its one package, and each file the build made
+// that the folder holds: each mEdit made, each the build file takes and each a step makes.
+async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly MadeFile[], taken: readonly string[]): Promise<string | undefined> {
+  const { buildFile } = mod;
   try {
     const held = new Set(await adapter.filesIn(mod.folder));
-    const kept = manifest.files
-      .filter((line) => line.entry.kind === 'madeByStep' || isTaken(packageOf(manifest, line)))
-      .map((line) => keptLine(manifest, line, adapter.exclusionMark));
-    const named = new Set(kept.map(({ path }) => path));
-    const madeHeld = made.filter(({ path }) => held.has(path));
-    const repository: ManifestPackage = { kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule };
-    await writeSourceManifestIn(mod.sourceFolder, {
-      output: manifest.output, exclude: manifest.exclude, archives: manifest.archives, steps: manifest.steps, tools: manifest.tools,
-      packages: [repository, ...manifest.packages.filter(isTaken)],
-      files: [...madeHeld.filter(({ path }) => !named.has(path)).map(({ path }): ManifestFile => ({ path, entry: { kind: 'held' } })), ...kept],
+    const stepped = buildFile.files.filter(({ entry }) => entry.kind === 'madeByStep').map(({ path }) => path);
+    const paths = [...new Set([...made.map(({ path }) => path), ...taken, ...stepped])].filter((path) => held.has(path));
+    await writeManifestIn(mod.folder, {
+      packages: [{ kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule }],
+      exclude: [], archives: [], steps: [], tools: [],
+      files: paths.map((path): ManifestFile => ({ path, entry: { kind: 'held' } })),
       ...mod.version === undefined ? {} : { version: mod.version },
     });
-    await entriesKept(adapter, mod, madeHeld);
+    await entriesKept(adapter, mod, paths, new Set(made.filter(({ vouchedFor }) => !vouchedFor).map(({ path }) => path)));
     return undefined;
   } catch (err) {
     return `The build could not write its manifest: ${errorMessage(err)}`;
@@ -141,27 +123,30 @@ const refusedAs = (mod: string, why: string, lacksATask = false): { readonly ref
   ({ refusal: { item: mod, reason: notBuilt(why), ...lacksATask ? { lacksATask: true } : {} } });
 
 // mods.md, Build, stories 4 and 13: what refuses the mod is checked before its first write.
-function refusedBeforeWriting({ name, folder, manifest, packages }: SourceModToBuild, pass: BuildPass): { readonly refusal: BuildRefusal } | undefined {
-  if (manifest.output?.toLowerCase() !== basename(folder).toLowerCase()) {
-    return refusedAs(name, `its manifest names the output folder '${manifest.output ?? ''}', not its folder '${basename(folder)}'`);
+function refusedBeforeWriting({ name, folder, buildFile, packages }: SourceModToBuild, pass: BuildPass): { readonly refusal: BuildRefusal } | undefined {
+  if (buildFile.output?.toLowerCase() !== basename(folder).toLowerCase()) {
+    return refusedAs(name, `its build file names the output folder '${buildFile.output ?? ''}', not its folder '${basename(folder)}'`);
   }
-  const noTask = toolsWithoutTask(manifest, pass.tasks);
+  const noTask = toolsWithoutTask(buildFile, pass.tasks);
   if (noTask !== undefined) return refusedAs(name, noTask, true);
   return packages.lacks.length > 0 ? refusedAs(name, packages.lacks.join('; ')) : undefined;
 }
 
-// mods.md, Build, story 1: the steps run once mEdit made the folder, and the manifest's file lines are written last.
-async function finished({ adapter, tasks }: BuildDeps, mod: SourceModToBuild, landed: ModBuilt, made: readonly MadeFile[]): Promise<ModBuilt> {
+// mods.md, Build, stories 1 and 3: the steps run once mEdit made the folder, and the manifest is written last.
+async function finished(
+  { adapter, tasks }: BuildDeps, mod: SourceModToBuild, landed: ModBuilt, made: readonly MadeFile[], taken: readonly string[],
+): Promise<ModBuilt> {
   if (landed.failure !== undefined) return landed;
-  const stepFailed = mod.manifest.steps.length === 0 ? undefined : await tasks.whyStepsFailed(mod.manifest.steps, mod.folder);
+  const { steps } = mod.buildFile;
+  const stepFailed = steps.length === 0 ? undefined : await tasks.whyStepsFailed(steps, mod.folder);
   if (stepFailed !== undefined) return { ...landed, failure: `The build stopped as its ${stepFailed}, so its manifest was not written.` };
-  const failure = await recorded(adapter, mod, made);
+  const failure = await recorded(adapter, mod, made, taken);
   return failure === undefined ? landed : { ...landed, failure };
 }
 
 /** The mod built, refused before anything was written, or mEdit's refusal of the whole call. */
 export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built> {
-  const { name, folder, manifest } = mod;
+  const { name, folder, buildFile } = mod;
   const refusal = refusedBeforeWriting(mod, pass);
   if (refusal !== undefined) return refusal;
   let taken: Taken;
@@ -171,8 +156,8 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
     return { landed: { mod: name, compiled: [], refused: [], archivesRefused: [], overwritten: [], failure: `The build stopped before compiling, as a file its packages give could not be written: ${errorMessage(err)}` } };
   }
   const answer = await deps.client.build([{
-    name, sourceFolder: mod.sourceFolder, folder, exclude: [...manifest.exclude], taken: [...taken.at],
-    archives: manifest.archives.map(({ path, files }) => ({ path, files: [...files] })),
+    name, sourceFolder: mod.sourceFolder, folder, exclude: [...buildFile.exclude], taken: [...taken.at],
+    archives: buildFile.archives.map(({ path, files }) => ({ path, files: [...files] })),
   }], pass.facts);
   if (isRefused(answer)) return answer;
   const [mEditRefused] = answer.refused;
@@ -180,5 +165,5 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
   const [built] = answer.landed;
   if (built === undefined) return refusedAs(name, 'mEdit answered nothing for it');
   const { made, ...outcome } = built;
-  return { landed: await finished(deps, mod, { ...outcome, overwritten: [...taken.overwritten, ...outcome.overwritten].sort() }, made) };
+  return { landed: await finished(deps, mod, { ...outcome, overwritten: [...taken.overwritten, ...outcome.overwritten].sort() }, made, taken.at) };
 }

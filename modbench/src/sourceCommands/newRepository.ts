@@ -1,10 +1,10 @@
-// commands.md, decompile and commit: a repository holding the mod's plugin source, a manifest naming this folder as the
+// commands.md, decompile and commit: a repository holding the mod's plugin source, a build file naming this folder as the
 // output, and as its assets only the files its installation file does not yield with their bytes (ADR-0016).
 
 import { basename, join, resolve } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, packageOf, removeManifestIn, sourceManifestFile, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
+import { buildFileText, manifestIn, packageOf, removeManifestIn, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
@@ -13,7 +13,7 @@ import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from '.
 import { buildManifest, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceFolder' | 'installationFile' | 'modMetadata' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
+  'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceMods'>;
 
 /** The repository a mod's decompile and commit makes, and the mod's folder. */
@@ -21,8 +21,6 @@ export interface MadeRepository {
   readonly repository: NewRepository;
   readonly folder: string;
 }
-
-const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
 function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
   const plugins = paths.filter(isPluginAtRoot);
@@ -49,17 +47,14 @@ async function heldManifest(folder: string): Promise<Manifest | undefined | { re
   }
 }
 
-// The package a line takes its file from, named, as the repository becomes the manifest's first.
-const takenFrom = (manifest: Manifest, line: ManifestFile): string | undefined => {
-  if (line.entry.kind !== 'held' && line.entry.kind !== 'heldAt') return undefined;
-  return packageOf(manifest, line)?.name;
-};
+// A line the build file keeps: a file a package gives, or one a step makes.
+const isTakenOrStepped = (manifest: Manifest, line: ManifestFile): boolean =>
+  line.entry.kind === 'madeByStep' || ((line.entry.kind === 'held' || line.entry.kind === 'heldAt') && packageOf(manifest, line) !== undefined);
 
 interface ModRead {
   readonly sourceFolder: string;
   readonly folder: string;
   readonly installationFile: InstallationFile | undefined;
-  readonly version: string | undefined;
   readonly game: GameHeld | undefined;
   readonly held: Manifest | undefined;
 }
@@ -69,10 +64,8 @@ async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise
   const sourceFolder = adapter.sourceFolder(mod);
   if (sourceFolder === undefined) return { refusal: 'its name gives it no source folder' };
   const installation = await adapter.installationFile(mod);
-  const metadata = await adapter.modMetadata(mod);
   const folder = await adapter.modFolderPath(mod);
   if (installation.kind === 'unreadable') return { refusal: installation.reason };
-  if (metadata.kind === 'unreadable') return { refusal: metadataUnreadable(metadata.reason) };
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const taken = typeof game.folder === 'string' ? { gameFiles: NONE_HELD, notes: [] } : await gameFilesOf(adapter, { mod, folder }, game, false);
   if ('refusal' in taken) return taken;
@@ -82,41 +75,32 @@ async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise
   if (typeof game.folder === 'string' && held?.packages.some(({ kind }) => kind === 'gameFolder')) {
     return { refusal: 'its manifest names the game folder, and the game folder was not found' };
   }
-  return { sourceFolder, folder, installationFile: installation.answer, version: metadata.answer.version, game: gameHeld(game.folder, taken.gameFiles), held };
+  return { sourceFolder, folder, installationFile: installation.answer, game: gameHeld(game.folder, taken.gameFiles), held };
 }
 
-/** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its manifest in the
- *  form a build writes, and its assets. */
+/** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
+ *  which takes from the mod's packages each file they give, and its assets. */
 export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
-  const { sourceFolder, folder, installationFile, version, held } = read;
+  const { sourceFolder, folder, installationFile, held } = read;
   const leftOut = new Set([...adapter.metadataFilesInModFolder, `${basename(folder)}${MANIFEST_SUFFIX}`].map((path) => path.toLowerCase()));
   const all = await hashed(adapter, folder, (await adapter.filesIn(folder)).filter((path) => !leftOut.has(path.toLowerCase())));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
   const { manifest: recorded } = await buildManifest(
     { downloadedFiles: [], ...installationFile === undefined ? {} : { installationFile }, ...read.game === undefined ? {} : { game: read.game } },
-    all.filter(({ path }) => !compiled.has(path)), version, held, (text) => adapter.textHash(text));
-  const kept = recorded.files.flatMap((line): ManifestFile[] => {
-    if (line.entry.kind === 'madeByStep') return [line];
-    const pkg = takenFrom(recorded, line);
-    return pkg === undefined ? [] : [{ ...line, package: pkg }];
-  });
-  const notMade = new Set(kept.map(({ path }) => path));
-  const made = all.filter(({ path }) => !notMade.has(path));
-  const manifest: Manifest = {
-    exclude: recorded.exclude, archives: recorded.archives, steps: recorded.steps, tools: recorded.tools,
-    packages: [{ kind: 'sourceRepository', name: basename(sourceFolder), isSubmodule: false }, ...recorded.packages],
-    files: [...made.map(({ path }): ManifestFile => ({ path, entry: { kind: 'held' } })), ...kept],
-    output: basename(folder),
-    ...version === undefined ? {} : { version },
+    all.filter(({ path }) => !compiled.has(path)), undefined, held, (text) => adapter.textHash(text));
+  const kept = recorded.files.filter((line) => isTakenOrStepped(recorded, line));
+  const notAssets = new Set([...kept.map(({ path }) => path), ...compiled]);
+  const buildFile: Manifest = {
+    output: basename(folder), packages: recorded.packages, exclude: recorded.exclude, archives: recorded.archives, steps: recorded.steps, tools: recorded.tools,
+    files: kept,
   };
-  const { name, text } = sourceManifestFile(manifest);
-  return { folder, repository: { sourceFolder, assets: made.filter(({ path }) => !compiled.has(path)).map(({ path }) => path), manifestName: name, manifest: text } };
+  return { folder, repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText(buildFile) } };
 }
 
-/** Why the manifest a mod's folder held could not be removed once its repository holds one (ADR-0022); a
+/** Why the manifest a mod's folder held could not be removed once its repository is made; a
  *  repository in the mod's folder keeps its own. */
 export async function folderManifestRemovedOrWhy({ folder, repository }: MadeRepository): Promise<string | undefined> {
   if (resolve(folder) === resolve(repository.sourceFolder)) return undefined;

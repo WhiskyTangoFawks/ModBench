@@ -13,7 +13,7 @@ const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const CLEAN = { name: 'Clean.esp', origin: 'Harbor' };
 const DROPS = { description: 'drops 25 bytes of parameters', dropsData: true };
 const NOT_MALFORMED = { item: CLEAN, reason: 'Clean.esp is not malformed.' };
-const MADE = { folder: '/instance/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], manifestName: 'Harbor.manifest.json', manifest: '{}' } };
+const MADE = { folder: '/instance/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
 const PREVIEW: PluginRepairPreview = {
   plugin: MALFORMED, hash: 'abc',
   diagnoses: [{ diagnosis: { anchor: 'REGN 00000800 (Harbor)', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT from 6 to 8 bytes with zeros', dropsData: false } }],

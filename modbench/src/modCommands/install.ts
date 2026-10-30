@@ -76,8 +76,7 @@ export async function upgradeLoss({ adapter }: { adapter: InstanceAdapter }, tar
   const mod = target.name;
   const folder = (await adapter.modOrder()).modFolders?.find((held) => sameEntry(adapter, held, { kind: 'mod', name: mod }));
   if (folder === undefined) return undefined;
-  const sourceFolder = (await adapter.sourceMods()).folderOf(mod);
-  const status = await statusOf({ name: mod, folder: folder.path, ...(sourceFolder === undefined ? {} : { sourceFolder }) }, adapter);
+  const status = await statusOf({ name: mod, folder: folder.path }, adapter);
   if (status.unreadable !== undefined) return statusUnread(mod, status.unreadable);
   const loss = lossOf(status);
   return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}.`;
