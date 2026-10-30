@@ -6,6 +6,7 @@
   },
   "references": [
     { "path": "../instanceAdapter" },
+    { "path": "../manifestAdapter" },
     { "path": "../ports" },
     { "path": "../tables" },
     { "path": "../wire" }

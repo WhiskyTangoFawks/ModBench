@@ -39,7 +39,6 @@ export interface ManifestArchive {
 export interface Manifest {
   readonly packages: readonly ManifestPackage[];
   readonly version?: string;
-  readonly output?: string;
   readonly exclude: readonly string[];
   readonly archives: readonly ManifestArchive[];
   readonly steps: readonly ManifestStep[];

@@ -86,14 +86,6 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
 
       expect({ handed, folders: await folderNames() }).toEqual({ handed: [await adapter.modFolderPath('Alpha')], folders: ['Alpha', 'Beta', 'Gamma'] });
     });
-
-    it('trashes no source folder for a mod that none builds', async () => {
-      const handed: string[] = [];
-
-      expect(await adapter.trashSourceFolder('Alpha', (path) => { handed.push(path); return Promise.resolve(); })).toBe(false);
-      expect(handed).toEqual([]);
-    });
-
   });
 
   describe('downloaded files', () => {

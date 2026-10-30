@@ -7,6 +7,7 @@
   "references": [
     { "path": "../loadOrderFileCodec" },
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../tables" },
     { "path": "../wire" }
   ],

@@ -4,7 +4,8 @@
 import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import type { Manifest, ManifestFile } from './manifest';
-import { manifestIn, manifestNameOf } from './manifestFiles';
+import { isManifestPath } from '../repositoriesLib/manifestPath';
+import { manifestFileIn, manifestIn } from './manifestFiles';
 import { installationFileLack } from './packageLack';
 import { packageOf } from './packageOf';
 
@@ -83,8 +84,7 @@ export interface FolderAgainst {
 /** The folder's files against `manifest`'s lines. A file is hashed only where a package entry fixes its bytes, and a line
  *  whose package entry `reads` lacks does not hold its bytes. */
 export async function folderAgainst(manifest: Manifest, folder: string, reads: Pick<FolderReads, 'filesIn' | 'fileStamp' | 'originFileHash' | 'packageEntries'>): Promise<FolderAgainst> {
-  const manifestName = folded(manifestNameOf(folder));
-  const onDisk = new Set((await reads.filesIn(folder)).filter((path) => folded(path) !== manifestName));
+  const onDisk = new Set((await reads.filesIn(folder)).filter((path) => !isManifestPath(path)));
   // A line names a file in another case only where the file system finds that file by the line's name.
   const found = async (path: string): Promise<boolean> => onDisk.has(path) || (await reads.fileStamp(join(folder, path))).kind === 'read';
   const spelledOnDisk = (path: string): string => (onDisk.has(path) ? path : [...onDisk].find((held) => folded(held) === folded(path)) ?? path);
@@ -183,9 +183,8 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
     if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
     const { manifest } = read;
     const [first] = manifest.packages;
-    const spelled = (await reads.filesIn(mod.folder)).find((held) => folded(held) === folded(manifestNameOf(mod.folder)));
     return {
-      ...nothing(mod.name, { manifestFile: join(mod.folder, spelled ?? manifestNameOf(mod.folder)) }), ...listsOf(manifest, await folderAgainst(manifest, mod.folder, reads)),
+      ...nothing(mod.name, { manifestFile: await manifestFileIn(mod.folder) }), ...listsOf(manifest, await folderAgainst(manifest, mod.folder, reads)),
       metadataDiffers: metadataDiffers(metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
       packagesLacking: await packagesLacking(manifest, reads),
     };

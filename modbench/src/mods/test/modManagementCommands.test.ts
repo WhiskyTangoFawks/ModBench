@@ -41,7 +41,7 @@ import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { modCommands, type ModCommands } from '../../modCommands/modCommands';
 import type { InstanceReading, ModlistEntry, ModOrderChange, OriginFile } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { Argument } from '../../wire/argument';
 import { file, folder, mod } from './indexedValue';
 
@@ -255,6 +255,16 @@ describe('uninstall over the selection', () => {
     expect(ask.asked).toEqual([{ message, detail: undefined, buttons: ['Uninstall'] }]);
   });
 
+  it('leaves out of the modal the source another mod\'s manifest still names, which stays', async () => {
+    const ask = scriptedDialog(undefined);
+    const sharing = { ...instance, value: instanceValueFixture({ mods: [...mods], paths: { ...instance.value.paths, sourceDirs: new Map([['Mod A', '/source/A'], ['Mod B', '/source/A']]) } }) };
+
+    registerModContextCommands({ commands: commandsOver(mods).commands, instance: sharing, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log: () => undefined });
+    await invoke('modbench.mod.uninstall', sourceA);
+
+    expect(ask.asked).toEqual([{ message: 'Uninstall "Mod A"? Its folder will be moved to the system trash. It loses its place in mod order and its publisher tags.', detail: undefined, buttons: ['Uninstall'] }]);
+  });
+
   it('uninstalls the selection once confirmed: each folder into the trash it was given, then each line', async () => {
     const { fake, commands } = commandsOver(mods);
 
@@ -263,7 +273,7 @@ describe('uninstall over the selection', () => {
 
     expect(trash.mock.calls).toEqual([['/instance/mods/Mod A'], ['/instance/mods/Mod B']]);
     expect(fake.calls).toEqual([
-      trashed('mod', 'Mod A'), { verb: 'trashSourceFolder', mod: 'Mod A' }, trashed('mod', 'Mod B'), { verb: 'trashSourceFolder', mod: 'Mod B' },
+      trashed('mod', 'Mod A'), trashed('mod', 'Mod B'),
       modOrderChange({ kind: 'dropMod', mod: 'Mod A' }, { kind: 'dropMod', mod: 'Mod B' }),
     ]);
   });
@@ -287,7 +297,7 @@ describe('uninstall over the selection', () => {
   ])('warns, and reports no failed uninstall, of a mod uninstalled whose %s', async (_case, answers, message, detail) => {
     const reporter = recordingReporter();
 
-    register(commandsOver(mods, answers).commands, { reporter });
+    register(commandsOver(mods, answers, { sourceRepositories: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) }).commands, { reporter });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([{ severity: 'warning', message, detail }]);
@@ -981,6 +991,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   const fileRow = new FileNode(modA, { kind: 'mod', name: 'Mod A' }, file('mods/Mod A', 'a.dds'), 'a.dds');
   const eachWriteInOrder: InstanceAnswers = { refusals: (call) => { progressSteps.push(call.verb); return undefined; } };
   const commands = () => commandsOver(mods, eachWriteInOrder, {
+    sourceRepositories: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }),
     modFiles: new Map([['Mod A', { origin: 'Mod A', folder: '/instance/mods/Mod A', files: [fileRow.file], folders: [], notes: [] }]]),
   }).commands;
   const reporter = () => recordingReporter();
@@ -1430,8 +1441,6 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
     ['separator delete', { unreadReads: { modOrder: 'ENOENT: modlist.txt' } }, 'Failed to delete separators.'],
     ['enable', { refusals: refusing('changeModOrder', 'ENOENT: modlist.txt') }, 'Failed to enable mods.'],
     ['move', { refusals: refusing('changeModOrder', 'ENOENT: modlist.txt') }, 'Failed to move mods.'],
-    ['exclude file', { unreadReads: { sourceMods: 'ENOENT: modlist.txt' } }, 'Could not exclude 2 files.'],
-    ['include file', { unreadReads: { sourceMods: 'ENOENT: modlist.txt' } }, 'Could not include 2 files.'],
   ])('%s reports a refusal of the whole selection with its cause', async (name, answers, message) => {
     const reporter = recordingReporter();
 

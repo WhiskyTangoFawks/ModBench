@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { modCommands, type ModPackage } from '../modCommands';
 import type { DownloadedFile, DownloadedFileMeta, InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, sourceModsOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ManifestFile } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 
@@ -123,7 +123,7 @@ describe('installMod', () => {
   });
 
   it('refuses a source mod as the mod to upgrade, even forced, naming its build file, and installs nothing', async () => {
-    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(mods, UPGRADED.name), sourceMods: sourceModsOf({ [UPGRADED.name]: '/source/vats' }) }));
+    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(mods, UPGRADED.name), sourceRepositories: repositoriesOf({ [UPGRADED.name]: '/source/vats' }) }));
 
     const result = await modCommands(fake.adapter).installMod(INSTALLATION_FILE, UPGRADED, true);
 

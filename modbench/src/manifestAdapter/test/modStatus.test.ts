@@ -112,6 +112,13 @@ describe('a mod\'s status against its manifest', () => {
     expect((await status()).manifestFile).toBe(join(folder, 'MOD.Manifest.json'));
   });
 
+  it('reads and names the manifest a folder renamed outside Modbench holds under the name it had (mods.md, Build, story 4)', async () => {
+    heldAsItSays(manifest([]));
+    await write('Old Name.manifest.json', manifestText(manifest([])));
+
+    expect(await status()).toEqual(heldAs({ manifestFile: join(folder, 'Old Name.manifest.json') }));
+  });
+
   it('names each file no line names, but its metadata and its manifest in any case', async () => {
     await Promise.all([write('mine.txt', 'mine'), write('meta.ini', 'metadata'), write('a.nif', 'hello')]);
     heldAsItSays(manifest([]));

@@ -1,4 +1,3 @@
-import { MANIFEST_OUTPUT_KEY } from '../wire/sourceMod';
 import type { Manifest, ManifestFile, ManifestPackage } from './manifest';
 
 const upperUnit = (unit: string): string => {
@@ -60,7 +59,6 @@ export function manifestText(manifest: Manifest): string {
   const first = manifest.packages[0]?.name;
   const files = [...manifest.files].sort((a, b) => ordinalIgnoreCaseThenOrdinal(a.path, b.path));
   const members = [
-    ...(manifest.output === undefined ? [] : [`"${MANIFEST_OUTPUT_KEY}": ${JSON.stringify(manifest.output)}`]),
     ...lineEach('packages', manifest.packages.map((pkg, index) => packageLine(pkg, index === 0 ? manifest.version : undefined))),
     ...(manifest.exclude.length === 0 ? [] : [`"exclude": ${JSON.stringify([...manifest.exclude].sort(ordinalIgnoreCaseThenOrdinal))}`]),
     ...(manifest.archives.length === 0

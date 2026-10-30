@@ -1,10 +1,12 @@
-// commands.md, decompile and commit: a repository holding the mod's plugin source, a build file naming this folder as the
-// output, and as its assets only the files its installation file does not yield with their bytes (ADR-0016).
+// commands.md, decompile and commit: a repository holding the mod's plugin source, a build file, and as its assets only the
+// files its installation file does not yield with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, manifestNameOf, manifestText, packageOf, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
+import {
+  manifestIn, manifestText, packageOf, sourceModsOf, writeManifestIn, type Manifest, type ManifestFile,
+} from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
@@ -13,7 +15,7 @@ import { buildManifest, type GameHeld, type HashedModFile } from './manifestBuil
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceMods'>;
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'modMetadata'>;
 
 /** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
@@ -81,7 +83,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, installationFile, held } = read;
-  const leftOut = new Set([...adapter.metadataFilesInModFolder, manifestNameOf(folder)].map((path) => path.toLowerCase()));
+  const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
   const all = await hashed(adapter, folder, (await adapter.filesIn(folder)).filter((path) => !leftOut.has(path.toLowerCase())));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
@@ -90,16 +92,47 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     all.filter(({ path }) => !compiled.has(path)), undefined, held, (text) => adapter.textHash(text));
   const kept = recorded.files.filter((line) => isTakenOrStepped(recorded, line));
   const notAssets = new Set([...kept.map(({ path }) => path), ...compiled]);
-  const buildFile: Manifest = {
-    output: basename(folder), packages: recorded.packages, exclude: recorded.exclude, archives: recorded.archives, steps: recorded.steps, tools: recorded.tools,
-    files: kept,
-  };
+  const buildFile: Manifest = { packages: recorded.packages, exclude: [], archives: recorded.archives, steps: recorded.steps, tools: recorded.tools, files: kept };
   return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
+}
+
+// The mod is a source mod once its folder's manifest names its repository, with the mod's version, and no file until its
+// first build records them (mods.md, Build, story 3).
+async function folderLinkedOrWhy(adapter: Pick<Adapter, 'modFolderPath' | 'modMetadata'>, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
+  const [folder, metadata] = await Promise.all([adapter.modFolderPath(mod), adapter.modMetadata(mod)]);
+  if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
+  try {
+    await writeManifestIn(folder, {
+      packages: [{ kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false }],
+      exclude: [], archives: [], steps: [], tools: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
+    });
+    return undefined;
+  } catch (err) {
+    return `its manifest could not name its repository: ${errorMessage(err)}`;
+  }
+}
+
+/** Makes each mod of `committed` a source mod of the repository made for it; answers why not, by the mod. */
+export async function foldersNotLinked(
+  adapter: Pick<Adapter, 'modFolderPath' | 'modMetadata'>, made: ReadonlyMap<string, MadeRepository>, committed: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const notLinked = new Map<string, string>();
+  for (const mod of committed) {
+    const repository = made.get(mod);
+    const why = repository === undefined ? undefined : await folderLinkedOrWhy(adapter, mod, repository);
+    if (why !== undefined) notLinked.set(mod, why);
+  }
+  return notLinked;
 }
 
 /** The repository decompile and commit makes for each mod decompile and repair asks for, read as the instance is now. */
 export const newRepositoriesOver = (adapter: Adapter): {
   readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
+  readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 } => ({
-  of: async (mod) => newRepositoryOf(adapter, mod, await gameToHand(adapter, await adapter.sourceMods())),
+  of: async (mod) => {
+    const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+    return newRepositoryOf(adapter, mod, await gameToHand(adapter, sourceMods));
+  },
+  notLinked: (made, committed) => foldersNotLinked(adapter, made, committed),
 });

@@ -1,4 +1,4 @@
-// mods.md, A source mod, story 2: a source mod's folder holds a file its manifest excludes under the mod manager's
+// mods.md, A source mod, story 2: a source mod's exclusions are the modlist's, held in its folder under the mod manager's
 // exclusion mark, and a line names the path the folder holds its file at.
 
 import type { Manifest, ManifestFile, PackageEntry } from './manifest';
@@ -32,4 +32,19 @@ export function lineAtFolderPath(manifest: Manifest, line: ManifestFile, mark: s
   const inPackage = entry.kind === 'heldAt' ? entry.path : line.path;
   const moved = pkg.kind === 'sourceRepository' ? { kind: 'held' as const } : entryAt(at, inPackage);
   return { path: at, entry: moved, ...(line.package === undefined ? {} : { package: line.package }) };
+}
+
+// Each path above and at `path` that a segment under the mark excludes, by its path without the mark.
+function excludedBy(path: string, mark: string): string[] {
+  const segments = path.split('/');
+  return segments.flatMap((segment, at) => (segment.endsWith(mark) ? [unmarked(segments.slice(0, at + 1).join('/'), mark)] : []));
+}
+
+/** The paths a source mod's build excludes: each `held` holds under `mark`, and each `manifest` records under it whose
+ *  file `held` does not hold included. `held` is the folder's files, none to make the folder what `manifest` says. */
+export function exclusionsOf(manifest: Manifest | undefined, held: readonly string[], mark: string): string[] {
+  const included = new Set(held.map((path) => path.toLowerCase()));
+  const recorded = (manifest?.files ?? []).map(({ path }) => path).filter((path) => !included.has(unmarked(path, mark).toLowerCase()));
+  const byFolded = new Map([...recorded, ...held].flatMap((path) => excludedBy(path, mark)).map((path) => [path.toLowerCase(), path]));
+  return [...byFolded.values()].sort();
 }

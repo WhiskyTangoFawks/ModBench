@@ -6,6 +6,7 @@
   },
   "references": [
     { "path": "../ports" },
+    { "path": "../repositoriesLib" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

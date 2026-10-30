@@ -16,6 +16,7 @@ import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import type { EntryRef, ModCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
+import { sourceFolderTrashed } from '../manifestAdapter/manifestAdapter';
 import {
   endAtTop, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
 } from './movePick';
@@ -152,6 +153,10 @@ export function registerModMoveCommand(
 
 const UNINSTALL_LOSS = 'its place in mod order and its publisher tags';
 
+// mods.md, Uninstall: a repository another mod's manifest still names stays.
+const keepsItsSource = ({ paths: { sourceDirs }, entryKey }: InstanceValue, mods: readonly string[]) => (mod: string): boolean =>
+  sourceDirs.has(mod) && sourceFolderTrashed(sourceDirs, mod, mods, (name) => entryKey({ kind: 'mod', name })) === undefined;
+
 // mods.md, Uninstall.
 async function confirmUninstall(names: readonly string[], sourceMods: readonly string[], ask: AskQuestion): Promise<boolean> {
   const [only] = names;
@@ -249,14 +254,15 @@ export function registerModContextCommands(
 
   const uninstallRefusals = (mods: readonly string[]) => refusedWithoutForce(
     mods, 'uninstall',
-    (name) => `it would move its folder${instance.value.sourceMods.has(name) ? ' and its source' : ''} to the system trash, and lose ${UNINSTALL_LOSS}`);
+    (name) => `it would move its folder${instance.value.sourceMods.has(name) && !keepsItsSource(instance.value, mods)(name) ? ' and its source' : ''} to the system trash, and lose ${UNINSTALL_LOSS}`);
 
   const uninstall: AgentGesture<ModlistNode, UninstallRequest, GestureResult<Uninstalled>, { force?: boolean }> = {
     fromView: async (entry) => {
       const rows = pluralArgument(entry, 'mod');
       const mods = rows.map((n) => n.mod.name);
       if (mods.length === 0) return undefined;
-      const sourceMods = rows.filter((n) => n.facts?.sourceMod === true).map((n) => n.mod.name);
+      const keeps = keepsItsSource(instance.value, mods);
+      const sourceMods = rows.filter((n) => n.facts?.sourceMod === true && !keeps(n.mod.name)).map((n) => n.mod.name);
       return (await confirmUninstall(mods, sourceMods, ask)) ? { mods, force: true } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ mods: argument.map(modNameOf), force: options.force === true }),

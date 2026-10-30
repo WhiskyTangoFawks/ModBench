@@ -4,14 +4,14 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
   entryNotFound, fileInFolder, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type ModMetadata, type InstanceAdapter,
-  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type PublisherTagChange, type SeparatorsPlace, type SourceMods,
+  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type PublisherTagChange, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { changeBuildFile, type BuildFileChange } from './buildFileChange';
 import { installMod, upgradeLoss } from './install';
+import { sourceFolderTrashed, sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 export type { SelectionResult };
 export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
@@ -121,13 +121,9 @@ export interface OriginFileRef {
   readonly relativePath: string;
 }
 
-const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
-
-const exclusionChange = (mark: OriginFileMark, paths: readonly string[], exclusionMark: string): BuildFileChange =>
-  (mark === 'Excluded' ? { exclude: paths, include: [], exclusionMark } : { exclude: [], include: paths, exclusionMark });
-
-function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionOutcome<OriginFileRef>> {
-  return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
+// mods.md, A source mod, story 2: a source mod's file is marked as any mod's, and its next build keeps the mark.
+async function markFiles(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionResult<OriginFileRef>> {
+  const outcome = await selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
     try {
       const marked = await adapter.markOriginFile(file.origin, file.relativePath, mark);
       if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
@@ -137,98 +133,7 @@ function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mar
       return refuse(err);
     }
   }, (file) => file);
-}
-
-interface ReadFile {
-  readonly file: OriginFileRef;
-  readonly includedPath: string;
-}
-
-type SourceGroups = ReadonlyMap<string | undefined, readonly ReadFile[]>;
-
-function bySourceFolder(reads: readonly ReadFile[], sourceMods: SourceMods): SourceGroups {
-  const groups = new Map<string | undefined, ReadFile[]>();
-  for (const read of reads) {
-    const { origin } = read.file;
-    const sourceFolder = origin.kind === 'mod' ? sourceMods.folderOf(origin.name) : undefined;
-    groups.set(sourceFolder, [...(groups.get(sourceFolder) ?? []), read]);
-  }
-  return groups;
-}
-
-type ExclusionChange = (sourceFolder: string, files: readonly ReadFile[], to: OriginFileMark) => Promise<string | undefined>;
-
-// Each source mod's refusal by its source folder.
-async function configureEach(change: ExclusionChange, groups: SourceGroups, mark: OriginFileMark): Promise<ReadonlyMap<string, string>> {
-  const refusals = new Map<string, string>();
-  for (const [sourceFolder, files] of groups) {
-    if (sourceFolder === undefined) continue;
-    const refusal = await change(sourceFolder, files, mark);
-    if (refusal !== undefined) refusals.set(sourceFolder, refusal);
-  }
-  return refusals;
-}
-
-// A file of a configured source mod that could not be marked has its change to the configuration taken back.
-async function markInSourceMod(
-  adapter: InstanceAdapter, change: ExclusionChange, sourceFolder: string, reads: readonly ReadFile[], mark: OriginFileMark,
-): Promise<SelectionOutcome<OriginFileRef>> {
-  const outcome = await markEach(adapter, reads.map(({ file }) => file), mark);
-  if (outcome.refused.length === 0) return outcome;
-  const unmarked = reads.filter(({ file }) => outcome.refused.some(({ item }) => item === file));
-  const takenBack = await change(sourceFolder, unmarked, UNMARK[mark]);
-  if (takenBack === undefined) return outcome;
-  return {
-    landed: outcome.landed,
-    refused: outcome.refused.map(({ item, reason }) => ({
-      item, reason: `${reason} Its change to the build file could not be taken back: ${takenBack}`,
-    })),
-  };
-}
-
-async function readEach(
-  adapter: InstanceAdapter, files: readonly OriginFileRef[],
-): Promise<{ read: ReadFile[]; unread: ItemRefusal<OriginFileRef>[] }> {
-  const read: ReadFile[] = [];
-  const unread: ItemRefusal<OriginFileRef>[] = [];
-  for (const file of files) {
-    try {
-      const found = await adapter.originFile(file.origin, file.relativePath);
-      if (found === undefined) unread.push({ item: file, reason: goneFromDisk(file.relativePath) });
-      else read.push({ file, includedPath: found.includedPath });
-    } catch (err) {
-      unread.push({ item: file, reason: refuse(err).refusal });
-    }
-  }
-  return { read, unread };
-}
-
-// A refusal all a source mod's files share writes none of them (commands.md, A selection is one gesture).
-async function markFiles(
-  adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark,
-): Promise<SelectionResult<OriginFileRef>> {
-  let sourceMods: SourceMods;
-  try {
-    sourceMods = await adapter.sourceMods();
-  } catch (err) {
-    return refuse(err);
-  }
-  const { read, unread } = await readEach(adapter, files);
-  const change: ExclusionChange = (sourceFolder, of, to) =>
-    changeBuildFile(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath), adapter.exclusionMark));
-  const groups = bySourceFolder(read, sourceMods);
-  const refusals = await configureEach(change, groups, mark);
-  const landed: OriginFileRef[] = [];
-  const refused: ItemRefusal<OriginFileRef>[] = [...unread];
-  for (const [sourceFolder, inIt] of groups) {
-    const refusal = sourceFolder === undefined ? undefined : refusals.get(sourceFolder);
-    const outcome = sourceFolder === undefined ? await markEach(adapter, inIt.map(({ file }) => file), mark)
-      : refusal === undefined ? await markInSourceMod(adapter, change, sourceFolder, inIt, mark)
-        : { landed: [], refused: inIt.map(({ file }) => ({ item: file, reason: refusal })) };
-    landed.push(...outcome.landed);
-    refused.push(...outcome.refused);
-  }
-  return { applied: true, outcome: { landed, refused } };
+  return { applied: true, outcome };
 }
 
 /** A row `modbench.mod.addPublisherTag` and `modbench.mod.removePublisherTag` act on: a mod, or a file or folder in one by
@@ -334,8 +239,11 @@ async function trashThenUnlist(
   adapter: InstanceAdapter, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
   let order: readonly EntryRef[];
+  let sourceMods: SourceMods | undefined;
   try {
-    ({ mods: order } = await adapter.modOrder());
+    const { mods, modFolders } = await adapter.modOrder();
+    order = mods;
+    if (kind === 'mod') sourceMods = await sourceModsOf(modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
   } catch (err) {
     return refuse(err);
   }
@@ -344,7 +252,10 @@ async function trashThenUnlist(
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
   const sourceRefusals = new Map<string, string>();
-  for (const name of names.filter((n) => isListed(adapter, order, { kind, name: n }))) {
+  const listed = names.filter((n) => isListed(adapter, order, { kind, name: n }));
+  const sourcesTrashed = new Set<string>();
+  for (const name of listed) {
+    const sourceFolder = sourceMods && sourceFolderTrashed(sourceMods.folders, name, listed, (mod) => adapter.entryKey({ kind: 'mod', name: mod }));
     try {
       if (await adapter.trashEntryFolder({ kind, name }, trash)) trashed.add(name);
       toUnlist.push(name);
@@ -352,9 +263,10 @@ async function trashThenUnlist(
       refused.push({ item: { name }, reason: errorMessage(err) });
       continue;
     }
-    if (kind === 'mod') {
+    if (sourceFolder !== undefined && !sourcesTrashed.has(sourceFolder)) {
+      sourcesTrashed.add(sourceFolder);
       try {
-        await adapter.trashSourceFolder(name, trash);
+        await adapter.trashSourceFolder(sourceFolder, trash);
       } catch (err) {
         sourceRefusals.set(name, errorMessage(err));
       }
@@ -496,8 +408,7 @@ async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string
   return { ...(tagRefusal !== undefined && { tagRefusal }), ...(keepOutRefusal !== undefined && { keepOutRefusal }) };
 }
 
-// The folder, then a source mod's build file, then the line in each profile, the active one first. A
-// profile that does not list the mod is left as it was.
+// The folder, then the line in each profile, the active one first. A profile that does not list the mod is left as it was.
 async function renameMod(adapter: InstanceAdapter, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   if (from === to) return { applied: true, lineRefusals: [], unchanged: true };
@@ -505,26 +416,14 @@ async function renameMod(adapter: InstanceAdapter, from: string, to: string): Pr
   if (refused) return refused;
   let activeProfile: string;
   let profiles: readonly string[];
-  let sourceFolder: string | undefined;
   let fromFolder: string | undefined;
   try {
     const unreadable = await adapter.publisherConfigurationRefusal();
     if (unreadable !== undefined) return { applied: false, refusal: unreadable };
-    [activeProfile, profiles, sourceFolder, fromFolder] = await Promise.all([
-      adapter.activeProfile(), adapter.profiles(), adapter.sourceMods().then((sourceMods) => sourceMods.folderOf(from)), adapter.modFolderPath(from),
-    ]);
+    [activeProfile, profiles, fromFolder] = await Promise.all([adapter.activeProfile(), adapter.profiles(), adapter.modFolderPath(from)]);
     await adapter.renameModFolder(from, to);
   } catch (err) {
     return refuse(err);
-  }
-  const configured = sourceFolder === undefined ? undefined : await changeBuildFile(sourceFolder, { output: to });
-  if (configured !== undefined) {
-    try {
-      await adapter.renameModFolder(to, from);
-    } catch (err) {
-      return { applied: false, refusal: `${configured} The folder could not be renamed back to "${from}": ${errorMessage(err)}` };
-    }
-    return { applied: false, refusal: configured };
   }
   const publisherRefusals = await updatePublisherAfterRename(adapter, fromFolder, to);
   const lineRefusals: { profile: string; refusal: string }[] = [];
@@ -545,17 +444,11 @@ const NO_MOD_FOLDERS = 'there is no folder for mods';
 const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry.name : `${entry.name} (separator)`);
 
 async function syncMods(adapter: InstanceAdapter): Promise<ModSyncResult> {
-  let sourceMods: SourceMods;
-  try {
-    sourceMods = await adapter.sourceMods();
-  } catch (err) {
-    return refuse(err);
-  }
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await changeModOrder(adapter, (order, folders) => {
     if (folders === undefined) throw new Error(NO_MOD_FOLDERS);
-    const gone = order.filter((entry) => folders.holding(entry) === undefined && !(entry.kind === 'mod' && sourceMods.builds(entry.name)));
+    const gone = order.filter((entry) => folders.holding(entry) === undefined);
     const held = new Set(order.flatMap((entry) => folders.holding(entry)?.path ?? []));
     const unlisted = folders.all.filter((folder) => !held.has(folder.path))
       .sort((a, b) => a.name.localeCompare(b.name));

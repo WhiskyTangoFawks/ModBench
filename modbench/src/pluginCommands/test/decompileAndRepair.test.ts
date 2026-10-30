@@ -4,7 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { MEditClient } from '../../client';
 
@@ -15,9 +15,18 @@ const MADE = { repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], 
 describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
   let made: typeof MADE | { refusal: string };
+  let linked: string[];
+  let notLinked: string | undefined;
   const repairIn = (sourceMods: Record<string, string>, force = false) => {
-    const newRepositories = { of: (mod: string) => Promise.resolve(mod === 'Harbor' ? made : { refusal: 'unasked' }) };
-    return pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceMods: sourceModsOf(sourceMods) })).adapter, client, newRepositories)
+    const newRepositories = {
+      of: (mod: string) => Promise.resolve(mod === 'Harbor' ? made : { refusal: 'unasked' }),
+      notLinked: (madeFor: ReadonlyMap<string, unknown>, committed: readonly string[]) => {
+        linked.push(...committed.filter((mod) => madeFor.has(mod)));
+        const why = notLinked;
+        return Promise.resolve(new Map(why === undefined ? [] : committed.map((mod) => [mod, why] as const)));
+      },
+    };
+    return pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(sourceMods) })).adapter, client, newRepositories)
       .decompileAndRepair([MALFORMED], force);
   };
   const sent = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => call.args);
@@ -30,6 +39,8 @@ describe('decompileAndRepair', () => {
     client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndRepair', landingEach);
     made = MADE;
+    linked = [];
+    notLinked = undefined;
   });
 
   it('repairs each plugin, a mod with no repository handed the one decompile and commit makes', async () => {
@@ -37,10 +48,24 @@ describe('decompileAndRepair', () => {
     expect(sent()).toEqual([[[{ plugin: MALFORMED, newRepository: MADE.repository }], true]]);
   });
 
-  it('hands a mod a repository builds no new one', async () => {
+  it('makes a repaired mod with no repository a source mod: its folder\'s manifest names the one made (plugin-source.md, Decompile and repair, story 4)', async () => {
+    await repairIn({}, true);
+
+    expect(linked).toEqual(['Harbor']);
+  });
+
+  it('names a repaired mod whose folder\'s manifest could not name its repository', async () => {
+    notLinked = 'its manifest could not name its repository: EACCES';
+
+    expect(await repairIn({}, true)).toEqual({ applied: true, outcome: {
+      landed: [MALFORMED], refused: [REFUSED, { item: MALFORMED, reason: 'was repaired, but its manifest could not name its repository: EACCES.' }],
+    } });
+  });
+
+  it('hands a mod a repository builds no new one, and links nothing', async () => {
     await repairIn({ Harbor: '/source/Harbor' }, true);
 
-    expect(sent()).toEqual([[[{ plugin: MALFORMED }], true]]);
+    expect([sent(), linked]).toEqual([[[[{ plugin: MALFORMED }], true]], []]);
   });
 
   it('sends the force it was given', async () => {

@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, it, expect } from 'vitest';
-import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import { manifestIn, writeBuildFileIn, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, manifestText, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
+import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { readManifest } from '../../manifestAdapter/manifestRead';
 import type { DecompileAndCommitMod } from '../../client';
@@ -16,25 +17,22 @@ import type { BuildMod } from '../../client/MEditClient';
 let root: string;
 let SOURCES: { ModA: string; ModB: string };
 
-const buildFileOf = (output: string, over: Partial<Manifest> = {}): Manifest =>
-  ({ packages: [], output, exclude: [], archives: [], steps: [], tools: [], files: [], ...over });
-
 const folderOf = (mod: string): string => join(root, 'mods', mod);
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'source-commands-'));
   SOURCES = { ModA: join(root, 'ModA'), ModB: join(root, 'Old ModB') };
-  for (const [output, folder] of Object.entries(SOURCES)) {
+  for (const [mod, folder] of Object.entries(SOURCES)) {
     await mkdir(folder, { recursive: true });
-    await mkdir(folderOf(output), { recursive: true });
-    await writeBuildFileIn(folder, buildFileOf(output));
+    await mkdir(folderOf(mod), { recursive: true });
+    await writeBuildFile(folder);
   }
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const fakeAdapter = (answers: InstanceAnswers = {}, gameRelease = 'Fallout4') =>
   fakeInstanceAdapter(readingFixture({
-    gameRelease, modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceMods: sourceModsOf(SOURCES, [], [], { '/source/ModD': 'Other' }),
+    gameRelease, modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES),
   }), answers).adapter;
 
 const recorded = async (mod: string): Promise<Manifest | undefined> => {
@@ -53,18 +51,42 @@ const buildingEach = (client: InMemoryMEditClient): void => {
 };
 
 describe('sourceCommands build', () => {
-  it('hands mEdit each mod with the source folder that builds it, its folder, what its build file excludes and packs, the exclusion mark and the release\'s archive variants', async () => {
-    await writeBuildFileIn(SOURCES.ModA, buildFileOf('ModA', { exclude: ['b.dds'], archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }));
+  it('hands mEdit each mod with the source folder that builds it, its folder, what its folder excludes, what its build file packs, the exclusion mark and the release\'s archive variants', async () => {
+    await writeBuildFile(SOURCES.ModA, buildFileOf({ archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }));
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+    await sourceCommands({ client, adapter: fakeAdapter({ folderFiles: new Map([[folderOf('ModA'), [`b.dds${EXCLUSION_MARK}`, 'c.dds']]]) }), saveUnsaved: savedAll, tasks: recordingTasks() })
+      .build(['ModA', 'ModB']);
 
     const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: BA2, textures: BA2 } };
     expect(client.calls).toEqual([
       { method: 'build', args: [[{ name: 'ModA', sourceFolder: SOURCES.ModA, folder: folderOf('ModA'), exclude: ['b.dds'], taken: [], archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }], facts] },
       { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], taken: [], archives: [] }], facts] },
     ]);
+  });
+
+  it('keeps each exclusion the manifest records whose file the folder does not hold (mods.md, A source mod, story 2)', async () => {
+    const recording: Manifest = {
+      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], exclude: [], archives: [], steps: [], tools: [],
+      files: [{ path: `docs${EXCLUSION_MARK}/readme.txt`, entry: { kind: 'held' } }],
+    };
+    await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), manifestText(recording));
+    const client = new InMemoryMEditClient();
+    buildingEach(client);
+
+    await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect(client.calls).toMatchObject([{ args: [[{ name: 'ModA', exclude: ['docs'] }], expect.anything()] }]);
+  });
+
+  it('refuses a mod whose manifest cannot be read, naming why, as its exclusions are there', async () => {
+    await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{');
+    const client = new InMemoryMEditClient();
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect([client.calls, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: 'was not built: its manifest cannot be read at line 1.' }] }]);
   });
 
   it('saves each mod\'s source folder, and refuses a mod whose file VS Code leaves unsaved, naming the file, while the rest build', async () => {
@@ -99,7 +121,6 @@ describe('sourceCommands build', () => {
     ['whose metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) }, ['ModA', 'ModB'],
       'ModA', 'its metadata could not be read: EISDIR: meta.ini', 'ModB'],
     ['no repository builds', {}, ['ModA', 'ModC'], 'ModC', 'no repository in the source folder builds it', 'ModA'],
-    ['whose repository\'s build file builds another mod', {}, ['ModA', 'ModD'], 'ModD', 'its folder is "ModD", but its repository\'s build file builds "Other"', 'ModA'],
   ])('refuses a mod %s, naming why, and builds the rest', async (_case, answers, mods, item, reason, sent) => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
@@ -121,18 +142,16 @@ describe('sourceCommands build', () => {
 
   it.each<[string, () => Promise<void>, string, Record<string, true>]>([
     ['holds no build file', () => rm(join(SOURCES.ModA, BUILD_FILE)), 'was not built: \'<ModA>\' holds no build file.', {}],
-    ['names another output folder', () => writeBuildFileIn(SOURCES.ModA, buildFileOf('Other')),
-      'was not built: its build file names the output folder \'Other\', not its folder \'ModA\'.', {}],
-    ['runs a tool this machine has no task for', () => writeBuildFileIn(SOURCES.ModA, buildFileOf('ModA', {
+    ['runs a tool this machine has no task for', () => writeBuildFile(SOURCES.ModA, buildFileOf({
       steps: [{ task: 'Zip', args: [] }], tools: [{ task: 'Zip', page: 'https://example.com/zip' }],
-    })).then(() => undefined), 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).', { lacksATask: true }],
-    ['takes a file from an installation file the downloads folder lacks', () => writeBuildFileIn(SOURCES.ModA, buildFileOf('ModA', {
+    })), 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).', { lacksATask: true }],
+    ['takes a file from an installation file the downloads folder lacks', () => writeBuildFile(SOURCES.ModA, buildFileOf({
       packages: [{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H' }], files: [{ path: 'a.dds', entry: { kind: 'held' } }],
-    })).then(() => undefined), 'was not built: installation file \'Pack.7z\' is missing.', {}],
+    })), 'was not built: installation file \'Pack.7z\' is missing.', {}],
   ])('refuses a mod whose repository %s, naming why, before anything is written', async (_case, arrange, reason, flags) => {
     await arrange();
     const client = new InMemoryMEditClient();
-    const fake = fakeInstanceAdapter(readingFixture({ sourceMods: sourceModsOf(SOURCES) }));
+    const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }));
 
     const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
 
@@ -142,7 +161,7 @@ describe('sourceCommands build', () => {
 
 describe('sourceCommands build, in mod order', () => {
   const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'separator', name: 'Group', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
-  const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceMods: sourceModsOf(SOURCES) })).adapter;
+  const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) })).adapter;
 
   it('builds the mods from the losing end of mod order, the winning mod last, whatever order they were asked in', async () => {
     const client = new InMemoryMEditClient();
@@ -175,7 +194,7 @@ describe('sourceCommands build, in mod order', () => {
 
   it('runs a mod\'s steps in its folder once mEdit built it, and writes its manifest, before the next mod builds', async () => {
     const steps: ManifestStep[] = [{ task: 'Patch', args: ['a'] }];
-    await writeBuildFileIn(SOURCES.ModB, buildFileOf('ModB', { steps, tools: [{ task: 'Patch', page: 'https://example.com/patch' }] }));
+    await writeBuildFile(SOURCES.ModB, buildFileOf({ steps, tools: [{ task: 'Patch', page: 'https://example.com/patch' }] }));
     const log: string[] = [];
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
@@ -223,7 +242,7 @@ describe('sourceCommands build, in mod order', () => {
   });
 
   it('names a mod whose step failed, and writes no manifest', async () => {
-    await writeBuildFileIn(SOURCES.ModA, buildFileOf('ModA', { steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }] }));
+    await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }] }));
     const client = new InMemoryMEditClient();
     buildingEach(client);
     const tasks = recordingTasks(['Optimise'], { [folderOf('ModA')]: 'step \'Optimise\' exited with code 2' });
@@ -238,7 +257,7 @@ describe('sourceCommands build, in mod order', () => {
 });
 
 describe('sourceCommands decompileAndCommit', () => {
-  const modsAt = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture({ sourceMods: sourceModsOf(SOURCES) }), answers).adapter;
+  const modsAt = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), answers).adapter;
   const FOLDER = '/instance/mods/ModA';
   const hashed = (files: Record<string, string>, folder = FOLDER): InstanceAnswers => ({
     folderFiles: new Map([[folder, Object.keys(files)]]),
@@ -256,7 +275,7 @@ describe('sourceCommands decompileAndCommit', () => {
     return read.manifest;
   };
 
-  it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and its build file naming its folder as its output and taking from its packages each file they give', async () => {
+  it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and its build file taking from its packages each file they give', async () => {
     const { client, handed } = committing();
     const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
     const adapter = modsAt({
@@ -269,8 +288,31 @@ describe('sourceCommands decompileAndCommit', () => {
     const [mod] = handed;
     expect(mod).toMatchObject({ name: 'ModA', repository: { sourceFolder: '/source/ModA', assets: ['scripts/b.pex'] } });
     expect(buildFileHanded(mod)).toEqual({
-      ...buildFileOf('ModA'), packages: [{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H' }], files: [{ path: 'textures/a.dds', entry: { kind: 'held' } }],
+      ...buildFileOf(), exclude: [], packages: [{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H' }], files: [{ path: 'textures/a.dds', entry: { kind: 'held' } }],
     });
+  });
+
+  it('names the repository in each committed mod\'s manifest, with the mod\'s version and no file, so the mod is a source mod (commands.md, decompile and commit)', async () => {
+    const folder = folderOf('ModA');
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('decompileAndCommit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
+    const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') }), { metadata: new Map([['ModA', { version: '1.2.3' }]]) }).adapter;
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+
+    expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
+    expect(await manifestIn(folder)).toEqual({ manifest: {
+      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], version: '1.2.3', exclude: [], archives: [], steps: [], tools: [], files: [],
+    } });
+  });
+
+  it('names a committed mod whose manifest could not name its repository', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('decompileAndCommit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [{ item: 'ModA', reason: expect.stringMatching(/^was committed, but its manifest could not name its repository: /) as unknown }] });
   });
 
   it('commits as an asset a file its installation file holds with other bytes', async () => {

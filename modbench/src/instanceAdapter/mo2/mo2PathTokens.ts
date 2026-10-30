@@ -15,7 +15,7 @@ import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
 import type { Mo2Context } from './mo2Context';
-import { MANIFEST_SUFFIX } from '../../wire/sourceMod';
+import { MANIFEST_SUFFIX } from '../../repositoriesLib/manifestPath';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens' | 'pathsOutsideFolders'>;
 

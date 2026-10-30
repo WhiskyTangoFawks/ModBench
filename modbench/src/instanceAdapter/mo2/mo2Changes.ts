@@ -17,7 +17,6 @@ import { ensureDir, exists, putIfChanged, putStreamedIf, remove, withLock, write
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
-import { outputUnset, sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
@@ -136,11 +135,8 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       return true;
     },
 
-    async trashSourceFolder(mod, trash) {
-      const source = (await sourceModsIn(instanceRoot)).folderOf(mod);
-      if (source !== undefined) await trash(source);
-      await outputUnset(instanceRoot, mod);
-      return source !== undefined;
+    async trashSourceFolder(sourceFolder, trash) {
+      await trash(sourceFolder);
     },
 
     async markDownloadedFile(name, mark) {

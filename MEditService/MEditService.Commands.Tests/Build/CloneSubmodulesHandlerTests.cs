@@ -22,7 +22,7 @@ public sealed class CloneSubmodulesHandlerTests : IDisposable
     [Fact]
     public void AnAbsentSubmodule_IsClonedAtItsPin_SoItsManifestIsThere()
     {
-        var pin = _submodule.Commit(("build.json", "{\"output\": \"Mod\", \"files\": []}"));
+        var pin = _submodule.Commit(("build.json", "{\"files\": []}"));
         _submodule.Pin(pin);
 
         var answer = TestEditService.CloneSubmodulesHandler().Clone([new Submodule(_submodule.Folder, pin, null)], CancellationToken.None);
@@ -35,7 +35,7 @@ public sealed class CloneSubmodulesHandlerTests : IDisposable
     [Fact]
     public void ASubmoduleAtAnotherCommitThanItsPin_IsNamedWithTheCommit_AndLeftThere()
     {
-        var first = _submodule.Commit(("build.json", "{\"output\": \"Mod\", \"files\": []}"));
+        var first = _submodule.Commit(("build.json", "{\"files\": []}"));
         var second = _submodule.Commit(("notes.txt", "later"));
         _submodule.Pin(second);
         TestEditService.CloneSubmodulesHandler().Clone([new Submodule(_submodule.Folder, second, null)], CancellationToken.None);

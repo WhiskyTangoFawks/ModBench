@@ -1,14 +1,15 @@
 // An origin's files as MO2 lays them out: a mod folder walked as MO2's VFS walks it, and the
 // overwrite folder listed whole. Neither answers the adapter's own writes in flight.
 
-import { basename, sep } from 'node:path';
+import { sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDir, isOwnTemp } from '../files';
 import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from '../instanceAdapter';
-import { includedPathOf, isExcludedName, manifestFileName, overwriteDir } from './layout';
+import { isManifestPath } from '../../repositoriesLib/manifestPath';
+import { includedPathOf, isExcludedName, overwriteDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
 
 // The mod's metadata is MO2's and its manifest is Modbench's: neither is the mod's content.
@@ -17,6 +18,7 @@ const NOT_CONTENT: ReadonlySet<string> = new Set([MOD_META_FILE_NAME]);
 interface Walk {
   readonly root: string;
   readonly notContent: ReadonlySet<string>;
+  readonly manifestAtRoot: boolean;
   /** Lists the origin's root alone, never a folder below it. */
   readonly rootOnly: boolean;
   readonly files: OriginFile[];
@@ -39,7 +41,7 @@ export const originFileOf = (relativePath: string, path: string, sourcePath: str
 
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
   const relativePath = relativeUnder(walk.root, path);
-  if (walk.notContent.has(relativePath)) return;
+  if (walk.notContent.has(relativePath) || (walk.manifestAtRoot && isManifestPath(relativePath))) return;
   walk.files.push(originFileOf(relativePath, path, sourcePath));
 }
 
@@ -106,8 +108,8 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
   }
 }
 
-async function walkMod(folder: string, modName: string, rootOnly: boolean): Promise<Walk> {
-  const walk: Walk = { root: folder, notContent: new Set([...NOT_CONTENT, manifestFileName(modName)]), rootOnly, files: [], folders: [], notes: [] };
+async function walkMod(folder: string, rootOnly: boolean): Promise<Walk> {
+  const walk: Walk = { root: folder, notContent: NOT_CONTENT, manifestAtRoot: true, rootOnly, files: [], folders: [], notes: [] };
   try {
     await walkDir(walk, folder, new Set([(await factsOf(folder)).realPath]));
   } catch (err) {
@@ -135,7 +137,7 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
 }
 
 async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
-  const walk: Walk = { root: folder, notContent: NOT_CONTENT, rootOnly, files: [], folders: [], notes: [] };
+  const walk: Walk = { root: folder, notContent: NOT_CONTENT, manifestAtRoot: false, rootOnly, files: [], folders: [], notes: [] };
   try {
     await listWhole(walk, folder);
   } catch (err) {
@@ -145,9 +147,9 @@ async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
   return walk;
 }
 
-/** The files below `folder` as a mod's are listed, its manifest, named for the folder it builds, not among them. */
+/** The files below `folder` as a mod's are listed, its manifest not among them. */
 export async function filesBelow(folder: string): Promise<{ files: OriginFile[]; notes: string[] }> {
-  const { files, notes } = await walkMod(folder, basename(folder), false);
+  const { files, notes } = await walkMod(folder, false);
   return { files, notes };
 }
 
@@ -158,6 +160,6 @@ export async function originFilesIn(context: Mo2Context, origin: FileOrigin, roo
   }
   const folder = await originFolder(context, origin, modFolders);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
-  const { files, folders, notes } = await walkMod(folder, origin.name, rootOnly);
+  const { files, folders, notes } = await walkMod(folder, rootOnly);
   return { origin: origin.name, folder, files, folders, notes };
 }

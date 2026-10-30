@@ -180,14 +180,14 @@ describe('a mod\'s files that the game folder holds', () => {
 describe('a mod whose manifest is held', () => {
   const step = { task: 'Optimise', args: [] as string[] };
   const held: Manifest = {
-    ...EMPTY, output: 'Mod', exclude: ['x'], archives: [{ path: 'Mod.ba2', files: ['a.nif'] }], steps: [step], tools: [{ task: 'Optimise', page: 'p' }],
+    ...EMPTY, exclude: ['x'], archives: [{ path: 'Mod.ba2', files: ['a.nif'] }], steps: [step], tools: [{ task: 'Optimise', page: 'p' }],
     files: [{ path: 'made.dds', entry: { kind: 'madeByStep' } }, { path: 'old.nif', entry: { kind: 'held' } }],
   };
 
-  it('keeps its output, exclusions, archives, steps and tools as written', async () => {
+  it('keeps its exclusions, archives, steps and tools as written', async () => {
     const { manifest } = await built({ 'a.nif': 'HA' }, {}, held);
 
-    expect(manifest).toMatchObject({ output: 'Mod', exclude: ['x'], archives: held.archives, steps: [step], tools: held.tools });
+    expect(manifest).toMatchObject({ exclude: ['x'], archives: held.archives, steps: [step], tools: held.tools });
   });
 
   it('keeps each file a step makes, there or not, and hashes it into no package', async () => {

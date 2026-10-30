@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeBuildFileIn } from '../../manifestAdapter/manifestAdapter';
+import { writeBuildFile } from '../../test/buildFiles';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client/MEditClient';
@@ -22,7 +22,7 @@ const savedAll = () => Promise.resolve([]);
 const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const client = new InMemoryMEditClient();
   client.setCommandHandler('build', (sent: readonly BuildMod[]) => Promise.resolve({ landed: sent.map(({ name }) => builtOf(name)), refused: [] }));
-  const adapter = fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA', 'ModB'), sourceMods: sourceModsOf(SOURCES), ...mods })).adapter;
+  const adapter = fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA', 'ModB'), sourceRepositories: repositoriesOf(SOURCES), ...mods })).adapter;
   const built = (mods: readonly string[] = ['ModA', 'ModB']) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(mods);
   return { client, built };
 };
@@ -34,10 +34,10 @@ describe('sourceCommands build, between mods', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'between-builds-'));
     SOURCES = { ModA: join(root, 'ModA'), ModB: join(root, 'Old ModB') };
-    for (const [output, folder] of Object.entries(SOURCES)) {
+    for (const [mod, folder] of Object.entries(SOURCES)) {
       await mkdir(folder);
-      await mkdir(join(root, 'mods', output), { recursive: true });
-      await writeBuildFileIn(folder, { packages: [], output, exclude: [], archives: [], steps: [], tools: [], files: [] });
+      await mkdir(join(root, 'mods', mod), { recursive: true });
+      await writeBuildFile(folder);
     }
     vi.useFakeTimers();
   });
