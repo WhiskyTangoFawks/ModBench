@@ -14,19 +14,9 @@ public enum BuildRefusal
     /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
     NoLoadOrder,
 
-    /// <summary>The source folder holds no manifest that reads, or assets one mod folder cannot hold.</summary>
+    /// <summary>The source folder cannot be read, or holds assets one mod folder cannot hold.</summary>
     SourceUnreadable,
 
-    /// <summary>The manifest names an output folder that is not the mod's (mods.md, Build, story 4).</summary>
-    OutputNotThisMod,
-
-    /// <summary>An archive takes a file that is not an asset of the source.</summary>
+    /// <summary>An archive takes a file that is neither an asset of the source nor a taken file.</summary>
     ArchiveFileNotAnAsset,
-
-    /// <summary>This machine has no VS Code task for a tool its manifest's steps run (mods.md, Build, story 14).</summary>
-    NoTaskForTool,
-
-    /// <summary>A package its manifest names lacks what a file takes, or holds it with other bytes (modlist-repository.md,
-    /// Restore from manifest, story 4).</summary>
-    PackageLacking,
 }

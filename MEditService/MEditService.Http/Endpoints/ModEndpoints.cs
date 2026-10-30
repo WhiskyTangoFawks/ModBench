@@ -1,6 +1,7 @@
+using System.Text;
 using MEditService.Commands;
 using MEditService.Commands.Build;
-using MEditService.ModFolderAdapter;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Http.Endpoints;
 
@@ -14,12 +15,11 @@ internal static class ModEndpoints
             .WithName("BuildMod")
             .WithTags("Mods")
             .WithDescription(
-                "Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin " +
-                "compiled, each archive packed, and its manifest last. A file the " +
-                "build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
-                "what failed when a read or write stopped it part way. A mod whose manifest holds steps is refused when the request names " +
-                "no task for one of its tools; otherwise it lands naming its steps, which each run a VS Code task, and the files it made, " +
-                "and a request handing those files back once the steps ran writes its manifest and nothing else. " +
+                "Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, " +
+                "and each archive packed from the assets and the taken files it is handed, a taken file it packs leaving the folder. " +
+                "A file of the source's under an excluded path is written under the exclusion mark, and no asset replaces a taken file. " +
+                "A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a " +
+                "read or write stopped it part way, and each file it made with whether the source vouches for it. " +
                 "Progress is the build-progress notification.")
             .Produces<BuildResult>()
             .ProducesProblem(400)
@@ -31,24 +31,12 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the files its installation file does not yield with their bytes as its assets, and a manifest naming " +
-                "its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
+                "plugin it provides, the assets it is handed, read from its folder, and the manifest it is handed, in one commit. " +
+                "A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
             .Produces<DecompileAndCommitResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
-
-        app.MapPost("/source-manifest", ChangeSourceManifest)
-            .WithName("ChangeSourceManifest")
-            .WithTags("Mods")
-            .WithDescription(
-                "Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's " +
-                "new name, which names the manifest, and the paths in the mod folder its build excludes, with the lines of its " +
-                "taken files at the paths the folder holds them under the exclusion mark. Modbench writes the mod folder in the same gesture.")
-            .Produces(204)
-            .ProducesProblem(400)
-            .ProducesProblem(422)
-            .ProducesProblem(500);
 
         return app;
     }
@@ -60,38 +48,13 @@ internal static class ModEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return EndpointMapping.BadRequest("At least one mod is required.");
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.SourceFolder)
-            || (mod.MetadataFiles ?? []).Any(string.IsNullOrWhiteSpace)))
-        {
-            return EndpointMapping.BadRequest("Every mod needs a name and a source folder.");
-        }
-        if (mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().Any(file => !file.IsWhole || !FileHash.IsHash(file.Hash) || file.Entries.Any(entry => !FileHash.IsHash(entry.Hash))))
-        {
-            return EndpointMapping.BadRequest("Every installation file needs a path, a size, a hash and its entries, each with a path and a hash, all xxHash64 as Wabbajack writes it: eight bytes in base64.");
-        }
-        if (mods.Any(mod => mod.GameFolder is { IsWhole: false })) return EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || !mod.Repository.IsWhole))
+            return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
-            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? [], mod.InstallationFile?.ToInstallationFile(), mod.Version, mod.GameFolder?.ToGameFolder()))]),
+            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.Repository.ToNewRepository()))]),
             EndpointMapping.Refusal);
-    }
-
-    internal static IResult ChangeSourceManifest(
-        SourceManifestRequest req, ChangeSourceManifestHandler handler, ILoggerFactory loggerFactory)
-    {
-        IReadOnlyList<string> exclude = req.Exclude ?? [], include = req.Include ?? [];
-        if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is null && exclude.Count + include.Count == 0)
-            || exclude.Concat(include).Any(path => path is null))
-        {
-            return EndpointMapping.BadRequest("A source folder is required, with an output, or paths to exclude or include.");
-        }
-        if (exclude.Count + include.Count > 0 && string.IsNullOrWhiteSpace(req.ExclusionMark))
-            return EndpointMapping.BadRequest("Paths to exclude or include need the exclusion mark.");
-
-        return EndpointMapping.Answered(
-            "Change source manifest", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder,
-            handler.Change(req.SourceFolder, new SourceManifestChange(req.Output, exclude, include, req.ExclusionMark)));
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
@@ -105,39 +68,49 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("Every mod needs a name, a source folder and a folder.");
         }
+        if (mods.Any(mod => !FolderPaths.AreInTheFolder([
+            .. mod.Exclude ?? [], .. mod.Taken ?? [], .. (mod.Archives ?? []).SelectMany(archive => (IEnumerable<string>)[archive.Path, .. archive.Files ?? []])])))
+        {
+            return EndpointMapping.BadRequest("Every path a mod excludes, takes or packs is a forward-slash path in its folder.");
+        }
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
-        if (string.IsNullOrWhiteSpace(req.StatCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
-        if (req.GameFolder is { IsWhole: false }) return EndpointMapping.BadRequest(GameFolderRequest.NotWhole);
         var variants = req.Archives?.Variants();
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 
         return await EndpointMapping.Answered(
             "Build", logger,
             buildModHandler.BuildAsync(
-                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule, mod.Made) { InstallationFiles = [.. (mod.InstallationFiles ?? []).Select(file => file.ToInstallationFile())], UnreadableInstallationFiles = mod.UnreadableInstallationFiles, UnreadableGameFiles = mod.UnreadableGameFiles })],
-                new InstanceToBuild(req.ExclusionMark, variants, req.StatCache) { Tasks = (req.Tasks ?? []).ToHashSet(StringComparer.Ordinal), GameFolder = req.GameFolder?.ToGameFolder() }),
+                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder)
+                {
+                    Exclude = mod.Exclude ?? [],
+                    Archives = [.. (mod.Archives ?? []).Select(archive => new ArchiveToPack(archive.Path, archive.Files ?? []))],
+                    Taken = mod.Taken ?? [],
+                })],
+                new InstanceToBuild(req.ExclusionMark, variants)),
             EndpointMapping.Refusal);
     }
 }
 
-/// <summary>A source mod's folder, and what to change in its manifest: the output folder's new name, and forward-slash
-/// paths in the mod folder to exclude or include.</summary>
-internal sealed record SourceManifestRequest(
-    string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include, string? ExclusionMark = null);
+internal static class FolderPaths
+{
+    /// <summary>Each a forward-slash path that stays inside the folder.</summary>
+    internal static bool AreInTheFolder(IEnumerable<string?> paths) =>
+        paths.All(path => path is not null && !path.Contains('\\', StringComparison.Ordinal) && !Path.IsPathRooted(path)
+            && path.Split('/').All(segment => !string.IsNullOrWhiteSpace(segment) && segment is not ("." or "..")));
+}
 
-/// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, the archive variants, if any,
-/// the stat cache's folder, and the label of each VS Code task this machine has.</summary>
-internal sealed record BuildRequest(
-    IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache, IReadOnlyList<string>? Tasks = null,
-    GameFolderRequest? GameFolder = null);
+/// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, and the archive variants, if any.</summary>
+internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives);
 
-/// <summary>A mod, the source folder whose manifest names it, its folder, version and metadata files, and whether its
-/// repository is a submodule (ADR-0022). Made: the files its build answered it made, handed back once its steps ran.</summary>
+/// <summary>A mod, the source folder that builds it, its folder, and what the extension hands its build (ADR-0016). Taken:
+/// each file the extension wrote into the folder from a package, by its path there.</summary>
 internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false,
-    IReadOnlyList<string>? Made = null, IReadOnlyList<InstallationFileRequest>? InstallationFiles = null,
-    IReadOnlyDictionary<string, string>? UnreadableInstallationFiles = null, IReadOnlyDictionary<string, string>? UnreadableGameFiles = null);
+    string Name, string SourceFolder, string Folder, IReadOnlyList<string>? Exclude = null, IReadOnlyList<ArchiveRequest>? Archives = null,
+    IReadOnlyList<string>? Taken = null);
+
+/// <summary>An archive by its path in the mod folder, and the files it takes.</summary>
+internal sealed record ArchiveRequest(string Path, IReadOnlyList<string> Files);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 internal sealed record ArchiveVariantsRequest(ArchiveVariantRequest General, ArchiveVariantRequest Textures)
@@ -169,8 +142,21 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 /// <summary>The mods to decompile and commit (ADR-0013).</summary>
 internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
 
-/// <summary>A mod by name, the folder its repository goes in, the mod manager's own files in its folder, by
-/// forward-slash path, which no build makes, its installation file and its version as its metadata says.</summary>
-internal sealed record DecompileAndCommitModRequest(
-    string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles, InstallationFileRequest? InstallationFile = null, string? Version = null,
-    GameFolderRequest? GameFolder = null);
+/// <summary>A mod by name, and the repository its decompile and commit makes.</summary>
+internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
+
+/// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
+/// assets by their forward-slash paths in its folder, and its manifest's file name and text.</summary>
+internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string ManifestName, string Manifest)
+{
+    internal const string NotWhole =
+        "A new repository needs its source folder, forward-slash paths in the mod folder for its assets, and its manifest with its file name.";
+
+    internal bool IsWhole =>
+        !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && Manifest is not null
+        && ManifestName is not null && FolderPaths.AreInTheFolder([ManifestName]) && !ManifestName.Contains('/', StringComparison.Ordinal)
+        && RepositoriesLib.ManifestName.Is(ManifestName);
+
+    internal NewRepository ToNewRepository() =>
+        new(SourceFolder, Assets ?? [], new SpelledManifest(ManifestName, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(Manifest)));
+}

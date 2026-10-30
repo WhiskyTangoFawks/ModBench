@@ -2,7 +2,7 @@
 // Instance adapter; a source mod rebuilt by mEdit from its submodule at the commit the instance repository pins.
 
 import { basename, join } from 'node:path';
-import { isRefused, type BuildFacts, type BuildMod, type MEditClient } from '../client';
+import { isRefused, type MEditClient } from '../client';
 import type { InstanceAdapter, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 import {
   folderAgainst, manifestIn, metadataOf, metadataOverwritten, sourceManifestIn, type FolderAgainst, type Manifest,
@@ -12,18 +12,18 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
-import { namedGameFolder, wireGameFolder, type NamedGameFolder } from './gameFolderFacts';
+import { archiveVariants, buildSourceMod, type BuildPass } from './buildSourceMod';
+import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
-import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
-import { packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
-import { archiveVariants, metadataUnreadable } from './sourceCommands';
+import { namedDownloadedFiles } from './namedDownloadedFiles';
+import { downloadedNow, packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
+import { metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceMods' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'textHash' | 'modMetadata'
-  | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'statCacheFolder'
-  | 'exclusionMark' | 'filesIn' | 'fileStamp' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
+  | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'filesIn' | 'fileStamp' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
   | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 export interface RestoreDeps {
@@ -148,8 +148,7 @@ interface Pass {
   readonly folders: Folders;
   readonly sourceMods: SourceMods;
   readonly game: NamedGameFolder | string;
-  readonly tasks: ReadonlySet<string>;
-  readonly facts: BuildFacts;
+  readonly build: BuildPass;
   readonly options: Options;
 }
 
@@ -158,8 +157,8 @@ async function passOver(deps: RestoreDeps, folders: Folders, sourceMods: SourceM
   const gameRelease = await adapter.gameRelease();
   const tasks = await deps.tasks.labels();
   return {
-    deps, folders, sourceMods, options, game: await namedGameFolder(adapter, gameRelease), tasks: new Set(tasks),
-    facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), statCache: adapter.statCacheFolder, tasks: [...tasks] },
+    deps, folders, sourceMods, options, game: await namedGameFolder(adapter, gameRelease),
+    build: { facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease) }, tasks: new Set(tasks) },
   };
 }
 
@@ -184,7 +183,7 @@ async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead
     const why = found.unreadable(name);
     return why === undefined ? { kind: 'read', answer: found.handed(name) } : { kind: 'unreadable', reason: why };
   };
-  const packages = await packagesRead(adapter, manifest, { downloaded, game: pass.game, tasks: pass.tasks });
+  const packages = await packagesRead(adapter, manifest, { downloaded, game: pass.game, tasks: pass.build.tasks });
   if (packages.lacks.length === 0) return packages;
   const notDownloaded = named.flatMap(({ name }) => {
     const why = found.notDownloaded(name);
@@ -226,6 +225,11 @@ async function whyNotStepped(pass: Pass, manifest: Manifest, folder: string): Pr
 
 async function whyNotFinished(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
   return await trashedOrWhy(pass.deps, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest) ?? await whyNotStepped(pass, manifest, folder);
+}
+
+// A source mod's build ran its steps.
+async function whyNotFinishedBuilt(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
+  return await trashedOrWhy(pass.deps, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest);
 }
 
 // A status on this machine reads a game folder package's entries from the hash index.
@@ -297,22 +301,18 @@ async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
 
 // modlist-repository.md, Restore from manifest, story 5: what the build makes comes back as the build makes it.
 async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, submodule: string): Promise<Answer> {
-  const { adapter, client } = pass.deps;
+  const { adapter, client, tasks } = pass.deps;
   const cloned = await clonedAtThePin(pass, submodule);
   if ('refusal' in cloned) return cloned;
   const packages = await packagesFor(pass, manifest);
   if ('refusal' in packages) return packages;
   const before = await hashesIn(adapter, folder);
-  const buildMod: BuildMod = {
-    name: mod, sourceFolder, folder, metadataFiles: [...adapter.metadataFilesInModFolder], version: manifest.version ?? null, isSubmodule: true,
-    installationFiles: packages.installationFiles.flatMap((file) => wireFile(file) ?? []),
-  };
-  const outcome = await client.build([buildMod], { ...pass.facts, gameFolder: wireGameFolder(pass.game, packages.gameFiles, false) });
+  const outcome = await buildSourceMod(
+    { client, adapter, tasks }, { name: mod, folder, sourceFolder, manifest, packages, version: manifest.version, isSubmodule: true }, pass.build);
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
-  const [refused] = outcome.refused;
-  if (refused !== undefined) return { refusal: refused.reason };
-  const [built] = outcome.landed;
-  const leftAsItWas = [...built?.failure === undefined ? [] : [built.failure], ...built?.refused.map(({ reason }) => reason) ?? [], ...built?.archivesRefused.map(({ reason }) => reason) ?? []];
+  if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
+  const built = outcome.landed;
+  const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...built.refused.map(({ reason }) => reason), ...built.archivesRefused.map(({ reason }) => reason)];
   if (leftAsItWas.length > 0) return { refusal: `was not finished: ${leftAsItWas.map((why) => why.replace(/\.$/, '')).join('; ')}.` };
   const recorded = await manifestHeld(folder, sourceFolder);
   if (recorded === undefined || 'refusal' in recorded) return { refusal: notFinished(recorded?.refusal ?? 'its build wrote no manifest') };
@@ -324,12 +324,12 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
-  const why = await whyNotFinished(pass, mod, recorded.manifest, folder, namedByNoLine);
+  const why = await whyNotFinishedBuilt(pass, mod, recorded.manifest, folder, namedByNoLine);
   if (why !== undefined) return { refusal: notFinished(why) };
   return {
     landed: {
       mod, written: [...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path).sort(), namedByNoLine,
-      ...(built?.uncommitted ? { uncommitted: true } : {}), ...cloned,
+      ...(built.uncommitted ? { uncommitted: true } : {}), ...(built.notes === undefined ? {} : { notes: built.notes }), ...cloned,
     },
   };
 }
@@ -438,15 +438,6 @@ export async function restoreFromManifest(
   };
 }
 
-// The listing asks before restore downloads anything, so it reads what the downloads folder holds now.
-async function installationFilesHeld(adapter: Adapter, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
-  const read = new Map<string, Awaited<ReturnType<Adapter['downloadedFile']>>>();
-  for (const pkg of manifest.packages) {
-    if (pkg.kind === 'installationFile') read.set(pkg.name, await adapter.downloadedFile(pkg.name));
-  }
-  return (name) => read.get(name) ?? { kind: 'read', answer: undefined };
-}
-
 async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys | { readonly refusal: string } | undefined> {
   const { adapter } = pass.deps;
   const folder = await pass.folders.of(mod);
@@ -460,8 +451,9 @@ async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys |
   const unwritable = metadata === undefined ? undefined : await adapter.unwritableMetadata(mod, says);
   if (unwritable !== undefined) return { refusal: skipped(unwritable) };
   try {
-    const downloaded = await installationFilesHeld(adapter, held.manifest);
-    const against = await compared(adapter, held.manifest, folder, await packagesRead(adapter, held.manifest, { downloaded, game: pass.game, tasks: pass.tasks }));
+    // The listing asks before restore downloads anything, so it reads what the downloads folder holds now.
+    const downloaded = await downloadedNow(adapter, held.manifest);
+    const against = await compared(adapter, held.manifest, folder, await packagesRead(adapter, held.manifest, { downloaded, game: pass.game, tasks: pass.build.tasks }));
     return {
       mod, differing: against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : [])).sort(),
       namedByNoLine: against.namedByNoLine, metadataDiffers: metadata !== undefined && metadataOverwritten(metadata.answer, says),

@@ -20,7 +20,7 @@ type QueryMethod =
 
 type CommandMethod =
   | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
-  | 'getCopyChanges' | 'decompile' | 'repairPreviews' | 'decompileAndRepair' | 'changeSourceManifest';
+  | 'getCopyChanges' | 'decompile' | 'repairPreviews' | 'decompileAndRepair';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
 // write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
@@ -326,9 +326,6 @@ export class InMemoryMEditClient implements MEditClient {
 
   cloneSubmodules(...args: Parameters<MEditClient['cloneSubmodules']>): ReturnType<MEditClient['cloneSubmodules']> {
     return this.command('cloneSubmodules', args);
-  }
-  changeSourceManifest(...args: Parameters<MEditClient['changeSourceManifest']>): ReturnType<MEditClient['changeSourceManifest']> {
-    return this.command('changeSourceManifest', args);
   }
 
   getPlugins(): ReturnType<MEditClient['getPlugins']> { return this.query('getPlugins', []); }

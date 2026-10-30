@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each source mod's folder from its source as the manifest in its repository says: its assets, each plugin compiled, each archive packed, and its manifest last. A file the build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and what failed when a read or write stopped it part way. A mod whose manifest holds steps is refused when the request names no task for one of its tools; otherwise it lands naming its steps, which each run a VS Code task, and the files it made, and a request handing those files back once the steps ran writes its manifest and nothing else. Progress is the build-progress notification. */
+        /** @description Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, and each archive packed from the assets and the taken files it is handed, a taken file it packs leaving the folder. A file of the source's under an excluded path is written under the exclusion mark, and no asset replaces a taken file. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a read or write stopped it part way, and each file it made with whether the source vouches for it. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -160,25 +160,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files its installation file does not yield with their bytes as its assets, and a manifest naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
+        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the manifest it is handed, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
         post: operations["DecompileAndCommitMod"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/source-manifest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Writes a source mod's manifest in its repository's working tree, keeping all else it says: the output folder's new name, which names the manifest, and the paths in the mod folder its build excludes, with the lines of its taken files at the paths the folder holds them under the exclusion mark. Modbench writes the mod folder in the same gesture. */
-        post: operations["ChangeSourceManifest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -958,6 +941,10 @@ export interface components {
             refusal: components["schemas"]["ArchiveRefusal"];
             message: string;
         };
+        ArchiveRequest: {
+            path: string;
+            files: string[];
+        };
         ArchiveVariantRequest: {
             ba2?: components["schemas"]["Ba2VariantRequest"] | null;
             bsa?: components["schemas"]["BsaVariantRequest"] | null;
@@ -983,34 +970,21 @@ export interface components {
             name: string;
             sourceFolder: string;
             folder: string;
-            metadataFiles: string[];
-            version?: string | null;
-            isSubmodule: boolean;
-            made?: string[] | null;
-            installationFiles?: components["schemas"]["InstallationFileRequest"][] | null;
-            unreadableInstallationFiles?: {
-                [key: string]: string;
-            } | null;
-            unreadableGameFiles?: {
-                [key: string]: string;
-            } | null;
+            exclude?: string[] | null;
+            archives?: components["schemas"]["ArchiveRequest"][] | null;
+            taken?: string[] | null;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset" | "NoTaskForTool" | "PackageLacking";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "ArchiveFileNotAnAsset";
         BuildRefused: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
             message: string;
-            installationFilesNotFound: components["schemas"]["InstallationFile"][];
-            gameFilesNotFound: string[];
         };
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
             exclusionMark: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
-            statCache: string;
-            tasks?: string[] | null;
-            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
         };
         BuildResult: {
             applied: components["schemas"]["ModBuilt"][];
@@ -1186,16 +1160,12 @@ export interface components {
         };
         DecompileAndCommitModRequest: {
             name: string;
-            sourceFolder: string;
-            metadataFiles: string[];
-            installationFile?: components["schemas"]["InstallationFileRequest"] | null;
-            version?: string | null;
-            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
+            repository: components["schemas"]["NewRepositoryRequest"];
         };
         /** @enum {string} */
-        DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
+        DecompileAndCommitPhase: "Parsing" | "Serializing" | "Committing";
         /** @enum {string} */
-        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "GameFolderNotFound" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         DecompileAndCommitRefused: {
             item: string;
             refusal: components["schemas"]["DecompileAndCommitRefusal"];
@@ -1209,7 +1179,7 @@ export interface components {
             refused: components["schemas"]["DecompileAndCommitRefused"][];
         };
         /** @enum {string} */
-        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "ChangedSincePreview" | "NoRepair" | "DropsData" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "ModFilesUnreadable" | "WriteFailed" | "RepairFailed";
+        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "ChangedSincePreview" | "NoRepair" | "DropsData" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "WriteFailed" | "RepairFailed";
         DecompileAndRepairRefused: {
             item: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["DecompileAndRepairRefusal"];
@@ -1217,7 +1187,6 @@ export interface components {
         };
         DecompileAndRepairRequest: {
             plugins: components["schemas"]["PluginToRepairRequest"][];
-            metadataFiles?: string[] | null;
             force: boolean;
             agreedDrops: boolean;
         };
@@ -1339,51 +1308,11 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
-        GameDepotRequest: {
-            id: string;
-            version: string;
-        };
-        GameFileRequest: {
-            path: string;
-            hash: string;
-            pathInFolder?: string | null;
-        };
-        GameFolderPlaceRequest: {
-            root: string;
-            files: components["schemas"]["GameFileRequest"][];
-            depots?: components["schemas"]["GameDepotRequest"][] | null;
-        };
-        GameFolderRequest: {
-            name: string;
-            root: string;
-            files: components["schemas"]["GameFileRequest"][];
-            elsewhere?: components["schemas"]["GameFolderPlaceRequest"][] | null;
-            depots?: components["schemas"]["GameDepotRequest"][] | null;
-        };
         GridPosition: {
             /** Format: int32 */
             x?: number | null;
             /** Format: int32 */
             y?: number | null;
-        };
-        InstallationFile: {
-            name: string;
-            /** Format: int64 */
-            size: number;
-            hash: string;
-            page?: string | null;
-        };
-        InstallationFileEntryRequest: {
-            path: string;
-            hash: string;
-        };
-        InstallationFileRequest: {
-            path: string;
-            page?: string | null;
-            /** Format: int64 */
-            size?: number | null;
-            hash: string;
-            entries: components["schemas"]["InstallationFileEntryRequest"][];
         };
         InteriorCellBlock: {
             /** Format: int32 */
@@ -1435,9 +1364,9 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
-        ManifestStep: {
-            task: string;
-            args: string[];
+        MadeFile: {
+            path: string;
+            vouchedFor: boolean;
         };
         ModBuilt: {
             mod: string;
@@ -1448,8 +1377,7 @@ export interface components {
             failure?: string | null;
             uncommitted: boolean;
             unpushed: boolean;
-            steps: components["schemas"]["ManifestStep"][];
-            made: string[];
+            made: components["schemas"]["MadeFile"][];
         };
         ModlistProgress: {
             mod?: string | null;
@@ -1472,6 +1400,12 @@ export interface components {
             plugin?: components["schemas"]["PluginAddress"] | null;
             formKey?: string | null;
             editorId?: string | null;
+        };
+        NewRepositoryRequest: {
+            sourceFolder: string;
+            assets?: string[] | null;
+            manifestName: string;
+            manifest: string;
         };
         NotificationEvent: {
             kind: string;
@@ -1580,7 +1514,7 @@ export interface components {
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
             hash: string;
-            sourceFolder?: string | null;
+            newRepository?: components["schemas"]["NewRepositoryRequest"] | null;
         };
         PluginWithUnreadableSource: {
             name: string;
@@ -1762,13 +1696,6 @@ export interface components {
             reached: boolean;
             /** Format: int64 */
             sequence: number;
-        };
-        SourceManifestRequest: {
-            sourceFolder: string;
-            output?: string | null;
-            exclude?: string[] | null;
-            include?: string[] | null;
-            exclusionMark?: string | null;
         };
         SourceMove: {
             from: string;
@@ -2279,55 +2206,6 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    ChangeSourceManifest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SourceManifestRequest"];
-            };
-        };
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };

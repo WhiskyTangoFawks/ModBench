@@ -74,7 +74,6 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingTasks } from '../../test/recordingTasks';
 
-const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 
 const foldersHoldingNothing = (metadata: Awaited<ReturnType<FolderReads['modMetadata']>> = { kind: 'read', answer: {} }): FolderReads => ({
   filesIn: () => Promise.resolve([]),
@@ -91,7 +90,7 @@ const shownRows = async () => (await treeViews.view('modbench.modList').treeData
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  commands: modCommands(fakeInstanceAdapter().adapter), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
   sourceGestures: {

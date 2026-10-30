@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { writeSourceManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
@@ -6,9 +10,11 @@ import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 
-const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
+let root: string;
+let SOURCES: Record<string, string>;
 const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
-const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [] });
+const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [] });
+const builtOf = (mod: string) => ({ ...landedOf(mod), made: [] });
 const NOT_YET = { state: 'NotYet' } as const;
 const AS_ON_DISK = { state: 'AsOnDisk' } as const;
 const savedAll = () => Promise.resolve([]);
@@ -25,16 +31,26 @@ const askedOfMEdit = (client: InMemoryMEditClient): unknown[] => client.calls.fi
 
 describe('sourceCommands build, between mods', () => {
   const modBHoldsPlugin = pluginFilesHeld({ origin: { kind: 'mod', name: 'ModB' }, name: 'B.esp' });
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'between-builds-'));
+    SOURCES = { ModA: join(root, 'ModA'), ModB: join(root, 'Old ModB') };
+    for (const [output, folder] of Object.entries(SOURCES)) {
+      await mkdir(folder);
+      await writeSourceManifestIn(folder, { packages: [], output, exclude: [], archives: [], steps: [], tools: [], files: [] });
+    }
+    vi.useFakeTimers();
+  });
+  afterEach(async () => {
+    vi.useRealTimers();
+    await rm(root, { recursive: true, force: true });
+  });
 
   it('builds the next mod once mEdit holds the plugins the built mod\'s folder gives the load order as they are on disk', async () => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
     client.setQueryAnswer('getPluginIndexing', NOT_YET);
 
     const outcome = built();
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(builtMods(client)).toEqual(['ModB']);
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
     client.emit(loadOrderStatusEventFixture());
 
@@ -60,7 +76,7 @@ describe('sourceCommands build, between mods', () => {
     const alone = await built(['ModB']);
 
     expect(askedOfMEdit(client)).toEqual([]);
-    expect(alone).toEqual({ landed: [builtOf('ModB')], refused: [] });
+    expect(alone).toEqual({ landed: [landedOf('ModB')], refused: [] });
   });
 
   it.each<[string, { state: 'NotYet' } | { failed: 'refused'; refusal: string }, string]>([
@@ -71,6 +87,7 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', answer);
 
     const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
     await vi.advanceTimersByTimeAsync(121_000);
 
     expect(builtMods(client)).toEqual(['ModB']);
@@ -85,6 +102,7 @@ describe('sourceCommands build, between mods', () => {
     client.setQueryAnswer('getPluginIndexing', { state: 'ReadFailed', reason: 'B.esp is not a plugin.' });
 
     const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(await outcome).toMatchObject({

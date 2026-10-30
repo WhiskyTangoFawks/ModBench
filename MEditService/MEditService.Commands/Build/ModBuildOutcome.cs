@@ -1,36 +1,35 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to build: the source folder holding its manifest, its folder, version and metadata files. Made: the
-/// files its build made, once its steps ran. InstallationFiles: those its manifest names. Unreadable files: why, by name.</summary>
-public sealed record ModToBuild(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule,
-    IReadOnlyList<string>? Made = null)
+/// <summary>A mod to build, as the extension hands it (ADR-0016). Taken: each file the extension wrote into the folder from a
+/// package, by its path there, which no asset of the source replaces.</summary>
+public sealed record ModToBuild(string Name, string SourceFolder, string Folder)
 {
-    public IReadOnlyList<InstallationFile> InstallationFiles { get; init; } = [];
+    public IReadOnlyList<string> Exclude { get; init; } = [];
 
-    public IReadOnlyDictionary<string, string>? UnreadableInstallationFiles { get; init; }
+    public IReadOnlyList<ArchiveToPack> Archives { get; init; } = [];
 
-    public IReadOnlyDictionary<string, string>? UnreadableGameFiles { get; init; }
+    public IReadOnlyList<string> Taken { get; init; } = [];
 }
 
-/// <summary>The instance's facts a build needs: the exclusion mark, the archive variants, none when the per-release
-/// table names none, the stat cache's folder, each VS Code task this machine has, and the game folder.</summary>
-public sealed record InstanceToBuild(string ExclusionMark, ArchiveVariants? Archives, string StatCache)
-{
-    public IReadOnlySet<string> Tasks { get; init; } = new HashSet<string>();
+/// <summary>An archive by its path in the mod folder, and the files it takes: an asset of the source, or a taken file.</summary>
+public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
-    public GameFolder? GameFolder { get; init; }
-}
+/// <summary>The instance's facts a build needs: the mod manager's exclusion mark, and the archive variants, none when the
+/// per-release table names none.</summary>
+public sealed record InstanceToBuild(string ExclusionMark, ArchiveVariants? Archives);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
 public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Textures);
 
-/// <summary>A mod that built. Overwritten: each replaced file that held other bytes (A source mod, story 4). Manifest:
-/// the one it records, none after a Failure, written once its Steps ran. Uncommitted and Unpushed: its source's.</summary>
+/// <summary>A file a build made, by its path in the mod folder. Vouched for: it holds what the source makes, which a refused
+/// plugin's or archive's file does not.</summary>
+public sealed record MadeFile(string Path, bool VouchedFor);
+
+/// <summary>A mod that built. Overwritten: each replaced file that held other bytes (A source mod, story 4). Made: each file
+/// it made, none after a Failure. Uncommitted and Unpushed: its source's.</summary>
 internal sealed record ModBuildOutcome(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
@@ -38,8 +37,7 @@ internal sealed record ModBuildOutcome(
     IReadOnlyList<string> Overwritten,
     string? Failure,
     bool Uncommitted = false,
-    bool Unpushed = false,
-    Manifest? Manifest = null)
+    bool Unpushed = false)
 {
-    public IReadOnlyList<ManifestStep> Steps { get; init; } = [];
+    public IReadOnlyList<MadeFile> Made { get; init; } = [];
 }

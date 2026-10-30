@@ -1,4 +1,4 @@
-import type { ManifestStep } from '../client';
+import type { ManifestStep } from '../manifestAdapter/manifestAdapter';
 import type { StepTasks } from '../sourceCommands/steps';
 
 interface StepsRun { readonly steps: readonly ManifestStep[]; readonly folder: string }

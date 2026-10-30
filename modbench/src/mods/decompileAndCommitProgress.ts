@@ -1,7 +1,7 @@
-import type { DecompileAndCommitProgress } from '../client';
+import type { DecompileProgress } from '../sourceCommands/sourceCommands';
 
 /** A progress with no phase is the gesture between steps. */
-export function decompileAndCommitProgressMessage(mod: string, phase: DecompileAndCommitProgress['phase']): string {
+export function decompileAndCommitProgressMessage(mod: string, phase: DecompileProgress['phase']): string {
   const doing = `Decompiling and committing "${mod}"`;
   switch (phase) {
     case 'Parsing':

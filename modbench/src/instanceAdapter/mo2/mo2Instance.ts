@@ -29,7 +29,7 @@ import type { FileProblems } from '../../ports/fileProblems';
 import { packageFilesWriter } from '../fileContents/packageFiles';
 import { hashIndex } from '../fileContents/hashIndex';
 import { textHash } from '../fileContents/contentDigest';
-import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
+import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
 import { parseModlist } from './codecs/modlistText';
 import { get } from '../files';
 import { gamePlacesOf } from '../gameFolder/gamePlaces';
@@ -88,7 +88,6 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     keepPackageEntries: (hash, entries) => hashes.keepPackageEntries(hash, entries),
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
-    statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
 }

@@ -8,9 +8,6 @@ public sealed class StampGatedMemo<TValue>(TimeProvider timeProvider) where TVal
 {
     private readonly ConcurrentDictionary<string, (FileStamp Stamp, TValue Value)> _known = new(StringComparer.Ordinal);
 
-    /// <summary>Each value kept, by its file's path, with the stamp it was read at.</summary>
-    public IReadOnlyDictionary<string, (FileStamp Stamp, TValue Value)> Known => _known;
-
     /// <summary>The remembered value while the file's stamp is unchanged, else <paramref name="read"/>'s
     /// answer. A null answer is passed on and remembers nothing.</summary>
     public TValue? Of(string path, Func<TValue?> read)
@@ -27,9 +24,6 @@ public sealed class StampGatedMemo<TValue>(TimeProvider timeProvider) where TVal
             _known.TryRemove(path, out _);
         return value;
     }
-
-    /// <summary>Remembers a value an earlier read kept, at the stamp it was read at.</summary>
-    public void Remember(string path, FileStamp stamp, TValue value) => _known[path] = (stamp, value);
 
     public void Retain(IReadOnlySet<string> paths)
     {

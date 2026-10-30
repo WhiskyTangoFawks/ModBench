@@ -9,9 +9,6 @@ public enum DecompileAndCommitPhase
 {
     Parsing,
     Serializing,
-
-    /// <summary>Reading the mod's files to tell its assets from what its installation files yield.</summary>
-    ReadingFiles,
     Committing,
 }
 

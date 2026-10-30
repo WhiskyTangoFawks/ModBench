@@ -1,6 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter.Repair;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands;
 
@@ -12,9 +13,12 @@ public sealed record RepairPreviewsResult(IReadOnlyList<PluginRepairPreview> App
 /// which its repair is handed.</summary>
 public sealed record PluginRepairPreview(PluginAddress Plugin, string Hash, IReadOnlyList<RepairPreview> Diagnoses);
 
-/// <summary>A plugin to repair as its preview read it, and the source folder its mod's repository is made in when it has
-/// none.</summary>
-public sealed record PluginToRepair(PluginAddress Plugin, string Hash, string? SourceFolder);
+/// <summary>A plugin to repair as its preview read it, and the repository made for its mod when it has none.</summary>
+public sealed record PluginToRepair(PluginAddress Plugin, string Hash, NewRepository? NewRepository = null);
+
+/// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): the
+/// assets, by their paths in the mod folder, and the manifest.</summary>
+public sealed record NewRepository(string SourceFolder, IReadOnlyList<string> Assets, SpelledManifest Manifest);
 
 public sealed record DecompileAndRepairResult(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileAndRepairRefused> Refused)
     : ISelectionAnswer<DecompileAndRepairRefused>;

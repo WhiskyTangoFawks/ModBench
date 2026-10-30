@@ -90,7 +90,7 @@ describe('a rename while a recompute is reading', () => {
     };
     showInputBox.mockResolvedValue(RENAMED);
     registerModContextCommands({
-      commands: modCommands({ ...writer, renameModFolder: folderRenamed }, { changeSourceManifest: () => Promise.reject(new Error('unscripted')) }),
+      commands: modCommands({ ...writer, renameModFolder: folderRenamed }),
       instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn(),
     });
     await present(handlers.get('modbench.mod.rename'), 'the rename mod command')(new ModNode({ kind: 'mod', name: MOD, enabled: true }));

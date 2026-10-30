@@ -31,7 +31,6 @@ public sealed class WriteRouteHandlerTests
         ("PUT", "/load-order", typeof(PutLoadOrderHandler), "PutLoadOrder"),
         ("POST", "/build", typeof(BuildModHandler), "Build"),
         ("POST", "/decompile-and-commit", typeof(DecompileAndCommitModHandler), "DecompileAndCommit"),
-        ("POST", "/source-manifest", typeof(ChangeSourceManifestHandler), "ChangeSourceManifest"),
         ("POST", "/clone-submodules", typeof(CloneSubmodulesHandler), "CloneSubmodules"),
     ];
 

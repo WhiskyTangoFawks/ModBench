@@ -45,7 +45,6 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(handler(...args));
 }
 
-const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 
 let fake: FakeInstanceAdapter;
 
@@ -56,7 +55,7 @@ function register(
 ): void {
   fake = fakeInstanceAdapter(readingFixture({ modFolders, downloadedFiles: downloadedFilesOf('foo.7z') }), answers);
   registerModInstallCommands({
-    commands: modCommands(fake.adapter, unscriptedMEdit),
+    commands: modCommands(fake.adapter),
     instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     ask: vi.fn(),

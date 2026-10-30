@@ -53,11 +53,10 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
-const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 
 function commandsOver(mods: readonly ModlistEntry[], answers: InstanceAnswers = {}, reading: Partial<InstanceReading> = {}) {
   const fake = fakeInstanceAdapter(readingFixture({ mods: [...mods], modFolders: modFoldersOf(...mods), ...reading }), answers);
-  return { fake, commands: modCommands(fake.adapter, unscriptedMEdit) };
+  return { fake, commands: modCommands(fake.adapter) };
 }
 
 const instanceOf = (mods: readonly ModlistEntry[] = []) => ({ ...instanceThatReads, value: instanceValueFixture({ mods: [...mods] }) });

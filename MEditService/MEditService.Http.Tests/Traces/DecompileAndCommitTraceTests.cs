@@ -46,34 +46,40 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task Init_CommitsAsAssetsEveryFileOfTheMod_ButTheModManagersOwn()
+    public async Task Init_CommitsTheAssetsAndTheManifestItIsHanded()
     {
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "installed.dds"), "hello");
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
-        OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "[General]");
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
         var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
-            mods = new[] { new { name = Origin, sourceFolder, metadataFiles = new[] { "meta.ini" } } },
+            mods = new[]
+            {
+                new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, manifestName = $"{Origin}.manifest.json", manifest = "the manifest" } },
+            },
         });
 
         response.EnsureSuccessStatusCode();
         Assert.Empty((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Where(path => path.StartsWith("assets/", StringComparison.Ordinal));
-        Assert.Equal(["assets/textures/added.dds", "assets/textures/installed.dds"], committed);
+            .Where(path => !path.StartsWith("plugin-source/", StringComparison.Ordinal));
+        Assert.Equal([".gitignore", $"{Origin}.manifest.json", "assets/textures/added.dds"], committed);
+        Assert.Equal("the manifest", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", $"HEAD:{Origin}.manifest.json"));
     }
 
     public static TheoryData<string, string> NotARequestToInit => new()
     {
         { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "sourceFolder": "s", "metadataFiles": []}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "metadataFiles": []}]}""" },
-        { "a mod naming a blank file of the mod manager's", """{"mods": [{"name": "InitializedMod", "sourceFolder": "s", "metadataFiles": [" "]}]}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "manifestName": "m.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "repository": {"manifestName": "m.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a manifest", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "manifestName": "m.manifest.json"}}]}""" },
+        { "a manifest name that is no manifest's", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "manifestName": "m.json", "manifest": "{}"}}]}""" },
+        { "a manifest name with a folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "manifestName": "a/m.manifest.json", "manifest": "{}"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "manifestName": "m.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]

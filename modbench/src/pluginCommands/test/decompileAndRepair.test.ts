@@ -4,7 +4,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { MEditClient, PluginRepairPreview } from '../../client';
 import { previewLines } from '../decompileAndRepair';
@@ -13,6 +13,7 @@ const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const CLEAN = { name: 'Clean.esp', origin: 'Harbor' };
 const DROPS = { description: 'drops 25 bytes of parameters', dropsData: true };
 const NOT_MALFORMED = { item: CLEAN, reason: 'Clean.esp is not malformed.' };
+const MADE = { folder: '/instance/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], manifestName: 'Harbor.manifest.json', manifest: '{}' } };
 const PREVIEW: PluginRepairPreview = {
   plugin: MALFORMED, hash: 'abc',
   diagnoses: [{ diagnosis: { anchor: 'REGN 00000800 (Harbor)', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT from 6 to 8 bytes with zeros', dropsData: false } }],
@@ -21,17 +22,23 @@ const PREVIEW: PluginRepairPreview = {
 describe('decompileAndRepair — the preview, then the repair of each plugin it previewed', () => {
   let client: InMemoryMEditClient;
   let previews: { landed: PluginRepairPreview[]; refused: typeof NOT_MALFORMED[] };
-  const repair = (force = false, agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>) => {
+  let made: typeof MADE | { refusal: string };
+  let removed: string[];
+  let notRemoved: string | undefined;
+  const repairIn = (sourceMods: Record<string, string>, force = false, agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>) => {
     const previewed: PluginRepairPreview[] = [];
-    const result = pluginCommandsWith(fakeInstanceAdapter(readingFixture()).adapter, client)
+    const newRepositories = {
+      of: (mod: string) => Promise.resolve(mod === 'Harbor' ? made : { refusal: 'unasked' }),
+      folderManifestRemovedOrWhy: ({ folder }: { folder: string }) => { removed.push(folder); return Promise.resolve(notRemoved); },
+    };
+    const result = pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceMods: sourceModsOf(sourceMods) })).adapter, client, newRepositories)
       .decompileAndRepair([MALFORMED, CLEAN], force, (preview) => previewed.push(preview), agrees);
     return { previewed, result };
   };
-  const repairedWith = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => ({ force: call.args[2], agreedDrops: call.args[3] }));
-  const landingOnlyAForcedPreviewedHashInItsModsSourceFolder: MEditClient['decompileAndRepair'] = (plugins, metadataFiles, force, agreedDrops) => Promise.resolve({
-    landed: plugins.filter(({ plugin, hash, sourceFolder }) =>
-      previews.landed.some((p) => p.plugin === plugin && p.hash === hash) && sourceFolder === `/source/${plugin.origin}` && (force || agreedDrops)
-      && metadataFiles.includes('meta.ini')).map(({ plugin }) => plugin),
+  const repair = (force = false, agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>) => repairIn({}, force, agrees);
+  const repairedWith = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => ({ force: call.args[1], agreedDrops: call.args[2] }));
+  const landingOnlyAForcedPreviewedHash: MEditClient['decompileAndRepair'] = (plugins, force, agreedDrops) => Promise.resolve({
+    landed: plugins.filter(({ plugin, hash }) => previews.landed.some((p) => p.plugin === plugin && p.hash === hash) && (force || agreedDrops)).map(({ plugin }) => plugin),
     refused: [],
   });
 
@@ -39,14 +46,43 @@ describe('decompileAndRepair — the preview, then the repair of each plugin it 
     client = new InMemoryMEditClient();
     previews = { landed: [PREVIEW], refused: [NOT_MALFORMED] };
     client.setCommandHandler('repairPreviews', () => Promise.resolve(previews));
-    client.setCommandHandler('decompileAndRepair', landingOnlyAForcedPreviewedHashInItsModsSourceFolder);
+    client.setCommandHandler('decompileAndRepair', landingOnlyAForcedPreviewedHash);
+    made = MADE;
+    removed = [];
+    notRemoved = undefined;
   });
 
-  it('hands each preview over before the repair, then repairs each by its hash in the folder the adapter names for its mod', async () => {
+  it('hands each preview over before the repair, then repairs each by its hash, a mod with no repository handed the one decompile and commit makes', async () => {
     const { previewed, result } = repair(true);
 
     expect(await result).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [NOT_MALFORMED] } });
     expect(previewed).toEqual([PREVIEW]);
+    expect(client.calls.find((call) => call.method === 'decompileAndRepair')?.args[0]).toEqual([{ plugin: MALFORMED, hash: 'abc', newRepository: MADE.repository }]);
+    expect(removed).toEqual([MADE.folder]);
+  });
+
+  it('hands a mod a repository builds no new one, and removes no manifest of its folder', async () => {
+    await repairIn({ Harbor: '/source/Harbor' }, true).result;
+
+    expect(client.calls.find((call) => call.method === 'decompileAndRepair')?.args[0]).toEqual([{ plugin: MALFORMED, hash: 'abc' }]);
+    expect(removed).toEqual([]);
+  });
+
+  it('refuses a plugin whose mod has no repository and cannot be given one, naming why, and repairs nothing for it', async () => {
+    made = { refusal: 'its metadata could not be read: EACCES' };
+
+    const outcome = await repair(true).result;
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [NOT_MALFORMED, { item: MALFORMED, reason: 'Harbor has no repository, and one cannot be made: its metadata could not be read: EACCES' }] } });
+    expect(client.calls.map((call) => call.method)).toEqual(['repairPreviews']);
+  });
+
+  it('names a repaired plugin whose mod folder\'s manifest could not be removed once its repository was made', async () => {
+    notRemoved = 'the manifest in its folder could not be removed: EACCES';
+
+    const outcome = await repair(true).result;
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [NOT_MALFORMED, { item: MALFORMED, reason: `was repaired, but ${notRemoved}` }] } });
   });
 
   it('repairs nothing when no plugin previewed', async () => {

@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import { isRefused, type BuildOutcome, type BuildRefusalKind } from '../client';
+import { isRefused } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import type { ReportAction, Reporter } from '../ports/reporter';
+import type { SourceBuildOutcome as BuildOutcome } from '../sourceCommands/buildSourceMod';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { BuildProblems } from './buildProblems';
 import { pluginRowName } from '../wire/pluginAddress';
@@ -75,7 +76,7 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, ever
 
 function reportBuildResult(reporter: Reporter, result: Built): void {
   if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
-  const lacksATask = result.outcome.refused.some((refused) => 'refusal' in refused && refused.refusal === NO_TASK);
+  const lacksATask = result.outcome.refused.some((refused) => 'lacksATask' in refused && refused.lacksATask === true);
   reportBuilt(reporter, result.outcome, lacksATask ? OPEN_USER_TASKS : undefined);
   reportPartial(reporter, result.partial);
 }
@@ -83,8 +84,6 @@ function reportBuildResult(reporter: Reporter, result: Built): void {
 function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
-
-const NO_TASK: BuildRefusalKind = 'NoTaskForTool';
 
 // mods.md, Build, story 14: a tool this machine has no task for is added as a user task.
 const OPEN_USER_TASKS: ReportAction = {
@@ -127,7 +126,7 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
+  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome), ...notRecorded(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
@@ -160,6 +159,11 @@ function builtUnpushed(outcome: BuildOutcome): PartialFailure[] {
     one: 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.',
     many: (count) => `Built ${count} mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.`,
   });
+}
+
+// modlist-repository.md, Status: a build that could not keep the hashes of what it made leaves its mod reading as differing, and says why.
+function notRecorded(outcome: BuildOutcome): PartialFailure[] {
+  return outcome.landed.flatMap(({ mod, notes }) => (notes ?? []).map((note) => ({ message: `Built "${mod}", and its status reads it as differing.`, detail: note, severity: 'warning' as const })));
 }
 
 function namedBuilt(mods: readonly { mod: string }[], message: { one: string; many: (count: number) => string }): PartialFailure[] {

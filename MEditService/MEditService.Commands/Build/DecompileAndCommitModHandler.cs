@@ -23,7 +23,7 @@ public sealed class DecompileAndCommitModHandler
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
         INotificationPublisher notifications, ILogger<DecompileAndCommitModHandler> logger) =>
         (_loadOrder, _source, _notifications, _init) =
-            (loadOrder, source, notifications, new ModInit(logger, adapter, source, modFolders, new PluginDecompiler(logger, adapter, source)));
+            (loadOrder, source, notifications, new ModInit(logger, source, modFolders, new PluginDecompiler(logger, adapter, source)));
 
     /// <summary>Each mod's plugins and folder are the held load order's. Refuses with
     /// <see cref="DecompileAndCommitRefusal.NoLoadOrder"/>, writing nothing, when none is held; git missing refuses

@@ -35,7 +35,6 @@ import { join } from 'node:path';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { manifestedIn } from '../../test/modStatusFixture';
 
-const unscriptedMEdit = { changeSourceManifest: () => Promise.reject(new Error('unscripted')) };
 
 const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }),
@@ -71,7 +70,7 @@ const installDownloadedFile = async (
   const folderFiles = new Map(modFolders.all.map(({ path }) => [path, loses === 'nothing' ? [] : ['a.esp']]));
   fake = fakeInstanceAdapter(readingFixture({ modFolders, downloadedFiles: downloadedFilesOf('foo.7z') }), { folderFiles, ...answers });
   registerModInstallCommands({
-    commands: modCommands(fake.adapter, unscriptedMEdit), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
+    commands: modCommands(fake.adapter), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
     fomodDialog: () => FOMOD_PAGE, downloadedFileInstallReporting: deps,
   });
   const [, handler] = present(registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install'), 'the install handler');

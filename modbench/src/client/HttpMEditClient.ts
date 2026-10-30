@@ -14,8 +14,8 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type SourceManifestChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type ManifestInstallationFile, type Submodule, type SubmodulesCloned,
+  type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
+  type Submodule, type SubmodulesCloned,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -62,10 +62,6 @@ function selectionOutcome<L, R>(
   answer: { applied: L[]; refused: { item: R; message: string }[] },
 ): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
   return { landed: answer.applied, refused: itemRefusals(answer.refused) };
-}
-
-function manifestInstallationFile(file: components['schemas']['InstallationFile']): ManifestInstallationFile {
-  return { name: file.name, hash: file.hash, ...(file.page ? { page: file.page } : {}) };
 }
 
 function appliedWithRefusals<A, R>(
@@ -494,22 +490,13 @@ class HttpMEditClient implements MEditClient {
   }
 
   async decompileAndRepair(
-    plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean, agreedDrops: boolean,
+    plugins: readonly PluginToRepair[], force: boolean, agreedDrops: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     return this.mutateEach({
       verb: 'decompile and repair', noun: 'plugin', items: plugins,
       op: (counted) => `decompileAndRepair(${counted})`,
-      post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], metadataFiles: [...metadataFiles], force, agreedDrops } }),
+      post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], force, agreedDrops } }),
       outcome: selectionOutcome,
-    });
-  }
-
-  async changeSourceManifest(sourceFolder: string, change: SourceManifestChange): Promise<{ changed: true } | WriteRefused> {
-    return this.mutate({
-      op: `changeSourceManifest(${sourceFolder})`,
-      failMsg: `Could not change the manifest in "${sourceFolder}"`,
-      post: () => this.apiClient.POST('/source-manifest', { body: { sourceFolder, ...change } }),
-      noContent: { changed: true },
     });
   }
 
@@ -523,13 +510,12 @@ class HttpMEditClient implements MEditClient {
       outcome: (answer) => ({
         landed: answer.applied.map((m) => ({
           mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused), archivesRefused: itemRefusals(m.archivesRefused), overwritten: m.overwritten,
-          steps: m.steps, made: m.made,
+          made: m.made,
           ...(m.failure ? { failure: m.failure } : {}),
           ...(m.uncommitted ? { uncommitted: true as const } : {}),
           ...(m.unpushed ? { unpushed: true as const } : {}),
         })),
-        refused: answer.refused.map(({ item, message, refusal, installationFilesNotFound, gameFilesNotFound }) =>
-          ({ item, reason: message, refusal, installationFilesNotFound: installationFilesNotFound.map(manifestInstallationFile), gameFilesNotFound })),
+        refused: itemRefusals(answer.refused),
       }),
     });
   }
