@@ -10,11 +10,10 @@ import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type RowOf,
 } from '../drivingLib/gestureEntry';
-import type { Instance } from '../instanceLoader/instance';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { ModlistEntry } from '../instanceAdapter/instanceAdapter';
 import type { EntryRef, ModCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
@@ -298,14 +297,14 @@ function modNamePrompt(
 }
 
 // The separator a deleted separator's mods join: the nearest one above it that the selection leaves.
-function separatorJoined(order: readonly ModlistEntry[], name: string, deleted: readonly string[]): string | undefined {
+function separatorJoined(order: InstanceValue['mods'], name: string, deleted: readonly string[]): string | undefined {
   const above = order.slice(0, order.findIndex((entry) => entry.kind === 'separator' && entry.name === name));
   return above.reverse().find((entry) => entry.kind === 'separator' && !deleted.includes(entry.name))?.name;
 }
 
 const joining = (joined: string | undefined) => (joined === undefined ? 'no separator' : `"${joined}"`);
 
-async function confirmSeparatorDelete(names: readonly string[], order: readonly ModlistEntry[], ask: AskQuestion): Promise<boolean> {
+async function confirmSeparatorDelete(names: readonly string[], order: InstanceValue['mods'], ask: AskQuestion): Promise<boolean> {
   const question = names.length === 1
     ? `Delete separator "${names[0]}"? Its mods stay and join ${joining(separatorJoined(order, names[0] ?? '', names))}.`
     : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay: ${
