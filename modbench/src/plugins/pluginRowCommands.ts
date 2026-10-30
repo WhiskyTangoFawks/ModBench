@@ -24,7 +24,7 @@ export interface PluginsViewProgress {
   say: (message: string | undefined) => void;
 }
 
-/** What decompile needs: the call, the Instance loader's refresh, its one confirmation, and how the user
+/** What decompile needs: the call, the Instance loader's refresh, its confirmation of a replaced change, and how the user
  *  is told. */
 export interface DecompileDeps {
   client: Pick<MEditClient, 'decompile'>;
@@ -36,9 +36,12 @@ export interface DecompileDeps {
 interface DecompileGiven {
   readonly plugins: readonly PluginAddress[];
   readonly force: boolean;
+  readonly agreesToReplace?: (plugins: readonly PluginAddress[]) => Promise<boolean>;
 }
 
-interface DecompileAndRepairGiven extends DecompileGiven {
+interface DecompileAndRepairGiven {
+  readonly plugins: readonly PluginAddress[];
+  readonly force: boolean;
   readonly agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>;
 }
 
@@ -48,15 +51,25 @@ export function registerDecompileCommand(
   deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
-    fromView: async (entry, _option, clicked) => {
+    fromView: (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
       const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 && await confirmDecompile(deps.ask, plugins) ? { plugins, force: true } : undefined;
+      return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, replaced) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
-    run: ({ plugins, force }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async () => {
+    run: ({ plugins, force, agreesToReplace }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async (progress) => {
       const outcome = await deps.client.decompile(plugins, force);
-      return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
+      if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
+      const replacing = outcome.refused.filter((refusal) => refusal.replacesChanges === true);
+      if (replacing.length === 0 || agreesToReplace === undefined) return { applied: true, outcome };
+      const others = outcome.refused.filter((refusal) => refusal.replacesChanges !== true);
+      progress.waiting();
+      const agreed = await agreesToReplace(replacing.map(({ item }) => item));
+      progress.working();
+      if (!agreed) return { applied: true, outcome: { landed: outcome.landed, refused: others } };
+      const forced = await deps.client.decompile(replacing.map(({ item }) => item), true);
+      if (isRefused(forced)) return { applied: false, refusal: forced.message };
+      return { applied: true, outcome: { landed: [...outcome.landed, ...forced.landed], refused: [...others, ...forced.refused] } };
     }),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
@@ -103,14 +116,12 @@ async function confirmDrops(ask: AskQuestion, dropping: readonly PluginRepairPre
   return answer === 'Repair';
 }
 
-// plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces
-// what the working tree holds (commands.md, Confirm what destroys).
-async function confirmDecompile(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
+async function confirmReplace(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
   const [only] = plugins;
   const answer = plugins.length === 1 && only !== undefined
-    ? await ask(`Decompile "${only.name}" in ${only.origin}? Decompile replaces its source in the working tree from its bytes.`,
+    ? await ask(`Decompile "${only.name}" in ${only.origin}? It replaces changes to its source that git does not hold.`,
       { modal: true }, 'Decompile')
-    : await ask(`Decompile ${plugins.length} plugins? Decompile replaces their source in the working tree from their bytes.`,
+    : await ask(`Decompile ${plugins.length} plugins? They replace changes to their source that git does not hold.`,
       { modal: true, detail: plugins.map(pluginRowName).join('\n') }, 'Decompile');
   return answer === 'Decompile';
 }

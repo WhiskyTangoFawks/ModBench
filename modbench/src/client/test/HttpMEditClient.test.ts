@@ -191,6 +191,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const sharedKey = '000800:Shared.esp';
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModB' };
+  const third = { name: 'Third.esp', origin: 'ModC' };
   const repairPreview = {
     plugin: first, hash: 'abc',
     diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT', dropsData: false } }],
@@ -277,8 +278,14 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
-      answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
-      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.' }] },
+      answer: { applied: [first], refused: [
+        { item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' },
+        { item: third, refusal: 'WorkingTreeChanges', message: 'Third.esp has working-tree changes.' },
+      ] },
+      reads: { landed: [first], refused: [
+        { item: second, reason: 'Second.esp is not in a source mod.' },
+        { item: third, reason: 'Third.esp has working-tree changes.', replacesChanges: true },
+      ] },
       path: '/plugins/decompile', body: { plugins: [first, second], force: true } },
     { name: 'repairPreviews', verb: (c) => c.repairPreviews([first, second]),
       answer: { applied: [repairPreview], refused: [{ item: second, refusal: 'NotMalformed', message: 'Second.esp is not malformed.' }] },

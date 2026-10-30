@@ -41,7 +41,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { PluginNode } from '../pluginRows';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
-import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import type { PluginAddress, PluginRepairPreview } from '../../client';
 
@@ -82,16 +82,15 @@ describe('modbench.plugin.decompile', () => {
 
   const decompileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'decompile').map((c) => c.args);
 
-  it('on a plugin row, asks once naming it, then decompiles it, the view\'s progress bar closing once the Instance loader has read again, and lands once', async () => {
+  it('on a plugin row, decompiles it unforced and asking nothing, the view\'s progress bar closing once the Instance loader has read again, and lands once', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
     const { handler, reporter, ask } = registered(client, 'Decompile');
 
     await handler(row(SECOND));
 
-    assertAskedOnce(ask, { messageContains: '"Second.esp"', buttons: ['Decompile'] });
-    expect(ask.asked[0]?.message).toContain('replaces its source in the working tree from its bytes');
-    expect(decompileCalls(client)).toEqual([[[SECOND], true]]);
+    expect(ask.asked).toEqual([]);
+    expect(decompileCalls(client)).toEqual([[[SECOND], false]]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'decompile', 'Instance loader: read every file again', 'progress closes',
     ]);
@@ -99,7 +98,7 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('on a selection, asks once naming every plugin, and decompiles them in one call', async () => {
+  it('on a selection, decompiles them in one unforced call', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompile', { landed: [FIRST, SECOND], refused: [] });
     const { handler, reporter, ask } = registered(client, 'Decompile');
@@ -107,24 +106,47 @@ describe('modbench.plugin.decompile', () => {
 
     await handler(rows[0], rows);
 
-    expect(ask.asked).toEqual([{
-      message: 'Decompile 2 plugins? Decompile replaces their source in the working tree from their bytes.',
-      detail: 'First.esp (ModA)\nSecond.esp (ModA)',
-      buttons: ['Decompile'],
-    }]);
-    expect(decompileCalls(client)).toEqual([[[FIRST, SECOND], true]]);
+    expect(ask.asked).toEqual([]);
+    expect(decompileCalls(client)).toEqual([[[FIRST, SECOND], false]]);
     expect(reporter.landings).toEqual(['Decompiled 2 plugins.']);
   });
 
-  it('decompiles nothing and says nothing when the confirmation is dismissed', async () => {
-    const client = new InMemoryMEditClient();
-    const { handler, reporter } = registered(client, undefined);
+  describe('when mEdit refuses plugins for the working-tree changes a decompile would replace', () => {
+    const changed = (item: PluginAddress) => ({ item, reason: `${item.name} has working-tree changes.`, replacesChanges: true as const });
 
-    await handler(row(SECOND));
+    function withChangedFirst(answer: string | undefined) {
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('decompile', (plugins, force) => Promise.resolve(force
+        ? { landed: plugins, refused: [] }
+        : { landed: [SECOND], refused: [changed(FIRST)] }));
+      return { client, ...registered(client, answer, [row(FIRST), row(SECOND)]) };
+    }
 
-    expect(decompileCalls(client)).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.landings).toEqual([]);
+    it('asks once naming only those plugins, then decompiles just them forced', async () => {
+      const { client, handler, reporter, ask } = withChangedFirst('Decompile');
+      const rows = [row(FIRST), row(SECOND)];
+
+      await handler(rows[0], rows);
+
+      expect(ask.asked).toEqual([{
+        message: 'Decompile "First.esp" in ModA? It replaces changes to its source that git does not hold.',
+        detail: undefined,
+        buttons: ['Decompile'],
+      }]);
+      expect(decompileCalls(client)).toEqual([[[FIRST, SECOND], false], [[FIRST], true]]);
+      expect(reporter.landings).toEqual(['Decompiled 2 plugins.']);
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('decompiles no plugin forced and reports nothing for them when the confirmation is dismissed', async () => {
+      const { client, handler, reporter } = withChangedFirst(undefined);
+      const rows = [row(FIRST), row(SECOND)];
+
+      await handler(rows[0], rows);
+
+      expect(decompileCalls(client)).toEqual([[[FIRST, SECOND], false]]);
+      expect(reporter.reports).toEqual([]);
+    });
   });
 
   it('names each refused plugin and why in one notification while the rest land', async () => {
