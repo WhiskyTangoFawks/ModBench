@@ -29,10 +29,9 @@ A mod's installation file is the downloaded file the mod's metadata names as wha
 As a user, I want:
 
 1. Each mod, separator and file in a mod to say, while the instance has a repository, differs when it or its metadata differs from its manifest, or no manifest when it has none, so a change I make in the mod manager reaches the commit. Cites: Never silently wrong
-2. A mod to say, with the count, when a clone cannot rebuild it, so I see what a clone cannot rebuild before I commit. Cites: Never silently wrong
+2. Each state in which my modlist would not rebuild my instance as it is, on any machine, in the Problems panel while it holds, on the file it concerns, so nothing I leave unfinished goes unseen. Cites: common, Reporting; Never silently wrong
 3. Status to cost only what changed since Modbench last read it on this machine, and a clone to read a file as differing only when its bytes do. Cites: ADR-0003
 4. The Mods view's badge to count the mods and separators that differ or have no manifest. Cites: VS Code's view badge
-5. A state that stops Modbench recording or rebuilding a mod, such as a missing download, shown in the Problems panel while it holds, on the file it concerns, so I fix it before I run a gesture. Cites: common, Reporting; Never silently wrong
 
 ## Git init
 
@@ -45,7 +44,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Update manifest and restore from manifest to run where I run them: on the folders I select, or with none selected on every manifest in the instance, whatever the Mods view shows.
+1. Update manifest and restore from manifest to run where I run them: on the folders I select, or with none selected on every manifest in the instance, not only those the Mods view shows.
 2. A separator in a selection to stand for itself and its mods, so a collapsed group acts whole. Cites: mods.md, The tree, story 2
 3. Progress by mod, with Cancel. Cancel stops after the mod in hand, and the mods that landed stay. Cites: VS Code's progress notification
 

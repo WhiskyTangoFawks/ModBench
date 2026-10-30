@@ -10,7 +10,7 @@ Alignment happened in the conversation, and grilling's handoff records it. This 
 
 ## A refactor
 
-A run that cleans up documents and changes no decision is a refactor, and needs no handoff. Before step 1, read back the documents as they are, as step 3 does. That read-back is the bar: step 3 compares with it in place of the handoff, and each difference goes to the maintainer as a question.
+A run that cleans up documents and changes no decision is a refactor, and needs no handoff. Before step 1, read back the documents as they are, as step 3 does. That read-back is the bar: it stands in for the handoff in every step, and each difference goes to the maintainer as a question.
 
 ## 1. Draft
 
