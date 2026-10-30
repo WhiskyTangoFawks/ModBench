@@ -144,19 +144,19 @@ const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
     + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two, and force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold or holds with other bytes, which is otherwise refused; '
     + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none, '
-    + 'or manual?: true to install it as a plain copy; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults',
+    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
   z.object({
     argument: z.array(INSTALL_SOURCE),
     options: z.object({
       name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional(),
-      choices: z.array(FOMOD_CHOICE).optional(), manual: z.boolean().optional(),
+      choices: z.array(FOMOD_CHOICE).optional(), manual: z.boolean().optional(), installAnyway: z.boolean().optional(),
     }).default({}),
   }),
-  (value, { argument, options: { name, target, force, choices, manual } }) => new AgentCall(
+  (value, { argument, options: { name, target, force, choices, manual, installAnyway } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
       ? { kind: source.kind, name: downloadedFilesNamed(value.downloadedFiles, [source.name])[0] ?? source.name }
       : source)),
-    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, force, choices, manual },
+    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, force, choices, manual, installAnyway },
   ),
 );
 

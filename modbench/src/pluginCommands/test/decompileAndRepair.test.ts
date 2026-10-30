@@ -10,7 +10,7 @@ import type { MEditClient } from '../../client';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const REFUSED = { item: { name: 'Clean.esp', origin: 'Harbor' }, reason: 'Clean.esp is not malformed.' };
-const MADE = { folder: '/instance/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], manifestName: 'Harbor.manifest.json', manifest: '{}' } };
+const MADE = { folder: '/instance/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
 
 describe('decompileAndRepair — one send, a mod with no repository handed the one decompile and commit makes', () => {
   let client: InMemoryMEditClient;

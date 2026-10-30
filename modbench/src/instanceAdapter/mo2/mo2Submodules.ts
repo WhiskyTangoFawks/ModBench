@@ -205,7 +205,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
       ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),
 
-    // ADR-0022: an absent submodule's mod is named only in the manifest it holds.
+    // ADR-0022: an absent submodule's mod is named only in the build file it holds.
     async unclonedSubmodules() {
       if (!(await isRepository(instanceRoot))) return [];
       const uncloned: UnclonedSubmodule[] = [];

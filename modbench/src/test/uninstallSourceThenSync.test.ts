@@ -10,6 +10,7 @@ import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { adapterOver, managerOver, readModlistEntries } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
+import { BUILD_FILE } from '../wire/sourceMod';
 
 const MOD = 'Built Mod';
 const roots: string[] = [];
@@ -25,7 +26,7 @@ async function instanceWithSourceMod(): Promise<{ root: string; adapter: Instanc
   roots.push(root);
   const source = join(root, 'source', 'Built Mod source');
   await mkdir(source, { recursive: true });
-  await writeFile(join(source, `${MOD}.manifest.json`), JSON.stringify({ output: MOD, packages: [] }));
+  await writeFile(join(source, BUILD_FILE), JSON.stringify({ output: MOD, packages: [] }));
   runGit(source, 'init', '--quiet', '--initial-branch=main');
   runGit(source, 'remote', 'add', 'origin', 'https://example.test/built.git');
   runGit(source, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '--allow-empty', '-m', 'first');

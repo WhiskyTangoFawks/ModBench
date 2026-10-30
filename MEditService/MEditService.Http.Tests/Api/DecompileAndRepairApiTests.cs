@@ -30,7 +30,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
                 new
                 {
                     plugin,
-                    newRepository = new { sourceFolder = Client.SourceFolderSentFor(Origin), manifestName = $"{Origin}.manifest.json", manifest = "{}" },
+                    newRepository = new { sourceFolder = Client.SourceFolderSentFor(Origin), buildFile = "{}" },
                 },
             },
             force = false,
@@ -40,7 +40,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARepairHandingANewRepositoryWithNoManifest_Is400()
+    public async Task ARepairHandingANewRepositoryWithNoBuildFile_Is400()
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 

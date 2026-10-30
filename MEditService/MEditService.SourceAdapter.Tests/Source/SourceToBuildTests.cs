@@ -16,7 +16,7 @@ public sealed class SourceToBuildTests : IDisposable
     public void AnInitializedSource_BuildsItsAssetsAndItsPlugins()
     {
         Assert.Null(TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.ManifestOf("The Output"), [PluginBaselines.OneRecordOf("B.esp"), PluginBaselines.OneRecordOf("A.esp")],
+            _sourceFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("B.esp"), PluginBaselines.OneRecordOf("A.esp")],
             [new Asset("textures/Sub Folder/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
 
         var source = Built();
@@ -31,7 +31,7 @@ public sealed class SourceToBuildTests : IDisposable
     [Fact]
     public void ALeftoverInTheAssets_IsNoAssetOfTheBuild()
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf("Mod"), [], [new Asset("textures/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [new Asset("textures/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
         TempLeftover.DeadWriters(Path.Combine(_sourceFolder, "assets", "textures"));
 
         Assert.Equal(["textures/a.dds"], Built().Assets.Select(asset => asset.Path));
@@ -42,7 +42,7 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("notes.txt", false)]
     public void ASourceWithARemote_SaysWhetherItsWorkingTreeHoldsChangesNoCommitHolds(string written, bool uncommitted)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf("Mod"), [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
         Git("remote", "add", "origin", "https://example.com/mod.git");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_sourceFolder, written)).Require());
         File.WriteAllText(Path.Combine(_sourceFolder, written), "new");
@@ -55,7 +55,7 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("refs/heads/kept", true)]
     public void ASourceWithARemote_SaysWhetherItsRemoteHoldsTheCommitAtHead_AsTheLastFetchSaw(string holding, bool unpushed)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf("Mod"), [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
         Git("remote", "add", "origin", "https://example.com/mod.git");
         Git("update-ref", holding, "HEAD");
 
@@ -67,7 +67,7 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("upstream", "fork", "fork")]
     public void ASourceWithRemotes_SaysWhetherOrigin_ElseTheFirstRemoteByName_HoldsTheCommitAtHead(string added, string addedNext, string holding)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.ManifestOf("Mod"), [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
         Git("remote", "add", added, $"https://example.com/{added}.git");
         Git("remote", "add", addedNext, $"https://example.com/{addedNext}.git");
         Git("update-ref", $"refs/remotes/{holding}/main", "HEAD");

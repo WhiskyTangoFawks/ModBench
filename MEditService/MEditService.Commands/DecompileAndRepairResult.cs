@@ -8,8 +8,8 @@ namespace MEditService.Commands;
 public sealed record PluginToRepair(PluginAddress Plugin, NewRepository? NewRepository = null);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): the
-/// assets, by their paths in the mod folder, and the manifest.</summary>
-public sealed record NewRepository(string SourceFolder, IReadOnlyList<string> Assets, SpelledManifest Manifest);
+/// assets, by their paths in the mod folder, and the build file.</summary>
+public sealed record NewRepository(string SourceFolder, IReadOnlyList<string> Assets, byte[] BuildFile);
 
 public sealed record DecompileAndRepairResult(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileAndRepairRefused> Refused)
     : ISelectionAnswer<DecompileAndRepairRefused>;

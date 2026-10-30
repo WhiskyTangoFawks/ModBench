@@ -7,7 +7,6 @@ import { metadataOf, metadataOverwritten, statusOf, statusesNow, type FolderRead
 
 let root: string;
 let folder: string;
-let source: string;
 let hashed: string[];
 let entries: Map<string, ReadonlyMap<string, string>>;
 let metadata: Awaited<ReturnType<FolderReads['modMetadata']>>;
@@ -15,7 +14,6 @@ let metadata: Awaited<ReturnType<FolderReads['modMetadata']>>;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-status-'));
   folder = join(root, 'mods', 'mod');
-  source = join(root, 'source', 'Mod');
   await mkdir(folder, { recursive: true });
   hashed = [];
   entries = new Map();
@@ -70,13 +68,7 @@ async function manifested(held: Manifest): Promise<void> {
   await write('mod.manifest.json', manifestText(held));
 }
 
-async function manifestedFromSource(held: Manifest): Promise<void> {
-  heldAsItSays(held);
-  await write('mod.manifest.json', manifestText({ ...held, output: 'mod' }), source);
-}
-
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusOf({ name: 'mod', folder }, readsHashingAFileAsItsText(fileSystemIgnoresCase));
-const sourceModStatus = (): Promise<ModStatus> => statusOf({ name: 'mod', folder, sourceFolder: source }, readsHashingAFileAsItsText());
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
   ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, ...over });
@@ -187,47 +179,9 @@ describe('a mod\'s status against its manifest', () => {
 
   it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule (submodule: %s)', async (isSubmodule, noHost) => {
     await write('a.esp', 'hello');
-    await manifestedFromSource(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
+    await manifested(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
 
-    expect((await sourceModStatus()).noHost).toBe(noHost);
-  });
-
-  it('reads a source mod\'s manifest in its repository, not one in its folder', async () => {
-    await Promise.all([write('a.esp', 'hello'), write('notes.txt', 'mine')]);
-    await manifested(manifest([line('notes.txt')]));
-    await manifestedFromSource(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
-
-    const read = await sourceModStatus();
-
-    expect([read.noManifest, read.namedByNoLine]).toEqual([false, ['notes.txt']]);
-  });
-
-  it('says a source mod whose folder its build has not made lacks every file its manifest names', async () => {
-    await rm(folder, { recursive: true });
-    await manifestedFromSource(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
-
-    expect(await sourceModStatus()).toEqual(nothing({ gone: ['a.esp'] }));
-  });
-
-  it('has no manifest when its repository holds none', async () => {
-    await manifested(manifest([line('a.esp')]));
-    await mkdir(source, { recursive: true });
-
-    expect((await sourceModStatus()).noManifest).toBe(true);
-  });
-
-  it.each([
-    ['holds two', async () => {
-      await write('A.manifest.json', manifestText({ ...manifest([]), output: 'A' }), source);
-      await write('B.manifest.json', manifestText({ ...manifest([]), output: 'B' }), source);
-    }, 'its repository holds two manifests, \'A.manifest.json\' and \'B.manifest.json\''],
-    ['names no output', () => write('Mod.manifest.json', manifestText(manifest([])), source), 'its manifest names no output folder'],
-    ['is not named for its output', () => write('Other.manifest.json', manifestText({ ...manifest([]), output: 'mod' }), source),
-      'its manifest \'Other.manifest.json\' is not named for its output folder \'mod\''],
-  ])('is unreadable when a source mod\'s repository %s', async (_, arrange, why) => {
-    await arrange();
-
-    expect(await sourceModStatus()).toEqual(nothing({ unreadable: why }));
+    expect((await status()).noHost).toBe(noHost);
   });
 
   it('is unreadable, saying why, when its metadata cannot be read', async () => {
@@ -244,12 +198,11 @@ describe('a mod\'s status against its manifest', () => {
     expect(await statusOf({ name: 'mod', folder }, listing)).toEqual(nothing({ unreadable: 'a file could not be read: EACCES: permission denied' }));
   });
 
-  it('read now, finds each mod\'s folder and a source mod\'s repository as the adapter answers them, and none for a mod its name gives no folder', async () => {
-    await manifestedFromSource(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
+  it('read now, finds each mod\'s folder as the adapter answers it, and none for a mod its name gives no folder', async () => {
+    await manifested(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
     const reads = {
       ...readsHashingAFileAsItsText(),
       modFolderPath: (mod: string) => Promise.resolve(mod === 'mod' ? folder : undefined),
-      sourceMods: () => Promise.resolve({ folderOf: (mod: string) => (mod === 'mod' ? source : undefined) }),
     };
 
     expect(await statusesNow(reads, ['mod', 'Nameless'])).toEqual([nothing({ gone: ['a.esp'] })]);

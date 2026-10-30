@@ -175,7 +175,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 }
 
 const modToDecompileAndCommit = (name: string) => ({
-  name, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], manifestName: `${name}.manifest.json`, manifest: '{}' },
+  name, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], buildFile: '{}' },
 });
 const modToBuild = (name: string) => ({
   name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, exclude: ['b.dds'], taken: ['a.dds'],

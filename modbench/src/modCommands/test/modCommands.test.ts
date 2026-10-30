@@ -9,7 +9,8 @@ import type {
   EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, sourceModsOf, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { sourceManifestIn, writeSourceManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { buildFileIn, writeBuildFileIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { BUILD_FILE } from '../../wire/sourceMod';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 const separator = (name: string, enabled = false): ModlistEntry => ({ kind: 'separator', name, enabled });
@@ -32,20 +33,18 @@ function over(order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceA
 const SOURCE_ROOT = mkdtempSync(join(tmpdir(), 'mod-commands-source-'));
 afterAll(() => { rmSync(SOURCE_ROOT, { recursive: true, force: true }); });
 const SOURCE = join(SOURCE_ROOT, 'Harder VATS');
-const BUILT = (output: string): Manifest => ({
-  packages: [{ kind: 'sourceRepository', name: output, isSubmodule: false }], output, exclude: [], archives: [], steps: [], tools: [], files: [],
-});
-const withSourceManifest = async (written = true): Promise<void> => {
+const BUILD_FILE_OF = (output: string): Manifest => ({ packages: [], output, exclude: [], archives: [], steps: [], tools: [], files: [] });
+const withBuildFile = async (written = true): Promise<void> => {
   await rm(SOURCE, { recursive: true, force: true });
   await mkdir(SOURCE, { recursive: true });
-  if (written) await writeSourceManifestIn(SOURCE, BUILT('Harder VATS'));
+  if (written) await writeBuildFileIn(SOURCE, BUILD_FILE_OF('Harder VATS'));
 };
-const sourceManifest = async (): Promise<Manifest | undefined> => {
-  const read = await sourceManifestIn(SOURCE);
+const buildFile = async (): Promise<Manifest | undefined> => {
+  const read = await buildFileIn(SOURCE);
   return read === undefined || 'refused' in read ? undefined : read.manifest;
 };
-const excludedInSource = async (): Promise<readonly string[] | undefined> => (await sourceManifest())?.exclude;
-const NO_MANIFEST = `"${SOURCE}" holds no manifest.`;
+const excludedInSource = async (): Promise<readonly string[] | undefined> => (await buildFile())?.exclude;
+const NO_BUILD_FILE = `"${SOURCE}" holds no build file.`;
 
 const orderWrite = (changes: readonly ModOrderChange[], profile = 'Default'): AdapterCall => ({ verb: 'changeModOrder', profile, changes });
 const verbs = (calls: readonly AdapterCall[]) => calls.map((call) => call.verb);
@@ -458,33 +457,33 @@ describe('renameMod', () => {
     expect(verbs(fake.calls)).toEqual(['renameModFolder']);
   });
 
-  describe('a source mod: the manifest written with the folder', () => {
-    it('renames the folder and the output its manifest names, then the lines', async () => {
-      await withSourceManifest();
+  describe('a source mod: the build file written with the folder', () => {
+    it('renames the folder and the output its build file names, then the lines', async () => {
+      await withBuildFile();
       const { fake, commands } = over(FIXTURE_ORDER, {}, sourced);
 
       const outcome = await rename(commands);
 
       expect(outcome).toEqual({ applied: true, lineRefusals: [] });
-      expect([await readdir(SOURCE), (await sourceManifest())?.output]).toEqual([['Harder VATS 2.manifest.json'], 'Harder VATS 2']);
+      expect([await readdir(SOURCE), (await buildFile())?.output]).toEqual([[BUILD_FILE], 'Harder VATS 2']);
       expect(verbs(fake.calls)).toEqual(['renameModFolder', 'keepOutOfPublisher', 'changeModOrder', 'changeModOrder']);
     });
 
-    it('puts the folder back and writes no line when the manifest cannot be changed', async () => {
-      await withSourceManifest(false);
+    it('puts the folder back and writes no line when the build file cannot be changed', async () => {
+      await withBuildFile(false);
       const { fake, commands } = over(FIXTURE_ORDER, {}, sourced);
 
       const outcome = await rename(commands);
 
-      expect(outcome).toEqual({ applied: false, refusal: NO_MANIFEST });
+      expect(outcome).toEqual({ applied: false, refusal: NO_BUILD_FILE });
       expect(fake.calls).toEqual([
         { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
         { verb: 'renameModFolder', from: 'Harder VATS 2', to: 'Harder VATS' },
       ]);
     });
 
-    it('names both failures when the folder cannot be put back after the manifest cannot be changed', async () => {
-      await withSourceManifest(false);
+    it('names both failures when the folder cannot be put back after the build file cannot be changed', async () => {
+      await withBuildFile(false);
       const { commands } = over(FIXTURE_ORDER, {
         refusals: (call) => (call.verb === 'renameModFolder' && call.from === 'Harder VATS 2' ? 'the folder is in use' : undefined),
       }, sourced);
@@ -493,7 +492,7 @@ describe('renameMod', () => {
 
       expect(outcome).toEqual({
         applied: false,
-        refusal: `${NO_MANIFEST} The folder could not be renamed back to "Harder VATS": the folder is in use`,
+        refusal: `${NO_BUILD_FILE} The folder could not be renamed back to "Harder VATS": the folder is in use`,
       });
     });
   });
@@ -510,13 +509,13 @@ describe('markFiles', () => {
   const markOf = (file: ReturnType<typeof fileOf>, mark: OriginFileMark): AdapterCall =>
     ({ verb: 'markOriginFile', origin: file.origin, relativePath: file.relativePath, mark });
 
-  beforeEach(() => withSourceManifest());
+  beforeEach(() => withBuildFile());
 
   it.each([
     ['Excluded', 'Textures/a.dds', [], ['Textures/a.dds']],
     ['Included', `Textures/b.dds${MARK}`, ['Textures/b.dds'], []],
-  ] as const)('marks a file %s, and the manifest\'s exclusion with it', async (mark, relativePath, before, after) => {
-    await writeSourceManifestIn(SOURCE, { ...BUILT('Harder VATS'), exclude: before });
+  ] as const)('marks a file %s, and the build file\'s exclusion with it', async (mark, relativePath, before, after) => {
+    await writeBuildFileIn(SOURCE, { ...BUILD_FILE_OF('Harder VATS'), exclude: before });
     const { fake, commands } = over(FIXTURE_ORDER, {}, SOURCES);
     const file = fileOf('Harder VATS', relativePath);
 
@@ -527,33 +526,33 @@ describe('markFiles', () => {
     expect(fake.calls).toEqual([markOf(file, mark)]);
   });
 
-  it('marks no file of a source mod whose manifest cannot be changed, naming why for each', async () => {
-    await withSourceManifest(false);
+  it('marks no file of a source mod whose build file cannot be changed, naming why for each', async () => {
+    await withBuildFile(false);
     const { fake, commands } = over(FIXTURE_ORDER, {}, SOURCES);
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds')];
 
     const outcome = await commands.markFiles(files, 'Excluded');
 
-    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: files.map((item) => ({ item, reason: NO_MANIFEST })) } });
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: files.map((item) => ({ item, reason: NO_BUILD_FILE })) } });
     expect(fake.calls).toEqual([]);
   });
 
-  it('marks the file of a mod with no source though a source mod\'s manifest cannot be changed', async () => {
-    await withSourceManifest(false);
+  it('marks the file of a mod with no source though a source mod\'s build file cannot be changed', async () => {
+    await withBuildFile(false);
     const { fake, commands } = over(FIXTURE_ORDER, {}, SOURCES);
     const inSource = fileOf('Harder VATS', 'a.dds');
     const inNoSource = fileOf('ENBoost', 'b.dds');
 
     const outcome = await commands.markFiles([inSource, inNoSource], 'Excluded');
 
-    expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: NO_MANIFEST }] } });
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: NO_BUILD_FILE }] } });
     expect(fake.calls).toEqual([markOf(inNoSource, 'Excluded')]);
   });
 
   it('refuses the whole selection, configuring and marking nothing, when the source mods cannot be read', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { sourceMods: 'Harder VATS.manifest.json is locked' } }, SOURCES);
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { sourceMods: 'Harder VATS build file is locked' } }, SOURCES);
 
-    expect(await commands.markFiles([fileOf('Harder VATS', 'a.dds')], 'Excluded')).toEqual({ applied: false, refusal: 'Harder VATS.manifest.json is locked' });
+    expect(await commands.markFiles([fileOf('Harder VATS', 'a.dds')], 'Excluded')).toEqual({ applied: false, refusal: 'Harder VATS build file is locked' });
     expect(await excludedInSource()).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
@@ -604,7 +603,7 @@ describe('markFiles', () => {
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [{
       item: refusedFile,
-      reason: expect.stringMatching(new RegExp(`^permission denied Its change to the manifest could not be taken back: The manifest in "${SOURCE}" could not be written: `)) as unknown,
+      reason: expect.stringMatching(new RegExp(`^permission denied Its change to the build file could not be taken back: The build file in "${SOURCE}" could not be written: `)) as unknown,
     }] } });
   });
 });
@@ -853,8 +852,8 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     expect(verbs(fake.calls)).toEqual(['renameModFolder']);
   });
 
-  it('rename moves none when the manifest cannot be changed', async () => {
-    await withSourceManifest(false);
+  it('rename moves none when the build file cannot be changed', async () => {
+    await withBuildFile(false);
     const { fake, commands } = publisherOver({}, sourceMods(new Map([['Harder VATS', SOURCE]])));
 
     await commands.renameMod('Harder VATS', 'Harder VATS 2');

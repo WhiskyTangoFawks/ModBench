@@ -43,6 +43,7 @@ interface InstallOptions {
   readonly force?: boolean;
   readonly choices?: readonly FomodStepChoice[];
   readonly manual?: boolean;
+  readonly installAnyway?: boolean;
 }
 
 interface ModInstallDeps {
@@ -106,8 +107,8 @@ const targetOf = async (
 };
 
 // No choices answer a FOMOD with none, so a FOMOD with a step to answer is refused, listing it.
-const fomodAnswerOf = ({ choices, manual }: InstallOptions): FomodAnswer => {
-  if (manual !== true) return { kind: 'choices', steps: choices ?? [] };
+const fomodAnswerOf = ({ choices, manual, installAnyway }: InstallOptions): FomodAnswer => {
+  if (manual !== true) return { kind: 'choices', steps: choices ?? [], installAnyway: installAnyway === true };
   if (choices !== undefined) throw new Refusal('An agent call to install carries choices or manual, not both.');
   return { kind: 'manual' };
 };

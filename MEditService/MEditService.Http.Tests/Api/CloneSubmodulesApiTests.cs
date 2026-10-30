@@ -23,7 +23,7 @@ public sealed class CloneSubmodulesApiTests : HostedTests
     [Fact]
     public async Task AnAbsentSubmodule_IsClonedAtItsPin_AndNamedCloned()
     {
-        var pin = _submodule.Commit(("Mod.manifest.json", "{\"output\": \"Mod\", \"files\": []}"));
+        var pin = _submodule.Commit(("build.json", "{\"output\": \"Mod\", \"files\": []}"));
         _submodule.Pin(pin);
 
         var response = await Client.PostAsJsonAsync("/clone-submodules", new { submodules = new[] { new { folder = _submodule.Folder, pin } } });
@@ -32,7 +32,7 @@ public sealed class CloneSubmodulesApiTests : HostedTests
         var answer = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(_submodule.Folder, Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("folder").GetString());
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
-        Assert.True(File.Exists(Path.Combine(_submodule.Folder, "Mod.manifest.json")));
+        Assert.True(File.Exists(Path.Combine(_submodule.Folder, "build.json")));
     }
 
     [Theory]

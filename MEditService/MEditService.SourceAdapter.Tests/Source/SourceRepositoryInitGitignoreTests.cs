@@ -16,14 +16,14 @@ public sealed class SourceRepositoryInitGitignoreTests
         GitProbe.TryRun(Path.Combine(sourceFolder, ".git"), sourceFolder, out _, "check-ignore", path);
 
     [Fact]
-    public void AnInit_TracksExactlyTheGitignoreTheManifestThePluginSourceAndTheAssets()
+    public void AnInit_TracksExactlyTheGitignoreTheBuildFileThePluginSourceAndTheAssets()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
-        TestAdapters.Source().Init(sourceFolder, SourceInits.ManifestOf("Mod"), [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))]);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))]);
 
         Assert.Equal(
-            [".gitignore", "Mod.manifest.json", "assets/meshes/a.nif", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
+            [".gitignore", "assets/meshes/a.nif", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
             CommittedPaths(sourceFolder));
     }
 
@@ -31,7 +31,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     public void AFileLaterPutBesideTheSource_IsIgnored_AndOneLaterPutAmongTheAssetsIsTracked()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.ManifestOf("Mod"), [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], []);
         File.WriteAllText(Path.Combine(sourceFolder, "Test.esp"), "a stray build output");
         Directory.CreateDirectory(Path.Combine(sourceFolder, "assets", "textures"));
         File.WriteAllText(Path.Combine(sourceFolder, "assets", "textures", "new.dds"), "a new asset");
@@ -41,20 +41,20 @@ public sealed class SourceRepositoryInitGitignoreTests
     }
 
     [Fact]
-    public void AManifestNamedForAnotherOutput_IsTracked_AndOneOutsideTheRootIsNot()
+    public void TheBuildFile_IsTracked_AndOneOutsideTheRootIsNot()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.ManifestOf("Mod"), [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], []);
 
-        Assert.False(Ignored(sourceFolder, "Renamed.manifest.json"));
-        Assert.True(Ignored(sourceFolder, "docs/Renamed.manifest.json"));
+        Assert.False(Ignored(sourceFolder, "build.json"));
+        Assert.True(Ignored(sourceFolder, "docs/build.json"));
     }
 
     [Fact]
     public void ATopLevelFolderThatMerelyEndsWithPluginSource_StaysIgnored_ForThePatternIsNotASuffixMatch()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.ManifestOf("Mod"), [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], []);
         Directory.CreateDirectory(Path.Combine(sourceFolder, "My-plugin-source"));
         File.WriteAllText(Path.Combine(sourceFolder, "My-plugin-source", "notes.txt"), "Notes");
 

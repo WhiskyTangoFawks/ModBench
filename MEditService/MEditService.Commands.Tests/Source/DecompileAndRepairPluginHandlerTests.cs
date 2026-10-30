@@ -203,7 +203,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     private PluginToRepair ToRepair(PluginAddress plugin) => new(plugin, MadeIn(_newMod));
 
-    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.ManifestOf(NewModName));
+    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.BuildFile);
 
     private string StrayFile()
     {

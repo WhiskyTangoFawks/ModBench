@@ -282,9 +282,10 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines('Late.esp'), dataFolderPlugins: inData(), mods: [] }), { repositoryOnDisk: true });
     const enablingLate = {
       ...fake.adapter,
-      sourceMods: () => {
+      modOrder: async () => {
+        const asked = await fake.adapter.modOrder();
         fake.read({ mods: [{ kind: 'mod', name: 'Late', enabled: true }] });
-        return fake.adapter.sourceMods();
+        return asked;
       },
     };
 

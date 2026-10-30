@@ -46,7 +46,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task Init_CommitsTheAssetsAndTheManifestItIsHanded()
+    public async Task Init_CommitsTheAssetsAndTheBuildFileItIsHanded()
     {
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "installed.dds"), "hello");
@@ -58,7 +58,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         {
             mods = new[]
             {
-                new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, manifestName = $"{Origin}.manifest.json", manifest = "the manifest" } },
+                new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
             },
         });
 
@@ -67,19 +67,17 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => !path.StartsWith("plugin-source/", StringComparison.Ordinal));
-        Assert.Equal([".gitignore", $"{Origin}.manifest.json", "assets/textures/added.dds"], committed);
-        Assert.Equal("the manifest", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", $"HEAD:{Origin}.manifest.json"));
+        Assert.Equal([".gitignore", "assets/textures/added.dds", "build.json"], committed);
+        Assert.Equal("the build file", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "HEAD:build.json"));
     }
 
     public static TheoryData<string, string> NotARequestToInit => new()
     {
         { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "manifestName": "m.manifest.json", "manifest": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "repository": {"manifestName": "m.manifest.json", "manifest": "{}"}}]}""" },
-        { "a mod without a manifest", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "manifestName": "m.manifest.json"}}]}""" },
-        { "a manifest name that is no manifest's", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "manifestName": "m.json", "manifest": "{}"}}]}""" },
-        { "a manifest name with a folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "manifestName": "a/m.manifest.json", "manifest": "{}"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "manifestName": "m.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "repository": {"buildFile": "{}"}}]}""" },
+        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
     };
 
     [Theory]

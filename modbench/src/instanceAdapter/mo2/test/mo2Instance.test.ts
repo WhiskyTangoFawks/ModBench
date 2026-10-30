@@ -37,6 +37,7 @@ import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
+import { BUILD_FILE } from '../../../wire/sourceMod';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
@@ -305,7 +306,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\n');
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\r\nsResourceIndexFileList=Fallout4 - Textures1.ba2\r\n');
           await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
-          await writeFile(join(root, 'source', 'Harder VATS', 'Harder VATS.manifest.json'), '{ "output": "Harder VATS" }');
+          await writeFile(join(root, 'source', 'Harder VATS', BUILD_FILE), '{ "output": "Harder VATS" }');
 
           const reading = await managerOver(root, { gameFolderSettingValue: game }).reading();
 
@@ -1635,9 +1636,9 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a mod\'s repository', () => {
-      const repository = async (folder: string, manifest: string | undefined, named = folder): Promise<void> => {
+      const repository = async (folder: string, buildFile: string | undefined): Promise<void> => {
         await mkdir(join(root, 'source', folder, '.git'), { recursive: true });
-        if (manifest !== undefined) await writeFile(join(root, 'source', folder, `${named}.manifest.json`), manifest);
+        if (buildFile !== undefined) await writeFile(join(root, 'source', folder, BUILD_FILE), buildFile);
       };
 
       it('answers a mod\'s source folder beside mods/, whether or not it is there, and none for a name that reaches outside it', () => {
@@ -1646,11 +1647,11 @@ describe('the MO2 Instance adapter', () => {
         expect(adapter.sourceFolder('../Harder VATS')).toBeUndefined();
       });
 
-      it('lists every repository under the source folder by the mod its manifest names as its output, with its folder, and no folder without a `.git`', async () => {
+      it('lists every repository under the source folder by the mod its build file names as its output, with its folder, and no folder without a `.git`', async () => {
         await repository('Harder VATS', '{ "output": "Harder VATS" }');
-        await repository('Renamed From', '{ "output": "Renamed To" }', 'Renamed To');
+        await repository('Renamed From', '{ "output": "Renamed To" }');
         await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
-        await writeFile(join(root, 'source', 'No Repository', 'No Repository.manifest.json'), '{ "output": "No Repository" }');
+        await writeFile(join(root, 'source', 'No Repository', BUILD_FILE), '{ "output": "No Repository" }');
 
         const { folders, notes } = await source.sourceMods();
 
@@ -1659,7 +1660,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers the source folder that builds a mod, its name matched without case', async () => {
-        await repository('Renamed From', '{ "output": "Renamed To" }', 'Renamed To');
+        await repository('Renamed From', '{ "output": "Renamed To" }');
 
         const sourceMods = await source.sourceMods();
 
@@ -1667,11 +1668,10 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it.each([
-        ['no manifest', undefined],
-        ['a manifest that is not JSON', '{ "output": '],
-        ['a manifest that names no output', '{ "exclude": [] }'],
+        ['no build file', undefined],
+        ['a build file that is not JSON', '{ "output": '],
+        ['a build file that names no output', '{ "exclude": [] }'],
         ['an output that is not a folder name', '{ "output": "../Elsewhere" }'],
-        ['a manifest not named for its output', '{ "output": "Elsewhere" }'],
       ])('leaves out a repository with %s, and says so', async (_, configuration) => {
         await repository('Unnamed', configuration);
 
@@ -1681,7 +1681,7 @@ describe('the MO2 Instance adapter', () => {
         expect(notes).toEqual([expect.stringContaining(join(root, 'source', 'Unnamed'))]);
       });
 
-      it('answers the output a repository\'s manifest names, though the manifest is not named for it so the repository builds no mod', async () => {
+      it('answers the output a repository\'s build file names, and none for one that names none', async () => {
         await repository('Src', '{ "output": "Other" }');
         await repository('Good', '{ "output": "Good" }');
         await repository('Bad', '{ "exclude": [] }');
@@ -1689,31 +1689,32 @@ describe('the MO2 Instance adapter', () => {
         const sources = await source.sourceMods();
 
         expect(['Src', 'Good', 'Bad'].map((name) => sources.claimedOutput(join(root, 'source', name)))).toEqual(['Other', 'Good', undefined]);
-        expect(sources.folderOf('Other')).toBeUndefined();
       });
 
-      it('reads a folder named as a manifest as no manifest, as mEdit does', async () => {
+      it('reads a folder named as the build file as no build file', async () => {
         await repository('Foldered', undefined);
-        await mkdir(join(root, 'source', 'Foldered', 'Foldered.manifest.json'));
+        await mkdir(join(root, 'source', 'Foldered', BUILD_FILE));
 
         const { folders, notes } = await source.sourceMods();
 
-        expect([folders, notes]).toEqual([new Map(), [`${join(root, 'source', 'Foldered')} is not a source mod: it has no manifest.`]]);
+        expect([folders, notes]).toEqual([new Map(), [`${join(root, 'source', 'Foldered')} is not a source mod: it has no build file.`]]);
       });
 
-      it('leaves out a repository that holds two manifests, and says so naming both', async () => {
-        await repository('Twice', '{ "output": "A" }', 'A');
-        await writeFile(join(root, 'source', 'Twice', 'B.manifest.json'), '{ "output": "B" }');
+      it('leaves out a repository that holds two build files that differ in case, and says so naming both', async () => {
+        await repository('Twice', undefined);
+        if (process.platform === 'win32') execFileSync('fsutil.exe', ['file', 'setCaseSensitiveInfo', join(root, 'source', 'Twice'), 'enable']);
+        await writeFile(join(root, 'source', 'Twice', BUILD_FILE), '{ "output": "A" }');
+        await writeFile(join(root, 'source', 'Twice', BUILD_FILE.toUpperCase()), '{ "output": "B" }');
 
         const { folders, notes } = await source.sourceMods();
 
         expect(folders).toEqual(new Map());
-        expect(notes).toEqual([`${join(root, 'source', 'Twice')} is not a source mod: it holds two manifests, A.manifest.json and B.manifest.json.`]);
+        expect(notes).toEqual([`${join(root, 'source', 'Twice')} is not a source mod: it holds two build files, ${BUILD_FILE} and ${BUILD_FILE.toUpperCase()}.`]);
       });
 
-      it('leaves out a repository whose manifest cannot be read, says so, and lists the rest', async () => {
+      it('leaves out a repository whose build file cannot be read, says so, and lists the rest', async () => {
         await repository('Unreadable', undefined);
-        await mkdir(join(root, 'source', 'Unreadable', 'Unreadable.manifest.json'));
+        await mkdir(join(root, 'source', 'Unreadable', BUILD_FILE));
         await repository('Readable', '{ "output": "Readable" }');
 
         const { folders, notes } = await source.sourceMods();
@@ -1723,8 +1724,8 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('gives an output two repositories name, matched without case, to the first by folder name, and says so', async () => {
-        await repository('Second', '{ "output": "SHARED" }', 'SHARED');
-        await repository('First', '{ "output": "Shared" }', 'Shared');
+        await repository('Second', '{ "output": "SHARED" }');
+        await repository('First', '{ "output": "Shared" }');
 
         const sources = await source.sourceMods();
 
@@ -2248,14 +2249,14 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
-  it('moves to the trash the repository whose manifest names the mod, and answers false when none does', async () => {
+  it('moves to the trash the repository whose build file names the mod, and answers false when none does', async () => {
     const trashed: string[] = [];
     const trash = (path: string): Promise<void> => {
       trashed.push(path);
       return Promise.resolve();
     };
     await mkdir(join(root, 'source', 'Renamed From', '.git'), { recursive: true });
-    await writeFile(join(root, 'source', 'Renamed From', 'Harder VATS.manifest.json'), '{ "output": "Harder VATS" }');
+    await writeFile(join(root, 'source', 'Renamed From', BUILD_FILE), '{ "output": "Harder VATS" }');
     await mkdir(join(root, 'source', 'Unofficial Fallout 4 Patch'), { recursive: true });
 
     expect(await adapter.trashSourceFolder('Harder VATS', trash)).toBe(true);
