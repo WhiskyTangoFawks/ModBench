@@ -39,7 +39,8 @@ export class ModStatuses {
   private readonly shown = new Map<string, ModStatus>();
   private readonly unreadable = new Map<string, string>();
   private waiting: StatusSource | undefined;
-  private deriving: Promise<void> | undefined;
+  private deriving = false;
+  private derivation: Promise<void> = Promise.resolve();
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
@@ -48,12 +49,14 @@ export class ModStatuses {
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
     this.waiting = value;
-    this.deriving ??= this.deriveWhileWaiting();
+    if (this.deriving) return;
+    this.deriving = true;
+    this.derivation = this.deriveWhileWaiting();
   }
 
   /** The statuses derived from the latest value handed, each as read, an unreadable one too. */
   async current(): Promise<ReadonlyMap<string, ModStatus>> {
-    await this.deriving;
+    await this.derivation;
     return this.derived;
   }
 
@@ -84,11 +87,11 @@ export class ModStatuses {
     try {
       for (let value = this.waiting; value !== undefined; value = this.waiting) {
         this.waiting = undefined;
-        const statuses = await Promise.all(value.holdsRepository ? modsAt(value).map((mod) => statusOf(mod, this.reads)) : []);
+        const statuses = value.holdsRepository ? await Promise.all(modsAt(value).map((mod) => statusOf(mod, this.reads))) : [];
         this.hold(new Map(statuses.map((status) => [status.mod, status])));
       }
     } finally {
-      this.deriving = undefined;
+      this.deriving = false;
     }
   }
 

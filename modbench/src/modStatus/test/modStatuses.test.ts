@@ -90,6 +90,20 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     expect([...(await statuses.current()).keys()]).toEqual(['ModA']);
   });
 
+  it('derives a value handed as a derivation ends', async () => {
+    const [a, b] = [await folderOf('A'), await folderOf('B')];
+    const statuses = statusesLogging();
+    const handing = statuses.onDidChange(() => {
+      handing.dispose();
+      queueMicrotask(() => { statuses.derive(valueOf([{ kind: 'mod', name: 'B' }], [folder('mod', 'B', b)])); });
+    });
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', a)]));
+    await statuses.current();
+
+    expect([...(await statuses.current()).keys()]).toEqual(['B']);
+  });
+
   it('of the values handed while one derives, derives the latest alone next', async () => {
     const [a, b, c] = [await folderOf('A'), await folderOf('B'), await folderOf('C')];
     const statuses = statusesLogging();
