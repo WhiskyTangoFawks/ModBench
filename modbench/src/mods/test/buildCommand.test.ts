@@ -205,13 +205,13 @@ describe('modbench.mod.build', () => {
   });
 
   it('names each mod whose built files could not be recorded, beside the landing', async () => {
-    const { handler, reporter } = registered({ landed: [{ ...built('ModA'), notes: ['could not be recorded: ENOSPC'] }, built('ModB')], refused: [] });
+    const { handler, reporter } = registered({ landed: [{ ...built('ModA'), notes: ['could not be kept: ENOSPC'] }, built('ModB')], refused: [] });
     const rows = [modRow('ModA'), modRow('ModB')];
 
     await handler(rows[0], rows);
 
     expect(reporter.landings).toEqual(['Built 2 mods.']);
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Build could not record a mod\'s files.', detail: '"ModA" (could not be recorded: ENOSPC)' }]);
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Build could not keep a mod\'s files.', detail: '"ModA" (could not be kept: ENOSPC)' }]);
   });
 
   it('names each file the build overwrote that differed, beside the landing', async () => {
