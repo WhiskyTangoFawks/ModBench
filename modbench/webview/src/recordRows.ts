@@ -1,5 +1,5 @@
 import { isString } from '../../src/wire/messages';
-import { copiedText, modelValue, readsAsFlags, shownValue } from './modelValue';
+import { copiedText, flagNames, modelValue, readsAsFlags, shownValue } from './modelValue';
 import { formKeyLabel } from './FormKeyLink';
 import { elementsIn } from './presentation';
 import { idleMembers } from './siblingsInUse';
@@ -32,8 +32,12 @@ export interface ValueCell extends GridCell {
   editPath?: PathHop[];
   dropAddsTo?: ArrayParentContext;
   // What a cell the game fills from a template reads, its tooltip, and the template it copies and drags as (editor-fields.md, Templated fields).
-  template?: { reading: string; tooltip: string; copyText: string; formKey: string };
+  template?: TemplateReading;
+  // Per flag of a Flags row, what the flag reads when the game fills it from a template.
+  templatedFlags?: Readonly<Record<string, TemplateReading>>;
 }
+
+export interface TemplateReading { reading: string; tooltip: string; copyText: string; formKey: string }
 
 interface RowBase {
   key: string;
@@ -104,6 +108,20 @@ function templateOf(
   }
 }
 
+// The flags of a Flags row that the copy hands to a template, keyed `<member path>.<flag>`.
+function templatedFlagsOf(
+  copy: CompareOverride, rootField: string, path: readonly PathSegment[], names: readonly string[], editable: boolean,
+): ValueCell['templatedFlags'] {
+  const prefix = [rootField, ...path.flatMap(seg => (seg.kind === 'member' ? [seg.name] : []))].join('.') + '.';
+  const readings = Object.entries(copy.templated ?? {})
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([key, by]): [string, TemplateReading] => {
+      const flag = key.slice(prefix.length);
+      return [flag, templateReading(by, names.includes(flag) ? 'set' : 'clear', editable)];
+    });
+  return readings.length > 0 ? Object.fromEntries(readings) : undefined;
+}
+
 const resolves = (resolution: FormKeyResolution | undefined): resolution is FormKeyResolution =>
   resolution !== undefined && resolution.state !== 'Unresolved';
 
@@ -114,7 +132,7 @@ function goToTarget(
   return isString(shown) && meta.type === 'formKey' && resolves(resolution) ? shown : undefined;
 }
 
-function templateReading(template: TemplatedBy, ownValue: string | undefined, editable: boolean): NonNullable<ValueCell['template']> {
+function templateReading(template: TemplatedBy, ownValue: string | undefined, editable: boolean): TemplateReading {
   const copyText = formKeyLabel(template.template, template.resolution);
   return {
     reading: `from ${template.resolution.editorId || template.template}`,
@@ -167,7 +185,10 @@ function fieldRow(
         : undefined,
       goesTo === undefined ? undefined : referenceContext(goesTo),
     );
-    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo, template }];
+    const templatedFlags = holds && readsAsFlags(cellMeta)
+      ? templatedFlagsOf(o, at.rootField, at.path, flagNames(held, cellMeta), editable.has(key))
+      : undefined;
+    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo, template, templatedFlags }];
   }));
   return {
     kind: 'field', diff, meta, ...place, expandable: (diff.children?.length ?? 0) > 0 || readsAsFlags(meta),

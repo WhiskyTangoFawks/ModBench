@@ -74,6 +74,29 @@ public sealed class SkyrimGestureTests : TestInstance
     }
 
     [Fact]
+    public void AFlagsWrite_ThatChangesATemplatedBit_IsRefused_AndOneThatLeavesItIsNot()
+    {
+        var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
+        var template = mod.Npcs.AddNew("Template");
+        var copy = mod.Npcs.AddNew("Copy");
+        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.BaseData;
+        copy.Configuration.Flags = NpcConfiguration.Flag.Essential;
+        copy.Template.SetTo(template.FormKey);
+        var plugin = Add(mod, "TemplatedMod");
+        var flags = (string json) => SetAt(Json(json), Member("Configuration"), Member("Flags"));
+
+        var cleared = EditHandler.Edit(plugin, copy.FormKey.ToString(), flags("[]"));
+        var added = EditHandler.Edit(plugin, copy.FormKey.ToString(), flags("""["Essential","Respawn"]"""));
+        var other = EditHandler.Edit(plugin, copy.FormKey.ToString(), flags("""["Essential","Female"]"""));
+
+        Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, cleared.Refusal);
+        Assert.Contains("Configuration.Flags.Essential", cleared.Message);
+        Assert.Contains("BaseData", cleared.Message);
+        Assert.Equal(RecordEditRefusal.TemplatedFieldReadOnly, added.Refusal);
+        Assert.True(other.Applied, other.Message);
+    }
+
+    [Fact]
     public void ClearingTheLastTemplateFlag_ThroughTheFlagsWrite_MakesTheMembersEditableAtOnce()
     {
         var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);

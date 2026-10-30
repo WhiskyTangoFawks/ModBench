@@ -144,6 +144,24 @@ public sealed class Document
     internal static JsonObject OwnerOf(JsonObject root, IEnumerable<string> path) =>
         OwnerAt(root, path, creating: true) ?? throw new InvalidOperationException("Expected a walk that makes what it lacks to reach its owner.");
 
+    /// <summary>The flags set at <paramref name="path"/>, as the codec spells a flags member: an array of names.
+    /// Empty where the document omits it.</summary>
+    public HashSet<string> FlagNamesAt(params ReadOnlySpan<string> path) => FlagNamesIn(At(path));
+
+    /// <summary>The flags a JSON value of a flags member names; empty for null.</summary>
+    public static HashSet<string> FlagNamesOf(string json)
+    {
+        using var parsed = JsonDocument.Parse(json);
+        return FlagNamesIn(parsed.RootElement);
+    }
+
+    private static HashSet<string> FlagNamesIn(JsonElement? flags) => flags switch
+    {
+        { ValueKind: JsonValueKind.Array } names => [.. names.EnumerateArray().Select(n => n.GetString()).OfType<string>()],
+        { ValueKind: JsonValueKind.String } name => [name.GetString() ?? ""],
+        _ => [],
+    };
+
     internal JsonElement? At(params ReadOnlySpan<string> path)
     {
         var current = _root;

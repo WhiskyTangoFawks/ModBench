@@ -25,11 +25,12 @@ public sealed class SkyrimTemplatedConflictTests : IDisposable
         var template = baseMod.Npcs.AddNew("Template");
         var npc = baseMod.Npcs.AddNew("Raider");
         npc.Configuration.MagickaOffset = 1;
-        npc.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats;
+        npc.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats | NpcConfiguration.TemplateFlag.BaseData;
         var topMod = new SkyrimMod(ModKey.FromFileName(Top), SkyrimRelease.SkyrimSE);
         var copy = npc.DeepCopy();
         copy.Configuration.MagickaOffset = 50;
-        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats;
+        copy.Configuration.TemplateFlags = NpcConfiguration.TemplateFlag.Stats | NpcConfiguration.TemplateFlag.BaseData;
+        copy.Configuration.Flags = NpcConfiguration.Flag.Essential;
         copy.Template.SetTo(template.FormKey);
         topMod.Npcs.Add(copy);
         _npcKey = npc.FormKey;
@@ -61,6 +62,15 @@ public sealed class SkyrimTemplatedConflictTests : IDisposable
 
         Assert.Equal(ConflictThis.IdenticalToMaster, configuration.CellStates[Top]);
         Assert.Equal(ConflictAll.NoConflict, configuration.ConflictAll);
+    }
+
+    [Fact]
+    public void AFlagsRowWhoseOnlyDifferenceIsATemplatedBit_IsNoConflict_AsTheBitIs()
+    {
+        var flags = Assert.Single(Row("Configuration").Children.Require(), d => d.FieldName == "Flags");
+
+        Assert.Equal(ConflictThis.IdenticalToMaster, flags.CellStates[Top]);
+        Assert.Equal(ConflictAll.NoConflict, flags.ConflictAll);
     }
 
     [Fact]

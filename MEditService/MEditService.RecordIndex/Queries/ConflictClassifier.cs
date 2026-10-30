@@ -190,14 +190,23 @@ internal sealed class ConflictClassifier(ILogger logger)
             NoWinner: noWinner);
     }
 
+    // A member inside a flags array is one flag, named in the array.
     private static object? WithoutMembers(object? value, IEnumerable<string[]> members)
     {
-        if (value is not JsonElement { ValueKind: JsonValueKind.Object } element) return value;
+        if (value is not JsonElement { ValueKind: JsonValueKind.Object or JsonValueKind.Array } element) return value;
         var node = System.Text.Json.Nodes.JsonNode.Parse(element.GetRawText());
         foreach (var member in members)
         {
             var owner = member[..^1].Aggregate(node, (at, name) => at?[name]);
-            (owner as System.Text.Json.Nodes.JsonObject)?.Remove(member[^1]);
+            if (owner is System.Text.Json.Nodes.JsonObject holder) holder.Remove(member[^1]);
+            else if (owner is System.Text.Json.Nodes.JsonArray flags)
+            {
+                foreach (var flag in flags.Where(f => f?.GetValueKind() == JsonValueKind.String && f.GetValue<string>() == member[^1]).ToList())
+                    flags.Remove(flag);
+                // The codec omits a flags member with no flag set.
+                if (flags.Count == 0 && member.Length > 1)
+                    (member[..^2].Aggregate(node, (at, name) => at?[name]) as System.Text.Json.Nodes.JsonObject)?.Remove(member[^2]);
+            }
         }
         return JsonSerializer.SerializeToElement(node);
     }
