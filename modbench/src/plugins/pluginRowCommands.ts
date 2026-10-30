@@ -115,8 +115,8 @@ async function withChangesGitDoesNotHold(
 
 type SendPlugins = (plugins: readonly PluginAddress[], force: boolean) => Promise<SelectionResult<PluginAddress>>;
 
-/** commands.md, Principles, Confirm what destroys: asks once, before any write, naming the plugins whose source holds
- *  changes git does not, and sends those forced and the rest unforced. Esc writes nothing. */
+// commands.md, Principles, Confirm what destroys: asks once, before any write, naming the plugins whose source holds
+// changes git does not, and sends those forced and the rest unforced. Esc writes nothing.
 async function sendAskingOverChanges(
   client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>, progress: Progress,
   { plugins, force, agreesToReplace }: DecompileGiven, send: SendPlugins,

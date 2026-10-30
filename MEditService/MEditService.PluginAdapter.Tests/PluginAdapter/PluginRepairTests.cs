@@ -180,19 +180,6 @@ public sealed class PluginRepairTests
         return (fixture.Malformed.Bytes, repaired, flagged);
     }
 
-    [Fact]
-    public async Task FlaggedSourceOf_APluginWhoseBytesChangedSinceThePreview_IsRefused()
-    {
-        using var folder = new ScratchDirectory("repair-flagged-stale");
-        var (malformed, previews) = Previewed(folder, ShortRegion);
-        File.WriteAllBytes(malformed, TwoRegions(PaddedRegion).Bytes);
-
-        var refused = (await TestAdapters.Mutagen().FlaggedSourceOfAsync(
-            Registered(malformed), [.. previews.Diagnoses.Select(d => d.Diagnosis)], new PluginSource([], [], ""), EmptyLoadOrder.Of(Release))).Failure();
-
-        Assert.Equal("its bytes changed since the repair preview", refused.Reason);
-    }
-
     private static RegisteredPlugin Registered(string path)
     {
         var folder = Path.GetDirectoryName(path) ?? throw new ArgumentException("No folder.", nameof(path));

@@ -5,7 +5,6 @@ import { isRefused, type MEditClient, type NewRepository, type PluginAddress, ty
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import { pluginRowName } from '../wire/pluginAddress';
 
 export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair'>;
 
