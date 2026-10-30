@@ -103,7 +103,6 @@ As a user, I want:
 
 1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the whole tree. Cites: MO2's priority sort; common, A view, story 7
 2. The name filter to match the name of any row: a separator, a mod, a folder or a file. A row whose name matches shows all its children; otherwise it shows only its matching children, expanded, and one with none is not shown. Overwrite stays, and does not count as a match; its files follow the same rule. Cites: common, The name filter
-3. A toggle in the filter box to show the matches as a flat list, with no separators. Mods still open to their matching files. It returns to grouped whenever the filter clears.
 
 ## States
 
