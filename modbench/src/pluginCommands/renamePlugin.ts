@@ -5,20 +5,16 @@ import type { TailOf } from '../coreLib/boundCommand';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import { isRefused, type MEditClient, type SourceChanges } from '../client';
-import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
 import { answerOf } from '../wire/readFailed';
 
-export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'getCreatablePluginExtensions'>;
+export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions'>;
 
 interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;
   readonly client: PluginRenameClient;
 }
-
-/** `refusal` is absent when the user declined the question. */
-export type RenameConfirmed = { confirmed: true } | { confirmed: false; refusal?: string };
 
 /** `sourceRenamed` is true when the files and lines failed after the source had moved. `reported` is why the source changes could not be applied. */
 export type PluginRenameResult =
@@ -26,34 +22,8 @@ export type PluginRenameResult =
   | { applied: false; reported: string }
   | { applied: false; sourceRenamed: boolean; refusal: string; detail?: string };
 
-const CONFIRM = 'Rename';
-
 const fileOriginOf = (origin: string): FileOrigin =>
   origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin };
-
-const named = ({ name, origin }: PluginAddress): string => `${name} (${origin})`;
-
-function listing(heading: string, plugins: readonly PluginAddress[]): string[] {
-  return plugins.length === 0 ? [] : [heading, ...plugins.map(named)];
-}
-
-// One question when plugins list the plugin as a master or may.
-async function confirmRename(access: PluginRenameAccess, ask: AskQuestion, plugin: PluginAddress, newName: string): Promise<RenameConfirmed> {
-  let dependants;
-  try {
-    dependants = answerOf(await access.client.getPluginDependants(plugin));
-  } catch (err) {
-    return { confirmed: false, refusal: errorMessage(err) };
-  }
-  if (dependants.dependants.length + dependants.unreadable.length === 0) return { confirmed: true };
-
-  const detail = [
-    ...listing('Keep the old name and will show Master issues:', dependants.dependants),
-    ...listing('mEdit could not read their masters, so they may keep the old name:', dependants.unreadable),
-  ].join('\n');
-  const answer = await ask(`Rename "${plugin.name}" to "${newName}"?`, { modal: true, detail }, CONFIRM);
-  return answer === CONFIRM ? { confirmed: true } : { confirmed: false };
-}
 
 async function renameRefusal(
   access: PluginRenameAccess, plugin: PluginAddress, newName: string, creatableExtensions: readonly string[],
@@ -96,7 +66,6 @@ async function renamePlugin(
 export function pluginRenameCommands(access: PluginRenameAccess) {
   return {
     renameRefusal: (...args: TailOf<typeof renameRefusal>) => renameRefusal(access, ...args),
-    confirmRename: (...args: TailOf<typeof confirmRename>) => confirmRename(access, ...args),
     renamePlugin: (...args: TailOf<typeof renamePlugin>) => renamePlugin(access, ...args),
   };
 }
