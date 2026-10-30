@@ -5,7 +5,6 @@ using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using SharpCompress.Common;
 
 namespace MEditService.Commands.Build;
 
@@ -63,7 +62,7 @@ internal sealed class SourceModBuild
                 });
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SharpCompressException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
                 [], [], [], [.. written.Overwritten.Order(StringComparer.Ordinal)],

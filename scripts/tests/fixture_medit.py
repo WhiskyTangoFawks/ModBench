@@ -136,7 +136,6 @@ def snapshot(instance: pathlib.Path, game: pathlib.Path) -> JsonRecord:
         'stringsFiles': [],
         'places': places(instance),
         'mods': [],
-        'statCache': str(instance / 'stat-cache'),
         'dataFolder': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',

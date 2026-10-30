@@ -83,14 +83,6 @@
       "OneOf": "3.0.271"
     }
   },
-  "MIT-SharpCompress.txt": {
-    "sources": [
-      "https://raw.githubusercontent.com/adamhathcock/sharpcompress/e4193af83b6ec8bdd5fb4f6ebffc2315dd3fc626/LICENSE.txt"
-    ],
-    "packages": {
-      "SharpCompress": "0.50.5"
-    }
-  },
   "MIT-SharpZipLib.txt": {
     "sources": [
       "https://raw.githubusercontent.com/icsharpcode/SharpZipLib/33f64eb0f28cdd2b084cb822fcc224c7c5aba553/LICENSE.txt"

@@ -12,7 +12,7 @@ import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
-  sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceModLines,
+  sourceRootDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceModLines,
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
@@ -199,7 +199,7 @@ export function mo2Repository(
       return {
         present: [
           join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
-          hashIndexDir(instanceRoot), statCacheDir(instanceRoot), sourceRootDir(instanceRoot), ...inFolders.flat(),
+          hashIndexDir(instanceRoot), sourceRootDir(instanceRoot), ...inFolders.flat(),
           ...search.found.map(({ segments }) => join(instanceRoot, ...segments)),
         ],
         owns: (path) => isManifestPath(instanceRoot, path) || search.owns(path),
