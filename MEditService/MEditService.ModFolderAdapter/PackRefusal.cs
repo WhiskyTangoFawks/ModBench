@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MEditService.Commands.Build;
+namespace MEditService.ModFolderAdapter;
 
 /// <summary>Why an archive of a build was not packed (ADR-0019); it stays as it was.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -18,4 +18,4 @@ public enum ArchiveRefusal
     NotWritten,
 }
 
-internal sealed record PackRefusal(ArchiveRefusal Reason, string Message);
+public sealed record PackRefusal(ArchiveRefusal Reason, string Message);

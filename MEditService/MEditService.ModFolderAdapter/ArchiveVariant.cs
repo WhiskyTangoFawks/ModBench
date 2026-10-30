@@ -1,4 +1,4 @@
-namespace MEditService.Commands.Build;
+namespace MEditService.ModFolderAdapter;
 
 public interface IArchiveVariant;
 

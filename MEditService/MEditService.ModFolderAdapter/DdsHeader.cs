@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace MEditService.Commands.Build;
+namespace MEditService.ModFolderAdapter;
 
 internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte Mips, byte DxgiFormat, bool IsCubeMap)
 {

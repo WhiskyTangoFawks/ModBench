@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using K4os.Compression.LZ4;
 
-namespace MEditService.Commands.Build;
+namespace MEditService.ModFolderAdapter;
 
 internal static class Ba2Writer
 {

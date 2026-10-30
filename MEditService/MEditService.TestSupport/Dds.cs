@@ -1,10 +1,10 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace MEditService.Commands.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>A DDS file and the pixel data after its header.</summary>
-internal sealed record Dds(byte[] File, byte[] Pixels)
+public sealed record Dds(byte[] File, byte[] Pixels)
 {
     private const int HeaderEnd = 128;
     private const uint FourCcFlag = 4;

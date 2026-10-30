@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using K4os.Compression.LZ4;
 
-namespace MEditService.Commands.Tests.TestSupport;
+namespace MEditService.ModFolderAdapter.Tests;
 
 /// <summary>Reads a BA2 of any version, given each reference reader's header length: Wabbajack's and CreationsForge's.</summary>
 internal static class Ba2Oracle
