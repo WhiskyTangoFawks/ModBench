@@ -31,7 +31,7 @@ import { pluginSyncOver } from '../pluginCommands/plugins';
 import { modSyncOver } from '../modCommands/modCommands';
 import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
 import { PluginNode } from '../plugins/pluginRows';
-import { recordingReporter, scriptedDialog } from './surfacingDoubles';
+import { recordingReporter } from './surfacingDoubles';
 import { present } from '../ports/present';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
@@ -90,11 +90,10 @@ describe('a rename while a recompute is reading', () => {
     client.setCommandResult('getRenameSourceChanges', { treeName: PLUGIN.name, moves: [], deletions: [], documents: [] });
     client.setCommandResult('moveLastWritten', { moved: true });
     client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
-    client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
     showInputBox.mockResolvedValue(RENAMED);
     registerRenamePluginCommand({
       client, commands: pluginCommandsWith({ ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } }, client),
-      ask: scriptedDialog('Rename'), instance, reporter: recordingReporter(),
+      instance, reporter: recordingReporter(),
       source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     }, () => []);
     await present(handlers.get('modbench.plugin.rename'), 'the rename plugin command')(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));

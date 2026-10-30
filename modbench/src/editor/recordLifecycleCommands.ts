@@ -20,7 +20,7 @@ function recordName(formKey: string, label: string | undefined): string {
   return label && label !== formKey ? `${label} [${formKey}]` : formKey;
 }
 
-// The question names the origin too, so it says which plugin of the filename it means (ADR-0012).
+// Names the origin too, so it says which plugin of the filename it means (ADR-0012).
 function recordLabel({ formKey, plugin }: RecordAt, label: string | undefined): string {
   return `${recordName(formKey, label)} in ${plugin.name} (${plugin.origin})`;
 }
@@ -29,18 +29,6 @@ function landedUnless<T>(failure: string | undefined, items: readonly T[], repor
   if (failure === undefined) return items;
   reporter.report('error', notApplied, failure);
   return [];
-}
-
-function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<string | undefined> {
-  const [only] = labels;
-  if (labels.length === 1 && only) {
-    return ask(`Delete ${only}? It leaves its plugin source as a working-tree change you can review.`, { modal: true }, 'Delete');
-  }
-  return ask(
-    `Delete ${labels.length} records? They leave their plugin source as working-tree changes you can review.`,
-    { modal: true, detail: labels.join('\n') },
-    'Delete',
-  );
 }
 
 const NO_RECORD_ARGUMENT = 'it carries no record Argument';
@@ -86,17 +74,15 @@ function selectedRecords(nodes: readonly unknown[]): Selection {
 type RecordLifecycleClient = Pick<MEditClient, 'getDeleteChanges'>;
 
 export function registerRecordLifecycleCommands(
-  client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
+  client: RecordLifecycleClient, reporter: Reporter,
   selections: ViewSelections,
   write: RecordWrite,
   source: SourceEditing,
 ): vscode.Disposable[] {
   return [
-    // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: readonly unknown[]) => {
       const { records, unreadable, labels } = selectedRecords(rowsOf(clicked, selected, selections));
       const label = (item: RecordAt | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
-      if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
       const reportOutcome = () => source.oneAtATime(async () => {
         const answer = records.length > 0 ? await client.getDeleteChanges(records) : { applied: [], refused: [] };

@@ -1288,10 +1288,8 @@ describe('deleting a record in a compiled plugin copy', () => {
   const plugin = { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN };
   const savedText = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
   const folder = path.join(path.dirname(COMPILED_PLUGIN_FILE), 'DoomedNpc');
-  const warn = vscode.window.showWarningMessage;
 
   afterEach(async () => {
-    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     rmSync(folder, { recursive: true, force: true });
@@ -1303,7 +1301,7 @@ describe('deleting a record in a compiled plugin copy', () => {
     answerDelete = { status: 200, body: { applied: [], refused: [] } };
   });
 
-  it('asks after mEdit was handed the dirty plugin source, deletes the answered folder recursively, and VS Code\'s refactoring auto-save saves the rewritten document', async () => {
+  it('hands mEdit the dirty plugin source, deletes the answered folder recursively, and VS Code\'s refactoring auto-save saves the rewritten document', async () => {
     mkdirSync(path.join(folder, 'Nested'), { recursive: true });
     writeFileSync(path.join(folder, 'Nested', 'Child.json'), '{}');
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(COMPILED_PLUGIN_FILE));
@@ -1317,7 +1315,6 @@ describe('deleting a record in a compiled plugin copy', () => {
       record: { formKey: COMPILED_PLUGIN_FORM_KEY, plugin },
       moves: [], deletions: [folder], documents: [{ path: COMPILED_PLUGIN_FILE, text: 'rewritten' }],
     }], refused: [] } };
-    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
 
     await vscode.commands.executeCommand('modbench.record.delete', {
       label: 'CompiledPluginGun', argument: { kind: 'record', plugin, formKey: COMPILED_PLUGIN_FORM_KEY },

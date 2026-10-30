@@ -54,7 +54,7 @@ type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 
 const downloadsViewDeps = (instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
   commands: downloadedFileCommands(fakeInstanceAdapter().adapter), queryInfo: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [] } }), instance, reporter: recordingReporter(),
-  ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
+  trash: () => Promise.resolve(),
   log: () => undefined,
   logUnresolved: () => undefined,
 });
