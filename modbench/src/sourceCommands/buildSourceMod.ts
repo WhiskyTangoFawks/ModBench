@@ -140,7 +140,7 @@ type Built = { readonly landed: ModBuilt } | { readonly refusal: BuildRefusal } 
 const refusedAs = (mod: string, why: string, lacksATask = false): { readonly refusal: BuildRefusal } =>
   ({ refusal: { item: mod, reason: notBuilt(why), ...lacksATask ? { lacksATask: true } : {} } });
 
-// mods.md, Build, stories 4 and 14: what refuses the mod is checked before its first write.
+// mods.md, Build, stories 4 and 13: what refuses the mod is checked before its first write.
 function refusedBeforeWriting({ name, folder, manifest, packages }: SourceModToBuild, pass: BuildPass): { readonly refusal: BuildRefusal } | undefined {
   if (manifest.output?.toLowerCase() !== basename(folder).toLowerCase()) {
     return refusedAs(name, `its manifest names the output folder '${manifest.output ?? ''}', not its folder '${basename(folder)}'`);

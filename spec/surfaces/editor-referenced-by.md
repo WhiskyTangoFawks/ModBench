@@ -1,6 +1,6 @@
 # Editor: Referenced By
 
-Referenced By lists the records that reference a record, so I can see what a change to it would reach before I make it. Its template is xEdit's Referenced By tab ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gesture is `referenced by` in [commands.md](commands.md) under Record. The list shows in VS Code's References view, which gives its history, Find, refresh and clear. It is a list, so [common.md](common.md) applies to it, except where a story here names an exception.
+Referenced By lists the records that reference a record, so I can see what a change to it would reach before I make it. Its template is xEdit's Referenced By tab ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gesture is `referenced by` in [commands.md](commands.md) under Record. The list shows in VS Code's References view, which gives its history, Find, refresh and clear.
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -11,9 +11,9 @@ As a user, I want:
 1. Referenced By in the menu of every record: a record row in Plugins, a column header in the record panel, and a row in this list. Cites: catalog `referenced by`; xEdit
 2. Referenced By from the palette to ask about the record tab in focus, or, with none, to ask for a record with the record picker. Cites: catalog `referenced by`
 3. The list in VS Code's References view, which takes the focus, titled `Referenced By: ` and the record's EditorID, or its FormKey when it has none. Cites: Existing tools
-4. The list to be a snapshot of the moment I asked, which the view's refresh reads again. This is an exception to common.md, A view, story 2: a snapshot is true when it is taken, and I know it is one. Cites: ruling
+4. The list to be a snapshot of the moment I asked, which the view's refresh reads again. Cites: ruling
 5. Referenced By on a row in the list to replace the list with that record's, and the view's history to keep the earlier list. Cites: xEdit; Existing tools
-6. VS Code's tree Find to narrow the list. This is an exception to common.md, The name filter, and A view, story 7: the view is VS Code's, and Modbench adds nothing to its title bar. Cites: Existing tools
+6. VS Code's tree Find to narrow the list. Cites: Existing tools
 7. With VS Code's References view disabled, the gesture refused, naming the built-in extension it needs. Cites: common.md, Reporting
 
 ## The tree
@@ -64,8 +64,6 @@ A row is a record, so it offers what a record offers in Plugins ([plugins.md](pl
 | Referrer menu | open · referenced by · copy value |
 | Where it is held | the record menu of Plugins |
 | Keys | none: VS Code's References view does not share its selection. |
-
-This is an exception to common.md, A view, stories 5, 6 and 8: the view is VS Code's, so a key cannot name the row it acts on, and its rows are selected one at a time.
 
 As a user, I want:
 

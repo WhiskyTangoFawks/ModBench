@@ -19,7 +19,7 @@ The record tab is VS Code's editor for the record's file ([ADR-0001](../adr/0001
 As a user, I want:
 
 1. A click on a record in Plugins or Referenced By to open it as a preview editor, which my next click replaces. Cites: catalog `open`; VS Code's preview editors
-2. Open, from a row's menu, to open the record pinned in the editor group I am in, so later clicks leave it alone. This is an exception to VS Code's Explorer, which pins on a double click: an extension's tree receives none. Cites: catalog `open`
+2. Open, from a row's menu, to open the record pinned in the editor group I am in, so later clicks leave it alone. An extension's tree receives no double click, which pins in VS Code's Explorer. Cites: catalog `open`; VS Code's interaction
 3. A file already open in a tab to be shown, not opened twice. Cites: VS Code
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Cites: catalog `open`; xEdit Compare Selected
 5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab, in a compiled plugin or not, is titled with its EditorID, or its FormKey when it has none. Cites: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
@@ -47,9 +47,9 @@ As a user, I want:
 As a user, I want:
 
 1. One column for each active plugin that holds the record, in plugin order: the record's master on the left, the winning copy on the right. The file's column is marked as the one I edit. Cites: xEdit; ADR-0012
-2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a plugin in a disabled mod. The file I opened is the exception. An overridden plugin's file is a column just before the plugin that overrides it. Any other file whose plugin is not active shows alone (States, story 7). Cites: ADR-0012; ADR-0001
+2. The file I opened to be a column even when its plugin is not active: just before the plugin that overrides it, or alone when the game does not load it (States, story 7). Cites: ADR-0012; ADR-0001
 3. To collapse a column to a narrow strip from a control in its header, and to restore it the same way. The strip's header keeps its arrow and its colour, and shows the load index as its label. Its tooltip holds the rest of the header. Its cells keep their colour (editor-conflicts.md, Cells, story 3).
-4. A cell in a column that cannot be edited, or that is not the file's, to open no editor, as in xEdit. Nothing marks its cells ahead of time. Its header says why, or opens its file. Cites: xEdit; ADR-0018
+4. A cell in a column that cannot be edited, or that is not the file's, to open no editor, as in xEdit. Its header says why, or opens its file. Cites: xEdit; ADR-0018
 5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every vertical position.
 7. Opened on several records, one column for each, in the order I selected them, the first as the file. Cites: xEdit Compare Selected; editor-conflicts.md, What takes part, story 6
@@ -140,7 +140,7 @@ As a user, I want:
 1. Go to record to show the record the reference points to, or the template a templated field comes from, in the panel's editor group, as VS Code's Go to Definition does. Cites: xedit.md, divergence 8; catalog `open`
 2. Open field value to open the field's text in a text editor tab beside the panel, titled `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long value can still be read. Cites: xedit.md, divergences 2 and 6; catalog `open field value`
 3. Copy on a column to copy that plugin's copy of the record, asking for the mode and then the destination, as in Plugins. Cites: catalog `copy`; xEdit's column header menu
-4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it. Cites: catalog `delete`; xEdit's column header menu
+4. Delete on a column to remove that plugin's copy of the record. Cites: catalog `delete`; xEdit's column header menu; xedit.md, divergence 41
 5. Decompile on a column to act on that column's plugin. Decompile and commit, and build, act on its plugin's mod. Cites: catalog `decompile`, `decompile and commit`, `build`
 
 ## Reporting

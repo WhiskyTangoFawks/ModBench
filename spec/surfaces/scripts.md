@@ -39,7 +39,6 @@ As a user, I want:
 As a user, I want:
 
 1. A refused write to raise an error naming why, and to write nothing. Cites: ADR-0019; Never silently wrong
-2. A refused write to write a line in the Output too, and no notification: my script asked, not me. This is an exception to common, Reporting, row 3. Cites: ADR-0019
 
 ## Test seam
 

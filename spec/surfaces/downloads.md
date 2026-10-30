@@ -79,8 +79,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. One confirmation for the whole selection. It names the file by its file name when I select one, and gives the count when I select several. It says the files go to the trash. Cites: Confirm what destroys; MO2
-2. The installed mod to be untouched, and the confirmation to say so. Cites: MO2
+1. The files sent to the trash. Cites: mo2.md, divergence 23
+2. The installed mod to be untouched. Cites: MO2
 
 ### The install target
 

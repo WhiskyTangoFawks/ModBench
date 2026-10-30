@@ -190,7 +190,7 @@ As a user, I want:
 
 ### Decompile
 
-As a user, I want one confirmation for the selection, naming the plugins and saying that decompile replaces their source in the working tree from their bytes. Cites: catalog `decompile`; Confirm what destroys
+As a user, I want one confirmation for the selection only when decompile would replace a change to plugin source that git does not hold, naming those plugins. Cites: catalog `decompile`; Confirm what destroys
 
 ### Rename plugin
 
@@ -199,8 +199,7 @@ As a user, I want:
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. It refuses what Create plugin, stories 1 and 3 refuse, compared without case. The extension may change. Cites: Windows and Linux alike
 2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Cites: Never silently wrong
 3. The files in its mod named for it to follow it: its strings, its archives and its `.ini`. Cites: Never silently wrong
-4. One confirmation when a plugin in the instance lists it as a master, naming each one and saying it keeps the old name and will show Master issues. Nothing asked otherwise. This is an exception to Confirm what destroys: the rename breaks those plugins' master.
-5. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then. This is an exception to A failed gesture writes nothing.
+4. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
 
 ### Move
 
@@ -236,7 +235,7 @@ As a user, I want:
 
 ### Delete
 
-As a user, I want one confirmation listing everything selected, saying the records leave their plugin source as working-tree changes I can review. A deleted record's referrers are left as they are, and compile reports them. Cites: catalog `delete`; Confirm what destroys
+As a user, I want a deleted record's referrers left as they are, and compile to report them. Cites: catalog `delete`; xedit.md, divergence 41
 
 ### Record filter
 

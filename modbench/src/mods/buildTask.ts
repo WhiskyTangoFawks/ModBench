@@ -5,7 +5,7 @@ import { Refusal } from '../drivingLib/refusal';
 import type { Reporter } from '../ports/reporter';
 import { buildFailures, buildWarnings, builtWhole, type Built } from './buildCommand';
 
-/** mods.md, Build, story 15: the task builds the mods its definition names, or every source. */
+/** mods.md, Build, story 14: the task builds the mods its definition names, or every source. */
 export function registerBuildTask(reporter: Reporter): vscode.Disposable {
   return registerTaskGesture<Built>({ label: 'Build', command: 'modbench.mod.build', reporter, argument: modsOfDefinition, settle: buildVerdict });
 }
@@ -15,7 +15,7 @@ function modsOfDefinition({ mods = [] }: vscode.TaskDefinition): Argument[] {
   return mods.map((name) => ({ kind: 'mod', name }));
 }
 
-// mods.md, Build, story 15: a refusal or a mod landed in part fails the task, and a warning does not.
+// mods.md, Build, story 14: a refusal or a mod landed in part fails the task, and a warning does not.
 function buildVerdict(result: Built): TaskVerdict {
   if (!result.applied) return { passed: false, lines: [], problems: [{ severity: 'error', message: result.refusal, detail: result.detail }] };
   const { refused } = result.outcome;

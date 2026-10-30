@@ -22,17 +22,13 @@ As a user, I want:
 
 ## Decompile and repair
 
-This is an exception to Refuse, do not repair ([commands.md](commands.md)): I run it on purpose, and it names every change before it writes.
-
 As a user, I want:
 
 1. To run Decompile and repair on a malformed plugin from its Problems entry or its row in the plugins list. Cites: GLOSSARY.md, Malformed plugin
-2. A preview that names each change with its record, and any data the change drops, before anything is written. Cites: Never silently wrong
-3. A repair that drops data to write nothing until I agree to that data. This is an exception to commands.md, Principles, Confirm what destroys. Cites: Never silently wrong; agent.md, Any agent, story 7
-4. A diagnosis that no repair answers to show itself, with no repair offered. Cites: Refuse, do not repair
-5. A repair refused, naming the change, when the plugin's bytes changed after the preview. Cites: ADR-0003
-6. Two commits in the mod's plugin source, both or neither. The first holds every other record as it is, and each malformed record with as much of it as can be read, as its raw subrecords where nothing else reads, and a field in its file that holds its diagnosis. The second holds only the repaired records. The history then shows what the repair changed. Cites: ADR-0006; ADR-0007; commands.md, Principles, A failed gesture writes nothing
-7. When the mod has no source repository, the repair creates one, and decompiles the mod's other plugins with it, as decompile and commit does. Cites: commands.md, decompile and commit
+2. A diagnosis that no repair answers to show itself, with no repair offered. Cites: Refuse, do not repair
+3. Two commits in the mod's plugin source, both or neither. The first holds every other record as it is, and each malformed record with as much of it as can be read, as its raw subrecords where nothing else reads, and a field in its file that holds its diagnosis. The second holds only the repaired records. The history then shows what the repair changed. Cites: ADR-0006; ADR-0007; commands.md, Principles, A failed gesture leaves nothing the user cannot make whole
+4. When the mod has no source repository, the repair creates one, and decompiles the mod's other plugins with it, as decompile and commit does. Cites: commands.md, decompile and commit
+5. One confirmation, only when the repair would replace a change to plugin source that git does not hold, naming those plugins. Cites: plugins.md, Decompile; Confirm what destroys
 
 ## Changes outside Modbench
 

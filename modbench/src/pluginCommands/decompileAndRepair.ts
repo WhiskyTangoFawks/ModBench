@@ -36,7 +36,7 @@ const droppingData = (previews: readonly PluginRepairPreview[]): PluginRepairPre
   previews.map((preview) => ({ ...preview, diagnoses: preview.diagnoses.filter(({ change }) => change?.dropsData === true) }))
     .filter(({ diagnoses }) => diagnoses.length > 0);
 
-// plugin-source.md, Decompile and repair, story 7: a mod with no repository gets one, as decompile and commit makes it.
+// plugin-source.md, Decompile and repair, story 4: a mod with no repository gets one, as decompile and commit makes it.
 async function toRepair(
   { adapter, newRepositories }: DecompileAndRepairAccess, previews: readonly PluginRepairPreview[],
 ): Promise<{ readonly plugins: PluginToRepair[]; readonly refused: ItemRefusal<PluginAddress>[]; readonly made: ReadonlyMap<string, MadeRepository> }> {

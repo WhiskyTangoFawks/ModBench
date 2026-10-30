@@ -7,7 +7,7 @@ export interface DeployProblem {
 
 const named = (files: readonly { path: string; winner: string }[]): string => files.map(({ path, winner }) => `${winner} at ${path}`).join(', ');
 
-/** The game gets something the load order does not hold (deployment-hardlink.md, Deploy, story 8). */
+/** The game gets something the load order does not hold (deployment-hardlink.md, Deploy, story 7). */
 export function deployFailures(result: Deployed): DeployProblem[] {
   const problems: DeployProblem[] = [];
   if (result.leftOut.length > 0) {

@@ -11,7 +11,7 @@ As a user, I want:
 1. Install of a file or folder that holds a FOMOD to open the installer before anything is written: after the name prompt for a new mod, and after the install target pick for an upgrade. Cites: MO2
 2. The tab titled `FOMOD: <module name>`.
 3. A FOMOD with no step I can see to show its header and Install alone. Cites: MO2
-4. A FOMOD whose installer is a script to install as a plain copy, as Manual does. Cites: Windows and Linux alike; mo2.md, divergence 15
+4. A FOMOD whose installer is a script refused, saying why, with Manual. Cites: Windows and Linux alike; mo2.md, divergence 15
 
 ## The header
 
@@ -40,12 +40,12 @@ As a user, I want:
 As a user, I want:
 
 1. The files the FOMOD installs for my choices to land as install lands any mod, each where MO2's installer puts it. Cites: MO2
-2. A file the FOMOD names and its archive lacks to be named in a confirmation, with Install anyway and Cancel. This is an exception to Confirm what destroys: MO2 asks. Cites: MO2
+2. An install whose FOMOD names a file its archive lacks refused, naming each file, with Install anyway. Cites: Refuse, do not repair; MO2
 3. A FOMOD whose module dependencies do not hold to say which, and install nothing. Cites: MO2
 
 ## Reporting
 
-By [common.md](common.md#reporting). As a user, I want a FOMOD whose installer cannot be read to install as a plain copy, and mods.md, Reporting, story 1 to say why. This is an exception to Refuse, do not repair: MO2 falls back to installing by hand. Cites: MO2; Never silently wrong
+By [common.md](common.md#reporting). As a user, I want a FOMOD whose installer cannot be read refused, naming why, with Manual. Cites: Refuse, do not repair
 
 ## Test seam
 
