@@ -27,9 +27,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         new(
             "POST /plugins/decompile-and-repair",
             (client, _) => client.PostAsJsonAsync(
-                "/plugins/decompile-and-repair", new { plugins = new[] { new { plugin = Plugin, hash = "h", sourceFolder = "s" } }, force = false })),
+                "/plugins/decompile-and-repair", new { plugins = new[] { new { plugin = Plugin, hash = "h" } }, force = false })),
         new("POST /plugins/compile", (client, _) => client.Compile([("New.esp", Origin)])),
-        new("POST /build", (client, _) => client.Build([(Origin, Origin)], "stat-cache")),
+        new("POST /build", (client, _) => client.Build([(Origin, Origin)])),
         new(
             "POST /plugins/create",
             (client, dataFolder) => client.PostAsJsonAsync(

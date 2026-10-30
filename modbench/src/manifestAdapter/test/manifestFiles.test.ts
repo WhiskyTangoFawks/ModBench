@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeManifestIn, type Manifest } from '../manifestAdapter';
+import { removeManifestIn, sourceManifestFile, writeManifestIn, writeSourceManifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
@@ -67,5 +67,66 @@ describe('writeManifestIn', () => {
     await expect(writeManifestIn(join(root, 'Gone'), manifest)).rejects.toThrow();
 
     expect(await readdir(root)).toEqual(['Mod']);
+  });
+});
+
+describe('writeSourceManifestIn', () => {
+  const built: Manifest = { ...manifest, output: 'Mod' };
+
+  it('writes the manifest named for its output folder and says it wrote', async () => {
+    const wrote = await writeSourceManifestIn(folder, built);
+
+    expect([wrote, await readdir(folder), await readFile(join(folder, 'Mod.manifest.json'), 'utf8')]).toEqual([true, ['Mod.manifest.json'], manifestText(built)]);
+  });
+
+  it('writes nothing, and says so, when the manifest already holds that text', async () => {
+    await writeFile(join(folder, 'Mod.manifest.json'), manifestText(built));
+
+    expect(await writeSourceManifestIn(folder, built)).toBe(false);
+  });
+
+  it('replaces the manifest named for another output folder, as a rename of the output renames it', async () => {
+    await writeFile(join(folder, 'Old.manifest.json'), manifestText({ ...built, output: 'Old' }));
+
+    const wrote = await writeSourceManifestIn(folder, built);
+
+    expect([wrote, await readdir(folder)]).toEqual([true, ['Mod.manifest.json']]);
+  });
+
+  it('renames a manifest whose name differs from its output folder\'s in case alone', async () => {
+    await writeFile(join(folder, 'MOD.manifest.json'), manifestText(built));
+
+    await writeSourceManifestIn(folder, built);
+
+    expect(await readdir(folder)).toEqual(['Mod.manifest.json']);
+  });
+
+  it('rejects, writing nothing, a manifest that names no output folder', async () => {
+    await expect(writeSourceManifestIn(folder, manifest)).rejects.toThrow('names no output folder');
+
+    expect(await readdir(folder)).toEqual([]);
+  });
+});
+
+describe('sourceManifestFile', () => {
+  it('is the name and text the source mod\'s repository holds its manifest as', () => {
+    expect(sourceManifestFile({ ...manifest, output: 'Mod' })).toEqual({ name: 'Mod.manifest.json', text: manifestText({ ...manifest, output: 'Mod' }) });
+  });
+});
+
+describe('removeManifestIn', () => {
+  it('removes the manifest named for the folder in any case, and leaves the rest', async () => {
+    await writeFile(join(folder, 'MOD.manifest.json'), '{}');
+    await writeFile(join(folder, 'a.nif'), 'a');
+
+    await removeManifestIn(folder);
+
+    expect(await readdir(folder)).toEqual(['a.nif']);
+  });
+
+  it('does nothing when the folder holds none', async () => {
+    await removeManifestIn(folder);
+
+    expect(await readdir(folder)).toEqual([]);
   });
 });

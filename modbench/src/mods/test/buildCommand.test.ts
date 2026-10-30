@@ -37,7 +37,7 @@ describe('modbench.mod.build', () => {
   const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
-    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [], steps: [], made: [] });
+    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
   const builds: (readonly string[] | 'every source')[] = [];
   beforeEach(() => { builds.length = 0; });
 
@@ -114,7 +114,7 @@ describe('modbench.mod.build', () => {
 
   it('offers Open User Tasks with a mod refused for a tool this machine has no task for, and opens them when clicked', async () => {
     const { handler, reporter } = registered({
-      landed: [], refused: [{ item: 'ModA', reason: 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).', refusal: 'NoTaskForTool' }],
+      landed: [], refused: [{ item: 'ModA', reason: 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).', lacksATask: true }],
     });
 
     await handler(modRow('ModA'));
@@ -137,7 +137,7 @@ describe('modbench.mod.build', () => {
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
     const { handler, reporter, diagnostics } = registered({
       landed: [{
-        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [], steps: [], made: [],
+        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [{ formKey: '000800:MyPatch.esp', sourceRelativePath: 'Source/A.json', message: 'Race: points at nothing' }],
@@ -157,7 +157,7 @@ describe('modbench.mod.build', () => {
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {
     const { handler, reporter } = registered({
       landed: [{
-        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [], steps: [], made: [],
+        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [

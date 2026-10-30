@@ -13,5 +13,5 @@ public static class SourceInits
         source.Init(sourceFolder, ManifestOf(TestMod.Name), plugins, []);
 
     /// <summary>A manifest for <paramref name="output"/>, whose text the Source adapter commits as it is given.</summary>
-    public static SpelledManifest ManifestOf(string output) => new(ManifestName.Of(output), Encoding.UTF8.GetBytes($"the manifest of {output}"));
+    public static SpelledManifest ManifestOf(string output) => new($"{output}.manifest.json", Encoding.UTF8.GetBytes($"the manifest of {output}"));
 }

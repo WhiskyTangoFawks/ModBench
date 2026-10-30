@@ -158,7 +158,7 @@ public sealed class DecompileAndCommitModTests
         var observed = notifications.Notifications.OfType<DecompileAndCommitProgressNotification>().ToList();
         Assert.Equal(
             [DecompileAndCommitPhase.Parsing, DecompileAndCommitPhase.Serializing, DecompileAndCommitPhase.Parsing, DecompileAndCommitPhase.Serializing,
-             DecompileAndCommitPhase.ReadingFiles, DecompileAndCommitPhase.Committing],
+             DecompileAndCommitPhase.Committing],
             observed.Select(n => n.Phase).OfType<DecompileAndCommitPhase>());
         Assert.All(observed.Where(n => n.Phase is not null), n => Assert.Equal("FixtureMod", n.Progress.Mod));
         Assert.Equal(new ModlistProgress(null, 0, 0), observed[^1].Progress);

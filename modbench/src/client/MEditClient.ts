@@ -162,15 +162,21 @@ export type PluginRepairPreview = components['schemas']['PluginRepairPreview'];
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
-/** A mod to decompile and commit, with its installation files and the mod manager's own files in its folder (ADR-0013). */
+/** A mod to decompile and commit, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
 export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
-/** A mod to build: the source folder whose manifest names it, its folder and its installation files
- *  (ADR-0013). */
+/** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
+export type NewRepository = components['schemas']['NewRepositoryRequest'];
+
+/** A mod to build, as the extension hands it (ADR-0016): the paths it excludes, the archives to pack, and each file the
+ *  extension wrote into its folder from a package. */
 export type BuildMod = components['schemas']['BuildModRequest'];
 
 /** The instance's facts every mod's build needs: the mod manager's exclusion mark, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
+
+/** A file a build made, by its path in the mod folder, and whether the source vouches for it. */
+export type MadeFile = components['schemas']['MadeFile'];
 
 // The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
 type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed'> & {
@@ -181,18 +187,12 @@ type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRef
   unpushed?: true;
 };
 
-/** Why mEdit refused a mod's build (ADR-0019). */
-export type BuildRefusalKind = components['schemas']['BuildRefusal'];
-
-/** Build's answer: each mod built, with the plugins it compiled and refused, or refused with its reason, mEdit's kind
- *  of refusal, and the installation files its manifest names that the call did not hand. */
+/** Build's answer: each mod built, with the plugins it compiled and refused and each file it made, or refused with its
+ *  reason. */
 export interface BuildOutcome {
   landed: readonly BuiltMod[];
-  refused: readonly (ItemRefusal<string> & { readonly refusal?: BuildRefusalKind; readonly installationFilesNotFound?: readonly ManifestInstallationFile[]; readonly gameFilesNotFound?: readonly string[] })[];
+  refused: readonly ItemRefusal<string>[];
 }
-
-/** A step of a manifest: the VS Code task it runs, by label, and the arguments it hands the task. */
-export type ManifestStep = components['schemas']['ManifestStep'];
 
 // Where a modlist gesture is: the mod it works on, none once it ends, and how many mods it has done of how many.
 type ModlistProgress = components['schemas']['ModlistProgress'];
@@ -206,9 +206,6 @@ export type Submodule = components['schemas']['SubmoduleRequest'];
 /** Each submodule cloned, by the folder git checked it out in, with why its branch was left elsewhere, and each not cloned,
  *  by that folder, with why. */
 export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
-
-/** An installation file as a manifest names it: by name, with its hash and its page on its host. */
-export type ManifestInstallationFile = Pick<components['schemas']['InstallationFile'], 'name' | 'hash'> & { readonly page?: string };
 
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
@@ -230,9 +227,6 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['RecordFilter'];
-
-/** A change to a source mod's manifest: the output folder's new name, and paths in the mod folder to exclude or include. */
-export type SourceManifestChange = Omit<components['schemas']['SourceManifestRequest'], 'sourceFolder'>;
 
 /** target-architecture.d2's mEdit client (ADR-0002). */
 export interface MEditClient {
@@ -266,13 +260,11 @@ export interface MEditClient {
   decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // Each plugin's repair preview, or why it has none. Nothing is written.
   repairPreviews(plugins: readonly PluginAddress[]): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused>;
-  // Each plugin's source is written as two commits, or refused on its own. `metadataFiles`: the mod manager's files,
-  // a new repository leaves out. `force` waives every loss, `agreedDrops` only the dropped data.
+  // Each plugin's source is written as two commits, or refused on its own. `force` waives every loss, `agreedDrops` only
+  // the dropped data.
   decompileAndRepair(
-    plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean, agreedDrops: boolean,
+    plugins: readonly PluginToRepair[], force: boolean, agreedDrops: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  // Rename's and exclude's half in mEdit: the manifest in the repository in `sourceFolder`, written in its working tree.
-  changeSourceManifest(sourceFolder: string, change: SourceManifestChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;

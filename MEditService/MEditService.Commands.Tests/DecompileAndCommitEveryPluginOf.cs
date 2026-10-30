@@ -6,6 +6,7 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests;
 
@@ -46,7 +47,7 @@ internal static class ToDecompileAndCommit
     /// <summary>Each mod with the source folder the load order's provider names for it, or its own name when none
     /// does.</summary>
     internal static IReadOnlyList<ModToDecompileAndCommit> In(LoadOrderSnapshot? loadOrder, params string[] mods) =>
-        [.. mods.Select(mod => new ModToDecompileAndCommit(mod, SourceFolderOf(loadOrder, mod), []))];
+        [.. mods.Select(mod => new ModToDecompileAndCommit(mod, new NewRepository(SourceFolderOf(loadOrder, mod), [], SourceInits.ManifestOf(mod))))];
 
     private static string SourceFolderOf(LoadOrderSnapshot? loadOrder, string mod) =>
         loadOrder?.Plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>()

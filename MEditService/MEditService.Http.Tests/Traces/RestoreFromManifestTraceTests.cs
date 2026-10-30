@@ -36,11 +36,9 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
                 new
                 {
                     name = Origin, sourceFolder = submodule.Folder, folder = Path.GetDirectoryName(_instance.Plugins.Single().Path).Require(),
-                    metadataFiles = new[] { "meta.ini" }, isSubmodule = true,
                 },
             },
             exclusionMark = ".mohidden",
-            statCache = Path.Combine(_instance.Root, "stat-cache"),
         }));
 
         Assert.Equal(submodule.Folder, Assert.Single(cloned.GetProperty("applied").EnumerateArray()).GetProperty("folder").GetString());

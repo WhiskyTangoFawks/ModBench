@@ -26,8 +26,6 @@ public sealed class BuildModTraceTests : HostedTests
 
     private string _builtFolder = string.Empty;
 
-    private string StatCache => Path.Combine(_instance.Root, "stat-cache");
-
     private async Task LoadedWithOneModFolderAndCompiledPlugin()
     {
         _builtFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == Plugin).Path).Require();
@@ -50,13 +48,15 @@ public sealed class BuildModTraceTests : HostedTests
         File.AppendAllText(Path.Combine(_builtFolder, Plugin), "changed outside Modbench");
         using var stream = await Client.NotificationStream();
 
-        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, version: "1.2.3"));
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)]));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(Origin, built.GetProperty("mod").GetString());
-        Assert.Contains("\"version\":\"1.2.3\"", File.ReadAllText(Path.Combine(Client.SourceFolderSentFor(Origin), $"{Path.GetFileName(_builtFolder)}.manifest.json")), StringComparison.Ordinal);
         Assert.Empty(built.GetProperty("refused").EnumerateArray());
+        Assert.Equal(
+            [(SecondPlugin, true), (Plugin, true)],
+            built.GetProperty("made").EnumerateArray().Select(file => (file.GetProperty("path").GetString(), file.GetProperty("vouchedFor").GetBoolean())).Order());
         Assert.Equal(
             [SecondPlugin, Plugin],
             built.GetProperty("compiled").EnumerateArray().Select(p => p.GetProperty("name").GetString()).Order());
@@ -70,18 +70,19 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task BuildingAModWhoseSourceHoldsNoManifest_RefusesItByName_AndBuildsTheRest()
+    public async Task BuildingAModWhoseArchiveTakesNoAssetOfItsSource_RefusesItByName_AndBuildsTheRest()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
-        var nonCompiledPluginFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
+        (await Client.DecompileAndCommit(NonCompiledPluginOrigin)).EnsureSuccessStatusCode();
+        var otherFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
 
-        var answer = await Answer(await Client.Build([(NonCompiledPluginOrigin, nonCompiledPluginFolder), (Origin, _builtFolder)], StatCache));
+        var answer = await Answer(await Client.Build(
+            [(NonCompiledPluginOrigin, otherFolder), (Origin, _builtFolder)], archives: [new { path = "Main.ba2", files = new[] { "meshes/a.nif" } }]));
 
-        Assert.Equal([Origin], answer.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
-        var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
-        Assert.Equal(NonCompiledPluginOrigin, refused.GetProperty("item").GetString());
-        Assert.Equal("SourceUnreadable", refused.GetProperty("refusal").GetString());
-        Assert.EndsWith("holds no manifest.", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Empty(answer.GetProperty("applied").EnumerateArray());
+        Assert.Equal(
+            [("ArchiveFileNotAnAsset", NonCompiledPluginOrigin), ("ArchiveFileNotAnAsset", Origin)],
+            answer.GetProperty("refused").EnumerateArray().Select(m => (m.GetProperty("refusal").GetString(), m.GetProperty("item").GetString())));
     }
 
     [Fact]
@@ -91,50 +92,26 @@ public sealed class BuildModTraceTests : HostedTests
         var source = Client.SourceFolderSentFor(Origin);
         Directory.CreateDirectory(Path.Combine(source, "assets", "meshes"));
         File.WriteAllText(Path.Combine(source, "assets", "meshes", "a.nif"), "mesh");
-        var output = Path.GetFileName(_builtFolder);
-        File.WriteAllText(Path.Combine(source, $"{output}.manifest.json"), $"{{\"output\": \"{output}\", \"archives\": {{\"Main.ba2\": [\"meshes/a.nif\"]}}, \"files\": []}}");
         var ba2 = new { ba2 = new { version = 1, compressed = true } };
 
-        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, new { general = ba2, textures = ba2 }));
+        var answer = await Answer(await Client.Build(
+            [(Origin, _builtFolder)], new { general = ba2, textures = ba2 }, [new { path = "Main.ba2", files = new[] { "meshes/a.nif" } }]));
 
         Assert.Empty(Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("archivesRefused").EnumerateArray());
         Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
         Assert.False(File.Exists(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
-    [Fact]
-    public async Task BuildingAModWithAStep_AnswersTheStepAndTheFilesItMade_WhichARequestHandsBackOnceTheStepRan_ToWriteItsManifest()
-    {
-        await LoadedWithOneModFolderAndCompiledPlugin();
-        var source = Client.SourceFolderSentFor(Origin);
-        var output = Path.GetFileName(_builtFolder);
-        var manifestPath = Path.Combine(source, $"{output}.manifest.json");
-        File.WriteAllText(manifestPath, $"{{\"output\": \"{output}\", \"steps\": [{{\"task\": \"Zip\", \"args\": [\"a\"]}}], " +
-            "\"tools\": [{\"task\": \"Zip\", \"page\": \"https://example.com/zip\"}], \"files\": [{\"path\": \"made.zip\", \"madeByStep\": true}]}");
-
-        var built = Assert.Single((await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, tasks: ["Zip"]))).GetProperty("applied").EnumerateArray());
-
-        var step = Assert.Single(built.GetProperty("steps").EnumerateArray());
-        Assert.Equal(("Zip", "a"), (step.GetProperty("task").GetString(), Assert.Single(step.GetProperty("args").EnumerateArray()).GetString()));
-        var made = built.GetProperty("made").EnumerateArray().Select(path => path.GetString().Require()).ToList();
-        Assert.Contains(Plugin, made);
-        Assert.DoesNotContain(Plugin, File.ReadAllText(manifestPath), StringComparison.Ordinal);
-
-        Assert.Single((await Answer(await Client.Build([(Origin, _builtFolder)], StatCache, tasks: ["Zip"], made: made))).GetProperty("applied").EnumerateArray());
-
-        Assert.Contains($"{{\"path\":\"{Plugin}\"}}", File.ReadAllText(manifestPath), StringComparison.Ordinal);
-        Assert.Contains("{\"path\":\"made.zip\",\"madeByStep\":true}", File.ReadAllText(manifestPath), StringComparison.Ordinal);
-    }
-
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
         { "no folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\"}], \"exclusionMark\": \".mohidden\"}" },
-        { "no exclusion mark", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"statCache\": \"c\"}" },
-        { "no stat cache", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\"}" },
+        { "no exclusion mark", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}]}" },
+        { "a taken path outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"taken\": [\"../a.nif\"]}], \"exclusionMark\": \".mohidden\"}" },
+        { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"archives\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}], \"exclusionMark\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",
-            "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\", \"statCache\": \"c\", " +
+            "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\", " +
             "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },

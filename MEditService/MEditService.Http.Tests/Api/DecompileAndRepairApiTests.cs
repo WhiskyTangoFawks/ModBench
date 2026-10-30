@@ -27,13 +27,33 @@ public sealed class DecompileAndRepairApiTests : HostedTests
             .EnsureSuccessStatusCode().Body()).GetProperty("applied").EnumerateArray());
         var repaired = await (await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin, hash = preview.GetProperty("hash").GetString(), sourceFolder = Client.SourceFolderSentFor(Origin) } },
-            metadataFiles = Array.Empty<string>(),
+            plugins = new[]
+            {
+                new
+                {
+                    plugin, hash = preview.GetProperty("hash").GetString(),
+                    newRepository = new { sourceFolder = Client.SourceFolderSentFor(Origin), manifestName = $"{Origin}.manifest.json", manifest = "{}" },
+                },
+            },
             force = false,
         })).EnsureSuccessStatusCode().Body();
 
         Assert.Equal(Fixture.Change, Assert.Single(preview.GetProperty("diagnoses").EnumerateArray()).GetProperty("change").GetProperty("description").GetString());
         Assert.Equal([Fixture.Malformed.FileName], repaired.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+    }
+
+    [Fact]
+    public async Task ARepairHandingANewRepositoryWithNoManifest_Is400()
+    {
+        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+
+        var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
+        {
+            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, hash = "h", newRepository = new { sourceFolder = "s" } } },
+            force = false,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

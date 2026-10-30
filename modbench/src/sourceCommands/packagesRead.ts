@@ -2,10 +2,19 @@
 // fix, and what it lacks.
 
 import type { FileRead, GameFile, GamePlace, InstallationFile, InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
-import { pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { packageOf, pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { NamedGameFolder } from './gameFolderFacts';
 
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
+
+/** The downloaded file of each name `manifest` names, as the downloads folder holds it now. */
+export async function downloadedNow(adapter: Pick<InstanceAdapter, 'downloadedFile'>, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
+  const read = new Map<string, FileRead<InstallationFile | undefined>>();
+  for (const pkg of manifest.packages) {
+    if (pkg.kind === 'installationFile') read.set(pkg.name, await adapter.downloadedFile(pkg.name));
+  }
+  return (name) => read.get(name) ?? { kind: 'read', answer: undefined };
+}
 
 /** What restore takes a manifest's packages from on this machine. */
 export interface PackagesHeld {
@@ -16,10 +25,11 @@ export interface PackagesHeld {
   readonly tasks: ReadonlySet<string>;
 }
 
-/** Where each line a package fixes has its bytes, by the line's path, each package's entries by its hash, and what the mod
- *  lacks. */
+/** Where each line a package fixes has its bytes, and the hash it fixes, by the line's path, each package's entries by its
+ *  hash, and what the mod lacks. */
 export interface PackagesRead {
   readonly packageFiles: ReadonlyMap<string, PackageFile>;
+  readonly hashes: ReadonlyMap<string, string>;
   readonly entries: ReadonlyMap<string, ReadonlyMap<string, string>>;
   readonly lacks: readonly string[];
   readonly installationFiles: readonly InstallationFile[];
@@ -29,9 +39,6 @@ export interface PackagesRead {
 
 type InstallationFilePackage = Extract<ManifestPackage, { kind: 'installationFile' }>;
 type GameFolderPackage = Extract<ManifestPackage, { kind: 'gameFolder' }>;
-
-const packageOf = (manifest: Manifest, line: ManifestFile): ManifestPackage | undefined =>
-  (line.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === line.package));
 
 const pathInPackage = (line: ManifestFile): string => (line.entry.kind === 'heldAt' ? line.entry.path : line.path);
 
@@ -69,6 +76,7 @@ interface PlaceRead {
 
 interface GameTaken {
   readonly packageFiles: Map<string, PackageFile>;
+  readonly hashes: Map<string, string>;
   readonly entries: Map<string, ReadonlyMap<string, string>>;
   readonly lacks: string[];
   readonly files: Map<GamePlace, GameFile[]>;
@@ -77,7 +85,7 @@ interface GameTaken {
 async function takenFrom(
   adapter: Adapter, manifest: Manifest, lines: readonly ManifestFile[], places: readonly PlaceRead[], unreadable: ReadonlyMap<string, string>,
 ): Promise<GameTaken> {
-  const taken: GameTaken = { packageFiles: new Map(), entries: new Map(), lacks: [], files: new Map() };
+  const taken: GameTaken = { packageFiles: new Map(), hashes: new Map(), entries: new Map(), lacks: [], files: new Map() };
   const hashes = new Map<string, Map<string, string>>();
   const pinned = new Map<string, { path: string; hash: string }[]>();
   for (const line of lines) {
@@ -91,6 +99,7 @@ async function takenFrom(
     }
     const pkg = packageOf(manifest, line)?.name ?? '';
     taken.packageFiles.set(line.path, { kind: 'gameFile', root: at.place.root, path: file.path });
+    taken.hashes.set(line.path, file.hash);
     taken.files.set(at.place, [...taken.files.get(at.place) ?? [], file]);
     hashes.set(pkg, (hashes.get(pkg) ?? new Map<string, string>()).set(path, file.hash));
     pinned.set(pkg, [...pinned.get(pkg) ?? [], { path: line.path, hash: file.hash }]);
@@ -129,8 +138,8 @@ async function gameFilesOf(adapter: Adapter, manifest: Manifest, lines: readonly
   return first;
 }
 
-// mods.md, Build, story 14
-function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>): string | undefined {
+/** Why this machine cannot run `manifest`'s steps: each tool it has no task for (mods.md, Build, story 14). */
+export function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>): string | undefined {
   const pages = new Map<string, string>();
   for (const { task, page } of manifest.tools) if (!pages.has(task)) pages.set(task, page);
   const named = [...new Set([...manifest.steps.map(({ task }) => task), ...pages.keys()])].filter((task) => !tasks.has(task))
@@ -144,6 +153,7 @@ function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>): strin
 export async function packagesRead(adapter: Adapter, manifest: Manifest, { downloaded, game, tasks }: PackagesHeld): Promise<PackagesRead> {
   const installed = installationFilesOf(manifest, downloaded);
   const packageFiles = new Map<string, PackageFile>();
+  const hashes = new Map<string, string>();
   const entries = new Map<string, Map<string, string>>();
   const lacks = [...installed.lacks];
   const fromTheGame: ManifestFile[] = [];
@@ -159,15 +169,17 @@ export async function packagesRead(adapter: Adapter, manifest: Manifest, { downl
       if (file !== undefined && entry === undefined) lacks.push(`installation file '${pkg.name}' holds no '${pathInPackage(line)}'`);
       if (file === undefined || entry === undefined) continue;
       packageFiles.set(line.path, { kind: 'entry', downloadedFile: file.path, entry: entry.path });
+      hashes.set(line.path, entry.hash);
       const held = entries.get(pkg.hash) ?? new Map(file.entries.map(({ path, hash }) => [path, hash]));
       entries.set(pkg.hash, held.set(pathInPackage(line), entry.hash));
     }
   }
   const taken = await gameFilesOf(adapter, manifest, fromTheGame, game);
   for (const [path, file] of taken.packageFiles) packageFiles.set(path, file);
+  for (const [path, hash] of taken.hashes) hashes.set(path, hash);
   const noTask = toolsWithoutTask(manifest, tasks);
   return {
-    packageFiles, entries: new Map([...entries, ...taken.entries]), lacks: [...new Set([...lacks, ...taken.lacks, ...(noTask === undefined ? [] : [noTask])])],
+    packageFiles, hashes, entries: new Map([...entries, ...taken.entries]), lacks: [...new Set([...lacks, ...taken.lacks, ...(noTask === undefined ? [] : [noTask])])],
     installationFiles: [...installed.held.values()], gameFiles: taken.files,
   };
 }

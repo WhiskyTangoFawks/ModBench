@@ -1,10 +1,7 @@
-import type { BuildFacts } from '../client';
-import type { Depot, GameFile, GamePlace, InstanceAdapter, SourceMods } from '../instanceAdapter/instanceAdapter';
+import type { GamePlace, InstanceAdapter, SourceMods } from '../instanceAdapter/instanceAdapter';
 import type { GameHeld, GamePlaceHeld } from './manifestBuilder';
 
 type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy'>;
-
-type WireDepots = NonNullable<NonNullable<BuildFacts['gameFolder']>['depots']>;
 
 export interface NamedGameFolder {
   readonly name: string;
@@ -30,18 +27,6 @@ export async function gameToHand(adapter: GameAdapter, sourceMods: SourceMods): 
   const [{ modFolders }, folder] = await Promise.all([adapter.modOrder(), namedGameFolder(adapter, await adapter.gameRelease())]);
   return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined && modFolders?.find((entry) => entry.modName === mod)?.kind !== 'separator' };
 }
-
-const wireDepots = (depots: readonly Depot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
-
-export const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): BuildFacts['gameFolder'] => {
-  if (typeof folder === 'string') return undefined;
-  const { name, places: [first, ...others] } = folder;
-  const elsewhere = others.flatMap((place) => {
-    const files = held.get(place) ?? [];
-    return files.length === 0 ? [] : [{ root: place.root, files: [...files], ...wireDepots(place.depots, withDepots) }];
-  });
-  return { name, root: first.root, files: [...held.get(first) ?? []], ...wireDepots(first.depots, withDepots), ...elsewhere.length === 0 ? {} : { elsewhere } };
-};
 
 /** The game folder with the files each place holds of a mod's, none when the game folder was not found. */
 export function gameHeld(folder: NamedGameFolder | string, held: HeldGameFiles): GameHeld | undefined {
@@ -76,26 +61,3 @@ export async function gameFilesOf(
   return { gameFiles: held, notes: [...notes] };
 }
 
-export async function namedGameFiles(
-  adapter: GameAdapter, folder: NamedGameFolder | string, notFound: readonly { readonly mod: string; readonly gameFiles: readonly string[] }[],
-): Promise<{ found: HeldGameFiles; unreadable: (mod: string) => Record<string, string> }> {
-  const found = new Map<GamePlace, Map<string, GameFile>>();
-  const unreadable = new Map<string, Record<string, string>>();
-  for (const { mod, gameFiles } of notFound) {
-    if (gameFiles.length === 0) continue;
-    if (typeof folder === 'string') {
-      unreadable.set(mod, Object.fromEntries(gameFiles.map((path) => [path, folder])));
-      continue;
-    }
-    const reasons: Record<string, string> = {};
-    for (const place of folder.places) {
-      const read = await adapter.gameFiles(place, gameFiles);
-      Object.assign(reasons, read.unreadable, reasons);
-      const foundHere = found.get(place) ?? new Map<string, GameFile>();
-      for (const file of read.files) foundHere.set(file.path.toLowerCase(), file);
-      found.set(place, foundHere);
-    }
-    unreadable.set(mod, reasons);
-  }
-  return { found: new Map([...found].map(([place, files]) => [place, [...files.values()]])), unreadable: (mod) => unreadable.get(mod) ?? {} };
-}

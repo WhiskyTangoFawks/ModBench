@@ -50,7 +50,7 @@ public enum DecompileAndRepairRefusal
     /// <summary>The plugin source holds twin folders and none is its tree; the way out is removing the extra by hand.</summary>
     AmbiguousSource,
 
-    /// <summary>The mod has no repository and the request names no source folder to make one in.</summary>
+    /// <summary>The mod has no repository and the request hands none to make.</summary>
     NoSourceFolder,
 
     /// <summary>The mod's source folder holds a repository Modbench did not make.</summary>
@@ -58,9 +58,6 @@ public enum DecompileAndRepairRefusal
 
     /// <summary>The mod has no repository, and another of its plugins cannot become source to make one with.</summary>
     OtherPluginRefused,
-
-    /// <summary>A file of the mod folder could not be read, so the assets of a new repository are not known.</summary>
-    ModFilesUnreadable,
 
     /// <summary>The repair passed its checks, and git or the file system refused the commits. Nothing was written.</summary>
     WriteFailed,

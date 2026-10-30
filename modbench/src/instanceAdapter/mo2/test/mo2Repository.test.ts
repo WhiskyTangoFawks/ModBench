@@ -435,12 +435,6 @@ describe('the MO2 adapter\'s repository', () => {
     });
   });
 
-  it('keeps the stat cache in a folder at the instance root, beside the mod folders', async () => {
-    const adapter = await instance();
-
-    expect(adapter.statCacheFolder).toBe(join(root, 'stat-cache'));
-  });
-
   it('shows git exactly the whitelist: the manifests, each profile\'s orders and INIs, and the configuration', async () => {
     const adapter = await instance();
     runGit('init', '--quiet');

@@ -64,7 +64,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(_newMod, "textures")).FullName, "a.dds"), "texture");
         Load(Entry(_sourceMod, "First.esp"), Entry(_newMod, Malformed), Entry(_newMod, "Clean.esp"));
 
-        var result = await Repair(await Previewed(plugin));
+        var result = await Repair(await Previewed(plugin, MadeIn(_newMod, "textures/a.dds")));
 
         Assert.Equal([plugin], result.Applied);
         Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_newMod, 3));
@@ -86,7 +86,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var second = AddToNewMod(Lossless.Malformed with { FileName = "Second Malformed.esp" });
         Load(Entry(_newMod, Malformed), Entry(_newMod, "Second Malformed.esp"));
 
-        var result = await Repair([.. (await PreviewAll(first, second)).Applied.Select(p => new PluginToRepair(p.Plugin, p.Hash, null))]);
+        var result = await Repair([.. (await PreviewAll(first, second)).Applied.Select(p => new PluginToRepair(p.Plugin, p.Hash, MadeIn(_newMod)))]);
 
         Assert.Empty(result.Refused);
         Assert.Equal([first, second], result.Applied);
@@ -102,7 +102,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var second = AddToNewMod(Lossy.Malformed with { FileName = "Lossy.esp" });
         Load(Entry(_newMod, Malformed), Entry(_newMod, "Lossy.esp"));
 
-        var result = await Repair([.. (await PreviewAll(first, second)).Applied.Select(p => new PluginToRepair(p.Plugin, p.Hash, null))]);
+        var result = await Repair([.. (await PreviewAll(first, second)).Applied.Select(p => new PluginToRepair(p.Plugin, p.Hash, MadeIn(_newMod)))]);
 
         Assert.Equal([first], result.Applied);
         var refused = Assert.Single(result.Refused);
@@ -232,7 +232,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var plugin = AddToNewMod(Lossless.Malformed);
         Load(Entry(_newMod, Malformed) with { NamedProvider = new PluginProvider.FromMod(NewModName, _newMod, null) });
 
-        var refused = Assert.Single((await Repair(await Previewed(plugin))).Refused);
+        var refused = Assert.Single((await Repair(await Previewed(plugin, made: null))).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.NoSourceFolder, refused.Refusal);
         Assert.False(Directory.Exists(Path.Combine(_newMod, ".git")));
@@ -279,11 +279,15 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private async Task<RepairPreviewsResult> PreviewAll(params PluginAddress[] plugins) =>
         (await TestEditService.Over(_holder).GetRequiredService<RepairPreviewsHandler>().PreviewAsync(plugins)).Value();
 
-    private async Task<PluginToRepair> Previewed(PluginAddress plugin)
+    private Task<PluginToRepair> Previewed(PluginAddress plugin) => Previewed(plugin, MadeIn(_newMod));
+
+    private async Task<PluginToRepair> Previewed(PluginAddress plugin, NewRepository? made)
     {
         var preview = Assert.Single((await PreviewAll(plugin)).Applied);
-        return new PluginToRepair(preview.Plugin, preview.Hash, SourceFolder: null);
+        return new PluginToRepair(preview.Plugin, preview.Hash, made);
     }
+
+    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.ManifestOf(NewModName));
 
     private string StrayFile()
     {
@@ -296,7 +300,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     private async Task<DecompileAndRepairResult> Repair(IReadOnlyList<PluginToRepair> plugins, bool force = false, IPluginAdapter? adapter = null, bool agreedDrops = false) =>
         (await TestEditService.Over(_holder, adapter: adapter).GetRequiredService<DecompileAndRepairPluginHandler>()
-            .DecompileAndRepairAsync(plugins, metadataFiles: [], force, agreedDrops)).Value();
+            .DecompileAndRepairAsync(plugins, force, agreedDrops)).Value();
 
     private static void WriteCleanPlugin(string modFolder, string name)
     {

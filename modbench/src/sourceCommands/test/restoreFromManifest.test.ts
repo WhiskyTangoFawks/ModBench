@@ -336,7 +336,7 @@ describe('restore from manifest', () => {
   describe('a source mod with a remote', () => {
     const source = (): string => join(root, 'source', 'ModA');
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
-    const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [] };
+    const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [{ path: 'a.esp', vouchedFor: true }] };
 
     async function sourceMod(answers: InstanceAnswers = {}) {
       await mkdir(source(), { recursive: true });
@@ -363,12 +363,11 @@ describe('restore from manifest', () => {
 
       expect(client.calls.map(({ method, args }) => [method, args[0]])).toEqual([
         ['cloneSubmodules', [pinned()]],
-        ['build', [{
-          name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), metadataFiles: ['meta.ini'], version: null, isSubmodule: true,
-          installationFiles: [{ path: DOWNLOADED.path, size: 10, hash: 'H', entries: DOWNLOADED.entries }],
-        }]],
+        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], taken: ['b.nif'], archives: [] }]],
       ]);
-      expect(writes(fake.calls).map(({ verb }) => verb)).toEqual(['trashFileIn', 'writeModMetadata']);
+      expect(writes(fake.calls)).toMatchObject([
+        { verb: 'keepPackageEntries', hash: 'ModA', entries: new Map([['a.esp', 'compiled']]) }, { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
+      ]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
     });
 

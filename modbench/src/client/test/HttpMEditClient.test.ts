@@ -174,11 +174,15 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToDecompileAndCommit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
-const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSubmodule: true });
+const modToDecompileAndCommit = (name: string) => ({
+  name, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], manifestName: `${name}.manifest.json`, manifest: '{}' },
+});
+const modToBuild = (name: string) => ({
+  name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, exclude: ['b.dds'], taken: ['a.dds'],
+  archives: [{ path: `${name}.ba2`, files: ['a.dds'] }],
+});
 const buildFacts = {
   exclusionMark: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
-  statCache: '/instance/stat-cache',
 };
 
 describe('HttpMEditClient — what each verb sends and reads', () => {
@@ -259,23 +263,17 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         applied: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }],
           archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
-          failure: 'The build stopped before compiling.', steps: [{ task: 'Zip', args: ['a'] }], made: ['a.nif'],
+          failure: 'The build stopped before compiling.', made: [{ path: 'a.nif', vouchedFor: true }],
         }],
-        refused: [
-          { item: 'ModC', refusal: 'NoTaskForTool', message: "this machine has no task for its tool 'Pack'.", installationFilesNotFound: [] },
-          { item: 'ModE', refusal: 'PackageLacking', message: "installation file 'E.7z' is missing.", installationFilesNotFound: [{ name: 'E.7z', size: 7, hash: 'H' }], gameFilesNotFound: ['a.nif'] },
-        ],
+        refused: [{ item: 'ModC', refusal: 'ArchiveFileNotAnAsset', message: "'ModC.ba2' takes 'a.dds', which is not an asset of its source." }],
       },
       reads: {
         landed: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
           archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
-          failure: 'The build stopped before compiling.', steps: [{ task: 'Zip', args: ['a'] }], made: ['a.nif'],
+          failure: 'The build stopped before compiling.', made: [{ path: 'a.nif', vouchedFor: true }],
         }],
-        refused: [
-          { item: 'ModC', reason: "this machine has no task for its tool 'Pack'.", refusal: 'NoTaskForTool', installationFilesNotFound: [] },
-          { item: 'ModE', reason: "installation file 'E.7z' is missing.", refusal: 'PackageLacking', installationFilesNotFound: [{ name: 'E.7z', hash: 'H' }], gameFilesNotFound: ['a.nif'] },
-        ],
+        refused: [{ item: 'ModC', reason: "'ModC.ba2' takes 'a.dds', which is not an asset of its source." }],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
@@ -286,10 +284,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [repairPreview], refused: [{ item: second, refusal: 'NotMalformed', message: 'Second.esp is not malformed.' }] },
       reads: { landed: [repairPreview], refused: [{ item: second, reason: 'Second.esp is not malformed.' }] },
       path: '/plugins/repair-previews', body: { plugins: [first, second] } },
-    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, hash: 'abc', sourceFolder: '/source/ModA' }], ['meta.ini'], false, true),
+    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, hash: 'abc', newRepository: modToDecompileAndCommit('ModA').repository }], false, true),
       answer: { applied: [first], refused: [] },
       reads: { landed: [first], refused: [] },
-      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, hash: 'abc', sourceFolder: '/source/ModA' }], metadataFiles: ['meta.ini'], force: false, agreedDrops: true } },
+      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, hash: 'abc', newRepository: modToDecompileAndCommit('ModA').repository }], force: false, agreedDrops: true } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
       answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },
       path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },
@@ -319,8 +317,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it.each([
     { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
       reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
-    { name: 'changeSourceManifest', verb: (c: MEditClient) => c.changeSourceManifest('/instance/source/Old', { output: 'New', exclude: ['a.dds'] }),
-      reads: { changed: true }, path: '/source-manifest', body: { sourceFolder: '/instance/source/Old', output: 'New', exclude: ['a.dds'] } },
     { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
       reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
   ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {
@@ -424,8 +420,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second], true), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
-      { name: 'changeSourceManifest', verb: (c) => c.changeSourceManifest('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
-        body: { detail: 'It holds no manifest.' }, text: 'It holds no manifest.', refusal: 'Could not change the manifest in "/instance/source/ModA"' },
     ];
 
     it.each(writes)('$name resolves a WriteRefused with the server text, asking once', async ({ verb, status, body, text, refusal }) => {

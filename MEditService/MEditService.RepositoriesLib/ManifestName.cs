@@ -8,7 +8,5 @@ public static class ManifestName
     /// <summary>The glob of every manifest's name.</summary>
     public const string Glob = "*" + Suffix;
 
-    public static string Of(string folderName) => folderName + Suffix;
-
     public static bool Is(string fileName) => fileName.EndsWith(Suffix, StringComparison.OrdinalIgnoreCase);
 }

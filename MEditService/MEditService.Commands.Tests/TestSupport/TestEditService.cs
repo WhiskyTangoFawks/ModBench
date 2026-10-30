@@ -30,7 +30,7 @@ internal static class TestEditService
             .AddSingleton(documents)
             .AddSingleton(source ?? new GitSourceAdapter(documents, TimeProvider.System))
             .AddSingleton(TimeProvider.System)
-            .AddSingleton(modFolders ?? new ModFolderRepository(TimeProvider.System))
+            .AddSingleton(modFolders ?? new ModFolderRepository())
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? TestAdapters.Mutagen())
             .AddSingleton(SharedSchemaReflector.Instance)
@@ -62,9 +62,6 @@ internal static class TestEditService
         Over(holder, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();
 
     internal static CloneSubmodulesHandler CloneSubmodulesHandler() => Over(new LoadOrderHolder()).GetRequiredService<CloneSubmodulesHandler>();
-
-    internal static ChangeSourceManifestHandler ChangeSourceManifestHandler(IModFolderRepository modFolders) =>
-        Over(new LoadOrderHolder(), modFolders: modFolders).GetRequiredService<ChangeSourceManifestHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();

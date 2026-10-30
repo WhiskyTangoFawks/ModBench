@@ -121,18 +121,6 @@ internal static class EndpointMapping
             _ => 422,
         });
 
-    /// <summary>A source mod's manifest change's refusal, leaving the manifest as it was (ADR-0019).</summary>
-    internal static IResult Refusal(SourceManifestRefusal refusal, string? message) => Results.Problem(
-        detail: message,
-        statusCode: refusal switch
-        {
-            SourceManifestRefusal.OutsideTheMod => 400,
-            // The request is sound; the disk refused the write.
-            SourceManifestRefusal.WriteFailed => 500,
-            _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
-
     /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderRefused refused) => Results.Problem(
         detail: refused.Message,
@@ -257,14 +245,6 @@ internal static class EndpointMapping
         if (result.Refusal is not { } refusal) return Results.NoContent();
 
         LogRefusal(logger, gesture, refusal, result.Message, plugin);
-        return Refusal(refusal, result.Message);
-    }
-
-    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, SourceManifestChangeResult result)
-    {
-        if (result.Refusal is not { } refusal) return Results.NoContent();
-
-        LogRefusal(logger, gesture, refusal, result.Message, sourceFolder);
         return Refusal(refusal, result.Message);
     }
 

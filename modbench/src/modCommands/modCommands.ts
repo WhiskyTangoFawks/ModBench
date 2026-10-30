@@ -10,7 +10,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { isRefused, type MEditClient } from '../client';
+import { changeSourceManifest, type SourceManifestChange } from './sourceManifestChange';
 import { installMod, upgradeLoss } from './install';
 export type { SelectionResult };
 export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
@@ -121,15 +121,10 @@ export interface OriginFileRef {
   readonly relativePath: string;
 }
 
-interface SourceModWriters {
-  readonly adapter: InstanceAdapter;
-  readonly mEdit: Pick<MEditClient, 'changeSourceManifest'>;
-}
-
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
 
-const exclusionChange = (mark: OriginFileMark, paths: string[], exclusionMark: string) =>
-  (mark === 'Excluded' ? { exclude: paths, exclusionMark } : { include: paths, exclusionMark });
+const exclusionChange = (mark: OriginFileMark, paths: readonly string[], exclusionMark: string): SourceManifestChange =>
+  (mark === 'Excluded' ? { exclude: paths, include: [], exclusionMark } : { exclude: [], include: paths, exclusionMark });
 
 function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionOutcome<OriginFileRef>> {
   return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
@@ -161,29 +156,17 @@ function bySourceFolder(reads: readonly ReadFile[], sourceMods: SourceMods): Sou
   return groups;
 }
 
-type ExclusionChange = (sourceFolder: string, files: readonly ReadFile[], to: OriginFileMark) => ReturnType<MEditClient['changeSourceManifest']>;
+type ExclusionChange = (sourceFolder: string, files: readonly ReadFile[], to: OriginFileMark) => Promise<string | undefined>;
 
-// Each source mod's refusal by its source folder; or, when mEdit cannot be reached, the whole selection's, with the
-// configurations already changed put back.
-async function configureEach(
-  change: ExclusionChange, groups: SourceGroups, mark: OriginFileMark,
-): Promise<{ refusals: ReadonlyMap<string, string> } | { unreachable: string }> {
+// Each source mod's refusal by its source folder.
+async function configureEach(change: ExclusionChange, groups: SourceGroups, mark: OriginFileMark): Promise<ReadonlyMap<string, string>> {
   const refusals = new Map<string, string>();
-  const configured: [string, readonly ReadFile[]][] = [];
   for (const [sourceFolder, files] of groups) {
     if (sourceFolder === undefined) continue;
-    const answer = await change(sourceFolder, files, mark);
-    if (isRefused(answer) && answer.unreachable) {
-      const notPutBack = await Promise.all(configured.map(async ([folder, of]) => {
-        const putBack = await change(folder, of, UNMARK[mark]);
-        return isRefused(putBack) ? [` The manifest in "${folder}" could not be put back: ${putBack.message}`] : [];
-      }));
-      return { unreachable: [answer.message, ...notPutBack.flat()].join('') };
-    }
-    if (isRefused(answer)) refusals.set(sourceFolder, answer.message);
-    else configured.push([sourceFolder, files]);
+    const refusal = await change(sourceFolder, files, mark);
+    if (refusal !== undefined) refusals.set(sourceFolder, refusal);
   }
-  return { refusals };
+  return refusals;
 }
 
 // A file of a configured source mod that could not be marked has its change to the configuration taken back.
@@ -194,11 +177,11 @@ async function markInSourceMod(
   if (outcome.refused.length === 0) return outcome;
   const unmarked = reads.filter(({ file }) => outcome.refused.some(({ item }) => item === file));
   const takenBack = await change(sourceFolder, unmarked, UNMARK[mark]);
-  if (!isRefused(takenBack)) return outcome;
+  if (takenBack === undefined) return outcome;
   return {
     landed: outcome.landed,
     refused: outcome.refused.map(({ item, reason }) => ({
-      item, reason: `${reason} Its change to the manifest could not be taken back: ${takenBack.message}`,
+      item, reason: `${reason} Its change to the manifest could not be taken back: ${takenBack}`,
     })),
   };
 }
@@ -222,7 +205,7 @@ async function readEach(
 
 // A refusal all a source mod's files share writes none of them (commands.md, A selection is one gesture).
 async function markFiles(
-  { adapter, mEdit }: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark,
+  adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionResult<OriginFileRef>> {
   let sourceMods: SourceMods;
   try {
@@ -232,14 +215,13 @@ async function markFiles(
   }
   const { read, unread } = await readEach(adapter, files);
   const change: ExclusionChange = (sourceFolder, of, to) =>
-    mEdit.changeSourceManifest(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath), adapter.exclusionMark));
+    changeSourceManifest(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath), adapter.exclusionMark));
   const groups = bySourceFolder(read, sourceMods);
-  const configured = await configureEach(change, groups, mark);
-  if ('unreachable' in configured) return { applied: false, refusal: configured.unreachable };
+  const refusals = await configureEach(change, groups, mark);
   const landed: OriginFileRef[] = [];
   const refused: ItemRefusal<OriginFileRef>[] = [...unread];
   for (const [sourceFolder, inIt] of groups) {
-    const refusal = sourceFolder === undefined ? undefined : configured.refusals.get(sourceFolder);
+    const refusal = sourceFolder === undefined ? undefined : refusals.get(sourceFolder);
     const outcome = sourceFolder === undefined ? await markEach(adapter, inIt.map(({ file }) => file), mark)
       : refusal === undefined ? await markInSourceMod(adapter, change, sourceFolder, inIt, mark)
         : { landed: [], refused: inIt.map(({ file }) => ({ item: file, reason: refusal })) };
@@ -516,7 +498,7 @@ async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string
 
 // The folder, then a source mod's manifest, then the line in each profile, the active one first. A
 // profile that does not list the mod is left as it was.
-async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to: string): Promise<RenameModResult> {
+async function renameMod(adapter: InstanceAdapter, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   if (from === to) return { applied: true, lineRefusals: [], unchanged: true };
   const refused = await refusedName(renameModNameRefusal(adapter, to, from));
@@ -535,14 +517,14 @@ async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to:
   } catch (err) {
     return refuse(err);
   }
-  const configured = sourceFolder === undefined ? undefined : await mEdit.changeSourceManifest(sourceFolder, { output: to });
-  if (configured !== undefined && isRefused(configured)) {
+  const configured = sourceFolder === undefined ? undefined : await changeSourceManifest(sourceFolder, { output: to });
+  if (configured !== undefined) {
     try {
       await adapter.renameModFolder(to, from);
     } catch (err) {
-      return { applied: false, refusal: `${configured.message} The folder could not be renamed back to "${from}": ${errorMessage(err)}` };
+      return { applied: false, refusal: `${configured} The folder could not be renamed back to "${from}": ${errorMessage(err)}` };
     }
-    return { applied: false, refusal: configured.message };
+    return { applied: false, refusal: configured };
   }
   const publisherRefusals = await updatePublisherAfterRename(adapter, fromFolder, to);
   const lineRefusals: { profile: string; refusal: string }[] = [];
@@ -598,19 +580,19 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 }
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
-export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit']) {
+export function modCommands(adapter: InstanceAdapter) {
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
     moveSeparators: (...args: TailOf<typeof moveSeparators>) => moveSeparators(adapter, ...args),
-    markFiles: (...args: TailOf<typeof markFiles>) => markFiles({ adapter, mEdit }, ...args),
+    markFiles: (...args: TailOf<typeof markFiles>) => markFiles(adapter, ...args),
     changePublisherTag: (...args: TailOf<typeof changePublisherTag>) => changePublisherTag(adapter, ...args),
     insertSeparator: (...args: TailOf<typeof insertSeparator>) => insertSeparator(adapter, ...args),
     renameSeparator: (...args: TailOf<typeof renameSeparator>) => renameSeparator(adapter, ...args),
     deleteSeparators: (...args: TailOf<typeof deleteSeparators>) => deleteSeparators(adapter, ...args),
     uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
     createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
-    renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
+    renameMod: (...args: TailOf<typeof renameMod>) => renameMod(adapter, ...args),
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusalInInstance>) => newModNameRefusalInInstance(adapter, ...args),

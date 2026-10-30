@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import { isRefused, type BuildOutcome, type BuildRefusalKind } from '../client';
+import { isRefused } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import type { ReportAction, Reporter } from '../ports/reporter';
+import type { SourceBuildOutcome as BuildOutcome } from '../sourceCommands/buildSourceMod';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import type { BuildProblems } from './buildProblems';
 import { pluginRowName } from '../wire/pluginAddress';
@@ -75,7 +76,7 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, ever
 
 function reportBuildResult(reporter: Reporter, result: Built): void {
   if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
-  const lacksATask = result.outcome.refused.some((refused) => 'refusal' in refused && refused.refusal === NO_TASK);
+  const lacksATask = result.outcome.refused.some((refused) => 'lacksATask' in refused && refused.lacksATask === true);
   reportBuilt(reporter, result.outcome, lacksATask ? OPEN_USER_TASKS : undefined);
   reportPartial(reporter, result.partial);
 }
@@ -83,8 +84,6 @@ function reportBuildResult(reporter: Reporter, result: Built): void {
 function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
-
-const NO_TASK: BuildRefusalKind = 'NoTaskForTool';
 
 // mods.md, Build, story 14: a tool this machine has no task for is added as a user task.
 const OPEN_USER_TASKS: ReportAction = {

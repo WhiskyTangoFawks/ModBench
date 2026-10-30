@@ -6,7 +6,7 @@ namespace MEditService.RepositoriesLib;
 
 /// <summary>What the file system says of a file without a read of its bytes. Times are nanoseconds
 /// since the Unix epoch. .NET exposes no change time, so each platform's is read natively.</summary>
-public readonly record struct FileStamp(long Size, long Modified, long Changed)
+internal readonly record struct FileStamp(long Size, long Modified, long Changed)
 {
     /// <summary>Null when the file system cannot answer, and then nothing vouches for a remembered
     /// hash.</summary>

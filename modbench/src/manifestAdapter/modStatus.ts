@@ -6,6 +6,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { MANIFEST_SUFFIX } from '../wire/sourceMod';
 import type { Manifest, ManifestFile } from './manifest';
 import { manifestIn, sourceManifestIn } from './manifestFiles';
+import { packageOf } from './packageOf';
 
 type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
@@ -55,7 +56,7 @@ const folded = (path: string): string => path.toLowerCase();
 function fixedBy(manifest: Manifest, file: ManifestFile): { readonly package: string; readonly path: string } | undefined {
   const { entry } = file;
   if (entry.kind !== 'held' && entry.kind !== 'heldAt') return undefined;
-  const pkg = file.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === file.package);
+  const pkg = packageOf(manifest, file);
   if (pkg === undefined) return undefined;
   return { package: pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash, path: entry.kind === 'heldAt' ? entry.path : file.path };
 }

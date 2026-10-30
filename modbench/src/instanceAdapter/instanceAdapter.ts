@@ -697,9 +697,6 @@ export interface InstanceAdapter {
   writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
-  /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
-   *  (modlist-repository.md, Status, story 3). The repository never commits it. */
-  readonly statCacheFolder: string;
   /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;

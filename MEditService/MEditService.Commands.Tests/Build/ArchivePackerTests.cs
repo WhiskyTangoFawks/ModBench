@@ -4,7 +4,6 @@ using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.ModFolderAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -57,14 +56,13 @@ public sealed class ArchivePackerTests : IDisposable
 
     private async Task<(byte[]? Archive, ArchiveRefused? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
     {
-        _folders.WriteSourceManifest(SourceFolder, new Manifest([], []) { Output = "Mod", Archives = [new ManifestArchive(Archive, files)] });
         var source = new FakeSourceAdapter().Building(SourceFolder, new SourceToBuild(
             [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_scratch, null, GameRelease.Fallout4, []));
 
         var built = (await TestEditService.BuildModHandler(holder, source: source, modFolders: _folders)
-            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod, [], null, IsSubmodule: false)], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant), "stat-cache"))).Value();
+            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod) { Archives = [new ArchiveToPack(Archive, files)] }], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant)))).Value();
 
         return (_folders.Written.GetValueOrDefault((Mod, Archive)), Assert.Single(built.Applied).ArchivesRefused.SingleOrDefault());
     }

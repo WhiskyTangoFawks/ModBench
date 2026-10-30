@@ -1,4 +1,4 @@
-import type { ManifestStep } from '../client';
+import type { ManifestStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { HostTasks } from '../ports/tasks';
 

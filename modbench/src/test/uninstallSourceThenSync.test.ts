@@ -6,7 +6,6 @@ import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { adapterOver, managerOver, readModlistEntries } from './mo2/adapterOver';
@@ -47,7 +46,7 @@ describe('an uninstall whose line write fails', () => {
     const lineWriteFails: InstanceAdapter = { ...adapter, changeModOrder: () => Promise.reject(new Error('disk full')) };
     const trash = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
 
-    const outcome = await modCommands(lineWriteFails, new InMemoryMEditClient()).uninstallMods([MOD], trash);
+    const outcome = await modCommands(lineWriteFails).uninstallMods([MOD], trash);
     expect(outcome).toMatchObject({ applied: true, outcome: { landed: [{ name: MOD, lineRefusal: 'disk full' }] } });
     expect((await readModlistEntries(root)).some((entry) => entry.name === MOD)).toBe(true);
     const synced = await modSyncOver(adapter)();

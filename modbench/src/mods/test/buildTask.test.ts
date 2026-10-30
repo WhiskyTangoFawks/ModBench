@@ -4,13 +4,13 @@ vi.mock('vscode', async () => (await import('../../test/taskDouble')).taskModule
 
 import { executeCommand, runRegisteredTask } from '../../test/taskDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import type { BuildOutcome } from '../../client';
+import type { SourceBuildOutcome as BuildOutcome } from '../../sourceCommands/buildSourceMod';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerBuildTask } from '../buildTask';
 
 type Landed = BuildOutcome['landed'][number];
 const landed = (overrides: Partial<Landed> = {}): Landed =>
-  ({ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], steps: [], made: [], ...overrides });
+  ({ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], ...overrides });
 const applied = (outcome: BuildOutcome) => ({ applied: true, outcome });
 const DEFINITION = { type: 'modbench.mod.build' };
 

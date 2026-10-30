@@ -11,9 +11,7 @@ import {
 } from './corpusFixture';
 import { adapterOver, readDownloadedFile, readModlistEntries } from './adapterOver';
 import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
-const unscriptedMEdit = new InMemoryMEditClient();
 
 
 const trash = async (path: string): Promise<void> => { await rm(path, { recursive: true }); };
@@ -31,7 +29,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods trashes the folder, removes the modlist line, and marks the downloaded file its meta.ini names uninstalled — nothing else', async () => {
     const downloadedFileMeta = `downloads/${DOWNLOADED_FILE_NAME}.meta`;
     const before = await snapshotTree(dir);
-    await modCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(['Unofficial Fallout 4 Patch'], trash);
+    await modCommands(adapterOver(dir)).uninstallMods(['Unofficial Fallout 4 Patch'], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadedFileMeta]));
@@ -43,7 +41,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
   it('uninstallMods on a mod with no linked downloaded file touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await modCommands(adapterOver(dir), unscriptedMEdit).uninstallMods(['Harder VATS'], trash);
+    await modCommands(adapterOver(dir)).uninstallMods(['Harder VATS'], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));
@@ -58,7 +56,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
     await writeFile(join(dir, 'source', 'Harder VATS', '.git', 'HEAD'), 'ref: refs/heads/main\n');
     const before = await snapshotTree(dir);
 
-    await modCommands(adapterOver(dir), unscriptedMEdit).renameMod('Harder VATS', 'Harder VATS 2');
+    await modCommands(adapterOver(dir)).renameMod('Harder VATS', 'Harder VATS 2');
     const after = await snapshotTree(dir);
 
     expect([textsUnder(after, 'mods/Harder VATS'), textsUnder(after, 'mods/Harder VATS 2')]).toEqual([{}, {
@@ -87,7 +85,7 @@ describe('mod lifecycle corpus (install)', () => {
     await writeFile(join(dir, 'downloads', `${MANUAL}.meta`), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
 
-    const outcome = await modCommands(adapterOver(dir, { installationFileReader: fakeInstallationFileReader(['Manual.esp']) }), unscriptedMEdit)
+    const outcome = await modCommands(adapterOver(dir, { installationFileReader: fakeInstallationFileReader(['Manual.esp']) }))
       .installMod({ kind: 'downloadedFile', name: MANUAL }, { kind: 'new', name: 'Manual' }, true);
     const after = await snapshotTree(dir);
 

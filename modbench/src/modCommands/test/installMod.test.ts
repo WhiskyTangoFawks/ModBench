@@ -7,7 +7,6 @@ import type { DownloadedFile, DownloadedFileMeta, InstallPackage, InstallTarget 
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ManifestFile } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
 const INSTALLATION_FILE: InstallPackage = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
@@ -33,7 +32,7 @@ function install(
   files: readonly DownloadedFile[] = [FRESHLY], folders: readonly string[] = [UPGRADED.name],
 ) {
   const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(mods, ...folders), downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files } }), answers);
-  const outcome = modCommands(fake.adapter, new InMemoryMEditClient()).installMod(installed, target, force);
+  const outcome = modCommands(fake.adapter).installMod(installed, target, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
@@ -243,7 +242,7 @@ describe('installMod', () => {
   it('refuses, installing nothing, an installation file when the downloads folder cannot be resolved', async () => {
     const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: { kind: 'unresolved', reason: 'the downloads folder is unresolvable' } }));
 
-    const result = await modCommands(fake.adapter, new InMemoryMEditClient()).installMod(INSTALLATION_FILE, NEW_MOD, true);
+    const result = await modCommands(fake.adapter).installMod(INSTALLATION_FILE, NEW_MOD, true);
 
     expect(result).toEqual({ applied: false, refusal: 'the downloads folder is unresolvable' });
     expect(fake.calls).toEqual([]);
@@ -269,7 +268,7 @@ describe('installMod', () => {
       },
     });
 
-    const result = await modCommands(fake.adapter, new InMemoryMEditClient()).installMod(DOWNLOADED_FILE, NEW_MOD, true);
+    const result = await modCommands(fake.adapter).installMod(DOWNLOADED_FILE, NEW_MOD, true);
 
     expect(result).toEqual({ applied: true, downloadedFile: 'Freshly-1-0.7z', downloadedFileRefusal: '"Freshly-1-0.7z" is gone from disk.' });
   });

@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.ModFolderAdapter;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
@@ -8,7 +7,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>The Build gesture's handler (ADR-0014), the Build engine's way in. The mod is the item of the selection:
-/// its folder is written from its source as its manifest says, or it is refused.</summary>
+/// its plugins and archives are made from its source, or it is refused.</summary>
 public sealed class BuildModHandler
 {
     private readonly SourceModBuild _build;
@@ -34,7 +33,7 @@ public sealed class BuildModHandler
             (mod, _) => _build.BuildAsync(mod, instance), CancellationToken.None);
         return built.ToResult(
             landed => ModBuiltOf(landed.Item, landed.Outcome),
-            refused => new BuildRefused(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFilesNotFound, refused.Refusal.GameFilesNotFound),
+            refused => new BuildRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new BuildResult(applied, refused));
     }
 
@@ -43,6 +42,5 @@ public sealed class BuildModHandler
         [.. built.Compiled.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
         [.. built.Refused.Select(refused => new CompileRefused(refused.Item, refused.Refusal, refused.Message))],
         [.. built.ArchivesRefused.Select(refused => new ArchiveRefused(refused.Item, refused.Refusal, refused.Message))],
-        built.Overwritten, built.Failure, built.Uncommitted, built.Unpushed, built.Steps,
-        built.Steps.Count == 0 ? [] : [.. built.Manifest?.Files.Where(line => line.Entry is not PackageEntry.MadeByStep).Select(line => line.Path) ?? []]);
+        built.Overwritten, built.Failure, built.Uncommitted, built.Unpushed, built.Made);
 }

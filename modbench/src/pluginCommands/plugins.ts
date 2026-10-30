@@ -13,7 +13,7 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
 import { moveOrderRefusal } from './pluginOrder';
-import { decompileAndRepair, type DecompileAndRepairClient } from './decompileAndRepair';
+import { decompileAndRepair, type DecompileAndRepairClient, type NewRepositories } from './decompileAndRepair';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
@@ -219,12 +219,14 @@ export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
 }
 
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
-export function pluginCommands({ adapter, client }: { adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient }) {
+export function pluginCommands({ adapter, client, newRepositories }: {
+  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; newRepositories: NewRepositories;
+}) {
   return {
     setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),
     setPluginsEnabled: (...args: TailOf<typeof setPluginsEnabled>) => setPluginsEnabled(adapter, ...args),
     reorderPlugins: (...args: TailOf<typeof reorderPlugins>) => reorderPlugins({ adapter, client }, ...args),
-    decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client }, ...args),
+    decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client, newRepositories }, ...args),
     ...pluginRenameCommands({ adapter, client }),
   };
 }
