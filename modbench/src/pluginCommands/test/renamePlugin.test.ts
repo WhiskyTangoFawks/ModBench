@@ -6,13 +6,10 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { present } from '../../ports/present';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const PLUGIN = { name: 'Patch Mod.esp', origin: 'Patch Mod' };
-const CHILD = { name: 'Child.esp', origin: 'ChildMod' };
-const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
 
 const CHANGES = { treeName: 'Patch Mod.esp', moves: [{ from: '/m/plugin-source/Patch Mod.esp', to: '/m/plugin-source/Renamed Patch.esp' }], deletions: [], documents: [] };
 

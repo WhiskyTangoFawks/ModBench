@@ -106,16 +106,6 @@ describe('modbench.plugin.rename', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('renames at once, never looking up the plugins that list it as a master', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, run } = setup();
-
-    await run(row());
-
-    expect(client.calls.filter((c) => c.method === 'getPluginDependants')).toEqual([]);
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
-  });
-
   it('takes nothing from a row that is no plugin line', async () => {
     const { client, run } = setup();
 

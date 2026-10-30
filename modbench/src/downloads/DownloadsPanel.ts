@@ -43,7 +43,7 @@ function deleteGesture(
   trash: MoveToTrash, log: (line: string) => void,
 ): DownloadsGesture<readonly string[], DeletedDownloadedFile> {
   return {
-    fromView: async (entry) => {
+    fromView: (entry) => {
       const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
       return names.length > 0 ? names : undefined;
     },
