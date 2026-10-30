@@ -30,7 +30,7 @@ public enum CloneRefusal
 }
 
 /// <summary>Restore from manifest's clone of each submodule the source folder lacks, at the commit the instance repository
-/// pins, and its check that a submodule is at that commit (modlist-repository.md, Restore from manifest, story 3).</summary>
+/// pins, and its check that a submodule is at that commit (ADR-0022).</summary>
 public sealed class CloneSubmodulesHandler
 {
     private readonly ISourceAdapter _source;

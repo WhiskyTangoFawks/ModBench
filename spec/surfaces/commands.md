@@ -94,7 +94,7 @@ A gesture that fits none of these stays in the tables. A new reason is added to 
 | Modlist repository | - | - | [modlist-repository.md](modlist-repository.md) |
 | Deployment: hardlink | - | - | [deployment-hardlink.md](deployment-hardlink.md) |
 
-The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
+The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019). A state that is wrong goes to the Problems panel (common.md, Reporting).
 
 ## Where surfaces live
 

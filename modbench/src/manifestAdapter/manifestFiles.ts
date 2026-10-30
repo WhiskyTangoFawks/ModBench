@@ -22,8 +22,8 @@ const read = async (path: string): Promise<ManifestRead> => readManifest(await t
 
 const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
-/** The manifest named for `folder` in it, its name in any case, so a folder reads alike on Windows and Linux
- *  (modlist-repository.md, The manifest, story 16); undefined when it holds none. */
+/** The manifest named for `folder` in it, its name in any case, so a folder reads alike on Windows and Linux;
+ *  undefined when it holds none. */
 export async function manifestIn(folder: string): Promise<ManifestRead | undefined> {
   const named = `${basename(folder)}${MANIFEST_SUFFIX}`.toLowerCase();
   const [one, other] = (await fileNamesIn(folder)).filter((name) => name.toLowerCase() === named);
@@ -86,7 +86,7 @@ export async function writeSourceManifestIn(sourceFolder: string, manifest: Mani
 }
 
 /** The manifest at the root of the source mod's repository in `sourceFolder`, which names the folder it builds
- *  (modlist-repository.md, The manifest, story 20); undefined when it holds none. */
+ *  (ADR-0022); undefined when it holds none. */
 export async function sourceManifestIn(sourceFolder: string): Promise<ManifestRead | undefined> {
   const [one, other] = (await fileNamesIn(sourceFolder)).filter((name) => name.toLowerCase().endsWith(MANIFEST_SUFFIX));
   if (one === undefined) return undefined;

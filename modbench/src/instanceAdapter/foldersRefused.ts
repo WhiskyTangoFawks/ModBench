@@ -2,8 +2,7 @@ import { isBelow, realPathOf } from './gameFolder/pathWithin';
 
 export interface FolderRefusal { readonly item: string; readonly reason: string }
 
-/** The manifests among `asked` whose folder restore refuses (modlist-repository.md, Restore from manifest, stories 13 and
- *  14), compared with every manifest in `folders`: outside the instance folder, or built by another manifest too. Each
+/** The manifests among `asked` whose folder restore refuses (ADR-0022), compared with every manifest in `folders`: outside the instance folder, or built by another manifest too. Each
  *  folder resolves once. */
 export async function foldersRefused(
   instanceRoot: string, folders: ReadonlyMap<string, string>, asked: readonly string[], resolve: (path: string) => Promise<string> = realPathOf,

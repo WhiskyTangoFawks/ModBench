@@ -16,7 +16,7 @@ interface Listening {
   dispose(): void;
 }
 
-// A source mod's manifest is in its repository (modlist-repository.md, The manifest, story 1).
+// A source mod's manifest is in its repository (ADR-0022).
 function modsAt(value: StatusSource): ModAt[] {
   const keyOf = (entry: EntryRef): string => `${entry.kind}:${value.entryKey(entry)}`;
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));

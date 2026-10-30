@@ -23,7 +23,7 @@ interface EntryNote { readonly note: string; readonly keepsEntry: boolean }
 
 const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
 
-// modlist-repository.md, The manifest, story 8: a path or a file URL reaches no other machine.
+// modlist-repository.md, The repository, story 3: a path or a file URL reaches no other machine.
 const LOCAL = 'its remote is on this machine alone';
 
 // git's scp-like form, [user@]host:path, whose host is longer than a Windows drive letter, and that form with a password.
@@ -205,7 +205,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
       ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),
 
-    // modlist-repository.md, Restore from manifest, story 3: an absent submodule's mod is named only in the manifest it holds.
+    // ADR-0022: an absent submodule's mod is named only in the manifest it holds.
     async unclonedSubmodules() {
       if (!(await isRepository(instanceRoot))) return [];
       const uncloned: UnclonedSubmodule[] = [];

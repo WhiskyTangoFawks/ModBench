@@ -56,7 +56,7 @@ function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, 
   row.tooltip = relativePath;
 }
 
-// modlist-repository.md, Status, story 4.
+// modlist-repository.md, Status, story 1.
 function sayingWhetherItDiffers<T extends vscode.TreeItem>(row: T, differs: boolean | undefined): T {
   if (differs === true) row.description = 'differs';
   return row;

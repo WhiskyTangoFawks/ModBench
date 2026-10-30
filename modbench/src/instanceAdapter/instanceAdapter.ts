@@ -374,8 +374,7 @@ export type UnclonedSubmodule = { readonly name: string } & (Submodule | { reado
 
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
 
-/** A folder outside every mod folder that holds the manifest named for it, which builds it (modlist-repository.md, The
- *  manifest, story 20). `name` is its path in the instance, ending in `/`, so no mod has it. */
+/** A folder outside every mod folder that holds the manifest named for it, which builds it (ADR-0022). `name` is its path in the instance, ending in `/`, so no mod has it. */
 export interface OtherManifest { readonly name: string; readonly folder: string }
 
 /** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
@@ -664,8 +663,7 @@ export interface InstanceAdapter {
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
    *  name gives none. `among`: a listing the caller holds, so many mods list `mods/` once. */
   modFolderPath(mod: string, among?: readonly ModFolder[]): Promise<string | undefined>;
-  /** The manifests among `asked` whose folder restore refuses (modlist-repository.md, Restore from manifest, stories 13 and
-   *  14). `folders` is every manifest's folder by its name. */
+  /** The manifests among `asked` whose folder restore refuses (ADR-0022). `folders` is every manifest's folder by its name. */
   foldersRefused(folders: ReadonlyMap<string, string>, asked: readonly string[]): Promise<readonly FolderRefusal[]>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;

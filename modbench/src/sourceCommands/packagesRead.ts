@@ -1,4 +1,4 @@
-// modlist-repository.md, Restore from manifest, stories 4 and 12: where this machine holds each file a manifest's packages
+// modlist-repository.md, Restore from manifest, story 4: where this machine holds each file a manifest's packages
 // fix, and what it lacks.
 
 import type { FileRead, GameFile, GamePlace, InstallationFile, InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
@@ -117,7 +117,7 @@ async function takenFrom(
   return taken;
 }
 
-// modlist-repository.md, Restore from manifest, story 12: the game folder first, then each other place of the game, and the
+// modlist-repository.md, Restore from manifest, story 4: the game folder first, then each other place of the game, and the
 // first order whose places hold every file with the bytes the pin fixes.
 async function gameFilesOf(adapter: Adapter, manifest: Manifest, lines: readonly ManifestFile[], game: NamedGameFolder | string): Promise<GameTaken> {
   const paths = [...new Set(lines.map(pathInPackage))];

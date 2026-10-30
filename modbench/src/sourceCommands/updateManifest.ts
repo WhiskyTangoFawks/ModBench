@@ -105,7 +105,7 @@ const refusal = (why: string): { refusal: string } => ({ refusal: `was not updat
 const pathsWhere = (manifest: Manifest, kind: 'notHeld' | 'otherBytes'): string[] =>
   manifest.files.filter((file) => file.entry.kind === kind).map((file) => file.path).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-// modlist-repository.md, Update manifest, story 5: a source mod's build writes its manifest.
+// ADR-0022: a source mod's build writes its manifest.
 async function leftToItsBuild(adapter: Adapter, mod: ModToUpdate & { sourceFolder: string }): Promise<Answer> {
   const status: ModStatus = await statusOf({ name: mod.name, folder: mod.folder, sourceFolder: mod.sourceFolder }, adapter);
   if (status.unreadable !== undefined) return refusal(`${status.unreadable}.`);

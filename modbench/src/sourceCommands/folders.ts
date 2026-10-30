@@ -1,6 +1,6 @@
 import type { InstanceAdapter, ModFolder, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 
-// modlist-repository.md, The manifest, story 20: another manifest builds the folder it sits in, which is no mod, so the mod
+// ADR-0022: another manifest builds the folder it sits in, which is no mod, so the mod
 // manager holds nothing of it: no metadata, no installation file and no game files it takes.
 export interface Folders {
   /** The folder `name` builds; undefined when its name gives it none. */
@@ -13,7 +13,7 @@ export function foldersOf(adapter: Pick<InstanceAdapter, 'modFolderPath'>, other
   return { of: (name) => (other.has(name) ? Promise.resolve(other.get(name)) : adapter.modFolderPath(name, among)), isMod: (name) => !other.has(name) };
 }
 
-// A source mod's manifest is in its repository (modlist-repository.md, The manifest, story 1).
+// A source mod's manifest is in its repository (ADR-0022).
 export const sourceFolderOf = (sourceMods: SourceMods, mod: string): { sourceFolder?: string } => {
   const sourceFolder = sourceMods.folderOf(mod);
   return sourceFolder === undefined ? {} : { sourceFolder };
