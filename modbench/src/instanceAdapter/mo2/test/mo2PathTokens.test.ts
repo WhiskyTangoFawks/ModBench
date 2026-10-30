@@ -430,6 +430,40 @@ describe('the MO2 adapter\'s path tokens', () => {
       .toEqual([undefined, [], SETTINGS(['1\\binary=C:/Modding/x.exe'])]);
   });
 
+  it('leaves the config of a repository that already holds its filters as it is', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await adapter.writePathTokens();
+    const configFile = async (): Promise<bigint[]> => {
+      const { ino, mtimeNs } = await stat(join(root, '.git', 'config'), { bigint: true });
+      return [ino, mtimeNs];
+    };
+    const before = await configFile();
+
+    await adapter.writePathTokens();
+
+    expect(await configFile()).toEqual(before);
+  });
+
+  it('holds a file by its tokens though the repository held its filter with another program', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    git(root, 'config', 'filter.modbench-tokens.clean', 'cat');
+    await put(root, 'profiles/Default/Fallout4Custom.ini', `sPath=${onWineDrive(root, '\\')}\\Stock Game\r\n`);
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'profiles/Default/Fallout4Custom.ini')).toBe('sPath={instance folder:\\}\\Stock Game\r\n');
+  });
+
+  it('takes back each filter key to the value the repository held when a write fails', async () => {
+    const { root } = await instanceRepository([]);
+    git(root, 'config', 'filter.modbench-tokens.clean', 'cat');
+    const failing = managerOver(root, { gameFolder: () => Promise.reject(new Error('the game folder could not be read')) }, PUBLISHER);
+
+    await expect(failing.writePathTokens()).rejects.toThrow('the game folder could not be read');
+
+    expect(git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-'))).toEqual(['filter.modbench-tokens.clean=cat']);
+  });
+
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) leaves the repository with no filter, no attributes and no config when a first write fails', async () => {
     const { root, adapter } = await instanceRepository([]);
     await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
