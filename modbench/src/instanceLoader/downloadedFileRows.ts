@@ -54,11 +54,11 @@ const isInstallationFileNameMatch = (mod: Mod, downloadedFileName: string): bool
 const TIER_RANK: Record<UpgradeTier | 'none', number> = { fileId: 0, installationFileName: 1, none: 2 };
 
 function upgradeCandidates(
-  mods: readonly ModlistEntry[],
+  mods: readonly ModlistEntry[], sourceMods: ReadonlySet<string>,
   downloadedFile: Pick<DownloadedFileRow, 'modID' | 'name'> & { readonly installedKey?: string },
 ): UpgradeCandidate[] {
   if (!downloadedFile.modID) return [];
-  const pool = mods.filter((e): e is Mod => e.kind === 'mod' && e.nexusId === downloadedFile.modID);
+  const pool = mods.filter((e): e is Mod => e.kind === 'mod' && !sourceMods.has(e.name) && e.nexusId === downloadedFile.modID);
   const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, downloadedFile.installedKey));
   const tierOf = (mod: Mod): UpgradeTier | undefined => {
     if (isFileIdMatch(mod, downloadedFile.installedKey)) return 'fileId';
@@ -88,7 +88,7 @@ export function modsByInstallationFileName(
  *  is what makes a row Installed; unclaimed, the metadata's own claim decides Downloaded vs.
  *  Uninstalled. */
 export function buildDownloadedFileRows(
-  files: readonly DownloadedFile[], installedInto: ReadonlyMap<string, readonly string[]>, mods: readonly ModlistEntry[],
+  files: readonly DownloadedFile[], installedInto: ReadonlyMap<string, readonly string[]>, mods: readonly ModlistEntry[], sourceMods: ReadonlySet<string>,
 ): LocatedDownloadedFileRow[] {
   return files.map((file): LocatedDownloadedFileRow => {
     const meta = file.meta;
@@ -112,7 +112,7 @@ export function buildDownloadedFileRows(
       modName: meta?.modName,
       gameName: meta?.gameName,
       author: meta?.author,
-      upgrades: upgradeCandidates(mods, { name: file.name, modID: file.modID, installedKey: meta?.installedKey }),
+      upgrades: upgradeCandidates(mods, sourceMods, { name: file.name, modID: file.modID, installedKey: meta?.installedKey }),
       path: file.path,
       metadataPath: file.metadataPath,
     };
