@@ -63,11 +63,6 @@ async function writeNamed(folder: string, name: string, text: string, two: (one:
 export const writeManifestIn = (folder: string, manifest: Manifest): Promise<boolean> =>
   writeNamed(folder, manifestNameOf(folder), manifestText(manifest), twoManifests);
 
-/** Removes the manifest named for `folder` in it, in any case; does nothing when it holds none. */
-export async function removeManifestIn(folder: string): Promise<void> {
-  for (const name of await spellingsIn(folder, manifestNameOf(folder))) await rm(join(folder, name));
-}
-
 /** Writes `buildFile` at the root of the source mod's repository in `sourceFolder`, in the spelling it holds it in. Rejects,
  *  writing nothing, when the repository holds two. */
 export async function writeBuildFileIn(sourceFolder: string, buildFile: Manifest): Promise<void> {
