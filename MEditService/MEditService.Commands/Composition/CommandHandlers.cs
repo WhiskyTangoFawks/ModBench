@@ -118,12 +118,6 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
-        services.AddSingleton(sp => new RepairPreviewsHandler(
-            sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<ISourceAdapter>(),
-            sp.GetRequiredService<ILogger<RepairPreviewsHandler>>()));
-
         services.AddSingleton(sp => new DecompileAndRepairPluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),

@@ -151,10 +151,7 @@ export interface DecompileAndCommitOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A malformed plugin's diagnoses, each with the change that repairs it, and the hash of the bytes they came from. */
-export type PluginRepairPreview = components['schemas']['PluginRepairPreview'];
-
-/** A plugin to repair, by the hash its preview answered, and the source folder its mod's repository is made in when it
+/** A plugin to repair, and the source folder its mod's repository is made in when it
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
@@ -254,12 +251,9 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  // Each plugin's repair preview, or why it has none. Nothing is written.
-  repairPreviews(plugins: readonly PluginAddress[]): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused>;
-  // Each plugin's source is written as two commits, or refused on its own. `force` waives every loss, `agreedDrops` only
-  // the dropped data.
+  // Each plugin's source is written as two commits, or refused on its own. `force` waives the working-tree changes it replaces.
   decompileAndRepair(
-    plugins: readonly PluginToRepair[], force: boolean, agreedDrops: boolean,
+    plugins: readonly PluginToRepair[], force: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.

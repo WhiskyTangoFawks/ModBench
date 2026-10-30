@@ -148,24 +148,13 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
-    /// <summary>The plugin's bytes are not the ones its repair preview read (ADR-0003).</summary>
-    public sealed record ChangedSincePreview : PluginFailure
-    {
-        internal ChangedSincePreview() : base(error: null)
-        {
-        }
-
-        public override string Reason => "its bytes changed since the repair preview";
-
-        public override bool OfItsBytes => false;
-    }
-
-    /// <summary>A diagnosis chosen for repair that no repair answers.</summary>
+    /// <summary>Malformations that no repair answers.</summary>
     public sealed record NoRepair : PluginFailure
     {
         private readonly string _reason;
 
-        internal NoRepair(PluginDiagnosis diagnosis) : base(error: null) => _reason = $"no repair answers {diagnosis.Describe()}";
+        internal NoRepair(IEnumerable<PluginDiagnosis> diagnoses) : base(error: null) =>
+            _reason = $"no repair answers {string.Join("; ", diagnoses.Select(diagnosis => diagnosis.Describe()))}";
 
         public override string Reason => _reason;
     }

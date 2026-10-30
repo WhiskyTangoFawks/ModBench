@@ -12,13 +12,12 @@ export function pluginCommandsWith(
   const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
   return pluginCommands({
     adapter,
-    newRepositories: { of: newRepositories.of ?? unanswered, folderManifestRemovedOrWhy: newRepositories.folderManifestRemovedOrWhy ?? unanswered },
+    newRepositories: { of: newRepositories.of ?? unanswered },
     client: {
       getPlugins: client.getPlugins?.bind(client) ?? unanswered,
       getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,
       moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
       getCreatablePluginExtensions: client.getCreatablePluginExtensions?.bind(client) ?? unanswered,
-      repairPreviews: client.repairPreviews?.bind(client) ?? unanswered,
       decompileAndRepair: client.decompileAndRepair?.bind(client) ?? unanswered,
     },
   });

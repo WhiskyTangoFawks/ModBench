@@ -17,28 +17,25 @@ public sealed class DecompileAndRepairApiTests : HostedTests
     protected override void DisposeFixtures() => _instance.Dispose();
 
     [Fact]
-    public async Task APreviewedMalformedPlugin_AnswersItsDiagnosis_ThenItsRepairAnswersItApplied()
+    public async Task AMalformedPlugin_IsRepaired_AndAnswersItApplied()
     {
         File.WriteAllBytes(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), Fixture.Malformed.FileName), Fixture.Malformed.Bytes);
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
         var plugin = new { name = Fixture.Malformed.FileName, origin = Origin };
 
-        var preview = Assert.Single((await (await Client.PostAsJsonAsync("/plugins/repair-previews", new { plugins = new[] { plugin } }))
-            .EnsureSuccessStatusCode().Body()).GetProperty("applied").EnumerateArray());
         var repaired = await (await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
             plugins = new[]
             {
                 new
                 {
-                    plugin, hash = preview.GetProperty("hash").GetString(),
+                    plugin,
                     newRepository = new { sourceFolder = Client.SourceFolderSentFor(Origin), buildFile = "{}" },
                 },
             },
             force = false,
         })).EnsureSuccessStatusCode().Body();
 
-        Assert.Equal(Fixture.Change, Assert.Single(preview.GetProperty("diagnoses").EnumerateArray()).GetProperty("change").GetProperty("description").GetString());
         Assert.Equal([Fixture.Malformed.FileName], repaired.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
     }
 
@@ -49,21 +46,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, hash = "h", newRepository = new { sourceFolder = "s" } } },
-            force = false,
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ARepairNamingNoPreviewedHash_Is400()
-    {
-        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-
-        var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
-        {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, hash = "" } },
+            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, newRepository = new { sourceFolder = "s" } } },
             force = false,
         });
 

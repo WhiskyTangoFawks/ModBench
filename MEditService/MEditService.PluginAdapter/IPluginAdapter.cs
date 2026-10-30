@@ -46,23 +46,21 @@ public interface IPluginAdapter
 
     /// <summary>The malformed-record diagnoses from one fresh read of the file, each with the change that
     /// repairs it, or none.</summary>
-    Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease);
+    Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease);
 
-    /// <summary>The plugin with the repair of each of <paramref name="chosen"/> written to <paramref name="destinationPath"/>.
-    /// Refused, writing nothing, when the bytes changed since the preview or no repair answers a chosen one.</summary>
-    Answer<string, PluginFailure> WriteRepaired(
-        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease);
+    /// <summary>The plugin with the repair of each malformation it holds written to <paramref name="destinationPath"/>.
+    /// Refused, writing nothing, naming every malformation no repair answers. The answer holds what the one read of the
+    /// plugin repaired.</summary>
+    Answer<RepairedPlugin, PluginFailure> WriteRepaired(string pluginPath, string destinationPath, GameRelease gameRelease);
 
-    /// <summary>Refused unless the plugin at <paramref name="repairedPath"/> holds every record of the plugin,
-    /// and differs from it only by the repairs of <paramref name="chosen"/>. Answers the repaired path.</summary>
-    Answer<string, PluginFailure> VerifyRepaired(
-        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease);
+    /// <summary>Refused unless the plugin <paramref name="written"/> wrote holds every record of the plugin it was made
+    /// from, and differs from it only by the repairs of its malformations.</summary>
+    Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease);
 
-    /// <summary><paramref name="repaired"/> with each record a repair of <paramref name="chosen"/> changes flagged: its
-    /// diagnoses, and the plugin's own subrecords for each field the repair feeds. Refused when the bytes changed since the
-    /// preview.</summary>
+    /// <summary><paramref name="repaired"/> with each record a repair changes flagged: its
+    /// diagnoses, and the plugin's own subrecords for each field the repair feeds.</summary>
     Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        RegisteredPlugin plugin, RepairedPlugin written, PluginSource repaired, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default);
 
     /// <summary>The loose strings files and archives a read of the localized plugin under <paramref name="loadOrder"/>
