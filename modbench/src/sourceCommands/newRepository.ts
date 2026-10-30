@@ -50,6 +50,7 @@ const isTakenOrStepped = (manifest: Manifest, line: ManifestFile): boolean =>
 
 interface ModRead {
   readonly sourceFolder: string;
+  readonly folder: string;
   readonly installationFile: InstallationFile | undefined;
   readonly game: GameHeld | undefined;
   readonly held: Manifest | undefined;

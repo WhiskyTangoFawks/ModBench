@@ -76,19 +76,19 @@ public sealed class DecompileAndRepairPluginHandler
                 workingTree.Message + " Nothing was written.");
         }
 
-        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, cancel)).Holds(out var made, out var failure))
+        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, cancel)).Holds(out var repairedSource, out var failure))
             return RefusedAs(plugin, failure);
-        var (decompiled, written) = (made.Decompiled, made.Written);
+        var (decompiled, repair) = (repairedSource.Decompiled, repairedSource.Written);
         if (decompiled.Source is not { } repaired)
         {
             return Refused(decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
-        if (!(await _adapter.FlaggedSourceOfAsync(plugin, written, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
+        if (!(await _adapter.FlaggedSourceOfAsync(plugin, repair, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
             return RefusedAs(plugin, failure);
 
-        var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, written));
+        var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, repair));
         if (!inSourceMod)
         {
             if (item.NewRepository is not { } made)
@@ -103,7 +103,7 @@ public sealed class DecompileAndRepairPluginHandler
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
-        var flaggedCommit = new TreeCommit(flagged.Files, FlaggedMessage(plugin, written));
+        var flaggedCommit = new TreeCommit(flagged.Files, FlaggedMessage(plugin, repair));
         switch (repository.CommitRepair(plugin.Key, flaggedCommit, repairedCommit, flagged.BinarySha256))
         {
             case null:
