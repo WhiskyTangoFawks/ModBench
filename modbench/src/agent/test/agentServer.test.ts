@@ -273,8 +273,8 @@ describe('the agent server, given an instance value', () => {
       const { client } = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], metadataDiffers: false, noHost: false },
-        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false },
+        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], metadataDiffers: false, noHost: false, packagesMissing: [] },
+        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesMissing: [] },
       ]);
     });
 
