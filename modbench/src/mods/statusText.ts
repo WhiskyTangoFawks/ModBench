@@ -12,20 +12,8 @@ function stateOf(status: ModStatus): string | undefined {
   return differs(status) ? 'differs' : undefined;
 }
 
-const countedFiles = (files: readonly string[], phrase: string): string | undefined =>
-  files.length > 0 ? `${counted(files.length, 'file', 'files')} its package ${phrase}` : undefined;
-
-/** What a mod row's description says of its status (mods.md, A row, Mod). */
-export function statusDescription(status: ModStatus): string | undefined {
-  const state = stateOf(status);
-  const notHeld = countedFiles(status.notInPackage, 'does not hold');
-  const otherBytes = countedFiles(status.otherBytes, 'holds with other bytes');
-  const noHost = status.noHost ? 'its package has no host' : undefined;
-  return [state, notHeld, otherBytes, noHost].filter((part) => part !== undefined).join(' · ') || undefined;
-}
-
-/** What a separator row's description says of its status (mods.md, A row, Separator). */
-export const separatorDescription = stateOf;
+/** What a mod or separator row's description says of its status (mods.md, A row). */
+export const statusDescription = stateOf;
 
 /** What a mod row's tooltip says of the files its folder lacks (mods.md, A row). */
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>

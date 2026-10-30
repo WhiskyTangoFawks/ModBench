@@ -80,6 +80,8 @@ const foldersHoldingNothing = (metadata: Awaited<ReturnType<FolderReads['modMeta
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   packageEntries: () => Promise.resolve(undefined),
+  downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
+  gameFolder: () => Promise.resolve({ kind: 'found' }),
   modMetadata: () => Promise.resolve(metadata),
 });
 
