@@ -26,7 +26,7 @@ import { Refusal } from '../drivingLib/refusal';
 import { promptRefusal, refuseAgentName } from './nameRefusals';
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
-// Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
+// Menus and keys, story 2). Each mod lands on its own (commands.md, "A selection is one gesture").
 export function registerModEnableCommands(
   commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
