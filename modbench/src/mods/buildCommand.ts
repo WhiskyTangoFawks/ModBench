@@ -126,7 +126,7 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
+  [...overwritten(outcome), ...notKept(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
@@ -143,6 +143,12 @@ function overwritten(outcome: BuildOutcome): PartialFailure[] {
     message: `Build overwrote ${paths.length} ${paths.length === 1 ? 'file' : 'files'} that differed.`,
     detail: paths.map((name) => `"${name}"`).join(', '), severity: 'warning',
   }];
+}
+
+// common.md, Reporting: a mod built whole whose files the hash index could not take is named, as restore names it.
+function notKept(outcome: BuildOutcome): PartialFailure[] {
+  const noted = outcome.landed.flatMap(({ mod, notes = [] }) => notes.map((note) => `"${mod}" (${note})`));
+  return noted.length === 0 ? [] : [{ message: `Build could not keep ${noted.length === 1 ? 'a mod\'s files' : 'some mods\' files'}.`, detail: noted.join(', '), severity: 'warning' }];
 }
 
 // mods.md, Build, story 1: the manifest names a commit, so a build from changes no commit holds says so.
