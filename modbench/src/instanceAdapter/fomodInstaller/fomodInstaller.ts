@@ -35,7 +35,7 @@ interface FomodInstall {
 
 type Stopped = { readonly kind: 'manual' } | { readonly kind: 'cancelled' };
 
-type FomodInstalled = Extract<FomodLanded, { readonly kind: 'installer' }> | Stopped | { readonly kind: 'unreadable'; readonly why: string };
+type FomodInstalled = Extract<FomodLanded, { readonly kind: 'installer' }> | Stopped | { readonly kind: 'unreadable' | 'refused'; readonly why: string };
 
 type Step = types.IInstallStep;
 type Group = types.IGroup;
@@ -367,8 +367,9 @@ async function land(root: string, files: readonly string[], into: string, instru
   }
 }
 
-// Rejects, landing nothing, when the choices do not answer the installer, its module dependencies do not hold, a
-// fact its conditions read is unknown, or it installs outside the mod's folder.
+// Rejects, landing nothing, when the choices do not answer the installer, a
+// fact its conditions read is unknown, or it installs outside the mod's folder; resolves refused when its module
+// dependencies do not hold.
 async function installFomod(engine: FomodEngine, { root, into, facts, driver }: FomodInstall): Promise<FomodInstalled> {
   const files = await filesUnder(root);
   await driver.released({ root, files });
@@ -384,7 +385,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
   if (untaken.length > 0) throw new Error(`The installer shows no step ${quoted(untaken)} for the choices given.`);
   const { instructions } = run.result;
   const fatal = instructions.find(({ type, value }) => type === 'error' && value === 'fatal');
-  if (fatal !== undefined) throw new Error(fatal.source.replaceAll('\n', '; '));
+  if (fatal !== undefined) return { kind: 'refused', why: fatal.source.replaceAll('\n', '; ') };
   await driver.finish();
   const errors = instructions.filter(({ type }) => type === 'error').map(({ source }) => ({ source, missing: MISSING_SOURCE.exec(source)?.[1] }));
   const missing = errors.flatMap(({ missing: each }) => (each === undefined ? [] : [slashed(each)]));
@@ -414,14 +415,15 @@ export async function fomodLanding(
     return await answer.dialog.refuse(why) ? asIs(MANUAL_ASKED) : { kind: 'cancelled' };
   };
   if (release.fomod === 'script') return refused(SCRIPT);
-  if (answer === undefined) return asIs('no choices were given for its steps');
+  if (answer === undefined) return refused('no choices were given for its steps');
   const into = await makeTempDir(ownTempPrefix(release.root, 'fomod'));
   try {
     const installed = await installFomod(engine, { root: release.root, into, facts: await facts(), driver: driverFor(answer) });
     if (installed.kind === 'installer') return { kind: 'landing', root: into, fomod: installed };
     await remove(into);
     if (installed.kind === 'cancelled') return installed;
-    return installed.kind === 'manual' ? asIs(MANUAL_ASKED) : await refused(`its installer cannot be read: ${installed.why}`);
+    if (installed.kind === 'manual') return asIs(MANUAL_ASKED);
+    return await refused(installed.kind === 'refused' ? installed.why : `its installer cannot be read: ${installed.why}`);
   } finally {
     if (answer.kind === 'dialog') answer.dialog.close();
   }

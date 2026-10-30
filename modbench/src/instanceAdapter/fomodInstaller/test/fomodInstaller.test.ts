@@ -195,7 +195,24 @@ describe('the FOMOD installer', () => {
 
     await expect(refusal).rejects.toThrow(/needed\.esm/i);
     await expect(refusal).rejects.not.toThrow(/active\.esp/i);
+    await expect(refusal).rejects.toThrow(/Request it again with manual to install it as a plain copy\.$/);
     await releaseLeftAsItWas(['core/Core.esp']);
+  });
+
+  it.each([
+    ['takes Manual', true, 'plainCopy'],
+    ['declines it', false, 'cancelled'],
+  ] as const)('refuses a FOMOD whose module dependencies do not hold to the page, naming which, which %s', async (_, manual, ended) => {
+    await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'
+      + `<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
+    const refused: string[] = [];
+    const dialog: FomodDialog = { ...FOMOD_PAGE, refuse: (why) => { refused.push(why); return Promise.resolve(manual); } };
+
+    const landing = await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
+
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatch(/needed\.esm/i);
+    expect(landing.kind === 'cancelled' ? 'cancelled' : landing.fomod.kind).toBe(ended);
   });
 
   it('names each folder the options chosen name and its archive lacks, and no folder of an option not chosen', async () => {
@@ -655,13 +672,15 @@ describe('the FOMOD installer', () => {
       });
     });
 
-    it('closes the page, and refuses, when the module dependencies do not hold', async () => {
+    it('closes the page after it refuses, when the module dependencies do not hold', async () => {
       await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'), ['core/Core.esp']);
       const close = vi.fn();
+      const refuse = vi.fn(() => Promise.resolve(false));
 
-      await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...FOMOD_PAGE, close } }, () => Promise.resolve(KNOWN)))
-        .rejects.toThrow(/needed\.esm/i);
+      expect(await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...FOMOD_PAGE, close, refuse } }, () => Promise.resolve(KNOWN)))
+        .toEqual({ kind: 'cancelled' });
       expect(close).toHaveBeenCalledTimes(1);
+      expect(refuse).toHaveBeenCalledTimes(1);
     });
   });
 });
