@@ -84,7 +84,7 @@ export class ModStatuses {
     try {
       for (let value = this.waiting; value !== undefined; value = this.waiting) {
         this.waiting = undefined;
-        const statuses = value.holdsRepository ? await Promise.all(modsAt(value).map((mod) => statusOf(mod, this.reads))) : [];
+        const statuses = await Promise.all(value.holdsRepository ? modsAt(value).map((mod) => statusOf(mod, this.reads)) : []);
         this.hold(new Map(statuses.map((status) => [status.mod, status])));
       }
     } finally {

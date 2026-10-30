@@ -78,6 +78,18 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     expect([(await statuses.current()).size, asked]).toEqual([0, []]);
   });
 
+  it('derives a value handed after one that held no repository', async () => {
+    const mod = await folderOf('ModA');
+    const statuses = statusesLogging();
+    const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]);
+
+    statuses.derive({ ...value, holdsRepository: false });
+    await statuses.current();
+    statuses.derive(value);
+
+    expect([...(await statuses.current()).keys()]).toEqual(['ModA']);
+  });
+
   it('of the values handed while one derives, derives the latest alone next', async () => {
     const [a, b, c] = [await folderOf('A'), await folderOf('B'), await folderOf('C')];
     const statuses = statusesLogging();
