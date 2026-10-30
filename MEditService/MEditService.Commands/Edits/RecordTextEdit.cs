@@ -200,18 +200,17 @@ internal static class RecordTextEdit
         {
             var member = string.Join('.', members.Take(length));
             if (!templated.TryGetValue(member, out var by)) continue;
-            return Templated(spelled, member, by);
+            return TemplatedRefusal(spelled, member, by);
         }
         return RefuseIfTemplatedBitChanges(request, templated, string.Join('.', members), spelled);
     }
 
-    private static RecordEditResult Templated(string spelled, string member, TemplatedBy by) =>
+    private static RecordEditResult TemplatedRefusal(string spelled, string member, TemplatedBy by) =>
         RecordEditResult.RefusedAt(
             RecordEditRefusal.TemplatedFieldReadOnly, spelled,
             $"'{member}' is templated by {by.Flag} from {by.Template} — the game ignores the copy's own value, so it is " +
             $"read-only here. Clear the {by.Flag} flag to edit it. Nothing was written.");
 
-    // A flags write carries every flag, so it is refused only where it changes a templated one.
     private static RecordEditResult? RefuseIfTemplatedBitChanges(
         RecordTextEditRequest request, IReadOnlyDictionary<string, TemplatedBy> templated, string flagsMember, string spelled)
     {
@@ -222,7 +221,7 @@ internal static class RecordTextEdit
         foreach (var (member, by) in bits)
         {
             var bit = member[(flagsMember.Length + 1)..];
-            if (held.Contains(bit) != requested.Contains(bit)) return Templated(spelled, member, by);
+            if (held.Contains(bit) != requested.Contains(bit)) return TemplatedRefusal(spelled, member, by);
         }
         return null;
     }

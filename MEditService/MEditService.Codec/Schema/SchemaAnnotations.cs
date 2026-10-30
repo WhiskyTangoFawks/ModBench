@@ -575,7 +575,6 @@ public sealed record SchemaAnnotations(
             yield return $"{label} reaches no member at {member}";
     }
 
-    // A templated path ends at a member, or at the name of one flag of a flags member.
     private static bool ReachesMemberOrFlag(Type actor, string path)
     {
         if (ReflectedTypes.PropertyAt(actor, path) is not null) return true;

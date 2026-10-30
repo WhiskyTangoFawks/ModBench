@@ -190,7 +190,6 @@ internal sealed class ConflictClassifier(ILogger logger)
             NoWinner: noWinner);
     }
 
-    // A member inside a flags array is one flag, named in the array.
     private static object? WithoutMembers(object? value, IEnumerable<string[]> members)
     {
         if (value is not JsonElement { ValueKind: JsonValueKind.Object or JsonValueKind.Array } element) return value;

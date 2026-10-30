@@ -147,7 +147,6 @@ public class TemplatedFieldTests
         Assert.DoesNotContain("Configuration.Flags.Unique", templated.Keys);
     }
 
-
     [Fact]
     public void AStarfieldFlag_TemplatesFromItsOwnTemplate()
     {
