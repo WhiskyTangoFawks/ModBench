@@ -95,6 +95,7 @@ export const editorVscode = {
   },
   window: {
     tabGroups: { get all() { return tabGroups; }, close: () => Promise.resolve(true) },
+    withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     showTextDocument: () => Promise.resolve(),
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
     createTreeView: () => ({ selection: [], onDidChangeSelection: () => ({ dispose: () => undefined }), dispose: () => undefined }),

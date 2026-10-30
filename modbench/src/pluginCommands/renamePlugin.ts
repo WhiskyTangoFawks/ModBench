@@ -1,5 +1,5 @@
 // Rename plugin (rename-plugin trace). The client's reach is the plugin source's changes, which only mEdit
-// can answer, and the dependants query; the file and its lines are the Instance adapter's.
+// can answer; the file and its lines are the Instance adapter's.
 
 import type { TailOf } from '../coreLib/boundCommand';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter/instanceAdapter';

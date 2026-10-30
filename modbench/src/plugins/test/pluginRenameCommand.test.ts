@@ -106,6 +106,17 @@ describe('modbench.plugin.rename', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it.each([['Esc', undefined], ['an empty name', ''], ['the same name', 'Patch.esp']])('renames nothing on %s', async (_, answer) => {
+    showInputBox.mockResolvedValueOnce(answer);
+    const { client, fake, run } = setup();
+
+    await run(row());
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(fake.calls).toEqual([]);
+    expect(progressSteps).toEqual([]);
+  });
+
   it('takes nothing from a row that is no plugin line', async () => {
     const { client, run } = setup();
 

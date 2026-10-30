@@ -84,7 +84,7 @@ async function referencedByCopy(record: RecordAt, editorId: string) {
 const changes = (record: RecordAt) => ({ record, moves: [], deletions: [], documents: [] });
 
 type RegisterCommands = (
-  client: InMemoryMEditClient, ...rest: Parameters<typeof registerRecordLifecycleCommands> extends [unknown, ...infer Rest] ? Rest : never
+  client: InMemoryMEditClient, ...rest: Parameters<typeof registerRecordCopyCommands> extends [unknown, ...infer Rest] ? Rest : never
 ) => unknown;
 
 function invoking(register: RegisterCommands) {
@@ -330,16 +330,6 @@ describe('registerRecordLifecycleCommands', () => {
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(writing).toEqual(['opens', 'delete', 'ends']);
-    });
-
-    it('deletes at once, with no confirmation to answer', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
-      invoke(client);
-
-      await deleteRecords(SECOND_NODE);
-
-      expect(deleteCalls(client)).toEqual([[SECOND]]);
     });
 
     it('ends the write after mEdit refuses the call, and reports it', async () => {

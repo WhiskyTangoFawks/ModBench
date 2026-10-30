@@ -20,7 +20,7 @@ function recordName(formKey: string, label: string | undefined): string {
   return label && label !== formKey ? `${label} [${formKey}]` : formKey;
 }
 
-// The question names the origin too, so it says which plugin of the filename it means (ADR-0012).
+// Names the origin too, so it says which plugin of the filename it means (ADR-0012).
 function recordLabel({ formKey, plugin }: RecordAt, label: string | undefined): string {
   return `${recordName(formKey, label)} in ${plugin.name} (${plugin.origin})`;
 }

@@ -127,9 +127,6 @@ export type RebuildIndexOutcome =
  *  of a group in one page. */
 export const UNLIMITED_RECORDS = 2147483647;
 
-/** The plugins that list a plugin's file name as a master, and the plugins whose masters mEdit could
- *  not read. */
-
 /** Whether mEdit's rows for a plugin are of the file now on disk, not yet, or its read failed with `reason` (ADR-0003, ADR-0019). */
 export type PluginIndexedState = components['schemas']['PluginIndexedState'];
 /** What is wrong in a compiled, active plugin's source, per plugin: each problem names the referring
