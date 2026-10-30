@@ -40,7 +40,7 @@ public sealed class DecompileAndCommitModHandler
             (mod, at) => _init.InitAsync(
                 loadOrder, mod, new HashSet<PluginAddress>(), repair: null,
                 phase => _notifications.Publish(new DecompileAndCommitProgressNotification(at, phase)), cancel),
-            gesture: null, cancel);
+            cancel);
         return decompiled.ToResult(
             landed => new DecompiledAndCommittedMod(landed.Item, landed.Outcome),
             refused => new DecompileAndCommitRefused(refused.Item, refused.Refusal, refused.Message),

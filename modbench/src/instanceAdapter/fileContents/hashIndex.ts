@@ -11,7 +11,8 @@ import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, sta
 import type { FileRead, FileStamp, HashedDownloadedFile, HashedFile, InstanceAdapter } from '../instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
-const EXTRACTION_PREFIX = 'entries-';
+/** The prefix of an extraction of a downloaded file, which a crash can leave behind. */
+export const EXTRACTION_PREFIX = 'entries-';
 
 // A file system stamps a change with a clock coarser than a hash is quick, and a network share's
 // clock is not this machine's: a stamp this recent may not change for a write that follows it.
@@ -93,6 +94,8 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
   const indexFile = join(folder, INDEX_FILE);
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), downloadedFile: new Map() };
   const entriesByHash = new Map<string, ReadonlyMap<string, string>>();
+  // The package lines the index file holds, so a write that failed is tried again.
+  const packageLinesWritten = new Map<string, ReadonlyMap<string, string>>();
   let loaded: Promise<void> | undefined;
   let unwritten: string | undefined;
 
@@ -107,7 +110,11 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       const known = keptAt(line);
       if (known === undefined) continue;
       if (known.kind === 'package') {
-        if (known.read.kind === 'read') entriesByHash.set(known.path, new Map(known.read.answer.entries.map(({ path, hash }) => [path, hash])));
+        if (known.read.kind === 'read') {
+          const entries = new Map(known.read.answer.entries.map(({ path, hash }) => [path, hash]));
+          entriesByHash.set(known.path, entries);
+          packageLinesWritten.set(known.path, entries);
+        }
         continue;
       }
       kept[known.kind].set(known.path, { stamp: known.stamp, hashed: Promise.resolve(known.read) });
@@ -228,13 +235,15 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     downloadedFilesHashed,
     keepPackageEntries: async (hash, entries) => {
       await load();
-      const held = entriesByHash.get(hash);
-      const alreadyKept = held?.size === entries.size && [...entries].every(([path, entryHash]) => held.get(path) === entryHash);
       entriesByHash.set(hash, entries);
-      if (alreadyKept) return undefined;
+      const written = packageLinesWritten.get(hash);
+      if (written?.size === entries.size && [...entries].every(([path, entryHash]) => written.get(path) === entryHash)) return undefined;
       const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
       const line = lineOf('package', hash, stamp, { size: 0, hash, entries: [...entries].map(([path, entryHash]) => ({ path, hash: entryHash })) });
-      return ensureDir(folder).then(() => append(indexFile, line)).then(() => undefined, (err: unknown) => errorMessage(err));
+      return ensureDir(folder).then(() => append(indexFile, line)).then(
+        () => { packageLinesWritten.set(hash, entries); return undefined; },
+        (err: unknown) => errorMessage(err),
+      );
     },
     packageEntries: async (hash) => {
       await load();

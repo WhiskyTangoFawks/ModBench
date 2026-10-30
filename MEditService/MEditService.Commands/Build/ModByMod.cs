@@ -9,7 +9,7 @@ internal static class ModByMod
 {
     public static async Task<PerItemResult<string, TRefusal, TOutcome>> OverAsync<TMod, TRefusal, TOutcome>(
         IReadOnlyList<TMod> mods, Func<TMod, string> nameOf, Action<ModlistProgress> publish,
-        Func<TMod, ModlistProgress, Task<ItemAnswer<TRefusal, TOutcome>>> each, string? gesture, CancellationToken cancel)
+        Func<TMod, ModlistProgress, Task<ItemAnswer<TRefusal, TOutcome>>> each, CancellationToken cancel)
     {
         var distinct = mods.DistinctBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
         List<ItemLanded<string, TOutcome>> landed = [];
@@ -19,7 +19,7 @@ internal static class ModByMod
             foreach (var (done, mod) in distinct.Index())
             {
                 if (cancel.IsCancellationRequested) break;
-                var at = new ModlistProgress(gesture, nameOf(mod), done, distinct.Count);
+                var at = new ModlistProgress(nameOf(mod), done, distinct.Count);
                 publish(at);
                 switch (await each(mod, at))
                 {
@@ -34,7 +34,7 @@ internal static class ModByMod
         }
         finally
         {
-            publish(new ModlistProgress(gesture, null, 0, 0));
+            publish(new ModlistProgress(null, 0, 0));
         }
         return new PerItemResult<string, TRefusal, TOutcome>(landed, refused);
     }

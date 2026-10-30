@@ -117,23 +117,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/restore-from-manifest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a source mod, whose manifest is in its repository, from the submodule handed at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. A mod whose manifest names a tool the request names no task for is skipped; one that lands names the steps still to run, each a VS Code task. Progress is the restore-from-manifest-progress notification, which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: its NotFound answers are not logged as skips. */
-        post: operations["RestoreFromManifest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/clone-submodules": {
         parameters: {
             query?: never;
@@ -143,42 +126,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Clones each source mod's submodule the source folder lacks at the commit the instance repository pins, on its branch when that branch is at the pin, so restore from manifest reads the manifest it holds. Each submodule is cloned, named with why its branch was left elsewhere, or named with why it was not cloned. */
+        /** @description Clones each source mod's submodule the source folder lacks at the commit the instance repository pins, on its branch when that branch is at the pin, so restore from manifest reads the manifest it holds. Each submodule is cloned or at its pin, named with why its branch was left elsewhere; at another commit, which it leaves as it is; or named with why it was not cloned. */
         post: operations["CloneSubmodules"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/what-restore-destroys": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description What restore from manifest would destroy in each mod, from its manifest, its files' stamps and the stat cache, before anything is written: each file whose bytes the stat cache cannot vouch are its package's, and each file no line names. A mod with no manifest destroys nothing, and a mod whose manifest or a file cannot be read is skipped. */
-        post: operations["WhatRestoreDestroys"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/modlist-gestures/{gesture}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Stops the running modlist gesture its client named after the mod in hand. Its request then answers the mods it finished. */
-        post: operations["CancelModlistGesture"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1101,7 +1050,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        CloneRefusal: "None" | "NotCloned";
+        CloneRefusal: "None" | "NotCloned" | "AtAnotherCommit";
         CloneSubmodulesRequest: {
             submodules: components["schemas"]["SubmoduleRequest"][];
         };
@@ -1486,17 +1435,9 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
-        ManifestMetadataResponse: {
-            mod: string;
-            metadata: components["schemas"]["ModMetadata"];
-        };
         ManifestStep: {
             task: string;
             args: string[];
-        };
-        MetadataInstallationFile: {
-            name: string;
-            page?: string | null;
         };
         ModBuilt: {
             mod: string;
@@ -1510,40 +1451,7 @@ export interface components {
             steps: components["schemas"]["ManifestStep"][];
             made: string[];
         };
-        ModByFolder: {
-            name: string;
-            folder: string;
-            metadataFiles: string[];
-            sourceFolder?: string | null;
-            metadata?: components["schemas"]["ModMetadata"] | null;
-            metadataUnreadable?: string | null;
-        };
-        ModFoldersRequest: {
-            mods: components["schemas"]["ModByFolder"][];
-            statCache: string;
-        };
-        ModMetadata: {
-            version?: string | null;
-            installationFile?: components["schemas"]["MetadataInstallationFile"] | null;
-        };
-        ModRestoreDestroys: {
-            mod: string;
-            differing: string[];
-            namedByNoLine: string[];
-            metadataDiffers: boolean;
-        };
-        ModRestored: {
-            mod: string;
-            written: string[];
-            namedByNoLine: string[];
-            statCacheNotWritten?: string | null;
-            metadata: components["schemas"]["ModMetadata"];
-            steps: components["schemas"]["ManifestStep"][];
-            uncommitted: boolean;
-            leftDetached?: string | null;
-        };
         ModlistProgress: {
-            gesture?: string | null;
             mod?: string | null;
             /** Format: int32 */
             modsDone: number;
@@ -1838,46 +1746,6 @@ export interface components {
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];
         };
-        RestoreFromManifestModRequest: {
-            name: string;
-            folder: string;
-            installationFile?: components["schemas"]["InstallationFileRequest"] | null;
-            metadataFiles: string[];
-            submodule?: components["schemas"]["SubmoduleRequest"] | null;
-            unreadableGameFiles?: {
-                [key: string]: string;
-            } | null;
-            unreadableInstallationFiles?: {
-                [key: string]: string;
-            } | null;
-            sourceFolder?: string | null;
-            installationFiles?: components["schemas"]["InstallationFileRequest"][] | null;
-        };
-        RestoreFromManifestRequest: {
-            mods: components["schemas"]["RestoreFromManifestModRequest"][];
-            statCache: string;
-            exclusionMark: string;
-            archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
-            gameFolder?: components["schemas"]["GameFolderRequest"] | null;
-            gesture?: string | null;
-            asksWhatItLacks: boolean;
-            tasks?: string[] | null;
-        };
-        RestoreFromManifestResult: {
-            applied: components["schemas"]["ModRestored"][];
-            refused: components["schemas"]["RestoreRefused"][];
-        };
-        /** @enum {string} */
-        RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "OutputNotThisFolder" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt" | "NoTaskForTool";
-        RestoreRefused: {
-            item: string;
-            refusal: components["schemas"]["RestoreRefusal"];
-            message: string;
-            installationFilesNotFound: components["schemas"]["InstallationFile"][];
-            gameFilesNotFound: string[];
-            buildRefusal: components["schemas"]["BuildRefusal"];
-            submoduleNotFound?: string | null;
-        };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAt"];
             mode: components["schemas"]["CopyMode"];
@@ -1942,11 +1810,6 @@ export interface components {
         };
         UnsavedDocumentsRequest: {
             documents: components["schemas"]["DocumentChange"][];
-        };
-        WhatRestoreDestroysResponse: {
-            mods: components["schemas"]["ModRestoreDestroys"][];
-            refused: components["schemas"]["RestoreRefused"][];
-            manifests: components["schemas"]["ManifestMetadataResponse"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -2290,39 +2153,6 @@ export interface operations {
             };
         };
     };
-    RestoreFromManifest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RestoreFromManifestRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RestoreFromManifestResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     CloneSubmodules: {
         parameters: {
             query?: never;
@@ -2347,68 +2177,6 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    WhatRestoreDestroys: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModFoldersRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WhatRestoreDestroysResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    CancelModlistGesture: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                gesture: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not Found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

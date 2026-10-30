@@ -460,6 +460,12 @@ interface GameFilesTaken {
   readonly notes: readonly string[];
 }
 
+/** Where a package holds a file's bytes: an entry, by its path inside a downloaded file, or a game file, by its path under a
+ *  place's root. */
+export type PackageFile =
+  | { readonly kind: 'entry'; readonly downloadedFile: string; readonly entry: string }
+  | { readonly kind: 'gameFile'; readonly root: string; readonly path: string };
+
 /** A downloaded file hashed whole and entry by entry. */
 export interface HashedDownloadedFile extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
@@ -805,6 +811,9 @@ export interface InstanceAdapter {
   /** Moves the file at the forward-slash `relativePath` in `folder`, a folder a manifest builds, into the trash; a file
    *  already gone is done. Rejects a path that leaves the folder, its links resolved. */
   trashFileIn(folder: string, relativePath: string, trash: MoveToTrash): Promise<void>;
+  /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes. Rejects a
+   *  path that leaves the folder, its links resolved; a write that fails leaves the files before it written. */
+  writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[]): Promise<void>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a

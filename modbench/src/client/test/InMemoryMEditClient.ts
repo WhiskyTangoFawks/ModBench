@@ -11,7 +11,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
-  | 'getRecords' | 'searchRecords' | 'getWhatRestoreDestroys'
+  | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
@@ -19,7 +19,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'restoreFromManifest' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile' | 'repairPreviews' | 'decompileAndRepair' | 'changeSourceManifest';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -324,10 +324,6 @@ export class InMemoryMEditClient implements MEditClient {
     return this.command('build', args);
   }
 
-  restoreFromManifest(...args: Parameters<MEditClient['restoreFromManifest']>): ReturnType<MEditClient['restoreFromManifest']> {
-    return this.command('restoreFromManifest', args);
-  }
-
   cloneSubmodules(...args: Parameters<MEditClient['cloneSubmodules']>): ReturnType<MEditClient['cloneSubmodules']> {
     return this.command('cloneSubmodules', args);
   }
@@ -373,9 +369,6 @@ export class InMemoryMEditClient implements MEditClient {
   }
   resolveNames(...args: Parameters<MEditClient['resolveNames']>): ReturnType<MEditClient['resolveNames']> {
     return this.query('resolveNames', args);
-  }
-  getWhatRestoreDestroys(...args: Parameters<MEditClient['getWhatRestoreDestroys']>): ReturnType<MEditClient['getWhatRestoreDestroys']> {
-    return this.query('getWhatRestoreDestroys', args);
   }
   selectRows(...args: Parameters<MEditClient['selectRows']>): ReturnType<MEditClient['selectRows']> {
     return this.query('selectRows', args);

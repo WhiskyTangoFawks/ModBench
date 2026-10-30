@@ -18,16 +18,10 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
 
         internal sealed record GameFileUnreadable(string Path, string Reason) : Lack($"game file '{Path}' could not be read: {Reason}");
 
-        internal sealed record SubmoduleMissing(string Name) : Lack($"its submodule '{Name}' is missing");
-
         internal sealed record GameFolderOtherBytes(string Name) : Lack($"the files it takes from the game folder '{Name}' have other bytes");
 
         internal sealed record GameFolderDepots(string Name, IReadOnlyList<GameDepot> Depots)
             : Lack($"the game folder '{Name}' is {string.Join(" and ", Depots.Select(depot => $"depot {depot.Id} at version {depot.Version}"))}");
-
-        internal sealed record NoHost() : Lack("its package has no host");
-
-        internal sealed record NoTask(string Why) : Lack(Why);
     }
 
     /// <summary>A file of the mod folder, by its path, and where its package holds its bytes.</summary>
@@ -40,8 +34,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record InGameFolder(string Path, string Hash, string Root, string GamePath) : PackagedFile(Path, Hash);
     }
 
-    /// <summary>Built names the submodule whose build writes the files, none when its package is no submodule.</summary>
-    internal sealed record Resolved(IReadOnlyList<PackagedFile> Files, IReadOnlyList<Lack> Lacks, string? Built);
+    internal sealed record Resolved(IReadOnlyList<PackagedFile> Files, IReadOnlyList<Lack> Lacks);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
@@ -63,7 +56,6 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         {
             if (Package(named).Lack is { } missing) lacks.Add(missing);
         }
-        if (manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false }) lacks.Add(new Lack.NoHost());
         foreach (var file in manifest.Files)
         {
             var (entry, lack) = EntryOf(file, places);
@@ -75,8 +67,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         {
             lacks.AddRange(manifest.Packages.OfType<ManifestPackage.GameFolder>().Where(named => named.Depots.Count > 0).Select(named => new Lack.GameFolderDepots(named.Name, named.Depots)));
         }
-        var built = manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: true } submodule ? submodule.Name : null;
-        return new Resolved(sourced, [.. lacks.Distinct()], built);
+        return new Resolved(sourced, [.. lacks.Distinct()]);
     }
 
     private static Lack.GameFolderOtherBytes? PinnedLack(ManifestPackage.GameFolder pinned, IReadOnlyList<PackagedFile> taken) =>

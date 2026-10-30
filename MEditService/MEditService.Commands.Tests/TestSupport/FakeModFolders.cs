@@ -17,13 +17,8 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public HashSet<string> UnwritableManifests { get; } = [];
 
-    /// <summary>The mod folders whose stat cache cannot be written.</summary>
-    public HashSet<string> UnwritableStatCaches { get; } = [];
 
     public Dictionary<string, Manifest> Manifests { get; } = [];
-
-    /// <summary>The mod folders whose status throws, as a path the file system refuses does.</summary>
-    public HashSet<string> StatusThrows { get; } = [];
 
     public FakeModFolders WithFile(string folder, string path, string text) => WithBytes(folder, path, Encoding.ASCII.GetBytes(text));
 
@@ -51,42 +46,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         return new([.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))]);
     }
 
-    /// <summary>Each mod folder's hashes kept as its providers fix them, by path.</summary>
-    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptPackageHashes { get; } = [];
-
-    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
-    {
-        var modFolder = Manifests.First(held => ReferenceEquals(held.Value, manifest)).Key;
-        KeptPackageHashes[modFolder] = provided;
-        return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
-    }
-
-    public IReadOnlyList<string> NamedByNoLine(string modFolder, Manifest manifest, IReadOnlySet<string> leftOut)
-    {
-        var named = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
-        return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
-    }
-
-    /// <summary>The hash a line's package fixes is the one the last keep held for its path. A source mod's manifest is the
-    /// one held for its source folder.</summary>
-    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held, string? sourceFolder)
-    {
-        var at = sourceFolder ?? modFolder;
-        if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
-        if (UnreadableManifests.Contains(at)) return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
-        if (!Manifests.TryGetValue(at, out var manifest)) return new(modName, NoManifest: true, [], [], [], [], []);
-        var kept = KeptPackageHashes.GetValueOrDefault(at) ?? new Dictionary<string, string>();
-        var there = manifest.Files.ToLookup(line => _files.ContainsKey((modFolder, line.Path)));
-        return new(
-            modName, NoManifest: false,
-            [.. there[true].Where(line => line.Entry is not (PackageEntry.NotHeld or PackageEntry.OtherBytes)
-                && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(_files[(modFolder, line.Path)])).Select(line => line.Path)],
-            NamedByNoLine(modFolder, manifest, leftOut),
-            [.. there[false].Select(line => line.Path)],
-            [.. manifest.Files.Where(line => line.Entry is PackageEntry.NotHeld).Select(line => line.Path)],
-            [.. manifest.Files.Where(line => line.Entry is PackageEntry.OtherBytes).Select(line => line.Path)],
-            MetadataDiffers: MetadataDiffering.Contains(modFolder), ManifestMetadata: ModMetadata.Of(manifest));
-    }
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided) => null;
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
 
@@ -124,9 +84,6 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public HashSet<string> UnreadableManifests { get; } = [];
 
-    /// <summary>The mod folders whose status says their metadata differs from their manifest.</summary>
-    public HashSet<string> MetadataDiffering { get; } = [];
-
     /// <summary>What reading each mod folder's manifest throws.</summary>
     public Dictionary<string, Exception> ManifestReadThrows { get; } = [];
 
@@ -152,7 +109,7 @@ internal sealed class FakeModFolders : IModFolderRepository
     private bool WriteManifest(string modFolder, Manifest manifest)
     {
         if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");
-        var text = string.Join('\n', manifest.Files.Select(f => f.ToString()).Prepend(manifest.Package?.ToString()));
+        var text = string.Join('\n', manifest.Files.Select(f => f.ToString()).Prepend(manifest.Packages.Count > 0 ? manifest.Packages[0].ToString() : null));
         Manifests[modFolder] = manifest;
         if (_manifests.TryGetValue(modFolder, out var there) && there == text) return false;
         _manifests[modFolder] = text;

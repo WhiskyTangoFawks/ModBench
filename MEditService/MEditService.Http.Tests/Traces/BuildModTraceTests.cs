@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -68,37 +67,6 @@ public sealed class BuildModTraceTests : HostedTests
         var progress = await stream.EventsUntil(
             "build-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Origin);
-    }
-
-    [Fact]
-    public async Task RestoringAModWhoseSubmoduleIsAbsent_HasGitCloneItAtThePin_AndBuildsIt()
-    {
-        await LoadedWithOneModFolderAndCompiledPlugin();
-        var source = Client.SourceFolderSentFor(Origin);
-        using var submodule = new PinnedSubmodule(_instance.Root, Origin);
-        AnotherTool.CopyDirectory(source, submodule.Remote);
-        var pin = PinnedSubmodule.Git(submodule.Remote, "rev-parse", "HEAD").Trim();
-        submodule.Pin(pin);
-        var manifest = JsonSerializer.Serialize(new { package = new { submodule = Origin }, files = new[] { new { path = Plugin } } });
-        File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest.json"), manifest);
-
-        var answer = await Answer(await Client.PostAsJsonAsync("/restore-from-manifest", new
-        {
-            mods = new[]
-            {
-                new
-                {
-                    name = Origin, folder = _builtFolder, metadataFiles = new[] { "meta.ini" },
-                    submodule = new { folder = submodule.Folder, pin },
-                },
-            },
-            statCache = StatCache,
-            exclusionMark = ".mohidden",
-        }));
-
-        Assert.Empty(answer.GetProperty("refused").EnumerateArray());
-        Assert.Equal(Origin, Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("mod").GetString());
-        Assert.Equal(pin, PinnedSubmodule.Git(submodule.Folder, "rev-parse", "HEAD").Trim());
     }
 
     [Fact]

@@ -200,9 +200,9 @@ internal static class EndpointMapping
 
     /// <summary>A gesture over a selection that no cause refuses whole answers 200 with its answer.</summary>
     internal static IResult Answered<TRefusal>(
-        string gesture, ILogger logger, ISelectionAnswer<IItemRefused<TRefusal>> answered, Func<TRefusal, bool>? isLogged = null)
+        string gesture, ILogger logger, ISelectionAnswer<IItemRefused<TRefusal>> answered)
     {
-        foreach (var item in answered.Refused.Where(item => isLogged?.Invoke(item.Refusal) ?? true))
+        foreach (var item in answered.Refused)
             LogRefusal(logger, gesture, item.Refusal, item.Message, item.Item);
         return Results.Ok(answered);
     }

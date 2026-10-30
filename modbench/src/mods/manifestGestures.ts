@@ -53,7 +53,7 @@ const named = <Outcome extends { landed: readonly { mod: string }[]; refused: re
 });
 
 type AgentOutcome<Landed> = GestureResult<Landed, string>;
-type Restored = Extract<RestoreResult, { applied: true }>['landed'];
+type Restored = RestoreResult['landed'];
 
 // modlist-repository.md, Every mod, story 5: progress by mod with Cancel, which stops after the mod in hand. The
 // Toolbox's message line says what the notification says (Reporting).
@@ -116,8 +116,7 @@ function updateMessage(status: UpdateManifestStatus, label: Label): string {
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
-const statCacheNotWritten = (landed: readonly { mod: string; statCacheNotWritten?: string | null }[]): string[] =>
-  landed.flatMap(({ mod, statCacheNotWritten: why }) => (why ? [`${mod}: the stat cache could not be written: ${why}`] : []));
+const restoredNotes = (landed: Restored): string[] => landed.flatMap(({ mod, notes = [] }) => notes.map((note) => `${mod}: ${note}`));
 
 const gapsOf = (
   landed: readonly { mod: string; notInPackage: readonly string[]; otherBytes: readonly string[] }[],
@@ -139,10 +138,6 @@ function reportUpdated(reporter: Reporter, label: Label, outcome: UpdateManifest
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
   else if (warnings.length > 0 || outcome.cancelled) reporter.report('warning', line, detail);
   else reporter.landed(line);
-}
-
-function reportCancelRefused(reporter: Reporter, { cancelRefusal }: { readonly cancelRefusal?: string }): void {
-  if (cancelRefusal !== undefined) reporter.report('error', cancelRefusal);
 }
 
 const quoted = (label: Label, mods: readonly string[]): string => mods.map((mod) => `"${label(mod)}"`).join(', ');
@@ -179,7 +174,6 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
   }
   deps.say('Restore from manifest — reading what it would destroy…');
   const listing = await commands.whatRestoreDestroys(mods, found.others).finally(() => { deps.say(undefined); });
-  if ('refusal' in listing) { reporter.report('error', listing.refusal); return; }
   const skipped = new Set(listing.refused.map(({ item }) => item));
   const toRestore = mods.filter((mod) => !skipped.has(mod));
   const others = found.others.filter(({ name }) => !skipped.has(name));
@@ -192,11 +186,6 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.restoreFromManifest(toRestore, { onProgress: (status) => { show(restoreMessage(status, label)); }, signal }, toRun.everyMod, others));
-    if (!outcome.applied) {
-      reporter.report('error', outcome.refusal, restoreStoppedDetail(label, outcome, notAsked));
-      return;
-    }
-    reportCancelRefused(reporter, outcome);
     reportRestored(reporter, total, named(label, { ...outcome, refused: [...outcome.refused, ...notAsked] }));
   });
 }
@@ -211,7 +200,6 @@ async function restoreFromManifestForAgent(
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
   const listing = await commands.whatRestoreDestroys(mods, found.others);
-  if ('refusal' in listing) return { applied: false, refusal: listing.refusal };
   const overwrites = options.force === true ? [] : listing.destroys
     .filter(({ differing, metadataDiffers }) => differing.length > 0 || metadataDiffers)
     .map(({ mod, differing, metadataDiffers }) => ({
@@ -227,42 +215,27 @@ async function restoreFromManifestForAgent(
   const others = found.others.filter(({ name }) => !notRestored.has(name));
   if (toRestore.length + others.length === 0) return { applied: true, outcome: named(label, { landed: [], refused }) };
   const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(toRestore, {}, argument.length === 0, others));
-  if (!outcome.applied) {
-    const detail = restoreStoppedDetail(label, outcome, refused);
-    return { applied: false, refusal: outcome.refusal, ...(detail === undefined ? {} : { detail }) };
-  }
   const answered = named(label, { landed: outcome.landed, refused: [...outcome.refused, ...refused] });
   return {
     applied: true,
     outcome: answered,
-    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed), ...leftDetachedWarnings(answered.landed), ...repositoryNotSetUp(outcome)]),
+    partial: warned('Restore from manifest:', [...restoredNotes(answered.landed), ...uncommittedWarnings(answered.landed), ...leftDetachedWarnings(answered.landed), ...repositoryNotSetUp(outcome)]),
   };
 }
 
 function restoreMessage(status: RestoreStatus, label: Label): string {
   switch (status.phase) {
     case 'Cloning': return 'Restore from manifest — cloning the submodules the instance repository pins…';
-    case 'ReadingFiles': return `Restore from manifest — reading the files of "${label(status.mod)}"…`;
     case 'Downloading': return `Restore from manifest — downloading "${status.file}" from Nexus…`;
-    case 'Restoring': return `Restore from manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
+    case 'Restoring': return `Restore from manifest — "${label(status.mod)}", ${status.modsDone} of ${status.modsTotal} mods done…`;
   }
 }
 
-// modlist-repository.md, Reporting: one line, with each skipped mod, each stat cache not written and each mod built from
+// modlist-repository.md, Reporting: one line, with each skipped mod, each thing not recorded and each mod built from
 // changes no commit holds in the Output.
-function restoreStoppedDetail(
-  label: Label, { unfinished, refused }: Extract<RestoreResult, { applied: false }>, notAsked: readonly { item: string; reason: string }[],
-): string | undefined {
-  const lines = [
-    ...unfinished.length === 0 ? [] : [`Not finished: ${quoted(label, unfinished)}. Restoring again finishes them.`],
-    ...[...refused, ...notAsked].map(({ item, reason }) => `"${item}" (${reason})`),
-  ];
-  return lines.length === 0 ? undefined : lines.join('\n');
-}
-
-function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
+function reportRestored(reporter: Reporter, total: number, outcome: RestoreResult): void {
   const warnings = [
-    ...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...repositoryNotSetUp(outcome),
+    ...restoredNotes(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...repositoryNotSetUp(outcome),
   ];
   if (outcome.refused.length > 0) {
     const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');

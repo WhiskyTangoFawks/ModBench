@@ -31,7 +31,7 @@ public sealed class BuildModHandler
 
         var built = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new BuildProgressNotification(progress)),
-            (mod, _) => _build.BuildAsync(mod, instance), gesture: null, CancellationToken.None);
+            (mod, _) => _build.BuildAsync(mod, instance), CancellationToken.None);
         return built.ToResult(
             landed => ModBuiltOf(landed.Item, landed.Outcome),
             refused => new BuildRefused(refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFilesNotFound, refused.Refusal.GameFilesNotFound),

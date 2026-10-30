@@ -1,4 +1,4 @@
-import type { ManifestInstallationFile, NotFound, RestoreMod } from '../client';
+import type { BuildMod, ManifestInstallationFile } from '../client';
 import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
@@ -10,7 +10,7 @@ type Downloading = {
 
 type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
 
-export const wireFile = (file: InstallationFile | undefined): RestoreMod['installationFile'] =>
+export const wireFile = (file: InstallationFile | undefined): NonNullable<BuildMod['installationFiles']>[number] | undefined =>
   (file === undefined ? undefined : { path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] });
 
 interface Found {
@@ -39,7 +39,7 @@ async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, pa
 
 /** The installation files the mods `notFound` lack, by name in the downloads folder, each one they lack downloaded first. */
 export async function namedDownloadedFiles(
-  deps: Deps, notFound: readonly Pick<NotFound, 'installationFiles'>[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
+  deps: Deps, notFound: readonly { readonly installationFiles: readonly ManifestInstallationFile[] }[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
 ): Promise<{
   handed: (name: string | undefined) => InstallationFile | undefined;
   unreadable: (name: string | undefined) => string | undefined;

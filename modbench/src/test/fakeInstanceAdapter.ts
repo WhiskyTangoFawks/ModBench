@@ -87,6 +87,7 @@ export type AdapterCall =
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashFileIn'; readonly folder: string; readonly relativePath: string }
+  | { readonly verb: 'writeFilesIn'; readonly folder: string; readonly files: Parameters<InstanceAdapter['writeFilesIn']>[1] }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
   | { readonly verb: 'followModFolders'; readonly moves: Parameters<InstanceAdapter['followModFolders']>[0] }
   | { readonly verb: 'changePublisherTag'; readonly change: PublisherTagChange; readonly tag: string; readonly paths: readonly string[] }
@@ -536,6 +537,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     trashFileIn: (folder, relativePath) =>
       write({ verb: 'trashFileIn', folder, relativePath }, () => {
         if (reachesOut(relativePath)) throw new Error(`Not a file of "${folder}": "${relativePath}"`);
+      }),
+    writeFilesIn: (folder, files) =>
+      write({ verb: 'writeFilesIn', folder, files }, () => {
+        const outside = files.find(({ path }) => reachesOut(path));
+        if (outside !== undefined) throw new Error(`Not a file of "${folder}": "${outside.path}"`);
       }),
     trashSourceFolder: async (mod, trash) => {
       const source = await write({ verb: 'trashSourceFolder', mod }, () => current.sourceMods.folderOf(mod));

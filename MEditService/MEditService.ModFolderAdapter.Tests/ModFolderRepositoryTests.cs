@@ -13,7 +13,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
     private readonly ScratchDirectory _scratch = new("modfolder-adapter-");
     private readonly ScratchDirectory _statCache = new("stat-cache-");
-    private readonly ScratchDirectory _source = new("source-");
     private readonly ModFolderRepository _repository = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow().AddDays(1)));
     private readonly string _root;
 
@@ -23,7 +22,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
     {
         _scratch.Dispose();
         _statCache.Dispose();
-        _source.Dispose();
     }
 
     [Fact]
@@ -58,7 +56,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         Assert.Equal(["a.txt"], _repository.Files(_root, new HashSet<string>(), statCache: null).Files.Select(f => f.Path));
         Assert.Equal(["a.txt"], _repository.FilePaths(_root));
-        Assert.Equal(["a.txt"], _repository.NamedByNoLine(_root, NoLines, new HashSet<string>()));
     }
 
     public static TheoryData<string, Func<string, string>, bool> Leftovers => new()
@@ -207,87 +204,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["a.txt"], Directory.GetFileSystemEntries(_root).Select(Path.GetFileName));
     }
 
-    [Fact]
-    public void Status_NamesEachFileNoLineNames_ButTheManifestAndEachFileLeftOut()
-    {
-        Write("mine.txt", "mine");
-        Write("meta.ini", "[General]");
-        Write("a.nif", "hello");
-        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
-
-        var status = Status();
-
-        Assert.Equal(["mine.txt"], status.NamedByNoLine);
-        Assert.Empty(status.Differing);
-    }
-
-    private Func<string, bool> FileSystemMatchingNames(StringComparison comparison) =>
-        path => Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
-            .Any(file => string.Equals(Normalized(file), Normalized(path), comparison));
-
-    private static string Normalized(string path) => path.Replace('\\', '/');
-
-    [Theory]
-    [InlineData(StringComparison.OrdinalIgnoreCase, false)]
-    [InlineData(StringComparison.Ordinal, true)]
-    public void AFileNamedByALineInAnotherCase_IsNamedByNoLine_OnlyWhereTheFileSystemFindsItByTheLinesName(
-        StringComparison fileSystemMatchesNames, bool namedByNoLine)
-    {
-        Write("Meshes/A.nif", "hello");
-        var manifest = Manifested(Line("meshes/a.nif", "Mod.zip"));
-        var repository = new ModFolderRepository(
-            TimeProvider.System,
-            FileSystemMatchingNames(fileSystemMatchesNames));
-
-        var status = repository.Status(_root, "mod", new HashSet<string>(), _statCache, held: null, sourceFolder: null);
-
-        Assert.Equal(namedByNoLine, repository.NamedByNoLine(_root, manifest, new HashSet<string>()).Contains("Meshes/A.nif"));
-        Assert.Equal(namedByNoLine, status.NamedByNoLine.Contains("Meshes/A.nif"));
-        Assert.Equal(namedByNoLine, status.Gone.Contains("meshes/a.nif"));
-    }
-
-    [Theory]
-    [InlineData(StringComparison.OrdinalIgnoreCase, "Meshes/A.nif")]
-    [InlineData(StringComparison.Ordinal, null)]
-    public void AFileThatDiffers_IsNamedByItsPathOnDisk_WhereTheFileSystemFindsItByItsLinesName(
-        StringComparison fileSystemMatchesNames, string? differing)
-    {
-        Write("Meshes/A.nif", "hello");
-        Manifested(Line("meshes/a.nif", "Mod.zip"));
-        var repository = new ModFolderRepository(
-            TimeProvider.System,
-            FileSystemMatchingNames(fileSystemMatchesNames));
-
-        Assert.Equal(differing is null ? [] : [differing], repository.Status(_root, "mod", new HashSet<string>(), _statCache, held: null, sourceFolder: null).Differing);
-    }
-
-    [PosixFact]
-    public void AStatusWhoseStatCacheCannotBeWritten_SaysWhy()
-    {
-        Write("a.nif", "hello");
-        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
-        Write("a.nif", "hello");
-        FileModes.Set(_statCache, "555");
-        try
-        {
-            Assert.Contains(_statCache.Path, Status().StatCacheNotWritten, StringComparison.Ordinal);
-        }
-        finally
-        {
-            FileModes.Set(_statCache, "755");
-        }
-    }
-
-    [PosixFact]
-    public void OnAFileSystemThatTellsCaseApart_TwoFilesWhoseNamesDifferInCaseAlone_AreOneNamedByALineAndOneNot()
-    {
-        Write("a.nif", "hello");
-        Write("A.nif", "hello");
-        var manifest = Manifested(Line("a.nif", "Mod.zip"));
-
-        Assert.Equal(["A.nif"], _repository.NamedByNoLine(_root, manifest, new HashSet<string>()));
-    }
-
     [PosixFact]
     public void OnAFileSystemThatTellsCaseApart_TwoManifestsWhoseNamesDifferInCaseAlone_AreRefusedNamingBoth()
     {
@@ -309,155 +225,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
 
         var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root));
         Assert.Empty(read.Files);
-        Assert.Null(read.Package);
-        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], [], []), Status());
-    }
-
-    [Fact]
-    public void AfterAFreshClone_EveryFileTheManifestNamesIsGone_AndNoneDiffersOrIsNamedByNoLine()
-    {
-        Write("meta.ini", "[General]");
-        Manifested(Line("a.nif", "Mod.zip"));
-
-        var status = Status();
-
-        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], ["a.nif"], [], []), status);
-    }
-
-    [Theory]
-    [InlineData("hello", "Mod.zip", false)]
-    [InlineData("edited", "Mod.zip", true)]
-    [InlineData("hello", "Upgraded.zip", true)]
-    public void AFileALineNames_WrittenSinceTheLastRestore_Differs_UnlessItHoldsTheBytesItsPackageFixed(
-        string written, string installationFile, bool differs)
-    {
-        Write("a.nif", "hello");
-        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
-        Write("a.nif", written);
-        Manifested(Line("a.nif", installationFile));
-
-        Assert.Equal(differs, Status().Differing.Contains("a.nif"));
-    }
-
-    [Theory]
-    [InlineData("Mod", false)]
-    [InlineData("Other", true)]
-    public void AFileItsSourceModBuilds_Differs_UnlessItHoldsTheBytesTheLastBuildOfTheManifestsRepositoryKept(string repository, bool differs)
-    {
-        Write("a.esp", "hello");
-        KeepAsRestored(ManifestedFromSource("Mod"));
-        ManifestedFromSource(repository);
-
-        Assert.Equal(differs, SourceModStatus().Differing.Contains("a.esp"));
-    }
-
-    [Fact]
-    public void AStatus_KeepsWhatItReadInTheStatCache_SoTheNextOpensNoFileItRead()
-    {
-        Write("a.nif", "hello");
-        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
-        Write("a.nif", "hello");
-        Status();
-        using var held = HeldOpen("a.nif");
-
-        Assert.Empty(Status().Differing);
-    }
-
-    [Fact]
-    public void AFileItsPackageDoesNotHold_IsNotInThePackage_AndDoesNotDiffer()
-    {
-        Write("a.nif", "edited");
-        Manifested(new ManifestFile("a.nif", new PackageEntry.NotHeld()));
-
-        var status = Status();
-
-        Assert.Equal(["a.nif"], status.NotInPackage);
-        Assert.Empty(status.Differing);
-    }
-
-    [Fact]
-    public void AFileItsPackageHoldsWithOtherBytes_IsInItsOwnList_NotInThePackageList_AndDoesNotDiffer()
-    {
-        Write("a.nif", "edited");
-        Write("b.nif", "added");
-        Manifested(new ManifestFile("a.nif", new PackageEntry.OtherBytes()), new ManifestFile("b.nif", new PackageEntry.NotHeld()));
-
-        var status = Status();
-
-        Assert.Equal(["b.nif"], status.NotInPackage);
-        Assert.Equal(["a.nif"], status.OtherBytes);
-        Assert.Empty(status.Differing);
-    }
-
-    [Fact]
-    public void AFileAStepMakes_IsNoGapAndDoesNotDiffer_ButIsGoneWhenTheFolderLacksIt()
-    {
-        Write("made.dds", "whatever the step wrote");
-        ManifestFile[] madeByStep = [new("made.dds", new PackageEntry.MadeByStep()), new("lacked.dds", new PackageEntry.MadeByStep())];
-        ManifestOnDisk.Write(_repository, _root, new Manifest([Package], madeByStep) { Steps = [new ManifestStep("Optimise textures", [])] });
-
-        var status = Status();
-
-        Assert.Empty(status.NotInPackage);
-        Assert.Empty(status.Differing);
-        Assert.Equal(["lacked.dds"], status.Gone);
-    }
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public void ASourceMod_HasNoHost_OnlyWhenItsRepositoryIsNoSubmodule_AndItsPackageHoldsEveryFile(bool isSubmodule, bool noHost)
-    {
-        Write("a.esp", "hello");
-        ManifestedFromSource("Mod", isSubmodule);
-
-        var status = SourceModStatus();
-
-        Assert.Equal((noHost, 0), (status.NoHost, status.NotInPackage.Count));
-    }
-
-    [Fact]
-    public void ASourceModsStatus_ReadsTheManifestInItsRepository_NotOneInItsFolder()
-    {
-        Write("a.esp", "hello");
-        Write("notes.txt", "mine");
-        Manifested(Line("notes.txt", "Mod.zip"));
-        ManifestedFromSource("Mod");
-
-        var status = SourceModStatus();
-
-        Assert.False(status.NoManifest);
-        Assert.Equal(["notes.txt"], status.NamedByNoLine);
-    }
-
-    [Fact]
-    public void ASourceModWhoseRepositoryHoldsNoManifest_HasNoManifest()
-    {
-        Write("a.esp", "hello");
-        Manifested(Line("a.esp", "Mod.zip"));
-
-        Assert.True(SourceModStatus().NoManifest);
-    }
-
-    [Fact]
-    public void AModWithNoManifest_HasNoManifest_AndListsNothing()
-    {
-        Write("mine.txt", "mine");
-
-        Assert.Equal(new ModStatus("mod", NoManifest: true, [], [], [], [], []), Status());
-    }
-
-    [Fact]
-    public void AModWithAManifestItCannotRead_IsUnreadable_NamingTheLine_AndListsNothing()
-    {
-        Write("mine.txt", "mine");
-        Write("mod.manifest.json", "<<<<<<< HEAD\n");
-
-        var status = Status();
-
-        Assert.True(status.Unreadable?.Manifest);
-        Assert.Contains("line 1", status.Unreadable?.Why, StringComparison.Ordinal);
-        Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], [], []), status with { Unreadable = null });
+        Assert.Empty(read.Packages);
     }
 
     [Fact]
@@ -521,29 +289,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
             read.Files);
     }
 
-    [Theory]
-    [InlineData("PACK1", false)]
-    [InlineData("PACK2", true)]
-    public void AFileTakenFromAnInstallationFile_Differs_UnlessItHoldsTheBytesThatFilesHashFixed_NotTheFirstPackages(string pinned, bool differs)
-    {
-        Write("b.nif", "hello");
-        var taken = new ManifestFile("b.nif", new PackageEntry.Held(), "Zed.7z");
-        KeepAsRestored(TakingFromZed("PACK1", taken));
-        TakingFromZed(pinned, taken);
-
-        Assert.Equal(differs, SourceModStatus().Differing.Contains("b.nif"));
-    }
-
-    [Fact]
-    public void AFileAnArchiveOfTheManifestPacks_IsNotGone_ThoughNoLooseCopyIsThere()
-    {
-        var packed = new ManifestFile("b.nif", new PackageEntry.Held(), "Zed.7z");
-        var manifest = TakingFromZed("PACK1", packed) with { Archives = [new ManifestArchive("Mod - Main.ba2", ["b.nif"])] };
-        _repository.WriteSourceManifest(_source, manifest);
-
-        Assert.Empty(SourceModStatus().Gone);
-    }
-
     public static TheoryData<Manifest> Manifests => new()
     {
         new Manifest(
@@ -572,7 +317,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         var read = _repository.ReadManifest(_root);
 
         Assert.NotNull(read);
-        Assert.Equal(manifest.Package, read.Package);
+        Assert.Equal(manifest.Packages, read.Packages);
         Assert.Equal(manifest.Version, read.Version);
         Assert.Equal(manifest.Files, read.Files);
     }
@@ -740,44 +485,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         _repository.KeepInStatCache(read, NoLines, NoHashes);
         return read.Files;
     }
-
-    private static (string Path, string InstallationFile) Line(string path, string installationFile) => (path, installationFile);
-
-    private Manifest Manifested((string Path, string InstallationFile) line) => Manifested(line.InstallationFile, [new ManifestFile(line.Path, new PackageEntry.Held())]);
-
-    private Manifest Manifested(params ManifestFile[] lines) => Manifested("Mod.zip", lines);
-
-    private Manifest Manifested(string installationFile, ManifestFile[] lines)
-    {
-        var manifest = new Manifest([new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile)], lines);
-        ManifestOnDisk.Write(_repository, _root, manifest);
-        return manifest;
-    }
-
-    private Manifest ManifestedFromSource(string repository, bool isSubmodule = true)
-    {
-        var manifest = new Manifest([new ManifestPackage.SourceRepository(repository, isSubmodule)], [new ManifestFile("a.esp", new PackageEntry.Held())]) { Output = "mod" };
-        _repository.WriteSourceManifest(_source, manifest);
-        return manifest;
-    }
-
-    private Manifest TakingFromZed(string hash, ManifestFile taken)
-    {
-        var manifest = new Manifest(
-            [new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), new ManifestPackage.InstallationFile("Zed.7z", 7, hash)], [taken])
-        { Output = "mod" };
-        _repository.WriteSourceManifest(_source, manifest);
-        return manifest;
-    }
-
-    private ModStatus SourceModStatus() => _repository.Status(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache, held: null, _source);
-
-    private void KeepAsRestored(Manifest manifest) =>
-        _repository.KeepInStatCache(
-            _repository.Files(_root, new HashSet<string>(), _statCache), manifest,
-            manifest.Files.ToDictionary(line => line.Path, _ => HashOfHello));
-
-    private ModStatus Status() => _repository.Status(_root, "mod", new HashSet<string> { "meta.ini" }, _statCache, held: null, sourceFolder: null);
 
     private FileStream HeldOpen(string relative) =>
         new(Path.Combine(_root, relative), FileMode.Open, FileAccess.Read, FileShare.None);

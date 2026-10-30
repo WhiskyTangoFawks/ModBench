@@ -1,10 +1,10 @@
-import type { NotFound, RestoreFacts } from '../client';
+import type { BuildFacts } from '../client';
 import type { Depot, GameFile, GamePlace, InstanceAdapter, SourceMods } from '../instanceAdapter/instanceAdapter';
 import type { GameHeld, GamePlaceHeld } from './manifestBuilder';
 
 type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy'>;
 
-type WireDepots = NonNullable<NonNullable<RestoreFacts['gameFolder']>['depots']>;
+type WireDepots = NonNullable<NonNullable<BuildFacts['gameFolder']>['depots']>;
 
 export interface NamedGameFolder {
   readonly name: string;
@@ -21,7 +21,7 @@ export interface GameToHand {
 }
 
 // The game folder found, named by the game's release, or why a manifest cannot name it.
-export async function namedGameFolder(adapter: GameAdapter, gameRelease: string): Promise<NamedGameFolder | string> {
+export async function namedGameFolder(adapter: Pick<InstanceAdapter, 'gamePlaces'>, gameRelease: string): Promise<NamedGameFolder | string> {
   const [first, ...others] = await adapter.gamePlaces();
   return first === undefined ? 'the game folder was not found' : { name: gameRelease, places: [first, ...others] };
 }
@@ -33,7 +33,7 @@ export async function gameToHand(adapter: GameAdapter, sourceMods: SourceMods): 
 
 const wireDepots = (depots: readonly Depot[], sent: boolean): { depots?: WireDepots } => (sent && depots.length > 0 ? { depots: [...depots] } : {});
 
-export const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): RestoreFacts['gameFolder'] => {
+export const wireGameFolder = (folder: NamedGameFolder | string, held: HeldGameFiles, withDepots: boolean): BuildFacts['gameFolder'] => {
   if (typeof folder === 'string') return undefined;
   const { name, places: [first, ...others] } = folder;
   const elsewhere = others.flatMap((place) => {
@@ -77,7 +77,7 @@ export async function gameFilesOf(
 }
 
 export async function namedGameFiles(
-  adapter: GameAdapter, folder: NamedGameFolder | string, notFound: readonly Pick<NotFound, 'mod' | 'gameFiles'>[],
+  adapter: GameAdapter, folder: NamedGameFolder | string, notFound: readonly { readonly mod: string; readonly gameFiles: readonly string[] }[],
 ): Promise<{ found: HeldGameFiles; unreadable: (mod: string) => Record<string, string> }> {
   const found = new Map<GamePlace, Map<string, GameFile>>();
   const unreadable = new Map<string, Record<string, string>>();

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { components } from '../wire/generated/api';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
@@ -16,7 +15,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type SourceManifestChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type ManifestInstallationFile, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type SubmodulesCloned, type ModByFolder, type WhatRestoreDestroys,
+  type ManifestInstallationFile, type Submodule, type SubmodulesCloned,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -535,63 +534,12 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  // A cancel asks mEdit to stop after the mod in hand, and the request then answers what landed, so the read that
-  // follows shows the disk. mEdit holds a gesture once begun, which its first progress naming it shows.
-  private async modlistGesture<O extends object>(
-    kind: 'restore-from-manifest-progress', { onProgress, signal }: ModlistCallOptions,
-    call: (gesture: string) => Promise<O | WriteRefused>,
-  ): Promise<(O & { cancelRefusal?: string }) | WriteRefused> {
-    const gesture = randomUUID();
-    let begun = false;
-    let cancelling: Promise<{ cancelled: true } | WriteRefused> | undefined;
-    const cancel = (): void => {
-      cancelling ??= this.sendNow({
-        op: `cancel(${gesture})`, failMsg: 'Could not cancel', noContent: { cancelled: true as const },
-        post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }),
-      });
-    };
-    const unsubscribe = this.notifications.onNotification(kind, (progress) => {
-      if (progress.gesture !== gesture) return;
-      begun = true;
-      if (signal?.aborted) cancel();
-      onProgress?.(progress);
-    });
-    const cancelOnceBegun = (): void => { if (begun) cancel(); };
-    signal?.addEventListener('abort', cancelOnceBegun);
-    try {
-      const answer = await call(gesture);
-      const cancelled = await cancelling;
-      return isRefused(answer) || cancelled === undefined || !isRefused(cancelled) ? answer : { ...answer, cancelRefusal: cancelled.message };
-    } finally {
-      unsubscribe();
-      signal?.removeEventListener('abort', cancelOnceBegun);
-    }
-  }
-
-  cloneSubmodules(submodules: readonly NonNullable<RestoreMod['submodule']>[]): Promise<SubmodulesCloned | WriteRefused> {
+  cloneSubmodules(submodules: readonly Submodule[]): Promise<SubmodulesCloned | WriteRefused> {
     return this.mutate({
       op: `cloneSubmodules(${submodules.length})`,
       failMsg: 'Could not clone the submodules the instance repository pins',
       post: () => this.apiClient.POST('/clone-submodules', { body: { submodules: [...submodules] } }),
     });
-  }
-
-  restoreFromManifest(
-    mods: readonly RestoreMod[], facts: RestoreFacts, options: ModlistCallOptions = {},
-  ): Promise<RestoreOutcome | WriteRefused> {
-    return this.modlistGesture('restore-from-manifest-progress', options, (gesture) => this.mutateEach({
-      verb: 'restore', noun: 'mod', items: mods,
-      op: (counted) => `restoreFromManifest(${counted})`,
-      post: () => this.apiClient.POST('/restore-from-manifest', { body: { mods: [...mods], ...facts, gesture } }),
-      outcome: (answer) => ({
-        ...selectionOutcome(answer),
-        notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
-          .map((refused) => ({
-            mod: refused.item, installationFiles: refused.installationFilesNotFound.map(manifestInstallationFile), gameFiles: refused.gameFilesNotFound,
-            submodule: refused.submoduleNotFound ?? undefined,
-          })),
-      }),
-    }));
   }
 
   /** A refusal (non-compiled plugin, a link that would dangle) comes back typed (ADR-0014), and so does a
@@ -750,11 +698,6 @@ class HttpMEditClient implements MEditClient {
 
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed> {
     return this.read('resolveNames', (api, signal) => api.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails);
-  }
-
-  getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {
-    return this.read('getWhatRestoreDestroys', (api, signal) => api.POST('/what-restore-destroys', { body: { mods: [...mods], statCache }, signal }),
-      (data) => (data ? { destroys: data.mods, refused: itemRefusals(data.refused), manifests: data.manifests } : NO_ANSWER));
   }
 
   selectRows(sql: string): Promise<unknown[] | ReadFailed> {
