@@ -151,7 +151,7 @@ describe('decompile and commit over an instance on disk', () => {
     const [sent] = handed;
     expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'], manifestName: 'Mod.manifest.json' });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
-    expect(await readdir(join(root, 'mods', 'Mod'))).toEqual(['Mod.esp', 'a.nif', 'meta.ini']);
+    expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'a.nif', 'meta.ini']));
   });
 
   it('leaves the manifest the mod folder held when mEdit refuses the mod', async () => {

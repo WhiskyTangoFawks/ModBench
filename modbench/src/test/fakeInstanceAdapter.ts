@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import { textHash } from '../instanceAdapter/fileContents/contentDigest';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
@@ -205,17 +205,22 @@ const EXCLUSION_MARK = '.mohidden';
 
 const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
 
+type FolderEntry = string | (EntryRef & { modName?: string });
+
+const foldersAt = (pathOf: (name: string) => string, entries: readonly FolderEntry[]): ModFolders =>
+  foldersHolding(entries.map((entry) => {
+    const ref = typeof entry === 'string' ? { kind: 'mod' as const, name: entry } : entry;
+    return { kind: ref.kind, name: ref.name, path: pathOf(ref.name), modName: ref.modName ?? ref.name };
+  }));
+
 /** The folders of the given entries, a bare name being a mod, held as the fake's `entryKey` folds names. */
-export function modFoldersOf(...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
-  return modFoldersIn('/instance/mods', ...entries);
+export function modFoldersOf(...entries: readonly FolderEntry[]): ModFolders {
+  return foldersAt((name) => `/instance/mods/${name}`, entries);
 }
 
-/** As `modFoldersOf`, each folder in `mods`. */
-export function modFoldersIn(mods: string, ...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
-  return foldersHolding(entries.map((entry) => {
-    const ref = typeof entry === 'string' ? { kind: 'mod' as const, name: entry } : entry;
-    return { kind: ref.kind, name: ref.name, path: `${mods}/${ref.name}`, modName: ref.modName ?? ref.name };
-  }));
+/** As `modFoldersOf`, each folder in `mods` on disk, joined by the platform's separator as the adapter joins it. */
+export function modFoldersIn(mods: string, ...entries: readonly FolderEntry[]): ModFolders {
+  return foldersAt((name) => join(mods, name), entries);
 }
 
 const foldersHolding = (all: readonly ModFolder[]): ModFolders =>

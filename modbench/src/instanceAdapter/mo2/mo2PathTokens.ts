@@ -197,23 +197,45 @@ function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directo
   return { config: merged(({ config }) => config), programFiles: merged(({ programFiles }) => programFiles) };
 }
 
-async function filterPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram): Promise<void> {
-  const { config, programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts);
+async function programsPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram): Promise<void> {
+  const { programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts);
   await mkdir(directory, { recursive: true });
   for (const [file, text] of Object.entries(programFiles)) await write(file, text);
-  for (const [key, value] of Object.entries(config)) await git(instanceRoot, 'config', key, value);
 }
 
-// Answers the call that restores each key and program file as the repository held it, and the folder if it held none.
-async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[], directory: string): Promise<Undo> {
+// A filter's config names its program files and no folder, so one write serves every pass. Each key written costs a
+// git process, so a key the repository already holds is left as it is.
+async function configPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, held: ReadonlyMap<string, string>): Promise<void> {
+  const { config } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''));
+  for (const [key, value] of Object.entries(config)) if (held.get(key) !== value) await git(instanceRoot, 'config', key, value);
+}
+
+// The repository's own value of each filter key, the last where it holds several, as git config --get answers it. -z
+// answers each key, a newline and its value, or the key alone where it has none.
+async function localFilterConfig(instanceRoot: string): Promise<ReadonlyMap<string, string>> {
+  const listed = await unlessExit(1, () => git(instanceRoot, 'config', '--local', '-z', '--get-regexp', String.raw`^(filter|diff)\.modbench-`)) ?? '';
+  return new Map(listed.split('\0').filter((entry) => entry !== '').map((entry) => {
+    const [key = '', ...value] = entry.split('\n');
+    return [key, value.join('\n')];
+  }));
+}
+
+interface FilterHeld {
+  readonly config: ReadonlyMap<string, string>;
+  /** Restores each key and program file as the repository held it, and the folder if it held none. */
+  readonly restore: Undo;
+}
+
+async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[], directory: string): Promise<FilterHeld> {
   const { config, programFiles } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''));
-  const keys = await Promise.all(Object.keys(config).map(async (key) => ({ key, value: await unlessExit(1, () => git(instanceRoot, 'config', '--get', key)) })));
+  const held = await localFilterConfig(instanceRoot);
   const files = await Promise.all(Object.keys(programFiles).map(async (file) => ({ file, text: await readOrAbsent<string | undefined>(() => get(file), undefined) })));
   const folderHeld = await exists(directory);
-  return async () => {
-    for (const { key, value } of keys) {
+  const restore = async (): Promise<void> => {
+    for (const key of Object.keys(config)) {
+      const value = held.get(key);
       if (value === undefined) await unlessExit(5, () => git(instanceRoot, 'config', '--unset-all', key));
-      else await git(instanceRoot, 'config', key, value.replace(/\n$/, ''));
+      else await git(instanceRoot, 'config', key, value);
     }
     if (!folderHeld) return remove(directory);
     for (const { file, text } of files) {
@@ -221,6 +243,7 @@ async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[],
       else await write(file, text);
     }
   };
+  return { config: held, restore };
 }
 
 /** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them, and the programs it names are there. */
@@ -264,11 +287,13 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
     const directory = await programDirectory(instanceRoot);
-    takeBack.push(await filterHeld(instanceRoot, covered, directory));
-    await filterPut(instanceRoot, covered, directory, NO_FOLDERS, accounts);
+    const held = await filterHeld(instanceRoot, covered, directory);
+    takeBack.push(held.restore);
+    await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts);
+    await configPut(instanceRoot, covered, directory, held.config);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await filterPut(instanceRoot, covered, directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
+    await programsPut(instanceRoot, covered, directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;

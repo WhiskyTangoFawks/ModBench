@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { removeManifestIn, sourceManifestFile, writeManifestIn, writeSourceManifestIn, type Manifest } from '../manifestAdapter';
+import { manifestIn, removeManifestIn, sourceManifestFile, writeManifestIn, writeSourceManifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
@@ -16,6 +17,20 @@ beforeEach(async () => {
   await mkdir(folder);
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
+
+async function holdingTwoManifestsThatDifferInCase(): Promise<void> {
+  if (process.platform === 'win32') execFileSync('fsutil.exe', ['file', 'setCaseSensitiveInfo', folder, 'enable']);
+  await writeFile(join(folder, 'MOD.manifest.json'), '{}');
+  await writeFile(join(folder, 'mod.manifest.json'), '{}');
+}
+
+describe('manifestIn', () => {
+  it('refuses a folder that holds two manifests, naming both', async () => {
+    await holdingTwoManifestsThatDifferInCase();
+
+    expect(await manifestIn(folder)).toEqual({ refused: "its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'" });
+  });
+});
 
 describe('writeManifestIn', () => {
   it('writes the manifest named for the folder and says it wrote', async () => {
@@ -57,8 +72,7 @@ describe('writeManifestIn', () => {
   });
 
   it('rejects, writing nothing, when the folder holds two manifests', async () => {
-    await writeFile(join(folder, 'MOD.manifest.json'), '{}');
-    await writeFile(join(folder, 'mod.manifest.json'), '{}');
+    await holdingTwoManifestsThatDifferInCase();
 
     await expect(writeManifestIn(folder, manifest)).rejects.toThrow("its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'");
   });
