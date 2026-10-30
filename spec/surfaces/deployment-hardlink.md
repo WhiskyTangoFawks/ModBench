@@ -50,9 +50,3 @@ As a user, I want:
 As a user, I want:
 
 1. Purge to remove each file deploy wrote that is still as deploy wrote it, and to put back the `plugins.txt` deploy renamed.
-
-## Test seam
-
-- Deploy, given a load order, a deployment folder and what deploy last wrote there: the files written, removed and left, the `plugins.txt` written or renamed, and what the notification names.
-- Purge, given the same: the files removed and left, and the `plugins.txt` put back.
-- The Linux `plugins.txt` location, given Steam's shortcuts and prefixes: the prefix, or why there is none.

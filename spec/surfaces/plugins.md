@@ -271,7 +271,7 @@ As a user, I want:
 
 1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index, or `(not active)`. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. Cites: catalog `copy`
 2. A copy as new to take the next free FormKey. A reference to itself follows it.
-3. A copy as override into a plugin that loads before a master the copy needs, its origin or a plugin holding a record it references, refused: that is an underride (commands.md, A compiled plugin is its files). A cell or a worldspace copied as new refused.
+3. A copy as override into a plugin that loads before a master the copy needs, its origin or a plugin holding a record it references, refused: that is an underride (commands.md, A compiled plugin is its files). A record xEdit does not copy as new, such as a cell or a worldspace, refused.
 4. A container the destination lacks copied in as an override, in every mode. Where the game lets it be a Partial Form, it is one, so it carries only its children and overrides none of the container's own fields. Cites: xedit.md, divergence 30; editor-fields.md, Partial Form
 5. A copy, in either mode, to copy each record without its child records. To copy a child record too, I select it. Cites: xEdit; commands.md, An all variant is select all, then the gesture
 
@@ -287,15 +287,6 @@ As a user, I want a pick of the workspace's `.sql` files, then "New filter…", 
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. When mEdit cannot read active plugins, one notification naming them, beside each row's status: my picture of my records would otherwise be wrong. Cites: ADR-0019
+1. A plugin mEdit cannot read to be an error in the Problems panel, on the plugin file, naming why, while it holds. Cites: common.md, Reporting
 2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being the result. When a folder cannot be listed, or the game folder is not found, `plugins.txt` untouched.
 3. Every message to name a gesture that exists and a view by its name.
-
-## Test seam
-
-- The view, given an instance value and mEdit's answers: the rows at every level, each row's parts, the order, and the states, with no VS Code UI and no disk.
-- A gesture's entry: given the right-clicked row, the focused row and the selection, the Argument the command receives.
-- A drop: given what is dragged and the target, the move's Argument and target, or the refusal.
-- The pickers and prompts: their items, prefill, refusals, and what Esc yields.
-- Menus and keys: the placement above, checked against the extension manifest.
-

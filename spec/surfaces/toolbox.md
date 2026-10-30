@@ -14,7 +14,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 
 | Row | Description | Icon | Tooltip | Click |
 |---|---|---|---|---|
-| Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder, the game's version, and the script extender's version, or that the game folder holds none, and how many links it holds, which Modbench ignores | none |
+| Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder, the game's version, and the script extender's version, or that the game folder holds none, and how many of its files are links, as a deploy into it leaves, which Modbench does not read as the game's own | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
 | Modlist | "no repository", or "repository" ([modlist-repository.md](modlist-repository.md)) | `$(source-control)` | none | none |
 | Deployment | the deployment folder's name, or "no deployment folder" ([deployment-hardlink.md](deployment-hardlink.md)) | `$(rocket)` | the deployment folder, and where deploy writes `plugins.txt` | `open settings`, at the deployment folder's setting |
@@ -56,10 +56,3 @@ As a user, I want:
 By [common.md](common.md#reporting). As a user, I want:
 
 1. A refresh refused because another window holds the record index to say so, naming the instance, and that closing that window lets refresh run. Cites: catalog `refresh`; Never silently wrong; ADR-0003
-
-## Test seam
-
-- The view, given an instance value: the rows and their parts, and the states, with no VS Code UI and no disk.
-- The pickers: switch profile's items, the marked one, and what Esc yields.
-- Menus and keys: the placement above, checked against the extension manifest.
-

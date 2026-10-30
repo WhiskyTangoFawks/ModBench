@@ -99,11 +99,3 @@ What I expect to need and choose not to build yet, each with why.
 6. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
 7. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
 8. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
-
-## Test seam
-
-- The manifest, given a folder's files and its packages: the lines, with no git and no VS Code.
-- Restore from manifest, given manifests, the downloaded files, the game folders and the submodules: the files written, the files sent to the trash, each mod's metadata written, and the mods skipped with their reasons.
-- Status, given manifests, a folder and what Modbench last read: each mod's state, with no hash of a file that has not changed.
-- The round trip: update manifest then restore from manifest on a fixture instance changes no file.
-- Menus and keys: the placement above, checked against the extension manifest.

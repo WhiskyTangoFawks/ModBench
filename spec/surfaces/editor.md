@@ -147,10 +147,3 @@ By [common.md](common.md#reporting). As a user, I want:
 
 1. A refused edit to raise a notification that says why and names the field. Cites: common, Reporting; editor-fields.md, Every field, story 5
 2. A failed copy to the clipboard to say so. Cites: ADR-0019
-
-## Test seam
-
-- The panel, given mEdit's answer for a record: the header, the columns, their statuses and order, the rows and their nesting, the collapsed runs of rows, and the states, with no VS Code UI.
-- A gesture's entry: given the focused cell and a click, key, drop or menu item, the command and Argument it fires, or nothing.
-- The tab: its title, a file already open shown and not opened twice, a column's header opening its file in the preview tab, its place kept when hidden, and the read again on mEdit's report of a change.
-- Menus and keys: the placement above, checked against the extension manifest.

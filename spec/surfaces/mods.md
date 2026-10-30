@@ -245,13 +245,3 @@ By [common.md](common.md#reporting). As a user, I want:
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed metadata write is a line in the Output.
 5. Check for updates to say in one line how many mods have an update, and how many it could not ask about.
-
-## Test seam
-
-- The view, given an instance value: the rows, their parents, each row's parts, the order in both directions, and the states, with no VS Code UI and no disk.
-- A gesture's entry: given the right-clicked row, the focused row and the selection, the Argument the command receives.
-- A drop: given what is dragged, the target and the direction, the move's Argument and target.
-- The pickers and prompts: their items, prefill, refusals, and what Esc yields.
-- The files, given an instance value and the settings: each mod's and Overwrite's files, each one active or inactive and why, the indicators each mod carries, and the filter at every level.
-- Menus and keys: the placement above, checked against the extension manifest.
-

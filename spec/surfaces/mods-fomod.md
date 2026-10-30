@@ -46,8 +46,3 @@ As a user, I want:
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want a FOMOD whose installer cannot be read refused, naming why, with Manual. Cites: Refuse, do not repair
-
-## Test seam
-
-- The page, given what the installer sends: the header, the steps, the groups, each option's state, and what each click sends back, with no VS Code.
-- Install, given a file or folder that holds a FOMOD, and the choices: the files landed, each at its destination.
