@@ -272,11 +272,11 @@ describe('the FOMOD installer', () => {
     await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, undefined, () => Promise.resolve(KNOWN))).rejects.toThrow('manual');
   });
 
-  it('refuses an agent a FOMOD that names files its archive lacks, naming each, unless it asks for force', async () => {
+  it('refuses an agent a FOMOD that names files its archive lacks, naming each, unless it asks to install anyway', async () => {
     await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}<folder source="gone" destination=""/></requiredInstallFiles>`), ['core/Core.esp']);
     const asked = (installAnyway: boolean) => fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'choices', steps: [], installAnyway }, () => Promise.resolve(KNOWN));
 
-    await expect(asked(false)).rejects.toThrow(/gone.*force/);
+    await expect(asked(false)).rejects.toThrow(/gone.*Request it again with install anyway/);
     expect(await asked(true)).toMatchObject({ kind: 'landing', fomod: { kind: 'installer', missing: ['gone'] } });
   });
 

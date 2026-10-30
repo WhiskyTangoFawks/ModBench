@@ -152,7 +152,7 @@ function choosing({ steps: choices, installAnyway }: Extract<FomodAnswer, { read
     return answerFor(step, choice);
   };
   const confirmMissing = (missing: readonly string[]): Promise<boolean> => {
-    if (installAnyway !== true) throw new Error(`The FOMOD names files its archive does not hold: ${missing.join(', ')}. Request it again with force to install anyway.`);
+    if (installAnyway !== true) throw new Error(`The FOMOD names files its archive does not hold: ${missing.join(', ')}. Request it again with install anyway to land it without them.`);
     return Promise.resolve(true);
   };
   return { ...UNATTENDED, step: answer, confirmMissing, untaken: () => choices.filter((_, i) => !taken.has(i)) };

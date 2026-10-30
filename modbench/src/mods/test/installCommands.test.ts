@@ -260,7 +260,7 @@ describe('modbench.mod.install called by the agent', () => {
     register();
     await install([outsideInstallationFile], { target: 'Harder VATS', force: true });
 
-    expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: { ...NO_CHOICES, installAnyway: true } }]);
+    expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
   });
 
   const EXACTLY_ONE = new Refusal('An agent call to install carries exactly one of the name of a new mod and the target mod to upgrade.');
@@ -320,7 +320,7 @@ describe('modbench.mod.install called by the agent', () => {
   it.each([
     ['its choices', { choices: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }] },
       { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }], installAnyway: false }],
-    ['its choices, with force', { force: true, choices: [] }, { kind: 'choices', steps: [], installAnyway: true }],
+    ['its choices, with install anyway', { installAnyway: true, choices: [] }, { kind: 'choices', steps: [], installAnyway: true }],
     ['Manual', { manual: true }, { kind: 'manual' }],
   ])('hands the install %s, for a FOMOD', async (_, options, answer) => {
     register();
