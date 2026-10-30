@@ -141,7 +141,7 @@ describe('the MO2 adapter\'s repository', () => {
   });
 
   describe('the files Modbench keeps in the instance', () => {
-    it('are its record index, hash index, stat cache, source folder and repository files, every manifest a mod folder holds, and every other manifest', async () => {
+    it('are its record index, hash index, source folder and repository files, every manifest a mod folder holds, and every other manifest', async () => {
       const adapter = await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('mods/A/A.manifest.json');
