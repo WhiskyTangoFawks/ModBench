@@ -347,9 +347,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/plugin-source/record', query: { path: sourcePath } },
     { name: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), answer: ['.esp', '.esm'],
       path: '/plugins/creatable-extensions', query: {} },
-    { name: 'getPluginDependants', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }),
-      answer: { dependants: [{ name: 'Child.esp', origin: 'ChildMod' }], unreadable: [{ name: 'Bad.esp', origin: 'BadMod' }] },
-      path: '/plugins/Base.esm/dependants', query: { origin: 'BaseMod' } },
     { name: 'getPluginIndexing', verb: (c) => c.getPluginIndexing({ name: 'Patch.esp', origin: 'PatchMod' }), answer: { state: 'ReadFailed', reason: 'Patch.esp could not be parsed.' },
       path: '/plugins/Patch.esp/indexed-as-on-disk', query: { origin: 'PatchMod' } },
     { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
@@ -458,7 +455,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { what: 'getCopyDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
       { what: `getRecordOfFile(${sourcePath})`, verb: (c) => c.getRecordOfFile(sourcePath), status: 422, detail: `${sourcePath} declares no FormKey, so it is no record's document.` },
       { what: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
-      { what: 'getPluginDependants(Base.esm)', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed, refusal: 'IndexNotReady' },
       { what: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed, refusal: 'IndexNotReady' },
     ];
 
@@ -491,7 +487,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     });
 
     it.each([
-      ['getPluginDependants, so a rename never goes ahead unasked on no answer', (c: MEditClient) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' })],
       ['getPluginProblems, so no plugin reads as clean on no answer', (c: MEditClient) => c.getPluginProblems()],
     ])('%s fails a response with no body', async (_name, verb) => {
       const { result } = await exchange(verb, answers(200));
@@ -872,7 +867,6 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
 
   it.each([
     ['getRecordTypes', (c: MEditClient) => c.getRecordTypes(plugin), []],
-    ['getPluginDependants', (c: MEditClient) => c.getPluginDependants(plugin), { dependants: [], unreadable: [] }],
     ['getWorldspaces', (c: MEditClient) => c.getWorldspaces(plugin), []],
     ['getWorldspaceBlocks', (c: MEditClient) => c.getWorldspaceBlocks(plugin, '000800:Shared.esp'), { topCells: [], blocks: [] }],
     ['getCellChildRecords', (c: MEditClient) => c.getCellChildRecords(plugin, '000800:Shared.esp'), { persistent: [], temporary: [] }],
