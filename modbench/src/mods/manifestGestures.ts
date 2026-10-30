@@ -231,7 +231,7 @@ function restoreMessage(status: RestoreStatus, label: Label): string {
   }
 }
 
-// modlist-repository.md, Reporting: one line, with each skipped mod, each thing not recorded and each mod built from
+// common.md, Reporting: one line, with each skipped mod, each thing not recorded and each mod built from
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: RestoreResult): void {
   const warnings = [

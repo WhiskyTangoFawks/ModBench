@@ -215,7 +215,7 @@ async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest)
   return undefined;
 }
 
-// ADR-0022: restore runs a mod's steps once its folder holds what its packages give.
+// Restore runs a mod's steps once its folder holds what its packages give.
 async function whyNotStepped(pass: Pass, manifest: Manifest, folder: string): Promise<string | undefined> {
   if (manifest.steps.length === 0) return undefined;
   if (pass.options.signal?.aborted) return 'the restore was cancelled before its steps ran';

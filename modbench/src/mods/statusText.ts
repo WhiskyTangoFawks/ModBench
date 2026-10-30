@@ -27,7 +27,7 @@ export function statusDescription(status: ModStatus): string | undefined {
 /** What a separator row's description says of its status (mods.md, A row, Separator). */
 export const separatorDescription = stateOf;
 
-/** What a mod row's tooltip says of the files its folder lacks (modlist-repository.md, Status, story 1). */
+/** What a mod row's tooltip says of the files its folder lacks (mods.md, A row). */
 export const lackedLine = ({ gone }: ModStatus): string | undefined =>
   (gone.length > 0 ? `its folder lacks ${counted(gone.length, 'file', 'files')} its manifest names` : undefined);
 
