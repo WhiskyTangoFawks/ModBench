@@ -5,7 +5,7 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class WriteRouteSeamTests
 {
-    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "ManifestEndpoints.cs"];
+    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "SubmoduleEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex ProblemCall = new(@"Results\.Problem\(|EndpointMapping\.BadRequest\(", RegexOptions.Compiled);

@@ -70,7 +70,7 @@ function routedFetch(routes: [match: string, handle: (req: Request) => Promise<R
 }
 
 const EMPTY_SNAPSHOT = {
-  plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
+  plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [],
   dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
 };
 
@@ -593,7 +593,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   const archives = [{ path: '/game/Data/Foo - Main.ba2', stamp: '1/2/3' }];
   const stringsFiles = [{ path: '/mods/A/Strings/Foo_en.STRINGS', stamp: '4/5/6' }];
   const snapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, places: [], mods: [], statCache: '/instance/stat-cache',
+    plugins, active, loadedWithNoLine, archives, stringsFiles, places: [], mods: [],
     dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
   };
 

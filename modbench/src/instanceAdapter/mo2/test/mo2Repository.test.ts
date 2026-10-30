@@ -141,7 +141,7 @@ describe('the MO2 adapter\'s repository', () => {
   });
 
   describe('the files Modbench keeps in the instance', () => {
-    it('are its record index, hash index, stat cache, source folder and repository files, every manifest a mod folder holds, and every other manifest', async () => {
+    it('are its record index, hash index, source folder and repository files, every manifest a mod folder holds, and every other manifest', async () => {
       const adapter = await instance();
       await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
       await put('mods/A/A.manifest.json');
@@ -154,7 +154,7 @@ describe('the MO2 adapter\'s repository', () => {
 
       expect((await adapter.filesKept()).present.map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
         '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/Renamed.manifest.json',
-        'plugins/rootbuilder/rootbuilder.manifest.json', 'source', 'stat-cache',
+        'plugins/rootbuilder/rootbuilder.manifest.json', 'source',
       ].sort());
     });
   });
@@ -445,7 +445,7 @@ describe('the MO2 adapter\'s repository', () => {
     const ignored = [
       'mods/Mod A/Mod A.esp', 'mods/Mod A/textures/a.dds', 'mods/Mod A/readme.ini', 'mods/Mod A/Mod A.json', 'mods/Mod A/Mod A.manifest', 'mods/Mod A/.git/HEAD', 'mods/Mod A/meta.ini', 'mods/Mod B/meta.ini',
       'profiles/Default/saves/save.fos', 'profiles/Default/nested/modlist.txt', 'downloads/Mod.7z', 'downloads/Mod.7z.meta',
-      'source/Mod A/Mod A.manifest.json', 'hash-index/hashes.jsonl', 'stat-cache/Mod A', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
+      'source/Mod A/Mod A.manifest.json', 'hash-index/hashes.jsonl', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
     ];
     await Promise.all([...listed, ...ignored].map((path) => put(path)));
 

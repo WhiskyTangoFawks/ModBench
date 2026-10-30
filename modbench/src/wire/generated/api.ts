@@ -117,23 +117,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/clone-submodules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Clones each source mod's submodule the source folder lacks at the commit the instance repository pins, on its branch when that branch is at the pin, so restore from manifest reads the manifest it holds. Each submodule is cloned or at its pin, named with why its branch was left elsewhere; at another commit, which it leaves as it is; or named with why it was not cloned. */
-        post: operations["CloneSubmodules"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/build": {
         parameters: {
             query?: never;
@@ -162,6 +145,23 @@ export interface paths {
         put?: never;
         /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the manifest it is handed, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
         post: operations["DecompileAndCommitMod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clone-submodules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Clones each source mod's submodule the source folder lacks at the commit the instance repository pins, on its branch when that branch is at the pin. Each submodule is cloned or at its pin, named with why its branch was left elsewhere; at another commit, which it leaves as it is; or named with why it was not cloned. */
+        post: operations["CloneSubmodules"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2080,39 +2080,6 @@ export interface operations {
             };
         };
     };
-    CloneSubmodules: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CloneSubmodulesRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloneSubmodulesResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     BuildMod: {
         parameters: {
             query?: never;
@@ -2206,6 +2173,39 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    CloneSubmodules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneSubmodulesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloneSubmodulesResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
