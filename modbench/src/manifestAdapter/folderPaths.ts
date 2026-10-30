@@ -3,7 +3,6 @@
 
 import type { Manifest, ManifestFile, PackageEntry } from './manifest';
 
-/** `path` as the folder holds it: the first of its folders, or itself, that `exclude` names carries `mark`. */
 function atFolderPath(path: string, exclude: readonly string[], mark: string): string {
   const excluded = new Set(exclude.map((one) => one.toLowerCase()));
   const segments = path.split('/');

@@ -9,7 +9,6 @@ import { pluginRowName } from '../wire/pluginAddress';
 
 export type DecompileAndRepairClient = Pick<MEditClient, 'repairPreviews' | 'decompileAndRepair'>;
 
-/** The repository made for a mod with none, and its folder. */
 interface MadeRepository {
   readonly repository: NewRepository;
   readonly folder: string;
