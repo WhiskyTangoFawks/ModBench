@@ -321,7 +321,6 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
 describe('modbench.plugin.decompileAndRepair', () => {
   const MALFORMED = { name: 'Malformed.esp', origin: 'ModA' };
-  const OTHER = { name: 'Other.esp', origin: 'ModA' };
   const SELECTED = { name: 'Selected.esp', origin: 'ModA' };
   const beneath = (...plugin: ('None' | 'Modified' | 'Added')[]) => ({ plugin, recordTypes: {}, records: {} });
   const clean = beneath('None');
@@ -375,32 +374,6 @@ describe('modbench.plugin.decompileAndRepair', () => {
       buttons: ['Decompile and repair'],
     }]);
     expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
-  });
-
-  it('writes nothing when the question is dismissed', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getWorkingTreeStatesBeneath', changedSource);
-    const { handler, repaired, reporter } = registered([], [undefined], client);
-
-    await handler(row(MALFORMED));
-
-    expect(repaired).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('on a selection, asks once naming only the plugins with such changes, then repairs them forced and the rest unforced', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', changedSource);
-    client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', clean);
-    const { handler, repaired, ask } = registered([], ['Decompile and repair'], client);
-    const rows = [row(MALFORMED), row(OTHER)];
-
-    await handler(rows[0], rows);
-
-    expect(ask.asked.map(({ message }) => message)).toEqual([
-      'Decompile and repair "Malformed.esp" in ModA? It replaces changes to its source that git does not hold.',
-    ]);
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }, { plugins: [OTHER], force: false }]);
   });
 
   it('from a Malformed entry\'s link in the Problems panel, repairs the plugin it names, not the selection', async () => {

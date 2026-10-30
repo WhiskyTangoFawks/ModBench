@@ -153,10 +153,9 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     public async Task DecompileAndRepair_AWrittenRepairThatIsNotThePlannedOne_IsRefused_ThoughItRoundTrips_AndWritesNothing()
     {
         var plugin = AddToSourceMod(Lossless.Malformed);
-        var preview = ToRepair(plugin);
         var before = Head(_sourceMod);
 
-        var refused = Assert.Single((await Repair([preview], adapter: new RepairWrittenWithAnUnplannedRecord(TestAdapters.Mutagen()))).Refused);
+        var refused = Assert.Single((await Repair([ToRepair(plugin)], adapter: new RepairWrittenWithAnUnplannedRecord(TestAdapters.Mutagen()))).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.RoundTripFailed, refused.Refusal);
         Assert.Contains("records where the plugin holds", refused.Message, StringComparison.Ordinal);
@@ -235,7 +234,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private static string Git(string mod, params string[] args) => GitProbe.Run(Path.Combine(mod, ".git"), mod, args);
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginChangedAfterItsDiagnoses_RepairsWhatTheFileNowHolds()
+    public async Task DecompileAndRepair_OfAPluginChangedAfterItsDiagnoses_RepairsWhatTheFileNowHolds_AndNamesThatInItsCommits()
     {
         var plugin = AddToSourceMod(Lossless.Malformed);
         var adapter = new ChangingAfterItsDiagnoses(TestAdapters.Mutagen(), Path.Combine(_sourceMod, Malformed), Lossy.Malformed.Bytes.ToArray());
@@ -243,33 +242,86 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var result = await Repair([ToRepair(plugin)], adapter: adapter);
 
         Assert.Equal([plugin], result.Applied);
+        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
+        Assert.Contains(Lossy.Change.Require(), messages, StringComparison.Ordinal);
+        Assert.Contains(Lossy.Diagnosis, messages, StringComparison.Ordinal);
+        Assert.DoesNotContain(Lossless.Change.Require(), messages, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth()
+    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth_AndNamesBothInItsCommits()
     {
         var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
 
         var result = await Repair([ToRepair(plugin)]);
 
         Assert.Equal([plugin], result.Applied);
-        Assert.Equal(2, Subjects(_sourceMod, 2).Length);
+        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
+        Assert.Contains("HarborRegion", messages, StringComparison.Ordinal);
+        Assert.Contains("HarborRace", messages, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfAPluginWithTwoDiagnosesNoRepairAnswers_IsRefusedNamingBoth_AndWritesNothing()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideTwoUnansweredPerks);
+        var before = Head(_sourceMod);
+
+        var refused = Assert.Single((await Repair([ToRepair(plugin)])).Refused);
+
+        Assert.Equal(DecompileAndRepairRefusal.NoRepair, refused.Refusal);
+        Assert.Contains("HarborPerkOne", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("HarborPerkTwo", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(before, Head(_sourceMod));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedNamingDecompile()
+    {
+        var clean = new PluginAddress("First.esp", SourceModName);
+
+        var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
+
+        Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
+        Assert.Contains("Decompile it", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsToRead_RefusesWithoutOfferingItself()
+    {
+        var plugin = AddToSourceMod(Lossless.Malformed);
+
+        var refused = Assert.Single((await Repair([ToRepair(plugin)], adapter: new LeavingTheRepairUnmade(TestAdapters.Mutagen()))).Refused);
+
+        Assert.Equal(DecompileAndRepairRefusal.RoundTripFailed, refused.Refusal);
+        Assert.DoesNotContain("Decompile and repair", refused.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class ChangingAfterItsDiagnoses(IPluginAdapter inner, string path, byte[] changed) : DelegatingPluginAdapter(inner)
     {
-        public override Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease)
+        public override Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease)
         {
-            var previews = base.RepairsOf(pluginPath, gameRelease);
+            var diagnosed = base.RepairsOf(pluginPath, gameRelease);
             File.WriteAllBytes(path, changed);
-            return previews;
+            return diagnosed;
         }
+    }
+
+    private sealed class LeavingTheRepairUnmade(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
+    {
+        public override Answer<RepairedPlugin, PluginFailure> WriteRepaired(string pluginPath, string destinationPath, GameRelease gameRelease)
+        {
+            var written = base.WriteRepaired(pluginPath, destinationPath, gameRelease);
+            File.Copy(pluginPath, destinationPath, overwrite: true);
+            return written;
+        }
+
+        public override Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease) => written;
     }
 
     private sealed class RepairWrittenWithAnUnplannedRecord(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
     {
-        public override Answer<string, PluginFailure> WriteRepaired(
-            string pluginPath, string destinationPath, GameRelease gameRelease)
+        public override Answer<RepairedPlugin, PluginFailure> WriteRepaired(string pluginPath, string destinationPath, GameRelease gameRelease)
         {
             var written = base.WriteRepaired(pluginPath, destinationPath, gameRelease);
             var mod = Fallout4Mod.CreateFromBinary(new ModPath(destinationPath), Fallout4Release.Fallout4);

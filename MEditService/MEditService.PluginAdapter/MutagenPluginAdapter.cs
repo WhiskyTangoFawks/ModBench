@@ -109,18 +109,17 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
-    public Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
+    public Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
         PluginFailure.Answer(() => PluginRepair.Preview(File.ReadAllBytes(pluginPath), gameRelease));
 
-    public Answer<string, PluginFailure> WriteRepaired(
-        string pluginPath, string destinationPath, GameRelease gameRelease)
+    public Answer<RepairedPlugin, PluginFailure> WriteRepaired(string pluginPath, string destinationPath, GameRelease gameRelease)
     {
         try
         {
-            if (!PluginRepair.Repaired(File.ReadAllBytes(pluginPath), gameRelease).Holds(out var repaired, out var refused))
-                return refused;
+            var original = File.ReadAllBytes(pluginPath);
+            if (!PluginRepair.Repaired(original, gameRelease).Holds(out var repaired, out var refused)) return refused;
             File.WriteAllBytes(destinationPath, repaired);
-            return destinationPath;
+            return new RepairedPlugin(destinationPath, PluginRepair.Preview(original, gameRelease), original);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -129,13 +128,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     public async Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        RegisteredPlugin plugin, RepairedPlugin written, PluginSource repaired, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default)
     {
         try
         {
-            var bytes = await File.ReadAllBytesAsync(plugin.Path, cancel);
-            var diagnosed = PluginRepair.Diagnosed(bytes, loadOrder.GameRelease);
+            var diagnosed = PluginRepair.Diagnosed(written.Original, loadOrder.GameRelease);
             var masters = PluginBinaryWalk.MastersOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder);
             var flagged = diagnosed.Select(record => new FlaggedTrees.FlaggedRecord(
                 masters.GetFormKey(record[0].Record.FormID, reference: false).ToString(),
@@ -145,7 +143,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             return repaired with
             {
                 Files = await FlaggedTrees.FlaggedAsync(plugin.Name, repaired, [.. flagged], loadOrder, cancel),
-                BinarySha256 = Convert.ToHexString(SHA256.HashData(bytes)),
+                BinarySha256 = Convert.ToHexString(SHA256.HashData(written.Original)),
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -154,14 +152,11 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
-    public Answer<string, PluginFailure> VerifyRepaired(
-        string pluginPath, string repairedPath, GameRelease gameRelease)
+    public Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease)
     {
         try
         {
-            return PluginRepair.Unverified(File.ReadAllBytes(pluginPath), File.ReadAllBytes(repairedPath), gameRelease) is { } refused
-                ? refused
-                : repairedPath;
+            return PluginRepair.Unverified(written.Original, File.ReadAllBytes(written.Path), gameRelease) is { } refused ? refused : written;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

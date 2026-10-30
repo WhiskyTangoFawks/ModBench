@@ -15,10 +15,9 @@ type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceMods'>;
 
-/** The repository a mod's decompile and commit makes, and the mod's folder. */
+/** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
   readonly repository: NewRepository;
-  readonly folder: string;
 }
 
 function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
@@ -51,7 +50,6 @@ const isTakenOrStepped = (manifest: Manifest, line: ManifestFile): boolean =>
 
 interface ModRead {
   readonly sourceFolder: string;
-  readonly folder: string;
   readonly installationFile: InstallationFile | undefined;
   readonly game: GameHeld | undefined;
   readonly held: Manifest | undefined;
@@ -95,7 +93,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     output: basename(folder), packages: recorded.packages, exclude: recorded.exclude, archives: recorded.archives, steps: recorded.steps, tools: recorded.tools,
     files: kept,
   };
-  return { folder, repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
+  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
 /** The repository decompile and commit makes for each mod decompile and repair asks for, read as the instance is now. */

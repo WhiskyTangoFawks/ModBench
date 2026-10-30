@@ -64,7 +64,7 @@ public sealed class DecompileAndRepairPluginHandler
     {
         var target = RepairTarget.Of(_repairer, loadOrder, item.Plugin);
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
-        var (plugin, mod, previews) = (RepairTarget.Diagnosed)target;
+        var (plugin, mod) = (RepairTarget.Diagnosed)target;
         var sourceFolder = mod.SourceFolder ?? item.NewRepository?.SourceFolder;
         if (sourceFolder is null)
             return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
@@ -76,18 +76,19 @@ public sealed class DecompileAndRepairPluginHandler
                 workingTree.Message + " Nothing was written.");
         }
 
-        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, cancel)).Holds(out var decompiled, out var failure))
+        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, mod.Folder, cancel)).Holds(out var made, out var failure))
             return RefusedAs(plugin, failure);
+        var (decompiled, written) = (made.Decompiled, made.Written);
         if (decompiled.Source is not { } repaired)
         {
             return Refused(decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
-        if (!(await _adapter.FlaggedSourceOfAsync(plugin, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
+        if (!(await _adapter.FlaggedSourceOfAsync(plugin, written, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
             return RefusedAs(plugin, failure);
 
-        var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, previews));
+        var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, written));
         if (!inSourceMod)
         {
             if (item.NewRepository is not { } made)
@@ -102,7 +103,7 @@ public sealed class DecompileAndRepairPluginHandler
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
-        var flaggedCommit = new TreeCommit(flagged.Files, FlaggedMessage(plugin, previews));
+        var flaggedCommit = new TreeCommit(flagged.Files, FlaggedMessage(plugin, written));
         switch (repository.CommitRepair(plugin.Key, flaggedCommit, repairedCommit, flagged.BinarySha256))
         {
             case null:
@@ -134,11 +135,11 @@ public sealed class DecompileAndRepairPluginHandler
 
     private static string Named(RepairPreview preview) => $"{preview.Diagnosis.Anchor ?? "the plugin"}: {preview.Change?.Description}";
 
-    private static string FlaggedMessage(RegisteredPlugin plugin, RepairPreviews previews) =>
-        $"Decompile {plugin.Name}, its malformed records flagged\n\n" + string.Join('\n', previews.Diagnoses.Select(preview => preview.Diagnosis.Describe()));
+    private static string FlaggedMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
+        $"Decompile {plugin.Name}, its malformed records flagged\n\n" + string.Join('\n', written.Repairs.Select(repair => repair.Diagnosis.Describe()));
 
-    private static string RepairMessage(RegisteredPlugin plugin, RepairPreviews previews) =>
-        $"Repair {plugin.Name}\n\n" + string.Join('\n', previews.Diagnoses.Select(Named));
+    private static string RepairMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
+        $"Repair {plugin.Name}\n\n" + string.Join('\n', written.Repairs.Select(Named));
 
     private sealed class SamePlugin : IEqualityComparer<PluginToRepair>
     {

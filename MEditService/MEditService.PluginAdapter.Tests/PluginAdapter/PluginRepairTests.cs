@@ -32,7 +32,7 @@ public sealed class PluginRepairTests
     public void RepairsOf_AMalformedRecord_NamesItsDiagnosisAndTheChangeThatRepairsIt_OrNoChangeWhereNoRepairAnswers(MalformationFixture fixture)
     {
         using var folder = new ScratchDirectory("repair-preview");
-        var preview = Assert.Single(TestAdapters.Mutagen().RepairsOf(Write(folder, fixture.Malformed), Release).Answered().Diagnoses);
+        var preview = Assert.Single(TestAdapters.Mutagen().RepairsOf(Write(folder, fixture.Malformed), Release).Answered());
 
         Assert.Equal(fixture.Diagnosis, preview.Diagnosis.Describe());
         Assert.Equal(fixture.Change, preview.Change?.Description);
@@ -47,7 +47,7 @@ public sealed class PluginRepairTests
 
         var repaired = RepairEverything(malformed, Path.Combine(folder.Path, "repaired.esp")).Answered();
 
-        Assert.Equal(fixture.Repaired, File.ReadAllBytes(repaired));
+        Assert.Equal(fixture.Repaired, File.ReadAllBytes(repaired.Path));
     }
 
     [Fact]
@@ -57,12 +57,11 @@ public sealed class PluginRepairTests
         var malformed = Write(folder, TwoRegions(DeflatedRecord("REGN", 0x00000800, CompressionLevel.Optimal,
             EditorId("Harbor"), Subrecord("RDAT", new byte[6]), Subrecord("RDAT", new byte[6]))));
 
-        var previews = TestAdapters.Mutagen().RepairsOf(malformed, Release).Answered();
         var repaired = RepairEverything(malformed, Path.Combine(folder.Path, "repaired.esp")).Answered();
 
-        Assert.Equal("pads RDAT from 6 to 8 bytes with zeros; pads RDAT from 6 to 8 bytes with zeros", Assert.Single(previews.Diagnoses).Change?.Description);
+        Assert.Equal("pads RDAT from 6 to 8 bytes with zeros; pads RDAT from 6 to 8 bytes with zeros", Assert.Single(repaired.Repairs).Change?.Description);
         Assert.Equal(TwoRegions(DeflatedRecord("REGN", 0x00000800, CompressionLevel.Optimal,
-            EditorId("Harbor"), Subrecord("RDAT", new byte[8]), Subrecord("RDAT", new byte[8]))).Bytes, File.ReadAllBytes(repaired));
+            EditorId("Harbor"), Subrecord("RDAT", new byte[8]), Subrecord("RDAT", new byte[8]))).Bytes, File.ReadAllBytes(repaired.Path));
     }
 
     [Fact]
@@ -79,13 +78,24 @@ public sealed class PluginRepairTests
     }
 
     [Fact]
-    public void VerifyRepaired_ThePluginItsRepairWrote_AnswersItsPath()
+    public void WriteRepaired_APluginWithTwoDiagnosesNoRepairAnswers_IsRefusedNamingBoth()
+    {
+        using var folder = new ScratchDirectory("repair-two-unanswered");
+        var malformed = Write(folder, MalformationFixtures.ShortRegionBesideTwoUnansweredPerks);
+
+        var refused = RepairEverything(malformed, Path.Combine(folder.Path, "repaired.esp")).Failure();
+
+        Assert.Contains("HarborPerkOne", refused.Reason, StringComparison.Ordinal);
+        Assert.Contains("HarborPerkTwo", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VerifyRepaired_ThePluginItsRepairWrote_AnswersIt()
     {
         using var folder = new ScratchDirectory("repair-verified");
-        var original = Previewed(folder, ShortRegion);
-        var repaired = Write(folder, TwoRegions(PaddedRegion) with { FileName = "repaired.esp" });
+        var written = RepairEverything(Diagnosed(folder, ShortRegion), Path.Combine(folder.Path, "repaired.esp")).Answered();
 
-        Assert.Equal(repaired, VerifyEverything(original, repaired).Answered());
+        Assert.Same(written, TestAdapters.Mutagen().VerifyRepaired(written, Release).Answered());
     }
 
     public static TheoryData<byte[], string> UnplannedRepairs() => new()
@@ -100,10 +110,10 @@ public sealed class PluginRepairTests
     public void VerifyRepaired_APluginMissingARecordOrChangedOtherThanPlanned_IsRefusedNamingWhereItParts(byte[] repairedBytes, string reason)
     {
         using var folder = new ScratchDirectory("repair-unverified");
-        var original = Previewed(folder, ShortRegion);
-        var repaired = Write(folder, new GeneratedPlugin("repaired.esp", repairedBytes));
+        var written = RepairEverything(Diagnosed(folder, ShortRegion), Path.Combine(folder.Path, "repaired.esp")).Answered();
+        File.WriteAllBytes(written.Path, repairedBytes);
 
-        Assert.Equal(reason, VerifyEverything(original, repaired).Failure().Reason);
+        Assert.Equal(reason, TestAdapters.Mutagen().VerifyRepaired(written, Release).Failure().Reason);
     }
 
     public static TheoryData<MalformationFixture, string, string[]> RepairsAndTheFieldEachHoldsRaw() => new()
@@ -171,10 +181,10 @@ public sealed class PluginRepairTests
         using var repairedFolder = new ScratchDirectory("repair-flagged-repaired");
         var adapter = TestAdapters.Mutagen();
         var malformed = Write(folder, fixture.Malformed);
-        var repairedPath = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
+        var written = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
         var loadOrder = EmptyLoadOrder.Of(Release);
-        var repaired = (await adapter.ReadSourceOfAsync(Registered(repairedPath), loadOrder)).Answered();
-        var flagged = (await adapter.FlaggedSourceOfAsync(Registered(malformed), repaired, loadOrder)).Answered();
+        var repaired = (await adapter.ReadSourceOfAsync(Registered(written.Path), loadOrder)).Answered();
+        var flagged = (await adapter.FlaggedSourceOfAsync(Registered(malformed), written, repaired, loadOrder)).Answered();
         return (fixture.Malformed.Bytes, repaired, flagged);
     }
 
@@ -221,15 +231,10 @@ public sealed class PluginRepairTests
     private static GeneratedPlugin TwoRegions(byte[] first, byte[]? second = null) =>
         new("Regions.esp", Plugin(Tes4(), Group("REGN", first, second ?? CleanRegion(new byte[8]))));
 
-    private static string Previewed(ScratchDirectory folder, byte[] region) => Write(folder, TwoRegions(region));
+    private static string Diagnosed(ScratchDirectory folder, byte[] region) => Write(folder, TwoRegions(region));
 
-    private static RepositoriesLib.Answer<string, PluginFailure> RepairEverything(string malformed, string destination)
-    {
-        return TestAdapters.Mutagen().WriteRepaired(malformed, destination, Release);
-    }
-
-    private static RepositoriesLib.Answer<string, PluginFailure> VerifyEverything(string original, string repaired) =>
-        TestAdapters.Mutagen().VerifyRepaired(original, repaired, Release);
+    private static RepositoriesLib.Answer<Repair.RepairedPlugin, PluginFailure> RepairEverything(string malformed, string destination) =>
+        TestAdapters.Mutagen().WriteRepaired(malformed, destination, Release);
 
     private static string Write(ScratchDirectory folder, GeneratedPlugin plugin)
     {

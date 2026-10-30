@@ -148,12 +148,13 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
-    /// <summary>A malformation that no repair answers.</summary>
+    /// <summary>Malformations that no repair answers.</summary>
     public sealed record NoRepair : PluginFailure
     {
         private readonly string _reason;
 
-        internal NoRepair(PluginDiagnosis diagnosis) : base(error: null) => _reason = $"no repair answers {diagnosis.Describe()}";
+        internal NoRepair(IEnumerable<PluginDiagnosis> diagnoses) : base(error: null) =>
+            _reason = $"no repair answers {string.Join("; ", diagnoses.Select(diagnosis => diagnosis.Describe()))}";
 
         public override string Reason => _reason;
     }

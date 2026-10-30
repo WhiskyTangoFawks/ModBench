@@ -16,8 +16,8 @@ internal static class PluginRepair
 
     private sealed record PlannedRecord(MajorRecordPinFrame Record, List<Subrecord> Subrecords);
 
-    internal static RepairPreviews Preview(byte[] plugin, GameRelease release) =>
-        new([.. Malformations.In(plugin, release).Select(found => found.Preview)]);
+    internal static IReadOnlyList<RepairPreview> Preview(byte[] plugin, GameRelease release) =>
+        [.. Malformations.In(plugin, release).Select(found => found.Preview)];
 
     /// <summary>The plugin with the repair of each malformation it holds made.</summary>
     internal static Answer<byte[], PluginFailure> Repaired(byte[] plugin, GameRelease release)
@@ -58,7 +58,8 @@ internal static class PluginRepair
     private static Answer<Dictionary<int, PlannedRecord>, PluginFailure> Planned(byte[] plugin, GameRelease release)
     {
         var repairing = Malformations.In(plugin, release).ToList();
-        if (repairing.FirstOrDefault(found => found.Repair is null) is { } unanswered) return new PluginFailure.NoRepair(unanswered.Diagnosis);
+        var unanswered = repairing.Where(found => found.Repair is null).ToList();
+        if (unanswered.Count > 0) return new PluginFailure.NoRepair(unanswered.Select(found => found.Diagnosis));
 
         return repairing
             .GroupBy(found => found.Record.Location)

@@ -61,6 +61,22 @@ public static class MalformationFixtures
         }
     }
 
+    /// <summary>A REGN whose RDAT is short beside two PERKs no repair answers.</summary>
+    public static GeneratedPlugin ShortRegionBesideTwoUnansweredPerks
+    {
+        get
+        {
+            var mod = NewMod();
+            var region = mod.Regions.AddNew("HarborRegion");
+            region.Map = new RegionMap { Name = "Harbor" };
+            MisshapedPerks.Add(mod, "HarborPerkOne");
+            MisshapedPerks.Add(mod, "HarborPerkTwo");
+            using var stream = new MemoryStream();
+            mod.WriteToBinary(stream);
+            return new GeneratedPlugin(FileName, MisshapedPerks.Misshape(RawPlugin.EditRecord(stream.ToArray(), region.FormKey.ID, ShortenRdat)));
+        }
+    }
+
     private static IEnumerable<(string Signature, byte[] Payload)> ShortenRdat(List<(string Signature, byte[] Payload)> subrecords) =>
         subrecords.Select(s => s.Signature == "RDAT" ? (s.Signature, s.Payload[..6]) : s);
 

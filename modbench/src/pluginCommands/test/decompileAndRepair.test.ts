@@ -10,9 +10,9 @@ import type { MEditClient } from '../../client';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const REFUSED = { item: { name: 'Clean.esp', origin: 'Harbor' }, reason: 'Clean.esp is not malformed.' };
-const MADE = { folder: '/instance/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
+const MADE = { repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
 
-describe('decompileAndRepair — one send, a mod with no repository handed the one decompile and commit makes, its folder\'s manifest left in place', () => {
+describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
   let made: typeof MADE | { refusal: string };
   const repairIn = (sourceMods: Record<string, string>, force = false) => {
@@ -32,7 +32,7 @@ describe('decompileAndRepair — one send, a mod with no repository handed the o
     made = MADE;
   });
 
-  it('repairs each plugin with no preview, a mod with no repository handed the one decompile and commit makes, its folder\'s manifest left in place', async () => {
+  it('repairs each plugin, a mod with no repository handed the one decompile and commit makes', async () => {
     expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [REFUSED] } });
     expect(sent()).toEqual([[[{ plugin: MALFORMED, newRepository: MADE.repository }], true]]);
   });

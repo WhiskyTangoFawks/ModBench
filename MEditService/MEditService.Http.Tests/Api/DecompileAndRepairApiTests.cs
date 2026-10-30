@@ -17,7 +17,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
     protected override void DisposeFixtures() => _instance.Dispose();
 
     [Fact]
-    public async Task AMalformedPlugin_IsRepairedWithNoPreview_AndAnswersItApplied()
+    public async Task AMalformedPlugin_IsRepaired_AndAnswersItApplied()
     {
         File.WriteAllBytes(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), Fixture.Malformed.FileName), Fixture.Malformed.Bytes);
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
