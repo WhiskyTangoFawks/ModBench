@@ -144,13 +144,13 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](mods-fomod.md)); force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
 | decompile and commit | writes | `modbench.mod.decompileAndCommit` | mods | - | none | Make a mod a source mod: a repository that holds its plugin source, in one commit. | decompile-and-commit |
-| build | writes | `modbench.mod.build` | mods, or none for every source in the source folder | force: [agent.md](agent.md#any-agent), story 7 | none | Write a source mod's folder as its manifest says. | build-mod |
+| build | writes | `modbench.mod.build` | mods, or none for every source mod | force: [agent.md](agent.md#any-agent), story 7 | none | Write a source mod's folder as its manifest says. | build-mod |
 | update manifest | writes | `modbench.mod.updateManifest` | mods or separators, or none for every manifest | - | none | Write each manifest from the folder it builds and the mod's metadata. | update-manifest |
 | restore from manifest | writes | `modbench.mod.restoreFromManifest` | mods or separators, or none for every manifest | force: [agent.md](agent.md#any-agent), story 7 | none | Make each folder what its manifest says. | restore-from-manifest |
 | check for updates | writes | `modbench.mod.checkForUpdates` | mods or separators, or none for every mod | - | MO2 mod list | Ask Nexus for the newest version of each mod, and write it in the mod's metadata. | - |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. | none |
-| open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's source folder in VS Code's Explorer. | none |
+| open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's repository in VS Code's Explorer. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. | none |
 | open conflicts | reads | `modbench.mod.openConflicts` | mod | - | MO2 Information dialog, Conflicts tab | Open a mod's conflict table in an editor tab. | open-conflicts |
 | compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
