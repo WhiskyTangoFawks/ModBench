@@ -2136,7 +2136,7 @@
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/wire/generated/api.ts",
     "test:unit": "vitest run",
-    "test:integration": "tsc -p tsconfig.integration.json && node integration.mjs",
+    "test:integration": "npm run build && tsc -p tsconfig.integration.json && node integration.mjs",
     "lint": "eslint src webview/src eslint-rules eslint.config.mjs && knip --production",
     "package": "node package.mjs"
   },
