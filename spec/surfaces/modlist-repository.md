@@ -19,7 +19,7 @@ As a user, I want:
 
 A mod's installation file is the downloaded file the mod's metadata names as what the mod was installed from. As a user, I want:
 
-1. The manifest to be a build file that restores its folder's contents from its packages, on any machine. Cites: ADR-0022
+1. The manifest to be a record that restores its folder's contents from its packages, on any machine. Cites: ADR-0022
 2. A change to my modlist to read in a git diff as the change I made, so I review and merge it as source. Cites: Existing tools
 3. Restore to give the mod manager back what it had. Cites: Never break the instance for its owner
 4. Each package named with where a clone gets it, so a clone fetches what this machine lacks.
@@ -52,7 +52,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none. A source mod's manifest is its author's build file, which its build records, so update manifest leaves it, and is not offered on a source mod's row. Cites: ADR-0022; commands.md, No dead entries
+1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none. A source mod's build records its manifest, so update manifest is not offered on a source mod's row, and passes over each source mod among the folders it runs on. Cites: ADR-0022; commands.md, No dead entries
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
@@ -62,11 +62,12 @@ As a user, I want:
 
 As a user, I want:
 
-1. Each folder to become what its manifest says, with each file restore removes sent to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022
+1. Each folder to become what its manifest says, a source mod's by its build, with each file restore removes sent to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022
 2. One confirmation, only when the restore destroys a change no manifest holds, naming the mods or saying every mod. A restore after a fresh clone asks nothing. Cites: Confirm what destroys
 3. A source mod left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
-4. Each package taken from wherever this machine already holds it with the bytes the manifest pins, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the file the manifest names. A clone then restores with no file fetched by hand. Cites: Minimal by default
+4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the pinned file. A clone then restores with no file fetched by hand. Cites: Minimal by default
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
+6. A source mod's repository cloned when it is absent, and never moved when it is at another commit than the one the modlist pins, since my repository is mine to move. Cites: ADR-0003
 
 ## Menus and keys
 

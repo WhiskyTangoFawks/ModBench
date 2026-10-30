@@ -86,8 +86,8 @@ As a user, I want:
 
 There is no file picker: the row supplies the downloaded file (commands.md, The entry point supplies what it knows). As a user, I want:
 
-1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod, showing its name and version, and a last item, "Install as a new mod…".
-2. No pick when no installed mod shares the ID, or the file has none: the file installs as a new mod.
+1. A pick whenever an installed mod that is not a source mod shares the file's Nexus mod ID: one item for each such mod, showing its name and version, and a last item, "Install as a new mod…".
+2. No pick otherwise: the file installs as a new mod.
 3. An upgrade only when I choose it.
 4. The mod whose installed files record this file's Nexus file ID named "File ID match", listed first and pre-selected. With no such mod, the mod whose metadata records this file as its installation file named "Installed from this file", listed first and pre-selected. With neither, "Install as a new mod…" is pre-selected. The pre-selection never matches the file's name against a mod's.
 5. Esc to install nothing. Cites: Esc changes nothing

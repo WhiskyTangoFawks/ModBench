@@ -1,6 +1,6 @@
 # Plugin edits are git working-tree changes
 
-Plugin edits are git working-tree changes. A source mod's source ([ADR-0006](0006-a-compiled-plugins-truth-is-its-plugin-source.md)) lives in a repository of its own, in a source folder beside `mods/`: the plugin source, the mod's own assets, and its manifest, which names the output folder. The mod folder is the build's output and nothing else.
+Plugin edits are git working-tree changes. A source mod's source ([ADR-0006](0006-a-compiled-plugins-truth-is-its-plugin-source.md)) lives in a repository of its own, in a source folder beside `mods/`: the plugin source, the mod's own assets, and its build file. The mod folder is the build's output, its manifest and the mod manager's files, and nothing else.
 
 ## Consequences
 

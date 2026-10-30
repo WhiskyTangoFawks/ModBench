@@ -203,8 +203,8 @@ As a user, I want:
 As a user, I want:
 
 1. No prompt. While it runs, the view's message line names the mod and the phase. Cites: catalog `decompile and commit`
-2. The repository to track the plugin source, the mod's assets, the manifest and `.gitignore`, and nothing else. The assets are the mod's files that no package yields with their bytes. Cites: ADR-0007; ADR-0022
-3. One commit, `Init <mod>`, holding the source of every plugin the mod provides, the assets and the manifest.
+2. The repository to track the plugin source, the mod's assets, the build file and `.gitignore`, and nothing else. The assets are the mod's files that no package yields with their bytes. Cites: ADR-0007; ADR-0022
+3. One commit, `Init <mod>`, holding the source of every plugin the mod provides, the assets and the build file.
 4. Each file's line endings kept as written.
 5. A decompile and commit that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
 

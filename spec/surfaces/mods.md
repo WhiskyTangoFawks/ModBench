@@ -92,9 +92,9 @@ Each publisher tag is an indicator of its own, with the badge its publisher decl
 A source mod's folder is its build's output ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
-2. Rename and exclude or include to write the manifest and the folder together, so the folder already equals the next build's output: rename changes the output folder's name, and exclude or include its exclusions, which build writes with the mod manager's exclusion mark. Cites: ADR-0007
+2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
-4. A file I change in the folder to show as differing from the manifest, and build to overwrite it and name it, after one confirmation naming the files. Cites: modlist-repository.md, Status; Confirm what destroys
+4. Build to make the folder hold what ADR-0007 names and nothing else: it overwrites a file I changed and sends any other file to the trash, after one confirmation naming them. Until then the mod shows as differing from its manifest. Cites: ADR-0007; modlist-repository.md, Status; Confirm what destroys
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
 
 ## Order and view state
@@ -182,10 +182,10 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from its repository and the installation files its manifest names: its assets, its plugins compiled from their plugin source, and its steps run in order, then the manifest's file lines. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
-2. The manifest to name, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
-3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Cites: ADR-0022
-4. A build whose manifest names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Cites: ADR-0003
+1. Build to write the mod folder from its repository and the installation files its build file names: its assets, its plugins compiled from their plugin source, and its steps run in order. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
+2. The build file to name, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
+3. Build to record what it made in the mod's manifest, so a build that makes something else, here or after a clone, shows in Source Control as a change to the manifest. Cites: ADR-0022; Existing tools
+4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
 7. From the palette with no mod, a pick of every source mod, one with no folder yet included, so a clone builds its mods back. Cites: commands.md, The entry point supplies what it knows
@@ -215,9 +215,9 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder.
 2. A new mod to appear at the winning end of the mod order, disabled, as a mod new on disk is.
-3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is in the source folder, and an upgrade never touches it. One confirmation, only when the upgrade would lose what the mod's folder holds and the new file does not, naming it. Cites: ADR-0007; ADR-0022; Confirm what destroys
+3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. One confirmation, only when the upgrade would lose what the mod's folder holds and the new file does not, naming it. A source mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0022; Confirm what destroys; commands.md, Refuse, do not repair
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
-5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git.
+5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery.
 6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2
 
 ### Uninstall
