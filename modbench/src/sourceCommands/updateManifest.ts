@@ -236,9 +236,13 @@ export async function updateManifest(
     read.push(answer.read);
     notes.push(...answer.notes.map((note) => ({ mod, note })));
   }
-  const nothingUpdated = async (): Promise<UpdateManifestResult> => ({
-    ...cancelledIf(signal), landed: [], refused, notes, repositoryNotes: await pathsShown(deps),
-  });
+  const nothingUpdated = async (): Promise<UpdateManifestResult> => {
+    const submodules = passedOver.length === 0 || signal?.aborted ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, passedOver);
+    return {
+      ...cancelledIf(signal), landed: [], refused, notes: [...notes, ...submodules.notes],
+      repositoryNotes: [...submodules.repositoryNotes, ...await pathsShown(deps)],
+    };
+  };
   if (signal?.aborted || read.length === 0) return nothingUpdated();
 
   const versioned: ModToUpdate[] = [];

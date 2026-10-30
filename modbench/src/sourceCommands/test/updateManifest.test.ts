@@ -213,6 +213,14 @@ describe('update manifest', () => {
       expect((await update(['ModB'])).refused).toEqual([]);
     });
 
+    it('still has its submodule entry written when it is all the selection holds', async () => {
+      const { update, fake } = await among();
+
+      const result = await update(['ModB']);
+
+      expect([fake.calls[0], result.landed, result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, [], []]);
+    });
+
     it('still has its submodule entry written, as a mod acted on', async () => {
       const { update, fake } = await among();
 
