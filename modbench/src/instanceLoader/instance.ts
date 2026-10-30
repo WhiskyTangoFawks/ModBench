@@ -509,7 +509,7 @@ export class Instance implements Subscription {
         ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }
         : {
           kind: 'listed',
-          rows: downloadedFilesOutcome.files ? buildDownloadedFileRows(downloadedFilesOutcome.files, installedInto, entries) : [],
+          rows: downloadedFilesOutcome.files ? buildDownloadedFileRows(downloadedFilesOutcome.files, installedInto, entries, new Set(paths.sourceDirs.keys())) : [],
         },
       activeProfile: profile,
       managerNames: adapter.names,
