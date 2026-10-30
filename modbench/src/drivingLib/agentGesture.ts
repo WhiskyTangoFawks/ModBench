@@ -5,7 +5,7 @@ import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
 
-/** The Argument and the Options an agent call gives a gesture (commands.md, The surface supplies the Argument). */
+/** The Argument and the Options an agent call gives a gesture (commands.md, The entry point supplies what it knows). */
 export class AgentCall<Options extends object = object> {
   constructor(readonly argument: readonly Argument[], readonly options: Options) {}
 }

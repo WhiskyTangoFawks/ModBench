@@ -171,7 +171,7 @@ As a user, I want:
 As a user, I want:
 
 1. A prompt for the name. It refuses an empty name, a name that does not end `.esp`, `.esm` or `.esl`, and `.esl` when the game has no light plugins.
-2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. Cites: catalog `create`, place Option
+2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. Cites: catalog `create`, Argument
 3. A place that already holds a plugin of that name left out of the pick. The same name in another place is not checked. Cites: No dead entries
 4. Esc at either step to create nothing. Cites: Esc changes nothing
 5. The new plugin to appear at the winning end of the list, disabled. Cites: catalog `plugin sync`

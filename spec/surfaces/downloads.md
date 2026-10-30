@@ -84,7 +84,7 @@ As a user, I want:
 
 ### The install target
 
-There is no file picker: the row supplies the downloaded file (commands.md, The surface supplies the Argument). As a user, I want:
+There is no file picker: the row supplies the downloaded file (commands.md, The entry point supplies what it knows). As a user, I want:
 
 1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod, showing its name and version, and a last item, "Install as a new mod…".
 2. No pick when no installed mod shares the ID, or the file has none: the file installs as a new mod.

@@ -52,7 +52,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. An update manifest gesture that writes the manifest of a folder, and creates it when the folder has none.
+1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none. A source mod's manifest is its author's build file, which its build records, so update manifest leaves it, and is not offered on a source mod's row. Cites: ADR-0022; commands.md, No dead entries
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.

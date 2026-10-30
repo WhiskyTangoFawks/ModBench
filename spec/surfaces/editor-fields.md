@@ -37,7 +37,7 @@ Cites: xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11, 12, 38 and 3
 
 A struct or array row pastes a whole value copied from the same field, in place of its own. Cites: xEdit
 
-The strings language setting chooses the language a translated text shows in, English by default. The source keeps every language the plugin's strings hold. Cites: xEdit, Localization > Language; commands.md, VS Code provides it
+The strings language setting chooses the language a translated text shows in, English by default. The source keeps every language the plugin's strings hold. Cites: xEdit, Localization > Language; xedit.md, Omissions by reason, VS Code provides it
 
 ## Placeholders
 

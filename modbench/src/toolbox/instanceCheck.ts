@@ -18,7 +18,7 @@ export type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { fold
 
 /** Outside an instance only the Toolbox registers, row-less, and each view's `viewsWelcome` says
  *  why. An instance whose files cannot be read is still an instance: its views show the error row
- *  (common.md, States, stories 2 and 4). */
+ *  (common.md, States, story 2). */
 export function openedFolder(isInstance: (root: string) => boolean, log: (message: string) => void): OpenedFolder {
   const roots = openRoots();
   const [chosen, ...others] = roots.filter(isInstance);
