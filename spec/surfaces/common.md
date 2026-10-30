@@ -12,7 +12,7 @@ As a user, I want:
 
 1. Every list to be a native VS Code tree view, so selection, keyboard navigation, drag and the context menu behave as they do everywhere else in VS Code. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 2. Every view to follow the disk: a change on disk, from Modbench, MO2 or any other tool, shows up with no action of mine. A view has no refresh of its own. Cites: ADR-0015
-3. A row's icon, badge or colour to carry its status, and its description to repeat it, only where the row is not in the ordinary case, so an unmarked row reads as the ordinary case.
+3. A row's icon, badge or colour to carry its status. A row with nothing wrong carries no warning.
 4. View state, such as a sort, a toggle or a filter, to end with the window. It is a lens, not a setting. Cites: commands.md, Exclude and hide
 5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: a key fires the gesture VS Code binds it to, on a row that offers it. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 6. Every list to let me select several rows. Cites: commands.md, Argument; A selection is one gesture, and each item lands on its own
@@ -48,6 +48,7 @@ As a user, I want:
 7. An instance whose game Modbench does not support refused when it opens, naming the game, and no file of it written. Cites: Never break the instance for its owner
 8. A warning, when the mod manager that made the instance is running, that it overwrites my changes when it launches a program or exits. Cites: Never break the instance for its owner; Never silently wrong
 9. One instance in each window: the first open folder that is an instance, chosen when Modbench starts. No view shows the other open folders, which stay VS Code's, and each other instance among them gets one line in the Output naming it. Cites: Existing tools
+10. A folder I have not trusted, when it is an instance, to say in Modbench's views that Modbench is off until I trust it, with a link to trust it, and Modbench to start once I do, with no reload. Cites: VS Code's interaction; Never silently wrong
 
 ## A gesture that writes
 
@@ -70,7 +71,7 @@ As a user, I want:
 
 The Output is the log: a line for each thing that happened. The Problems panel is the dashboard: a problem for each state that is wrong, on the file it concerns, while the state holds.
 
-A notification is for what I started, or for a view left showing something untrue (ADR-0019). For anything else my script or my agent asked, the reason goes back to it, and the Output logs it.
+A notification is for what I started, or for a view left showing something untrue (ADR-0019). For anything else my Modbench script or my agent asked, the reason goes back to it, and the Output logs it.
 
 ADR-0019 decides the tier; this table is how each tier looks on a surface.
 
@@ -84,4 +85,5 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | Something Modbench does on its own, such as a sync, fails, and every view stays true | the view's message line, and a line in the Output, once, and again only when the reason changes |
 | Something Modbench does on its own fails, and a view now shows something untrue, such as a record filter it cleared | a notification naming what changed and why, and a line in the Output |
 | Modbench could not hash a file it reads | a problem on that file in the Problems panel while it holds, and a line in the Output |
+| A VS Code feature Modbench answers, such as Go to Definition, could not answer in full | what it found, and a line in the Output for each reason |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |

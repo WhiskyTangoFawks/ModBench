@@ -13,7 +13,7 @@ As a user, I want:
 3. My agent's changes to reach every view as mine do. Cites: common, A view, story 2; ADR-0015
 4. To approve my agent's requests to Modbench as I approve any of its tools, in my agent's own way. Modbench adds no approval of its own. Cites: VS Code's interaction; Minimal by default
 5. While an instance is open, Modbench to take one port for my agent, the same in every workspace unless I set another for a workspace, so two windows on two instances each have their own. A window that cannot take its port says so, and names the setting.
-6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a script. I set up nothing to teach it. Cites: Minimal by default
+6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a Modbench script. I set up nothing to teach it. Cites: Minimal by default
 7. A gesture that would ask me first to refuse my agent's request instead, for each item it would destroy. The refusal lists what the item would lose and names force, and my agent requests it again with force once I approve that in my agent's own way (story 4), as git refuses a checkout over my changes until it is forced. Cites: commands.md, Confirm what destroys; Existing tools
 
 ## Names
@@ -30,12 +30,12 @@ As a user, I want:
 
 1. My agent to read any record in my load order, in a compiled plugin or not: each plugin's copy, and the copy that wins. Cites: editor.md; editor-conflicts.md
 2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Cites: plugin-source.md, In the text editor, stories 2 and 4
-3. My agent to query the record index with one SQL SELECT, and to get back the rows it selects, as scripts.md, Reading, story 6 says. Cites: catalog, Record, `filter`
+3. My agent to query the record index with one SQL SELECT, and to get back the rows it selects, as scripts.md, Reading, story 1 says. Cites: catalog, Record, `filter`
 4. My agent to edit a compiled plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Cites: ADR-0007
 5. My agent to see the problems I see in the Problems panel for the source it changed. Cites: plugin-source.md, In the text editor, story 6
 6. My agent never to edit a plugin with no source. Editing needs a source, for my agent as for me. Cites: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Cites: catalog, Record, `open`
-8. My agent to change many records by a rule with a script, as I do. Cites: scripts.md
+8. My agent to change many records by a rule with a Modbench script, as I do. Cites: scripts.md
 9. My agent to learn from Modbench which views a SELECT reads, and the columns of each. A SELECT that reads anything else is refused, naming the views. Cites: Any agent, story 6
 
 ## Mod management

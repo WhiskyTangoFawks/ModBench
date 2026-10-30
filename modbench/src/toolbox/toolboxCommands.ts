@@ -58,7 +58,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     const outcome = await deps.commands.refresh();
     if (!outcome.applied) {
       if (outcome.heldElsewhere) {
-        // toolbox.md, Reporting story 1: the spec's own words, naming this instance.
+        // toolbox.md, Reporting story 1: naming this instance.
         deps.reporter.report('error', "This instance is open in another Modbench window. Close it, then refresh.", deps.instanceRoot);
       } else {
         deps.reporter.report('error', 'Could not refresh.', outcome.refusal);

@@ -51,7 +51,8 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
       reporter.report('warning', 'Purge landed, and could not finish:', result.unfinished.join(', '));
     }
   };
-  // The game folder can be the deployment folder (deployment-hardlink.md, story 4), and the instance value reads its Data folder.
+  // The game folder can be the deployment folder (deployment-hardlink.md, The deployment folder, story 4), and
+  // the instance value reads its Data folder.
   return [
     registerDeployTask(reporter),
     vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),

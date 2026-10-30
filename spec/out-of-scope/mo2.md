@@ -24,7 +24,7 @@ Gestures Modbench does differently.
 
 | # | Where | Modbench | MO2 | Why |
 |---|---|---|---|---|
-| 1 | The top bar | The Toolbox, the container's first view: a small readout of the instance value, Game and Profile, with the workspace actions in its title bar ([toolbox.md](../surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
+| 1 | The top bar | The Toolbox, the container's first view: a small readout of the instance value, with the workspace actions in its title bar ([toolbox.md](../surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
 | 2 | Downloads | Starts collapsed. | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
 | 3 | Archives | No Archives view. | An Archives tab | Ruling. |
 | 5 | Downloads rows | Excluded rows, when shown, are dimmed | Hidden rows look like the rest | Ruling: show excluded mixes them into the list, and the dim is the only way to tell them apart. |
@@ -46,6 +46,7 @@ Gestures Modbench does differently.
 | 21 | Mod sync | Keeps the line of a mod whose folder a manifest builds until I restore the mod | Drops each line whose folder is gone | ADR-0022: a mod is what its manifest says. |
 | 22 | A plugin order that breaks the game's sorting rules | Stays as I set it. Each broken sorting rule shows on its plugin, and a drop is refused only for a rule at Error ([plugins.md](../surfaces/plugins.md), Sorting rules; Drag and drop, story 3) | Moves the plugins with the master flag above those without it, and each plugin below its masters, on every refresh, and says nothing. Clamps a drag to the same rules | Principle: Never silently wrong; commands.md, Principles, Refuse, do not repair. |
 | 23 | Delete a downloaded file | Asks nothing: the trash gives the file back | Confirms each delete | Principle: Minimal by default (commands.md, Confirm what destroys). |
+| 24 | Hide and Hidden files | Exclude or include, and show excluded | Hide / Un-Hide, and the Hidden files check box | Ruling: in Modbench, hide acts on the view alone (commands.md, Exclude and hide). |
 
 ## Omissions by object
 

@@ -249,7 +249,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
 
 const VIEWS_OF_THE_INSTANCE = ['modbench.toolbox', 'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'];
 
-describe('package.json in an untrusted folder (user-docs.md, The walkthrough, story 4)', () => {
+describe('package.json in an untrusted folder (common.md, States, story 10)', () => {
   const OFF_UNTIL_TRUSTED = 'Modbench is off until you trust this folder. It changes your mod files and runs git here.';
 
   it('stays in Restricted Mode and says why it is off', () => {
