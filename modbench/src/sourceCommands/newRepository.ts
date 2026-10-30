@@ -4,11 +4,10 @@
 import { basename, join, resolve } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { buildFileText, manifestIn, packageOf, removeManifestIn, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
+import { manifestIn, manifestNameOf, manifestText, packageOf, removeManifestIn, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
-import { MANIFEST_SUFFIX } from '../wire/sourceMod';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import { buildManifest, type GameHeld, type HashedModFile } from './manifestBuilder';
 
@@ -47,7 +46,6 @@ async function heldManifest(folder: string): Promise<Manifest | undefined | { re
   }
 }
 
-// A line the build file keeps: a file a package gives, or one a step makes.
 const isTakenOrStepped = (manifest: Manifest, line: ManifestFile): boolean =>
   line.entry.kind === 'madeByStep' || ((line.entry.kind === 'held' || line.entry.kind === 'heldAt') && packageOf(manifest, line) !== undefined);
 
@@ -84,7 +82,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, installationFile, held } = read;
-  const leftOut = new Set([...adapter.metadataFilesInModFolder, `${basename(folder)}${MANIFEST_SUFFIX}`].map((path) => path.toLowerCase()));
+  const leftOut = new Set([...adapter.metadataFilesInModFolder, manifestNameOf(folder)].map((path) => path.toLowerCase()));
   const all = await hashed(adapter, folder, (await adapter.filesIn(folder)).filter((path) => !leftOut.has(path.toLowerCase())));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
@@ -97,7 +95,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     output: basename(folder), packages: recorded.packages, exclude: recorded.exclude, archives: recorded.archives, steps: recorded.steps, tools: recorded.tools,
     files: kept,
   };
-  return { folder, repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText(buildFile) } };
+  return { folder, repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
 /** Why the manifest a mod's folder held could not be removed once its repository is made; a

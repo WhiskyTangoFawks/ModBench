@@ -1,11 +1,10 @@
 // modlist-repository.md, Status: a mod's folder and metadata against its manifest, the rule the Mod status box and mod
 // commands' upgrade check both read.
 
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { MANIFEST_SUFFIX } from '../wire/sourceMod';
 import type { Manifest, ManifestFile } from './manifest';
-import { manifestIn } from './manifestFiles';
+import { manifestIn, manifestNameOf } from './manifestFiles';
 import { packageOf } from './packageOf';
 
 type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
@@ -77,7 +76,7 @@ export interface FolderAgainst {
 /** The folder's files against `manifest`'s lines. A file is hashed only where a package entry fixes its bytes, and a line
  *  whose package entry `reads` lacks does not hold its bytes. */
 export async function folderAgainst(manifest: Manifest, folder: string, reads: Omit<FolderReads, 'modMetadata'>): Promise<FolderAgainst> {
-  const manifestName = folded(`${basename(folder)}${MANIFEST_SUFFIX}`);
+  const manifestName = folded(manifestNameOf(folder));
   const onDisk = new Set((await reads.filesIn(folder)).filter((path) => folded(path) !== manifestName));
   // A line names a file in another case only where the file system finds that file by the line's name.
   const found = async (path: string): Promise<boolean> => onDisk.has(path) || (await reads.fileStamp(join(folder, path))).kind === 'read';

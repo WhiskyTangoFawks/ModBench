@@ -198,6 +198,18 @@ describe('sourceCommands build, in mod order', () => {
     expect(await recorded('ModB')).toMatchObject({ packages: [{ kind: 'sourceRepository', name: 'Old ModB' }] });
   });
 
+  it('names a mod whose manifest could not be written', async () => {
+    await rm(folderOf('ModA'), { recursive: true });
+    const client = new InMemoryMEditClient();
+    buildingEach(client);
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+
+    expect(outcome).toEqual({
+      landed: [{ ...landedOf('ModA'), failure: expect.stringMatching(/^The build could not write its manifest: /) as unknown }], refused: [],
+    });
+  });
+
   it('names a mod whose step failed, and writes no manifest', async () => {
     await writeBuildFileIn(SOURCES.ModA, buildFileOf('ModA', { steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }] }));
     const client = new InMemoryMEditClient();

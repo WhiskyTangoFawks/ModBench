@@ -365,7 +365,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
 const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;
 
 // ADR-0022: a submodule the source folder lacks is cloned first, because the
-// manifest it holds is what names the mod it builds.
+// build file it holds is what names the mod it builds.
 async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (status: RestoreStatus) => void): Promise<readonly ItemRefusal<string>[]> {
   const uncloned = await adapter.unclonedSubmodules();
   const refused: ItemRefusal<string>[] = uncloned.flatMap((submodule) => ('lacks' in submodule ? [{ item: submodule.name, reason: notCloned(submodule.lacks) }] : []));

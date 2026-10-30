@@ -1,6 +1,3 @@
-// mods.md, A source mod, story 2: rename and exclude or include write a source mod's build file with its folder, so the
-// folder already equals the next build's output.
-
 import { buildFileIn, lineAtFolderPath, writeBuildFileIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 

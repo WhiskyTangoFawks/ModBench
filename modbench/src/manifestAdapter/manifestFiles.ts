@@ -19,12 +19,12 @@ async function fileNamesIn(folder: string): Promise<string[]> {
 const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
   (await fileNamesIn(folder)).filter((held) => held.toLowerCase() === name.toLowerCase());
 
-const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
+export const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
 
 // An editor may write a byte order mark, which JSON does not allow.
 const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
 
-const read = async (path: string): Promise<ManifestRead> => readManifest(await textAt(path));
+const read = async (path: string, file?: string): Promise<ManifestRead> => readManifest(await textAt(path), file);
 
 const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
@@ -68,16 +68,11 @@ export async function removeManifestIn(folder: string): Promise<void> {
   for (const name of await spellingsIn(folder, manifestNameOf(folder))) await rm(join(folder, name));
 }
 
-/** The text a source mod's repository holds `buildFile` as. */
-export const buildFileText = (buildFile: Manifest): string => manifestText(buildFile);
-
 /** Writes `buildFile` at the root of the source mod's repository in `sourceFolder`, in the spelling it holds it in. Rejects,
  *  writing nothing, when the repository holds two. */
 export async function writeBuildFileIn(sourceFolder: string, buildFile: Manifest): Promise<void> {
-  await writeNamed(sourceFolder, BUILD_FILE, buildFileText(buildFile), twoBuildFiles);
+  await writeNamed(sourceFolder, BUILD_FILE, manifestText(buildFile), twoBuildFiles);
 }
-
-const asBuildFile = (refused: string): string => refused.replaceAll('manifest', 'build file');
 
 /** The build file at the root of the source mod's repository in `sourceFolder`, which names the folder it builds; undefined
  *  when it holds none. */
@@ -85,7 +80,7 @@ export async function buildFileIn(sourceFolder: string): Promise<ManifestRead | 
   const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
   if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
   if (one === undefined) return undefined;
-  const held = await read(join(sourceFolder, one));
-  if ('refused' in held) return { refused: asBuildFile(held.refused) };
+  const held = await read(join(sourceFolder, one), 'build file');
+  if ('refused' in held) return held;
   return held.manifest.output === undefined ? { refused: 'its build file names no output folder' } : held;
 }
