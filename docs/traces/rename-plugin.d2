@@ -14,9 +14,6 @@ instanceloader.label: Instance loader
 
 plugins."the name"
 plugins -> plugincommands: "the gesture: the plugin, the new name" {class: loadorder}
-plugincommands -> client: "the plugin's dependants" {class: query}
-client -> plugincommands: "the dependants" {class: query}
-plugincommands."confirm, when there are dependants"
 plugincommands -> client: "rename source: the plugin, the new name; the rest is edit-record" {class: edit}
 client -> plugincommands: applied or refusal {class: edit}
 plugincommands -> instanceadapter: "the change: the file names · the lines, every profile; the rest is update-load-order-file" {class: loadorder}

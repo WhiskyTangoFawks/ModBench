@@ -115,7 +115,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       tellFocusedPanel: (message) => { tabs.activeTab()?.post(message); },
     }),
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, recordWrite, deps.sourceEditing),
+      meditClient, deps.reporterFor('recordLifecycle'), selections, recordWrite, deps.sourceEditing),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, recordWrite, deps.sourceEditing),
     registerAgentGesture('modbench.record.open', () => [], recordOpenGesture(meditClient, deps.reporterFor('recordOpen'), recordEditorProvider, deps.focusedViewSelection)),
