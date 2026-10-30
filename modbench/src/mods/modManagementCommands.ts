@@ -14,6 +14,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
+import type { ModlistEntry } from '../instanceAdapter/instanceAdapter';
 import type { EntryRef, ModCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
@@ -151,14 +152,14 @@ export function registerModMoveCommand(
 }
 
 // One question for the whole selection: naming the mod alone, or listing several, both saying
-// where the folders go (mods.md, Uninstall).
+// what each loses (mods.md, Uninstall).
 async function confirmUninstall(names: readonly string[], sourceMods: readonly string[], ask: AskQuestion): Promise<boolean> {
   const [only] = names;
   const quoted = (list: readonly string[]) => list.map((n) => `"${n}"`).join(', ');
   const question = names.length === 1 && only !== undefined
-    ? `Uninstall "${only}"? Its folder${sourceMods.length > 0 ? ' and its source' : ''} will be moved to the system trash.`
+    ? `Uninstall "${only}"? Its folder${sourceMods.length > 0 ? ' and its source' : ''} will be moved to the system trash. It loses its place in mod order and its publisher tags.`
     : `Uninstall ${quoted(names)}? Their folders will be moved to the system trash${
-      sourceMods.length > 0 ? `, and the source of ${quoted(sourceMods)} with them` : ''}.`;
+      sourceMods.length > 0 ? `, and the source of ${quoted(sourceMods)} with them` : ''}. Each loses its place in mod order and its publisher tags.`;
   return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
 }
 
@@ -175,6 +176,11 @@ interface ModContextDeps {
 interface Rename {
   readonly oldName: string;
   readonly newName: string;
+}
+
+interface UninstallRequest {
+  readonly mods: readonly string[];
+  readonly force: boolean;
 }
 
 type Uninstalled = Extract<Awaited<ReturnType<ModCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
@@ -235,21 +241,35 @@ export function registerModContextCommands(
     },
   };
 
-  const uninstall: AgentGesture<ModlistNode, readonly string[], GestureResult<Uninstalled>> = {
+  const uninstallForced = (mods: readonly string[]) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
+    const result = await commands.uninstallMods(mods, trash);
+    if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
+    return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
+  });
+
+  // agent.md, Any agent, story 7: each mod is refused, listing what it loses, until the request forces.
+  const uninstallRefusals = (mods: readonly string[]): GestureResult<Uninstalled> => ({
+    applied: true,
+    outcome: {
+      landed: [],
+      refused: mods.map((name) => ({
+        item: { name },
+        reason: `it would move its folder${instance.value.sourceMods.has(name) ? ' and its source' : ''} to the system trash, and lose its place in mod order and its publisher tags. Request it again with force to uninstall it.`,
+      })),
+    },
+  });
+
+  const uninstall: AgentGesture<ModlistNode, UninstallRequest, GestureResult<Uninstalled>, { force?: boolean }> = {
     fromView: async (entry) => {
       const rows = pluralArgument(entry, 'mod');
       const mods = rows.map((n) => n.mod.name);
       if (mods.length === 0) return undefined;
       const sourceMods = rows.filter((n) => n.facts?.sourceMod === true).map((n) => n.mod.name);
-      return (await confirmUninstall(mods, sourceMods, ask)) ? mods : undefined;
+      return (await confirmUninstall(mods, sourceMods, ask)) ? { mods, force: true } : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(modNameOf),
-    run: (mods) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
-      const result = await commands.uninstallMods(mods, trash);
-      if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
-      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
-    }),
-    report: (result, mods) => {
+    fromAgent: ({ argument, options }) => ({ mods: argument.map(modNameOf), force: options.force === true }),
+    run: ({ mods, force }) => force ? uninstallForced(mods) : Promise.resolve(uninstallRefusals(mods)),
+    report: (result, { mods }) => {
       if (!result.applied) {
         reporter.report('error', result.refusal, result.detail);
         return;
@@ -277,11 +297,25 @@ function modNamePrompt(
   return (value) => (value === '' ? undefined : promptRefusal(commands.renameModNameRefusal(value, own)));
 }
 
-async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
+// The separator a deleted separator's mods join: the nearest one above it that the selection leaves.
+function separatorJoined(order: readonly ModlistEntry[], name: string, deleted: readonly string[]): string | undefined {
+  const above = order.slice(0, order.findIndex((entry) => entry.kind === 'separator' && entry.name === name));
+  return above.reverse().find((entry) => entry.kind === 'separator' && !deleted.includes(entry.name))?.name;
+}
+
+const joining = (joined: string | undefined) => (joined === undefined ? 'no separator' : `"${joined}"`);
+
+async function confirmSeparatorDelete(names: readonly string[], order: readonly ModlistEntry[], ask: AskQuestion): Promise<boolean> {
   const question = names.length === 1
-    ? `Delete separator "${names[0]}"? Its mods stay.`
-    : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay.`;
+    ? `Delete separator "${names[0]}"? Its mods stay and join ${joining(separatorJoined(order, names[0] ?? '', names))}.`
+    : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay: ${
+      names.map((n) => `those of "${n}" join ${joining(separatorJoined(order, n, names))}`).join(', ')}.`;
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
+}
+
+interface SeparatorDeletion {
+  readonly names: readonly string[];
+  readonly force: boolean;
 }
 
 interface SeparatorAdd {
@@ -357,14 +391,25 @@ function renameGesture(
 
   function deleteGesture(
     commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  ): AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> {
+  ): AgentGesture<ModlistNode, SeparatorDeletion, GestureResult<DeletedSeparator>, { force?: boolean }> {
+    // agent.md, Any agent, story 7: each separator is refused, naming where its mods go, until the request forces.
+    const refusals = (names: readonly string[]): GestureResult<DeletedSeparator> => ({
+      applied: true,
+      outcome: {
+        landed: [],
+        refused: names.map((name) => ({
+          item: { name },
+          reason: `its mods would join ${joining(separatorJoined(instance.value.mods, name, names))}. Request it again with force to delete it.`,
+        })),
+      },
+    });
     return {
     fromView: async (entry) => {
       const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
-      return names.length > 0 && await confirmSeparatorDelete(names, ask) ? names : undefined;
+      return names.length > 0 && await confirmSeparatorDelete(names, instance.value.mods, ask) ? { names, force: true } : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(separatorNameOf),
-    run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
+    fromAgent: ({ argument, options }) => ({ names: argument.map(separatorNameOf), force: options.force === true }),
+    run: ({ names, force }) => !force ? Promise.resolve(refusals(names)) : runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
       const result = await commands.deleteSeparators(names, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
       return {
@@ -376,7 +421,7 @@ function renameGesture(
         }])),
       };
     }),
-    report: (result, names) => {
+    report: (result, { names }) => {
       if (!result.applied) {
         reporter.report('error', result.refusal, result.detail);
         return;

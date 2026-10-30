@@ -241,11 +241,11 @@ describe('uninstall over the selection', () => {
     registerModContextCommands({ commands, instance, viewSelection: () => [], reporter, ask, trash, log });
 
   it.each<[string, ModNode, ModNode[] | undefined, string]>([
-    ['naming the mod', modA, undefined, 'Uninstall "Mod A"? Its folder will be moved to the system trash.'],
-    ['saying the source goes with the folder of a source mod', sourceA, undefined, 'Uninstall "Mod A"? Its folder and its source will be moved to the system trash.'],
-    ['listing every mod of a selection of several', modA, [modA, modB], 'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash.'],
+    ['naming the mod', modA, undefined, 'Uninstall "Mod A"? Its folder will be moved to the system trash. It loses its place in mod order and its publisher tags.'],
+    ['saying the source goes with the folder of a source mod', sourceA, undefined, 'Uninstall "Mod A"? Its folder and its source will be moved to the system trash. It loses its place in mod order and its publisher tags.'],
+    ['listing every mod of a selection of several', modA, [modA, modB], 'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash. Each loses its place in mod order and its publisher tags.'],
     ['naming the source mods whose source goes with the folders, for a selection of several', sourceA, [sourceA, modB],
-      'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash, and the source of "Mod A" with them.'],
+      'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash, and the source of "Mod A" with them. Each loses its place in mod order and its publisher tags.'],
   ])('asks one modal %s', async (_case, clicked, selected, message) => {
     const ask = scriptedDialog(undefined);
 
@@ -342,8 +342,9 @@ describe('delete separator: the whole selection of separators, asked once', () =
   });
 
   it.each<[string, SeparatorNode[] | undefined, string]>([
-    ['naming the separator and saying its mods stay', undefined, 'Delete separator "Group A"? Its mods stay.'],
-    ['listing every separator of a selection of several', [groupA, groupB], 'Delete separators "Group A", "Group B"? Their mods stay.'],
+    ['naming the separator and saying its mods stay', undefined, 'Delete separator "Group A"? Its mods stay and join no separator.'],
+    ['naming the separator above, which the mods join', [groupB], 'Delete separator "Group B"? Its mods stay and join "Group A".'],
+    ['listing every separator of a selection of several', [groupA, groupB], 'Delete separators "Group A", "Group B"? Their mods stay: those of "Group A" join no separator, those of "Group B" join no separator.'],
   ])('asks one modal %s', async (_case, selected, message) => {
     const ask = scriptedDialog(undefined);
 
@@ -1163,16 +1164,41 @@ describe('the mod gestures, called by the agent', () => {
     });
   });
 
-  it('uninstall uninstalls the mods given, never the selection, confirming nothing', async () => {
-    const { fake, commands } = commandsOver(mods);
-    const ask = scriptedDialog();
-    registerModContextCommands({ commands, instance, viewSelection: () => [selected], reporter: recordingReporter(), ask, trash: vi.fn(), log: vi.fn() });
+  describe('uninstall for an agent', () => {
+    const register = (commands: ModCommands, ask = scriptedDialog()) =>
+      registerModContextCommands({ commands, instance: sourceInstance, viewSelection: () => [selected], reporter: recordingReporter(), ask, trash: vi.fn(), log: vi.fn() });
+    const sourceInstance = { ...instanceOf(mods), value: instanceValueFixture({ mods: [...mods], sourceMods: new Set(['Mod B']) }) };
 
-    const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
+    it('uninstalls the mods given when forced, never the selection, confirming nothing', async () => {
+      const { fake, commands } = commandsOver(mods);
+      const ask = scriptedDialog();
+      register(commands, ask);
 
-    expect(fake.calls.filter((call) => call.verb === 'trashEntryFolder')).toEqual([trashed('mod', 'Mod A'), trashed('mod', 'Mod B')]);
-    expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] }, partial: [] });
-    expect(ask.asked).toEqual([]);
+      const answered = await invoke('modbench.mod.uninstall', new AgentCall(ofMods('Mod A', 'Mod B').argument, { force: true }));
+
+      expect(fake.calls.filter((call) => call.verb === 'trashEntryFolder')).toEqual([trashed('mod', 'Mod A'), trashed('mod', 'Mod B')]);
+      expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] }, partial: [] });
+      expect(ask.asked).toEqual([]);
+    });
+
+    it('refuses each mod without force, listing what it loses and naming force, trashing nothing', async () => {
+      const { fake, commands } = commandsOver(mods);
+      register(commands);
+
+      const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
+
+      expect(fake.calls).toEqual([]);
+      expect(answered).toEqual({
+        applied: true,
+        outcome: {
+          landed: [],
+          refused: [
+            { item: { name: 'Mod A' }, reason: 'it would move its folder to the system trash, and lose its place in mod order and its publisher tags. Request it again with force to uninstall it.' },
+            { item: { name: 'Mod B' }, reason: 'it would move its folder and its source to the system trash, and lose its place in mod order and its publisher tags. Request it again with force to uninstall it.' },
+          ],
+        },
+      });
+    });
   });
 
   describe('create empty mod', () => {
@@ -1298,18 +1324,39 @@ describe('the separator gestures, called by the agent', () => {
     expect(await invoke('modbench.separator.rename', new AgentCall([group('Group A')], { name: 'Group A' }))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
   });
 
-  it('delete deletes the separators given, never the selection, asking nothing, and answers the outcome', async () => {
-    const { fake, commands } = commandsOver(mods);
-    const reporter = recordingReporter();
-    const ask = scriptedDialog();
-    register(commands, reporter, ask);
+  describe('delete for an agent', () => {
+    it('deletes the separators given when forced, never the selection, asking nothing, and answers the outcome', async () => {
+      const { fake, commands } = commandsOver(mods);
+      const reporter = recordingReporter();
+      const ask = scriptedDialog();
+      register(commands, reporter, ask);
 
-    const answered = await invoke('modbench.separator.delete', new AgentCall([group('Group A'), group('Group B')], {}));
+      const answered = await invoke('modbench.separator.delete', new AgentCall([group('Group A'), group('Group B')], { force: true }));
 
-    expect(fake.calls.filter((call) => call.verb === 'trashEntryFolder')).toEqual([trashed('separator', 'Group A'), trashed('separator', 'Group B')]);
-    expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] }, partial: [] });
-    expect(reporter.reports).toEqual([]);
-    nothingOpened(ask);
+      expect(fake.calls.filter((call) => call.verb === 'trashEntryFolder')).toEqual([trashed('separator', 'Group A'), trashed('separator', 'Group B')]);
+      expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] }, partial: [] });
+      expect(reporter.reports).toEqual([]);
+      nothingOpened(ask);
+    });
+
+    it('refuses each separator without force, naming the separator its mods would join and force, deleting nothing', async () => {
+      const { fake, commands } = commandsOver(mods);
+      register(commands);
+
+      const answered = await invoke('modbench.separator.delete', new AgentCall([group('Group A'), group('Group B')], {}));
+
+      expect(fake.calls).toEqual([]);
+      expect(answered).toEqual({
+        applied: true,
+        outcome: {
+          landed: [],
+          refused: [
+            { item: { name: 'Group A' }, reason: 'its mods would join no separator. Request it again with force to delete it.' },
+            { item: { name: 'Group B' }, reason: 'its mods would join no separator. Request it again with force to delete it.' },
+          ],
+        },
+      });
+    });
   });
 });
 
