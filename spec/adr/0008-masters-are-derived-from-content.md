@@ -4,7 +4,7 @@ A recorded divergence from [ADR-0018](0018-xedit-is-the-reference-for-record-edi
 
 ## Consequences
 
-- Nothing edits a master list directly, not a gesture and not a script. A reference to another plugin's record makes that plugin a master at the next compile, and a master nothing references leaves.
+- Nothing edits a master list directly, not a gesture and not a Modbench script. A reference to another plugin's record makes that plugin a master at the next compile, and a master nothing references leaves.
 
 ## Alternatives rejected
 

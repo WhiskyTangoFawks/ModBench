@@ -1,12 +1,12 @@
 # Toolbox
 
-The Toolbox shows the instance itself: which game it is for and which profile is active, with the gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in [commands.md](commands.md) under Instance, Profile and Modlist. What every view shares is in [common.md](common.md).
+The Toolbox shows the instance itself: which game it is for and which profile is active, with the gestures that act on the whole instance. Its template is MO2's top bar and profile combo ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in [commands.md](commands.md) under Instance, Profile, Modlist and Mod. What every view shares is in [common.md](common.md).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
 ## The view
 
-A native tree view, `modbench.toolbox`, first in the `modbench` container and open by default (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. So the list rules in common do not apply to it: it has no name filter, no sort direction, no Collapse All, and selecting several rows means nothing. A click never runs a gesture that writes with no prompt, so a stray click changes nothing.
+A native tree view (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. It has no name filter, no sort direction and no Collapse All, and selecting several rows means nothing. A row's click never writes with no prompt, so a stray click changes nothing.
 
 As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. Cites: ADR-0015
 
@@ -33,7 +33,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 |---|---|
 | Title bar | 1: refresh. Overflow: open settings · log in, or log out while logged in. |
 | Profile menu | switch |
-| Modlist menu | git init (no repository, or one git init has not set up) · update manifest · restore from manifest…, on every mod (a repository) |
+| Modlist menu | as [modlist-repository.md](modlist-repository.md), Menus and keys, places it |
 | Deployment menu | inline: deploy. Menu: deploy · purge. |
 | Keys | Enter: the row's gesture, as a click does. |
 
@@ -41,27 +41,21 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 ### Switch profile
 
-As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to it; Esc switches nothing. Cites: catalog `switch`
-
-### Refresh
-
-As a user, I want the view's progress bar while it runs.
+As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to it. Cites: catalog `switch`; Esc changes nothing
 
 ### Log in
 
 As a user, I want:
 
-1. A password prompt for my Nexus API key. Esc keeps nothing. Cites: MO2's Enter API Key Manually
+1. A password prompt for my Nexus API key. Cites: MO2's Enter API Key Manually; Esc changes nothing
 2. A key Nexus refuses to be refused in the prompt, so a key I keep is one that works. Cites: Refuse, do not repair
 3. The key kept in VS Code's secret storage, for every instance, and never in a setting or the instance, so no commit holds it. Cites: Existing tools
-4. Log out to forget the key.
 
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A refresh refused because another window holds the record index to say "This instance is open in another Modbench window. Close it, then refresh.", and to name the instance. Modbench cannot name the other window. Cites: catalog `refresh`; Never silently wrong; ADR-0003
-2. A failed refresh to say why.
+1. A refresh refused because another window holds the record index to say so, naming the instance, and that closing that window lets refresh run. Cites: catalog `refresh`; Never silently wrong; ADR-0003
 
 ## Test seam
 

@@ -69,7 +69,7 @@ A template is a standalone program. Modbench is not. A gesture leaves this file 
 
 | Surface | xEdit template | MO2 template | What it shows |
 |---|---|---|---|
-| Toolbox | main menu | toolbar, run box, profile combo | [toolbox.md](toolbox.md) |
+| Toolbox | main menu | toolbar, profile combo | [toolbox.md](toolbox.md) |
 | Mods | - | mod list | [mods.md](mods.md) |
 | Plugins | navigator | plugin list | [plugins.md](plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](downloads.md) |
@@ -112,7 +112,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| open settings | reads | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
+| open settings | reads | `modbench.settings.open` | - | setting to show, when the caller names one | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
 | log in / log out | writes | `modbench.instance.logIn`, `modbench.instance.logOut` | - | key | MO2 settings, Nexus tab, Enter API Key Manually | Keep my Nexus API key, or forget it. | none |
 | refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Rebuild the record index, and read the instance again from disk. | load-instance |
 | deploy / purge | writes | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Deploy the active profile's load order to the deployment folder, or remove what deploy wrote there ([deployment-hardlink.md](deployment-hardlink.md)). | - |
@@ -209,7 +209,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | query info | writes | `modbench.downloadedFile.queryInfo` | downloaded files | - | MO2 Downloads, Query Info (MD5) | Look each file up on Nexus, and write what Nexus knows of it in its metadata. | - |
 | open | reads | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open metadata | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the file that holds a downloaded file's metadata in an editor tab. | none |
-| sort | reads | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | none |
+| sort | reads | `modbench.downloadedFile.sort` | - | field; direction | MO2 Downloads | Choose the field the downloaded files sort by. | none |
 | show excluded | reads | `modbench.downloadedFile.showExcluded`, `modbench.downloadedFile.hideExcluded` | - | - | MO2 Downloads | Show or hide the excluded downloaded files. | none |
 
 ## System commands

@@ -164,6 +164,11 @@ A record that holds a reference to the record the Referenced By list is about. I
 
 Avoid: referencing record, back-reference
 
+# Modbench script
+A program that reads and changes records through mEdit: Modbench's evolution of the xEdit script.
+
+Avoid: script (alone, for this), xEdit script (for Modbench's)
+
 # Record index
 mEdit's searchable copy of every record in every plugin of the instance, derived from the plugins.
 
