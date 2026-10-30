@@ -201,21 +201,51 @@ describe('modbench.plugin.decompile', () => {
     expect(decompileCalls(client)).toEqual([[[SECOND], false]]);
   });
 
-  it('reports what the unforced send landed and refused when the forced send is refused whole', async () => {
+  it('reports what the forced send landed and the unforced send was refused when the unforced send is refused whole', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', changedSource);
     client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', clean);
     client.setCommandHandler('decompile', (plugins, force) => Promise.resolve(force
-      ? { refused: true as const, message: 'git was not found on PATH.' }
-      : { landed: plugins, refused: [] }));
+      ? { landed: plugins, refused: [] }
+      : { refused: true as const, message: 'git went away.' }));
     const { handler, reporter } = registered(client, 'Decompile');
     const rows = [row(FIRST), row(SECOND)];
 
     await handler(rows[0], rows);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not decompile 1 of 2 plugins.', detail: '"First.esp (ModA)" (git was not found on PATH.)' },
+      { severity: 'error', message: 'Could not decompile 1 of 2 plugins.', detail: '"Second.esp (ModA)" (git went away.)' },
     ]);
+  });
+
+  it('refuses the whole selection once, writing nothing further, when the forced send is refused whole', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', changedSource);
+    client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', clean);
+    client.setCommandResult('decompile', { refused: true, message: 'git was not found on PATH.' });
+    const { handler, reporter } = registered(client, 'Decompile');
+    const rows = [row(FIRST), row(SECOND)];
+
+    await handler(rows[0], rows);
+
+    expect(decompileCalls(client)).toEqual([[[FIRST], true]]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'git was not found on PATH.', detail: undefined }]);
+  });
+
+  it('reports a working-tree refusal without mEdit\'s offer of force, which the view does not make', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+    client.setCommandResult('decompile', { landed: [], refused: [{
+      item: FIRST, reason: 'First.esp\'s source has working-tree changes that decompile would replace: a.json. Commit or discard them, or request it again with force to replace them.',
+    }] });
+    const { handler, reporter } = registered(client, 'Decompile');
+
+    await handler(row(FIRST));
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not decompile "First.esp".',
+      detail: '"First.esp (ModA)" (First.esp\'s source has working-tree changes that decompile would replace: a.json. Commit or discard them.)',
+    }]);
   });
 
   it('names each refused plugin and why in one notification while the rest land', async () => {
