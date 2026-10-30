@@ -169,7 +169,7 @@ internal sealed class SourceModBuild
 
             var variant = files.All(file => file.Path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) ? variants.Textures : variants.General;
             var at = written.PathOf(archive.Path);
-            if (!packer.Pack(mod.Folder, at, files, variant).Holds(out var replaced, out var refusal))
+            if (!packer.Pack(mod.Folder, at, [.. files.Select(file => new ArchiveFile(file.Path, file.Open))], variant).Holds(out var replaced, out var refusal))
             {
                 refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
                 continue;

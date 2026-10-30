@@ -1,14 +1,12 @@
-using MEditService.ModFolderAdapter;
 using MEditService.RepositoriesLib;
-using MEditService.SourceAdapter;
 
-namespace MEditService.Commands.Build;
+namespace MEditService.ModFolderAdapter;
 
-internal sealed class ArchivePacker(IModFolderRepository repository)
+public sealed class ArchivePacker(IModFolderRepository repository)
 {
     /// <summary>Writes the archive at <paramref name="archivePath"/> under <paramref name="folder"/> from
     /// <paramref name="files"/>: true when it replaced an archive that held other bytes.</summary>
-    public Answer<bool, PackRefusal> Pack(string folder, string archivePath, IReadOnlyList<Asset> files, IArchiveVariant variant)
+    public Answer<bool, PackRefusal> Pack(string folder, string archivePath, IReadOnlyList<ArchiveFile> files, IArchiveVariant variant)
     {
         try
         {
