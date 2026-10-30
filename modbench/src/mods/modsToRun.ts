@@ -61,7 +61,7 @@ function modsOf(row: unknown, value: InstanceValue, scope: Scope): string[] | un
   return typeof name === 'string' ? modsHeldBy(kindOf(row), name, value, scope) : undefined;
 }
 
-// commands.md, The surface supplies the Argument: an agent call may supply all of it, and none is every mod.
+// modlist-repository.md, Every mod, story 1: an agent call may supply all of it, and none is every mod.
 export function modsOfAgent(argument: readonly Argument[], value: InstanceValue, scope: Scope = 'modsAndSeparators'): string[] {
   if (argument.length === 0) return everyMod(value, scope);
   const held = argument.flatMap((entry) => {

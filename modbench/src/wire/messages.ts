@@ -38,8 +38,8 @@ export const WEBVIEW_TO_EXTENSION = {
   // The same native pick for an enum: `choices` are the names to list, `current` the value the
   // pick opens on.
   OPEN_ENUM_PICKER: 'openEnumPicker',
-  // commands.md, Record: a field gesture from the palette acts on the focused cell, which only the
-  // panel knows. `context` is what its right-click hands a command; `null` is no focused cell.
+  // commands.md, The entry point supplies what it knows: a field gesture from the palette acts on the
+  // focused cell, which only the panel knows. `context` is what its right-click hands a command; `null` is no focused cell.
   FOCUS_CELL: 'focusCell',
   // RecordPanelClient's own read, asked of the host's mEdit client rather than fetched by the
   // webview itself. `requestId` pairs the reply.
