@@ -1,21 +1,15 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using MEditService.Commands.Build;
-using MEditService.Commands.Tests.TestSupport;
-using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Archives;
 
-namespace MEditService.Commands.Tests.Build;
+namespace MEditService.ModFolderAdapter.Tests;
 
 public sealed class ArchivePackerTests : IDisposable
 {
     private const string Mod = "mods/Mod";
-    private const string SourceFolder = "source/Mod";
-    private const string Assets = "source/Mod/assets";
     private const string Archive = "Mod - Main.archive";
     private const string Meshes = "Meshes/Actors/A.nif";
     private const string Scripts = "scripts/a.pex";
@@ -26,7 +20,7 @@ public sealed class ArchivePackerTests : IDisposable
     private static readonly Ba2Variant Ba2 = new(1, Ba2Contents.General, Compressed: false);
     private static readonly BsaVariant Bsa104 = new(104, ArchiveFlags: 0x3, FileFlags: 0x3);
 
-    private readonly FakeModFolders _folders = new();
+    private readonly Dictionary<string, Func<Stream>> _assets = [];
     private readonly ScratchDirectory _scratch = new("archive-packer-");
 
     public static TheoryData<uint, bool> GeneralBa2s => new()
@@ -54,31 +48,35 @@ public sealed class ArchivePackerTests : IDisposable
 
     public void Dispose() => _scratch.Dispose();
 
-    private async Task<(byte[]? Archive, ArchiveRefused? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
+    private (byte[]? Archive, PackRefusal? Refusal) Pack(IArchiveVariant variant, params string[] files)
     {
-        var source = new FakeSourceAdapter().Building(SourceFolder, new SourceToBuild(
-            [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
-        var holder = new LoadOrderHolder();
-        holder.Apply(SnapshotPlugins.Snapshot(_scratch, null, GameRelease.Fallout4, []));
-
-        var built = (await TestEditService.BuildModHandler(holder, source: source, modFolders: _folders)
-            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod) { Archives = [new ArchiveToPack(Archive, files)] }], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant)))).Value();
-
-        return (_folders.Written.GetValueOrDefault((Mod, Archive)), Assert.Single(built.Applied).ArchivesRefused.SingleOrDefault());
+        var modFolder = Path.Combine(_scratch, Mod);
+        var answer = new ArchivePacker(new ModFolderRepository())
+            .Pack(modFolder, Archive, [.. files.Select(file => new ArchiveFile(file, _assets[file]))], variant);
+        var written = Path.Combine(modFolder, Archive);
+        return (File.Exists(written) ? File.ReadAllBytes(written) : null, answer.Holds(out _, out var refusal) ? null : refusal);
     }
 
-    private async Task<byte[]> PackedAsync(IArchiveVariant variant, params string[] files)
+    private byte[] Packed(IArchiveVariant variant, params string[] files)
     {
-        var (archive, refusal) = await PackAsync(variant, files);
+        var (archive, refusal) = Pack(variant, files);
         Assert.Null(refusal);
         return Assert.IsType<byte[]>(archive);
     }
 
-    private async Task<ArchiveRefused> RefusedAsync(IArchiveVariant variant, params string[] files)
+    private PackRefusal Refused(IArchiveVariant variant, params string[] files)
     {
-        var (archive, refusal) = await PackAsync(variant, files);
+        var (archive, refusal) = Pack(variant, files);
         Assert.Null(archive);
-        return Assert.IsType<ArchiveRefused>(refusal);
+        return Assert.IsType<PackRefusal>(refusal);
+    }
+
+    private ArchivePackerTests WithBytes(string path, byte[] bytes) => WithStream(path, () => new MemoryStream(bytes));
+
+    private ArchivePackerTests WithStream(string path, Func<Stream> open)
+    {
+        _assets[path] = open;
+        return this;
     }
 
     private IArchiveReader Reader(GameRelease release, byte[] archive)
@@ -91,7 +89,7 @@ public sealed class ArchivePackerTests : IDisposable
     private static Dictionary<string, byte[]> ContentsOf(IArchiveReader reader) =>
         reader.Files.ToDictionary(f => f.Path.Replace('/', '\\'), f => f.GetBytes());
 
-    private FakeModFolders WithMeshAndScript() => _folders.WithBytes(Assets, Meshes, Mesh).WithBytes(Assets, Scripts, Script);
+    private ArchivePackerTests WithMeshAndScript() => WithBytes(Meshes, Mesh).WithBytes(Scripts, Script);
 
     private static void AssertEveryReferenceReaderSees(byte[] archive, Dictionary<string, byte[]> expected)
     {
@@ -100,11 +98,11 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task AGeneralBa2_ReadsBackThroughMutagenUnderLowercasedBackslashPaths()
+    public void AGeneralBa2_ReadsBackThroughMutagenUnderLowercasedBackslashPaths()
     {
         WithMeshAndScript();
 
-        var contents = ContentsOf(Reader(GameRelease.Fallout4, await PackedAsync(Ba2, Meshes, Scripts)));
+        var contents = ContentsOf(Reader(GameRelease.Fallout4, Packed(Ba2, Meshes, Scripts)));
 
         Assert.Equal(["meshes\\actors\\a.nif", "scripts\\a.pex"], contents.Keys.Order());
         Assert.Equal(Mesh, contents["meshes\\actors\\a.nif"]);
@@ -112,56 +110,56 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompressedGeneralBa2_ReadsBackThroughMutagen()
+    public void ACompressedGeneralBa2_ReadsBackThroughMutagen()
     {
         WithMeshAndScript();
 
-        var archive = await PackedAsync(Ba2 with { Compressed = true }, Meshes);
+        var archive = Packed(Ba2 with { Compressed = true }, Meshes);
 
-        Assert.True(archive.Length < (await PackedAsync(Ba2, Meshes)).Length);
+        Assert.True(archive.Length < (Packed(Ba2, Meshes)).Length);
         Assert.Equal(Mesh, ContentsOf(Reader(GameRelease.Fallout4, archive)).Values.Single());
     }
 
     [Theory]
     [MemberData(nameof(GeneralBa2s))]
-    public async Task AGeneralBa2_ReadsBackThroughBothReferenceReaders(uint version, bool compressed)
+    public void AGeneralBa2_ReadsBackThroughBothReferenceReaders(uint version, bool compressed)
     {
         WithMeshAndScript();
 
-        var archive = await PackedAsync(new Ba2Variant(version, Ba2Contents.General, compressed), Meshes, Scripts);
+        var archive = Packed(new Ba2Variant(version, Ba2Contents.General, compressed), Meshes, Scripts);
 
         AssertEveryReferenceReaderSees(archive, new() { ["meshes\\actors\\a.nif"] = Mesh, ["scripts\\a.pex"] = Script });
     }
 
     [Theory]
     [MemberData(nameof(TextureBa2s))]
-    public async Task ATexturesBa2_ReadsBackItsPixelDataThroughBothReferenceReaders(uint version, bool compressed)
+    public void ATexturesBa2_ReadsBackItsPixelDataThroughBothReferenceReaders(uint version, bool compressed)
     {
         var dds = Dds.Dxt1(width: 8, height: 8, mips: 2);
-        _folders.WithBytes(Assets, "textures/a_d.dds", dds.File);
+        WithBytes("textures/a_d.dds", dds.File);
 
-        var archive = await PackedAsync(new Ba2Variant(version, Ba2Contents.Textures, compressed), "textures/a_d.dds");
+        var archive = Packed(new Ba2Variant(version, Ba2Contents.Textures, compressed), "textures/a_d.dds");
 
         AssertEveryReferenceReaderSees(archive, new() { ["textures\\a_d.dds"] = dds.Pixels });
     }
 
     [Fact]
-    public async Task AVersion3TexturesBa2_HeaderNamesLz4ItsCompression()
+    public void AVersion3TexturesBa2_HeaderNamesLz4ItsCompression()
     {
-        _folders.WithBytes(Assets, "textures/a_d.dds", Dds.Dxt1(8, 8, 1).File);
+        WithBytes("textures/a_d.dds", Dds.Dxt1(8, 8, 1).File);
 
-        var archive = await PackedAsync(new Ba2Variant(3, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds");
+        var archive = Packed(new Ba2Variant(3, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds");
 
         Assert.Equal((1ul, 3u), (U64(archive, 24), U32(archive, 32)));
     }
 
     [Fact]
-    public async Task ATexturesBa2_ReadsBackThroughMutagenWithItsFormat()
+    public void ATexturesBa2_ReadsBackThroughMutagenWithItsFormat()
     {
         var dds = Dds.Dxt1(width: 8, height: 8, mips: 2);
-        _folders.WithBytes(Assets, "textures/a_d.dds", dds.File);
+        WithBytes("textures/a_d.dds", dds.File);
 
-        var extracted = ContentsOf(Reader(GameRelease.Fallout4, await PackedAsync(new Ba2Variant(1, Ba2Contents.Textures, false), "textures/a_d.dds"))).Single();
+        var extracted = ContentsOf(Reader(GameRelease.Fallout4, Packed(new Ba2Variant(1, Ba2Contents.Textures, false), "textures/a_d.dds"))).Single();
 
         Assert.Equal("textures\\a_d.dds", extracted.Key);
         Assert.Equal(dds.Pixels, extracted.Value[^dds.Pixels.Length..]);
@@ -169,24 +167,24 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task ADdsWithAnExtendedHeader_KeepsItsDxgiFormat()
+    public void ADdsWithAnExtendedHeader_KeepsItsDxgiFormat()
     {
         var dds = Dds.Bc7(width: 8, height: 8);
-        _folders.WithBytes(Assets, "textures/a_n.dds", dds.File);
+        WithBytes("textures/a_n.dds", dds.File);
 
-        var extracted = ContentsOf(Reader(GameRelease.Fallout4, await PackedAsync(new Ba2Variant(1, Ba2Contents.Textures, false), "textures/a_n.dds"))).Single().Value;
+        var extracted = ContentsOf(Reader(GameRelease.Fallout4, Packed(new Ba2Variant(1, Ba2Contents.Textures, false), "textures/a_n.dds"))).Single().Value;
 
         Assert.Equal(dds.Pixels, extracted[^dds.Pixels.Length..]);
         Assert.Equal(98u, U32(extracted, 128));
     }
 
     [Fact]
-    public async Task AGeneralBa2_HeaderNamesTheVersionAndCountAndEachFileHashesItsStemAndFolder()
+    public void AGeneralBa2_HeaderNamesTheVersionAndCountAndEachFileHashesItsStemAndFolder()
     {
         const string path = "meshes/actors/character/facegendata/facegeom/ordinator - perks of skyrim.esp/0006c67c.nif";
-        _folders.WithBytes(Assets, path, Mesh);
+        WithBytes(path, Mesh);
 
-        var archive = await PackedAsync(Ba2, path);
+        var archive = Packed(Ba2, path);
 
         Assert.Equal("BTDX", Encoding.ASCII.GetString(archive, 0, 4));
         Assert.Equal((1u, 1u), (U32(archive, 4), U32(archive, 12)));
@@ -196,24 +194,24 @@ public sealed class ArchivePackerTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Ba2sNotWritten))]
-    public async Task ABa2NoReaderAgreesOn_IsNotWritten(uint version, Ba2Contents contents, bool compressed)
+    public void ABa2NoReaderAgreesOn_IsNotWritten(uint version, Ba2Contents contents, bool compressed)
     {
         WithMeshAndScript();
 
-        var refusal = await RefusedAsync(new Ba2Variant(version, contents, compressed), Scripts);
+        var refusal = Refused(new Ba2Variant(version, contents, compressed), Scripts);
 
-        Assert.Equal(ArchiveRefusal.VariantNotWritten, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.VariantNotWritten, refusal.Reason);
     }
 
     [Theory]
     [MemberData(nameof(BsasNotWritten))]
-    public async Task ABsaWithoutAWriter_IsNotWritten(uint version, uint archiveFlags)
+    public void ABsaWithoutAWriter_IsNotWritten(uint version, uint archiveFlags)
     {
         WithMeshAndScript();
 
-        var refusal = await RefusedAsync(new BsaVariant(version, archiveFlags, FileFlags: 3), Scripts);
+        var refusal = Refused(new BsaVariant(version, archiveFlags, FileFlags: 3), Scripts);
 
-        Assert.Equal(ArchiveRefusal.VariantNotWritten, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.VariantNotWritten, refusal.Reason);
     }
 
     [Theory]
@@ -221,11 +219,11 @@ public sealed class ArchivePackerTests : IDisposable
     [InlineData(GameRelease.SkyrimLE, 104u, 0x3u)]
     [InlineData(GameRelease.SkyrimSE, 105u, 0x3u)]
     [InlineData(GameRelease.SkyrimSE, 105u, 0x7u)]
-    public async Task ABsa_ReadsBackThroughMutagenUnderLowercasedFolderAndName(GameRelease release, uint version, uint archiveFlags)
+    public void ABsa_ReadsBackThroughMutagenUnderLowercasedFolderAndName(GameRelease release, uint version, uint archiveFlags)
     {
         WithMeshAndScript();
 
-        var contents = ContentsOf(Reader(release, await PackedAsync(new BsaVariant(version, archiveFlags, FileFlags: 0x3), Meshes, Scripts)));
+        var contents = ContentsOf(Reader(release, Packed(new BsaVariant(version, archiveFlags, FileFlags: 0x3), Meshes, Scripts)));
 
         Assert.Equal(["meshes\\actors\\a.nif", "scripts\\a.pex"], contents.Keys.Order());
         Assert.Equal(Mesh, contents["meshes\\actors\\a.nif"]);
@@ -233,11 +231,11 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompressedBsa104_HoldsTheFileZlibCompressedBehindItsLength()
+    public void ACompressedBsa104_HoldsTheFileZlibCompressedBehindItsLength()
     {
         WithMeshAndScript();
 
-        var archive = await PackedAsync(Bsa104 with { ArchiveFlags = 0x7 }, Meshes);
+        var archive = Packed(Bsa104 with { ArchiveFlags = 0x7 }, Meshes);
 
         var fileRecord = 36 + 16 + 1 + "meshes\\actors".Length + 1 + 8;
         var (size, offset) = (U32(archive, fileRecord), (int)U32(archive, fileRecord + 4));
@@ -249,11 +247,11 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task ABsa_HashesFoldersAndFilesTheWayTheGameDoes()
+    public void ABsa_HashesFoldersAndFilesTheWayTheGameDoes()
     {
-        _folders.WithBytes(Assets, "textures/excellent/ninelives.dds", Script);
+        WithBytes("textures/excellent/ninelives.dds", Script);
 
-        var archive = await PackedAsync(Bsa104, "textures/excellent/ninelives.dds");
+        var archive = Packed(Bsa104, "textures/excellent/ninelives.dds");
 
         const int folderRecord = 36;
         Assert.Equal((0x0542982074126E74UL, 1u), (U64(archive, folderRecord), U32(archive, folderRecord + 8)));
@@ -263,22 +261,22 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task ABsa_ListsItsFoldersInTheOrderOfTheirHashes()
+    public void ABsa_ListsItsFoldersInTheOrderOfTheirHashes()
     {
-        _folders.WithBytes(Assets, "b/z.txt", Script).WithBytes(Assets, "a/y.txt", Script).WithBytes(Assets, "a/x.txt", Script);
+        WithBytes("b/z.txt", Script).WithBytes("a/y.txt", Script).WithBytes("a/x.txt", Script);
 
-        var archive = await PackedAsync(Bsa104, "b/z.txt", "a/y.txt", "a/x.txt");
+        var archive = Packed(Bsa104, "b/z.txt", "a/y.txt", "a/x.txt");
 
         var hashes = Enumerable.Range(0, 2).Select(i => U64(archive, 36 + 16 * i)).ToList();
         Assert.Equal(hashes.Order(), hashes);
     }
 
     [Fact]
-    public async Task ABsa_ListsTheFilesOfAFolderInTheOrderOfTheirHashes()
+    public void ABsa_ListsTheFilesOfAFolderInTheOrderOfTheirHashes()
     {
-        _folders.WithBytes(Assets, "a/zz.txt", Script).WithBytes(Assets, "a/ab.txt", Script).WithBytes(Assets, "a/m.txt", Script);
+        WithBytes("a/zz.txt", Script).WithBytes("a/ab.txt", Script).WithBytes("a/m.txt", Script);
 
-        var archive = await PackedAsync(Bsa104, "a/zz.txt", "a/ab.txt", "a/m.txt");
+        var archive = Packed(Bsa104, "a/zz.txt", "a/ab.txt", "a/m.txt");
 
         var firstFileRecord = 36 + 16 + 1 + "a".Length + 1;
         var hashes = Enumerable.Range(0, 3).Select(i => U64(archive, firstFileRecord + 16 * i)).ToList();
@@ -286,55 +284,55 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Fact]
-    public async Task ABsa_SpellsANameInWindows1252()
+    public void ABsa_SpellsANameInWindows1252()
     {
-        _folders.WithBytes(Assets, "scripts/it’s.pex", Script);
+        WithBytes("scripts/it’s.pex", Script);
 
-        var archive = await PackedAsync(Bsa104, "scripts/it’s.pex");
+        var archive = Packed(Bsa104, "scripts/it’s.pex");
 
         Assert.Contains((byte)0x92, archive);
     }
 
     [Fact]
-    public async Task ABsa_RefusesANameWindows1252CannotSpell()
+    public void ABsa_RefusesANameWindows1252CannotSpell()
     {
-        _folders.WithBytes(Assets, "scripts/日本.pex", Script);
+        WithBytes("scripts/日本.pex", Script);
 
-        var refusal = await RefusedAsync(Bsa104, "scripts/日本.pex");
+        var refusal = Refused(Bsa104, "scripts/日本.pex");
 
-        Assert.Equal(ArchiveRefusal.FileNotPackable, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.FileNotPackable, refusal.Reason);
     }
 
     [Fact]
-    public async Task ABsa_RefusesAFileWhoseSizeSetsTheCompressionBit()
+    public void ABsa_RefusesAFileWhoseSizeSetsTheCompressionBit()
     {
-        _folders.WithStream(Assets, "scripts/big.pex", () => new LengthOnlyStream(1L << 30));
+        WithStream("scripts/big.pex", () => new LengthOnlyStream(1L << 30));
 
-        var refusal = await RefusedAsync(Bsa104, "scripts/big.pex");
+        var refusal = Refused(Bsa104, "scripts/big.pex");
 
-        Assert.Equal(ArchiveRefusal.FileNotPackable, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.FileNotPackable, refusal.Reason);
         Assert.Contains("scripts/big.pex", refusal.Message);
     }
 
     [Fact]
-    public async Task AFileThatCannotBeRead_WritesNoArchive()
+    public void AFileThatCannotBeRead_WritesNoArchive()
     {
         WithMeshAndScript();
-        _folders.Unreadable.Add((Assets, Scripts));
+        WithStream(Scripts, () => throw new IOException("held by another process"));
 
-        var refusal = await RefusedAsync(Ba2, Meshes, Scripts);
+        var refusal = Refused(Ba2, Meshes, Scripts);
 
-        Assert.Equal(ArchiveRefusal.NotWritten, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.NotWritten, refusal.Reason);
     }
 
     [Fact]
-    public async Task AStreamThatCannotBeRead_IsNotAVariantRefusal()
+    public void AStreamThatCannotBeRead_IsNotAVariantRefusal()
     {
-        _folders.WithStream(Assets, Scripts, () => throw new NotSupportedException("no reads"));
+        WithStream(Scripts, () => throw new NotSupportedException("no reads"));
 
-        var refusal = await RefusedAsync(Ba2, Scripts);
+        var refusal = Refused(Ba2, Scripts);
 
-        Assert.Equal(ArchiveRefusal.NotWritten, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.NotWritten, refusal.Reason);
     }
 
     [Theory]
@@ -343,7 +341,7 @@ public sealed class ArchivePackerTests : IDisposable
     [InlineData("textures/array.dds")]
     [InlineData("textures/volume.dds")]
     [InlineData("textures/empty.dds")]
-    public async Task ATexturesBa2_RefusesAFileThatIsNoSingle2DTextureOfAKnownFormat(string path)
+    public void ATexturesBa2_RefusesAFileThatIsNoSingle2DTextureOfAKnownFormat(string path)
     {
         var unknownFormat = Dds.Dxt1(8, 8, 1).File;
         BinaryPrimitives.WriteUInt32LittleEndian(unknownFormat.AsSpan(84), 0x31545845);
@@ -351,15 +349,15 @@ public sealed class ArchivePackerTests : IDisposable
         BinaryPrimitives.WriteUInt32LittleEndian(array.AsSpan(128 + 12), 2);
         var volume = Dds.Dxt1(8, 8, 1).File;
         BinaryPrimitives.WriteUInt32LittleEndian(volume.AsSpan(112), 0x200000);
-        _folders.WithBytes(Assets, "textures/a.txt", Script)
-            .WithBytes(Assets, "textures/unknown_format.dds", unknownFormat)
-            .WithBytes(Assets, "textures/array.dds", array)
-            .WithBytes(Assets, "textures/volume.dds", volume)
-            .WithBytes(Assets, "textures/empty.dds", Dds.Dxt1(8, 8, 1).File[..128]);
+        WithBytes("textures/a.txt", Script)
+            .WithBytes("textures/unknown_format.dds", unknownFormat)
+            .WithBytes("textures/array.dds", array)
+            .WithBytes("textures/volume.dds", volume)
+            .WithBytes("textures/empty.dds", Dds.Dxt1(8, 8, 1).File[..128]);
 
-        var refusal = await RefusedAsync(new Ba2Variant(1, Ba2Contents.Textures, false), path);
+        var refusal = Refused(new Ba2Variant(1, Ba2Contents.Textures, false), path);
 
-        Assert.Equal(ArchiveRefusal.FileNotPackable, refusal.Refusal);
+        Assert.Equal(ArchiveRefusal.FileNotPackable, refusal.Reason);
         Assert.Contains(path, refusal.Message);
     }
 

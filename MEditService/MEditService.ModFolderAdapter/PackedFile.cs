@@ -1,4 +1,4 @@
-namespace MEditService.Commands.Build;
+namespace MEditService.ModFolderAdapter;
 
 internal sealed record PackedFile(string Source, string Name, Func<Stream> Open)
 {
