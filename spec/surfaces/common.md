@@ -68,6 +68,8 @@ As a user, I want:
 
 ADR-0019 decides the tier; this table is how each tier looks on a surface.
 
+The Output is the log: a line for each thing that happened. The Problems panel is the dashboard: a problem for each state that is wrong, on the file it concerns, while the state holds.
+
 | What happened | What I see |
 |---|---|
 | The first read behind the view failed | the error row (States, story 2), and a line in the Output |

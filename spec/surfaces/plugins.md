@@ -23,7 +23,7 @@ As a user, I want:
 7. A row with nothing beneath it to show no expander, and an empty group of a cell's child records not to be a row. Cites: xEdit
 8. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what is on screen.
 9. Every row collapsed each time the extension activates, so the view opens clean. Cites: as in Mods
-10. A clone or a checkout to keep the plugin order of each mod I have not restored yet. Cites: modlist-repository.md, The repository, story 4; ADR-0022
+10. A clone or a checkout to keep the plugin order of each mod I have not restored yet. Cites: modlist-repository.md, The repository, story 3; ADR-0022
 
 ## A row
 
