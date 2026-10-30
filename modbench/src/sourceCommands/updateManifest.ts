@@ -1,10 +1,10 @@
 import { join } from 'node:path';
-import type { InstallationFile, InstanceAdapter, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, statusOf, writeManifestIn, type Manifest, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
+import { manifestIn, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import type { FileProblems } from '../ports/fileProblems';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import { foldersOf, namesOf, sourceFolderOf, type Folders } from './folders';
+import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFilesOf, type GameHeld, type HashedModFile, type PackageEntries } from './manifestBuilder';
 import { metadataUnreadable } from './sourceCommands';
@@ -50,7 +50,6 @@ interface ModToUpdate {
   readonly name: string;
   readonly folder: string;
   readonly installationFile?: InstallationFile;
-  readonly sourceFolder?: string;
   readonly version?: string;
   readonly game?: GameHeld;
 }
@@ -61,7 +60,7 @@ interface UpdateOptions {
 }
 
 async function readMod(
-  adapter: Adapter, mod: string, folders: Folders, game: GameToHand, sourceMods: SourceMods,
+  adapter: Adapter, mod: string, folders: Folders, game: GameToHand,
 ): Promise<{ read: Omit<ModToUpdate, 'version'>; notes: readonly string[] } | { refusal: string }> {
   const folder = await folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
@@ -76,7 +75,7 @@ async function readMod(
   if ('refusal' in taken) return taken;
   return {
     read: {
-      name: mod, folder, ...withGame(game, taken.gameFiles), ...sourceFolderOf(sourceMods, mod),
+      name: mod, folder, ...withGame(game, taken.gameFiles),
       ...installed.answer === undefined ? {} : { installationFile: installed.answer },
     },
     notes: [
@@ -104,17 +103,6 @@ const refusal = (why: string): { refusal: string } => ({ refusal: `was not updat
 
 const pathsWhere = (manifest: Manifest, kind: 'notHeld' | 'otherBytes'): string[] =>
   manifest.files.filter((file) => file.entry.kind === kind).map((file) => file.path).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-
-// ADR-0022: a source mod's build writes its manifest.
-async function recordedByItsBuild(adapter: Adapter, mod: ModToUpdate): Promise<Answer> {
-  const status: ModStatus = await statusOf({ name: mod.name, folder: mod.folder }, adapter);
-  if (status.unreadable !== undefined) return refusal(`${status.unreadable}.`);
-  if (status.noManifest) return refusal('its build writes its manifest, and it has not written one.');
-  if (status.differing.length + status.namedByNoLine.length + status.gone.length > 0) {
-    return refusal('its build writes its manifest, and its folder differs from what the build wrote.');
-  }
-  return { landed: { mod: mod.name, manifestWritten: false, notInPackage: status.notInPackage, otherBytes: status.otherBytes }, notes: [] };
-}
 
 async function folderMissing(adapter: Adapter, folder: string): Promise<boolean> {
   const stamp = await adapter.fileStamp(folder);
@@ -151,8 +139,6 @@ async function packageEntriesKept(adapter: Adapter, gamePackage: PackageEntries 
 }
 
 async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: ReturnType<typeof downloadedFilesOf>): Promise<Answer> {
-  if (mod.sourceFolder !== undefined) return recordedByItsBuild(adapter, mod);
-
   const held = await heldManifestOf(mod.folder);
   if (held !== undefined && 'refusal' in held) return held;
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
@@ -228,7 +214,7 @@ async function pathsShown({ adapter, pathProblems, instanceRoot }: UpdateManifes
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
-/** Each mod's manifest from the mod as it is. A mod the Instance adapter cannot answer is refused, naming why. `everyMod`:
+/** Each mod's manifest from the mod as it is; a source mod's build records its own. A mod the adapter cannot answer is refused, naming why. `everyMod`:
  *  a source mod that is gone loses its submodule entry. */
 export async function updateManifest(
   deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
@@ -240,17 +226,24 @@ export async function updateManifest(
   const refused: ItemRefusal<string>[] = [];
   const notes: ModNote[] = [];
   const read: Omit<ModToUpdate, 'version'>[] = [];
+  const passedOver: string[] = [];
   for (const mod of new Set(namesOf(mods, others))) {
     if (signal?.aborted) break;
+    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) { passedOver.push(mod); continue; }
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const answer = await readMod(adapter, mod, folders, game, sourceMods);
+    const answer = await readMod(adapter, mod, folders, game);
     if ('refusal' in answer) { refused.push({ item: mod, reason: answer.refusal }); continue; }
     read.push(answer.read);
     notes.push(...answer.notes.map((note) => ({ mod, note })));
   }
-  const nothingUpdated = async (): Promise<UpdateManifestResult> => ({
-    ...cancelledIf(signal), landed: [], refused, notes, repositoryNotes: await pathsShown(deps),
-  });
+  const nothingUpdated = async (): Promise<UpdateManifestResult> => {
+    const cancelled = cancelledIf(signal);
+    const submodules = passedOver.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, passedOver);
+    return {
+      ...cancelled, landed: [], refused, notes: [...notes, ...submodules.notes],
+      repositoryNotes: [...submodules.repositoryNotes, ...await pathsShown(deps)],
+    };
+  };
   if (signal?.aborted || read.length === 0) return nothingUpdated();
 
   const versioned: ModToUpdate[] = [];
@@ -267,7 +260,7 @@ export async function updateManifest(
 
   const downloadedFiles = downloadedFilesOf(downloaded.files);
   const landed: ModUpdated[] = [];
-  const acted: string[] = [];
+  const acted = [...passedOver];
   for (const [at, mod] of versioned.entries()) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: versioned.length });

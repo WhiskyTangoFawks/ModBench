@@ -194,36 +194,39 @@ describe('update manifest', () => {
   describe('a source mod', () => {
     const SOURCE = () => join(root, 'source', 'ModB');
 
-    const sourced = async (manifest: Manifest | undefined, files: Record<string, string> = {}) => {
+    const among = async (files: Record<string, string> = {}, answers: InstanceAnswers = {}) => {
       await mkdir(SOURCE(), { recursive: true });
-      const setup = await over({ files: { ModB: files }, sourceFolders: { ModB: SOURCE() } });
-      if (manifest !== undefined) await writeManifestIn(join(modsDir, 'ModB'), manifest);
-      return setup;
+      return over({ files: { ModA: {}, ModB: files }, sourceFolders: { ModB: SOURCE() }, answers });
     };
 
-    it('is left to its build when its build wrote no manifest', async () => {
-      const { update, manifestOf } = await sourced(undefined);
+    it('is passed over, neither written, landed nor refused, while the mods beside it are updated', async () => {
+      const { update, manifestOf } = await among({ 'extra.nif': 'HX' });
 
-      expect([(await update(['ModB'])).refused, await manifestOf('ModB')]).toEqual([
-        [{ item: 'ModB', reason: 'was not updated: its build writes its manifest, and it has not written one.' }], undefined,
-      ]);
+      const result = await update(['ModA', 'ModB']);
+
+      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB')]).toEqual([['ModA'], [], undefined]);
     });
 
-    it('is left to its build when its folder differs from what the build wrote', async () => {
-      const { update } = await sourced(EMPTY, { 'extra.nif': 'HX' });
+    it('is passed over without its metadata read', async () => {
+      const { update } = await among({}, { unreadableMetadata: new Map([['ModB', 'EISDIR: meta.ini']]) });
 
-      expect((await update(['ModB'])).refused).toEqual([
-        { item: 'ModB', reason: 'was not updated: its build writes its manifest, and its folder differs from what the build wrote.' },
-      ]);
+      expect((await update(['ModB'])).refused).toEqual([]);
     });
 
-    it('lands, leaving its manifest, when its folder is as its build wrote it, naming each file no package holds', async () => {
-      const built: Manifest = { ...EMPTY, files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
-      const { update, manifestOf } = await sourced(built, { 'a.nif': 'HA' });
+    it('still has its submodule entry written when it is all the selection holds', async () => {
+      const { update, fake } = await among();
 
       const result = await update(['ModB']);
 
-      expect([result.landed, result.refused, await manifestOf('ModB')]).toEqual([[{ mod: 'ModB', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }], [], { manifest: built }]);
+      expect([fake.calls[0], result.landed, result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, [], []]);
+    });
+
+    it('still has its submodule entry written, as a mod acted on', async () => {
+      const { update, fake } = await among();
+
+      await update(['ModA', 'ModB']);
+
+      expect(fake.calls[0]).toEqual({ verb: 'writeSubmodules', acted: ['ModB', 'ModA'] });
     });
   });
 
