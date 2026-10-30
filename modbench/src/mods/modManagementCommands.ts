@@ -398,16 +398,16 @@ function renameGesture(
     const refusals = (names: readonly string[]) => refusedWithoutForce(
       names, 'delete', (name) => `its mods would ${destinationOf(instance.value.modGroups.groups, name, names)}`);
     const deleteForced = (names: readonly string[]) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
-    const result = await commands.deleteSeparators(names, trash);
-    if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
-    return {
-      applied: true,
-      outcome: result.outcome,
-      partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
-        message: `"${item.name}" was deleted, but its ${commands.names.modOrderFile} line could not be removed.`,
-        detail: item.lineRefusal, severity: 'warning' as const,
-      }])),
-    };
+      const result = await commands.deleteSeparators(names, trash);
+      if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
+      return {
+        applied: true,
+        outcome: result.outcome,
+        partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
+          message: `"${item.name}" was deleted, but its ${commands.names.modOrderFile} line could not be removed.`,
+          detail: item.lineRefusal, severity: 'warning' as const,
+        }])),
+      };
     });
     return {
     fromView: async (entry) => {
