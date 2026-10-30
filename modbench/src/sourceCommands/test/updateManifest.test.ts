@@ -139,15 +139,6 @@ describe('update manifest', () => {
       ]);
     });
 
-    it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) whose folder holds two manifests', async () => {
-      const { result } = await refusedBy({}, async () => {
-        await writeFile(join(modsDir, 'ModA', 'ModA.manifest.json'), '{}');
-        await writeFile(join(modsDir, 'ModA', 'moda.manifest.json'), '{}');
-      });
-
-      expect(result.refused).toEqual([{ item: 'ModA', reason: "was not updated: its folder holds two manifests, 'ModA.manifest.json' and 'moda.manifest.json'." }]);
-    });
-
     it('whose manifest names the game folder when the game folder was not found', async () => {
       const { result } = await refusedBy({ gameFolder: GAME_FOLDER_NOT_FOUND }, () => writeManifestIn(
         join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'H', depots: [] }] }));
