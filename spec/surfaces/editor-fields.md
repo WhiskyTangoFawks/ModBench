@@ -143,11 +143,3 @@ As a user, I want:
 ## A plugin's header
 
 A plugin's header is a record, and reads and edits as one. Its masters are derived from its plugin source. Cites: ADR-0008
-
-## Test seam
-
-- A cell, given a field's metadata and a column's value: what it reads, its editor, what Ctrl+C copies, and what a pasted text writes, or the refusal.
-- An array: given the focused row, which of add, remove, move up and move down are offered.
-- A collapsed element: given its value, what it reads.
-- The record picker: its items, what it opens on, what a pasted label searches, and what Esc yields.
-- The enum pick: its items, what it opens on, and what Esc yields.

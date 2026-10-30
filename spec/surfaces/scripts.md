@@ -39,10 +39,3 @@ As a user, I want:
 As a user, I want:
 
 1. A refused write to raise an error naming why. Cites: common.md, Reporting; ADR-0019
-
-## Test seam
-
-- Each read, against mEdit over a fixture instance: what it returns and what it refuses.
-- Each write: mEdit writes it; given a refusal, it raises and nothing is written.
-- A query after a write returns the written rows.
-- A terminal, a debug launch and a notebook kernel of the window import `medit` and reach that window's mEdit.

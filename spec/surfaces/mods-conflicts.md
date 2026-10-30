@@ -82,9 +82,3 @@ As a user, I want:
 
 1. Compare file to open VS Code's diff editor, the cell's copy on the left and the winning copy on the right, titled with the file and both mods. Cites: catalog `compare file`
 2. Open conflicts on a column header to open that mod's table. Cites: catalog `open conflicts`
-
-## Test seam
-
-- The table, given the instance value and which copies of each file are the same: the columns and their order, the rows and their nesting, each cell's state and value, each row's state, each folder's worst state, and the states.
-- A gesture's entry: given a cell or a column header and a menu item, the command and Argument it fires, or nothing.
-- Menus: the placement above, checked against the extension manifest.

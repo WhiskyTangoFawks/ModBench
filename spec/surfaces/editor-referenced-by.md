@@ -68,10 +68,3 @@ As a user, I want:
 1. A click on a referrer to open its winning copy as a preview editor. Cites: catalog `open`; editor.md, Opening, stories 1 and 8
 2. A click on a row beneath a referrer to open that plugin's copy as a preview editor. Cites: catalog `open`; editor.md, Opening, story 1
 3. Copy value to copy the row as `EditorID [FormKey]`. Cites: catalog `copy value`; plugins.md, Menus and keys, story 5
-
-## Test seam
-
-- The list, given the record it is about and mEdit's answer: the title, the rows, their order, and the states, with no VS Code UI.
-- Asking: given the clicked record, or the record tab in focus, or neither, the record the list is about.
-- A gesture's entry: given the clicked row and the selection, the Argument the command receives, and what copy value copies.
-- Menus and keys: the placement above, checked against the extension manifest.

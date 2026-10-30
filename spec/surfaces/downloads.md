@@ -111,11 +111,3 @@ By [common.md](common.md#reporting). As a user, I want:
 1. An install that landed, and then failed to write its metadata, not reported as failed: the row still shows Installed, and the failed metadata write is a line in the Output. A gesture reported as failed is one I would retry.
 2. A delete that moved the file to the trash and then failed on its metadata reported as done, with a line in the Output naming the metadata left behind. The row is gone and lone metadata shows nothing, so no view is untrue. Cites: Which files are rows, story 5
 3. Query info to say in one line how many files it filled, with each file Nexus does not know in the Output.
-
-## Test seam
-
-- The view, given an instance value: which rows exist, each row's parts, the order, and the states, with no VS Code UI and no disk.
-- A gesture's entry: given the right-clicked row and the selection, the Argument the command receives.
-- The pickers: their items, the pre-selected item, and what Esc yields, against a scripted quick pick.
-- Menus and keys: the placement above, checked against the extension manifest. A `when` condition's truth is not tested.
-

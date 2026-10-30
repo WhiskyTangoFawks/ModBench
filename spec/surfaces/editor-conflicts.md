@@ -64,8 +64,3 @@ As a user, I want:
 
 1. Each colour to be a theme colour Modbench contributes, with its own defaults for dark, light and high contrast themes, so a theme or my settings can change it, as xEdit's options change its colours. Cites: xedit.md, VS Code provides it
 2. A cell's tooltip to name its state, in xEdit's words, so the colour is never the only way to tell.
-
-## Test seam
-
-- The panel, given mEdit's classification: each row's background, collapsed and expanded, each cell's background and text, in an open and a collapsed column, each header's colour, and each cell's tooltip.
-- Theme colours: each conflict colour the panel paints with is contributed in the extension manifest, with a default for each kind of theme.
