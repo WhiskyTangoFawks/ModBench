@@ -46,7 +46,7 @@ async function manifested(held: string | Manifest): Promise<void> {
 }
 
 const holding = (...files: ManifestFile[]): Manifest =>
-  ({ packages: [{ kind: 'installationFile', name: 'Vats.7z', size: 1, hash: 'PACK' }], exclude: [], archives: [], steps: [], tools: [], files });
+  ({ packages: [{ kind: 'installationFile', name: 'Vats.7z', size: 1, hash: 'PACK' }], exclude: [], archives: [], tools: [], files });
 
 const folderHoldingFixedBytesBut = (onDisk: readonly string[], edited: readonly string[] = []): InstanceAnswers => ({
   folderFiles: new Map([[upgradedFolder(), onDisk]]),

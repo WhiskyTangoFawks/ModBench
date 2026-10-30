@@ -128,7 +128,7 @@ class Sourcing {
       return line === undefined ? [] : [line.package === first ? { path: line.path, entry: line.entry } : line];
     });
     return {
-      packages: this.packages.map(({ package: pkg }) => pkg), exclude: [], archives: [], steps: [], tools: [], files,
+      packages: this.packages.map(({ package: pkg }) => pkg), exclude: [], archives: [], tools: [], files,
       ...this.packages.length > 0 && version !== undefined ? { version } : {},
     };
   }
@@ -152,7 +152,7 @@ const heldFor = (file: GamePlaceHeld['files'][number]): Held => ({ path: file.pa
 const gameHolder = (name: string, places: readonly GamePlaceHeld[]): Holder => new Holder(name, places.flatMap((place) => place.files.map(heldFor)));
 
 /** A mod's manifest from the mod as it is: each file taken by hash from its installation file, then the game's places,
- *  then another download. `held`'s steps and their files stay as written (ADR-0022). */
+ *  then another download. `held`'s files made by a step stay as written (ADR-0022). */
 export async function buildManifest(
   { installationFile, game, downloadedFiles }: ManifestSources, files: readonly HashedModFile[], version: string | undefined, held: Manifest | undefined,
   hashText: (text: string) => Promise<string>,
@@ -172,7 +172,7 @@ export async function buildManifest(
   const base = held ?? recorded;
   const manifest: Manifest = {
     packages: recorded.packages.map((pkg) => keepingDepots(pkg, held)),
-    exclude: base.exclude, archives: base.archives, steps: base.steps, tools: base.tools,
+    exclude: base.exclude, archives: base.archives, tools: base.tools,
     files: [...recorded.files, ...[...madeByStep].map((path): ManifestFile => ({ path, entry: { kind: 'madeByStep' } }))],
     ...recorded.version === undefined ? {} : { version: recorded.version },
   };

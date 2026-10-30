@@ -15,7 +15,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
 import { restoreFromManifest, whatRestoreDestroys, type RestoreStatus } from '../restoreFromManifest';
 
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [] };
+const EMPTY: Manifest = { packages: [], exclude: [], archives: [], tools: [], files: [] };
 const MOD_7Z: ManifestPackage = { kind: 'installationFile', name: 'ModA.7z', size: 10, hash: 'H' };
 const DOWNLOADED: InstallationFile = {
   path: '/downloads/ModA.7z', size: 10, hash: 'H', entries: [{ path: 'a.nif', hash: 'HA' }, { path: 'b.nif', hash: 'HB' }, { path: 'Data/c.nif', hash: 'HC' }],
@@ -178,9 +178,6 @@ describe('restore from manifest', () => {
         answers: { gameFiles: gameFiles(['Data/a.nif', '#a']) },
       },
       "was skipped: the files it takes from the game folder 'Fallout4' have other bytes."],
-    ['this machine has no task for a tool its steps run',
-      { manifests: { ModA: { ...EMPTY, steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://tools.example/optimise' }] } } },
-      "was skipped: this machine has no task for its tool 'Optimise' (https://tools.example/optimise)."],
     ['its repository is not in the source folder and has no host',
       { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }] } } },
       "was skipped: the source folder holds no repository 'ModA', and its package has no host."],
@@ -214,21 +211,6 @@ describe('restore from manifest', () => {
     });
 
     expect(await restore(['ModA'])).toEqual({ landed: [], refused: [{ item: 'ModA', reason }] });
-  });
-
-  it('runs a mod\'s steps in its folder once its files and metadata are written, and names it not finished when a step fails', async () => {
-    const steps = [{ task: 'Optimise', args: ['--in', 'textures'] }];
-    const { restore, steps: tasks } = await over({
-      manifests: { ModA: { ...EMPTY, steps }, ModB: { ...EMPTY, steps } }, tasks: ['Optimise'], failures: { [join(modsDir, 'ModB')]: "step 'Optimise' exited with code 1" },
-    });
-
-    const outcome = await restore(['ModA', 'ModB']);
-
-    expect(tasks.runs).toEqual([{ steps, folder: folderOf('ModA') }, { steps, folder: folderOf('ModB') }]);
-    expect(outcome).toEqual({
-      landed: [{ mod: 'ModA', written: [], namedByNoLine: [] }],
-      refused: [{ item: 'ModB', reason: "was not finished: its step 'Optimise' exited with code 1. Restoring it again finishes it." }],
-    });
   });
 
   it('restores a folder outside the mod folders by its name, and writes no metadata', async () => {

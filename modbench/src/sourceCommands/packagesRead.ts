@@ -2,7 +2,7 @@
 // fix, and what it lacks.
 
 import type { FileRead, GameFile, GamePlace, InstallationFile, InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
-import { installationFileLack, packageOf, pinText, type Manifest, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { installationFileLack, packageOf, pinText, type Manifest, type ManifestFile, type ManifestPackage, type BuildFile } from '../manifestAdapter/manifestAdapter';
 import type { NamedGameFolder } from './gameFolderFacts';
 
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
@@ -21,8 +21,6 @@ export interface PackagesHeld {
   /** The downloaded file of a name, as the downloads folder holds it. */
   readonly downloaded: (name: string) => FileRead<InstallationFile | undefined>;
   readonly game: NamedGameFolder | string;
-  /** The label of each VS Code task this machine has. */
-  readonly tasks: ReadonlySet<string>;
 }
 
 /** Where each line a package fixes has its bytes, and the hash it fixes, by the line's path, each package's entries by its
@@ -137,11 +135,11 @@ async function gameFilesOf(adapter: Adapter, manifest: Manifest, lines: readonly
   return first;
 }
 
-/** Why this machine cannot run `manifest`'s steps: each tool it has no task for (mods.md, Build, story 13). */
-export function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>): string | undefined {
+/** Why this machine cannot run a build file's steps: each tool it has no task for (mods.md, Build, story 13). */
+export function toolsWithoutTask(buildFile: BuildFile, tasks: ReadonlySet<string>): string | undefined {
   const pages = new Map<string, string>();
-  for (const { task, page } of manifest.tools) if (!pages.has(task)) pages.set(task, page);
-  const named = [...new Set([...manifest.steps.map(({ task }) => task), ...pages.keys()])].filter((task) => !tasks.has(task))
+  for (const { task, page } of buildFile.tools) if (!pages.has(task)) pages.set(task, page);
+  const named = [...new Set([...buildFile.steps.map(({ task }) => task), ...pages.keys()])].filter((task) => !tasks.has(task))
     .map((task) => (pages.has(task) ? `'${task}' (${pages.get(task) ?? ''})` : `'${task}'`));
   const last = named.pop();
   if (last === undefined) return undefined;
@@ -149,7 +147,7 @@ export function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>)
 }
 
 /** Where this machine holds the bytes each of `manifest`'s lines fixes, from the installation files and the game's places. */
-export async function packagesRead(adapter: Adapter, manifest: Manifest, { downloaded, game, tasks }: PackagesHeld): Promise<PackagesRead> {
+export async function packagesRead(adapter: Adapter, manifest: Manifest, { downloaded, game }: PackagesHeld): Promise<PackagesRead> {
   const installed = installationFilesOf(manifest, downloaded);
   const packageFiles = new Map<string, PackageFile>();
   const hashes = new Map<string, string>();
@@ -176,9 +174,8 @@ export async function packagesRead(adapter: Adapter, manifest: Manifest, { downl
   const taken = await gameFilesOf(adapter, manifest, fromTheGame, game);
   for (const [path, file] of taken.packageFiles) packageFiles.set(path, file);
   for (const [path, hash] of taken.hashes) hashes.set(path, hash);
-  const noTask = toolsWithoutTask(manifest, tasks);
   return {
-    packageFiles, hashes, entries: new Map([...entries, ...taken.entries]), lacks: [...new Set([...lacks, ...taken.lacks, ...(noTask === undefined ? [] : [noTask])])],
+    packageFiles, hashes, entries: new Map([...entries, ...taken.entries]), lacks: [...new Set([...lacks, ...taken.lacks])],
     installationFiles: [...installed.held.values()], gameFiles: taken.files,
   };
 }

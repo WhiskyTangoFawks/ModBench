@@ -31,7 +31,7 @@ async function instanceWithSourceMod(): Promise<{ root: string; source: string; 
   runGit(source, 'init', '--quiet', '--initial-branch=main');
   await mkdir(join(root, 'mods', MOD), { recursive: true });
   await writeFile(join(root, 'mods', MOD, `${MOD}.manifest.json`), manifestText({
-    packages: [{ kind: 'sourceRepository', name: 'Built Mod source', isSubmodule: false }], exclude: [], archives: [], steps: [], tools: [], files: [],
+    packages: [{ kind: 'sourceRepository', name: 'Built Mod source', isSubmodule: false }], exclude: [], archives: [], tools: [], files: [],
   }));
   const adapter = adapterOver(root);
   const added = await modSyncOver(adapter)();

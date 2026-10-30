@@ -12,7 +12,7 @@ import { updateManifest, type UpdateManifestStatus } from '../updateManifest';
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'a.nif', hash: 'HA' }] };
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [] };
+const EMPTY: Manifest = { packages: [], exclude: [], archives: [], tools: [], files: [] };
 
 let root: string;
 let modsDir: string;
@@ -107,17 +107,17 @@ describe('update manifest', () => {
     expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: true, notInPackage: ['z.txt'], otherBytes: ['a.nif'] }]);
   });
 
-  it('keeps the steps of a manifest and each file a step makes, whether the file is there or not', async () => {
+  it('keeps each file a step makes, whether the file is there or not', async () => {
     const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': 'HA' } } });
     await writeManifestIn(join(modsDir, 'ModA'), {
-      ...EMPTY, steps: [{ task: 'Optimise', args: ['--in', 'textures'] }], files: [{ path: 'textures/made.dds', entry: { kind: 'madeByStep' } }],
+      ...EMPTY, files: [{ path: 'textures/made.dds', entry: { kind: 'madeByStep' } }],
     });
 
     const result = await update(['ModA']);
 
     expect([result.landed, await manifestOf('ModA')]).toEqual([
       [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
-      { manifest: { ...EMPTY, steps: [{ task: 'Optimise', args: ['--in', 'textures'] }], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }, { path: 'textures/made.dds', entry: { kind: 'madeByStep' } }] } },
+      { manifest: { ...EMPTY, files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }, { path: 'textures/made.dds', entry: { kind: 'madeByStep' } }] } },
     ]);
   });
 
@@ -341,7 +341,7 @@ describe('update manifest', () => {
 
       const { packages, ...rest } = await heldIn(folder);
       expect([result.refused, result.landed.map(({ mod }) => mod), packages.map(({ kind }) => kind), rest]).toEqual([
-        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
+        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], archives: [], tools: [], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
       ]);
     });
   });

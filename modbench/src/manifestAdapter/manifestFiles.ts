@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import { BUILD_FILE } from '../wire/sourceMod';
-import type { Manifest, ManifestRead } from './manifest';
+import type { BuildFileRead, Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
 import { readBuildFile, readManifest } from './manifestRead';
 
@@ -67,7 +67,7 @@ export async function writeManifestIn(folder: string, manifest: Manifest): Promi
 }
 
 /** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */
-export async function buildFileIn(sourceFolder: string): Promise<ManifestRead | undefined> {
+export async function buildFileIn(sourceFolder: string): Promise<BuildFileRead | undefined> {
   const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
   if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
   return one === undefined ? undefined : readBuildFile(await textAt(join(sourceFolder, one)));

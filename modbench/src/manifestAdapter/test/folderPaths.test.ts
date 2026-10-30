@@ -6,7 +6,7 @@ const PACK = { kind: 'installationFile', name: 'Pack.zip', size: 10, hash: 'hash
 const REPOSITORY = { kind: 'sourceRepository', name: 'Mod', isSubmodule: false } as const;
 
 const manifestOf = (exclude: readonly string[]): Manifest =>
-  ({ packages: [REPOSITORY, PACK], exclude, archives: [], steps: [], tools: [], files: [] });
+  ({ packages: [REPOSITORY, PACK], exclude, archives: [], tools: [], files: [] });
 
 describe('lineAtFolderPath', () => {
   it.each([

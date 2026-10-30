@@ -2,7 +2,7 @@ import {
   isRefused, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { buildFileIn, exclusionsOf, manifestIn, sourceModsOf, type Manifest, type SourceMods } from '../manifestAdapter/manifestAdapter';
+import { buildFileIn, exclusionsOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
@@ -34,7 +34,7 @@ export const metadataUnreadable = (reason: string): string => `its metadata coul
 
 type Adapter = SourceCommandsDeps['adapter'];
 
-async function heldBuildFile(sourceFolder: string): Promise<Manifest | { readonly reason: string }> {
+async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readonly reason: string }> {
   try {
     const held = await buildFileIn(sourceFolder);
     if (held === undefined) return { reason: `was not built: '${sourceFolder}' holds no build file.` };
@@ -63,7 +63,7 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
 
 // mods.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
 async function sourceModOf(
-  { adapter, saveUnsaved }: Pick<SourceCommandsDeps, 'adapter' | 'saveUnsaved'>, mod: string, sourceMods: SourceMods, pass: BuildPass,
+  { adapter, saveUnsaved }: Pick<SourceCommandsDeps, 'adapter' | 'saveUnsaved'>, mod: string, sourceMods: SourceMods,
 ): Promise<SourceModToBuild | ItemRefusal<string>> {
   const sourceFolder = sourceMods.folderOf(mod);
   const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
@@ -80,7 +80,7 @@ async function sourceModOf(
   const exclude = await exclusionsIn(adapter, folder);
   if ('reason' in exclude) return { item: mod, reason: exclude.reason };
   const game = await namedGameFolder(adapter, await adapter.gameRelease());
-  const packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game, tasks: pass.tasks });
+  const packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game });
   return { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: metadata.answer.version, isSubmodule: host.answer.kind === 'host' };
 }
 
@@ -101,7 +101,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
       const ordered = await inModOrder(adapter, mods);
       let previous: string | undefined;
       for (const [at, mod] of ordered.entries()) {
-        const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods, pass);
+        const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
         // mods.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
         const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
