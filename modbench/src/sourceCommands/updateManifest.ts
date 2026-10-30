@@ -214,7 +214,7 @@ async function pathsShown({ adapter, pathProblems, instanceRoot }: UpdateManifes
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
-/** Each mod's manifest from the mod as it is, a source mod's passed over: its build records it. A mod the Instance adapter cannot answer is refused, naming why. `everyMod`:
+/** Each mod's manifest from the mod as it is; a source mod's build records its own. A mod the adapter cannot answer is refused, naming why. `everyMod`:
  *  a source mod that is gone loses its submodule entry. */
 export async function updateManifest(
   deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
