@@ -26,7 +26,10 @@ export function FlagCell({ value, meta, onCommit, collapsed, templated = {} }: F
 
   if (collapsed) {
     const own = names.filter(name => !templated[name]);
-    const fromTemplate = meta.enumMembers.filter(({ value: name }) => templated[name]).map(({ value: name }) => `${name} ${templated[name].reading}`);
+    const fromTemplate = meta.enumMembers.flatMap(({ value: name }) => {
+      const flag = templated[name];
+      return flag ? [`${name} ${flag.reading}`] : [];
+    });
     return <span>{[...own, ...fromTemplate].join(', ')}</span>;
   }
 
