@@ -6,7 +6,6 @@ import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { restoredMod } from '../../test/restoredMod';
 import { answered } from './healthAnswer';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -177,8 +176,6 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 
 const modToDecompileAndCommit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSubmodule: true });
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
-const restoreFacts = { statCache: '/instance/stat-cache', exclusionMark: '.mohidden', archives: null, asksWhatItLacks: false };
 const buildFacts = {
   exclusionMark: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
   statCache: '/instance/stat-cache',
@@ -227,10 +224,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const same = <T>(answer: T) => ({ answer, reads: answer });
   const createdRecord = { formKey: '000900:MyPatch.esp', ...changes };
   const formKeyEdit: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' };
-  const modsOnDisk = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
-  const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
-  const skipped = "'ModB' was skipped: a file could not be read: denied";
-  const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
 
   const posts: {
     name: string; verb: Verb; answer: unknown; reads: unknown; path: string; body: unknown;
@@ -285,31 +278,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         ],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
-    { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], restoreFacts),
-      answer: {
-        applied: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] })],
-        refused: [
-          {
-            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing.",
-            installationFilesNotFound: [{ name: 'B.7z', size: 7, hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' }],
-          },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'.", installationFilesNotFound: [] },
-          {
-            item: 'ModD', refusal: 'NotFound', message: "'ModD' was skipped: its submodule 'Mod Source' is missing.",
-            submoduleNotFound: 'Mod Source', installationFilesNotFound: [],
-          },
-        ],
-      },
-      reads: {
-        landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] })],
-        refused: [
-          { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing." },
-          { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
-          { item: 'ModD', reason: "'ModD' was skipped: its submodule 'Mod Source' is missing." },
-        ],
-        notFound: [{ mod: 'ModB', installationFiles: [{ name: 'B.7z', hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' }] }, { mod: 'ModD', installationFiles: [], submodule: 'Mod Source' }],
-      },
-      path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.' }] },
@@ -332,10 +300,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
       ...same([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]),
       path: '/names/resolve', body: { names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] } },
-    { name: 'getWhatRestoreDestroys', verb: (c) => c.getWhatRestoreDestroys(modsOnDisk, '/instance/stat-cache'),
-      answer: { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped }], manifests },
-      reads: { destroys, refused: [{ item: 'ModB', reason: skipped }], manifests },
-      path: '/what-restore-destroys', body: { mods: modsOnDisk, statCache: '/instance/stat-cache' } },
     { name: 'selectRows', verb: (c) => c.selectRows('SELECT 1'), answer: { rows: [{ n: 1 }] }, reads: [{ n: 1 }],
       path: '/records/select', body: { sql: 'SELECT 1' } },
   ];
@@ -459,8 +423,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
       { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
-      { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts), status: 503, body: detail, text: detail,
-        refusal: 'Could not restore 1 mod' },
       { name: 'decompile', verb: (c) => c.decompile([first, second], true), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
       { name: 'changeSourceManifest', verb: (c) => c.changeSourceManifest('/instance/source/ModA', { exclude: ['a.dds'] }), status: 422,
         body: { detail: 'It holds no manifest.' }, text: 'It holds no manifest.', refusal: 'Could not change the manifest in "/instance/source/ModA"' },
@@ -1012,92 +974,4 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(await client.getEditChanges(record.formKey, plugin, envelope)).toEqual({ applied: false, refusal: 'Unknown', message: 'mEdit could not be reached.' });
   });
 
-});
-
-describe('HttpMEditClient — a modlist gesture the user cancels', () => {
-  type ProgressKind = 'restore-from-manifest-progress';
-  const gestures: [string, string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>][] = [
-    ['restoreFromManifest', '/restore-from-manifest', 'restore-from-manifest-progress',
-      (c, signal) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts, { signal })],
-  ];
-  const progressFrame = (kind: string, gesture: unknown) => new TextEncoder().encode(
-    `data: ${JSON.stringify({ kind, plugin: '', origin: '', keys: [], sequence: 0, modlistProgress: { gesture, mod: 'ModA', modsDone: 0, modsTotal: 2 } })}\n\n`);
-  const NOT_RUNNING = "No modlist gesture 'x' is running.";
-
-  async function cancelled(
-    [route, kind, call]: [string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
-    { ownProgress = true, loadOrderPending = false } = {},
-  ) {
-    const log = leveledLog();
-    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean; putLoadOrder?: boolean } = {};
-    let answer = (): void => {};
-    const answered = new Promise<void>((resolve) => { answer = resolve; });
-    const { response, push } = pushableStreamResponse();
-    const client = makeClient(routedFetch([
-      ['/notifications/stream', () => Promise.resolve(response)], ['/unsaved-documents', noContent],
-      ['/load-order', () => { seen.putLoadOrder = true; return new Promise<Response>(() => {}); }],
-      ['/modlist-gestures/', (req) => { seen.cancelPath = new URL(req.url).pathname; answer(); return cancelAnswer(); }],
-      [route, async (req) => {
-        const body: unknown = await req.clone().json();
-        seen.gesture = typeof body === 'object' && body !== null ? Reflect.get(body, 'gesture') : undefined;
-        await answered;
-        seen.aborted = req.signal.aborted;
-        if (req.signal.aborted) throw new DOMException('This operation was aborted', 'AbortError');
-        return jsonResponse(200, { applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [], written: [] }], refused: [] });
-      }],
-    ]), { log });
-    await client.start();
-    const cancel = new AbortController();
-    const outcome = call(client, cancel.signal);
-    cancel.abort();
-    await vi.waitFor(() => expect(seen.gesture).toBeDefined());
-    if (loadOrderPending) {
-      void client.sendLoadOrder(EMPTY_SNAPSHOT);
-      await vi.waitFor(() => expect(seen.putLoadOrder).toBe(true));
-    }
-    const heard: unknown[] = [];
-    client.onNotification(kind, (progress) => heard.push(progress.gesture));
-    push(progressFrame(kind, 'another-gesture'));
-    await vi.waitFor(() => expect(heard).toEqual(['another-gesture']));
-    if (ownProgress) push(progressFrame(kind, seen.gesture));
-    else answer();
-    return { client, log, seen, outcome: await outcome };
-  }
-
-  it.each(gestures)('%s asks mEdit to stop that gesture once its own progress shows mEdit has begun it, and answers with what mEdit answers once it has', async (_name, ...gesture) => {
-    const { client, seen, outcome } = await cancelled(gesture);
-
-    expect([seen.cancelPath, seen.aborted]).toEqual([`/modlist-gestures/${String(seen.gesture)}/cancel`, false]);
-    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [] });
-    expect(outcome).not.toHaveProperty('cancelRefusal');
-    await client.stop();
-  });
-
-  it.each(gestures)('%s sends no cancel on another gesture\'s progress: none lands before its answer, which waits on any cancel it sent', async (_name, ...gesture) => {
-    const { client, seen, outcome } = await cancelled(gesture, noContent, { ownProgress: false });
-
-    expect([seen.cancelPath, outcome]).toMatchObject([undefined, { landed: [{ mod: 'ModA' }] }]);
-    await client.stop();
-  });
-
-  it.each(gestures)('%s sends its cancel while a load order is still being put, since a cancel depends on none', async (_name, ...gesture) => {
-    const { client, seen, outcome } = await cancelled(gesture, noContent, { loadOrderPending: true });
-
-    expect([seen.cancelPath, outcome]).toMatchObject([`/modlist-gestures/${String(seen.gesture)}/cancel`, { landed: [{ mod: 'ModA' }] }]);
-    await client.stop();
-  });
-
-  it.each(gestures)('%s logs no error, since a cancel is no failure', async (_name, ...gesture) => {
-    const { client, log } = await cancelled(gesture);
-
-    expect(log.lines.error).toEqual([]);
-    await client.stop();
-  });
-
-  it.each(gestures)('%s answers a cancel mEdit refused beside what mEdit answers, so the refusal surfaces', async (_name, ...gesture) => {
-    const { client, outcome } = await cancelled(gesture, answers(404, { detail: NOT_RUNNING }));
-
-    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], cancelRefusal: `Could not cancel — ${NOT_RUNNING}` });
-    await client.stop();
-  });
 });

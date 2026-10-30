@@ -100,22 +100,6 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARestoreFromManifestItemSkipped_IsLoggedOnce_NamingTheModAndWhy()
-    {
-        using var instance = new ScratchDirectory("refusal-logging-restore-");
-        var folder = Directory.CreateDirectory(Path.Combine(instance, "Bare")).FullName;
-
-        await Client.PostAsJsonAsync("/restore-from-manifest", new
-        {
-            mods = new[] { new { name = "Bare", folder, metadataFiles = Array.Empty<string>() } },
-            statCache = Path.Combine(instance, "stat-cache"),
-            exclusionMark = ".mohidden",
-        });
-
-        AssertLoggedOnce("Refused Restore from manifest of Bare:", "NoManifest");
-    }
-
-    [Fact]
     public async Task ARefusedCreatePlugin_IsLoggedOnce_NamingThePluginAndWhy()
     {
         using var scratch = new ScratchDirectory("refusal-logging-create-");

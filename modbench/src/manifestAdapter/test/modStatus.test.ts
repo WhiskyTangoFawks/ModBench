@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { manifestText } from '../manifestText';
-import { statusOf, statusesNow, type FolderReads, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { metadataOf, metadataOverwritten, statusOf, statusesNow, type FolderReads, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 let root: string;
 let folder: string;
@@ -52,6 +52,9 @@ async function write(path: string, text: string, at = folder): Promise<void> {
   await writeFile(join(at, path), text);
 }
 
+type Says = { version?: string; installationFile?: { name: string; page?: string } };
+const says = (version?: string, file?: [string, string?]): Says =>
+  ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
 const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: 'PACK1' };
 const line = (path: string, entry: ManifestFile['entry'] = { kind: 'held' }, pkg?: string): ManifestFile => ({ path, entry, ...(pkg === undefined ? {} : { package: pkg }) });
 const manifest = (files: ManifestFile[], over: Partial<Manifest> = {}): Manifest => ({ packages: [MOD_ZIP], exclude: [], archives: [], steps: [], tools: [], files, ...over });
@@ -252,9 +255,6 @@ describe('a mod\'s status against its manifest', () => {
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {
-    type Says = { version?: string; installationFile?: { name: string; page?: string } };
-    const says = (version?: string, file?: [string, string?]): Says =>
-      ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
 
     it.each([
       [says('1.0'), says('1.0'), false],
@@ -280,5 +280,29 @@ describe('a mod\'s status against its manifest', () => {
 
       expect((await status()).metadataDiffers).toBe(differs);
     });
+  });
+});
+
+describe('metadata a restore writes over what the metadata holds', () => {
+
+  it.each([
+    [says('1.0'), says('1.0'), false],
+    [says('1.0'), says('2.0'), true],
+    [says(), says('2.0'), false],
+    [says('1.0'), says(), false],
+    [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z', 'nexus:2']), true],
+    [says(undefined, ['a.7z']), says(undefined, ['a.7z', 'nexus:1']), false],
+    [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z']), false],
+    [says(undefined, ['old.7z']), says(undefined, ['new.7z']), true],
+    [says(), says(undefined, ['a.7z']), false],
+    [says(undefined, ['a.7z']), says(), false],
+  ])('held %j, the manifest saying %j, is overwritten: %s', (held, manifests, overwritten) => {
+    expect(metadataOverwritten(held, manifests)).toBe(overwritten);
+  });
+
+  it('is the version and the first package\'s installation file and its page, as the manifest holds them', () => {
+    const packages: ManifestPackage[] = [{ kind: 'installationFile', name: 'a.7z', size: 1, hash: 'hash', page: 'nexus:1' }, { kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }];
+
+    expect(metadataOf(manifest([], { version: '2.0', packages }))).toEqual({ version: '2.0', installationFile: { name: 'a.7z', page: 'nexus:1' } });
   });
 });

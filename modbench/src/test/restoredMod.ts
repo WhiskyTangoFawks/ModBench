@@ -1,6 +1,6 @@
-import type { RestoreOutcome } from '../client/MEditClient';
+import type { RestoreResult } from '../sourceCommands/restoreFromManifest';
 
-type RestoredMod = RestoreOutcome['landed'][number];
+type ModRestored = RestoreResult['landed'][number];
 
-export const restoredMod = (given: Pick<RestoredMod, 'mod'> & Partial<RestoredMod>): RestoredMod =>
-  ({ written: [], namedByNoLine: [], metadata: {}, steps: [], uncommitted: false, ...given });
+export const restoredMod = (given: Pick<ModRestored, 'mod'> & Partial<ModRestored>): ModRestored =>
+  ({ written: [], namedByNoLine: [], ...given });

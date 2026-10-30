@@ -60,9 +60,23 @@ function fixedBy(manifest: Manifest, file: ManifestFile): { readonly package: st
   return { package: pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash, path: entry.kind === 'heldAt' ? entry.path : file.path };
 }
 
-type FolderLists = Pick<ModStatus, 'differing' | 'namedByNoLine' | 'gone' | 'notInPackage' | 'otherBytes'>;
+// A line of a manifest against its folder: the file it names, by its path on disk, none when the folder holds none, and
+// whether that file holds the bytes a package entry fixes, none when no package fixes them.
+interface LineAgainstFolder {
+  readonly line: ManifestFile;
+  readonly onDisk?: string;
+  readonly holdsItsBytes?: boolean;
+}
 
-async function folderAgainst(manifest: Manifest, folder: string, reads: FolderReads): Promise<FolderLists> {
+/** A folder against its manifest: each line but those an archive packs, and each file no line names, by path on disk. */
+export interface FolderAgainst {
+  readonly lines: readonly LineAgainstFolder[];
+  readonly namedByNoLine: readonly string[];
+}
+
+/** The folder's files against `manifest`'s lines. A file is hashed only where a package entry fixes its bytes, and a line
+ *  whose package entry `reads` lacks does not hold its bytes. */
+export async function folderAgainst(manifest: Manifest, folder: string, reads: Omit<FolderReads, 'modMetadata'>): Promise<FolderAgainst> {
   const manifestName = folded(`${basename(folder)}${MANIFEST_SUFFIX}`);
   const onDisk = new Set((await reads.filesIn(folder)).filter((path) => folded(path) !== manifestName));
   // A line names a file in another case only where the file system finds that file by the line's name.
@@ -76,25 +90,38 @@ async function folderAgainst(manifest: Manifest, folder: string, reads: FolderRe
   };
 
   const packed = new Set(manifest.archives.flatMap(({ files }) => files).map(folded));
-  const lists = { differing: [] as string[], gone: [] as string[], notInPackage: [] as string[], otherBytes: [] as string[] };
+  const lines: LineAgainstFolder[] = [];
   for (const line of manifest.files.filter(({ path }) => !packed.has(folded(path)))) {
     const fixes = fixedBy(manifest, line);
-    if (line.entry.kind === 'otherBytes') lists.otherBytes.push(line.path);
-    else if (fixes === undefined && line.entry.kind !== 'madeByStep') lists.notInPackage.push(line.path);
-    if (!(await found(line.path))) lists.gone.push(line.path);
-    else if (fixes !== undefined && !(await holds(spelledOnDisk(line.path), fixes))) lists.differing.push(spelledOnDisk(line.path));
+    if (!(await found(line.path))) {
+      lines.push({ line });
+      continue;
+    }
+    const onDiskAs = spelledOnDisk(line.path);
+    lines.push(fixes === undefined ? { line, onDisk: onDiskAs } : { line, onDisk: onDiskAs, holdsItsBytes: await holds(onDiskAs, fixes) });
   }
 
-  const lines = new Set(manifest.files.map(({ path }) => path));
+  const named = new Set(manifest.files.map(({ path }) => path));
   const namedByNoLine: string[] = [];
   for (const path of onDisk) {
-    if (lines.has(path)) continue;
-    const namesIt = await Promise.all([...lines].filter((named) => folded(named) === folded(path) && !onDisk.has(named)).map(found));
+    if (named.has(path)) continue;
+    const namesIt = await Promise.all([...named].filter((line) => folded(line) === folded(path) && !onDisk.has(line)).map(found));
     if (!namesIt.includes(true)) namedByNoLine.push(path);
   }
+  return { lines, namedByNoLine: ordered(namedByNoLine) };
+}
+
+type FolderLists = Pick<ModStatus, 'differing' | 'namedByNoLine' | 'gone' | 'notInPackage' | 'otherBytes'>;
+
+function listsOf(manifest: Manifest, { lines, namedByNoLine }: FolderAgainst): FolderLists {
+  const paths = (where: (against: LineAgainstFolder) => boolean, path = (against: LineAgainstFolder): string => against.line.path): string[] =>
+    ordered(lines.filter(where).map(path));
   return {
-    differing: ordered(lists.differing), namedByNoLine: ordered(namedByNoLine), gone: ordered(lists.gone),
-    notInPackage: ordered(lists.notInPackage), otherBytes: ordered(lists.otherBytes),
+    differing: paths(({ holdsItsBytes }) => holdsItsBytes === false, ({ onDisk, line }) => onDisk ?? line.path),
+    namedByNoLine,
+    gone: paths(({ onDisk }) => onDisk === undefined),
+    notInPackage: paths(({ line }) => line.entry.kind !== 'otherBytes' && line.entry.kind !== 'madeByStep' && fixedBy(manifest, line) === undefined),
+    otherBytes: paths(({ line }) => line.entry.kind === 'otherBytes'),
   };
 }
 
@@ -109,6 +136,25 @@ function metadataDiffers(held: HeldMetadata, manifest: Manifest): boolean {
   return (first === undefined ? undefined : held.version) !== manifest.version || !sameInstallationFile(held.installationFile, says);
 }
 
+/** The version and installation file the manifest holds, as a mod's metadata holds them. */
+export function metadataOf(manifest: Manifest): HeldMetadata {
+  const [first] = manifest.packages;
+  return {
+    ...(manifest.version === undefined ? {} : { version: manifest.version }),
+    ...(first?.kind === 'installationFile' ? { installationFile: { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } } : {}),
+  };
+}
+
+/** Whether writing `says` into the metadata replaces a value `held` holds: another version, another installation file,
+ *  or another page for the same one. A value either side lacks replaces nothing (modlist-repository.md, Restore from
+ *  manifest, story 2). */
+export function metadataOverwritten(held: HeldMetadata, says: HeldMetadata): boolean {
+  const version = held.version !== undefined && says.version !== undefined && held.version !== says.version;
+  const file = held.installationFile !== undefined && says.installationFile !== undefined && (held.installationFile.name !== says.installationFile.name
+    || (held.installationFile.page !== undefined && says.installationFile.page !== undefined && held.installationFile.page !== says.installationFile.page));
+  return version || file;
+}
+
 /** The mod's folder and metadata against its manifest (modlist-repository.md, Status). A file is hashed only where a
  *  package entry fixes its bytes, and a line whose package entry the hash index lacks differs. */
 export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatus> {
@@ -121,7 +167,7 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
     const { manifest } = read;
     const [first] = manifest.packages;
     return {
-      ...nothing(mod.name), ...await folderAgainst(manifest, mod.folder, reads),
+      ...nothing(mod.name), ...listsOf(manifest, await folderAgainst(manifest, mod.folder, reads)),
       metadataDiffers: metadataDiffers(metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
     };
   } catch (err) {

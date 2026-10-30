@@ -3,14 +3,8 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary><paramref name="fileExists"/> is the file system's answer to whether a file is at a path, in the case it
-/// matches names in.</summary>
-public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fileExists) : IModFolderRepository
+public sealed class ModFolderRepository(TimeProvider time) : IModFolderRepository
 {
-    public ModFolderRepository(TimeProvider time) : this(time, File.Exists)
-    {
-    }
-
     public ModFolderFiles Files(string modFolder, IReadOnlySet<string> leftOut, string? statCache)
     {
         var paths = FilesOf(modFolder).Where(path => !leftOut.Contains(path)).ToList();
@@ -31,82 +25,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             if (manifest.FixedBy(line) is { } fixedBy && hashes.TryGetValue(line.Path, out var hash)) fixes.TryAdd(fixedBy, hash);
         }
         return cache.Write([.. read.Files.Select(file => file.Path)], fixes);
-    }
-
-    public IReadOnlyList<string> NamedByNoLine(string modFolder, Manifest manifest, IReadOnlySet<string> leftOut)
-    {
-        var onDisk = FilesOf(modFolder).ToHashSet(StringComparer.Ordinal);
-        var lines = manifest.Files.Select(line => line.Path).ToHashSet(StringComparer.Ordinal);
-        var linesInAnyCase = lines.ToLookup(line => line, StringComparer.OrdinalIgnoreCase);
-        return [.. onDisk.Where(path => !leftOut.Contains(path) && !lines.Contains(path) && !linesInAnyCase[path].Any(line => FoundAt(modFolder, line, onDisk)))];
-    }
-
-    // A line names a file in another case only where the file system finds that file by the line's name: no file of its
-    // own has that name, and yet one is there.
-    private bool FoundAt(string modFolder, string line, HashSet<string> onDisk) =>
-        !onDisk.Contains(line) && fileExists(Path.Combine(modFolder, line));
-
-    public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held, string? sourceFolder)
-    {
-        try
-        {
-            Manifest? manifest;
-            if (sourceFolder is null) manifest = ReadManifest(modFolder);
-            else if (!ReadSourceManifest(sourceFolder).Holds(out manifest, out var why)) return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: true, why));
-            if (manifest is null) return new(modName, NoManifest: true, [], [], [], [], []);
-
-            // A folder its build has not made yet lacks every file its manifest names.
-            var there = Directory.Exists(modFolder);
-            var cache = new StatCache(statCache, modFolder, time);
-            var onDisk = there ? FilesOf(modFolder).ToHashSet(StringComparer.Ordinal) : [];
-            List<string> differing = [], gone = [], notInPackage = [], otherBytes = [];
-            var packed = manifest.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var line in manifest.Files.Where(line => !packed.Contains(line.Path)))
-            {
-                var fixedBy = manifest.FixedBy(line);
-                if (line.Entry is PackageEntry.OtherBytes) otherBytes.Add(line.Path);
-                else if (fixedBy is null && line.Entry is not PackageEntry.MadeByStep) notInPackage.Add(line.Path);
-                if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
-                else if (fixedBy is { } fixes && !HoldsWhatItIsFixedBy(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
-            }
-            var namedByNoLine = there ? NamedByNoLine(modFolder, manifest, leftOut) : [];
-            var statCacheNotWritten = there ? cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]) : null;
-            var says = ModMetadata.Of(manifest);
-            return new(
-                modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), Ordered(otherBytes), null, statCacheNotWritten,
-                Held(held, manifest)?.DiffersFrom(says) == true, says, NoHost: manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false });
-        }
-        catch (InvalidDataException e)
-        {
-            return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: true, e.Message));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new(modName, NoManifest: false, [], [], [], [], [], new ModUnreadable(Manifest: false, $"a file could not be read: {e.Message}"));
-        }
-    }
-
-    // A manifest with no package holds no version, so the version a mod's metadata holds is no difference.
-    private static ModMetadata? Held(ModMetadata? held, Manifest manifest) =>
-        held is not null && manifest.Package is null ? held with { Version = null } : held;
-
-    // A line found by the file system names the file on disk in its own case where none has the line's (NamedByNoLine).
-    private static string OnDisk(string line, HashSet<string> onDisk) =>
-        onDisk.Contains(line) ? line : onDisk.FirstOrDefault(path => string.Equals(path, line, StringComparison.OrdinalIgnoreCase)) ?? line;
-
-    private static string[] Ordered(IEnumerable<string> paths) => [.. paths.Order(StringComparer.Ordinal)];
-
-    private static bool HoldsWhatItIsFixedBy(string modFolder, string path, StatCache cache, (string Package, string Path) fixedBy)
-    {
-        if (cache.HashFixedBy(fixedBy) is not { } fixedHash) return false;
-        try
-        {
-            return cache.HashOf(path, () => HashOf(modFolder, path)) == fixedHash;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
     }
 
     private IEnumerable<string> FilesOf(string modFolder) =>

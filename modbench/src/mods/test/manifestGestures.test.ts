@@ -94,7 +94,7 @@ beforeEach(() => {
   notification.messages.length = 0;
   vi.clearAllMocks();
   updateManifest.mockResolvedValue({ notes: [], repositoryNotes: [], landed: [], refused: [] });
-  restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
+  restoreFromManifest.mockResolvedValue({ landed: [], refused: [] });
   whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
   otherManifests.mockResolvedValue({ others: [], refused: [] });
 });
@@ -157,7 +157,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     })],
     [RESTORE, () => restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 2 });
-      return Promise.resolve({ applied: true, landed: [], refused: [] });
+      return Promise.resolve({ landed: [], refused: [] });
     })],
   ])('%s shows its progress by mod in a notification with Cancel', async (id, reportsProgress) => {
     reportsProgress();
@@ -184,32 +184,21 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     }]]);
   });
 
-  it('restore from manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
+  it('restore from manifest, cancelled, aborts the signal it handed the command, and reports each mod it did not finish', async () => {
     let signal: AbortSignal | undefined;
+    const cancelled = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
       notification.cancel();
       signal = options?.signal;
-      return Promise.resolve({ applied: false, refusal: 'Could not restore 2 mods — mEdit stopped.', unfinished: ['ModB'], refused: [] });
+      return Promise.resolve({ landed: [], refused: [{ item: 'ModB', reason: cancelled }] });
     });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
 
-    expect([signal?.aborted, reporter.reports]).toEqual([true, [{
-      severity: 'error', message: 'Could not restore 2 mods — mEdit stopped.', detail: 'Not finished: "ModB". Restoring again finishes them.',
-    }]]);
+    expect([signal?.aborted, reporter.reports]).toEqual([true, [{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (${cancelled})` }]]);
   });
 
-  it.each([
-    [RESTORE, () => restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [], refused: [], cancelRefusal: 'Could not cancel — not running.' })],
-  ])('%s reports a cancel mEdit refused', async (id, answersCancelRefused) => {
-    answersCancelRefused();
-    const { reporter, run } = register();
-
-    await run(id, modRow('ModA'));
-
-    expect(reporter.reports).toContainEqual({ severity: 'error', message: 'Could not cancel — not running.', detail: undefined });
-  });
 });
 
 describe('Every other manifest', () => {
@@ -364,7 +353,7 @@ describe('Restore from manifest', () => {
   const asked = (ask: ScriptedDialog) => ask.asked.map(({ message, detail, buttons }) => ({ message, detail, buttons }));
 
   it('asks once, naming the selected mods and that a change no manifest holds is lost, then restores them under the Mods view\'s progress', async () => {
-    restoreFromManifest.mockImplementationOnce(() => { progressSteps.push('restore'); return Promise.resolve({ applied: true, landed: [], refused: [] }); });
+    restoreFromManifest.mockImplementationOnce(() => { progressSteps.push('restore'); return Promise.resolve({ landed: [], refused: [] }); });
     const { ask, run } = register();
 
     await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
@@ -414,24 +403,13 @@ describe('Restore from manifest', () => {
   it('restores only the mods it could ask about, naming each it skipped in its one line', async () => {
     const skipped = "was skipped: a file could not be read: denied";
     whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: skipped }] });
-    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [] });
+    restoreFromManifest.mockResolvedValueOnce({ landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [] });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
 
     expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (${skipped})` }]);
-  });
-
-  it('restores nothing, and says why, when mEdit cannot say what restore destroys', async () => {
-    whatRestoreDestroys.mockResolvedValueOnce({ refusal: 'Could not ask what restore from manifest destroys: mEdit could not be reached.' });
-    const { ask, reporter, run } = register();
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect([ask.asked, restoreFromManifest.mock.calls, reporter.reports]).toEqual([[], [], [{
-      severity: 'error', message: 'Could not ask what restore from manifest destroys: mEdit could not be reached.', detail: undefined,
-    }]]);
   });
 
   it('restores nothing and says nothing when the question is cancelled', async () => {
@@ -453,10 +431,9 @@ describe('Restore from manifest', () => {
 
   it('says its phase on the Toolbox\'s message line while it runs, and gives the line back when it ends', async () => {
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
-      options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
       options?.onProgress?.({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       options?.onProgress?.({ phase: 'Downloading', file: 'ModB.7z' });
-      return Promise.resolve({ applied: true, landed: [], refused: [] });
+      return Promise.resolve({ landed: [], refused: [] });
     });
     const { said, run } = register();
 
@@ -464,7 +441,7 @@ describe('Restore from manifest', () => {
 
     expect(said).toEqual([
       'Restore from manifest — reading what it would destroy…', undefined,
-      'Restore from manifest — reading the files of "ModA"…', 'Restore from manifest — "ModA", 0 of 2 mods done…',
+      'Restore from manifest — "ModA", 0 of 2 mods done…',
       'Restore from manifest — downloading "ModB.7z" from Nexus…', undefined,
     ]);
   });
@@ -475,7 +452,7 @@ describe('Restore from manifest', () => {
     [[restoredMod({ mod: 'ModA' }), restoredMod({ mod: 'ModB' })], []],
     [[restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], ['Restored "ModA" from its manifest.']],
   ])('says what it restored, and nothing when it changed nothing: %j', async (landed, landings) => {
-    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed, refused: [] });
+    restoreFromManifest.mockResolvedValueOnce({ landed, refused: [] });
     const { reporter, run } = register();
 
     await run(RESTORE);
@@ -484,8 +461,8 @@ describe('Restore from manifest', () => {
   });
 
   it.each([
-    ['the stat cache could not be written for a mod it restored', { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], statCacheNotWritten: '/i/stat-cache is read-only' })] },
-      'ModA: the stat cache could not be written: /i/stat-cache is read-only'],
+    ['it could not record what a mod it restored takes from the game folder', { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], notes: ['the files it takes could not be recorded'] })] },
+      'ModA: the files it takes could not be recorded'],
     ['the clone of a submodule was left detached at its pin', {
       landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], leftDetached: "its branch 'main' is at abc, not at the pin, so it is left detached at the pin" })],
     }, "ModA: its branch 'main' is at abc, not at the pin, so it is left detached at the pin"],
@@ -496,7 +473,7 @@ describe('Restore from manifest', () => {
     ['a mod was built from a source holding changes no commit holds', { landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], uncommitted: true })] },
       'ModA: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes'],
   ])('warns in its one line when %s, naming why in the Output', async (_case, answer, detail) => {
-    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...answer });
+    restoreFromManifest.mockResolvedValueOnce({ landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...answer });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'));
@@ -506,7 +483,7 @@ describe('Restore from manifest', () => {
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [{ item: 'ModB', reason: "was skipped: its package does not hold 'b.nif'." }],
+      landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [{ item: 'ModB', reason: "was skipped: its package does not hold 'b.nif'." }],
     });
     const { reporter, run } = register();
 
@@ -518,22 +495,22 @@ describe('Restore from manifest', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('says no file differed, warning in its one line, when the only thing to say is a stat cache it could not write', async () => {
+  it('says no file differed, warning in its one line, when the only thing to say is what it could not record', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', statCacheNotWritten: 'read-only' })], refused: [],
+      landed: [restoredMod({ mod: 'ModA', notes: ['not recorded'] })], refused: [],
     });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'));
 
     expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Restore from manifest: no file differed from its manifest.', detail: 'ModA: the stat cache could not be written: read-only',
+      severity: 'warning', message: 'Restore from manifest: no file differed from its manifest.', detail: 'ModA: not recorded',
     }]);
   });
 
-  it('names a skipped mod and a stat cache it could not write in its one line', async () => {
+  it('names a skipped mod and what it could not record in its one line', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', statCacheNotWritten: 'read-only' })],
+      landed: [restoredMod({ mod: 'ModA', notes: ['not recorded'] })],
       refused: [{ item: 'ModB', reason: "was skipped: it has no manifest." }],
     });
     const { reporter, run } = register();
@@ -542,7 +519,7 @@ describe('Restore from manifest', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not restore 1 of 2 mods.',
-      detail: `"ModB" (was skipped: it has no manifest.)\nModA: the stat cache could not be written: read-only`,
+      detail: `"ModB" (was skipped: it has no manifest.)\nModA: not recorded`,
     }]);
   });
 
@@ -586,7 +563,7 @@ describe('A separator in a report or an outcome', () => {
   it('restore from manifest names it as a separator in its progress and its report', async () => {
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Restoring', mod: WIRE, modsDone: 0, modsTotal: 1 });
-      return Promise.resolve({ applied: true, landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
+      return Promise.resolve({ landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
     });
     const { reporter, said, run } = register();
 
@@ -594,31 +571,6 @@ describe('A separator in a report or an outcome', () => {
 
     expect(said).toContain(`Restore from manifest — "${NAMED}", 0 of 1 mods done…`);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"${NAMED}" (was skipped: it has no manifest.)` }]);
-  });
-
-  it('restore from manifest names each mod it refused beside the mods mEdit did not finish', async () => {
-    restoreFromManifest.mockResolvedValueOnce({
-      applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: ['ModB'], refused: [{ item: 'ModA', reason: 'was skipped: its folder is outside the instance folder.' }],
-    });
-    const { reporter, run } = register();
-
-    await run(RESTORE, modRow('ModB'), [modRow('ModB')]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not restore 1 mod — mEdit stopped.',
-      detail: 'Not finished: "ModB". Restoring again finishes them.\n"ModA" (was skipped: its folder is outside the instance folder.)',
-    }]);
-  });
-
-  it('restore from manifest names it as a separator among the mods not finished', async () => {
-    restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: [WIRE], refused: [] });
-    const { reporter, run } = register();
-
-    await run(RESTORE, separatorRow('Weapons'));
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not restore 1 mod — mEdit stopped.', detail: `Not finished: "${NAMED}". Restoring again finishes them.`,
-    }]);
   });
 
   it('an agent reads it as a separator in what landed and what was refused', async () => {
@@ -720,10 +672,10 @@ describe('An agent call', () => {
       expect(answer).toMatchObject({ applied: true, outcome: { landed: [], refused: [{ item: 'ModA' }] } });
     });
 
-    it('answers what it restored, the mods mEdit would not restore refused with why, and a stat cache it could not write as a part that failed', async () => {
+    it('answers what it restored, the mods it would not restore refused with why, and what it could not record as a part that failed', async () => {
       whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] });
-      const landed = restoredMod({ mod: 'ModA', statCacheNotWritten: 'disk full' });
-      restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [landed], refused: [] });
+      const landed = restoredMod({ mod: 'ModA', notes: ['disk full'] });
+      restoreFromManifest.mockResolvedValueOnce({ landed: [landed], refused: [] });
       const { run } = register();
 
       const answer = await run(RESTORE, new AgentCall([], {}));
@@ -732,37 +684,9 @@ describe('An agent call', () => {
       expect(answer).toEqual({
         applied: true,
         outcome: { landed: [landed], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] },
-        partial: [{ message: 'Restore from manifest:', detail: 'ModA: the stat cache could not be written: disk full', severity: 'warning' }],
+        partial: [{ message: 'Restore from manifest:', detail: 'ModA: disk full', severity: 'warning' }],
       });
     });
 
-    it('answers a restore that stopped as a refusal naming the mods not finished', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
-      restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', unfinished: ['ModA'], refused: [] });
-      const { run } = register();
-
-      expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
-        .toEqual({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', detail: 'Not finished: "ModA". Restoring again finishes them.' });
-    });
-
-    it('answers a restore that stopped with the mods it refused', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
-      restoreFromManifest.mockResolvedValueOnce({
-        applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', unfinished: [], refused: [{ item: 'ModB', reason: 'was skipped: its folder is outside the instance folder.' }],
-      });
-      const { run } = register();
-
-      expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
-        .toEqual({ applied: false, refusal: 'Could not restore 1 mod: mEdit stopped.', detail: '"ModB" (was skipped: its folder is outside the instance folder.)' });
-    });
-
-    it('answers a refusal when mEdit could not say what the restore destroys', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ refusal: 'Could not ask what restore from manifest destroys: mEdit gave no answer.' });
-      const { run } = register();
-
-      expect(await run(RESTORE, new AgentCall([mod('ModA')], {})))
-        .toEqual({ applied: false, refusal: 'Could not ask what restore from manifest destroys: mEdit gave no answer.' });
-      expect(sentMods(restoreFromManifest)).toEqual([]);
-    });
   });
 });
