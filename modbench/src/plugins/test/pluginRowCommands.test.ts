@@ -43,7 +43,7 @@ import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import type { PluginAddress, PluginRepairPreview } from '../../client';
+import type { PluginAddress } from '../../client';
 
 beforeEach(() => {
   handlers.clear();
@@ -321,89 +321,116 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
 describe('modbench.plugin.decompileAndRepair', () => {
   const MALFORMED = { name: 'Malformed.esp', origin: 'ModA' };
+  const OTHER = { name: 'Other.esp', origin: 'ModA' };
   const SELECTED = { name: 'Selected.esp', origin: 'ModA' };
-  const PREVIEW: PluginRepairPreview = {
-    plugin: MALFORMED, hash: 'abc',
-    diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'drops 25 bytes', dropsData: true } }],
-  };
+  const beneath = (...plugin: ('None' | 'Modified' | 'Added')[]) => ({ plugin, recordTypes: {}, records: {} });
+  const clean = beneath('None');
+  const changedSource = beneath('Modified');
 
-  function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = []) {
+  function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = [], client = new InMemoryMEditClient()) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const logged: string[] = [];
-    const repaired: { plugins: readonly PluginAddress[]; force: boolean; agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean> }[] = [];
+    const repaired: { plugins: readonly PluginAddress[]; force: boolean }[] = [];
     registerDecompileAndRepairCommand({
       commands: {
-        decompileAndRepair: (plugins, force, previewed, agrees) => {
-          progressSteps.push('decompile and repair');
-          repaired.push({ plugins, force, agrees });
-          previewed({ ...PREVIEW, plugin: present(plugins[0], 'a plugin to repair') });
+        decompileAndRepair: (plugins, force) => {
+          progressSteps.push(`decompile and repair${force ? ' forced' : ''}`);
+          repaired.push({ plugins, force });
           return Promise.resolve({ applied: true, outcome: { landed: [...plugins], refused: [] } });
         },
       },
-      instance: instanceThatReads, reporter, ask, log: (line) => logged.push(line),
+      client: { getWorkingTreeStatesBeneath: (plugin) => client.getWorkingTreeStatesBeneath(plugin) },
+      instance: instanceThatReads, reporter, ask,
     }, () => viewSelection);
-    return { handler: present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command'), reporter, logged, repaired, ask };
+    return { handler: present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command'), reporter, repaired, ask, client };
   }
 
   const row = (plugin: PluginAddress) => new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
-  const agreement = (repaired: ReturnType<typeof registered>['repaired']) => present(present(repaired[0], 'the repair').agrees, 'the way to ask');
 
-  it('on a plugin row, names each previewed change in the Output, repairs it unforced under the view\'s progress, and lands once', async () => {
-    const { handler, reporter, logged, repaired } = registered();
+  it('on a plugin row whose source is held, repairs it unforced asking nothing, under the view\'s progress, and lands once', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+    const { handler, reporter, repaired, ask } = registered([], [], client);
 
     await handler(row(MALFORMED));
 
-    expect(repaired.map(({ plugins, force }) => ({ plugins, force }))).toEqual([{ plugins: [MALFORMED], force: false }]);
-    expect(logged).toEqual(['Malformed.esp (ModA): REGN 00000800: drops 25 bytes']);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
+    expect(ask.asked).toEqual([]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'decompile and repair', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Decompiled and repaired "Malformed.esp".']);
   });
 
-  it('asks once, naming each change that drops data with its plugin and origin, and takes Repair as agreement', async () => {
-    const { handler, repaired, ask } = registered([], ['Repair']);
+  it('on a plugin row whose source has working-tree changes, asks naming it before any write, then repairs it forced', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', changedSource);
+    const { handler, repaired, ask } = registered([], ['Decompile and repair'], client);
+
     await handler(row(MALFORMED));
 
-    const agreed = await agreement(repaired)([PREVIEW]);
-
-    expect(agreed).toBe(true);
-    expect(ask.asked).toEqual([{ message: 'Repair drops data?', detail: 'Malformed.esp (ModA): REGN 00000800: drops 25 bytes', buttons: ['Repair'] }]);
+    expect(ask.asked).toEqual([{
+      message: 'Decompile and repair "Malformed.esp" in ModA? It replaces changes to its source that git does not hold.',
+      detail: undefined,
+      buttons: ['Decompile and repair'],
+    }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
   });
 
-  it('takes a dismissed question as no', async () => {
-    const { handler, repaired } = registered([], [undefined]);
+  it('writes nothing when the question is dismissed', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', changedSource);
+    const { handler, repaired, reporter } = registered([], [undefined], client);
+
     await handler(row(MALFORMED));
 
-    expect(await agreement(repaired)([PREVIEW])).toBe(false);
+    expect(repaired).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('on a selection, asks once naming only the plugins with such changes, then repairs them forced and the rest unforced', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', changedSource);
+    client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', clean);
+    const { handler, repaired, ask } = registered([], ['Decompile and repair'], client);
+    const rows = [row(MALFORMED), row(OTHER)];
+
+    await handler(rows[0], rows);
+
+    expect(ask.asked.map(({ message }) => message)).toEqual([
+      'Decompile and repair "Malformed.esp" in ModA? It replaces changes to its source that git does not hold.',
+    ]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }, { plugins: [OTHER], force: false }]);
   });
 
   it('from a Malformed entry\'s link in the Problems panel, repairs the plugin it names, not the selection', async () => {
-    const { handler, repaired } = registered([row(SELECTED)]);
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+    const { handler, repaired } = registered([row(SELECTED)], [], client);
 
     await handler(MALFORMED);
 
     expect(repaired.map(({ plugins }) => plugins)).toEqual([[MALFORMED]]);
   });
 
-  it('for the agent, repairs the plugins given, forced when its options say force, with no way to ask, reporting nothing, and answers the outcome', async () => {
+  it('for the agent, repairs the plugins given, forced when its options say force, asking nothing and reporting nothing, and answers the outcome', async () => {
     const { handler, reporter, repaired, ask } = registered([row(SELECTED)]);
 
     const answered = await handler(new AgentCall([{ kind: 'plugin', plugin: MALFORMED }], { force: true }));
 
-    expect(repaired.map(({ plugins, force, agrees }) => ({ plugins, force, agrees }))).toEqual([{ plugins: [MALFORMED], force: true, agrees: undefined }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [] } });
     expect(ask.asked).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
 
-  it('tells the user a plugin whose bytes changed since the preview was refused', async () => {
+  it('tells the user a plugin mEdit refused, naming why', async () => {
     const reporter = recordingReporter();
-    const reason = 'Malformed.esp\'s bytes changed since the repair preview, so nothing was written.';
+    const reason = 'Malformed.esp is not malformed.';
     registerDecompileAndRepairCommand({
       commands: { decompileAndRepair: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [{ item: MALFORMED, reason }] } }) },
-      instance: instanceThatReads, reporter, ask: scriptedDialog(), log: () => undefined,
+      client: { getWorkingTreeStatesBeneath: () => Promise.resolve(clean) },
+      instance: instanceThatReads, reporter, ask: scriptedDialog(),
     }, () => []);
 
     await present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command')(row(MALFORMED));

@@ -1,7 +1,8 @@
 import type * as vscode from 'vscode';
-import { isRefused, type MEditClient, type PluginAddress, type PluginRepairPreview } from '../client';
+import { isRefused, type MEditClient, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
+import type { Progress } from '../drivingLib/pausableProgress';
 import { columnHeaderOf } from '../wire/columnHeader';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
@@ -12,7 +13,6 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { previewLines } from '../pluginCommands/decompileAndRepair';
 import { isPluginAddress } from '../wire/messages';
 import { isReadFailed } from '../wire/readFailed';
 
@@ -40,12 +40,6 @@ interface DecompileGiven {
   readonly agreesToReplace?: (plugins: readonly PluginAddress[]) => Promise<boolean>;
 }
 
-interface DecompileAndRepairGiven {
-  readonly plugins: readonly PluginAddress[];
-  readonly force: boolean;
-  readonly agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>;
-}
-
 /** commands.md, `decompile`: the plugins of Plugins rows, the selection included, of a record tab's
  *  column header, or of the palette's Plugins selection, asked once. */
 export function registerDecompileCommand(
@@ -55,19 +49,11 @@ export function registerDecompileCommand(
     fromView: (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
       const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, replaced) } : undefined;
+      return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile', replaced) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
-    run: ({ plugins, force, agreesToReplace }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async (progress) => {
-      const replacing = agreesToReplace === undefined || force ? [] : await withChangesGitDoesNotHold(deps.client, plugins);
-      if (replacing.length === 0) return decompileBatches(deps.client, [{ plugins, force }]);
-      progress.waiting();
-      const agreed = await agreesToReplace?.(replacing);
-      progress.working();
-      if (agreed !== true) return { applied: true, outcome: { landed: [], refused: [] } };
-      const rest = plugins.filter((plugin) => !replacing.includes(plugin));
-      return decompileBatches(deps.client, [{ plugins: replacing, force: true }, { plugins: rest, force: false }]);
-    }),
+    run: (given) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
+      sendAskingOverChanges(deps.client, progress, given, (plugins, force) => decompiled(deps.client, plugins, force))),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
       else deps.reporter.report('error', result.refusal);
@@ -76,29 +62,29 @@ export function registerDecompileCommand(
   return registerAgentGesture('modbench.plugin.decompile', viewSelection, gesture);
 }
 
-/** What decompile and repair needs: the command, the Instance loader's refresh, the Output line each preview's changes
- *  are named on, and how the user is told. */
+/** What decompile and repair needs: the command, mEdit's working-tree states, the Instance loader's refresh, its
+ *  confirmation of a replaced change, and how the user is told. */
 export interface DecompileAndRepairDeps {
   commands: Pick<PluginCommands, 'decompileAndRepair'>;
+  client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
-  log: (line: string) => void;
   ask: AskQuestion;
 }
 
 /** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
- *  selection, or of a Malformed entry's link in the Problems panel. A repair that drops data asks first. */
+ *  selection, or of a Malformed entry's link in the Problems panel. */
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
     fromView: (entry, _option, clicked) => {
       const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 ? { plugins, force: false, agrees: (dropping) => confirmDrops(deps.ask, dropping) } : undefined;
+      return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile and repair', replaced) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
-    run: ({ plugins, force, agrees }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, () =>
-      deps.commands.decompileAndRepair(plugins, force, (preview) => { previewLines(preview).forEach(deps.log); }, agrees)),
+    run: (given) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
+      sendAskingOverChanges(deps.client, progress, given, deps.commands.decompileAndRepair)),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
       else deps.reporter.report('error', result.refusal);
@@ -107,20 +93,14 @@ export function registerDecompileAndRepairCommand(
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
 }
 
-async function confirmDrops(ask: AskQuestion, dropping: readonly PluginRepairPreview[]): Promise<boolean> {
-  const answer = await ask('Repair drops data?',
-    { modal: true, detail: dropping.flatMap(previewLines).join('\n') }, 'Repair');
-  return answer === 'Repair';
-}
-
-async function confirmReplace(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
+async function confirmReplace(ask: AskQuestion, verb: string, plugins: readonly PluginAddress[]): Promise<boolean> {
   const [only] = plugins;
   const answer = plugins.length === 1 && only !== undefined
-    ? await ask(`Decompile "${only.name}" in ${only.origin}? It replaces changes to its source that git does not hold.`,
-      { modal: true }, 'Decompile')
-    : await ask(`Decompile ${plugins.length} plugins? They replace changes to their source that git does not hold.`,
-      { modal: true, detail: plugins.map(pluginRowName).join('\n') }, 'Decompile');
-  return answer === 'Decompile';
+    ? await ask(`${verb} "${only.name}" in ${only.origin}? It replaces changes to its source that git does not hold.`,
+      { modal: true }, verb)
+    : await ask(`${verb} ${plugins.length} plugins? They replace changes to their source that git does not hold.`,
+      { modal: true, detail: plugins.map(pluginRowName).join('\n') }, verb);
+  return answer === verb;
 }
 
 async function withChangesGitDoesNotHold(
@@ -133,24 +113,47 @@ async function withChangesGitDoesNotHold(
   });
 }
 
-interface DecompileBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }
+type SendPlugins = (plugins: readonly PluginAddress[], force: boolean) => Promise<SelectionResult<PluginAddress>>;
 
-async function decompileBatches(
-  client: Pick<MEditClient, 'decompile'>, batches: readonly DecompileBatch[],
+/** commands.md, Principles, Confirm what destroys: asks once, before any write, naming the plugins whose source holds
+ *  changes git does not, and sends those forced and the rest unforced. Esc writes nothing. */
+async function sendAskingOverChanges(
+  client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>, progress: Progress,
+  { plugins, force, agreesToReplace }: DecompileGiven, send: SendPlugins,
 ): Promise<SelectionResult<PluginAddress>> {
-  const answered: { batch: DecompileBatch; answer: Awaited<ReturnType<MEditClient['decompile']>> }[] = [];
+  const replacing = agreesToReplace === undefined || force ? [] : await withChangesGitDoesNotHold(client, plugins);
+  if (replacing.length === 0) return sendBatches([{ plugins, force }], send);
+  progress.waiting();
+  const agreed = await agreesToReplace?.(replacing);
+  progress.working();
+  if (agreed !== true) return { applied: true, outcome: { landed: [], refused: [] } };
+  const rest = plugins.filter((plugin) => !replacing.includes(plugin));
+  return sendBatches([{ plugins: replacing, force: true }, { plugins: rest, force: false }], send);
+}
+
+async function decompiled(
+  client: Pick<MEditClient, 'decompile'>, plugins: readonly PluginAddress[], force: boolean,
+): Promise<SelectionResult<PluginAddress>> {
+  const answer = await client.decompile(plugins, force);
+  return isRefused(answer) ? { applied: false, refusal: answer.message } : { applied: true, outcome: answer };
+}
+
+interface SendBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }
+
+async function sendBatches(batches: readonly SendBatch[], send: SendPlugins): Promise<SelectionResult<PluginAddress>> {
+  const answered: { batch: SendBatch; answer: SelectionResult<PluginAddress> }[] = [];
   for (const batch of batches.filter(({ plugins }) => plugins.length > 0)) {
-    const answer = await client.decompile(batch.plugins, batch.force);
-    if (isRefused(answer) && answered.length === 0) return { applied: false, refusal: answer.message };
+    const answer = await send(batch.plugins, batch.force);
+    if (!answer.applied && answered.length === 0) return answer;
     answered.push({ batch, answer });
   }
   return {
     applied: true,
     outcome: {
-      landed: answered.flatMap(({ answer }) => isRefused(answer) ? [] : answer.landed),
-      refused: answered.flatMap(({ batch, answer }) => isRefused(answer)
-        ? batch.plugins.map((item) => ({ item, reason: answer.message }))
-        : answer.refused),
+      landed: answered.flatMap(({ answer }) => answer.applied ? answer.outcome.landed : []),
+      refused: answered.flatMap(({ batch, answer }) => answer.applied
+        ? answer.outcome.refused
+        : batch.plugins.map((item) => ({ item, reason: answer.refusal }))),
     },
   };
 }

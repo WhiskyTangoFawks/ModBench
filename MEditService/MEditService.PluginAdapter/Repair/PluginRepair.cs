@@ -18,13 +18,13 @@ internal static class PluginRepair
     private sealed record PlannedRecord(MajorRecordPinFrame Record, List<Subrecord> Subrecords);
 
     internal static RepairPreviews Preview(byte[] plugin, GameRelease release) =>
-        new(PluginBinaryHash.OfBytes(plugin), [.. Malformations.In(plugin, release).Select(found => found.Preview)]);
+        new([.. Malformations.In(plugin, release).Select(found => found.Preview)]);
 
     /// <summary>The plugin with the repair of each of <paramref name="chosen"/> made.</summary>
     internal static Answer<byte[], PluginFailure> Repaired(
-        byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
+        byte[] plugin, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
     {
-        if (!Planned(plugin, previewedHash, chosen, release).Holds(out var planned, out var refused)) return refused;
+        if (!Planned(plugin, chosen, release).Holds(out var planned, out var refused)) return refused;
         return Spliced(plugin, release, planned.ToDictionary(
             p => p.Key, p => (OriginalLength: checked((int)p.Value.Record.TotalLength), Bytes: RecordBytes(plugin, p.Value))));
     }
@@ -33,9 +33,9 @@ internal static class PluginRepair
     /// differs from it only by the repairs of <paramref name="chosen"/>; otherwise the refusal naming the first
     /// record that does not.</summary>
     internal static PluginFailure? Unverified(
-        byte[] original, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, byte[] repaired, GameRelease release)
+        byte[] original, IReadOnlyCollection<PluginDiagnosis> chosen, byte[] repaired, GameRelease release)
     {
-        if (!Planned(original, previewedHash, chosen, release).Holds(out var planned, out var refused)) return refused;
+        if (!Planned(original, chosen, release).Holds(out var planned, out var refused)) return refused;
         var before = PluginBinaryWalk.Records(original, release).ToList();
         var after = PluginBinaryWalk.Records(repaired, release).ToList();
         if (before.Count != after.Count)
@@ -57,14 +57,13 @@ internal static class PluginRepair
     /// <summary>Each record a diagnosis of <paramref name="chosen"/> names, as the plugin holds it, with those
     /// diagnoses.</summary>
     internal static Answer<List<Malformations.Found[]>, PluginFailure> Diagnosed(
-        byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release) =>
-        Chosen(plugin, previewedHash, chosen, release)
+        byte[] plugin, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release) =>
+        Chosen(plugin, chosen, release)
             .Then<List<Malformations.Found[]>>(found => found.GroupBy(f => f.Record.Location).Select(record => record.ToArray()).ToList());
 
     private static Answer<List<Malformations.Found>, PluginFailure> Chosen(
-        byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
+        byte[] plugin, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
     {
-        if (PluginBinaryHash.OfBytes(plugin) != previewedHash) return new PluginFailure.ChangedSincePreview();
         var found = Malformations.In(plugin, release).Where(f => chosen.Contains(f.Diagnosis)).ToList();
         if (chosen.FirstOrDefault(diagnosis => found.All(f => f.Diagnosis != diagnosis)) is { } absent)
             throw new ArgumentException($"A diagnosis chosen for repair is one its preview made, and {absent.Describe()} is not.", nameof(chosen));
@@ -72,9 +71,9 @@ internal static class PluginRepair
     }
 
     private static Answer<Dictionary<int, PlannedRecord>, PluginFailure> Planned(
-        byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
+        byte[] plugin, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
     {
-        if (!Chosen(plugin, previewedHash, chosen, release).Holds(out var repairing, out var refused)) return refused;
+        if (!Chosen(plugin, chosen, release).Holds(out var repairing, out var refused)) return refused;
         if (repairing.FirstOrDefault(found => found.Repair is null) is { } unanswered) return new PluginFailure.NoRepair(unanswered.Diagnosis);
 
         return repairing

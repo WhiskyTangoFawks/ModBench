@@ -2,9 +2,8 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.PluginAdapter.Repair;
 
-/// <summary>A plugin's malformed-record diagnoses from one read of it, with the hash of the bytes they
-/// came from, which a repair of them is handed (ADR-0003).</summary>
-public sealed record RepairPreviews(string Hash, IReadOnlyList<RepairPreview> Diagnoses);
+/// <summary>A plugin's malformed-record diagnoses from one read of it.</summary>
+public sealed record RepairPreviews(IReadOnlyList<RepairPreview> Diagnoses);
 
 /// <summary>The malformations of a plugin Mutagen failed to read: those in the record it failed at, and those in the rest.</summary>
 public sealed record MalformationScan(IReadOnlyList<RepairPreview> AtFailure, IReadOnlyList<RepairPreview> Elsewhere);

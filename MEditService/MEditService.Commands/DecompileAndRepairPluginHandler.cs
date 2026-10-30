@@ -32,11 +32,9 @@ public sealed class DecompileAndRepairPluginHandler
         _init = new ModInit(logger, source, modFolders, decompiler);
     }
 
-    /// <summary>A repair that drops data, or a source with working-tree changes, is refused once, listing every loss,
-    /// unless <paramref name="force"/> waives both; <paramref name="agreedDrops"/> waives the dropped data alone.</summary>
+    /// <summary>A source with working-tree changes is refused, listing them, unless <paramref name="force"/> waives them.</summary>
     public async Task<Answer<DecompileAndRepairResult, SelectionRefusal<DecompileAndRepairRefusal>>> DecompileAndRepairAsync(
-        IReadOnlyList<PluginToRepair> plugins, bool force, bool agreedDrops,
-        CancellationToken cancel = default)
+        IReadOnlyList<PluginToRepair> plugins, bool force, CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new SelectionRefusal<DecompileAndRepairRefusal>(DecompileAndRepairRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -46,7 +44,7 @@ public sealed class DecompileAndRepairPluginHandler
         var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, async item =>
         {
             cancel.ThrowIfCancellationRequested();
-            var answer = await RepairOneAsync(loadOrder, item, selected, leftOutOfANewRepository, force, agreedDrops, cancel);
+            var answer = await RepairOneAsync(loadOrder, item, selected, leftOutOfANewRepository, force, cancel);
             return answer is ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refusing(var refusal, var message) && leftOutOfANewRepository.Contains(item.Plugin)
                 ? Refused(refusal, $"{message} The repository made for its mod holds no source for it.")
                 : answer;
@@ -62,32 +60,33 @@ public sealed class DecompileAndRepairPluginHandler
 
     private async Task<ItemAnswer<DecompileAndRepairRefusal, NoOutcome>> RepairOneAsync(
         LoadOrderSnapshot loadOrder, PluginToRepair item, IReadOnlySet<PluginAddress> selected, HashSet<PluginAddress> leftOutOfANewRepository,
-        bool force, bool agreedDrops, CancellationToken cancel)
+        bool force, CancellationToken cancel)
     {
         var target = RepairTarget.Of(_repairer, loadOrder, item.Plugin);
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
-        var (plugin, mod, previews) = (RepairTarget.Previewed)target;
+        var (plugin, mod, previews) = (RepairTarget.Diagnosed)target;
         var sourceFolder = mod.SourceFolder ?? item.NewRepository?.SourceFolder;
         if (sourceFolder is null)
             return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
         var inSourceMod = _source.IsSourceMod(sourceFolder);
         var repository = _source.OverFolder(mod with { SourceFolder = sourceFolder }, loadOrder.GameRelease);
-        var dropped = force || agreedDrops ? [] : previews.Diagnoses.Where(preview => preview.Change is { DropsData: true }).ToList();
-        var workingTree = inSourceMod && !force ? WorkingTreeCheck.Of(repository, plugin.Key, "decompile and repair") : null;
-        if (dropped.Count > 0 || workingTree is not null)
-            return LossRefused(plugin, dropped, workingTree);
+        if (inSourceMod && !force && WorkingTreeCheck.Of(repository, plugin.Key, "decompile and repair") is { } workingTree)
+        {
+            return Refused(workingTree.Unreadable ? DecompileAndRepairRefusal.WorkingTreeStatusUnreadable : DecompileAndRepairRefusal.WorkingTreeChanges,
+                workingTree.Message + " Nothing was written.");
+        }
 
         var chosen = previews.Diagnoses.Select(preview => preview.Diagnosis).ToList();
-        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, item.Hash, chosen, mod.Folder, cancel)).Holds(out var decompiled, out var failure))
-            return RefusedAs(plugin, previews, failure);
+        if (!(await _repairer.DecompileRepairedAsync(loadOrder, plugin, chosen, mod.Folder, cancel)).Holds(out var decompiled, out var failure))
+            return RefusedAs(plugin, failure);
         if (decompiled.Source is not { } repaired)
         {
             return Refused(decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
-        if (!(await _adapter.FlaggedSourceOfAsync(plugin, item.Hash, chosen, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
-            return RefusedAs(plugin, previews, failure);
+        if (!(await _adapter.FlaggedSourceOfAsync(plugin, chosen, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
+            return RefusedAs(plugin, failure);
 
         var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, previews));
         if (!inSourceMod)
@@ -119,25 +118,8 @@ public sealed class DecompileAndRepairPluginHandler
         }
     }
 
-    private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> LossRefused(
-        RegisteredPlugin plugin, List<RepairPreview> dropped, WorkingTreeLoss? workingTree)
+    private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> RefusedAs(RegisteredPlugin plugin, PluginFailure failure) => failure switch
     {
-        var drops = dropped.Count == 0 ? null
-            : $"Repairing {plugin.Name} drops data: " + string.Join("; ", dropped.Select(Named)) + ". Request it again with force to repair it anyway.";
-        var refusal = DecompileAndRepairRefusal.DropsData;
-        if (dropped.Count == 0 && workingTree is { } loss)
-            refusal = loss.Unreadable ? DecompileAndRepairRefusal.WorkingTreeStatusUnreadable : DecompileAndRepairRefusal.WorkingTreeChanges;
-        return Refused(refusal, string.Join(" ", new[] { drops, workingTree?.Message }.OfType<string>()) + " Nothing was written.");
-    }
-
-    private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> ChangedSincePreview(RegisteredPlugin plugin, RepairPreviews previews) =>
-        Refused(DecompileAndRepairRefusal.ChangedSincePreview,
-            $"{plugin.Name}'s bytes changed since the repair preview, so nothing was written. Its repair now: "
-            + string.Join("; ", previews.Diagnoses.Select(Named)) + ". Run decompile and repair again to preview it.");
-
-    private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> RefusedAs(RegisteredPlugin plugin, RepairPreviews previews, PluginFailure failure) => failure switch
-    {
-        PluginFailure.ChangedSincePreview => ChangedSincePreview(plugin, previews),
         PluginFailure.NoRepair => Refused(DecompileAndRepairRefusal.NoRepair, $"{plugin.Name} cannot be repaired: {failure.Reason}."),
         PluginFailure.Inaccessible => Refused(DecompileAndRepairRefusal.Unreadable, $"{plugin.Name} could not be read: {failure.Reason}"),
         PluginFailure.RepairUnverified => Refused(DecompileAndRepairRefusal.RoundTripFailed, $"{plugin.Name}'s repair was refused: {failure.Reason}."),

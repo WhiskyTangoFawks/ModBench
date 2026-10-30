@@ -148,18 +148,6 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
-    /// <summary>The plugin's bytes are not the ones its repair preview read (ADR-0003).</summary>
-    public sealed record ChangedSincePreview : PluginFailure
-    {
-        internal ChangedSincePreview() : base(error: null)
-        {
-        }
-
-        public override string Reason => "its bytes changed since the repair preview";
-
-        public override bool OfItsBytes => false;
-    }
-
     /// <summary>A diagnosis chosen for repair that no repair answers.</summary>
     public sealed record NoRepair : PluginFailure
     {

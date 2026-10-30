@@ -170,15 +170,14 @@ function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsT
 }
 
 function registerPluginGestures(
-  { instance, commands, client, ask, reporterFor, recordWrite, sourceEditing, log }: PluginsViewDeps,
+  { instance, commands, client, ask, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
   { tree, view, selection }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; selection: () => readonly PluginsTreeNode[];
   },
 ): vscode.Disposable[] {
   return [
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
-    registerDecompileAndRepairCommand(
-      { commands, instance, ask, reporter: reporterFor('plugin.decompileAndRepair'), log: (line) => { log('info', `[decompileAndRepair] ${line}`); } }, selection),
+    registerDecompileAndRepairCommand({ commands, client, instance, ask, reporter: reporterFor('plugin.decompileAndRepair') }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),

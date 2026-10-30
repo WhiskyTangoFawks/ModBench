@@ -41,17 +41,17 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.RepairsOf(pluginPath, gameRelease);
 
     public virtual Answer<string, PluginFailure> WriteRepaired(
-        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease) =>
-        inner.WriteRepaired(pluginPath, previewedHash, chosen, destinationPath, gameRelease);
+        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease) =>
+        inner.WriteRepaired(pluginPath, chosen, destinationPath, gameRelease);
 
     public virtual Answer<string, PluginFailure> VerifyRepaired(
-        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease) =>
-        inner.VerifyRepaired(pluginPath, previewedHash, chosen, repairedPath, gameRelease);
+        string pluginPath, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease) =>
+        inner.VerifyRepaired(pluginPath, chosen, repairedPath, gameRelease);
 
     public virtual Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        RegisteredPlugin plugin, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
         CancellationToken cancel = default) =>
-        inner.FlaggedSourceOfAsync(plugin, previewedHash, chosen, repaired, loadOrder, cancel);
+        inner.FlaggedSourceOfAsync(plugin, chosen, repaired, loadOrder, cancel);
 
     public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.StringsPlacesOf(modPath, loadOrder, strings);

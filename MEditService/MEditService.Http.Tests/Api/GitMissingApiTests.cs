@@ -43,12 +43,9 @@ public sealed class GitMissingApiTests : HostedTests
         fixture.Malformed.WriteInto(Path.GetDirectoryName(fx.Plugins.Single().Path).Require());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         var plugin = new { name = fixture.Malformed.FileName, origin = Origin };
-        var hash = Assert.Single((await (await Client.PostAsJsonAsync("/plugins/repair-previews", new { plugins = new[] { plugin } }))
-            .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray()).GetProperty("hash").GetString();
-
         var response = await WithGitMissing(() => Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin, hash, sourceFolder = Client.SourceFolderSentFor(Origin) } },
+            plugins = new[] { new { plugin, sourceFolder = Client.SourceFolderSentFor(Origin) } },
             force = false,
         }));
 
