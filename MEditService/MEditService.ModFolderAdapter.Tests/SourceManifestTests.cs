@@ -57,7 +57,7 @@ public sealed class SourceManifestTests : IDisposable
         var read = Read();
 
         Assert.NotNull(read);
-        Assert.Equal((Built.Output, Built.Package, Built.Version), (read.Output, read.Package, read.Version));
+        Assert.Equal((Built.Output, Built.Packages[0], Built.Version), (read.Output, read.Packages[0], read.Version));
         Assert.Equal(["a.esp", "docs"], read.Exclude);
         Assert.Equal(
             [("Mod - Main.ba2", "meshes/a.nif|meshes/b.nif"), ("Mod - Textures.ba2", "textures/a.dds")],

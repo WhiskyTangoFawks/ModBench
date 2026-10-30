@@ -15,11 +15,8 @@ public enum DecompileAndCommitPhase
     Committing,
 }
 
-/// <summary>A modlist gesture's progress over a selection: the id its client named it by, the mod in flight (null at
-/// rest) and the mods done.</summary>
-public sealed record ModlistProgress(string? Gesture, string? Mod, int ModsDone, int ModsTotal);
-
-public sealed record RestoreFromManifestProgressNotification(ModlistProgress Progress) : INotification;
+/// <summary>A modlist gesture's progress over a selection: the mod in flight (null at rest) and the mods done.</summary>
+public sealed record ModlistProgress(string? Mod, int ModsDone, int ModsTotal);
 
 public sealed record BuildProgressNotification(ModlistProgress Progress) : INotification;
 

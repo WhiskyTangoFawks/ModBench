@@ -62,7 +62,7 @@ public sealed class BuildModHandlerTests : IDisposable
         await Landed(_noArchives, isSubmodule);
 
         var manifest = ManifestWritten().Require();
-        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, isSubmodule), manifest.Package);
+        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, isSubmodule), manifest.Packages[0]);
         Assert.Equal([new ManifestFile("meshes/c.nif", new PackageEntry.Held())], manifest.Files);
     }
 
@@ -128,31 +128,6 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AJustBuiltMod_DiffersFromItsManifestOnlyByTheFilesTheBuildDidNotMake()
-    {
-        WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
-        WriteInFolder(MetaIni, "[General]");
-        WriteInFolder("notes.txt", "mine");
-        Shared();
-
-        await Landed(_noArchives, isSubmodule: true);
-
-        Assert.Equal(new ModStatus(ModName, NoManifest: false, [], ["notes.txt"], [], [], []), Status());
-    }
-
-    [Fact]
-    public async Task AnArchiveTheBuildDidNotPack_Differs_ThoughItsSourceProvidesIt()
-    {
-        WriteSource("{\"output\": \"Mod\", \"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\"]}}", ("meshes/c.nif", "c"));
-        WriteInFolder("Mod - Main.ba2", "packed by an earlier build");
-        Shared();
-
-        Assert.Single((await Landed()).ArchivesRefused);
-
-        Assert.Equal(["Mod - Main.ba2"], Status().Differing);
-    }
-
-    [Fact]
     public async Task Build_WritesAnExcludedFile_AndEachFileOfAnExcludedFolder_UnderTheExclusionMarkHanded()
     {
         WriteSource("{\"output\": \"Mod\", \"exclude\": [\"Textures/A.dds\", \"meshes\"]}",
@@ -212,7 +187,7 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task OnceItsStepsRan_ItsBuildWritesItsManifest_EachFileItMadeThatTheFolderHolds_AndEachFileAStepMakes_AndNothingDiffers()
+    public async Task OnceItsStepsRan_ItsBuildWritesItsManifest_EachFileItMadeThatTheFolderHolds_AndEachFileAStepMakes()
     {
         WriteSourceText(WithAStep, ("meshes/c.nif", "c"), ("meshes/d.nif", "d"));
         var built = await Landed(WithItsTask);
@@ -225,8 +200,6 @@ public sealed class BuildModHandlerTests : IDisposable
             [new ManifestFile("meshes/c.nif", new PackageEntry.Held()), new ManifestFile("textures/a.dds", new PackageEntry.MadeByStep())],
             ManifestWritten().Require().Files);
         Assert.Equal([("meshes/c.nif", "c"), ("textures/a.dds", "optimised")], FilesIn(ModFolder));
-        var status = Status();
-        Assert.Equal((0, 0, 0), (status.Differing.Count, status.NamedByNoLine.Count, status.Gone.Count));
     }
 
     [PosixFact]
@@ -296,7 +269,7 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompiledPlugin_AndItsStrings_AreHeldByItsSource_AndDoNotDiffer()
+    public async Task ACompiledPlugin_AndItsStrings_AreHeldByItsSource()
     {
         await InitializedWithALocalizedPlugin();
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "remote", "add", "origin", Remote);
@@ -306,11 +279,10 @@ public sealed class BuildModHandlerTests : IDisposable
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
         var manifest = ManifestWritten().Require();
-        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: true), manifest.Package);
+        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: true), manifest.Packages[0]);
         Assert.Equal(
             [.. new[] { "Fixture.esp" }.Concat(stringsFiles).Order(StringComparer.Ordinal).Select(path => new ManifestFile(path, new PackageEntry.Held()))],
             manifest.Files);
-        Assert.Empty(Status().Differing);
     }
 
     [Fact]
@@ -359,12 +331,10 @@ public sealed class BuildModHandlerTests : IDisposable
             [new ManifestFile("meshes/c.nif", ManifestFile.At("meshes/c.nif", new FileBytes.InInstallationFile(DownloadedZip.PackName, "Data/c.nif")).Entry, DownloadedZip.PackName),
                 new ManifestFile("textures/a.dds", new PackageEntry.Held(), DownloadedZip.PackName)],
             manifest.Files.OrderBy(file => file.Path, StringComparer.Ordinal));
-        Assert.Empty(Status().Differing);
-        Assert.Empty(Status().Gone);
     }
 
     [Fact]
-    public async Task AnArchive_PacksAFileTakenFromAnInstallationFile_LeavingNoLooseCopy_ThoughItsLineStays_AndTheModIsNotGone()
+    public async Task AnArchive_PacksAFileTakenFromAnInstallationFile_LeavingNoLooseCopy_ThoughItsLineStays()
     {
         WriteSourceText(DownloadedZip.TakingFromAPack.Replace("\"files\"", "\"archives\": {\"Mod - Main.ba2\": [\"meshes/c.nif\"]}, \"files\""));
         var variants = new ArchiveVariants(new Ba2Variant(1, Ba2Contents.General, Compressed: false), new Ba2Variant(1, Ba2Contents.Textures, Compressed: false));
@@ -374,7 +344,6 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Empty(built.ArchivesRefused);
         Assert.Equal(["Mod - Main.ba2", "textures/a.dds"], FilesIn(ModFolder).Select(file => file.Path));
         Assert.Contains("meshes/c.nif", ManifestWritten().Require().Files.Select(file => file.Path));
-        Assert.Empty(Status().Gone);
     }
 
     [Fact]
@@ -388,8 +357,6 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(
             ManifestFile.At("textures/a.dds.excluded", new FileBytes.InInstallationFile(DownloadedZip.PackName, "textures/a.dds")) with { Package = DownloadedZip.PackName },
             ManifestWritten().Require().Files.Single(file => file.Path.StartsWith("textures", StringComparison.Ordinal)));
-        Assert.Empty(Status().Gone);
-        Assert.Empty(Status().Differing);
     }
 
     [Fact]
@@ -543,9 +510,6 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     private Manifest? ManifestWritten() => new ModFolderRepository(TimeProvider.System).ReadSourceManifest(SourceFolder).Value();
-
-    private ModStatus Status() =>
-        new ModFolderRepository(TimeProvider.System).Status(ModFolder, ModName, new HashSet<string> { MetaIni }, StatCache, held: null, SourceFolder);
 
     private void WriteAsset(string path, byte[] bytes) => Write(Path.Combine(SourceFolder, "assets"), path, bytes);
 

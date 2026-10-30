@@ -75,7 +75,6 @@ internal sealed record NotificationEvent(
         PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
         DecompileAndCommitProgressNotification n => new("decompile-and-commit-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, DecompileAndCommitPhase: n.Phase),
-        RestoreFromManifestProgressNotification n => new("restore-from-manifest-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
         PluginSourceUnreadableNotification n => new("plugin-source-unreadable", "", n.Origin, [], 0, PluginWithUnreadableSources: n.Plugins),

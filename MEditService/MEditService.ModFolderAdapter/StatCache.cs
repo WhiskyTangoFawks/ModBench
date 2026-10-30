@@ -6,7 +6,7 @@ using MEditService.RepositoriesLib;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>What Modbench last read of one mod folder's files on this machine (modlist-repository.md, Status, story 3), and
-/// the hash its package fixes for each file, as the last update or restore was handed it.</summary>
+/// the hash its package fixes for each file, as the last build was handed it.</summary>
 internal sealed class StatCache
 {
     private sealed record Entry(long Size, long Modified, long Changed, string Hash);
@@ -51,9 +51,7 @@ internal sealed class StatCache
     public string HashOf(string path, Func<string> read) =>
         _memo.Of(FileAt(path), read) ?? throw new InvalidOperationException("A read of a file's hash answers a hash.");
 
-    public string? HashFixedBy((string Package, string Path) fixedBy) => _fixes.GetValueOrDefault(fixedBy);
-
-    // A status reads beside an update or a restore of the same mod, and each writes the whole cache.
+    // Each write replaces the whole cache.
     private static readonly Lock Writing = new();
 
     /// <summary>Writes what this read kept of the files at <paramref name="paths"/>, and <paramref name="fixes"/>, in
@@ -61,17 +59,6 @@ internal sealed class StatCache
     public string? Write(IReadOnlyList<string> paths, IReadOnlyDictionary<(string Package, string Path), string> fixes)
     {
         lock (Writing) return Write(Kept(paths), _read, fixes, _fixes);
-    }
-
-    /// <summary>Writes what this read kept of the files at <paramref name="paths"/> beside the hashes its package fixes that the cache
-    /// holds as it writes, which an update or a restore can have written since this read.</summary>
-    public string? Keep(IReadOnlyList<string> paths)
-    {
-        lock (Writing)
-        {
-            var (files, fixes) = Parsed(Read(_file));
-            return Write(Kept(paths), files, fixes, fixes);
-        }
     }
 
     private Dictionary<string, Entry> Kept(IReadOnlyList<string> paths)

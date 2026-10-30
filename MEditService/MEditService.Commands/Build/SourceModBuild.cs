@@ -44,7 +44,7 @@ internal sealed class SourceModBuild
         var plugins = Placed(loadOrder, mod, source.Plugins);
         var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets.Where(asset => !compiled.Contains(asset.Path)).ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
-        using var taken = new TakenFromPackages(_modFolders, mod.Folder);
+        using var taken = new TakenFromPackages(_modFolders);
         var lacking = taken.Lacking(configured, mod, instance.GameFolder);
         if (lacking is not null) return lacking;
         try

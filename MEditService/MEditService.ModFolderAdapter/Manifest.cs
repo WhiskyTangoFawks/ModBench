@@ -5,7 +5,7 @@ namespace MEditService.ModFolderAdapter;
 public sealed record Manifest(IReadOnlyList<ManifestPackage> Packages, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
     /// <summary>The package a file is in when it names none.</summary>
-    public ManifestPackage? Package => Packages.Count > 0 ? Packages[0] : null;
+    internal ManifestPackage? Package => Packages.Count > 0 ? Packages[0] : null;
 
     /// <summary>The name of the folder it builds, which a manifest outside that folder names, as a source mod's does
     /// (modlist-repository.md, The manifest, story 20).</summary>

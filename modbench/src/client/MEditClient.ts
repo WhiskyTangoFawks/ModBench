@@ -12,10 +12,8 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { UnreadableSource } from '../wire/unreadableSource';
 import type { ReadFailed } from '../wire/readFailed';
-import type { ModByFolder } from '../wire/modByFolder';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
-export type { ModByFolder };
 
 /** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
  *  this port. */
@@ -47,7 +45,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'restore-from-manifest-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared',
 ] as const;
 
@@ -60,7 +58,6 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'decompile-and-commit-progress': DecompileAndCommitProgress;
-  'restore-from-manifest-progress': ModlistProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
@@ -197,67 +194,21 @@ export interface BuildOutcome {
 /** A step of a manifest: the VS Code task it runs, by label, and the arguments it hands the task. */
 export type ManifestStep = components['schemas']['ManifestStep'];
 
-/** Where a modlist gesture is: the gesture it is, the mod it works on, and how many mods it has done of how many. The
- *  mod is none once it ends. */
-export type ModlistProgress = components['schemas']['ModlistProgress'];
+// Where a modlist gesture is: the mod it works on, none once it ends, and how many mods it has done of how many.
+type ModlistProgress = components['schemas']['ModlistProgress'];
 
 /** A mod's progress through decompile and commit: its place in the selection and the step it is at. */
 export type DecompileAndCommitProgress = ModlistProgress & { phase?: components['schemas']['DecompileAndCommitPhase'] | null };
 
-/** An abort stops mEdit after the mod in hand, and the mods done stay done. */
-export interface ModlistCallOptions<P = ModlistProgress> {
-  readonly onProgress?: (progress: P) => void;
-  readonly signal?: AbortSignal;
-}
-
-/** A mod to restore from its manifest: its folder and its installation files (ADR-0013). */
-export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
+/** A source mod's repository as the instance repository pins it: the folder git checks it out in, the pin and its branch. */
+export type Submodule = components['schemas']['SubmoduleRequest'];
 
 /** Each submodule cloned, by the folder git checked it out in, with why its branch was left elsewhere, and each not cloned,
  *  by that folder, with why. */
 export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
 
-/** The instance's facts restore from manifest needs: the stat cache's folder, the game folder with the game files handed so
- *  far, the mod manager's exclusion mark and the archives a build packs. */
-export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
-
-/** A mod restore would destroy files in: each file whose bytes differ from what its package fixes, and each file no line
- *  names, by its path in the mod folder, or a version or page in its metadata. */
-export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
-
-/** What a manifest says of its mod's version and installation files. */
-export type ManifestMetadata = components['schemas']['ModMetadata'];
-
-/** Each mod restore from manifest would destroy files in, and each mod skipped because a file of it could not be read. */
-export interface WhatRestoreDestroys {
-  destroys: readonly ModRestoreDestroys[];
-  refused: readonly ItemRefusal<string>[];
-  /** What each manifest says of its mod's version and installation files. */
-  manifests: readonly components['schemas']['ManifestMetadataResponse'][];
-}
-
-type RestoredMod = components['schemas']['ModRestored'];
-
 /** An installation file as a manifest names it: by name, with its hash and its page on its host. */
 export type ManifestInstallationFile = Pick<components['schemas']['InstallationFile'], 'name' | 'hash'> & { readonly page?: string };
-
-/** A skipped mod lacking installation files, as its manifest names them, a submodule, by name, or game files, by their path in
- *  the mod folder, that the call did not hand. A call that hands them brings it back. */
-export interface NotFound {
-  mod: string;
-  installationFiles: readonly ManifestInstallationFile[];
-  gameFiles: readonly string[];
-  submodule?: string;
-}
-
-/** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */
-export interface RestoreOutcome {
-  landed: readonly RestoredMod[];
-  refused: readonly ItemRefusal<string>[];
-  notFound: readonly NotFound[];
-  /** Why mEdit refused the user's cancel. */
-  cancelRefusal?: string;
-}
 
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
@@ -325,9 +276,8 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
-  restoreFromManifest(mods: readonly RestoreMod[], facts: RestoreFacts, options?: ModlistCallOptions): Promise<RestoreOutcome | WriteRefused>;
   // modlist-repository.md, Restore from manifest, story 3: each submodule cloned at its pin, or named with why it was not.
-  cloneSubmodules(submodules: readonly NonNullable<RestoreMod['submodule']>[]): Promise<SubmodulesCloned | WriteRefused>;
+  cloneSubmodules(submodules: readonly Submodule[]): Promise<SubmodulesCloned | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).
@@ -361,8 +311,6 @@ export interface MEditClient {
   /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
-  /** Each mod restore from manifest would destroy files in, from the stat cache in `statCache`, before anything is written. */
-  getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed>;
   /** The rows one SQL SELECT over the record index selects. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string): Promise<unknown[] | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

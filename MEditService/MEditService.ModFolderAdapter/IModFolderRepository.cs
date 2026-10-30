@@ -13,14 +13,6 @@ public interface IModFolderRepository
     /// the one <paramref name="hashes"/> holds for its path. Why it could not, or null.</summary>
     string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes);
 
-    /// <summary>Every file of the mod no line of <paramref name="manifest"/> names, but its manifest and those left out. A
-    /// line names a file in another case where the file system finds it by the line's name.</summary>
-    IReadOnlyList<string> NamedByNoLine(string modFolder, Manifest manifest, IReadOnlySet<string> leftOut);
-
-    /// <summary>The mod's folder against its manifest, a source mod's in <paramref name="sourceFolder"/>, from each file's
-    /// stamp, the stat cache, which keeps what it read, and the metadata the mod manager <paramref name="held"/>.</summary>
-    ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held, string? sourceFolder);
-
     Stream OpenFile(string modFolder, string path);
 
     /// <summary>Scratch storage for bytes a build reads more than once, removed when disposed.</summary>

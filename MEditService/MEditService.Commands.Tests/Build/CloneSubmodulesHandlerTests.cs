@@ -33,6 +33,22 @@ public sealed class CloneSubmodulesHandlerTests : IDisposable
     }
 
     [Fact]
+    public void ASubmoduleAtAnotherCommitThanItsPin_IsNamedWithTheCommit_AndLeftThere()
+    {
+        var first = _submodule.Commit(("Mod.manifest.json", "{\"output\": \"Mod\", \"files\": []}"));
+        var second = _submodule.Commit(("notes.txt", "later"));
+        _submodule.Pin(second);
+        TestEditService.CloneSubmodulesHandler().Clone([new Submodule(_submodule.Folder, second, null)], CancellationToken.None);
+
+        var answer = TestEditService.CloneSubmodulesHandler().Clone([new Submodule(_submodule.Folder, first, null)], CancellationToken.None);
+
+        Assert.Equal(
+            (new SubmoduleNotCloned(_submodule.Folder, CloneRefusal.AtAnotherCommit, $"its submodule is at {second}, not at {first}, the commit the instance repository pins"), 0),
+            (Assert.Single(answer.Refused), answer.Applied.Count));
+        Assert.Equal(second, PinnedSubmodule.Git(_submodule.Folder, "rev-parse", "HEAD").Trim());
+    }
+
+    [Fact]
     public void ASubmoduleWhosePinItsRemoteLacks_IsNotCloned_NamingWhy()
     {
         _submodule.Commit(("Mod.manifest.json", "{}"));

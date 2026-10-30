@@ -31,7 +31,7 @@ public sealed class ChangeSourceManifestHandlerTests : IDisposable
         Assert.Equal(new SourceManifestChangeResult(), _handler.Change(_source, new SourceManifestChange("New Name", [], [])));
 
         var renamed = _folders.ReadSourceManifest(_source).Value();
-        Assert.Equal(("New Name", Built.Package, Built.Version), (renamed?.Output, renamed?.Package, renamed?.Version));
+        Assert.Equal(("New Name", Built.Packages[0], Built.Version), (renamed?.Output, renamed?.Packages[0], renamed?.Version));
         Assert.Equal(Built.Files, renamed?.Files);
         Assert.Equal(["Mod - Main.ba2"], renamed?.Archives.Select(archive => archive.Path));
     }
