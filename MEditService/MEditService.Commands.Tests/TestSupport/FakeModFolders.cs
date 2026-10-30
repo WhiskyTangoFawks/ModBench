@@ -17,8 +17,6 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public HashSet<string> UnwritableManifests { get; } = [];
 
-    /// <summary>The mod folders whose stat cache cannot be written.</summary>
-    public HashSet<string> UnwritableStatCaches { get; } = [];
 
     public Dictionary<string, Manifest> Manifests { get; } = [];
 
@@ -48,15 +46,7 @@ internal sealed class FakeModFolders : IModFolderRepository
         return new([.. files.Select(f => new HashedFile(f.Key.Path, Encoding.ASCII.GetString(f.Value)))]);
     }
 
-    /// <summary>Each mod folder's hashes kept as its providers fix them, by path.</summary>
-    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptPackageHashes { get; } = [];
-
-    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
-    {
-        var modFolder = Manifests.First(held => ReferenceEquals(held.Value, manifest)).Key;
-        KeptPackageHashes[modFolder] = provided;
-        return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
-    }
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided) => null;
 
     public Stream OpenFile(string modFolder, string path) => Open(modFolder, path);
 

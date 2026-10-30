@@ -8,7 +8,7 @@ import type { NamedGameFolder } from './gameFolderFacts';
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
 
 /** What restore takes a manifest's packages from on this machine. */
-export interface PackageSources {
+export interface PackagesHeld {
   /** The downloaded file of a name, as the downloads folder holds it. */
   readonly downloaded: (name: string) => FileRead<InstallationFile | undefined>;
   readonly game: NamedGameFolder | string;
@@ -19,7 +19,7 @@ export interface PackageSources {
 /** Where each line a package fixes has its bytes, by the line's path, each package's entries by its hash, and what the mod
  *  lacks. */
 export interface PackagesRead {
-  readonly sources: ReadonlyMap<string, PackageFile>;
+  readonly packageFiles: ReadonlyMap<string, PackageFile>;
   readonly entries: ReadonlyMap<string, ReadonlyMap<string, string>>;
   readonly lacks: readonly string[];
   readonly installationFiles: readonly InstallationFile[];
@@ -42,7 +42,7 @@ function entryOf(file: InstallationFile, path: string): { readonly path: string;
   return file.entries.find((entry) => entry.path === path) ?? file.entries.find((entry) => folded(entry.path) === folded(path));
 }
 
-function installationFilesOf(manifest: Manifest, downloaded: PackageSources['downloaded']): { held: Map<string, InstallationFile>; lacks: string[] } {
+function installationFilesOf(manifest: Manifest, downloaded: PackagesHeld['downloaded']): { held: Map<string, InstallationFile>; lacks: string[] } {
   const held = new Map<string, InstallationFile>();
   const lacks: string[] = [];
   for (const named of manifest.packages.filter((pkg): pkg is InstallationFilePackage => pkg.kind === 'installationFile')) {
@@ -68,17 +68,16 @@ interface PlaceRead {
 }
 
 interface GameTaken {
-  readonly sources: Map<string, PackageFile>;
+  readonly packageFiles: Map<string, PackageFile>;
   readonly entries: Map<string, ReadonlyMap<string, string>>;
   readonly lacks: string[];
   readonly files: Map<GamePlace, GameFile[]>;
 }
 
-// Each line from the first place in `places` that holds it, and each game folder package whose pin those bytes hold.
 async function takenFrom(
   adapter: Adapter, manifest: Manifest, lines: readonly ManifestFile[], places: readonly PlaceRead[], unreadable: ReadonlyMap<string, string>,
 ): Promise<GameTaken> {
-  const taken: GameTaken = { sources: new Map(), entries: new Map(), lacks: [], files: new Map() };
+  const taken: GameTaken = { packageFiles: new Map(), entries: new Map(), lacks: [], files: new Map() };
   const hashes = new Map<string, Map<string, string>>();
   const pinned = new Map<string, { path: string; hash: string }[]>();
   for (const line of lines) {
@@ -91,7 +90,7 @@ async function takenFrom(
       continue;
     }
     const pkg = packageOf(manifest, line)?.name ?? '';
-    taken.sources.set(line.path, { kind: 'gameFile', root: at.place.root, path: file.path });
+    taken.packageFiles.set(line.path, { kind: 'gameFile', root: at.place.root, path: file.path });
     taken.files.set(at.place, [...taken.files.get(at.place) ?? [], file]);
     hashes.set(pkg, (hashes.get(pkg) ?? new Map<string, string>()).set(path, file.hash));
     pinned.set(pkg, [...pinned.get(pkg) ?? [], { path: line.path, hash: file.hash }]);
@@ -142,9 +141,9 @@ function toolsWithoutTask(manifest: Manifest, tasks: ReadonlySet<string>): strin
 }
 
 /** Where this machine holds the bytes each of `manifest`'s lines fixes, from the installation files and the game's places. */
-export async function packagesRead(adapter: Adapter, manifest: Manifest, { downloaded, game, tasks }: PackageSources): Promise<PackagesRead> {
+export async function packagesRead(adapter: Adapter, manifest: Manifest, { downloaded, game, tasks }: PackagesHeld): Promise<PackagesRead> {
   const installed = installationFilesOf(manifest, downloaded);
-  const sources = new Map<string, PackageFile>();
+  const packageFiles = new Map<string, PackageFile>();
   const entries = new Map<string, Map<string, string>>();
   const lacks = [...installed.lacks];
   const fromTheGame: ManifestFile[] = [];
@@ -159,16 +158,16 @@ export async function packagesRead(adapter: Adapter, manifest: Manifest, { downl
       const entry = file === undefined ? undefined : entryOf(file, pathInPackage(line));
       if (file !== undefined && entry === undefined) lacks.push(`installation file '${pkg.name}' holds no '${pathInPackage(line)}'`);
       if (file === undefined || entry === undefined) continue;
-      sources.set(line.path, { kind: 'entry', downloadedFile: file.path, entry: entry.path });
+      packageFiles.set(line.path, { kind: 'entry', downloadedFile: file.path, entry: entry.path });
       const held = entries.get(pkg.hash) ?? new Map(file.entries.map(({ path, hash }) => [path, hash]));
       entries.set(pkg.hash, held.set(pathInPackage(line), entry.hash));
     }
   }
   const taken = await gameFilesOf(adapter, manifest, fromTheGame, game);
-  for (const [path, source] of taken.sources) sources.set(path, source);
+  for (const [path, file] of taken.packageFiles) packageFiles.set(path, file);
   const noTask = toolsWithoutTask(manifest, tasks);
   return {
-    sources, entries: new Map([...entries, ...taken.entries]), lacks: [...new Set([...lacks, ...taken.lacks, ...(noTask === undefined ? [] : [noTask])])],
+    packageFiles, entries: new Map([...entries, ...taken.entries]), lacks: [...new Set([...lacks, ...taken.lacks, ...(noTask === undefined ? [] : [noTask])])],
     installationFiles: [...installed.held.values()], gameFiles: taken.files,
   };
 }

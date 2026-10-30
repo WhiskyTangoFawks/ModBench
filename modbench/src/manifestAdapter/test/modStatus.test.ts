@@ -52,6 +52,9 @@ async function write(path: string, text: string, at = folder): Promise<void> {
   await writeFile(join(at, path), text);
 }
 
+type Says = { version?: string; installationFile?: { name: string; page?: string } };
+const says = (version?: string, file?: [string, string?]): Says =>
+  ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
 const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: 'PACK1' };
 const line = (path: string, entry: ManifestFile['entry'] = { kind: 'held' }, pkg?: string): ManifestFile => ({ path, entry, ...(pkg === undefined ? {} : { package: pkg }) });
 const manifest = (files: ManifestFile[], over: Partial<Manifest> = {}): Manifest => ({ packages: [MOD_ZIP], exclude: [], archives: [], steps: [], tools: [], files, ...over });
@@ -252,9 +255,6 @@ describe('a mod\'s status against its manifest', () => {
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {
-    type Says = { version?: string; installationFile?: { name: string; page?: string } };
-    const says = (version?: string, file?: [string, string?]): Says =>
-      ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
 
     it.each([
       [says('1.0'), says('1.0'), false],
@@ -284,9 +284,6 @@ describe('a mod\'s status against its manifest', () => {
 });
 
 describe('metadata a restore writes over what the metadata holds', () => {
-  type Says = { version?: string; installationFile?: { name: string; page?: string } };
-  const says = (version?: string, file?: [string, string?]): Says =>
-    ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
 
   it.each([
     [says('1.0'), says('1.0'), false],

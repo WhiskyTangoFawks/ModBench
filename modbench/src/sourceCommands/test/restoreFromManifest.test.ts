@@ -1,15 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
 import { textHash } from '../../instanceAdapter/fileContents/contentDigest';
 import { pinText, writeManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
 import { manifestText } from '../../manifestAdapter/manifestText';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, sourceModsOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
 import { restoreFromManifest, whatRestoreDestroys, type RestoreStatus } from '../restoreFromManifest';
@@ -46,20 +47,22 @@ interface Setup {
   readonly manifests?: Readonly<Record<string, Manifest>>;
   readonly answers?: InstanceAnswers;
   readonly sourceFolders?: Record<string, string>;
+  readonly shared?: Record<string, readonly string[]>;
+  readonly reading?: Partial<InstanceReading>;
   readonly gameFolder?: GameFolder;
   readonly tasks?: readonly string[];
   readonly failures?: Readonly<Record<string, string>>;
   readonly nexus?: Nexus;
 }
 
-async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = {}, gameFolder = FOUND, tasks = [], failures = {}, nexus }: Setup = {}) {
+async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = {}, shared = {}, reading = {}, gameFolder = FOUND, tasks = [], failures = {}, nexus }: Setup = {}) {
   const mods = [...new Set([...Object.keys(files), ...Object.keys(manifests)])];
   for (const mod of mods) await mkdir(join(modsDir, mod), { recursive: true });
   for (const [mod, manifest] of Object.entries(manifests)) await writeManifestIn(join(modsDir, mod), manifest);
   const hashes = new Map<string, HashedFile>(Object.entries(files).flatMap(([mod, inFolder]) =>
     Object.entries(inFolder).map(([path, hash]) => [join(modsDir, mod, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceMods: sourceModsOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods) }),
+    readingFixture({ gameFolder, sourceMods: sourceModsOf(sourceFolders, [], [], {}, shared), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
     { folderFiles: new Map(Object.entries(files).map(([mod, inFolder]) => [join(modsDir, mod), Object.keys(inFolder)])), hashes, ...answers });
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);
@@ -404,6 +407,72 @@ describe('restore from manifest', () => {
       client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'was not built: no load order is held.' }] }));
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not built: no load order is held.' }]);
+    });
+  });
+
+  it('skips a mod two repositories both build, writing nothing', async () => {
+    const { restore, fake } = await over({ manifests: { ModA: EMPTY }, shared: { ModA: ['/instance/source/A', '/instance/source/B'] } });
+
+    const outcome = await restore(['ModA']);
+
+    expect([outcome, writes(fake.calls)]).toEqual([
+      { landed: [], refused: [{ item: 'ModA', reason: "was skipped: the repositories '/instance/source/A' and '/instance/source/B' both build it." }] }, [],
+    ]);
+  });
+
+  describe('before a source mod', () => {
+    const MODS = ['ModA', 'ModB', 'ModC'].map((name) => ({ kind: 'mod', name, enabled: true }) as const);
+    const C_ESP = { origin: { kind: 'mod', name: 'ModC' }, name: 'C.esp' } as const;
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    async function aSourceModAfterTwoMods() {
+      const source = join(root, 'source', 'ModA');
+      await mkdir(source, { recursive: true });
+      await writeFile(join(source, 'ModA.manifest.json'), manifestText({ ...EMPTY, output: 'ModA' }));
+      return over({ manifests: { ModA: EMPTY, ModB: EMPTY, ModC: EMPTY }, sourceFolders: { ModA: source }, reading: { mods: [...MODS], ...pluginFilesHeld(C_ESP) } });
+    }
+
+    const waiting = (client: InMemoryMEditClient) => vi.waitFor(() => { expect(client.calls.map(({ method }) => method)).toContain('getPluginIndexing'); });
+
+    it('waits until the record index holds the plugins of each mod restored before it', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
+      let ended = false;
+
+      const outcome = restore(['ModA', 'ModB', 'ModC']).finally(() => { ended = true; });
+      await waiting(client);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const endedBeforeIndexed = ended;
+      client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
+      client.emit(loadOrderStatusEventFixture());
+
+      expect([endedBeforeIndexed, (await outcome).landed.map(({ mod }) => mod)]).toEqual([false, ['ModC', 'ModB', 'ModA']]);
+    });
+
+    it.each([
+      ['never reaches the record index', { state: 'NotYet' } as const, 121_000, 'was restored, but plugin C.esp did not reach the record index within 120 seconds'],
+      ['could not be read by mEdit', { state: 'ReadFailed', reason: 'C.esp is not a plugin.' } as const, 0, 'was restored, but plugin C.esp could not be read: C.esp is not a plugin.'],
+    ])('names a mod whose plugin %s, and restores the source mod after it', async (_case, indexing, wait, reason) => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', indexing);
+
+      const outcome = restore(['ModA', 'ModB', 'ModC']);
+      await waiting(client);
+      await vi.advanceTimersByTimeAsync(wait);
+
+      expect(await outcome).toEqual({
+        landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }, { mod: 'ModA', written: [], namedByNoLine: [] }], refused: [{ item: 'ModC', reason }],
+      });
+    });
+
+    it('waits on no mod before a mod that is not a source mod', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
+
+      const outcome = await restore(['ModB', 'ModC']);
+
+      expect([client.calls.filter(({ method }) => method === 'getPluginIndexing'), outcome.refused]).toEqual([[], []]);
     });
   });
 

@@ -15,7 +15,7 @@ import { foldersOf, namesOf, type Folders } from './folders';
 import { namedGameFolder, wireGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
-import { packagesRead, type PackageSources, type PackagesRead } from './packagesRead';
+import { packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
@@ -163,7 +163,6 @@ async function passOver(deps: RestoreDeps, folders: Folders, sourceMods: SourceM
   };
 }
 
-// Each package's entries as this machine holds them, else as the hash index does.
 const compared = (adapter: Adapter, manifest: Manifest, folder: string, packages: PackagesRead): Promise<FolderAgainst> =>
   folderAgainst(manifest, folder, {
     filesIn: (at) => adapter.filesIn(at),
@@ -181,7 +180,7 @@ async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead
   const found = await namedDownloadedFiles({ adapter, nexus }, [{ installationFiles: named }], {
     onDownload: (file) => { pass.options.onProgress?.({ phase: 'Downloading', file }); }, signal: pass.options.signal,
   });
-  const downloaded: PackageSources['downloaded'] = (name) => {
+  const downloaded: PackagesHeld['downloaded'] = (name) => {
     const why = found.unreadable(name);
     return why === undefined ? { kind: 'read', answer: found.handed(name) } : { kind: 'unreadable', reason: why };
   };
@@ -225,7 +224,6 @@ async function whyNotStepped(pass: Pass, manifest: Manifest, folder: string): Pr
   return failed === undefined ? undefined : `its ${failed}`;
 }
 
-// What follows its files: the files no line names to the trash, its metadata, then its steps.
 async function whyNotFinished(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
   return await trashedOrWhy(pass.deps, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest) ?? await whyNotStepped(pass, manifest, folder);
 }
@@ -259,7 +257,7 @@ async function restoreFromPackages(pass: Pass, mod: string, folder: string, mani
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
   const writes = against.lines.flatMap(({ line, onDisk, holdsItsBytes }) => {
-    const from = packages.sources.get(line.path);
+    const from = packages.packageFiles.get(line.path);
     return from === undefined || holdsItsBytes === true ? [] : [{ path: onDisk ?? line.path, from }];
   });
   try {
@@ -441,7 +439,7 @@ export async function restoreFromManifest(
 }
 
 // The listing asks before restore downloads anything, so it reads what the downloads folder holds now.
-async function installationFilesHeld(adapter: Adapter, manifest: Manifest): Promise<PackageSources['downloaded']> {
+async function installationFilesHeld(adapter: Adapter, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
   const read = new Map<string, Awaited<ReturnType<Adapter['downloadedFile']>>>();
   for (const pkg of manifest.packages) {
     if (pkg.kind === 'installationFile') read.set(pkg.name, await adapter.downloadedFile(pkg.name));
