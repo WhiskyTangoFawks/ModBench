@@ -1223,17 +1223,13 @@ describe('the MO2 adapter\'s game files', () => {
 
     const taken = await adapter.gameFilesTakenBy(gamePlace(), join(root, 'Stock Game'));
 
-    expect(taken).toEqual({
-      kind: 'read',
-      answer: {
-        notes: [],
-        gameFiles: [
-          { path: 'Data/Textures/a.dds', hash: HASH_OF_AAAA, pathInFolder: 'Data/Textures/a.dds' },
-          { path: 'Data/b.esm', hash: HASH_OF_BBBB, pathInFolder: 'Data/b.esm' },
-          { path: 'Fallout4.exe', hash: HASH_OF_CCCC, pathInFolder: 'Fallout4.exe' },
-        ],
-      },
-    });
+    const gameFiles = [
+      { path: 'Data/Textures/a.dds', hash: HASH_OF_AAAA, pathInFolder: 'Data/Textures/a.dds' },
+      { path: 'Data/b.esm', hash: HASH_OF_BBBB, pathInFolder: 'Data/b.esm' },
+      { path: 'Fallout4.exe', hash: HASH_OF_CCCC, pathInFolder: 'Fallout4.exe' },
+    ];
+    expect(taken).toEqual({ kind: 'read', answer: { notes: [], gameFiles: expect.arrayContaining(gameFiles) as unknown } });
+    expect(taken).toHaveProperty('answer.gameFiles.length', gameFiles.length);
   });
 
   it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands the game files below a Data folder that is a link, as a game folder with its Data on another drive has', async () => {

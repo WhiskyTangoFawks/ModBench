@@ -63,7 +63,7 @@ describe('changeSourceManifest', () => {
   it('refuses a manifest that does not read, naming why, and leaves it as it was', async () => {
     await writeFile(join(source, 'Mod.manifest.json'), '{"output": ');
 
-    expect(await changeSourceManifest(source, { output: 'Other' })).toMatch(new RegExp(`^The source mod in "${source}" was not changed: `));
+    expect(await changeSourceManifest(source, { output: 'Other' })).toBe(`The source mod in "${source}" was not changed: its manifest cannot be read at line 1.`);
 
     expect(await readFile(join(source, 'Mod.manifest.json'), 'utf8')).toBe('{"output": ');
   });

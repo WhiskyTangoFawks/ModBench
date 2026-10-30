@@ -210,7 +210,7 @@ describe('sourceCommands decompileAndCommit', () => {
   const FOLDER = '/instance/mods/ModA';
   const hashed = (files: Record<string, string>, folder = FOLDER): InstanceAnswers => ({
     folderFiles: new Map([[folder, Object.keys(files)]]),
-    hashes: new Map(Object.entries(files).map(([path, hash]) => [`${folder}/${path}`, { size: 1, hash }])),
+    hashes: new Map(Object.entries(files).map(([path, hash]) => [join(folder, path), { size: 1, hash }])),
   });
   const committing = () => {
     const client = new InMemoryMEditClient();
@@ -287,7 +287,7 @@ describe('sourceCommands decompileAndCommit', () => {
   it.each<[string, InstanceAnswers, string]>([
     ['whose installation file cannot be read', { installations: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) }, 'EACCES'],
     ['whose metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) }, 'its metadata could not be read: EISDIR: meta.ini'],
-    ['a file of whose folder cannot be read', { folderFiles: new Map([[FOLDER, ['a.dds']]]) }, `a file of its folder could not be read: no answer fixed for ${FOLDER}/a.dds`],
+    ['a file of whose folder cannot be read', { folderFiles: new Map([[FOLDER, ['a.dds']]]) }, `a file of its folder could not be read: no answer fixed for ${join(FOLDER, 'a.dds')}`],
   ])('refuses a mod %s, naming why, and commits the rest', async (_case, answers, reason) => {
     const { client, handed } = committing();
 

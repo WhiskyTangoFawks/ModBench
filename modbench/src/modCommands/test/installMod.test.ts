@@ -36,8 +36,8 @@ function install(
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
-const upgradedFolder = (): string => `${mods}/${UPGRADED.name}`;
-const upgraded = (path: string): string => `${upgradedFolder()}/${path}`;
+const upgradedFolder = (): string => join(mods, UPGRADED.name);
+const upgraded = (path: string): string => join(upgradedFolder(), path);
 
 async function manifested(held: string | Manifest): Promise<void> {
   await mkdir(join(mods, UPGRADED.name), { recursive: true });

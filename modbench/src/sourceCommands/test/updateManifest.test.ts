@@ -139,7 +139,7 @@ describe('update manifest', () => {
       ]);
     });
 
-    it('whose folder holds two manifests', async () => {
+    it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) whose folder holds two manifests', async () => {
       const { result } = await refusedBy({}, async () => {
         await writeFile(join(modsDir, 'ModA', 'ModA.manifest.json'), '{}');
         await writeFile(join(modsDir, 'ModA', 'moda.manifest.json'), '{}');

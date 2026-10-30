@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { manifestText } from '../manifestText';
@@ -30,17 +30,18 @@ async function filesBelow(at: string): Promise<string[]> {
   return listed.filter((entry) => entry.isFile()).map((entry) => relative(at, join(entry.parentPath, entry.name)).split('\\').join('/'));
 }
 
-const foundIgnoringCase = async (path: string): Promise<boolean> =>
-  (await filesBelow(folder)).some((held) => held.toLowerCase() === relative(folder, path).toLowerCase());
+const inFolder = (path: string): string => relative(folder, path).split('\\').join('/');
+const spelled = (path: string, ignoresCase: boolean): string => (ignoresCase ? path.toLowerCase() : path);
+
+const foundByListing = async (path: string, ignoresCase: boolean): Promise<boolean> =>
+  (await filesBelow(folder)).some((held) => spelled(held, ignoresCase) === spelled(inFolder(path), ignoresCase));
 
 const readsHashingAFileAsItsText = (fileSystemIgnoresCase = false): FolderReads => ({
   filesIn: async (at) => (await filesBelow(at)).filter((path) => path !== 'meta.ini'),
-  fileStamp: async (path) => {
-    const there = fileSystemIgnoresCase ? await foundIgnoringCase(path) : await stat(path).then(() => true, () => false);
-    return there ? { kind: 'read', answer: undefined } : { kind: 'unreadable', reason: 'ENOENT' };
-  },
+  fileStamp: async (path) =>
+    ((await foundByListing(path, fileSystemIgnoresCase)) ? { kind: 'read', answer: undefined } : { kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: async (path) => {
-    hashed.push(relative(folder, path));
+    hashed.push(inFolder(path));
     return { kind: 'read', answer: { hash: await readFile(path, 'utf8') } };
   },
   packageEntries: (hash) => Promise.resolve(entries.get(hash)),

@@ -56,7 +56,7 @@ describe('writeManifestIn', () => {
     expect([wrote, await readdir(folder), await readFile(join(folder, 'MOD.manifest.json'), 'utf8')]).toEqual([true, ['MOD.manifest.json'], manifestText(manifest)]);
   });
 
-  it('rejects, writing nothing, when the folder holds two manifests', async () => {
+  it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) rejects, writing nothing, when the folder holds two manifests', async () => {
     await writeFile(join(folder, 'MOD.manifest.json'), '{}');
     await writeFile(join(folder, 'mod.manifest.json'), '{}');
 
