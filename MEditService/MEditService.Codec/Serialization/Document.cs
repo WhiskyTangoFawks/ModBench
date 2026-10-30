@@ -144,23 +144,24 @@ public sealed class Document
     internal static JsonObject OwnerOf(JsonObject root, IEnumerable<string> path) =>
         OwnerAt(root, path, creating: true) ?? throw new InvalidOperationException("Expected a walk that makes what it lacks to reach its owner.");
 
-    /// <summary>The flags set at <paramref name="path"/>, as the codec spells a flags member: an array of names.
-    /// Empty where the document omits it.</summary>
-    public HashSet<string> FlagNamesAt(params ReadOnlySpan<string> path) => FlagNamesIn(At(path));
-
-    /// <summary>The flags a JSON value of a flags member names; empty for null.</summary>
-    public static HashSet<string> FlagNamesOf(string json)
+    /// <summary>The first of <paramref name="members"/> below <paramref name="path"/> that reads differently once
+    /// <paramref name="requestedJson"/> replaces the value at <paramref name="path"/>; null where none does. A
+    /// member reads as the value it holds, and a name inside a flags array as whether the array holds it.</summary>
+    public string? FirstChangedBelow(IEnumerable<string> members, string requestedJson, params ReadOnlySpan<string> path)
     {
-        using var parsed = JsonDocument.Parse(json);
-        return FlagNamesIn(parsed.RootElement);
+        var prefix = string.Join('.', path.ToArray()) + ".";
+        var requested = requestedJson == "null" ? Without(path) : With(JsonNode.Parse(requestedJson) ?? throw new InvalidOperationException("Expected JSON."), path);
+        return members.FirstOrDefault(member => member.StartsWith(prefix, StringComparison.Ordinal) && ReadingOf(this, member) != ReadingOf(requested, member));
     }
 
-    private static HashSet<string> FlagNamesIn(JsonElement? flags) => flags switch
+    private static string? ReadingOf(Document document, string member)
     {
-        { ValueKind: JsonValueKind.Array } names => [.. names.EnumerateArray().Select(n => n.GetString()).OfType<string>()],
-        { ValueKind: JsonValueKind.String } name => [name.GetString() ?? ""],
-        _ => [],
-    };
+        var hops = member.Split('.');
+        if (document.At(hops) is { } held) return held.GetRawText();
+        return document.At(hops.AsSpan(..^1)) is { ValueKind: JsonValueKind.Array } flags
+            ? flags.EnumerateArray().Any(name => name.GetString() == hops[^1]).ToString()
+            : null;
+    }
 
     internal JsonElement? At(params ReadOnlySpan<string> path)
     {

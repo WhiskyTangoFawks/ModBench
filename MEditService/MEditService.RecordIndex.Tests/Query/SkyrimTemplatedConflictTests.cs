@@ -56,7 +56,7 @@ public sealed class SkyrimTemplatedConflictTests : IDisposable
             .Diffs.Single(d => d.FieldName == field);
 
     [Fact]
-    public void AStructWhoseOnlyDifferenceIsATemplatedMember_IsNoConflict_AsItsMemberIs()
+    public void AStructWhoseOnlyDifferencesAreATemplatedMemberAndATemplatedBit_IsNoConflict_AsTheyAre()
     {
         var configuration = Row("Configuration");
 

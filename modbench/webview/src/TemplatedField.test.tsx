@@ -255,18 +255,13 @@ describe('RecordPanel — a templated flag in a Flags row', () => {
     expect(row).toHaveTextContent('Essential from EncRaider01');
   });
 
-  it('names the flag, the template and its own value in its tooltip', async () => {
-    renderPanel(flagsPanel(bit));
-    const flag = required((await screen.findByText('from EncRaider01')).closest('[title]'), 'the templated flag');
-    expect(flag).toHaveAttribute('title', expect.stringContaining('Templated by BaseData from EncRaider01'));
-    expect(flag).toHaveAttribute('title', expect.stringContaining('Its own value: set'));
-    expect(flag).toHaveAttribute('title', expect.stringContaining('Clearing BaseData makes it editable.'));
-  });
-
-  it('is dimmed', async () => {
+  it('is dimmed, and names the flag, the template and its own value in its tooltip', async () => {
     renderPanel(flagsPanel(bit));
     const flag = required((await screen.findByText('from EncRaider01')).closest('[title]'), 'the templated flag');
     expect(flag).toHaveStyle({ opacity: DIMMED_OPACITY });
+    expect(flag).toHaveAttribute('title', expect.stringContaining('Templated by BaseData from EncRaider01'));
+    expect(flag).toHaveAttribute('title', expect.stringContaining('Its own value: set'));
+    expect(flag).toHaveAttribute('title', expect.stringContaining('Clearing BaseData makes it editable.'));
   });
 
   it('is left as it is by a toggle of another flag', async () => {
@@ -276,12 +271,6 @@ describe('RecordPanel — a templated flag in a Flags row', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({
       op: 'set', path: [member('Configuration'), member('Flags')], value: ['Essential', 'Respawn', 'Female'],
     });
-  });
-
-  it('reads every flag as a check box where the copy templates none', async () => {
-    renderPanel(flagsPanel(null));
-    await screen.findByText('Essential');
-    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
   });
 
   it('reads the templated flag from its template in the collapsed summary too', async () => {

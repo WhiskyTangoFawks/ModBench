@@ -195,14 +195,14 @@ internal static class RecordTextEdit
     private static RecordEditResult? RefuseIfTemplated(RecordTextEditRequest request, string spelled)
     {
         if (request.Schema.TemplatedIn(request.Record, _ => null, request.Release) is not { } templated) return null;
-        var members = request.Envelope.Path.Where(hop => hop.Kind == PathHop.MemberKind).Select(hop => hop.Name).ToList();
+        var members = request.Envelope.Path.Where(hop => hop.Kind == PathHop.MemberKind).Select(hop => hop.Name).OfType<string>().ToList();
         for (var length = 1; length <= members.Count; length++)
         {
             var member = string.Join('.', members.Take(length));
             if (!templated.TryGetValue(member, out var by)) continue;
             return TemplatedRefusal(spelled, member, by);
         }
-        return RefuseIfTemplatedBitChanges(request, templated, string.Join('.', members), spelled);
+        return RefuseIfTemplatedChange(request, templated, [.. members], spelled);
     }
 
     private static RecordEditResult TemplatedRefusal(string spelled, string member, TemplatedBy by) =>
@@ -211,19 +211,12 @@ internal static class RecordTextEdit
             $"'{member}' is templated by {by.Flag} from {by.Template} — the game ignores the copy's own value, so it is " +
             $"read-only here. Clear the {by.Flag} flag to edit it. Nothing was written.");
 
-    private static RecordEditResult? RefuseIfTemplatedBitChanges(
-        RecordTextEditRequest request, IReadOnlyDictionary<string, TemplatedBy> templated, string flagsMember, string spelled)
+    private static RecordEditResult? RefuseIfTemplatedChange(
+        RecordTextEditRequest request, IReadOnlyDictionary<string, TemplatedBy> templated, string[] path, string spelled)
     {
-        var bits = templated.Where(t => t.Key.StartsWith(flagsMember + ".", StringComparison.Ordinal)).ToList();
-        if (bits.Count == 0 || request.Envelope.Op != RecordEditEnvelope.Set) return null;
-        var held = request.Record.FlagNamesAt(flagsMember.Split('.'));
-        var requested = Document.FlagNamesOf(request.Envelope.Value?.RawText ?? "null");
-        foreach (var (member, by) in bits)
-        {
-            var bit = member[(flagsMember.Length + 1)..];
-            if (held.Contains(bit) != requested.Contains(bit)) return TemplatedRefusal(spelled, member, by);
-        }
-        return null;
+        if (request.Envelope.Op != RecordEditEnvelope.Set || request.Envelope.Path.Any(hop => hop.Kind != PathHop.MemberKind)) return null;
+        var changed = request.Record.FirstChangedBelow(templated.Keys, request.Envelope.Value?.RawText ?? "null", path);
+        return changed is null ? null : TemplatedRefusal(spelled, changed, templated[changed]);
     }
 
     // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that

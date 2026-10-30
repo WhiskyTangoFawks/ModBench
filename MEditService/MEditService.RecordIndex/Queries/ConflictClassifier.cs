@@ -202,7 +202,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             {
                 foreach (var flag in flags.Where(f => f?.GetValueKind() == JsonValueKind.String && f.GetValue<string>() == member[^1]).ToList())
                     flags.Remove(flag);
-                // The codec omits a flags member with no flag set.
+                // Mutagen's serializer omits an enum equal to its default (EnumFieldGenerator.cs:104).
                 if (flags.Count == 0 && member.Length > 1)
                     (member[..^2].Aggregate(node, (at, name) => at?[name]) as System.Text.Json.Nodes.JsonObject)?.Remove(member[^2]);
             }
