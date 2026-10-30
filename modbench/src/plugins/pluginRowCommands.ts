@@ -60,13 +60,13 @@ export function registerDecompileCommand(
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
     run: ({ plugins, force, agreesToReplace }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, async (progress) => {
       const replacing = agreesToReplace === undefined || force ? [] : await withChangesGitDoesNotHold(deps.client, plugins);
-      if (replacing.length === 0) return withoutForceOffered(await decompileBatches(deps.client, [{ plugins, force }]), agreesToReplace !== undefined);
+      if (replacing.length === 0) return decompileBatches(deps.client, [{ plugins, force }]);
       progress.waiting();
       const agreed = await agreesToReplace?.(replacing);
       progress.working();
       if (agreed !== true) return { applied: true, outcome: { landed: [], refused: [] } };
       const rest = plugins.filter((plugin) => !replacing.includes(plugin));
-      return withoutForceOffered(await decompileBatches(deps.client, [{ plugins: replacing, force: true }, { plugins: rest, force: false }]), true);
+      return decompileBatches(deps.client, [{ plugins: replacing, force: true }, { plugins: rest, force: false }]);
     }),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
@@ -131,15 +131,6 @@ async function withChangesGitDoesNotHold(
     const beneath = states[index];
     return beneath !== undefined && !isReadFailed(beneath) && beneath.plugin.some((state) => state !== 'None');
   });
-}
-
-const FORCE_OFFER = ', or request it again with force to replace them';
-
-// The view offers no force, so it drops mEdit's offer of one from what it reports.
-function withoutForceOffered(result: SelectionResult<PluginAddress>, fromView: boolean): SelectionResult<PluginAddress> {
-  if (!fromView || !result.applied) return result;
-  const refused = result.outcome.refused.map((refusal) => ({ ...refusal, reason: refusal.reason.replace(FORCE_OFFER, '') }));
-  return { applied: true, outcome: { ...result.outcome, refused } };
 }
 
 interface DecompileBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }

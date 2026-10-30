@@ -232,22 +232,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'git was not found on PATH.', detail: undefined }]);
   });
 
-  it('reports a working-tree refusal without mEdit\'s offer of force, which the view does not make', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
-    client.setCommandResult('decompile', { landed: [], refused: [{
-      item: FIRST, reason: 'First.esp\'s source has working-tree changes that decompile would replace: a.json. Commit or discard them, or request it again with force to replace them.',
-    }] });
-    const { handler, reporter } = registered(client, 'Decompile');
-
-    await handler(row(FIRST));
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not decompile "First.esp".',
-      detail: '"First.esp (ModA)" (First.esp\'s source has working-tree changes that decompile would replace: a.json. Commit or discard them.)',
-    }]);
-  });
-
   it('names each refused plugin and why in one notification while the rest land', async () => {
     const client = new InMemoryMEditClient();
     const refusal = 'First.esp does not round-trip through its own source.';
