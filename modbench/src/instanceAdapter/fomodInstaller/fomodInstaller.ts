@@ -397,6 +397,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
 const driverFor = (answer: Extract<FomodAnswer, { readonly kind: 'choices' | 'dialog' }>): Driver =>
   (answer.kind === 'choices' ? choosing(answer.steps) : conversing(answer.dialog));
 
+const SCRIPT = 'its installer is a script, which Modbench does not run';
 const MANUAL_ASKED = 'Manual was asked for';
 
 export type FomodLanding = { readonly kind: 'landing'; readonly root: string; readonly fomod: FomodLanded } | { readonly kind: 'cancelled' };
@@ -407,16 +408,20 @@ export async function fomodLanding(
   engine: FomodEngine, release: { readonly root: string; readonly fomod: FomodKind }, answer: FomodAnswer | undefined, facts: () => Promise<ConditionFacts>,
 ): Promise<FomodLanding> {
   const asIs = (why: string): FomodLanding => ({ kind: 'landing', root: release.root, fomod: { kind: 'plainCopy', why } });
-  if (release.fomod === 'script') return asIs('its installer is a script, which Modbench does not run');
+  if (answer?.kind === 'manual') return asIs(MANUAL_ASKED);
+  const refused = async (why: string): Promise<FomodLanding> => {
+    if (answer?.kind !== 'dialog') throw new Error(`${why}. Request it again with manual to install it as a plain copy.`);
+    return await answer.dialog.refuse(why) ? asIs(MANUAL_ASKED) : { kind: 'cancelled' };
+  };
+  if (release.fomod === 'script') return refused(SCRIPT);
   if (answer === undefined) return asIs('no choices were given for its steps');
-  if (answer.kind === 'manual') return asIs(MANUAL_ASKED);
   const into = await makeTempDir(ownTempPrefix(release.root, 'fomod'));
   try {
     const installed = await installFomod(engine, { root: release.root, into, facts: await facts(), driver: driverFor(answer) });
     if (installed.kind === 'installer') return { kind: 'landing', root: into, fomod: installed };
     await remove(into);
     if (installed.kind === 'cancelled') return installed;
-    return installed.kind === 'manual' ? asIs(MANUAL_ASKED) : asIs(`its installer cannot be read: ${installed.why}`);
+    return installed.kind === 'manual' ? asIs(MANUAL_ASKED) : await refused(`its installer cannot be read: ${installed.why}`);
   } finally {
     if (answer.kind === 'dialog') answer.dialog.close();
   }

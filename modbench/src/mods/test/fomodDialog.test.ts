@@ -147,6 +147,16 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     expect(ask.asked[0]).toEqual({ message: 'This FOMOD names files its archive does not hold.', detail: 'a.esp\nb/c.esp', buttons: ['Install anyway'] });
   });
 
+  it('refuses the installer in a modal that names why, and takes Manual only on Manual', async () => {
+    const ask = scriptedDialog('Manual', undefined);
+    const dialog = fomodDialog(EXTENSION, ask, PROGRESS);
+
+    expect(await dialog.refuse('its installer is a script')).toBe(true);
+    expect(await dialog.refuse('its installer is a script')).toBe(false);
+
+    expect(ask.asked[0]).toEqual({ message: 'This FOMOD\'s installer cannot run.', detail: 'its installer is a script', buttons: ['Manual'] });
+  });
+
   it('closes the view\'s progress while the user is asked, and shows it again after', () => {
     const dialog = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
 

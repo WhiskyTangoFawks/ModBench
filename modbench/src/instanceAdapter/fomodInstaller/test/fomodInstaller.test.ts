@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fomodLanding, type ConditionFacts, type FomodEngine } from '../fomodInstaller';
-import type { FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAdapter';
+import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAdapter';
 import type { FomodMove, FomodState, ReleaseImage } from '../../../wire/fomodPage';
 import { present } from '../../../ports/present';
 import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
@@ -234,14 +234,47 @@ describe('the FOMOD installer', () => {
   it.each([
     ['never closed', '<config><moduleName>Never closed</moduleName>', 'line 1, column 175'],
     ['not XML', 'not xml', 'line 1, column 1'],
-  ])('lands a FOMOD whose module config is %s as a plain copy, saying the config is not well-formed XML and where', async (_, config, where) => {
+  ])('refuses a FOMOD whose module config is %s, saying the config is not well-formed XML and where, and tells an agent to ask for manual', async (_, config, where) => {
     await release(config, ['core/Core.esp']);
 
-    const answered = await install([]);
-
-    expect(answered).toEqual({ kind: 'plainCopy', why: `its installer cannot be read: fomod/ModuleConfig.xml is not well-formed XML, at ${where}` });
-    expect(landedIn).toBe(root);
+    await expect(install([])).rejects.toThrow(
+      `its installer cannot be read: fomod/ModuleConfig.xml is not well-formed XML, at ${where}. Request it again with manual to install it as a plain copy.`);
     await releaseLeftAsItWas(['core/Core.esp']);
+  });
+
+  it.each([
+    ['takes Manual', true, { kind: 'plainCopy', why: 'Manual was asked for' }],
+    ['declines it', false, { kind: 'cancelled' }],
+  ] as const)('refuses a FOMOD whose module config cannot be read to the page, which %s', async (_, manual, ended) => {
+    await release('not xml', ['core/Core.esp']);
+    const refused: string[] = [];
+    const dialog: FomodDialog = { ...FOMOD_PAGE, refuse: (why) => { refused.push(why); return Promise.resolve(manual); } };
+
+    const landing = await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
+
+    expect(refused).toEqual(['its installer cannot be read: fomod/ModuleConfig.xml is not well-formed XML, at line 1, column 1']);
+    expect(landing).toEqual(ended.kind === 'cancelled' ? ended : { kind: 'landing', root, fomod: ended });
+  });
+
+  describe('a FOMOD whose installer is a script', () => {
+    const SCRIPT = 'its installer is a script, which Modbench does not run';
+    const scripted = (answer: FomodAnswer) => fomodLanding(FOMOD_ENGINE, { root, fomod: 'script' }, answer, () => Promise.resolve(KNOWN));
+
+    it('is refused to an agent, who is told to ask for manual', async () => {
+      await expect(scripted({ kind: 'choices', steps: [] })).rejects.toThrow(`${SCRIPT}. Request it again with manual to install it as a plain copy.`);
+    });
+
+    it('is refused to the page, which lands the plain copy only on Manual', async () => {
+      const refused: string[] = [];
+      const dialog: FomodDialog = { ...FOMOD_PAGE, refuse: (why) => { refused.push(why); return Promise.resolve(false); } };
+
+      expect(await scripted({ kind: 'dialog', dialog })).toEqual({ kind: 'cancelled' });
+      expect(refused).toEqual([SCRIPT]);
+    });
+
+    it('lands as a plain copy when Manual is asked for, without refusing', async () => {
+      expect(await scripted({ kind: 'manual' })).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+    });
   });
 
   it('refuses a FOMOD that installs outside the mod\'s folder, naming where, and writes nothing there', async () => {

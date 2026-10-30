@@ -138,7 +138,7 @@ const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
     + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two, and force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold or holds with other bytes, which is otherwise refused; '
     + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none, '
-    + 'or manual?: true to install it as a plain copy; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults',
+    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD or one whose installer cannot be read is refused without; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults',
   z.object({
     argument: z.array(INSTALL_SOURCE),
     options: z.object({

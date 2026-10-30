@@ -185,8 +185,6 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/ModuleConfig.xml'], NO_CHOICES, undefined],
       ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/moduleconfig.xml'], NO_CHOICES, undefined],
       ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], NO_CHOICES, undefined],
-      ['a scripted FOMOD, whatever its answer', ['MyMod/fomod/script.cs', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/script.cs'],
-        { fomod: { kind: 'plainCopy', why: 'its installer is a script, which Modbench does not run' } }, CHOSE_NOTHING],
       ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], {}, CHOSE_NOTHING],
     ])('%s', async (_, release, landed, how, answer) => {
       const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, answer);
@@ -256,6 +254,25 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
       expect(await filesIn(folder(MOD))).toEqual(['a/A.esp', 'b/B.esp', 'fomod/ModuleConfig.xml', 'meta.ini']);
+    });
+
+    describe('whose installer is a script', () => {
+      const scripted = ['MyMod/fomod/script.cs', 'MyMod/00 Core/foo.esp'];
+
+      it('refuses an answer by choices, writing nothing', async () => {
+        const before = await snapshotTree(root);
+
+        await expect(holding(scripted).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] }))
+          .rejects.toThrow('its installer is a script, which Modbench does not run');
+        assertOnlyChanged(before, await snapshotTree(root), new Set());
+      });
+
+      it('lands the release as it is for Manual', async () => {
+        const outcome = await holding(scripted).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, { kind: 'manual' });
+
+        expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+        expect(await filesIn(folder(MOD))).toEqual(['00 Core/foo.esp', 'fomod/script.cs', 'meta.ini']);
+      });
     });
 
     it('writes nothing, and says it was cancelled, when the user cancels the installer', async () => {

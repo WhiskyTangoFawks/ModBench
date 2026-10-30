@@ -9,6 +9,7 @@ import { FOMOD_STATE, isFomodReady, parseFomodMove, withImages, type FomodMove, 
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 
 const INSTALL_ANYWAY = 'Install anyway';
+const MANUAL = 'Manual';
 
 /** A page for one install. Closing its tab is Cancel. */
 export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress: Progress): FomodDialog {
@@ -54,6 +55,7 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress
     },
     confirmMissing: async (missing) => await ask(
       'This FOMOD names files its archive does not hold.', { modal: true, detail: missing.join('\n') }, INSTALL_ANYWAY) === INSTALL_ANYWAY,
+    refuse: async (why) => await ask("This FOMOD's installer cannot run.", { modal: true, detail: why }, MANUAL) === MANUAL,
     asking: (asking) => {
       if (asking) progress.waiting();
       else progress.working();
