@@ -1538,7 +1538,7 @@
         },
         {
           "command": "modbench.mod.updateManifest",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && !(viewItem =~ /\\bsourceMod\\b/) && modbench.modlist.hasRepository",
           "group": "4_sourceControl@3"
         },
         {

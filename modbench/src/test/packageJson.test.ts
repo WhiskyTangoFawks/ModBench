@@ -1028,6 +1028,10 @@ describe('package.json git init, update manifest and restore from manifest follo
       .toEqual([[[UPDATE_MANIFEST, group], [RESTORE_FROM_MANIFEST, group]], []]);
   });
 
+  it('offers restore from manifest alone on a source mod row, whose build records its manifest', () => {
+    expect(onRow('modbench.modList', 'mod enabled sourceMod', hasRepository)).toEqual([[RESTORE_FROM_MANIFEST, '4_sourceControl']]);
+  });
+
   it('offers git init on the Modlist row with no repository or one git init has not set up, and update manifest then restore from manifest with a repository', () => {
     expect([onRow('modbench.toolbox', 'modlist', inInstance), onRow('modbench.toolbox', 'modlist', unsetUpRepository), onRow('modbench.toolbox', 'modlist', hasRepository)]).toEqual([
       [[GIT_INIT, 'modbench']],
