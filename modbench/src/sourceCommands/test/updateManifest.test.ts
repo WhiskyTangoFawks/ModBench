@@ -196,8 +196,9 @@ describe('update manifest', () => {
 
     const sourced = async (manifest: Manifest | undefined, files: Record<string, string> = {}) => {
       await mkdir(SOURCE(), { recursive: true });
-      if (manifest !== undefined) await writeManifestIn(SOURCE(), { ...manifest, output: 'ModB' });
-      return over({ files: { ModB: files }, sourceFolders: { ModB: SOURCE() } });
+      const setup = await over({ files: { ModB: files }, sourceFolders: { ModB: SOURCE() } });
+      if (manifest !== undefined) await writeManifestIn(join(modsDir, 'ModB'), manifest);
+      return setup;
     };
 
     it('is left to its build when its build wrote no manifest', async () => {
@@ -217,11 +218,12 @@ describe('update manifest', () => {
     });
 
     it('lands, leaving its manifest, when its folder is as its build wrote it, naming each file no package holds', async () => {
-      const { update, manifestOf } = await sourced({ ...EMPTY, files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] }, { 'a.nif': 'HA' });
+      const built: Manifest = { ...EMPTY, files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
+      const { update, manifestOf } = await sourced(built, { 'a.nif': 'HA' });
 
       const result = await update(['ModB']);
 
-      expect([result.landed, result.refused, await manifestOf('ModB')]).toEqual([[{ mod: 'ModB', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }], [], undefined]);
+      expect([result.landed, result.refused, await manifestOf('ModB')]).toEqual([[{ mod: 'ModB', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }], [], { manifest: built }]);
     });
   });
 

@@ -343,17 +343,17 @@ export type OriginFileMarked =
   | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
-/** Every repository in the source folder, listed in the mod order or not, by the mod its manifest
+/** Every repository in the source folder, listed in the mod order or not, by the mod its build file
  *  names as its output (ADR-0007). A note names each repository left out, and why. */
 export interface SourceMods {
   readonly folders: ReadonlyMap<string, string>;
   /** The source folder that builds `mod`, its name matched as the manager matches names. */
   folderOf(mod: string): string | undefined;
-  /** Whether a manifest builds `mod`: one in a cloned repository, or the output `.gitmodules` records for a repository not cloned yet. */
+  /** Whether a build file builds `mod`: one in a cloned repository, or the output `.gitmodules` records for a repository not cloned yet. */
   builds(mod: string): boolean;
-  /** The output the manifest in `folder` names, though the repository builds no mod for it: a manifest not named for its output, or an output another repository builds too. */
+  /** The output the build file in `folder` names, though another repository may build that mod. */
   claimedOutput(folder: string): string | undefined;
-  /** Every source folder whose manifest names `mod` as its output, when two or more do; none otherwise. */
+  /** Every source folder whose build file names `mod` as its output, when two or more do; none otherwise. */
   buildersOf(mod: string): readonly string[];
   readonly notes: readonly string[];
 }

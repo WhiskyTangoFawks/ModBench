@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
 import { textHash } from '../../instanceAdapter/fileContents/contentDigest';
-import { pinText, writeManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
-import { manifestText } from '../../manifestAdapter/manifestText';
+import { pinText, writeBuildFileIn, writeManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
 import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, sourceModsOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
@@ -340,12 +339,10 @@ describe('restore from manifest', () => {
 
     async function sourceMod(answers: InstanceAnswers = {}) {
       await mkdir(source(), { recursive: true });
-      const manifest: Manifest = {
-        ...EMPTY, output: 'ModA', packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }, MOD_7Z], files: [held('a.esp'), held('b.nif', undefined, 'ModA.7z')],
-      };
-      await writeFile(join(source(), 'ModA.manifest.json'), manifestText(manifest));
+      await writeBuildFileIn(source(), { ...EMPTY, output: 'ModA', packages: [MOD_7Z], files: [held('b.nif')] });
       const setup = await over({
         files: { ModA: { 'a.esp': 'old', 'b.nif': 'HB', 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
+        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }], files: [held('a.esp'), held('b.nif')] } },
         answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), ...answers },
       });
       setup.client.setCommandResult('cloneSubmodules', { applied: [{ folder: source(), leftDetached: "its branch 'main' is at def" }], refused: [] });
@@ -356,7 +353,7 @@ describe('restore from manifest', () => {
       return setup;
     }
 
-    it('is built by mEdit at the commit the instance repository pins, with the installation files its manifest names, and its files no line names sent to the trash', async () => {
+    it('is built by mEdit at the commit the instance repository pins, with the installation files its build file names, and its files no line names sent to the trash', async () => {
       const { restore, client, fake } = await sourceMod();
 
       const outcome = await restore(['ModA']);
@@ -366,7 +363,7 @@ describe('restore from manifest', () => {
         ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], taken: ['b.nif'], archives: [] }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([
-        { verb: 'keepPackageEntries', hash: 'ModA', entries: new Map([['a.esp', 'compiled']]) }, { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
+        { verb: 'keepPackageEntries', hash: 'ModA', entries: new Map([['a.esp', 'compiled'], ['b.nif', 'HB']]) }, { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
       ]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
     });
@@ -428,7 +425,7 @@ describe('restore from manifest', () => {
     async function aSourceModAfterTwoMods() {
       const source = join(root, 'source', 'ModA');
       await mkdir(source, { recursive: true });
-      await writeFile(join(source, 'ModA.manifest.json'), manifestText({ ...EMPTY, output: 'ModA' }));
+      await writeBuildFileIn(source, { ...EMPTY, output: 'ModA' });
       return over({ manifests: { ModA: EMPTY, ModB: EMPTY, ModC: EMPTY }, sourceFolders: { ModA: source }, reading: { mods: [...MODS], ...pluginFilesHeld(C_ESP) } });
     }
 

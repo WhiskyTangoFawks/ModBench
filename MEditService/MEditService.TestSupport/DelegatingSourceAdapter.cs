@@ -43,9 +43,9 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
     public virtual string ContentStamp(string text) => inner.ContentStamp(text);
 
     public virtual SourceFailure? Init(
-        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null) =>
-        inner.Init(sourceFolder, manifest, plugins, assets, repair);
+        inner.Init(sourceFolder, buildFile, plugins, assets, repair);
 
     public virtual Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => inner.SourceToBuild(sourceFolder);
 

@@ -2,7 +2,6 @@ using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -74,7 +73,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_CommitsTheAssetsItIsHanded_ReadFromTheModFolder_AndTheManifestItIsHanded_AsItsBytes()
+    public async Task Init_CommitsTheAssetsItIsHanded_ReadFromTheModFolder_AndTheBuildFileItIsHanded_AsItsBytes()
     {
         WriteInModFolder("Scripts/Quest.pex", "a script");
         WriteInModFolder("textures/a.dds", "from the pack");
@@ -84,7 +83,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         Assert.Single((await InitWith(["Scripts/Quest.pex"], "{\"output\": \"FixtureMod\"}")).Applied);
 
         Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
-        Assert.Equal("{\"output\": \"FixtureMod\"}", GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", $"main:{Origin}.manifest.json"));
+        Assert.Equal("{\"output\": \"FixtureMod\"}", GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", "main:build.json"));
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
 
@@ -108,8 +107,8 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         }
     }
 
-    private Task<DecompileAndCommitResult> InitWith(IReadOnlyList<string> assets, string manifest) =>
-        InitWith(new ModToDecompileAndCommit(Origin, new NewRepository(SourceFolder, assets, new SpelledManifest($"{Origin}.manifest.json", Encoding.UTF8.GetBytes(manifest)))));
+    private Task<DecompileAndCommitResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
+        InitWith(new ModToDecompileAndCommit(Origin, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile))));
 
     private async Task<DecompileAndCommitResult> InitWith(ModToDecompileAndCommit mod)
     {

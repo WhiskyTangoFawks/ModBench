@@ -9,21 +9,18 @@ export interface StatusSource {
   readonly mods: readonly EntryRef[];
   readonly modFolders: readonly ModFolder[] | undefined;
   readonly entryKey: (entry: EntryRef) => string;
-  readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
 }
 
 interface Listening {
   dispose(): void;
 }
 
-// A source mod's manifest is in its repository (ADR-0022).
 function modsAt(value: StatusSource): ModAt[] {
   const keyOf = (entry: EntryRef): string => `${entry.kind}:${value.entryKey(entry)}`;
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
-    const sourceFolder = entry.kind === 'mod' ? value.paths.sourceDirs.get(entry.name) : undefined;
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, ...(sourceFolder === undefined ? {} : { sourceFolder }) }];
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path }];
   });
 }
 

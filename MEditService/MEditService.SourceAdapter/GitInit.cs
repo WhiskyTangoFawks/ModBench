@@ -1,7 +1,6 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
@@ -16,7 +15,7 @@ public sealed record Asset(string Path, Func<Stream> Open);
 internal static class GitInit
 {
     internal static void Init(
-        string sourceFolder, SpelledManifest manifest, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
+        string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
@@ -33,7 +32,7 @@ internal static class GitInit
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent));
-            journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Text);
+            journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             if (repair is var (repaired, commit))
@@ -106,7 +105,7 @@ internal static class GitInit
     private static readonly string GitignoreContent =
         "*\n" +
         "!/.gitignore\n" +
-        $"!/{ManifestName.Glob}\n" +
+        $"!/{SourceRepositoryLayout.BuildFileName}\n" +
         $"!/{SourceRepositoryLayout.RootFolderName}/\n" +
         $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
         $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +

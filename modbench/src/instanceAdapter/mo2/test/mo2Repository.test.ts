@@ -13,6 +13,7 @@ import type { GamePlace } from '../../instanceAdapter';
 import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { whitelistIgnoreList, withSourceModLines } from '../layout';
+import { BUILD_FILE } from '../../../wire/sourceMod';
 
 let root: string;
 
@@ -373,7 +374,7 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       await writeFile(join(root, '.gitignore'), `${await ignoreList()}!/plugins/\n/plugins/*\n!/plugins/mine.py\n!/source/\n/source/*\n!/source/notes.md\n`);
       await Promise.all(['plugins/mine.py', 'plugins/x.dll', 'plugins/rootbuilder/rootbuilder.manifest.json', 'source/notes.md'].map((path) => put(path)));
-      await put('source/Mod A/Mod A.manifest.json', JSON.stringify({ output: 'Mod A', files: [] }));
+      await put(`source/Mod A/${BUILD_FILE}`, JSON.stringify({ output: 'Mod A', files: [] }));
       const repository = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' });
       repository(join(root, 'source', 'Mod A'), 'init', '--quiet', '--initial-branch=main');
       repository(join(root, 'source', 'Mod A'), 'remote', 'add', 'origin', 'https://example.test/a.git');
@@ -445,7 +446,7 @@ describe('the MO2 adapter\'s repository', () => {
     const ignored = [
       'mods/Mod A/Mod A.esp', 'mods/Mod A/textures/a.dds', 'mods/Mod A/readme.ini', 'mods/Mod A/Mod A.json', 'mods/Mod A/Mod A.manifest', 'mods/Mod A/.git/HEAD', 'mods/Mod A/meta.ini', 'mods/Mod B/meta.ini',
       'profiles/Default/saves/save.fos', 'profiles/Default/nested/modlist.txt', 'downloads/Mod.7z', 'downloads/Mod.7z.meta',
-      'source/Mod A/Mod A.manifest.json', 'hash-index/hashes.jsonl', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
+      `source/Mod A/${BUILD_FILE}`, 'hash-index/hashes.jsonl', 'overwrite/log.txt', 'logs/mo_interface.log', 'webcache/index', 'plugins/x.dll',
     ];
     await Promise.all([...listed, ...ignored].map((path) => put(path)));
 
@@ -457,10 +458,10 @@ describe('the MO2 adapter\'s repository', () => {
 
   describe('a source mod with a remote is a submodule', () => {
     const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-    const SOURCE_MANIFEST = (output: string): string => JSON.stringify({ output, files: [] });
+    const BUILD_FILE_OF = (output: string): string => JSON.stringify({ output, files: [] });
 
     async function sourceMod(folder: string, output: string, remote?: string): Promise<string> {
-      await put(`source/${folder}/${output}.manifest.json`, SOURCE_MANIFEST(output));
+      await put(`source/${folder}/${BUILD_FILE}`, BUILD_FILE_OF(output));
       const path = join(root, 'source', folder);
       git(path, 'init', '--quiet', '--initial-branch=main');
       if (remote !== undefined) git(path, 'remote', 'add', 'origin', remote);
@@ -522,14 +523,13 @@ describe('the MO2 adapter\'s repository', () => {
       expect([sources.builds('mod a'), sources.builds('Mod B'), sources.folderOf('Mod A')]).toEqual([true, false, undefined]);
     });
 
-    it('lets the manifest of a cloned repository speak, not the output .gitmodules recorded before a rename', async () => {
+    it('lets the build file of a cloned repository speak, not the output .gitmodules recorded before a rename', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       await sourceMod('Mod A source', 'Mod A', 'https://example.test/a.git');
       await adapter.writeSubmodules('every');
-      await rm(join(root, 'source', 'Mod A source', 'Mod A.manifest.json'));
-      await put('source/Mod A source/Mod B.manifest.json', SOURCE_MANIFEST('Mod B'));
+      await put(`source/Mod A source/${BUILD_FILE}`, BUILD_FILE_OF('Mod B'));
 
       const sources = await adapter.sourceMods();
 
@@ -722,9 +722,9 @@ describe('the MO2 adapter\'s repository', () => {
       expect(await readFile(join(root, '.gitignore'), 'utf8')).not.toContain('NoDelete');
     });
 
-    it('keeps the entry and the line of a source mod whose manifest it cannot read, and says which', async () => {
+    it('keeps the entry and the line of a source mod whose build file it cannot read, and says which', async () => {
       const { adapter, folder } = await submoduleOfOne();
-      await writeFile(join(folder, 'Mod A.manifest.json'), 'not json');
+      await writeFile(join(folder, BUILD_FILE), 'not json');
 
       const report = await adapter.writeSubmodules('every');
 

@@ -106,8 +106,8 @@ const pathsWhere = (manifest: Manifest, kind: 'notHeld' | 'otherBytes'): string[
   manifest.files.filter((file) => file.entry.kind === kind).map((file) => file.path).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 // ADR-0022: a source mod's build writes its manifest.
-async function leftToItsBuild(adapter: Adapter, mod: ModToUpdate & { sourceFolder: string }): Promise<Answer> {
-  const status: ModStatus = await statusOf({ name: mod.name, folder: mod.folder, sourceFolder: mod.sourceFolder }, adapter);
+async function recordedByItsBuild(adapter: Adapter, mod: ModToUpdate): Promise<Answer> {
+  const status: ModStatus = await statusOf({ name: mod.name, folder: mod.folder }, adapter);
   if (status.unreadable !== undefined) return refusal(`${status.unreadable}.`);
   if (status.noManifest) return refusal('its build writes its manifest, and it has not written one.');
   if (status.differing.length + status.namedByNoLine.length + status.gone.length > 0) {
@@ -151,7 +151,7 @@ async function packageEntriesKept(adapter: Adapter, gamePackage: PackageEntries 
 }
 
 async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: ReturnType<typeof downloadedFilesOf>): Promise<Answer> {
-  if (mod.sourceFolder !== undefined) return leftToItsBuild(adapter, { ...mod, sourceFolder: mod.sourceFolder });
+  if (mod.sourceFolder !== undefined) return recordedByItsBuild(adapter, mod);
 
   const held = await heldManifestOf(mod.folder);
   if (held !== undefined && 'refusal' in held) return held;

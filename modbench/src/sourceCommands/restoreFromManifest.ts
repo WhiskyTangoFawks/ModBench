@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
 import type { InstanceAdapter, OtherManifest, SourceMods } from '../instanceAdapter/instanceAdapter';
 import {
-  folderAgainst, manifestIn, metadataOf, metadataOverwritten, sourceManifestIn, type FolderAgainst, type Manifest,
+  buildFileIn, folderAgainst, manifestIn, metadataOf, metadataOverwritten, type FolderAgainst, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
@@ -127,13 +127,24 @@ async function foldersCompared(
 
 type Held = { readonly manifest: Manifest } | { readonly refusal: string } | undefined;
 
-async function manifestHeld(folder: string, sourceFolder: string | undefined): Promise<Held> {
+async function manifestHeld(folder: string): Promise<Held> {
   try {
-    const read = sourceFolder === undefined ? await manifestIn(folder) : await sourceManifestIn(sourceFolder);
+    const read = await manifestIn(folder);
     if (read === undefined) return undefined;
     return 'refused' in read ? { refusal: skipped(read.refused) } : read;
   } catch (err) {
     return { refusal: skipped(`its manifest could not be read: ${errorMessage(err)}`) };
+  }
+}
+
+// Read once the submodule is cloned, as a clone holds no build file before.
+async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile: Manifest } | { readonly refusal: string }> {
+  try {
+    const read = await buildFileIn(sourceFolder);
+    if (read === undefined) return { refusal: skipped(`'${sourceFolder}' holds no build file`) };
+    return 'refused' in read ? { refusal: skipped(read.refused) } : { buildFile: read.manifest };
+  } catch (err) {
+    return { refusal: skipped(`its build file could not be read: ${errorMessage(err)}`) };
   }
 }
 
@@ -304,17 +315,20 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const { adapter, client, tasks } = pass.deps;
   const cloned = await clonedAtThePin(pass, submodule);
   if ('refusal' in cloned) return cloned;
-  const packages = await packagesFor(pass, manifest);
+  const held = await buildFileHeld(sourceFolder);
+  if ('refusal' in held) return held;
+  const { buildFile } = held;
+  const packages = await packagesFor(pass, buildFile);
   if ('refusal' in packages) return packages;
   const before = await hashesIn(adapter, folder);
   const outcome = await buildSourceMod(
-    { client, adapter, tasks }, { name: mod, folder, sourceFolder, manifest, packages, version: manifest.version, isSubmodule: true }, pass.build);
+    { client, adapter, tasks }, { name: mod, folder, sourceFolder, buildFile, packages, version: manifest.version, isSubmodule: true }, pass.build);
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;
   const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...built.refused.map(({ reason }) => reason), ...built.archivesRefused.map(({ reason }) => reason)];
   if (leftAsItWas.length > 0) return { refusal: `was not finished: ${leftAsItWas.map((why) => why.replace(/\.$/, '')).join('; ')}.` };
-  const recorded = await manifestHeld(folder, sourceFolder);
+  const recorded = await manifestHeld(folder);
   if (recorded === undefined || 'refusal' in recorded) return { refusal: notFinished(recorded?.refusal ?? 'its build wrote no manifest') };
   let after: Map<string, string>;
   let namedByNoLine: readonly string[];
@@ -338,7 +352,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   const folder = await pass.folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const sourceFolder = pass.sourceMods.folderOf(mod);
-  const held = await manifestHeld(folder, sourceFolder);
+  const held = await manifestHeld(folder);
   if (held === undefined) return { refusal: skipped('it has no manifest') };
   if ('refusal' in held) return held;
   const submodule = submoduleOf(held.manifest);
@@ -351,7 +365,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
 const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;
 
 // ADR-0022: a submodule the source folder lacks is cloned first, because the
-// manifest it holds is what names the mod it builds.
+// build file it holds is what names the mod it builds.
 async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (status: RestoreStatus) => void): Promise<readonly ItemRefusal<string>[]> {
   const uncloned = await adapter.unclonedSubmodules();
   const refused: ItemRefusal<string>[] = uncloned.flatMap((submodule) => ('lacks' in submodule ? [{ item: submodule.name, reason: notCloned(submodule.lacks) }] : []));
@@ -444,7 +458,7 @@ async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys |
   if (folder === undefined) return undefined;
   const metadata = pass.folders.isMod(mod) ? await adapter.modMetadata(mod) : undefined;
   if (metadata?.kind === 'unreadable') return { refusal: skipped(metadataUnreadable(metadata.reason)) };
-  const held = await manifestHeld(folder, pass.sourceMods.folderOf(mod));
+  const held = await manifestHeld(folder);
   if (held === undefined) return undefined;
   if ('refusal' in held) return held;
   const says = metadataOf(held.manifest);

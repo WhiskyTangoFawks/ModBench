@@ -27,6 +27,9 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata.</summary>
     internal const string RootFolderName = "plugin-source";
 
+    /// <summary>The build file's name at the repository's root.</summary>
+    internal const string BuildFileName = "build.json";
+
     /// <summary>A folder of its own, so no asset's path can be the plugin source's or a file init writes.</summary>
     internal const string AssetsFolderName = "assets";
 

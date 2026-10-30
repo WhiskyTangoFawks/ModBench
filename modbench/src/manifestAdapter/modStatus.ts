@@ -1,11 +1,10 @@
 // modlist-repository.md, Status: a mod's folder and metadata against its manifest, the rule the Mod status box and mod
 // commands' upgrade check both read.
 
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { MANIFEST_SUFFIX } from '../wire/sourceMod';
 import type { Manifest, ManifestFile } from './manifest';
-import { manifestIn, sourceManifestIn } from './manifestFiles';
+import { manifestIn, manifestNameOf } from './manifestFiles';
 import { packageOf } from './packageOf';
 
 type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
@@ -24,11 +23,10 @@ export interface FolderReads {
   modMetadata(mod: string): Promise<Read<HeldMetadata>>;
 }
 
-/** A mod by its name and folder, and a source mod's source folder, which holds its manifest. */
+/** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
   readonly name: string;
   readonly folder: string;
-  readonly sourceFolder?: string;
 }
 
 /** A mod's folder against its manifest, each list by path on disk in ordinal order; `unreadable` is why it lists nothing. */
@@ -78,7 +76,7 @@ export interface FolderAgainst {
 /** The folder's files against `manifest`'s lines. A file is hashed only where a package entry fixes its bytes, and a line
  *  whose package entry `reads` lacks does not hold its bytes. */
 export async function folderAgainst(manifest: Manifest, folder: string, reads: Omit<FolderReads, 'modMetadata'>): Promise<FolderAgainst> {
-  const manifestName = folded(`${basename(folder)}${MANIFEST_SUFFIX}`);
+  const manifestName = folded(manifestNameOf(folder));
   const onDisk = new Set((await reads.filesIn(folder)).filter((path) => folded(path) !== manifestName));
   // A line names a file in another case only where the file system finds that file by the line's name.
   const found = async (path: string): Promise<boolean> => onDisk.has(path) || (await reads.fileStamp(join(folder, path))).kind === 'read';
@@ -162,7 +160,7 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
   try {
     const metadata = await reads.modMetadata(mod.name);
     if (metadata.kind === 'unreadable') return nothing(mod.name, { unreadable: `its metadata could not be read: ${metadata.reason}` });
-    const read = mod.sourceFolder === undefined ? await manifestIn(mod.folder) : await sourceManifestIn(mod.sourceFolder);
+    const read = await manifestIn(mod.folder);
     if (read === undefined) return nothing(mod.name, { noManifest: true });
     if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
     const { manifest } = read;
@@ -178,17 +176,14 @@ export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatu
 
 interface ModReads extends FolderReads {
   modFolderPath(mod: string): Promise<string | undefined>;
-  sourceMods(): Promise<{ folderOf(mod: string): string | undefined }>;
 }
 
 /** Each mod's status as the adapters read it now, for a command, which never reads the Mod status box (ADR-0015). A mod
  *  its name gives no folder has none. */
 export async function statusesNow(reads: ModReads, mods: readonly string[]): Promise<ModStatus[]> {
-  const sourceMods = await reads.sourceMods();
   const statuses = await Promise.all(mods.map(async (name) => {
     const folder = await reads.modFolderPath(name);
-    const sourceFolder = sourceMods.folderOf(name);
-    return folder === undefined ? [] : [await statusOf({ name, folder, ...(sourceFolder === undefined ? {} : { sourceFolder }) }, reads)];
+    return folder === undefined ? [] : [await statusOf({ name, folder }, reads)];
   }));
   return statuses.flat();
 }

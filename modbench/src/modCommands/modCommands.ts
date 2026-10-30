@@ -10,7 +10,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { changeSourceManifest, type SourceManifestChange } from './sourceManifestChange';
+import { changeBuildFile, type BuildFileChange } from './buildFileChange';
 import { installMod, upgradeLoss } from './install';
 export type { SelectionResult };
 export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
@@ -123,7 +123,7 @@ export interface OriginFileRef {
 
 const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', Included: 'Excluded' };
 
-const exclusionChange = (mark: OriginFileMark, paths: readonly string[], exclusionMark: string): SourceManifestChange =>
+const exclusionChange = (mark: OriginFileMark, paths: readonly string[], exclusionMark: string): BuildFileChange =>
   (mark === 'Excluded' ? { exclude: paths, include: [], exclusionMark } : { exclude: [], include: paths, exclusionMark });
 
 function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionOutcome<OriginFileRef>> {
@@ -181,7 +181,7 @@ async function markInSourceMod(
   return {
     landed: outcome.landed,
     refused: outcome.refused.map(({ item, reason }) => ({
-      item, reason: `${reason} Its change to the manifest could not be taken back: ${takenBack}`,
+      item, reason: `${reason} Its change to the build file could not be taken back: ${takenBack}`,
     })),
   };
 }
@@ -215,7 +215,7 @@ async function markFiles(
   }
   const { read, unread } = await readEach(adapter, files);
   const change: ExclusionChange = (sourceFolder, of, to) =>
-    changeSourceManifest(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath), adapter.exclusionMark));
+    changeBuildFile(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath), adapter.exclusionMark));
   const groups = bySourceFolder(read, sourceMods);
   const refusals = await configureEach(change, groups, mark);
   const landed: OriginFileRef[] = [];
@@ -496,7 +496,7 @@ async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string
   return { ...(tagRefusal !== undefined && { tagRefusal }), ...(keepOutRefusal !== undefined && { keepOutRefusal }) };
 }
 
-// The folder, then a source mod's manifest, then the line in each profile, the active one first. A
+// The folder, then a source mod's build file, then the line in each profile, the active one first. A
 // profile that does not list the mod is left as it was.
 async function renameMod(adapter: InstanceAdapter, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
@@ -517,7 +517,7 @@ async function renameMod(adapter: InstanceAdapter, from: string, to: string): Pr
   } catch (err) {
     return refuse(err);
   }
-  const configured = sourceFolder === undefined ? undefined : await changeSourceManifest(sourceFolder, { output: to });
+  const configured = sourceFolder === undefined ? undefined : await changeBuildFile(sourceFolder, { output: to });
   if (configured !== undefined) {
     try {
       await adapter.renameModFolder(to, from);
