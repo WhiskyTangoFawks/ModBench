@@ -1,6 +1,6 @@
 # Editor: Referenced By
 
-Referenced By lists the records that reference a record, so I can see what a change to it would reach before I make it. Its template is xEdit's Referenced By tab ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gesture is `referenced by` in [commands.md](commands.md) under Record. The list shows in VS Code's References view, which gives its history, Find, refresh and clear.
+Referenced By lists the records that reference a record, so I can see what a change to it would reach before I make it. Its template is xEdit's Referenced By tab ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gesture is `referenced by` in [commands.md](commands.md) under Record. The list shows in VS Code's References view, which behaves as VS Code made it ([common.md](common.md)).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -9,12 +9,12 @@ Each story cites what decides it. A story that cites nothing is owned here.
 As a user, I want:
 
 1. Referenced By in the menu of every record: a record row in Plugins, a column header in the record panel, and a row in this list. Cites: catalog `referenced by`; xEdit
-2. Referenced By from the palette to ask about the record tab in focus, or, with none, to ask for a record with the record picker. Cites: catalog `referenced by`
+2. Referenced By from the palette to ask about the record tab in focus, or, with none, to ask for a record with the record picker (editor-fields.md, References, story 1). Cites: catalog `referenced by`
 3. The list in VS Code's References view, which takes the focus, titled `Referenced By: ` and the record's EditorID, or its FormKey when it has none. Cites: Existing tools
-4. The list to be a snapshot of the moment I asked, which the view's refresh reads again. Cites: ruling
+4. The list to be a snapshot of the moment I asked, which the view's refresh reads again. Cites: xedit.md, divergence 32
 5. Referenced By on a row in the list to replace the list with that record's, and the view's history to keep the earlier list. Cites: xEdit; Existing tools
-6. VS Code's tree Find to narrow the list. Cites: Existing tools
-7. With VS Code's References view disabled, the gesture refused, naming the built-in extension it needs. Cites: common.md, Reporting
+6. VS Code's tree Find to narrow the list. Cites: common.md; Existing tools
+7. With VS Code's References view disabled, the gesture not offered. Cites: commands.md, No dead entries
 
 ## The tree
 
@@ -34,19 +34,17 @@ As a user, I want:
 
 | Part | What it shows | Cites |
 |---|---|---|
-| Label | the EditorID, or the FormKey when it has none | Plugins' record row |
+| Label | as Plugins' record row labels it | [plugins.md](plugins.md), A row, Record |
 | Description | the record type as xEdit names it, then `· 3 plugins` when more than one plugin holds the reference | xEdit's columns; ruling |
-| Icon | none | Plugins' record row |
+| Icon | none | |
 | Tooltip | `EditorID [FormKey]`, the record type, and the plugins that hold the reference | |
-| Identity | the referrer's FormKey | |
 
 ### Where it is held
 
 | Part | What it shows | Cites |
 |---|---|---|
 | Label | the plugin's file name | xEdit |
-| Description | the fields that hold the reference, as mEdit gives their paths, joined by `, ` | ruling; mEdit's answer |
-| Identity | the referrer's FormKey and the plugin | |
+| Description | the fields that hold the reference | ruling |
 
 ## States
 
