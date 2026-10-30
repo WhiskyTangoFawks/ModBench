@@ -145,8 +145,7 @@ public sealed class Document
         OwnerAt(root, path, creating: true) ?? throw new InvalidOperationException("Expected a walk that makes what it lacks to reach its owner.");
 
     /// <summary>The first of <paramref name="members"/> below <paramref name="path"/> that reads differently once
-    /// <paramref name="requestedJson"/> replaces the value at <paramref name="path"/>; null where none does. A
-    /// member reads as the value it holds, and a name inside a flags array as whether the array holds it.</summary>
+    /// <paramref name="requestedJson"/> replaces the value there. A name in a flags array reads as present or not.</summary>
     public string? FirstChangedBelow(IEnumerable<string> members, string requestedJson, params ReadOnlySpan<string> path)
     {
         var prefix = string.Join('.', path.ToArray()) + ".";
