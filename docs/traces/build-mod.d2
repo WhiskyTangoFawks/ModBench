@@ -1,4 +1,4 @@
-# Build, orange: a source mod's folder written from its repository and the installation files its manifest names.
+# Build, orange: a source mod's folder written from its repository and the installation files its build file names, then recorded in its manifest.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
@@ -9,7 +9,7 @@ textdocuments.label: Text documents
 manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
 manifestadapter.label: Manifest adapter
 instance: @../../spec/architecture/target-architecture.modbench_data.instance
-instance.label: "Instance\nmods · downloaded files · the hash index · the manifests"
+instance.label: "Instance\nmods · downloaded files · the hash index · the manifests · the build files"
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
 tasks: "VS Code's tasks" {class: other}
@@ -36,16 +36,18 @@ views: "every view" {class: driving}
 driving -> sourcecommands: "build: the mods" {class: compile}
 sourcecommands -> textdocuments: "save: each mod's unsaved plugin source" {class: compile}
 textdocuments -> sourcecommands: "saved, or the file VS Code did not save" {class: compile}
-sourcecommands -> manifestadapter: "get: each mod's manifest" {class: compile}
-instance -> manifestadapter: manifests {class: compile}
-manifestadapter -> sourcecommands: "each mod's manifest" {class: compile}
+sourcecommands -> manifestadapter: "get: each mod's build file · its manifest" {class: compile}
+instance -> manifestadapter: "build files · manifests" {class: compile}
+manifestadapter -> sourcecommands: "each mod's build file · its manifest, naming its repository" {class: compile}
 sourcecommands -> instanceadapter: "get: each mod's folder · each package, hashed" {class: compile}
 instance -> instanceadapter: "downloaded files" {class: compile}
 instanceadapter -> sourcecommands: "each mod's folder · each package, hashed" {class: compile}
 sourcecommands -> tasks: "get: each task's label" {class: outside}
 tasks -> sourcecommands: "each task's label" {class: outside}
-sourcecommands."refused when the output folder is not the mod's, or a tool has no task"
-sourcecommands -> instanceadapter: "each file the manifest takes from a package" {class: compile}
+sourcecommands."refused when a tool has no task"
+sourcecommands -> driving: "confirm: each file I changed, and each file the build does not make" {class: compile}
+driving -> sourcecommands: "yes" {class: compile}
+sourcecommands -> instanceadapter: "each file the build file takes from a package" {class: compile}
 instanceadapter -> instance: "the files" {class: compile}
 sourcecommands -> client: "build: each mod's folder · the archives to pack and the files each takes" {class: compile}
 client -> http: envelope {class: compile}
@@ -59,7 +61,7 @@ engine -> http: "the files it made, per mod" {class: compile}
 http -> client: "the files it made, per mod" {class: compile}
 client -> sourcecommands: "the files it made, per mod" {class: compile}
 
-withsteps: "a mod whose manifest holds steps" {
+withsteps: "a mod whose build file holds steps" {
   sourcecommands -> tasks: "each step's task, with its arguments, in the mod's folder" {class: outside}
   tasks -> sourcecommands: "its exit code" {class: outside}
 }
@@ -67,8 +69,10 @@ withsteps: "a mod whose manifest holds steps" {
 sourcecommands -> instanceadapter: "get: the files the build made, hashed, as its repository's entries" {class: compile}
 instance -> instanceadapter: "each mod's files" {class: compile}
 instanceadapter -> sourcecommands: "the files, hashed" {class: compile}
-sourcecommands -> manifestadapter: "each mod's manifest" {class: compile}
-manifestadapter -> instance: manifests {class: compile}
+sourcecommands -> instanceadapter: "trash: each file the folder holds that the build did not make" {class: compile}
+instanceadapter -> instance: "the trash" {class: compile}
+sourcecommands -> manifestadapter: "each mod's manifest: its repository, its exclusions and the files the build made" {class: compile}
+manifestadapter -> instance: "the manifest, in the mod's folder" {class: compile}
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
