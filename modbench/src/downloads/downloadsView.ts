@@ -3,7 +3,6 @@ import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { DownloadedFileCommands } from '../downloadedFileCommands/downloads';
 import type { QueryInfo } from '../downloadedFileCommands/queryInfo';
 import type { Reporter } from '../ports/reporter';
-import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import {
@@ -21,7 +20,6 @@ interface DownloadsViewDeps {
   queryInfo: QueryInfo;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
-  ask: AskQuestion;
   trash: MoveToTrash;
   log: (line: string) => void;
   logUnresolved: (line: string) => void;
@@ -35,7 +33,7 @@ interface DownloadsView extends vscode.Disposable {
 
 /** Rows come from the Instance value alone (ADR-0015). */
 export function createDownloadsView(
-  { commands, queryInfo, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
+  { commands, queryInfo, instance, reporter, trash, log, logUnresolved }: DownloadsViewDeps,
 ): DownloadsView {
   const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
   const view = vscode.window.createTreeView(DOWNLOADS_KEY_ARGS.view, {
@@ -77,7 +75,7 @@ export function createDownloadsView(
     ...registerDownloadsExcludedToggleCommands(provider),
     ...registerDownloadsSingleRowCommands(reporter, () => view.selection),
     registerDownloadsQueryInfoCommand(queryInfo, instance, reporter, () => view.selection),
-    ...registerDownloadsMultiRowCommands(commands, instance, reporter, ask, trash, log, () => view.selection),
+    ...registerDownloadsMultiRowCommands(commands, instance, reporter, trash, log, () => view.selection),
     nameFilter,
     view,
     provider,

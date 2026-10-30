@@ -7,7 +7,6 @@ import { registerAgentGesture, type AgentGesture, type GestureResult } from '../
 import { promptRename } from '../drivingLib/promptRename';
 import { applyAnswered } from '../textDocuments/applyAnswered';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
-import type { AskQuestion } from '../ports/dialog';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -17,8 +16,7 @@ import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
 
 export interface RenamePluginDeps {
-  commands: Pick<PluginCommands, 'confirmRename' | 'renameRefusal' | 'renamePlugin'>;
-  ask: AskQuestion;
+  commands: Pick<PluginCommands, 'renameRefusal' | 'renamePlugin'>;
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>;
   source: SourceEditing;
   instance: Pick<Instance, 'value' | 'quiet'>;
@@ -46,7 +44,7 @@ async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, 
 
 /** commands.md, `rename` under Plugin. */
 export function registerRenamePluginCommand(
-  { client, commands, ask, instance, reporter, source }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
+  { client, commands, instance, reporter, source }: RenamePluginDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   const gesture: AgentGesture<PluginsTreeNode, Rename, GestureResult<PluginAddress>, { name: string }> = {
     fromView: async (entry) => {
@@ -67,11 +65,6 @@ export function registerRenamePluginCommand(
       const newName = await promptRename('Rename plugin', plugin.name, refusal);
       if (newName === undefined) return undefined;
 
-      const confirmed = await commands.confirmRename(ask, plugin, newName);
-      if (!confirmed.confirmed) {
-        if (confirmed.refusal !== undefined) reporter.report('error', confirmed.refusal);
-        return undefined;
-      }
       return { plugin, newName };
     },
     fromAgent: ({ argument, options: { name } }) => {

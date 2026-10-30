@@ -17,18 +17,8 @@ const runDownloadsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: ()
   runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, command);
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
-import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
-
-// One question for the whole selection: an N-file selection must not stack N modal dialogs.
-async function confirmDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
-  const [only] = names;
-  const question = names.length === 1 && only !== undefined
-    ? `Delete "${only}"? It will be moved to the system trash. The installed mod, if any, is untouched.`
-    : `Delete ${names.length} items? They will be moved to the system trash. The installed mod, if any, is untouched.`;
-  return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
-}
 
 type DownloadsGesture<Given, Item> = AgentGesture<DownloadsTreeNode, Given, GestureResult<Item>>;
 
@@ -50,12 +40,12 @@ const deletedPartials = (managerNames: Pick<InstanceValue['managerNames'], 'down
 
 function deleteGesture(
   commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
-  ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
+  trash: MoveToTrash, log: (line: string) => void,
 ): DownloadsGesture<readonly string[], DeletedDownloadedFile> {
   return {
-    fromView: async (entry) => {
+    fromView: (entry) => {
       const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
-      return names.length > 0 && await confirmDelete(names, ask) ? names : undefined;
+      return names.length > 0 ? names : undefined;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
     run: (names) => runDownloadsWriting(instance, () =>
@@ -115,11 +105,11 @@ export function registerDownloadsSingleRowCommands(
  *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
  *  argument. */
 export function registerDownloadsMultiRowCommands(
-  commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   return [
-    registerAgentGesture('modbench.downloadedFile.delete', viewSelection, deleteGesture(commands, instance, reporter, ask, trash, log)),
+    registerAgentGesture('modbench.downloadedFile.delete', viewSelection, deleteGesture(commands, instance, reporter, trash, log)),
     registerAgentGesture('modbench.downloadedFile.exclude', viewSelection, markGesture(commands, instance, reporter, true)),
     registerAgentGesture('modbench.downloadedFile.include', viewSelection, markGesture(commands, instance, reporter, false)),
   ];

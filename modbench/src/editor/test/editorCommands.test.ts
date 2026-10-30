@@ -250,3 +250,16 @@ describe('modbench.record.open for the agent', () => {
     expect(answer).toMatchObject({ applied: true, outcome: { landed: [{ formKey: '000801:A.esp', plugin }] } });
   });
 });
+
+describe('modbench.record.delete, registered with the Editor', () => {
+  it('deletes the records selected in the focused view, so its arguments reach the right parameters', async () => {
+    const plugin = { name: 'A.esp', origin: 'ModA' };
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
+    register({ selection: () => [{ argument: { kind: 'record', plugin, formKey: '000801:A.esp' } }], meditClient });
+
+    await commandHandlers.get('modbench.record.delete')?.();
+
+    expect(meditClient.calls.filter((c) => c.method === 'getDeleteChanges').map((c) => c.args[0])).toEqual([[{ formKey: '000801:A.esp', plugin }]]);
+  });
+});

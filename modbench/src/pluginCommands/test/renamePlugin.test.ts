@@ -6,14 +6,10 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { scriptedDialog } from '../../test/surfacingDoubles';
-import { present } from '../../ports/present';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const PLUGIN = { name: 'Patch Mod.esp', origin: 'Patch Mod' };
-const CHILD = { name: 'Child.esp', origin: 'ChildMod' };
-const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
 
 const CHANGES = { treeName: 'Patch Mod.esp', moves: [{ from: '/m/plugin-source/Patch Mod.esp', to: '/m/plugin-source/Renamed Patch.esp' }], deletions: [], documents: [] };
 
@@ -133,66 +129,5 @@ describe('renameRefusal — what the prompt is told before the rename is asked f
     ['lets through a name only another origin holds', 'Renamed Patch.esp', 'OtherMod', undefined],
   ])('%s', async (_case, newName, heldIn, expected) => {
     expect(await refusal(newName, heldIn)).toBe(expected);
-  });
-});
-
-describe('confirmRename — what is known before any write', () => {
-  let client: InMemoryMEditClient;
-  const confirm = (ask: ReturnType<typeof scriptedDialog>, plugin = PLUGIN) =>
-    pluginCommandsWith(fakeInstanceAdapter().adapter, client).confirmRename(ask, plugin, 'Renamed Patch.esp');
-  const dependants = (dependantPlugins: PluginAddress[], unreadable: PluginAddress[] = []) =>
-    client.setQueryAnswer('getPluginDependants', { dependants: dependantPlugins, unreadable });
-
-  beforeEach(() => {
-    client = new InMemoryMEditClient();
-    dependants([]);
-  });
-
-  it('asks nothing when no plugin lists it as a master', async () => {
-    const ask = scriptedDialog();
-
-    expect(await confirm(ask)).toEqual({ confirmed: true });
-    expect(ask.asked).toEqual([]);
-  });
-
-  it('asks once, naming each dependant and what follows, and confirms on the button', async () => {
-    dependants([CHILD, OTHER]);
-    const ask = scriptedDialog('Rename');
-
-    expect(await confirm(ask)).toEqual({ confirmed: true });
-
-    expect(ask.asked).toHaveLength(1);
-    const question = present(ask.asked[0], 'the one recorded question');
-    expect(question.message).toContain('Patch Mod.esp');
-    expect(question.buttons).toEqual(['Rename']);
-    expect(question.detail).toContain('Child.esp (ChildMod)');
-    expect(question.detail).toContain('Other.esp (OtherMod)');
-    expect(question.detail).toMatch(/old name/);
-    expect(question.detail).toMatch(/Master issues/);
-  });
-
-  it('also names a plugin whose masters could not be read, as possibly keeping the old name', async () => {
-    dependants([], [OTHER]);
-    const ask = scriptedDialog('Rename');
-
-    await confirm(ask);
-
-    const detail = present(ask.asked[0], 'the one recorded question').detail;
-    expect(detail).toContain('Other.esp (OtherMod)');
-    expect(detail).toMatch(/could not read/);
-  });
-
-  it('confirms nothing when the question is declined, and says nothing', async () => {
-    dependants([CHILD]);
-
-    expect(await confirm(scriptedDialog(undefined))).toEqual({ confirmed: false });
-  });
-
-  it('refuses, asking nothing, when mEdit cannot say who depends on the plugin', async () => {
-    client.setQueryFailure('getPluginDependants', { failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
-    const ask = scriptedDialog('Rename');
-
-    expect(await confirm(ask)).toEqual({ confirmed: false, refusal: 'mEdit has not finished indexing the plugins.' });
-    expect(ask.asked).toEqual([]);
   });
 });

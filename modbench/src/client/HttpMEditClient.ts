@@ -18,7 +18,7 @@ import {
   type Submodule, type SubmodulesCloned,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
+  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
   type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginRepairPreview, type PluginToRepair, type DecompileOutcome, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress,
@@ -616,12 +616,6 @@ class HttpMEditClient implements MEditClient {
 
   getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed> {
     return this.read('GET /plugins/diagnoses', (api, signal) => api.GET('/plugins/diagnoses', { signal }), (data) => data ?? []);
-  }
-
-  getPluginDependants({ name: plugin, origin }: PluginAddress): Promise<PluginDependants | ReadFailed> {
-    return this.read(`getPluginDependants(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/dependants', {
-      params: { path: { plugin }, query: { origin } }, signal,
-    }), noBodyFails, { timed: true });
   }
 
   getPluginIndexing({ name: plugin, origin }: PluginAddress): Promise<PluginIndexedState | ReadFailed> {

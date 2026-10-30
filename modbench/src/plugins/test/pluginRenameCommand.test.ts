@@ -33,8 +33,7 @@ import { progressSteps } from '../../test/recordedProgress';
 import { registerRenamePluginCommand } from '../pluginRenameCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { AskQuestion } from '../../ports/dialog';
-import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
@@ -45,16 +44,11 @@ const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', n
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
 
-function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string | undefined)[]) {
+function setup(selection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
   client.setCommandResult('getRenameSourceChanges', CHANGES);
   client.setCommandResult('moveLastWritten', { moved: true });
-  client.setQueryAnswer('getPluginDependants', { dependants: [], unreadable: [] });
-  const dialog = scriptedDialog(...answers);
-  const stepsWhenAsked: string[][] = [];
-  const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
-    (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
   const instanceAnswers: InstanceAnswers = {};
   const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'))), instanceAnswers);
   const instance = {
@@ -76,7 +70,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     oneAtATime: (job) => { queued(); return queue(job); },
     refreshSourceControlFor: vi.fn(),
   };
-  registerRenamePluginCommand({ client, commands: pluginCommandsWith(fake.adapter, client), ask, instance, reporter, source }, () => selection);
+  registerRenamePluginCommand({ client, commands: pluginCommandsWith(fake.adapter, client), instance, reporter, source }, () => selection);
   const run = present(handlers.get('modbench.plugin.rename'), 'the rename plugin command');
   const validate = async (value: string): Promise<string | undefined> => {
     let validated: string | undefined;
@@ -87,7 +81,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
     await run(new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin));
     return validated;
   };
-  return { client, ask, stepsWhenAsked, fake, instanceAnswers, reporter, source, apply, queued, run, validate };
+  return { client, fake, instanceAnswers, reporter, source, apply, queued, run, validate };
 }
 
 const row = () => new PluginNode({ name: PLUGIN.name, enabled: true }, PLUGIN.origin);
@@ -110,42 +104,6 @@ describe('modbench.plugin.rename', () => {
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
     expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('renames nothing when the confirmation of its dependants is declined, and says nothing', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, ask, fake, reporter, run } = setup([], undefined);
-    client.setQueryAnswer('getPluginDependants', { dependants: [{ name: 'Child.esp', origin: 'ModB' }], unreadable: [] });
-
-    await run(row());
-
-    expect(ask.asked).toHaveLength(1);
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
-    expect(fake.calls).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-    expect(progressSteps).toEqual([]);
-  });
-
-  it('asks before the Plugins bar opens, so the question does not hold the bar or the reads', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, stepsWhenAsked, run } = setup([], 'Rename');
-    client.setQueryAnswer('getPluginDependants', { dependants: [{ name: 'Child.esp', origin: 'ModB' }], unreadable: [] });
-
-    await run(row());
-
-    expect(stepsWhenAsked).toEqual([[]]);
-    expect(progressSteps[0]).toBe('progress opens on modbench.pluginListTree');
-  });
-
-  it('tells a refusal that came before any write, such as an index still reading', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, reporter, run } = setup();
-    client.setQueryFailure('getPluginDependants', { failed: 'refused', refusal: 'mEdit has not finished indexing the plugins.' });
-
-    await run(row());
-
-    expect(fake.calls).toEqual([]);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'mEdit has not finished indexing the plugins.', detail: undefined }]);
   });
 
   it.each([['Esc', undefined], ['an empty name', ''], ['the same name', 'Patch.esp']])('renames nothing on %s', async (_, answer) => {
@@ -250,9 +208,8 @@ describe('modbench.plugin.rename', () => {
 describe('modbench.plugin.rename, called by the agent', () => {
   const calling = (name: string, plugins = [PLUGIN]) => new AgentCall(plugins.map((plugin) => ({ kind: 'plugin' as const, plugin })), { name });
 
-  it('renames the plugin given, never the selection, asking and prompting nothing and reporting nothing, and answers the outcome', async () => {
-    const { client, ask, fake, reporter, run } = setup([row()]);
-    client.setQueryAnswer('getPluginDependants', { dependants: [{ name: 'Child.esp', origin: 'ModB' }], unreadable: [] });
+  it('renames the plugin given, never the selection, prompting nothing and reporting nothing, and answers the outcome', async () => {
+    const { client, fake, reporter, run } = setup([row()]);
 
     const answered = await run(calling('Renamed.esp'));
 
@@ -260,7 +217,6 @@ describe('modbench.plugin.rename, called by the agent', () => {
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Renamed.esp', origin: 'ModA' }], refused: [] } });
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(ask.asked).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
