@@ -10,7 +10,7 @@ import { viewCopyValueText } from '../drivingLib/copyValue';
 import {
   pluralArgument, registerGesture, singularArgument, type RowOf,
 } from '../drivingLib/gestureEntry';
-import type { Instance } from '../instanceLoader/instance';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -150,15 +150,16 @@ export function registerModMoveCommand(
   return registerAgentGesture('modbench.mod.move', view.selection, gesture);
 }
 
-// One question for the whole selection: naming the mod alone, or listing several, both saying
-// where the folders go (mods.md, Uninstall).
+const UNINSTALL_LOSS = 'its place in mod order and its publisher tags';
+
+// mods.md, Uninstall.
 async function confirmUninstall(names: readonly string[], sourceMods: readonly string[], ask: AskQuestion): Promise<boolean> {
   const [only] = names;
   const quoted = (list: readonly string[]) => list.map((n) => `"${n}"`).join(', ');
   const question = names.length === 1 && only !== undefined
-    ? `Uninstall "${only}"? Its folder${sourceMods.length > 0 ? ' and its source' : ''} will be moved to the system trash.`
+    ? `Uninstall "${only}"? Its folder${sourceMods.length > 0 ? ' and its source' : ''} will be moved to the system trash. It loses ${UNINSTALL_LOSS}.`
     : `Uninstall ${quoted(names)}? Their folders will be moved to the system trash${
-      sourceMods.length > 0 ? `, and the source of ${quoted(sourceMods)} with them` : ''}.`;
+      sourceMods.length > 0 ? `, and the source of ${quoted(sourceMods)} with them` : ''}. Each loses ${UNINSTALL_LOSS}.`;
   return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
 }
 
@@ -175,6 +176,11 @@ interface ModContextDeps {
 interface Rename {
   readonly oldName: string;
   readonly newName: string;
+}
+
+interface UninstallRequest {
+  readonly mods: readonly string[];
+  readonly force: boolean;
 }
 
 type Uninstalled = Extract<Awaited<ReturnType<ModCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
@@ -235,21 +241,27 @@ export function registerModContextCommands(
     },
   };
 
-  const uninstall: AgentGesture<ModlistNode, readonly string[], GestureResult<Uninstalled>> = {
+  const uninstallForced = (mods: readonly string[]) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
+    const result = await commands.uninstallMods(mods, trash);
+    if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
+    return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
+  });
+
+  const uninstallRefusals = (mods: readonly string[]) => refusedWithoutForce(
+    mods, 'uninstall',
+    (name) => `it would move its folder${instance.value.sourceMods.has(name) ? ' and its source' : ''} to the system trash, and lose ${UNINSTALL_LOSS}`);
+
+  const uninstall: AgentGesture<ModlistNode, UninstallRequest, GestureResult<Uninstalled>, { force?: boolean }> = {
     fromView: async (entry) => {
       const rows = pluralArgument(entry, 'mod');
       const mods = rows.map((n) => n.mod.name);
       if (mods.length === 0) return undefined;
       const sourceMods = rows.filter((n) => n.facts?.sourceMod === true).map((n) => n.mod.name);
-      return (await confirmUninstall(mods, sourceMods, ask)) ? mods : undefined;
+      return (await confirmUninstall(mods, sourceMods, ask)) ? { mods, force: true } : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(modNameOf),
-    run: (mods) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
-      const result = await commands.uninstallMods(mods, trash);
-      if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
-      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
-    }),
-    report: (result, mods) => {
+    fromAgent: ({ argument, options }) => ({ mods: argument.map(modNameOf), force: options.force === true }),
+    run: async ({ mods, force }) => force ? uninstallForced(mods) : uninstallRefusals(mods),
+    report: (result, { mods }) => {
       if (!result.applied) {
         reporter.report('error', result.refusal, result.detail);
         return;
@@ -277,11 +289,36 @@ function modNamePrompt(
   return (value) => (value === '' ? undefined : promptRefusal(commands.renameModNameRefusal(value, own)));
 }
 
-async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
+// mods.md, Delete separator. A separator holds the mods before it, so they join the nearest separator the selection leaves
+// after it, and with none they become ungrouped.
+function destinationOf(groups: InstanceValue['modGroups']['groups'], name: string, deleted: readonly string[]): string {
+  const after = groups.slice(groups.findIndex(({ separator }) => separator.name === name) + 1);
+  const joined = after.find(({ separator }) => !deleted.includes(separator.name))?.separator.name;
+  return joined === undefined ? 'become ungrouped' : `join "${joined}"`;
+}
+
+async function confirmSeparatorDelete(names: readonly string[], groups: InstanceValue['modGroups']['groups'], ask: AskQuestion): Promise<boolean> {
   const question = names.length === 1
-    ? `Delete separator "${names[0]}"? Its mods stay.`
-    : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay.`;
+    ? `Delete separator "${names[0]}"? Its mods stay and ${destinationOf(groups, names[0] ?? '', names)}.`
+    : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay: ${
+      names.map((n) => `those of "${n}" ${destinationOf(groups, n, names)}`).join(', ')}.`;
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
+}
+
+// agent.md, Any agent, story 7.
+function refusedWithoutForce(names: readonly string[], verb: string, lossOf: (name: string) => string) {
+  return {
+    applied: true as const,
+    outcome: {
+      landed: [],
+      refused: names.map((name) => ({ item: { name }, reason: `${lossOf(name)}. Request it again with force to ${verb} it.` })),
+    },
+  };
+}
+
+interface SeparatorDeletion {
+  readonly names: readonly string[];
+  readonly force: boolean;
 }
 
 interface SeparatorAdd {
@@ -357,14 +394,10 @@ function renameGesture(
 
   function deleteGesture(
     commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  ): AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> {
-    return {
-    fromView: async (entry) => {
-      const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
-      return names.length > 0 && await confirmSeparatorDelete(names, ask) ? names : undefined;
-    },
-    fromAgent: ({ argument }) => argument.map(separatorNameOf),
-    run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
+  ): AgentGesture<ModlistNode, SeparatorDeletion, GestureResult<DeletedSeparator>, { force?: boolean }> {
+    const refusals = (names: readonly string[]) => refusedWithoutForce(
+      names, 'delete', (name) => `its mods would ${destinationOf(instance.value.modGroups.groups, name, names)}`);
+    const deleteForced = (names: readonly string[]) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
       const result = await commands.deleteSeparators(names, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
       return {
@@ -375,8 +408,15 @@ function renameGesture(
           detail: item.lineRefusal, severity: 'warning' as const,
         }])),
       };
-    }),
-    report: (result, names) => {
+    });
+    return {
+    fromView: async (entry) => {
+      const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
+      return names.length > 0 && await confirmSeparatorDelete(names, instance.value.modGroups.groups, ask) ? { names, force: true } : undefined;
+    },
+    fromAgent: ({ argument, options }) => ({ names: argument.map(separatorNameOf), force: options.force === true }),
+    run: async ({ names, force }) => force ? deleteForced(names) : refusals(names),
+    report: (result, { names }) => {
       if (!result.applied) {
         reporter.report('error', result.refusal, result.detail);
         return;

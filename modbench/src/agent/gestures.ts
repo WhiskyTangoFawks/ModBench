@@ -78,6 +78,12 @@ const ADD_SEPARATOR = gestureInput(
   (value, { argument, options }) => new AgentCall(entryArguments(value, argument), options),
 );
 
+const UNINSTALL = gestureInput(
+  `${MODS_TAKES}; options: { force?: true to uninstall, which is otherwise refused for each mod, listing what it loses }`,
+  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(modArguments(value, argument), { force: options?.force }),
+);
+
 const RENAME_SEPARATOR = gestureInput(
   'argument: the separator, { name } as list_mods names it; options: { name: its new name }',
   NAME_OPTION.extend({ argument: z.array(SEPARATOR_NAME) }),
@@ -85,9 +91,9 @@ const RENAME_SEPARATOR = gestureInput(
 );
 
 const DELETE_SEPARATORS = gestureInput(
-  'argument: the separators, each { name } as list_mods names it',
-  z.object({ argument: z.array(SEPARATOR_NAME) }),
-  (value, { argument }) => new AgentCall(separatorArguments(value, argument), {}),
+  'argument: the separators, each { name } as list_mods names it; options: { force?: true to delete, which is otherwise refused for each separator, naming the separator its mods would join }',
+  z.object({ argument: z.array(SEPARATOR_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(separatorArguments(value, argument), { force: options?.force }),
 );
 
 const CREATE_EMPTY_MOD = gestureInput(
@@ -251,7 +257,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.enable', MODS],
   ['modbench.mod.disable', MODS],
   ['modbench.mod.move', MOVE_MODS],
-  ['modbench.mod.uninstall', MODS],
+  ['modbench.mod.uninstall', UNINSTALL],
   ['modbench.mod.decompileAndCommit', MODS],
   ['modbench.mod.build', BUILD],
   ['modbench.mod.rename', RENAME_MOD],
