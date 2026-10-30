@@ -5,7 +5,7 @@ Plugin edits are git working-tree changes. A source mod's source ([ADR-0006](000
 ## Consequences
 
 - The instance repository tracks files in `mods/` in place, which a nested repository would forbid.
-- Editing requires a source; viewing never does. A plugin with no source is read-only. The friction is deliberate: someone else's plugin is edited as a vendored mod, with the author's releases on `main` and the user's edits on a branch.
+- Editing requires a source; viewing never does. A plugin with no source is read-only. The friction is deliberate: someone else's plugin is edited in a source mod the user owns, in a vendored workflow, whose plugin overrides it, and the author's mod stays as installed.
 
 ## Alternatives rejected
 
