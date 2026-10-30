@@ -75,18 +75,21 @@ public sealed class SkyrimGestureTests : TestInstance
     }
 
     [Theory]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, "Flags", "[]", "Configuration.Flags.Essential")]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, "Flags", """["Essential","Respawn"]""", "Configuration.Flags.Respawn")]
-    [InlineData(NpcConfiguration.TemplateFlag.BaseData, "Flags", """["Essential","Female"]""", null)]
-    [InlineData(NpcConfiguration.TemplateFlag.Stats, "MagickaOffset", "9", "Configuration.MagickaOffset")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", "[]", "Configuration.Flags.Essential")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", """["Essential","Respawn"]""", "Configuration.Flags.Respawn")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, NpcConfiguration.Flag.Essential, "Flags", """["Essential","Female"]""", null)]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, (NpcConfiguration.Flag)0, "Flags", """["2"]""", "Configuration.Flags.Essential")]
+    [InlineData(NpcConfiguration.TemplateFlag.BaseData, (NpcConfiguration.Flag)0, "Flags", """["Female"]""", null)]
+    [InlineData(NpcConfiguration.TemplateFlag.Stats, NpcConfiguration.Flag.Essential, "MagickaOffset", "9", "Configuration.MagickaOffset")]
+    [InlineData(NpcConfiguration.TemplateFlag.Stats, NpcConfiguration.Flag.Essential, "Flags", """["Essential"]""", null)]
     public void AWriteThatChangesATemplatedMemberOrBit_ThroughTheMemberOrItsStruct_IsRefused(
-        NpcConfiguration.TemplateFlag templateFlag, string member, string requested, string? refusedMember)
+        NpcConfiguration.TemplateFlag templateFlag, NpcConfiguration.Flag held, string member, string requested, string? refusedMember)
     {
         var mod = new SkyrimMod(ModKey.FromFileName("Templated.esp"), SkyrimRelease.SkyrimSE);
         var template = mod.Npcs.AddNew("Template");
         var copy = mod.Npcs.AddNew("Copy");
         copy.Configuration.TemplateFlags = templateFlag;
-        copy.Configuration.Flags = NpcConfiguration.Flag.Essential;
+        copy.Configuration.Flags = held;
         copy.Template.SetTo(template.FormKey);
         var plugin = Add(mod, "TemplatedMod");
         var configuration = JsonNode.Parse(Document.Parse(RecordTextCodec.SerializeToText(copy, GameRelease.SkyrimSE)).DocumentAt("Configuration").Require().Text).Require();

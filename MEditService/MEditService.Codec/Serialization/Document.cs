@@ -145,21 +145,24 @@ public sealed class Document
         OwnerAt(root, path, creating: true) ?? throw new InvalidOperationException("Expected a walk that makes what it lacks to reach its owner.");
 
     /// <summary>The first of <paramref name="members"/> below <paramref name="path"/> that reads differently once
-    /// <paramref name="requestedJson"/> replaces the value there. A name in a flags array reads as present or not.</summary>
+    /// <paramref name="requestedJson"/> replaces the value there. A name in a flags array reads as set or absent,
+    /// and a flag spelled as a number reads as that spelling: the reader resolves it, this does not.</summary>
     public string? FirstChangedBelow(IEnumerable<string> members, string requestedJson, params ReadOnlySpan<string> path)
     {
         var prefix = string.Join('.', path.ToArray()) + ".";
         var requested = requestedJson == "null" ? Without(path) : With(JsonNode.Parse(requestedJson) ?? throw new InvalidOperationException("Expected JSON."), path);
-        return members.FirstOrDefault(member => member.StartsWith(prefix, StringComparison.Ordinal) && ReadingOf(this, member) != ReadingOf(requested, member));
+        return members.FirstOrDefault(member => member.StartsWith(prefix, StringComparison.Ordinal) && !JsonNode.DeepEquals(ReadingOf(this, member), ReadingOf(requested, member)));
     }
 
-    private static string? ReadingOf(Document document, string member)
+    private static JsonNode? ReadingOf(Document document, string member)
     {
         var hops = member.Split('.');
-        if (document.At(hops) is { } held) return held.GetRawText();
-        return document.At(hops.AsSpan(..^1)) is { ValueKind: JsonValueKind.Array } flags
-            ? flags.EnumerateArray().Any(name => name.GetString() == hops[^1]).ToString()
-            : null;
+        if (document.At(hops) is { } held) return JsonNode.Parse(held.GetRawText());
+        if (document.At(hops.AsSpan(..^1)) is not { ValueKind: JsonValueKind.Array } flags) return null;
+        var names = flags.EnumerateArray().Select(name => name.GetString()).ToList();
+        if (names.FirstOrDefault(name => name is { Length: > 0 } && name.All(char.IsAsciiDigit)) is { } number)
+            return JsonValue.Create($"spelled as the number {number}");
+        return names.Contains(hops[^1]) ? JsonValue.Create(true) : null;
     }
 
     internal JsonElement? At(params ReadOnlySpan<string> path)
