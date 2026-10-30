@@ -45,8 +45,8 @@ function nestedAmong(names: readonly string[]): Map<string, string> {
   return new Map([...why].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, reasons]) => [name, `was skipped: ${reasons.join('; ')}.`]));
 }
 
-// modlist-repository.md, The repository, story 2. A link is not followed: it can reach outside the instance. An
-// unreadable folder is named and the rest searched (commands.md, A selection is one gesture, and each item lands on its own).
+// modlist-repository.md, The repository, story 2. A link is not followed: it can leave the instance. An
+// unreadable folder is named; the rest are searched (commands.md, A selection is one gesture, and each item lands on its own).
 async function searchForOtherManifests(context: Mo2Context): Promise<ManifestSearch> {
   const { instanceRoot } = context;
   const downloads = await currentDownloadsDir(context);
