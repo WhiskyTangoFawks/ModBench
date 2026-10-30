@@ -74,7 +74,7 @@ export interface WhatRestoreDestroys {
 }
 
 /** Every other manifest (modlist-repository.md, Every mod, story 1), and each folder the search could not read, or the
- *  search itself, refused on its own (story 4). */
+ *  search itself, refused on its own (commands.md, A selection is one gesture, and each item lands on its own). */
 export interface OtherManifests { readonly others: readonly OtherManifest[]; readonly refused: readonly ItemRefusal<string>[] }
 
 interface Options {
@@ -98,7 +98,7 @@ export async function otherManifestsOf(adapter: Pick<InstanceAdapter, 'otherMani
   }
 }
 
-// modlist-repository.md, Restore from manifest, stories 13 and 14: a folder is compared with every manifest's, not only the
+// ADR-0022: a folder is compared with every manifest's, not only the
 // selection's, and two repositories that build one mod refuse the mod.
 async function foldersCompared(
   adapter: Adapter, names: readonly string[], others: readonly OtherManifest[], sourceMods: SourceMods,
@@ -137,7 +137,7 @@ async function manifestHeld(folder: string, sourceFolder: string | undefined): P
   }
 }
 
-// A source mod with a remote is built from its submodule (modlist-repository.md, Restore from manifest, story 3).
+// A source mod with a remote is built from its submodule (ADR-0022).
 const submoduleOf = (manifest: Manifest): string | undefined => {
   const [first] = manifest.packages;
   return first?.kind === 'sourceRepository' && first.isSubmodule ? first.name : undefined;
@@ -172,7 +172,7 @@ const compared = (adapter: Adapter, manifest: Manifest, folder: string, packages
 
 type Answer = { readonly landed: ModRestored } | { readonly refusal: string };
 
-// modlist-repository.md, Restore from manifest, story 10: an installation file the downloads folder lacks is downloaded first.
+// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is downloaded first.
 async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead | { readonly refusal: string }> {
   const { adapter, nexus } = pass.deps;
   const named = manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [{ name: pkg.name, hash: pkg.hash, ...(pkg.page === undefined ? {} : { page: pkg.page }) }] : []));
@@ -203,7 +203,7 @@ async function trashedOrWhy({ adapter, trash }: RestoreDeps, folder: string, pat
   return undefined;
 }
 
-// modlist-repository.md, Restore from manifest, story 9: the manifest's version and installation file, and what else the
+// modlist-repository.md, The manifest, story 3: the manifest's version and installation file, and what else the
 // metadata holds kept.
 async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
   if (!pass.folders.isMod(mod)) return undefined;
@@ -215,7 +215,7 @@ async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest)
   return undefined;
 }
 
-// modlist-repository.md, The manifest, story 17: restore runs a mod's steps once its folder holds what its packages give.
+// Restore runs a mod's steps once its folder holds what its packages give.
 async function whyNotStepped(pass: Pass, manifest: Manifest, folder: string): Promise<string | undefined> {
   if (manifest.steps.length === 0) return undefined;
   if (pass.options.signal?.aborted) return 'the restore was cancelled before its steps ran';
@@ -286,7 +286,7 @@ async function hashesIn(adapter: Adapter, folder: string): Promise<Map<string, s
 
 type Cloned = { readonly leftDetached?: string } | { readonly refusal: string };
 
-// modlist-repository.md, Restore from manifest, story 3: built only at the commit the instance repository pins.
+// ADR-0022: built only at the commit the instance repository pins.
 async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
   const { adapter, client } = pass.deps;
   const pinned = await adapter.submodule(name);
@@ -299,7 +299,7 @@ async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
   return leftDetached ? { leftDetached } : {};
 }
 
-// modlist-repository.md, Restore from manifest, story 5: what the build makes comes back as the build makes it.
+// ADR-0006: what the build makes comes back as the build makes it.
 async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, submodule: string): Promise<Answer> {
   const { adapter, client, tasks } = pass.deps;
   const cloned = await clonedAtThePin(pass, submodule);
@@ -350,7 +350,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
 
 const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;
 
-// modlist-repository.md, Restore from manifest, story 3: a submodule the source folder lacks is cloned first, because the
+// ADR-0022: a submodule the source folder lacks is cloned first, because the
 // manifest it holds is what names the mod it builds.
 async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (status: RestoreStatus) => void): Promise<readonly ItemRefusal<string>[]> {
   const uncloned = await adapter.unclonedSubmodules();
@@ -370,7 +370,7 @@ const withEverySourceMod = (mods: readonly string[], sourceMods: SourceMods): st
   return [...mods, ...[...sourceMods.folders.keys()].filter((mod) => !listed.has(mod.toLowerCase()))];
 };
 
-// modlist-repository.md, The repository, story 6: a hook does not travel with a clone, so restore writes it as git init does.
+// modlist-repository.md, The repository, story 5: a hook does not travel with a clone, so restore writes it as git init does.
 async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
   try {
     if (await adapter.repositoryOnDisk()) await adapter.refuseUnpublishedPins();
@@ -380,7 +380,7 @@ async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undef
   return undefined;
 }
 
-// modlist-repository.md, The repository, story 4: a clone holds a path token where its game path is until restore puts
+// modlist-repository.md, The repository, story 3: a clone holds a path token where its game path is until restore puts
 // this machine's path there, so restore writes them before it reads the game folder.
 async function pathTokensWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
   try {

@@ -116,8 +116,8 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   return { folder, repository: { sourceFolder, assets: made.filter(({ path }) => !compiled.has(path)).map(({ path }) => path), manifestName: name, manifest: text } };
 }
 
-/** Why the manifest a mod's folder held could not be removed once its repository holds one (modlist-repository.md, The
- *  manifest, story 1); a repository in the mod's folder keeps its own. */
+/** Why the manifest a mod's folder held could not be removed once its repository holds one (ADR-0022); a
+ *  repository in the mod's folder keeps its own. */
 export async function folderManifestRemovedOrWhy({ folder, repository }: MadeRepository): Promise<string | undefined> {
   if (resolve(folder) === resolve(repository.sourceFolder)) return undefined;
   try {

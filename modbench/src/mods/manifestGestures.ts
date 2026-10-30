@@ -55,7 +55,7 @@ const named = <Outcome extends { landed: readonly { mod: string }[]; refused: re
 type AgentOutcome<Landed> = GestureResult<Landed, string>;
 type Restored = RestoreResult['landed'];
 
-// modlist-repository.md, Every mod, story 5: progress by mod with Cancel, which stops after the mod in hand. The
+// modlist-repository.md, Every mod, story 3: progress by mod with Cancel, which stops after the mod in hand. The
 // Toolbox's message line says what the notification says (Reporting).
 function withProgressAndCancel<T>(
   { say }: ManifestGestureDeps, run: (show: (message: string) => void, signal: AbortSignal) => Promise<T>,
@@ -126,7 +126,7 @@ const gapsOf = (
   otherBytes: landed.flatMap(({ mod, otherBytes }) => otherBytes.map((path) => otherBytesLine(mod, path))),
 });
 
-// modlist-repository.md, Update manifest, story 8
+// modlist-repository.md, Reporting, story 1
 function reportUpdated(reporter: Reporter, label: Label, outcome: UpdateManifestResult): void {
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
@@ -231,7 +231,7 @@ function restoreMessage(status: RestoreStatus, label: Label): string {
   }
 }
 
-// modlist-repository.md, Reporting: one line, with each skipped mod, each thing not recorded and each mod built from
+// common.md, Reporting: one line, with each skipped mod, each thing not recorded and each mod built from
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: RestoreResult): void {
   const warnings = [

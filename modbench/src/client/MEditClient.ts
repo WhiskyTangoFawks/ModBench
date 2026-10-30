@@ -268,7 +268,7 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
-  // modlist-repository.md, Restore from manifest, story 3: each submodule cloned at its pin, or named with why it was not.
+  // ADR-0022: each submodule cloned at its pin, or named with why it was not.
   cloneSubmodules(submodules: readonly Submodule[]): Promise<SubmodulesCloned | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear

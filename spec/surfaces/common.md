@@ -66,6 +66,8 @@ As a user, I want:
 
 ## Reporting
 
+The Output is the log: a line for each thing that happened. The Problems panel is the dashboard: a problem for each state that is wrong, on the file it concerns, while the state holds.
+
 ADR-0019 decides the tier; this table is how each tier looks on a surface.
 
 | What happened | What I see |

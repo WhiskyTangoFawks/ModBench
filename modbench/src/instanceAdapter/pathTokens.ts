@@ -1,4 +1,4 @@
-// modlist-repository.md, The repository, story 4. Git runs the filter with no Modbench running, so it is sed, which git
+// modlist-repository.md, The repository, story 3. Git runs the filter with no Modbench running, so it is sed, which git
 // ships on Windows too. The filter is the one program that tokenizes and restores.
 
 /** This machine's folders a token names; a folder not found has no token. */

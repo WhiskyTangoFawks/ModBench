@@ -82,7 +82,7 @@ export async function decompileAndRepair(
   return { applied: true, outcome: { landed: repaired.landed, refused: [...previews.refused, ...sent.refused, ...repaired.refused, ...notRemoved] } };
 }
 
-// modlist-repository.md, The manifest, story 1: a mod's manifest is in its repository once one is made.
+// ADR-0022: a mod's manifest is in its repository once one is made.
 async function folderManifestsRemoved(
   newRepositories: NewRepositories, made: ReadonlyMap<string, MadeRepository>, landed: readonly PluginAddress[],
 ): Promise<ItemRefusal<PluginAddress>[]> {

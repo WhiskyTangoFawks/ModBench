@@ -10,7 +10,7 @@ A native tree view, `modbench.modList`, second in the `modbench` container and o
 
 The view's description shows how many mods are enabled out of how many are listed, counting the whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. Cites: MO2's active-mod counter
 
-The view's badge is the modlist's ([modlist-repository.md](modlist-repository.md), Status, story 5).
+The view's badge is the modlist's ([modlist-repository.md](modlist-repository.md), Status, story 4).
 
 ## The tree
 
@@ -39,7 +39,7 @@ As a user, I want:
 | Description | the version in the mod's metadata, then the mod's status against its manifest ([modlist-repository.md](modlist-repository.md), Status) | MO2 |
 | Icon | `$(package)`, or `$(repo)` for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
-| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it, then the files its folder lacks ([modlist-repository.md](modlist-repository.md), Status, story 4) | MO2's columns |
+| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its source folder and that the folder is built from it, then the files its folder lacks | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
 ### Separator
@@ -48,7 +48,7 @@ As a user, I want:
 |---|---|---|
 | Label | the separator's name, without MO2's `_separator` suffix | MO2 |
 | Check box, icon | none | MO2 draws a separator as a heading |
-| Description | its status against its manifest ([modlist-repository.md](modlist-repository.md), Status, story 7) | |
+| Description | its status against its manifest ([modlist-repository.md](modlist-repository.md), Status, story 1) | |
 | Identity | the row's kind and the separator's name | |
 
 ### Overwrite
@@ -198,7 +198,7 @@ As a user, I want:
 11. A patcher to be a source mod whose step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
 12. Source mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
 13. No mod to say a patcher's output is stale. I rerun my patchers before I publish: whether a change before a patcher matters is mine to know, and most changes do not matter to a given patcher. This is an exception to Never silently wrong.
-14. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The manifest, story 8
+14. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The repository, story 3
 15. Build as a task, so my chain builds before it deploys or publishes. No warning of build's fails it. Cites: commands.md, A task is an entry point for a chain
 
 ### Delete separator

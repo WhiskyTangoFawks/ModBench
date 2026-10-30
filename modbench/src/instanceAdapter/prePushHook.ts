@@ -1,6 +1,6 @@
 export const PRE_PUSH_HOOK_NAME = 'pre-push';
 
-// modlist-repository.md, The repository, story 6: a clone fetches each source mod from the URL its .gitmodules names.
+// modlist-repository.md, The repository, story 5: a clone fetches each source mod from the URL its .gitmodules names.
 export const PRE_PUSH_HOOK = String.raw`#!/bin/sh
 tab=$(printf '\t')
 unpinned=0

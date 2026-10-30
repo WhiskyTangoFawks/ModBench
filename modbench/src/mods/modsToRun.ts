@@ -44,7 +44,7 @@ const everyMod = (value: InstanceValue, scope: Scope): string[] =>
 export const everyModHere = ({ instance }: Pick<ModsToRunDeps, 'instance'>, scope: Scope = 'modsAndSeparators'): ModsToRun =>
   ({ mods: everyMod(instance.value, scope), refused: [], everyMod: true, view: MODS_KEY_ARGS.view });
 
-// modlist-repository.md, Every mod, story 3: a separator stands for itself and its mods.
+// modlist-repository.md, Every mod, story 2: a separator stands for itself and its mods.
 function modsHeldBy(kind: unknown, name: string, value: InstanceValue, scope: Scope): string[] | undefined {
   if (kind !== 'mod' && kind !== 'separator') return undefined;
   const asked: EntryRef = { kind, name };

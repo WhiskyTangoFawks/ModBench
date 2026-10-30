@@ -8,7 +8,7 @@ Each story cites what decides it. A story that cites nothing is owned here.
 
 As a user, I want:
 
-1. To pick the deployment folder in a setting of this machine, one for each instance, which no commit holds. Cites: modlist-repository.md, The repository, story 4
+1. To pick the deployment folder in a setting of this machine, one for each instance, which no commit holds. Cites: modlist-repository.md, The repository, story 3
 2. Deploy with no deployment folder to be refused, naming the setting. Cites: commands.md, Refuse, do not repair
 3. A deployment folder on another volume than the instance to be refused, naming both volumes. A hardlink cannot cross volumes. Cites: commands.md, Refuse, do not repair
 4. Any folder to be a deployment folder, the game folder included. Cites: toolbox.md, Rows
