@@ -1,10 +1,9 @@
 import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
-import { unreadableSources, type UnreadableSource } from '../../src/wire/unreadableSource';
 import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress';
 import { pageGlobals, requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
-import { isColumnCopies, type ModRepository } from '../../src/wire/messages';
+import { isColumnCopies, type ColumnStatus, type ModRepository } from '../../src/wire/messages';
 import type { RecordCopy } from '../../src/wire/recordCopy';
 import { pluginCanBeEdited } from '../../src/wire/pluginEditable';
 import type { ReadFailed } from '../../src/wire/readFailed';
@@ -22,13 +21,12 @@ type PanelRead =
   | { result: null; gone: string[]; copiesLacking: string[] };
 
 interface LoadedPanel {
-  ok: true; immutableSet: Set<ColumnKey> | null;
-  // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
-  // editable" (commands.md, No dead entries). Read fail-closed.
-  compiledPluginSet: Set<ColumnKey> | null;
-  sourceUnreadableReasons: Map<ColumnKey, UnreadableSource> | null;
-  // The columns whose copy can be written; null exactly when immutableSet is.
+  ok: true;
+  // The columns whose copy can be written; null when the plugins read failed, degrading to "nothing is
+  // editable" (commands.md, No dead entries).
   editableSet: Set<ColumnKey> | null;
+  // Each column that has a status, as the host derived it.
+  columnStatuses: Readonly<Record<string, ColumnStatus>>;
   // The repository state of each origin that names a mod, which a column header offers decompile and commit or decompile on.
   modsByOrigin: Record<string, ModRepository>;
   // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
@@ -82,10 +80,8 @@ export function createRecordPanelClient(): RecordPanelClient {
       return {
         ok: true,
         ...read,
-        immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p))) : null,
-        compiledPluginSet: pluginList ? new Set(pluginList.filter(p => p.isCompiledPlugin).map(p => columnKey(p))) : null,
         editableSet: pluginList ? new Set(pluginList.filter(pluginCanBeEdited).map(p => columnKey(p))) : null,
-        sourceUnreadableReasons: pluginList ? unreadableSources(pluginList) : null,
+        columnStatuses: answer.columnStatuses,
         modsByOrigin: answer.modsByOrigin,
         conflictsComputed: answer.conflictsComputed,
         loadFailures: answer.loadFailures,

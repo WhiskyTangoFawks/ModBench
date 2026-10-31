@@ -6,7 +6,7 @@ import {
 } from '../wire/messages';
 import type { RecordCopy } from '../wire/recordCopy';
 import type { CompareRecordsAnswer, MEditClient, PluginLoadFailure, PluginMetadata } from '../client';
-import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickEnumValue } from './enumPicker';
 import { pickRecord, type RecordPickerDeps } from './recordPicker';
@@ -16,6 +16,9 @@ import type { FocusedCellContext } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
+import { columnStatuses } from '../drivingLib/columnStatus';
+import { withMasterCellStates } from '../drivingLib/masterCellStates';
+import { copyColumnKey } from '../wire/columnKey';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 
 type TitleFromRead = (formKey: string, columns: readonly TitledColumn[] | undefined) => void;
@@ -218,9 +221,13 @@ function tellAnswered(
   deps.readAnswered(m.formKey, m.columns);
   const standing = deps.modFacts.standingOf(deps.plugin);
   const fileOverriddenBy = !pluginActive && m.columns.length === 0 && standing.kind === 'overridden' ? standing.by : null;
+  const fileCopy = overrides?.find((o) => o.formKey === m.formKey && samePluginAddress(pluginAddressOf(o), deps.plugin));
+  const statuses = columnStatuses(overrides ?? [], listed, {
+    column: fileCopy && copyColumnKey(fileCopy), standing: { overriddenBy: fileOverriddenBy, notActive: answered.fileCopyAlone },
+  });
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
-    ...answered, plugins: listed,
+    ...answered, ...(answered.compare && { compare: withMasterCellStates(answered.compare) }), plugins: listed, columnStatuses: statuses,
     conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });

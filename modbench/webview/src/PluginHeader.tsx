@@ -1,17 +1,13 @@
 import React from 'react';
 import type { CompareOverride } from './types';
-import type { UnreadableSource } from '../../src/wire/unreadableSource';
+import type { ColumnStatus } from '../../src/wire/messages';
 import { headerCell } from './gridStyles';
 import { ColumnEdge } from './ColumnEdge';
 import { ExpandArrow } from './ExpandArrow';
 
 interface PluginHeaderProps {
   override: CompareOverride;
-  overriddenBy: string | null;
-  notActive: boolean;
-  isImmutable: boolean;
-  isCompiledPlugin: boolean;
-  sourceUnreadable: UnreadableSource | undefined;
+  status: ColumnStatus | undefined;
   isFile: boolean;
   onOpen: () => void;
   collapsed: boolean;
@@ -22,43 +18,9 @@ interface PluginHeaderProps {
   vscodeContext?: string;
 }
 
-interface Status { label: string; reason: string }
-
-// editor.md, A column's header, the Status table: the first row that applies.
-function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isCompiledPlugin: boolean, sourceUnreadable: UnreadableSource | undefined): Status | null {
-  if (o.parseDiagnosis != null) return { label: '(parse failure)', reason: o.parseDiagnosis };
-  if (overriddenBy !== null) return { label: '(overridden)', reason: `The game loads ${overriddenBy}’s file instead.` };
-  if (notActive) return { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' };
-  if (o.isPartialForm) return { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' };
-  if (isImmutable) return { label: '(read-only)', reason: 'The game’s plugins are not edited.' };
-  if (o.isInOverwrite) {
-    return {
-      label: '(read-only)',
-      reason: 'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.',
-    };
-  }
-  if (!isCompiledPlugin) {
-    return {
-      label: '(read-only)',
-      reason: '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
-        + 'makes it editable.',
-    };
-  }
-  if (sourceUnreadable !== undefined) {
-    return {
-      label: '(read-only)',
-      reason: `${sourceUnreadable.reason} Its records are its plugin file’s.`
-        + (sourceUnreadable.decompileRepairs ? ' “Decompile Plugin”, in this header’s menu, makes it editable.' : ''),
-    };
-  }
-  return null;
-}
-
 export function PluginHeader({
-  override: o, overriddenBy, notActive, isImmutable, isCompiledPlugin, sourceUnreadable, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
+  override: o, status, isFile, onOpen, collapsed, onToggleCollapse, onResize, style, vscodeContext,
 }: Readonly<PluginHeaderProps>) {
-  const status = statusOf(o, overriddenBy, notActive, isImmutable, isCompiledPlugin, sourceUnreadable);
-
   return (
     <th
       style={{ ...headerCell, position: 'relative', textAlign: 'left', ...style }}

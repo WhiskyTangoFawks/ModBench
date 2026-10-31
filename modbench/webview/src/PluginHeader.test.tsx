@@ -5,14 +5,12 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
 import type { CompareOverride } from './types';
-import type { UnreadableSource } from '../../src/wire/unreadableSource';
+import type { ColumnStatus } from '../../src/wire/messages';
 import { compareOverride, required } from './test/fixtures';
 
-const WHY = { reason: 'plugin-source holds no folder for MyMod.esp.', decompileRepairs: true };
-const TWINS = { reason: 'plugin-source holds FIXTURE.ESP and fixture.esp, which differ only in case.', decompileRepairs: false };
-const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
+const READ_ONLY = { label: '(read-only)', reason: 'The game’s plugins are not edited.' };
 
-type Facts = { override?: Partial<CompareOverride>; overriddenBy?: string | null; notActive?: boolean; isImmutable?: boolean; isCompiledPlugin?: boolean; sourceUnreadable?: UnreadableSource };
+type Facts = { override?: Partial<CompareOverride>; status?: ColumnStatus };
 
 function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typeof PluginHeader>> = {}) {
   const onToggleCollapse = vi.fn();
@@ -23,11 +21,7 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
         override={compareOverride({
           formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'ModA', loadIndex: '01', fields: [], ...facts.override,
         })}
-        overriddenBy={facts.overriddenBy ?? null}
-        notActive={facts.notActive ?? false}
-        isImmutable={facts.isImmutable ?? false}
-        isCompiledPlugin={facts.isCompiledPlugin ?? true}
-        sourceUnreadable={facts.sourceUnreadable}
+        status={facts.status}
         isFile={false}
         onOpen={vi.fn()}
         collapsed={false}
@@ -46,7 +40,7 @@ describe('PluginHeader', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('labels a column whose plugin is not active with the file name alone', () => {
-    renderHeader({ override: { loadIndex: null }, notActive: true });
+    renderHeader({ override: { loadIndex: null } });
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^MyMod\.esp$/);
   });
 
@@ -61,41 +55,10 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent('ModA');
   });
 
-  it.each<[string, Facts, string, string]>([
-    ['a copy mEdit could not read', { override: { parseDiagnosis: DIAGNOSIS } }, '(parse failure)', DIAGNOSIS],
-    ['a plugin another mod\u2019s file of its name overrides', { overriddenBy: 'ModB' }, '(overridden)',
-      'The game loads ModB\u2019s file instead.'],
-    ['a file whose plugin is disabled, or in a disabled mod', { notActive: true }, '(not active)',
-      'The game does not load it, so no other copy is compared.'],
-    ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
-    ['a plugin in Overwrite', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(read-only)',
-      'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.'],
-    ['a plugin that is not a compiled plugin', { isCompiledPlugin: false }, '(read-only)',
-      '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
-    ['a compiled plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(read-only)',
-      `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
-    ['a compiled plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(read-only)',
-      `${TWINS.reason} Its records are its plugin file’s.`],
-    ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
-      'The game ignores this copy’s own fields.'],
-  ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
-    const { header } = renderHeader(facts);
-    expect(header).toHaveTextContent(status);
-    expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${reason}`);
-  });
-
-  it.each<[string, Facts, string, string]>([
-    ['parse failure over read-only', { override: { parseDiagnosis: DIAGNOSIS }, isImmutable: true }, '(parse failure)', '(read-only)'],
-    ['parse failure over not active', { override: { parseDiagnosis: DIAGNOSIS }, notActive: true }, '(parse failure)', '(not active)'],
-    ['parse failure over overridden', { override: { parseDiagnosis: DIAGNOSIS }, overriddenBy: 'ModB' }, '(parse failure)', '(overridden)'],
-    ['overridden over read-only', { overriddenBy: 'ModB', isImmutable: true }, '(overridden)', '(read-only)'],
-    ['not active over read-only', { notActive: true, isImmutable: true }, '(not active)', '(read-only)'],
-    ['Partial Form over read-only', { override: { isPartialForm: true }, isImmutable: true }, '(Partial Form)', '(read-only)'],
-    ['Partial Form over no source', { override: { isPartialForm: true }, isCompiledPlugin: false }, '(Partial Form)', '(read-only)'],
-  ])('a column shows one status, the first that applies: %s', (_case, facts, shown, displaced) => {
-    const { header } = renderHeader(facts);
-    expect(header).toHaveTextContent(shown);
-    expect(header).not.toHaveTextContent(displaced);
+  it('shows the status it is sent, and a tooltip of the file name, the origin and the reason', () => {
+    const { header } = renderHeader({ status: { label: '(overridden)', reason: 'The game loads ModB’s file instead.' } });
+    expect(header).toHaveTextContent('(overridden)');
+    expect(header).toHaveAttribute('title', 'MyMod.esp\nModA\nThe game loads ModB’s file instead.');
   });
 
   it('shows no status and a tooltip of the file name and the origin alone, on a copy the game uses and I can edit', () => {
@@ -117,7 +80,7 @@ describe('PluginHeader', () => {
   });
 
   it('toggles nothing on a click elsewhere on it', () => {
-    const { header, onToggleCollapse } = renderHeader({ isImmutable: true });
+    const { header, onToggleCollapse } = renderHeader({ status: READ_ONLY });
     fireEvent.click(header);
     fireEvent.click(screen.getByText('MyMod.esp'));
     fireEvent.click(screen.getByText('(read-only)'));
@@ -130,7 +93,7 @@ describe('PluginHeader', () => {
   });
 
   it('shows only its load index while collapsed, the rest of the header in its tooltip', () => {
-    const { header } = renderHeader({ isImmutable: true }, { collapsed: true });
+    const { header } = renderHeader({ status: READ_ONLY }, { collapsed: true });
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
     expect(screen.queryByText('MyMod.esp')).not.toBeInTheDocument();
     expect(header).toHaveTextContent(/^\[01\]$/);
@@ -143,7 +106,7 @@ describe('PluginHeader', () => {
   });
 
   it('shows only its arrow while collapsed when it has no load index, the tooltip naming its file', () => {
-    const { header } = renderHeader({ override: { loadIndex: null }, notActive: true }, { collapsed: true });
+    const { header } = renderHeader({ override: { loadIndex: null } }, { collapsed: true });
     expect(header).toHaveTextContent(/^$/);
     expect(header).toHaveAttribute('title', expect.stringContaining('MyMod.esp'));
   });

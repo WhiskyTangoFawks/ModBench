@@ -93,13 +93,6 @@ function renderCell(
   );
 }
 
-function masterOrOnlyOne(
-  value: unknown, key: ColumnKey, columns: readonly Column[],
-): ConflictThis | undefined {
-  if (value == null || columns[0]?.key !== key) return undefined;
-  return columns.length === 1 ? 'OnlyOne' : 'Master';
-}
-
 function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey | null): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
@@ -163,7 +156,7 @@ export function DiffRow({
         // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
         const cellState = diff.cellStatesByFocus
           ? diff.cellStatesByFocus[focusedCell?.plugin ?? '']?.[key]
-          : diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
+          : diff.cellStates[key];
         const cell = row.cells.get(key);
         const cellStyle = {
           ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),

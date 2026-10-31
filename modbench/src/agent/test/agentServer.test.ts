@@ -631,11 +631,21 @@ describe('the agent server, reading a record through mEdit', () => {
     { plugin: 'B.esp', origin: 'Big Rocks', isWinner: true },
   ]);
 
+  const PLUGINS = ['A.esp', 'B.esp'].map((name) => ({
+    name, origin: 'Big Rocks', path: `/m/${name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false,
+    inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false,
+  }));
+  const ENABLED = {
+    ...VALUE,
+    mods: [{ kind: 'mod' as const, name: 'Big Rocks', enabled: true }],
+    plugins: VALUE.plugins.map((row) => ({ ...row, enabled: true })),
+  };
   const STANDING = { loadIndex: '00', isPartialForm: false, fields: [] };
 
   it('answers each copy\'s load index, Partial Form, parse diagnosis, column state and the conflict state of each row and cell', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getComparison', {
       ...comparisonOf('000800:A.esp', [
         { plugin: 'A.esp', origin: 'Big Rocks', isWinner: false },
@@ -645,26 +655,71 @@ describe('the agent server, reading a record through mEdit', () => {
         fieldName: 'Name', values: {}, winnerColumn: 'B.esp|Big Rocks', noWinner: false, conflictAll: 'Conflict',
         cellStates: { 'A.esp|Big Rocks': 'ConflictLoses', 'B.esp|Big Rocks': 'ConflictWins' },
         children: [{ fieldName: 'Full', values: {}, winnerColumn: '', noWinner: false, conflictAll: 'Override', cellStates: { 'B.esp|Big Rocks': 'Override' } }],
+      }, {
+        fieldName: 'Weight', values: { 'A.esp|Big Rocks': 2 }, winnerColumn: '', noWinner: false, conflictAll: 'Override', cellStates: { 'B.esp|Big Rocks': 'Override' },
       }],
     });
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+
+    const answered = await read(client, 'read_record', { name: 'SharedNpc' });
+
+    expect(answered).toMatchObject([
+      { plugin: { name: 'A.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictLoses' }, { field: 'Weight', conflictThis: 'Master' }] },
+      { plugin: { name: 'B.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictWins', children: [{ field: 'Full', conflictAll: 'Override', conflictThis: 'Override' }] }, { field: 'Weight', conflictAll: 'Override', conflictThis: 'Override' }] },
+    ]);
+  });
+
+  it('answers the status the record panel\'s column header shows, from the plugin mEdit lists and where the instance stands on it', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', [{ ...PLUGINS[0], isCompiledPlugin: false }, { ...PLUGINS[1], isImmutable: true }]);
+    mEdit.setQueryAnswer('getComparison', COPIES);
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+
+    const answered = await read(client, 'read_record', { name: 'SharedNpc' });
+
+    expect(answered).toMatchObject([
+      { status: { label: '(read-only)', reason: expect.stringContaining('Decompile and Commit Mod') } },
+      { status: { label: '(read-only)', reason: 'The game’s plugins are not edited.' } },
+    ]);
+  });
+
+  it('answers (not active) for a copy of a plugin the instance does not load', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
+    mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
     const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
-    expect(answered).toMatchObject([
-      { plugin: { name: 'A.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictLoses' }] },
-      { plugin: { name: 'B.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictWins', children: [{ field: 'Full', conflictAll: 'Override', conflictThis: 'Override' }] }] },
-    ]);
+    expect(answered).toMatchObject([{ status: { label: '(not active)' } }, { status: { label: '(not active)' } }]);
+  });
+
+  it('answers a copy the game uses and I can edit with no status', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
+    mEdit.setQueryAnswer('getComparison', COPIES);
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+
+    const [first] = await read(client, 'read_record', { name: 'SharedNpc' }) as object[];
+
+    expect(first).not.toHaveProperty('status');
   });
 
   it('answers each active plugin\'s copy and marks the winner when it names no plugin', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
@@ -680,10 +735,11 @@ describe('the agent server, reading a record through mEdit', () => {
   it('refuses in part when a copy cannot be read, answering the copies that read and the reason for the one that did not, in the Output', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswerOnce('getCopyDocument', { failed: 'refused', refusal: 'A.esp is unreadable.' });
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
-    const { client, warned } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client, warned } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
 
@@ -700,9 +756,10 @@ describe('the agent server, reading a record through mEdit', () => {
   it('answers the one plugin\'s copy when it names the plugin', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'b.esp' } });
 
@@ -713,10 +770,11 @@ describe('the agent server, reading a record through mEdit', () => {
   it('answers the text of a non-compiled plugin\'s copy, which has no file to open', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
     mEdit.setQueryAnswer('getRenderedDocument', { fileName: 'SharedNpc.txt', text: 'Name: Shared' });
     mEdit.setQueryAnswer('getComparison', COPIES);
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
 
@@ -730,9 +788,10 @@ describe('the agent server, reading a record through mEdit', () => {
   ] as const)('refuses the copy of a plugin when %s', async (_case, copyDocument) => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getCopyDocument', copyDocument);
     mEdit.setQueryAnswer('getRenderedDocument', null);
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
   });
@@ -740,7 +799,7 @@ describe('the agent server, reading a record through mEdit', () => {
   it('refuses a name that is not a record', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     expect(await call(client, 'read_record', { name: 'A.esp' })).toEqual({ isError: true, text: '"A.esp" is not a record.' });
   });
@@ -748,8 +807,9 @@ describe('the agent server, reading a record through mEdit', () => {
   it('refuses a record no active plugin holds', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getComparison', null);
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
   });
@@ -758,8 +818,9 @@ describe('the agent server, reading a record through mEdit', () => {
     const mEdit = new InMemoryMEditClient();
     const referrers = [{ formKey: '000900:B.esp', plugin: 'B.esp', origin: 'Big Rocks', fieldPath: 'Race', recordType: 'NPC_', recordTypeName: 'Npc' }];
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
     mEdit.setQueryAnswer('getReferences', referrers);
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     const answered = await read(client, 'list_references', { name: 'SharedNpc' });
 
@@ -770,7 +831,7 @@ describe('the agent server, reading a record through mEdit', () => {
   it('refuses with mEdit\'s listing of an ambiguous name, reading no references', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', { failed: 'refused', refusal: 'Ambiguous.' });
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     expect(await call(client, 'list_references', { name: 'Dup' })).toEqual({ isError: true, text: 'Ambiguous.' });
     expect(mEdit.calls.map(({ method }) => method)).not.toContain('getReferences');
