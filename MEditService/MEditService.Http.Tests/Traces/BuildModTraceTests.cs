@@ -106,7 +106,6 @@ public sealed class BuildModTraceTests : HostedTests
         { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
         { "no folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\"}], \"exclusionMark\": \".mohidden\"}" },
         { "no exclusion mark", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}]}" },
-        { "a taken path outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"taken\": [\"../a.nif\"]}], \"exclusionMark\": \".mohidden\"}" },
         { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"archives\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}], \"exclusionMark\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",

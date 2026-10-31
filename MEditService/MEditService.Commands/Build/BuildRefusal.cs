@@ -17,6 +17,6 @@ public enum BuildRefusal
     /// <summary>The source folder cannot be read, or holds assets one mod folder cannot hold.</summary>
     SourceUnreadable,
 
-    /// <summary>An archive takes a file that is neither an asset of the source nor a taken file.</summary>
+    /// <summary>An archive takes a file that is not an asset of the source.</summary>
     ArchiveFileNotAnAsset,
 }

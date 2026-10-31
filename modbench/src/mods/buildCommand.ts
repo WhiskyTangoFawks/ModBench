@@ -126,22 +126,13 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...undeclared(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
+  [...builtUncommitted(outcome), ...builtUnpushed(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
   const partly = outcome.landed.flatMap(({ mod, failure }) => (failure === undefined ? [] : [`"${mod}" (${failure})`]));
   return partly.length === 0 ? [] : [{
     message: `Built ${partly.length} mod${partly.length === 1 ? '' : 's'} only in part.`, detail: partly.join(', '), severity: 'warning',
-  }];
-}
-
-// Never silently wrong: a file of a step's that its build file does not name is sent to the trash, and named.
-function undeclared(outcome: BuildOutcome): PartialFailure[] {
-  const paths = outcome.landed.flatMap(({ mod, undeclared: files = [] }) => files.map((path) => inMod(path, mod)));
-  return paths.length === 0 ? [] : [{
-    message: `Build sent to the trash ${paths.length} ${paths.length === 1 ? 'file' : 'files'} a step made that its build file does not name.`,
-    detail: paths.map((name) => `"${name}"`).join(', '), severity: 'warning',
   }];
 }
 

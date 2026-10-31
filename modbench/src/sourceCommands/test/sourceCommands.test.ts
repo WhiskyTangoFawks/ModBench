@@ -7,8 +7,7 @@ import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import { manifestIn, writeManifestIn, type BuildFile, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
-import { readBuildFile } from '../../manifestAdapter/buildFileRead';
+import { manifestIn, writeManifestIn, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import type { DecompileAndCommitMod } from '../../client';
@@ -61,8 +60,8 @@ describe('sourceCommands build', () => {
 
     const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: BA2, textures: BA2 } };
     expect(client.calls).toEqual([
-      { method: 'build', args: [[{ name: 'ModA', sourceFolder: SOURCES.ModA, folder: folderOf('ModA'), exclude: ['b.dds'], taken: [], archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }], facts] },
-      { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], taken: [], archives: [] }], facts] },
+      { method: 'build', args: [[{ name: 'ModA', sourceFolder: SOURCES.ModA, folder: folderOf('ModA'), exclude: ['b.dds'], archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }], facts] },
+      { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], archives: [] }], facts] },
     ]);
   });
 
@@ -128,12 +127,10 @@ describe('sourceCommands build', () => {
 
   it.each<[string, () => Promise<void>, string, Record<string, true>]>([
     ['holds no build file', () => rm(join(SOURCES.ModA, BUILD_FILE)), 'was not built: \'<ModA>\' holds no build file.', {}],
+    ['holds a build file of the format before version 1', () => writeFile(join(SOURCES.ModA, BUILD_FILE), '{"files": []}'), 'was not built: its build file is in a format before version 1, and Modbench reads only version 1.', {}],
     ['runs a tool this machine has no task for', () => writeBuildFile(SOURCES.ModA, buildFileOf({
-      steps: [{ task: 'Zip', args: [] }], tools: [{ task: 'Zip', page: 'https://example.com/zip' }],
+      steps: [{ task: 'Zip', args: [], page: 'https://example.com/zip' }],
     })), 'was not built: this machine has no task for its tool \'Zip\' (https://example.com/zip).', { lacksATask: true }],
-    ['takes a file from an installation file the downloads folder lacks', () => writeBuildFile(SOURCES.ModA, buildFileOf({
-      packages: [{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H' }], files: [{ path: 'a.dds', entry: { kind: 'held' } }],
-    })), 'was not built: installation file \'Pack.7z\' is missing.', {}],
   ])('refuses a mod whose repository %s, naming why, before anything is written', async (_case, arrange, reason, flags) => {
     await arrange();
     const client = new InMemoryMEditClient();
@@ -179,8 +176,8 @@ describe('sourceCommands build, in mod order', () => {
   });
 
   it('runs a mod\'s steps in its folder once mEdit built it, and writes its manifest, before the next mod builds', async () => {
-    const steps: ManifestStep[] = [{ task: 'Patch', args: ['a'] }];
-    await writeBuildFile(SOURCES.ModB, buildFileOf({ steps, tools: [{ task: 'Patch', page: 'https://example.com/patch' }] }));
+    const steps: ManifestStep[] = [{ task: 'Patch', args: ['a'], page: 'https://example.com/patch' }];
+    await writeBuildFile(SOURCES.ModB, buildFileOf({ steps }));
     const log: string[] = [];
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
@@ -253,13 +250,7 @@ describe('sourceCommands decompileAndCommit', () => {
     client.setCommandHandler('decompileAndCommit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [], refused: [] }); });
     return { client, handed };
   };
-  const buildFileHanded = (mod: DecompileAndCommitMod | undefined): BuildFile => {
-    const read = readBuildFile(mod?.repository.buildFile ?? '');
-    if ('refused' in read) throw new Error(read.refused);
-    return read.buildFile;
-  };
-
-  it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and its build file taking from its packages each file they give', async () => {
+  it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and a build file that holds only its version', async () => {
     const { client, handed } = committing();
     const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
     const adapter = modsAt({
@@ -271,23 +262,7 @@ describe('sourceCommands decompileAndCommit', () => {
 
     const [mod] = handed;
     expect(mod).toMatchObject({ name: 'ModA', repository: { sourceFolder: '/source/ModA', assets: ['scripts/b.pex'] } });
-    expect(buildFileHanded(mod)).toEqual({
-      ...buildFileOf(), packages: [{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H' }], files: [{ path: 'textures/a.dds', entry: { kind: 'held' } }],
-    });
-  });
-
-  it('names the installation file\'s page from the downloaded file\'s own metadata when the mod\'s metadata names none (Query info, story 1)', async () => {
-    const { client, handed } = committing();
-    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
-    const page = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
-    const adapter = modsAt({
-      ...hashed({ 'textures/a.dds': 'A' }),
-      installations: new Map([['ModA', { kind: 'read', answer: pack }]]), downloadedFiles: new Map([['Pack.7z', { kind: 'read', answer: { ...pack, page } }]]),
-    });
-
-    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
-
-    expect(buildFileHanded(handed[0]).packages).toEqual([{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H', page }]);
+    expect(mod?.repository.buildFile).toBe('{"version":1}\n');
   });
 
   it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, decompile and commit)', async () => {
@@ -321,7 +296,7 @@ describe('sourceCommands decompileAndCommit', () => {
     expect(handed[0]?.repository.assets).toEqual(['textures/a.dds']);
   });
 
-  it('takes from the game folder each file it holds with its bytes, naming it as a package, and commits no asset for it', async () => {
+  it('commits no asset for a file the game folder holds with its bytes', async () => {
     const { client, handed } = committing();
     const file = { path: 'Data/textures/a.dds', hash: 'G', pathInFolder: 'textures/a.dds' };
     const adapter = modsAt({
@@ -331,9 +306,7 @@ describe('sourceCommands decompileAndCommit', () => {
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModC']);
 
-    const [mod] = handed;
-    expect(mod?.repository.assets).toEqual(['scripts/b.pex']);
-    expect(buildFileHanded(mod)).toMatchObject({ packages: [{ kind: 'gameFolder', name: 'Fallout4' }], files: [{ path: 'textures/a.dds', entry: { kind: 'heldAt', path: 'Data/textures/a.dds' } }] });
+    expect(handed[0]?.repository.assets).toEqual(['scripts/b.pex']);
   });
 
   it.each<[string, { kind: 'unreadable'; reason: string } | { kind: 'read'; answer: { gameFiles: []; notes: string[] } }, string]>([
