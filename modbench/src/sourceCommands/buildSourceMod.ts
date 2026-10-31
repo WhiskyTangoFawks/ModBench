@@ -67,7 +67,7 @@ export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
 const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '')}.`;
 
 // mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
-// those bytes, before mEdit packs it or compiles beside it. Answers each one's line, naming its package.
+// those bytes, before mEdit packs it or compiles beside it. Answers each one's line.
 async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<ManifestFile[]> {
   const { buildFile, packages, folder, exclude } = mod;
   const at: ManifestFile[] = [];
