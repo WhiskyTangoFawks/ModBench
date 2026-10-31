@@ -216,7 +216,7 @@ describe('a build mEdit refuses after the taken files are written, over an insta
     const manifestBuilt = await readFile(manifestPath, 'utf8');
     const statusBuilt = await status();
     await put('mods/Mod/b.nif', 'changed in the folder');
-    const refusal = { item: 'Mod', refusal: 'ArchiveFileNotAnAsset', message: "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source." } as const;
+    const refusal = { item: 'Mod', reason: "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source." };
     client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [refusal] }));
 
     const outcome = await build();
