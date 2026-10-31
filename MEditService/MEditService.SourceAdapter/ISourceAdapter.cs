@@ -61,8 +61,7 @@ public interface ISourceAdapter
     string AssetPathOf(string pathInModFolder);
 
     /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree, the
-    /// assets, <paramref name="buildFile"/> and <paramref name="manifest"/>, then any <paramref name="repair"/>. Git ignores each
-    /// path of <paramref name="ignored"/> in the source folder.</summary>
+    /// assets, build file, manifest and any repair, with the <paramref name="ignored"/> paths ignored.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null);
