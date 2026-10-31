@@ -167,6 +167,29 @@ describe('update manifest', () => {
       expect(result.refused).toEqual([{ item: 'ModA', reason: 'was not updated: its manifest names the game folder, and the game folder was not found.' }]);
     });
 
+    it.each([
+      ['a second installation file', 'Other.7z'],
+      ['the installation file the mod manager names', 'ModA-1.0.7z'],
+    ])('whose manifest names %s that is missing from this machine, leaving the manifest as it was', async (_, missing) => {
+      const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
+      const held: Manifest = {
+        packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }, { kind: 'installationFile', name: 'Other.7z', size: 5, hash: OTHER.hash }],
+        exclude: [], files: holding({ 'a.nif': HA, 'b.nif': HB }),
+      };
+      const downloads = [INSTALLED, OTHER].filter((file) => !file.path.endsWith(missing));
+      const { update, manifestHeld } = await over({
+        files: { ModA: { 'a.nif': HA, 'b.nif': HB } },
+        answers: { installations: new Map(), downloadedFilesHashed: { files: downloads, notes: [] } },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), held);
+
+      const result = await update(['ModA']);
+
+      expect([result.refused, result.landed, await manifestHeld('ModA')]).toEqual([
+        [{ item: 'ModA', reason: `was not updated: its manifest names '${missing}', and this machine does not hold it.` }], [], held,
+      ]);
+    });
+
     it('whose folder is gone', async () => {
       const { result } = await refusedBy({
         adapterOver: { fileStamp: (path) => Promise.resolve(path.endsWith('ModA') ? { kind: 'unreadable', reason: `ENOENT: no such file or directory, stat '${path}'` } : read({ size: 0n, modifiedNs: 0n, changedNs: 0n })) },
