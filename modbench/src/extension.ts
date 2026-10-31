@@ -23,6 +23,8 @@ import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoad
 import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
+import type { DeploymentRead } from './agent/instanceReads';
+import { deploymentFolderOf } from './instanceCommands/deploy';
 import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
 import { attachPort, deploymentFolderSetting, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
@@ -103,6 +105,7 @@ interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
   statuses?: ModStatuses;
+  deployment?: DeploymentRead;
   toolbox: ToolboxView;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
@@ -238,6 +241,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   return {
     instance, toolbox, statuses: modStatuses,
+    deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
@@ -328,7 +332,7 @@ function start(context: vscode.ExtensionContext): void {
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,

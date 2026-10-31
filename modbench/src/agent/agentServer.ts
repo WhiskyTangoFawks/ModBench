@@ -32,7 +32,7 @@ export interface AgentServerOptions {
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
-  deployment?: DeploymentRead;
+  deployment: DeploymentRead | undefined;
   reporter: Reporter;
   log: Log;
 }
@@ -43,7 +43,7 @@ export interface AgentServer {
 }
 
 type Instance = NonNullable<AgentServerOptions['instance']>;
-type OpenOptions = AgentServerOptions & { instance: Instance; statuses: Pick<ModStatuses, 'current'> };
+type OpenOptions = AgentServerOptions & { instance: Instance; statuses: Pick<ModStatuses, 'current'>; deployment: DeploymentRead };
 
 function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal(instance.readFailure === undefined ? 'The instance has not been read yet.' : `Failed to load: ${instance.readFailure}`);
@@ -155,9 +155,9 @@ async function handle(options: OpenOptions, request: IncomingMessage, response: 
 const NOT_SERVING: AgentServer = { listening: Promise.resolve(undefined), dispose: () => undefined };
 
 export function serveAgent(options: AgentServerOptions): AgentServer {
-  const { instance, statuses, port, reporter, log } = options;
-  if (instance === undefined || statuses === undefined) return NOT_SERVING;
-  const open = { ...options, instance, statuses };
+  const { instance, statuses, deployment, port, reporter, log } = options;
+  if (instance === undefined || statuses === undefined || deployment === undefined) return NOT_SERVING;
+  const open = { ...options, instance, statuses, deployment };
   const http = createServer((request, response) => {
     handle(open, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);

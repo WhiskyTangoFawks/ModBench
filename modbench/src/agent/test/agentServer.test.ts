@@ -63,11 +63,12 @@ afterEach(async () => {
 });
 
 const NO_ENVIRONMENT = { forEach: () => undefined };
+const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
 const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment?: AgentServerOptions['deployment']) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
@@ -81,7 +82,7 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment?: AgentServerOptions['deployment']) {
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
   const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
