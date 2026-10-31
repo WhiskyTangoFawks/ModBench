@@ -394,14 +394,14 @@ describe('restore from manifest', () => {
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
     const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [{ path: 'a.esp', vouchedFor: true }, { path: 'b.nif', vouchedFor: true }] };
 
-    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string>; heldByGit: string[] }) {
+    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string>; heldByGit: string[]; modFiles?: Record<string, string> }) {
       await mkdir(source(), { recursive: true });
       await writeBuildFile(source(), buildFileOf());
       if (sourceFolderHolds !== undefined) await writeManifestIn(source(), sourceFolderHolds.manifest);
       const setup = await over({
         foldersOutsideMods: sourceFolderHolds === undefined ? {} : { [source()]: sourceFolderHolds.files },
         files: { ModA: { 'a.esp': EDITED, 'b.nif': HB, 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
-        manifests: { ModA: { packages: [REPOSITORY], exclude, files: holding({ 'a.esp': HA, 'b.nif': HB }) } },
+        manifests: { ModA: { packages: [REPOSITORY], exclude, files: holding({ 'a.esp': HA, 'b.nif': HB, ...sourceFolderHolds?.modFiles }) } },
         answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), heldByGit: new Map([[source(), sourceFolderHolds?.heldByGit ?? []]]), ...answers },
       });
       setup.client.setCommandResult('cloneSubmodules', { applied: [{ folder: source(), leftDetached: "its branch 'main' is at def" }], refused: [] });
@@ -443,6 +443,17 @@ describe('restore from manifest', () => {
           { verb: 'trashFileIn', folder: source(), relativePath: 'junk.txt' },
         ]);
         expect([client.calls.map(({ method }) => method), outcome.refused]).toEqual([['cloneSubmodules', 'build'], []]);
+      });
+
+      it('writes a game file its manifest names at the layout\'s path from the game folder, as the mod folder holds it', async () => {
+        const named = { manifest: { packages: [{ kind: 'gameFolder' } as const], exclude: [], files: holding({ 'assets/x.nif': HA }) }, files: {}, heldByGit: [], modFiles: { 'x.nif': HA } };
+        const { restore, fake } = await sourceMod({ places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/x.nif', HA, 'x.nif']) }] }, [], named);
+
+        await restore(['ModA']);
+
+        expect(writes(fake.calls).filter((call) => 'folder' in call && call.folder === source())).toEqual([
+          { verb: 'writeFilesIn', folder: source(), files: [{ path: 'assets/x.nif', from: { kind: 'gameFile', root: '/game', path: 'Data/x.nif' } }] },
+        ]);
       });
 
       it('reports the files restored in its source folder with the mod\'s, under the folder\'s name', async () => {

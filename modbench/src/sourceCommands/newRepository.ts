@@ -124,18 +124,9 @@ type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 
 const replacesNothing: MoveToTrash = (path) => Promise.reject(new Error(`'${path}' is in the source folder already`));
 const downloadsNothing: RestoreDeps['nexus'] = { download: () => Promise.resolve({ found: false, reason: 'decompile and commit downloads nothing' }) };
 
-// ADR-0022: the repository leaves out what a package yields, so the manifest it holds writes those files where the build reads them.
-async function sourceFolderRestoredOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
-  const why = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder);
-  return why === undefined ? undefined : `its source folder could not be restored from its manifest: ${why}`;
-}
-
-// The mod is a source mod once its folder's manifest names its repository. It records the folder as it is, as its build
-// would, so a first build that makes the same folder changes nothing.
-async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, made: MadeRepository): Promise<string | undefined> {
-  const { repository } = made;
-  const notRestored = await sourceFolderRestoredOrWhy(adapter, mod, made);
-  if (notRestored !== undefined) return notRestored;
+// The mod is a source mod once its folder's manifest names its repository, recording the folder as its build would.
+// ADR-0022: the source folder's manifest writes what a package yields.
+async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
   try {
@@ -143,7 +134,10 @@ async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, made: MadeRe
     const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
     const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) });
     if ('why' in files) return files.why;
-    await writeManifestIn(folder, { packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: value.exclude, files });
+    const manifest: Manifest = { packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: value.exclude, files };
+    const notRestored = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder, { folder, manifest });
+    if (notRestored !== undefined) return `its source folder could not be restored from its manifest: ${notRestored}`;
+    await writeManifestIn(folder, manifest);
     return undefined;
   } catch (err) {
     return `its manifest could not name its repository: ${errorMessage(err)}`;

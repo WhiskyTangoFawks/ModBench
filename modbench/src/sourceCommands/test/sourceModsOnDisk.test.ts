@@ -439,8 +439,12 @@ describe('a mod installed from an installation file, then decompiled and committ
     const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
     expect(await commands.decompileAndCommit(['Mod'])).toMatchObject({ refused: [] });
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
-    const restoreSourceFolder = (): Promise<string | undefined> =>
-      sourceFolderRestoredFrom({ adapter, nexus: { download: () => Promise.reject(new Error('no download')) }, trash: (path) => rm(path) }, 'Mod', join(root, 'source', 'Mod'));
+    const restoreSourceFolder = async (): Promise<string | undefined> => {
+      const folder = join(root, 'mods', 'Mod');
+      const held = await manifestIn(folder);
+      const manifest = held !== undefined && !('refused' in held) ? held.manifest : { packages: [], exclude: [], files: new Map<string, string | null>() };
+      return sourceFolderRestoredFrom({ adapter, nexus: { download: () => Promise.reject(new Error('no download')) }, trash: (path) => rm(path) }, 'Mod', join(root, 'source', 'Mod'), { folder, manifest });
+    };
     return { adapter, commands, trashed, handed, manifestText, restoreSourceFolder, status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
   }
 
