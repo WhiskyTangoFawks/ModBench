@@ -27,8 +27,8 @@ As a user, I want:
 As a user, I want:
 
 1. To run Decompile and repair on a malformed plugin from its Problems entry, as well as from its menu in Plugins. Cites: GLOSSARY.md, Malformed plugin; plugins.md, Menus and keys
-2. A diagnosis that no repair answers to be named when the repair lands, with no repair offered (common.md, Reporting). Cites: Refuse, do not repair
-3. Two commits in the mod's plugin source, both or neither. The first holds every other record as it is, and each malformed record with as much of it as can be read, as its raw subrecords where nothing else reads, and a field in its file that holds its diagnosis. The second holds only the repaired records. The history then shows what the repair changed. Cites: ADR-0006; ADR-0007; commands.md, Principles, A failed gesture leaves nothing the user cannot make whole
+2. A plugin with a diagnosis no repair answers refused, naming each one. Cites: Refuse, do not repair
+3. The repair to land in the mod's plugin source as a commit naming each repair it made. Cites: ADR-0006; ADR-0007; principles.md, Mutagen's data
 4. When the mod is not a source mod, the repair makes it one, and decompiles the mod's other plugins with it, as decompile and commit does. Cites: commands.md, decompile and commit
 5. One confirmation, as decompile asks it (plugins.md, Decompile). Cites: Confirm what destroys
 

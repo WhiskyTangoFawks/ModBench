@@ -150,19 +150,19 @@ interface ManifestsRead {
 const NOTHING_NAMED: ManifestsRead = { goneFrom: () => [], unread: () => undefined };
 
 // A plugin the game loads with no line has a row of its own, so earns no line (plugins.md, The tree, story 2). A
-// plugin a manifest names is on no disk until restore (story 10).
+// plugin a manifest names keeps its line until restore and never gains one (story 10).
 function pluginLinesDelta(
   listed: readonly string[], provided: Extract<PluginsProvided, { kind: 'listed' }>, manifests: ManifestsRead,
 ): PluginLinesDelta {
   const notRestored = [...pluginsNotRestored(provided.enabledMods, (mod) => manifests.goneFrom(mod)).values()];
-  const plugins = new Map([...notRestored.map(({ name }) => [pluginKey(name), name] as const), ...provided.plugins]);
+  const kept = new Set([...notRestored.map(({ name }) => pluginKey(name)), ...provided.plugins.keys()]);
   const listedKeys = new Set(listed.map(pluginKey));
   const noLine = new Set(provided.loadedWithNoLine.map(pluginKey));
-  const added = [...plugins]
+  const added = [...provided.plugins]
     .filter(([key]) => !listedKeys.has(key) && !noLine.has(key))
     .map(([, real]) => real)
     .sort((a, b) => pluginKey(a).localeCompare(pluginKey(b)));
-  const dropped = listed.filter((name) => !plugins.has(pluginKey(name)));
+  const dropped = listed.filter((name) => !kept.has(pluginKey(name)));
   const unread = provided.enabledMods.flatMap((mod) => manifests.unread(mod) ?? []);
   if (dropped.length > 0 && unread.length > 0) throw new Error([...new Set(unread)].join('; '));
   return { added, dropped };
