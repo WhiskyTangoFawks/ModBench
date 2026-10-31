@@ -628,7 +628,7 @@ describe('move: the selection of mods or of separators, to a picked place', () =
     await invoke('modbench.mod.move', modA, [modA, groupB, modC]);
 
     expect(pickedLabels()).toEqual(['Ungrouped', 'Group B', 'Group A']);
-    expect(fake.calls).toEqual([modOrderChange({ kind: 'moveMods', mods: ['Mod A', 'Mod C'], place: { kind: 'separator', name: 'Group B' }, end: 'losing' })]);
+    expect(fake.calls).toEqual([modOrderChange({ kind: 'moveMods', mods: ['Mod A', 'Mod C'], place: { kind: 'separator', name: 'Group B' }, end: 'winning' })]);
   });
 
   it('right-clicked on a separator in a mixed selection, moves only the separators above the picked one', async () => {
@@ -642,7 +642,7 @@ describe('move: the selection of mods or of separators, to a picked place', () =
     expect(fake.calls).toEqual([modOrderChange({ kind: 'moveSeparators', separators: ['Group B'], place: { kind: 'separator', name: 'Group A' }, end: 'losing' })]);
   });
 
-  it('with winning at the top, lands mods and separators toward the winning end, as the view shows it', async () => {
+  it('with winning at the top, lands mods at the winning end and separators above the picked one, as the view shows it', async () => {
     const winningAtTop = { selection: () => [], direction: () => 'winningAtTop' as const };
     const { fake, commands } = commandsOver(mods);
 

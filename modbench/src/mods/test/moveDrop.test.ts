@@ -31,9 +31,9 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
     });
   });
 
-  it('mods dropped on a separator become its first mods', () => {
+  it('mods dropped on a separator land at its winning end', () => {
     expect(dropMove({ rows: [delta], focused: delta }, groupA, direction)).toEqual({
-      argument: [delta], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
+      argument: [delta], target: { place: { kind: 'separator', name: 'Group A' }, end: 'winning' },
     });
   });
 
@@ -54,22 +54,22 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
 
   it('a mixed drag moves only the rows of the focused row\'s kind', () => {
     expect(dropMove({ rows: [groupB, delta, alpha], focused: delta }, groupA, direction)).toEqual({
-      argument: [delta, alpha], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
+      argument: [delta, alpha], target: { place: { kind: 'separator', name: 'Group A' }, end: 'winning' },
     });
     expect(dropMove({ rows: [groupB, delta], focused: groupB }, groupA, direction)).toEqual({
       argument: [groupB], target: { place: { kind: 'separator', name: 'Group A' }, end: endTheViewShowsAtTheTop[direction] },
     });
   });
 
-  it.each<[string, DraggedRows, ModlistNode]>([
-    ['mods on Overwrite', { rows: [delta], focused: delta }, new OverwriteNode([], 'MO2')],
-    ['mods on a mod being dragged', { rows: [alpha, delta], focused: delta }, alpha],
-    ['separators on a separator being dragged', { rows: [groupA, groupB], focused: groupB }, groupA],
-    ['mods on a mod being dragged, as the view rebuilt it since the drag began', { rows: [alpha, delta], focused: delta }, modRow('Alpha')],
-    ['mods on a separator being dragged that is not of the focused row\'s kind', { rows: [groupB, delta], focused: delta }, groupB],
-    ['mods inside a separator being dragged', { rows: [groupB, delta], focused: delta }, gamma],
-    ['a separator on a mod', { rows: [groupA], focused: groupA }, delta],
-  ])('a drop of %s is no move', (_case, dragged, target) => {
-    expect(dropMove(dragged, target, direction)).toBeUndefined();
+  it.each<[string, DraggedRows, ModlistNode, string]>([
+    ['mods on Overwrite', { rows: [delta], focused: delta }, new OverwriteNode([], 'MO2'), 'Nothing goes onto Overwrite.'],
+    ['mods on a mod being dragged', { rows: [alpha, delta], focused: delta }, alpha, 'Alpha is being dragged, so nothing goes onto it.'],
+    ['separators on a separator being dragged', { rows: [groupA, groupB], focused: groupB }, groupA, 'Group A is being dragged, so nothing goes onto it.'],
+    ['mods on a mod being dragged, as the view rebuilt it since the drag began', { rows: [alpha, delta], focused: delta }, modRow('Alpha'), 'Alpha is being dragged, so nothing goes onto it.'],
+    ['mods on a separator being dragged that is not of the focused row\'s kind', { rows: [groupB, delta], focused: delta }, groupB, 'Group B is being dragged, so nothing goes onto it.'],
+    ['mods inside a separator being dragged', { rows: [groupB, delta], focused: delta }, gamma, 'Gamma is inside Group B, which is being dragged.'],
+    ['a separator on a mod', { rows: [groupA], focused: groupA }, delta, 'A separator goes above a separator, not on a mod.'],
+  ])('a drop of %s is refused, saying why', (_case, dragged, target, refusal) => {
+    expect(dropMove(dragged, target, direction)).toEqual({ refusal });
   });
 });
