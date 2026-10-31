@@ -35,7 +35,7 @@ export async function sourceFolderValueOver(
   return folderValueOver({ ...reads, filesIn }, folder);
 }
 
-type ModReads =FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule'>;
+type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule'>;
 
 // None when the game folder is not found.
 async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<FileRead<HashedPath[] | undefined>> {

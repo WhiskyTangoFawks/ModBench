@@ -432,6 +432,17 @@ describe('restore from manifest', () => {
         expect([landed?.written, landed?.namedByNoLine]).toEqual([['ModA/a.nif', 'a.esp'], ['ModA/junk.txt', 'mine.txt']]);
       });
 
+      it('is skipped, naming why, and not built, when git cannot list its source folder', async () => {
+        const { restore, client, deps } = await sourceMod({}, [], sourceHolds);
+        Object.assign(deps.adapter, { sourceFolderValue: () => Promise.reject(new Error('fatal: not a git repository')) });
+
+        const outcome = await restore(['ModA']);
+
+        expect([outcome.refused, client.calls.map(({ method }) => method)]).toEqual([
+          [{ item: 'ModA', reason: 'was skipped: a file could not be read: fatal: not a git repository.' }], ['cloneSubmodules'],
+        ]);
+      });
+
       it('is skipped, and not built, when a file of its source folder is held by no package', async () => {
         const { restore, client } = await sourceMod({}, [], { ...sourceHolds, manifest: fromTheZip({ 'a.nif': HC.replace('C', 'Z') }) });
 
