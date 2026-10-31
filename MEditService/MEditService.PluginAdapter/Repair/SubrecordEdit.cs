@@ -80,10 +80,6 @@ internal sealed record Drop(IReadOnlyList<int> Indexes) : SubrecordEdit
 /// the original, so the order edits apply in changes nothing.</summary>
 internal sealed class RecordRewrite(IReadOnlyList<Subrecord> original)
 {
-    /// <summary>A subrecord of the rewritten record, the index in the original it came from, null for one inserted,
-    /// and whether an edit changed it or moved it.</summary>
-    internal readonly record struct Placed(Subrecord Subrecord, int? Original, bool Changed);
-
     private readonly Subrecord[] _content = [.. original];
     private readonly int[] _placedBefore = [.. Enumerable.Range(0, original.Count)];
     private readonly bool[] _dropped = new bool[original.Count];
@@ -101,20 +97,17 @@ internal sealed class RecordRewrite(IReadOnlyList<Subrecord> original)
 
     internal void Insert(int before, Subrecord subrecord) => _inserted[before].Add(subrecord);
 
-    internal List<Subrecord> Result() => [.. Placing().Select(placed => placed.Subrecord)];
-
-    internal List<Placed> Placing()
+    internal List<Subrecord> Result()
     {
-        var result = new List<Placed>();
+        var result = new List<Subrecord>();
         for (var at = 0; at <= _content.Length; at++)
         {
             for (var moved = 0; moved < _content.Length; moved++)
             {
-                if (moved != at && _placedBefore[moved] == at && !_dropped[moved]) result.Add(new Placed(_content[moved], moved, Changed: true));
+                if (moved != at && _placedBefore[moved] == at && !_dropped[moved]) result.Add(_content[moved]);
             }
-            result.AddRange(_inserted[at].Select(inserted => new Placed(inserted, Original: null, Changed: true)));
-            if (at < _content.Length && _placedBefore[at] == at && !_dropped[at])
-                result.Add(new Placed(_content[at], at, Changed: !_content[at].SameAs(original[at])));
+            result.AddRange(_inserted[at]);
+            if (at < _content.Length && _placedBefore[at] == at && !_dropped[at]) result.Add(_content[at]);
         }
         return result;
     }

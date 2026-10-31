@@ -552,7 +552,7 @@ public sealed class WriteSessionTests : IDisposable
         verb switch
         {
             DiskVerb.ReplaceSourceFrom => () => repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            DiskVerb.CommitRepair => () => repository.CommitRepair(Plugin, new TreeCommit([], "Flagged"), new TreeCommit([], "Repaired"), "ABCDEF0123"),
+            DiskVerb.CommitRepair => () => repository.CommitRepair(Plugin, new TreeCommit([], "Baseline"), new TreeCommit([], "Repaired"), "ABCDEF0123"),
             DiskVerb.MoveLastWrittenTo => () => repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
             DiskVerb.WriteBinary => () => repository.WriteBinary(Plugin, "ABCDEF0123", onWrite),
             _ => throw new ArgumentOutOfRangeException(nameof(verb), verb, null),

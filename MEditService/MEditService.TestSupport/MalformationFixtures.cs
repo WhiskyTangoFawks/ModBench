@@ -77,6 +77,30 @@ public static class MalformationFixtures
         }
     }
 
+    /// <summary>A CELL holding two REFRs whose XWPG each counts one of their two XWPN entries.</summary>
+    public static GeneratedPlugin TwoMiscountedReferencesInOneCell
+    {
+        get
+        {
+            var mod = NewMod();
+            var cell = new Cell(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "HarborCell" };
+            PlacedObject[] references = [.. new[] { "HarborWorkshopRefOne", "HarborWorkshopRefTwo" }.Select(editorId =>
+                new PlacedObject(mod.GetNextFormKey(), Fallout4Release.Fallout4)
+                {
+                    EditorID = editorId,
+                    PowerGridConnections = [new PowerGridConnection(), new PowerGridConnection()],
+                })];
+            foreach (var reference in references) cell.Persistent.Add(reference);
+            mod.AddInteriorCells(cell);
+            using var stream = new MemoryStream();
+            mod.WriteToBinary(stream);
+            var bytes = stream.ToArray();
+            foreach (var reference in references)
+                bytes = RawPlugin.EditRecord(bytes, reference.FormKey.ID, subrecords => subrecords.Select(s => s.Signature == "XWPG" ? (s.Signature, RawPlugin.U32(1)) : s));
+            return new GeneratedPlugin(FileName, bytes);
+        }
+    }
+
     private static IEnumerable<(string Signature, byte[] Payload)> ShortenRdat(List<(string Signature, byte[] Payload)> subrecords) =>
         subrecords.Select(s => s.Signature == "RDAT" ? (s.Signature, s.Payload[..6]) : s);
 

@@ -73,6 +73,10 @@ public static class ContainerDocumentEdits
     public static string WithChildReplaced(byte[] ownerBytes, EmbeddedChildSpan span, string childText) =>
         EmbeddedChildSplice.Replace(ownerBytes, span, childText);
 
+    /// <summary>The owner's text with <paramref name="text"/>, which is not a record, in the child's place.</summary>
+    public static string WithChildNotedAs(byte[] ownerBytes, EmbeddedChildSpan span, string text) =>
+        EmbeddedChildSplice.Spliced(ownerBytes, span, text);
+
     /// <summary>The owner's text without the child, and without its slot when it was all the slot held.</summary>
     public static string WithChildCut(byte[] ownerBytes, EmbeddedChildSpan span) =>
         EmbeddedChildSplice.Cut(ownerBytes, span);

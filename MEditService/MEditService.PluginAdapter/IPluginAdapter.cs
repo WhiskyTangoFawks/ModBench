@@ -57,11 +57,10 @@ public interface IPluginAdapter
     /// from, and differs from it only by the repairs of its malformations.</summary>
     Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease);
 
-    /// <summary><paramref name="repaired"/> with each record a repair changes flagged: its
-    /// diagnoses, and the plugin's own subrecords for each field the repair feeds.</summary>
-    Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, RepairedPlugin written, PluginSource repaired, LoadOrderSnapshot loadOrder,
-        CancellationToken cancel = default);
+    /// <summary><paramref name="repaired"/>, the source of the plugin <paramref name="written"/> wrote, with each record
+    /// its repair rewrote a placeholder naming that record's diagnoses.</summary>
+    Answer<IReadOnlyList<TreeFile>, PluginFailure> BaselineOf(
+        RegisteredPlugin plugin, RepairedPlugin written, IReadOnlyList<TreeFile> repaired, LoadOrderSnapshot loadOrder);
 
     /// <summary>The loose strings files and archives a read of the localized plugin under <paramref name="loadOrder"/>
     /// takes its strings from.</summary>
