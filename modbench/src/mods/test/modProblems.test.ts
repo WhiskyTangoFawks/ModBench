@@ -84,6 +84,12 @@ describe('the Problems panel follows Mod status (modlist-repository.md, Status, 
       await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Decompile and Commit Mod/); });
     });
 
+    it('points at decompile and commit for a disabled mod\'s plugin, which the plugin list holds unlisted and not winning', async () => {
+      const { collection } = over([packaged('ModA', several)], [{ name: 'A.esp', path: `${FOLDER}/A.esp`, origin: 'ModA', line: null, enabled: false, winning: false }]);
+
+      await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Decompile and Commit Mod/); });
+    });
+
     it('shows nothing for a mod of one package', async () => {
       const { collection } = over([packaged('ModA', { manifestFile, packages: ['the game folder'] })]);
 
