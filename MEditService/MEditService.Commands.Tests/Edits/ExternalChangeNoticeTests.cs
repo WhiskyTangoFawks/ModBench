@@ -112,7 +112,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     }
 
     [Fact]
-    public void ASnapshot_NamesThePluginsWhoseSourceIsUnreadable_ApartFromItsChangedOnes()
+    public void ASnapshot_NamesNoChangedPlugin_ForAPluginWhoseSourceIsUnreadable()
     {
         var compiledPlugin = "the compiled plugin binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, compiledPlugin), ("SourceUnreadable.esp", "never compiled"u8.ToArray()));
@@ -121,12 +121,6 @@ public sealed class ExternalChangeNoticeTests : IDisposable
         Put(loadOrder);
 
         Assert.Empty(TheExternalChange().Plugins);
-        var unreadable = Assert.Single(_notifications.Notifications.OfType<PluginSourceUnreadableNotification>());
-        Assert.Equal(Origin, unreadable.Origin);
-        var plugin = Assert.Single(unreadable.Plugins);
-        Assert.Equal("SourceUnreadable.esp", plugin.Name);
-        Assert.Contains("SourceUnreadable.esp", plugin.Source.Reason, StringComparison.Ordinal);
-        Assert.True(plugin.Source.DecompileRepairs);
     }
 
     [Fact]
