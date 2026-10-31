@@ -12,15 +12,18 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
   const paths = await reads.filesIn(folder);
   const files = new Map<string, FileRead<{ readonly size: number; readonly hash: string }>>();
   for (const path of paths) files.set(path, await reads.originFileHash(join(folder, path)));
-  const cased = paths.find((path) => otherCase(path) !== path);
+  const holdsCasePair = new Set(paths.map((path) => path.toLowerCase())).size < paths.length;
+  const cased = holdsCasePair ? undefined : paths.find((path) => otherCase(path) !== path);
   return { files, ignoresCase: cased !== undefined && (await reads.fileStamp(join(folder, otherCase(cased)))).kind === 'read' };
 }
 
 type ModReads = FolderReads & Pick<InstanceAdapter, 'modMetadata' | 'packageEntries' | 'downloadedFile' | 'gameFolder'>;
 
-/** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. */
-export async function modValueOver(reads: ModReads, mod: string, folder: string, asked: PackagesAsked): Promise<StatusValues> {
+/** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. Nothing
+ *  of the folder is read when no manifest is `asked` for, or the metadata cannot be read. */
+export async function modValueOver(reads: ModReads, mod: string, folder: string, asked: PackagesAsked | undefined): Promise<StatusValues> {
   const metadata = await reads.modMetadata(mod);
+  if (asked === undefined || metadata.kind === 'unreadable') return { metadata, kind: 'metadataOnly' };
   try {
     const folderValue = await folderValueOver(reads, folder);
     const packageEntries = new Map<string, ReadonlyMap<string, string>>();

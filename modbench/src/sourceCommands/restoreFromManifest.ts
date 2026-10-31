@@ -165,7 +165,7 @@ async function passOver(deps: RestoreDeps, folders: Folders, sourceMods: SourceM
 
 async function compared(adapter: Adapter, manifest: Manifest, folder: string, packages: PackagesRead): Promise<FolderAgainst> {
   const entries = new Map<string, ReadonlyMap<string, string>>();
-  for (const key of packagesAsked({ read: { manifest }, file: '' }).entries) {
+  for (const key of packagesAsked(manifest).entries) {
     const held = packages.entries.get(key) ?? await adapter.packageEntries(key);
     if (held !== undefined) entries.set(key, held);
   }

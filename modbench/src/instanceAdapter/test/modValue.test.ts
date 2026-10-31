@@ -23,6 +23,10 @@ describe('a folder as a value', () => {
     expect((await folderValueOver(reads(['a.esp'], finds), '/mods/Mod')).ignoresCase).toBe(finds);
   });
 
+  it('says its file system does not ignore case when it lists two names that differ only in case', async () => {
+    expect((await folderValueOver(reads(['a.txt', 'A.TXT'], true), '/mods/Mod')).ignoresCase).toBe(false);
+  });
+
   it('says its file system does not ignore case when no file name has a case to change', async () => {
     expect((await folderValueOver(reads(['123.456'], true), '/mods/Mod')).ignoresCase).toBe(false);
   });
@@ -40,7 +44,22 @@ describe('a mod as a value', () => {
   it('holds the entries of the packages asked that the index holds', async () => {
     const value = await modValueOver(modReads, 'Mod', '/mods/Mod', { entries: ['H1', 'H2'], installationFiles: ['Mod.zip'] });
 
-    expect(value.kind === 'read' && [[...value.packageEntries.keys()], [...value.downloadedFiles.keys()]]).toEqual([['H1'], ['Mod.zip']]);
+    if (value.kind !== 'read') throw new Error('expected the values to read');
+    expect([[...value.packageEntries.keys()], [...value.downloadedFiles.keys()]]).toEqual([['H1'], ['Mod.zip']]);
+  });
+
+  it('reads and hashes no file of a folder when no manifest is asked for', async () => {
+    const hashed: string[] = [];
+    const value = await modValueOver({ ...modReads, originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } }, 'Mod', '/mods/Mod', undefined);
+
+    expect([value.kind, hashed]).toEqual(['metadataOnly', []]);
+  });
+
+  it('reads and hashes no file of a folder whose metadata cannot be read', async () => {
+    const hashed: string[] = [];
+    const reading = { ...modReads, modMetadata: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }), originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } };
+
+    expect([(await modValueOver(reading, 'Mod', '/mods/Mod', { entries: [], installationFiles: [] })).kind, hashed]).toEqual(['metadataOnly', []]);
   });
 
   it('is unreadable, saying why, when a read rejects, and keeps its metadata', async () => {

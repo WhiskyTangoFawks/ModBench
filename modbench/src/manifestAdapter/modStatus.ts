@@ -120,7 +120,9 @@ function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kin
   for (const pkg of manifest.packages) {
     if (pkg.kind === 'gameFolder' && values.gameFolder.kind === 'notFound') lacking.push('the game folder was not found');
     if (pkg.kind !== 'installationFile') continue;
-    const lack = installationFileLack(pkg, values.downloadedFiles.get(pkg.name) ?? { kind: 'read', answer: undefined });
+    const downloaded = values.downloadedFiles.get(pkg.name);
+    if (downloaded === undefined) throw new Error(`the downloaded file '${pkg.name}' was not read`);
+    const lack = installationFileLack(pkg, downloaded);
     if (lack !== undefined) lacking.push(lack);
   }
   return lacking;
@@ -151,6 +153,7 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   if (values.metadata.kind === 'unreadable') return nothing(mod.name, { unreadable: `its metadata could not be read: ${values.metadata.reason}` });
   if (read === undefined) return nothing(mod.name, { noManifest: true });
   if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
+  if (values.kind === 'metadataOnly') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;
   const [first] = manifest.packages;

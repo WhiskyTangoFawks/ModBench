@@ -89,11 +89,13 @@ export async function manifestAt(folder: string): Promise<ManifestAt> {
   }
 }
 
-/** What the Instance adapter is asked to read for a status of `at`. */
-export function packagesAsked({ read }: ManifestAt): PackagesAsked {
-  const packages = read !== undefined && 'manifest' in read ? read.manifest.packages : [];
+/** What the Instance adapter is asked to read for a status of `manifest`. */
+export function packagesAsked(manifest: Manifest): PackagesAsked {
   return {
-    entries: packages.map((pkg) => (pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash)),
-    installationFiles: packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
+    entries: manifest.packages.map((pkg) => (pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash)),
+    installationFiles: manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
   };
 }
+
+/** What the Instance adapter is asked to read for a status of the manifest `at` holds; none when it holds none to compare. */
+export const packagesAskedAt = ({ read }: ManifestAt): PackagesAsked | undefined => (read !== undefined && 'manifest' in read ? packagesAsked(read.manifest) : undefined);

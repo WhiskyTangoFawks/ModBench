@@ -1,7 +1,7 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { manifestAt, packagesAsked, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -94,7 +94,7 @@ export class ModStatuses {
 
   private async statusOf(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
-    return statusFrom(mod, manifest, await this.reads.modValue(mod.name, mod.folder, packagesAsked(manifest)));
+    return statusFrom(mod, manifest, await this.reads.modValue(mod.name, mod.folder, packagesAskedAt(manifest)));
   }
 
   private hold(derived: ReadonlyMap<string, ModStatus>): void {

@@ -21,9 +21,9 @@ activation -> modstatus: value {class: loadorder}
 modstatus -> manifestadapter: "get: each mod's manifest" {class: track}
 instance -> manifestadapter: manifests {class: track}
 manifestadapter -> modstatus: "each mod's manifest" {class: track}
-modstatus -> instanceadapter: "get: each mod's files, hashed, its metadata, and each package's entries" {class: track}
+modstatus -> instanceadapter: "get: each mod's files, hashed, its metadata, each package's entries, its downloaded files and the game folder" {class: track}
 instance -> instanceadapter: "each mod's files · metadata · the hash index" {class: track}
-instanceadapter -> modstatus: "each mod's files, hashed, its metadata, and each package's entries" {class: track}
+instanceadapter -> modstatus: "each mod's files, hashed, its metadata, each package's entries, its downloaded files and the game folder" {class: track}
 modstatus -> manifestadapter: "the status rule: each manifest, folder and package entries; metadata and packages held" {class: track}
 manifestadapter -> modstatus: "each mod's status" {class: track}
 modstatus -> mods: "the statuses" {class: track}

@@ -1,4 +1,5 @@
-type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
+/** A read that answers, or says why it could not. */
+export type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** The version and installation file a mod's metadata holds. */
 export interface HeldMetadata {
@@ -21,7 +22,7 @@ export interface PackagesAsked {
   readonly installationFiles: readonly string[];
 }
 
-/** What the status rule reads of a mod besides its manifest, as the Instance adapter hands it; `unreadable` is why a read rejected. */
+/** What the status rule reads of a mod besides its manifest, as the Instance adapter hands it; `unreadable` is why a read rejected, and `metadataOnly` is that the folder was not asked for. */
 export type StatusValues = { readonly metadata: Read<HeldMetadata> } & (
   | {
     readonly kind: 'read';
@@ -31,4 +32,5 @@ export type StatusValues = { readonly metadata: Read<HeldMetadata> } & (
     readonly gameFolder: { readonly kind: 'found' | 'notFound' };
   }
   | { readonly kind: 'unreadable'; readonly reason: string }
+  | { readonly kind: 'metadataOnly' }
 );

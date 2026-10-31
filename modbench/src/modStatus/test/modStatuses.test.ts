@@ -11,11 +11,13 @@ import { ModStatuses, type StatusSource } from '../modStatuses';
 let root: string;
 let logged: string[];
 let asked: string[];
+let hashed: string[];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-statuses-'));
   logged = [];
   asked = [];
+  hashed = [];
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -24,7 +26,10 @@ afterEach(async () => {
 const reads: Parameters<typeof modValueOver>[0] = {
   filesIn: async (folder) => (await readdir(folder).catch(() => [])).filter((name) => !name.endsWith('.manifest.json')),
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'unhashed' }),
+  originFileHash: (path) => {
+    hashed.push(path);
+    return Promise.resolve({ kind: 'unreadable', reason: 'unhashed' });
+  },
   packageEntries: () => Promise.resolve(undefined),
   downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
   gameFolder: () => Promise.resolve({ kind: 'found', root: '/game', dataFolder: '/game/Data' }),
@@ -67,6 +72,16 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
 
     expect([...derived.keys()]).toEqual(['ModA', 'Tools_separator']);
     expect([derived.get('ModA')?.namedByNoLine, derived.get('Tools_separator')?.noManifest]).toEqual([['mine.txt'], true]);
+  });
+
+  it('hashes no file of a mod whose folder holds no manifest', async () => {
+    const mod = await folderOf('ModA', { 'mine.txt': '' });
+    const statuses = statusesLogging();
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    await statuses.current();
+
+    expect(hashed).toEqual([]);
   });
 
   it('derives no status while the instance holds no repository', async () => {

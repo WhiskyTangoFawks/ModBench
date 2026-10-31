@@ -7,7 +7,7 @@ export type { SelectionResult };
 import { refuse } from '../coreLib/refuse';
 import { present } from '../ports/present';
 import type { MEditClient, PluginAddress } from '../client';
-import { manifestAt, packagesAsked, statusFrom, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { manifestAt, packagesAskedAt, statusFrom, type ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
@@ -175,7 +175,7 @@ async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> 
     const folder = await adapter.modFolderPath(name);
     if (folder === undefined) return [];
     const manifest = await manifestAt(folder);
-    return [statusFrom({ name, folder }, manifest, await adapter.modValue(name, folder, packagesAsked(manifest)))];
+    return [statusFrom({ name, folder }, manifest, await adapter.modValue(name, folder, packagesAskedAt(manifest)))];
   }));
   const statusOf = new Map(statuses.flat().map((status) => [status.mod, status]));
   return {

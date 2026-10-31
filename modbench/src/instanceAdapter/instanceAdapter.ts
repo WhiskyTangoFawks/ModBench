@@ -10,7 +10,7 @@ import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
-import type { FolderValue, PackagesAsked, StatusValues } from '../repositoriesLib/statusValues';
+import type { FolderValue, PackagesAsked, Read, StatusValues } from '../repositoriesLib/statusValues';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
@@ -418,7 +418,7 @@ export interface FileStamp {
 }
 
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
-export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
+export type FileRead<T> = Read<T>;
 
 export interface HashedFile {
   readonly size: number;
@@ -732,7 +732,7 @@ export interface InstanceAdapter {
   /** `folder`'s files, each with its hash kept in the hash index. */
   folderValue(folder: string): Promise<FolderValue>;
   /** What the status of `mod`, whose files `folder` holds, reads of the instance, for the packages `asked`. */
-  modValue(mod: string, folder: string, asked: PackagesAsked): Promise<StatusValues>;
+  modValue(mod: string, folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
   /** Each entry's hash, by its path, of the downloaded file whose hash is `hash`; undefined when the index holds none. */
   packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
   /** Keeps `entries`, each package path's hash, under the hash of a game folder package a manifest pins, so

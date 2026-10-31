@@ -5,7 +5,7 @@ import { dirname, join, relative } from 'node:path';
 import type { ManifestAt } from '../manifestFiles';
 import type { StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
-import { manifestAt, metadataOf, metadataOverwritten, packagesAsked, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { manifestAt, metadataOf, metadataOverwritten, packagesAskedAt, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 let root: string;
 let folder: string;
@@ -37,7 +37,7 @@ async function filesBelow(at: string): Promise<string[]> {
 type ReadValues = Extract<StatusValues, { kind: 'read' }>;
 
 async function valuesOver(manifest: ManifestAt, ignoresCase: boolean): Promise<ReadValues> {
-  const asked = packagesAsked(manifest);
+  const asked = packagesAskedAt(manifest) ?? { entries: [], installationFiles: [] };
   const files = new Map(await Promise.all((await filesBelow(folder)).filter((path) => path !== 'meta.ini').map(
     async (path) => [path, { kind: 'read' as const, answer: { hash: await readFile(join(folder, path), 'utf8') } }] as const,
   )));
@@ -221,10 +221,18 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(nothing({ unreadable: 'its metadata could not be read: access denied' }));
   });
 
-  it('is unreadable, saying why, when its folder cannot be listed', async () => {
+  it('is unreadable, saying why, when the values say a read of its folder rejected', async () => {
     await manifested(manifest([]));
 
     expect(await statusWith(({ metadata: held }) => ({ metadata: held, kind: 'unreadable', reason: 'EACCES: permission denied' }))).toEqual(nothing({ unreadable: 'a file could not be read: EACCES: permission denied' }));
+  });
+
+  it('is unreadable, saying why, when its folder cannot be read for its manifest', async () => {
+    await write('not-a-folder', 'x', root);
+
+    const manifest = await manifestAt(join(root, 'not-a-folder'));
+
+    expect(manifest.read).toEqual({ refused: expect.stringMatching(/^a file could not be read: ENOTDIR/) });
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {
