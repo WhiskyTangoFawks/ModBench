@@ -1,5 +1,6 @@
 import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { Refusal } from '../drivingLib/refusal';
+import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { originShown, type AgentValue } from './notRestored';
 
 const noLineMissingReason = ({ kind }: AgentValue['gameFolder'], inData: AgentValue['dataFolderPlugins']): string =>
@@ -13,10 +14,12 @@ export const LIST_PLUGINS = {
   name: 'list_plugins',
   description: 'The plugin order, losing first: the plugins the game loads with no line, then each line by its number, then the plugins outside the order (an overridden copy, a file no line names). '
     + 'Each plugin has its origin, its line (null when it has none), whether it is enabled and whether it wins its file name. '
+    + 'Each also has what its Plugins view row shows: statuses, each with its words and its tooltip line, '
+    + 'and readOnly, compiled (whether it is a compiled plugin) and masters, each null until mEdit has read the plugin. '
     + 'The origin of a line whose file is not on disk yet is the mod whose manifest names it. '
     + 'When it cannot name the plugins the game loads with no line, it refuses in part: noLineMissing is the reason, and the rest is answered. '
     + 'When it cannot read the manifests, it refuses in part too: notRestoredUndecided names the lines whose origin it could not decide, and why.',
-  of: (value: AgentValue) => {
+  of: (value: AgentValue, view: PluginsShown) => {
     const { plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins } = value;
     const { loadedWithNoLine, fromLines, others } = pluginOrderOf(
       { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] },
@@ -24,8 +27,10 @@ export const LIST_PLUGINS = {
     );
     const answer = {
       plugins: [
-        ...loadedWithNoLine.map(({ name, origin }) => ({ name, origin, line: null, enabled: true, winning: true })),
-        ...[...fromLines, ...others].map((plugin) => ({ name: plugin.name, origin: originShown(value, plugin), line: plugin.line, enabled: plugin.enabled, winning: plugin.winning })),
+        ...loadedWithNoLine.map(({ name, origin }) => ({ name, origin, line: null, enabled: true, winning: true, ...view.shown({ name, origin }) })),
+        ...[...fromLines, ...others].map((plugin) => ({
+          name: plugin.name, origin: originShown(value, plugin), line: plugin.line, enabled: plugin.enabled, winning: plugin.winning, ...view.shown(plugin),
+        })),
       ],
     };
     const noLineMissing = pluginsLoadedWithNoLine === undefined ? noLineMissingReason(gameFolder, dataFolderPlugins) : undefined;

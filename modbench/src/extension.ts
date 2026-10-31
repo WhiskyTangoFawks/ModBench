@@ -24,6 +24,7 @@ import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/in
 import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
 import type { DeploymentRead } from './agent/instanceReads';
+import type { PluginsShown } from './drivingLib/pluginsShown';
 import { deploymentFolderOf } from './instanceCommands/deploy';
 import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
@@ -106,6 +107,7 @@ interface InstanceSide {
   instance?: Instance;
   statuses?: ModStatuses;
   deployment?: DeploymentRead;
+  pluginsShown?: PluginsShown;
   toolbox: ToolboxView;
   /** The lines the Downloads, Toolbox and Mods views show on their message lines. */
   viewMessages: () => string[];
@@ -243,7 +245,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, reporter: reporterFor('deploy'),
   }));
   return {
-    instance, toolbox, statuses: modStatuses,
+    instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown,
     viewMessages: () => [...downloads.messages(), ...toolbox.messages(), ...mods.messages()],
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
@@ -339,7 +341,7 @@ function start(context: vscode.ExtensionContext): void {
   const sourceLanguage = createSourceLanguage({
     client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
   });
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, standing: { messages: () => [...plugins.mEditStanding.messages(), ...views.viewMessages(), ...sourceLanguage.messages()] }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { messages: () => [...plugins.mEditStanding.messages(), ...views.viewMessages(), ...sourceLanguage.messages()] }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,
