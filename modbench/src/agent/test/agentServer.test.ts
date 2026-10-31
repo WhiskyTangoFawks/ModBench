@@ -46,8 +46,9 @@ const VALUE = instanceValueFixture({
     { name: 'A.esp', path: '/m/A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
   ],
   downloadedFiles: { kind: 'listed', rows: [{
-    name: 'rocks.7z', displayName: 'Rocks', status: 'Installed', size: 5, mtimeMs: 0, hasMeta: true, excluded: false,
-    upgrades: [], path: '/d/rocks.7z', metadataPath: '/d/rocks.7z.meta',
+    name: 'rocks.7z', displayName: 'Rocks', status: 'Installed', size: 5, mtimeMs: 7, hasMeta: true, excluded: false,
+    modID: '12', fileID: '34', version: '1.2', modName: 'Big Rocks', gameName: 'fallout4', author: 'Ann',
+    upgrades: [{ modName: 'Big Rocks', version: '1.0', tier: 'fileId' }, { modName: 'Other Rocks' }], path: '/d/rocks.7z', metadataPath: '/d/rocks.7z.meta',
   }] },
 });
 
@@ -289,10 +290,14 @@ describe('the agent server, given an instance value', () => {
     });
   });
 
-  it('reads the downloaded files by file name', async () => {
+  it('reads each downloaded file as its row shows it, with its upgrade targets', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
-    expect(await read(client, 'list_downloads')).toEqual([{ name: 'rocks.7z', status: 'Installed', excluded: false }]);
+    expect(await read(client, 'list_downloads')).toEqual([{
+      name: 'rocks.7z', displayName: 'Rocks', status: 'Installed', excluded: false, hasMeta: true, size: 5, mtimeMs: 7,
+      modID: '12', fileID: '34', version: '1.2', modName: 'Big Rocks', gameName: 'fallout4', author: 'Ann',
+      upgrades: [{ modName: 'Big Rocks', version: '1.0', tier: 'fileId' }, { modName: 'Other Rocks' }],
+    }]);
   });
 
   it('reads the problems on plugin source files only, as the Problems panel holds them', async () => {
