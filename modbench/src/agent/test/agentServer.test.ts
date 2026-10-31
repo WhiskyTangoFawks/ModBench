@@ -68,18 +68,19 @@ const NO_TOOLBOX = {
   game: { name: 'Fallout 4', folder: GAME_FOLDER_NOT_FOUND, versions: { kind: 'unresolved' } },
   gameFolderLinks: 0, holdsRepository: false, deployment: { folder: null },
 };
+const NO_STANDING = { messages: () => [] };
 const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
 const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, mEditStanding: AgentServerOptions['mEditStanding'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment,
+    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment, mEditStanding,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -87,8 +88,8 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
-  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment);
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, mEditStanding: AgentServerOptions['mEditStanding'] = NO_STANDING) {
+  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment, mEditStanding);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
@@ -392,6 +393,17 @@ describe('the agent server, given an instance value', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('answers beside the words the status bar and the Plugins view say of mEdit, as they stand at each call', async () => {
+    let said = ['mEdit is Running'];
+    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => said });
+    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+
+    expect((await blocks()).slice(1)).toEqual(['mEdit is Running']);
+
+    said = ['mEdit is Ready (2 plugins)', 'Indexing failed: the record index threw'];
+    expect((await blocks()).slice(1)).toEqual(said);
+  });
+
   it.each([
     ['before the instance has been read', undefined, 'The instance has not been read yet.'],
     ['whose first read failed with the failure, as the view\'s error row does', 'Modbench does not support Oblivion', 'Failed to load: Modbench does not support Oblivion'],
@@ -401,18 +413,6 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(instance);
 
     expect(await call(client, 'list_profiles')).toEqual({ isError: true, text });
-  });
-
-  it('answers beside the last good read with the message every view shows, and with none once a read lands', async () => {
-    const instance = new FakeInstance(VALUE);
-    const { client } = await clientOf(instance);
-    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
-
-    instance.readFailure = 'plugins.txt is half written';
-    expect((await blocks()).slice(1)).toEqual(['Showing the last good read: plugins.txt is half written']);
-
-    instance.publish(VALUE);
-    expect(await blocks()).toHaveLength(1);
   });
 });
 

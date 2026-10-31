@@ -157,7 +157,7 @@ function pluginsView(
     channel: silentChannel,
     log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
-    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
+    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), standing: () => "", dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
   });
@@ -984,6 +984,15 @@ describe('the Plugins view\'s message line and name filter', () => {
       await applyFilter(client, recordFilter);
       return { ...result, sync };
     }
+
+    it('gives the agent the line it shows, read by the same function', async () => {
+      const { sync, plugins } = await refusedView('armor.sql');
+
+      await sync.refuse(SYNC_REASON);
+      await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
+
+      expect(plugins.messages()).toEqual([`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`]);
+    });
 
     it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
       const { sync } = await refusedView('armor.sql');

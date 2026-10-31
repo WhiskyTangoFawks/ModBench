@@ -262,6 +262,11 @@ export class PluginFacts {
     return this.indexFailure === undefined ? undefined : `Indexing failed: ${this.indexFailure}`;
   }
 
+  /** Another window holds the record index (ADR-0010), which every row expands into. */
+  heldElsewhereMessage(): string | undefined {
+    return this.expansionOverride?.scope === 'everyRow' ? this.expansionOverride.message : undefined;
+  }
+
   /** A record filter matching nothing (common.md, States 5). */
   noRecordMatchMessage(recordFilterSource: string): string | undefined {
     return this.matches !== undefined && this.noMatchAnywhere ? `No records match ${recordFilterSource}.` : undefined;
