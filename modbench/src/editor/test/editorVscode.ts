@@ -15,7 +15,7 @@ export const fileSystems = new Map<string, unknown>();
 export const openedDocuments: unknown[] = [];
 export const documentChanges = new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>();
 export const disk = new Map<string, string | Uint8Array>();
-export const referencesView = { enabled: true, inputs: [] as ReferencesViewInput[] };
+export const referencesView = { enabled: true, inputs: [] as ReferencesViewInput[], changed: [] as (() => void)[] };
 export const pickers = { shown: 0 };
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
 export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
@@ -114,6 +114,7 @@ export const editorVscode = {
     },
   },
   extensions: {
+    onDidChange: (listener: () => void) => { referencesView.changed.push(listener); return { dispose: () => undefined }; },
     getExtension: (id: string) => (id === 'vscode.references-view' && referencesView.enabled
       ? { activate: () => Promise.resolve({ setInput: (input: ReferencesViewInput) => { referencesView.inputs.push(input); } }) }
       : undefined),
@@ -161,6 +162,7 @@ export function forgetVscode(): void {
   disk.clear();
   referencesView.enabled = true;
   referencesView.inputs.length = 0;
+  referencesView.changed.length = 0;
   pickers.shown = 0;
   tabGroups.length = 0;
   executeCommand.mockReset();

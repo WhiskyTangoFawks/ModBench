@@ -4,6 +4,7 @@ import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells
 import { registerNoConflictLens } from './noConflictLens';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
 import { referencedByCopyValueText } from './referencedByList';
+import { publishReferencesView } from './referencesView';
 import { registerReferencedBy, type LocateRecord, type ReferencedByDeps } from './referencedBy';
 import { selectionInFocusedView } from '../drivingLib/inFocusedView';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
@@ -36,6 +37,7 @@ export function createEditor(deps: EditorDeps): Editor {
   };
   const tabs = new RecordTabs((cell) => { publishFocusedCell(cell, setContext); }, () => focusedView.enter(GRID_VIEW));
 
+  own(publishReferencesView(setContext));
   own(registerReferencedBy({
     client: deps.meditClient, reporter: deps.reporterFor('referencedBy'),
     locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeTab()?.formKey,

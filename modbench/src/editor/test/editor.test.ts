@@ -235,14 +235,21 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     expect(await idsOf(refreshed)).toEqual(await idsOf(first));
   });
 
-  it('is refused, naming the built-in extension it needs, while VS Code\'s References view is disabled, before any record is asked for', async () => {
+  it.each([[true], [false]])('publishes whether VS Code\'s References view is enabled (%s), for the menus that offer the gesture', (enabled) => {
+    referencesView.enabled = enabled;
+
+    asking();
+
+    expect(contextKeys.get('modbench.referencesView')).toBe(enabled);
+  });
+
+  it('publishes the References view enabled or disabled again when the extensions change', () => {
     asking();
     referencesView.enabled = false;
 
-    await askReferencedBy();
+    referencesView.changed.forEach((listener) => { listener(); });
 
-    expect(pickers.shown).toBe(0);
-    expect(reporter.report.mock.calls).toEqual([['error', 'Referenced By needs VS Code\'s built-in Reference Search View.', 'Enable the extension vscode.references-view.']]);
+    expect(contextKeys.get('modbench.referencesView')).toBe(false);
   });
 
   it('is refused for what names no record', async () => {

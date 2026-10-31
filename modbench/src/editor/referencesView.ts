@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { ReferencedByList } from './referencedByList';
 
-export const REFERENCES_VIEW_EXTENSION = 'vscode.references-view';
+const REFERENCES_VIEW_EXTENSION = 'vscode.references-view';
 
 // The slice of the built-in extension's exports Referenced By drives; @types/vscode does not declare it.
 export interface ReferencesViewInput {
@@ -22,4 +22,11 @@ interface ReferencesView {
 /** VS Code's References view; none while its built-in extension is disabled. */
 export async function referencesView(): Promise<ReferencesView | undefined> {
   return vscode.extensions.getExtension<ReferencesView>(REFERENCES_VIEW_EXTENSION)?.activate();
+}
+
+/** Keeps `modbench.referencesView` true while the view is enabled, for the menus that offer Referenced By. */
+export function publishReferencesView(setContext: (key: string, value: unknown) => void): vscode.Disposable {
+  const publish = (): void => { setContext('modbench.referencesView', vscode.extensions.getExtension(REFERENCES_VIEW_EXTENSION) !== undefined); };
+  publish();
+  return vscode.extensions.onDidChange(publish);
 }
