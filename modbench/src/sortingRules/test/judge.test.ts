@@ -61,13 +61,20 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
     }]);
   });
 
-  it('breaks, at Warning, a plugin with the master flag listed after one without it', () => {
-    const facts = factsFrom({ 'A.esp': {}, 'B.esm': { master: true } });
+  it('breaks, at Warning, a plugin with the master flag listed after one without it, naming the first such plugin', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esp': {}, 'C.esm': { master: true } });
 
-    expect(judge(['A.esp', 'B.esm'], facts)).toEqual([{
-      rule: 'masterFlag', level: 'warning', plugins: [ref('B.esm'), ref('A.esp')],
-      reason: '"B.esm" has the master flag, so the game loads it before "A.esp", which has not.',
+    expect(judge(['A.esp', 'B.esp', 'C.esm'], facts)).toEqual([{
+      rule: 'masterFlag', level: 'warning', plugins: [ref('C.esm'), ref('A.esp')],
+      reason: '"C.esm" has the master flag, so the game loads it before "A.esp", which has not.',
     }]);
+  });
+
+  it('gives each plugin with the master flag its own entry', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esm': { master: true }, 'C.esm': { master: true } });
+
+    expect(judge(['A.esp', 'B.esm', 'C.esm'], facts).map((broken) => broken.plugins.map((plugin) => plugin.filename)))
+      .toEqual([['B.esm', 'A.esp'], ['C.esm', 'A.esp']]);
   });
 
   it('holds a plugin with the master flag listed before one without it', () => {

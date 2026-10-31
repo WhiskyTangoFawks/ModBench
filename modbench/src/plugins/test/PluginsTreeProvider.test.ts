@@ -1431,6 +1431,17 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
     expect(item.checkboxState).toBe(vscode.TreeItemCheckboxState.Checked);
   });
 
+  it('reads a master that is listed but disabled as missing, at Error', async () => {
+    const rows = [plugin({ name: 'Base.esm', line: 0, enabled: false }), plugin({ name: 'A.esp', line: 1 })];
+    const h = makeTree(rows);
+
+    await reconcile(h, [held('Base.esm', { isMaster: true }), held('A.esp', { masters: ['Base.esm'] })]);
+
+    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
+    expect(item?.description).toBe('1 error');
+    expect(tooltipAsString(item?.tooltip)).toContain('"Base.esm" is a master of "A.esp", and is missing or not active.');
+  });
+
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);

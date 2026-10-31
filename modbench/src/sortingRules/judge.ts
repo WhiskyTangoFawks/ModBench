@@ -71,14 +71,13 @@ function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): Br
   return order.flatMap((flagged, index): BrokenRule[] => {
     const facts = factsOf(flagged);
     if (facts?.master !== true) return [];
-    return order.slice(0, index).flatMap((other): BrokenRule[] => {
-      const otherFacts = factsOf(other);
-      if (otherFacts?.master !== false) return [];
-      return [{
-        rule: 'masterFlag', level: 'warning', plugins: [refOf(flagged, facts), refOf(other, otherFacts)],
-        reason: `"${flagged}" has the master flag, so the game loads it before "${other}", which has not.`,
-      }];
-    });
+    const first = order.slice(0, index).find((other) => factsOf(other)?.master === false);
+    const firstFacts = first === undefined ? undefined : factsOf(first);
+    if (first === undefined || firstFacts === undefined) return [];
+    return [{
+      rule: 'masterFlag', level: 'warning', plugins: [refOf(flagged, facts), refOf(first, firstFacts)],
+      reason: `"${flagged}" has the master flag, so the game loads it before "${first}", which has not.`,
+    }];
   });
 }
 
