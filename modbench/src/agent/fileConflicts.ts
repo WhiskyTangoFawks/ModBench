@@ -9,7 +9,6 @@ import { Refusal } from '../drivingLib/refusal';
 import type { ConflictCellState, ConflictRowState } from '../wire/conflictTable';
 import { modsNamed, type ModName } from './names';
 
-/** The conflict table's cell for the file: `state` is null where it is not known, `unreadable` says why. `size` is in bytes, `modified` in ms. */
 interface Contents {
   state: ConflictCellState | null;
   row: ConflictRowState | null;
