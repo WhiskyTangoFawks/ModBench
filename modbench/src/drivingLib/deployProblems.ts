@@ -1,11 +1,23 @@
-import type { Deployed } from '../deployment/deployment';
+interface Placed {
+  readonly path: string;
+  readonly winner: string;
+}
+
+/** The parts of a landed deploy these problems read. */
+interface Deployed {
+  readonly leftOut: readonly Placed[];
+  readonly lost: readonly Placed[];
+  readonly leftAside: readonly string[];
+  readonly staleRecord?: string;
+  readonly pluginsTxt: { readonly kind: 'written' | 'unchanged'; readonly renamed: readonly string[] } | { readonly kind: 'notWritten'; readonly why: string };
+}
 
 export interface DeployProblem {
   readonly message: string;
   readonly detail: string;
 }
 
-const named = (files: readonly { path: string; winner: string }[]): string => files.map(({ path, winner }) => `${winner} at ${path}`).join(', ');
+const named = (files: readonly Placed[]): string => files.map(({ path, winner }) => `${winner} at ${path}`).join(', ');
 
 /** The game gets something the load order does not hold (deployment-hardlink.md, Deploy, story 7). */
 export function deployFailures(result: Deployed): DeployProblem[] {
