@@ -1046,8 +1046,23 @@ describe('what a record tab\'s webview posts', () => {
       expect(loadAnswered(tab)).toEqual([{
         type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
         loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null,
+        columnStatuses: { 'A.esp': { label: '(read-only)', reason: expect.stringContaining('Decompile and Commit Mod') as unknown } },
       }]);
       expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
+    });
+
+    it('states the first column\'s cell where mEdit stated none, so the page derives no state', async () => {
+      const mEdit = client();
+      mEdit.setQueryAnswer('getComparison', {
+        ...compare, diffs: [{ fieldName: 'Name', values: { 'A.esp': 'x' }, cellStates: {}, winnerColumn: 'A.esp', noWinner: false, conflictAll: 'OnlyOne' }],
+      });
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+
+      tab.receive(loadRequest);
+      await readAnswered(tab);
+
+      expect(loadAnswered(tab)).toMatchObject([{ compare: { diffs: [{ cellStates: { 'A.esp': 'OnlyOne' } }] } }]);
     });
 
     describe('for a record no active plugin holds', () => {

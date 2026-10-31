@@ -310,7 +310,10 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
     overrides: [compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'File Name' }] })],
     diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp|ModA': 'File Name' }, winnerColumn: 'MyMod.esp|ModA' })],
   });
-  const opts: PanelOpts = { plugins: [{ name: 'MyMod.esp', origin: 'ModA', isCompiledPlugin: true }], fileColumn: 'MyMod.esp|ModA', fileCopyAlone: true };
+  const opts: PanelOpts = {
+    plugins: [{ name: 'MyMod.esp', origin: 'ModA', isCompiledPlugin: true }], fileColumn: 'MyMod.esp|ModA', fileCopyAlone: true,
+    columnStatuses: { 'MyMod.esp|ModA': { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' } },
+  };
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
   afterEach(() => vi.unstubAllGlobals());
@@ -333,7 +336,7 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
   });
 
   it('says nothing of a plugin not active when its file is in the comparison', async () => {
-    renderPanel(alone, { ...opts, fileCopyAlone: false });
+    renderPanel(alone, { ...opts, fileCopyAlone: false, columnStatuses: {} });
     await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
 
     expect(screen.queryByText(NOT_ACTIVE)).not.toBeInTheDocument();
@@ -353,6 +356,7 @@ describe('RecordPanel — a file whose plugin another mod\'s file overrides', ()
   const opts: PanelOpts = {
     plugins: [{ name: 'MyMod.esp', origin: 'ModA', isCompiledPlugin: true }, { name: 'Other.esp', origin: 'ModC', isCompiledPlugin: true }],
     fileColumn: 'MyMod.esp|ModA', fileOverriddenBy: 'ModB',
+    columnStatuses: { 'MyMod.esp|ModA': { label: '(overridden)', reason: 'The game loads ModB’s file instead.' } },
   };
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
@@ -386,7 +390,7 @@ describe('RecordPanel — a file whose plugin another mod\'s file overrides', ()
   });
 
   it('is no (overridden) column when nothing overrides its plugin', async () => {
-    renderPanel(overridden, { ...opts, fileOverriddenBy: null });
+    renderPanel(overridden, { ...opts, fileOverriddenBy: null, columnStatuses: {} });
     await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
 
     expect(screen.queryByText('(overridden)')).not.toBeInTheDocument();
@@ -507,10 +511,10 @@ describe('RecordPanel — column header native right-click menu', () => {
     expect(client.load).toHaveBeenCalledTimes(1);
   });
 
-  it('offers no delete on a column whose state is unknown, when the page is given no plugin facts a column is neither a compiled plugin nor one with no plugin source', async () => {
+  it('offers no delete on a column whose state is unknown, when the page is given no plugin facts', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const load = vi.fn().mockResolvedValue({
-      ...loaded(compare), immutableSet: null, compiledPluginSet: null, editableSet: null, sourceUnreadableReasons: null,
+      ...loaded(compare), editableSet: null,
     } satisfies Loaded);
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
@@ -525,7 +529,7 @@ describe('RecordPanel — a vanilla master column', () => {
 
   it('is not dimmed', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
+    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse, columnStatuses: { 'Fallout4.esm': { label: '(read-only)', reason: 'The game’s plugins are not edited.' } } });
     await waitFor(() => expect(screen.getByText('Fallout4.esm')).toBeInTheDocument());
 
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
@@ -533,6 +537,8 @@ describe('RecordPanel — a vanilla master column', () => {
     expect(th).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 });
+
+const PARTIAL_FORM = { 'MyMod.esp': { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' } };
 
 describe('RecordPanel — a Partial Form column', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -542,7 +548,7 @@ describe('RecordPanel — a Partial Form column', () => {
     [pluginsResponse],
   ])('dims the header of a Partial Form copy under its (Partial Form) status, with no control on it', async (plugins) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(partialFormCompareResult, { plugins });
+    renderPanel(partialFormCompareResult, { plugins, columnStatuses: PARTIAL_FORM });
     await waitFor(() => expect(screen.getByText('(Partial Form)')).toBeInTheDocument());
 
     const th = required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
@@ -639,7 +645,7 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'A', 'Same.esp': 'A', 'Loser.esp': 'B', 'Winner.esp': 'C' },
       winnerColumn: 'Winner.esp',
-      cellStates: { 'Same.esp': 'IdenticalToMaster', 'Loser.esp': 'ConflictLoses', 'Winner.esp': 'ConflictWins' },
+      cellStates: { 'Fallout4.esm': 'Master', 'Same.esp': 'IdenticalToMaster', 'Loser.esp': 'ConflictLoses', 'Winner.esp': 'ConflictWins' },
       conflictAll: 'Conflict',
     })],
   });
@@ -706,7 +712,7 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
         formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: true,
         editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }],
       })],
-      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Only' }, winnerColumn: 'Fallout4.esm', conflictAll: 'OnlyOne' })],
+      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Only' }, winnerColumn: 'Fallout4.esm', conflictAll: 'OnlyOne', cellStates: { 'Fallout4.esm': 'OnlyOne' } })],
     }));
     expect((await cellOf('Only')).title).toBe('Single Record');
   });
@@ -1848,7 +1854,7 @@ describe('RecordPanel — the Record Header', () => {
 
   it('edits a Partial Form copy\'s header member', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: compiledPlugin });
+    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: compiledPlugin, columnStatuses: PARTIAL_FORM });
     await waitFor(() => screen.getByText('(Partial Form)'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -1883,7 +1889,7 @@ describe('RecordPanel — a field the schema marks read-only, the reason coming 
         fields: [{ metadata: lockedName, value: 'A Name' }],
       }),
     ],
-    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' })],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'OnlyOne' } })],
   });
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000800:MyMod.esp'));
