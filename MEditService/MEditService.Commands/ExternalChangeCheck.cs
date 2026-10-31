@@ -5,8 +5,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>Each compiled plugin changed outside Modbench (ADR-0003), and each source mod's
-/// plugins whose plugin source is unreadable.</summary>
+/// <summary>Each compiled plugin changed outside Modbench (ADR-0003).</summary>
 internal sealed class ExternalChangeCheck(INotificationPublisher notifications, IPluginAdapter adapter, ISourceAdapter source)
 {
     private readonly Lock _checking = new();
@@ -40,19 +39,11 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 
     private void Tell(string origin, ISourceRepository repository, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        var sourceReads = plugins.ToLookup(plugin => source.SourceReads(plugin));
-        notifications.Publish(new ExternalChangeNotification(origin, [.. sourceReads[true]
+        notifications.Publish(new ExternalChangeNotification(origin, [.. plugins
+            .Where(plugin => source.SourceReads(plugin))
             .Select(plugin => (plugin.Key, Observed: adapter.HashOf(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(repository, plugin.Key, plugin.Observed))
             .Select(plugin => new ChangedPlugin(plugin.Key.Name, plugin.Observed))]));
-
-        if (sourceReads[false].Any())
-        {
-            notifications.Publish(new PluginSourceUnreadableNotification(origin, [.. sourceReads[false]
-                .SelectMany(plugin => source.WhySourceDoesNotRead(plugin) is { } why
-                    ? new[] { new PluginWithUnreadableSource(plugin.Name, new UnreadableSource(why.Reason, why.DecompileRepairs)) }
-                    : [])]));
-        }
     }
 
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
