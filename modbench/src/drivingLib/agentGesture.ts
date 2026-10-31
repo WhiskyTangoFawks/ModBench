@@ -6,8 +6,30 @@ import type { Reporter } from '../ports/reporter';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
 
 /** The Argument and the Options an agent call gives a gesture (commands.md, The entry point supplies what it knows). */
-export class AgentCall<Options extends object = object> {
-  constructor(readonly argument: readonly Argument[], readonly options: Options) {}
+export class AgentCall<Options extends object = object, Given extends object = Argument> {
+  constructor(readonly argument: readonly Given[], readonly options: Options) {}
+}
+
+/** commands.md, switch: the profile an agent names as list_profiles shows it. */
+export interface ProfileArgument { readonly kind: 'profile'; readonly name: string }
+
+/** commands.md, move to Overwrite: a file in the deployment folder by its path below it. */
+export interface DeployedFileArgument { readonly kind: 'deployedFile'; readonly path: string }
+
+export const isAgentCall = (value: unknown): value is AgentCall<object, object> => value instanceof AgentCall;
+
+/** What an agent's call of switch names: the profile, or nothing when it names a different count. */
+export const profilesOf = (call: AgentCall<object, object>): string[] =>
+  call.argument.flatMap((given) => ('kind' in given && given.kind === 'profile' && 'name' in given && typeof given.name === 'string' ? [given.name] : []));
+
+/** The paths an agent's call of move to Overwrite names. */
+export const deployedPathsOf = (call: AgentCall<object, object>): string[] =>
+  call.argument.flatMap((given) => ('kind' in given && given.kind === 'deployedFile' && 'path' in given && typeof given.path === 'string' ? [given.path] : []));
+
+/** What a gesture over no items answers an agent: it landed, or it was refused. */
+export function answeredToAgent(result: { applied: true } | { applied: false; refusal: string }, partial: readonly PartialFailure[] = []): GestureResult<never, string> {
+  if (!result.applied) return { applied: false, refusal: result.refusal };
+  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
 }
 
 /** A part of a landed gesture that failed: a view warns of it, or logs it when its severity is `log`, and an agent

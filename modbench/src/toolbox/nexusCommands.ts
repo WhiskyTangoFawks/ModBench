@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { Nexus } from '../nexus/nexus';
 import type { NexusLogin } from '../instanceCommands/nexusLogin';
+import { AgentCall, answeredToAgent } from '../drivingLib/agentGesture';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 
@@ -49,9 +50,11 @@ export function registerNexusCommands({ commands, nexus, reporter }: NexusComman
   return [
     nexus.onDidChangeLogin(() => { void markLoggedIn(); }),
     vscode.commands.registerCommand('modbench.instance.logIn', () => askForKey(commands, reporter)),
-    vscode.commands.registerCommand('modbench.instance.logOut', async () => {
+    vscode.commands.registerCommand('modbench.instance.logOut', async (called?: unknown) => {
       const outcome = await commands.logOut();
+      if (called instanceof AgentCall) return answeredToAgent(outcome);
       if (!outcome.applied) reporter.report('error', 'Failed to log out of Nexus.', outcome.refusal);
+      return undefined;
     }),
   ];
 }

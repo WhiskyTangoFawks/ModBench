@@ -1,4 +1,4 @@
-import type { Deployed } from '../deployment/deployment';
+import type { Deployed } from './deployment';
 
 export interface DeployProblem {
   readonly message: string;

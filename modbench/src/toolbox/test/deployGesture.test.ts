@@ -262,6 +262,48 @@ describe('the problems on the files the deployment folder holds that deploy does
   });
 });
 
+describe('Purge and Move to Overwrite, called by an agent', () => {
+  const none = new AgentCall([], {});
+
+  it('answers a purge that landed with each file it left, warning at the Output and not at the user', async () => {
+    const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { ...NOT_PURGED, unmanaged: ['game.exe'], leftRenamed: ['plugins.txt.r'], unfinished: ['x (EBUSY)'] } });
+
+    expect([await runPurge(none), reporter.reports, reporter.shownFailures]).toEqual([{
+      applied: true, outcome: { landed: [], refused: [] }, partial: [
+        { message: 'The deployment folder holds files purge did not remove:', detail: 'game.exe', severity: 'warning' },
+        { message: 'Purge left each plugins.txt deploy renamed, which is yours to put back:', detail: 'plugins.txt.r', severity: 'warning' },
+        { message: 'Purge landed, and could not finish:', detail: 'x (EBUSY)', severity: 'warning' },
+      ],
+    }, [], []]);
+  });
+
+  it('answers a refused purge with its reason', async () => {
+    const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { applied: false, refusal: 'No deployment folder.' } });
+
+    expect([await runPurge(none), reporter.reports]).toEqual([{ applied: false, refusal: 'No deployment folder.' }, []]);
+  });
+
+  it('moves the files it names, or every one it does not manage when it names none', async () => {
+    const { moveToOverwrite, runMove } = deployAnswering(NOTHING_DEPLOYED);
+
+    await runMove(new AgentCall([{ kind: 'deployedFile', path: 'Data/a.esp' }], {}));
+    await runMove(none);
+
+    expect(moveToOverwrite.mock.calls).toEqual([[['Data/a.esp']], [undefined]]);
+  });
+
+  it('answers each file it left, and a refusal with its reason, reporting neither', async () => {
+    const left = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, left: ['Data/.hidden'] } });
+    expect([await left.runMove(none), left.reporter.reports]).toEqual([{
+      applied: true, outcome: { landed: [], refused: [] },
+      partial: [{ message: 'Left in the deployment folder, because no mod file lands at their path:', detail: 'Data/.hidden', severity: 'warning' }],
+    }, []]);
+
+    const refused = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: false, refusal: 'In the game folder.' } });
+    expect([await refused.runMove(none), refused.reporter.reports]).toEqual([{ applied: false, refusal: 'In the game folder.' }, []]);
+  });
+});
+
 describe('Move to Overwrite', () => {
 
   it('moves the files it is given under the Toolbox\'s progress, and says nothing', async () => {
