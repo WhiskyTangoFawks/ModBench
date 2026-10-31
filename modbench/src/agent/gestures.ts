@@ -231,10 +231,17 @@ const MOVE_PLUGINS = gestureInput(
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
+const CONTAINER_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'runtimeOutput']).optional() });
+
 const CREATE_PLUGIN = gestureInput(
-  'options: { name: the new plugin\'s file name, place: the origin that will hold it, an enabled mod\'s name or overwrite/ }',
-  z.object({ options: z.object({ name: z.string(), place: z.string() }) }),
-  (_value, { options }) => new AgentCall([], options),
+  'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name }',
+  z.object({ argument: z.array(CONTAINER_NAME), options: z.object({ name: z.string() }) }),
+  (value, { argument, options }) => new AgentCall(
+    argument.flatMap((container): Argument[] => (container.kind === 'runtimeOutput'
+      ? [{ kind: 'runtimeOutput' }]
+      : modArguments(value, [{ name: container.name, kind: container.kind }]))),
+    options,
+  ),
 );
 
 const RENAME_PLUGIN = gestureInput(
