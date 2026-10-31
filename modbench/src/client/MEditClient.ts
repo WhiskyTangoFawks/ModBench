@@ -10,7 +10,6 @@ import {
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
-import type { UnreadableSource } from '../wire/unreadableSource';
 import type { ReadFailed } from '../wire/readFailed';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
@@ -46,7 +45,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'external-change',
-  'plugin-source-unreadable', 'record-filter-cleared',
+  'record-filter-cleared',
 ] as const;
 
 /** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed `onNotification` call
@@ -59,7 +58,6 @@ export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
   'decompile-and-commit-progress': DecompileAndCommitProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
-  'plugin-source-unreadable': { plugins: (PluginAddress & UnreadableSource)[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };

@@ -288,8 +288,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     }],
     ['decompile-and-commit-progress', rowsChanged([], { kind: 'decompile-and-commit-progress', modlistProgress, decompileAndCommitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
-    ['plugin-source-unreadable', rowsChanged([], { kind: 'plugin-source-unreadable', pluginWithUnreadableSources: [{ name: 'A.esp', source: { reason: 'Gone.', decompileRepairs: true } }] }),
-      { plugins: [{ name: 'A.esp', origin: 'ModA', reason: 'Gone.', decompileRepairs: true }] }],
     ['record-filter-cleared', rowsChanged([], { kind: 'record-filter-cleared', recordFilterCleared: { source: 'a.sql', reason: 'boom' } }), { source: 'a.sql', reason: 'boom' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
     ['plugin-changed', rowsChanged([], { kind: 'plugin-changed' }), { plugin: { name: 'Test.esp', origin: 'ModA' } }],
@@ -301,7 +299,6 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     subscriber.onNotification('load-order-status', hear('load-order-status'));
     subscriber.onNotification('decompile-and-commit-progress', hear('decompile-and-commit-progress'));
     subscriber.onNotification('external-change', hear('external-change'));
-    subscriber.onNotification('plugin-source-unreadable', hear('plugin-source-unreadable'));
     subscriber.onNotification('record-filter-cleared', hear('record-filter-cleared'));
     subscriber.onNotification('rows-changed', hear('rows-changed'));
     subscriber.onNotification('plugin-changed', hear('plugin-changed'));
