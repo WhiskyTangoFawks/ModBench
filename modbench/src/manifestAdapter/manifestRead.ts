@@ -1,5 +1,5 @@
 import type {
-  BuildFile, BuildFileRead, GameDepot, Manifest, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
+  BuildFile, BuildFileRead, GameDepot, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
 } from './manifest';
 
 type Json = Record<string, unknown>;
@@ -228,8 +228,8 @@ const read = (text: string, file: string, keys: readonly string[]): { readonly r
 export const readManifest = (text: string): ManifestRead => {
   const parsed = read(text, 'manifest', MANIFEST_KEYS);
   if ('refused' in parsed) return parsed;
-  const { steps: _steps, tools: _tools, ...manifest } = parsed.read;
-  return { manifest };
+  const { packages, version, exclude, archives, files } = parsed.read;
+  return { manifest: { packages, ...version === undefined ? {} : { version }, exclude, archives, files } };
 };
 
 /** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A
