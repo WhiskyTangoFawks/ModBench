@@ -92,8 +92,8 @@ describe('the status bar, one item saying what mEdit is doing', () => {
   });
 
   it.each([
-    ['before the snapshot is indexed', undefined, 'mEdit: Running'],
-    ['once it is indexed', 2, 'mEdit: Ready (2 plugins)'],
+    ['before the snapshot is indexed', undefined, 'mEdit is Running'],
+    ['once it is indexed', 2, 'mEdit is Ready (2 plugins)'],
   ] as const)('tells the agent the same words %s', (_case, ready, text) => {
     const client = new InMemoryMEditClient();
     client.setStatus('running');

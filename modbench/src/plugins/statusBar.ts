@@ -21,8 +21,8 @@ export function createStatusBar(
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   let indexedActivePlugins: number | undefined;
   const show = () => {
-    const { icon, text } = mEditState(client.status, indexedActivePlugins);
-    item.text = `$(${icon}) ${text}`;
+    const { icon, state } = mEditState(client.status, indexedActivePlugins);
+    item.text = `$(${icon}) mEdit: ${state}`;
   };
   const showStatus = () => { indexedActivePlugins = undefined; show(); };
   showStatus();
@@ -42,7 +42,7 @@ export function createStatusBar(
   return {
     ready: (activePlugins) => { indexedActivePlugins = activePlugins; show(); },
     showMEditState: showStatus,
-    standing: () => mEditState(client.status, indexedActivePlugins).text,
+    standing: () => `mEdit is ${mEditState(client.status, indexedActivePlugins).state}`,
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); item.dispose(); },
   };
 }

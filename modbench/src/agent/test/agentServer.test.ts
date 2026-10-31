@@ -393,13 +393,13 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('answers beside the words the status bar and the Plugins view say of mEdit, as they stand at each call', async () => {
-    let said = ['mEdit: Running'];
+    let said = ['mEdit is Running'];
     const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => said });
     const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
 
-    expect((await blocks()).slice(1)).toEqual(['mEdit: Running']);
+    expect((await blocks()).slice(1)).toEqual(['mEdit is Running']);
 
-    said = ['mEdit: Ready (2 plugins)', 'Indexing failed: the record index threw'];
+    said = ['mEdit is Ready (2 plugins)', 'Indexing failed: the record index threw'];
     expect((await blocks()).slice(1)).toEqual(said);
   });
 
