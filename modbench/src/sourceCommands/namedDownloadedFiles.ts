@@ -2,10 +2,10 @@ import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAda
 import type { ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
-import { downloadedFileOf } from './packagesRead';
+import { downloadedFileHoldingPin } from './packagesRead';
 
 type Downloading = {
-  readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'nexusFileAt' | 'putDownloadedFile'>;
+  readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'nexusFileAt' | 'putDownloadedFile'>;
   readonly nexus: Pick<Nexus, 'download'>;
 };
 
@@ -13,7 +13,7 @@ type ManifestInstallationFile = Pick<Extract<ManifestPackage, { kind: 'installat
 
 interface Found {
   readonly read: FileRead<InstallationFile | undefined>;
-  readonly notDownloaded?: string;
+  readonly why: readonly string[];
 }
 
 const notDownloaded = (reason: string): string => `it could not be downloaded from Nexus: ${reason.replace(/\.$/, '')}`;
@@ -35,26 +35,38 @@ async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, pa
   }
 }
 
-/** The installation files the mods `notFound` lack, by name in the downloads folder, each one they lack downloaded first. */
+const copyFailed = (from: string, err: unknown): string => `it could not be copied from ${from}: ${errorMessage(err).replace(/\.$/, '')}`;
+
+/** The installation files the mods `notFound` lack, by name in the downloads folder: one held under another name is copied to the
+ *  pinned name, and one held nowhere is downloaded first. */
 export async function namedDownloadedFiles(
   deps: Downloading, notFound: readonly { readonly installationFiles: readonly ManifestInstallationFile[] }[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
 ): Promise<{
   handed: (name: string | undefined) => InstallationFile | undefined;
   unreadable: (name: string | undefined) => string | undefined;
-  /** Why the installation file of `name`, which the downloads folder lacks, was not downloaded. */
-  notDownloaded: (name: string | undefined) => string | undefined;
+  /** Why the installation file of `name` is not the pinned one, as sentences: what could not be checked, which file holds the
+   *  pinned bytes, and why it was not copied or downloaded. */
+  why: (name: string | undefined) => readonly string[];
 }> {
   const lacked = new Map(notFound.flatMap(({ installationFiles }) => installationFiles.map((file) => [file.name, file] as const)));
   const found = new Map<string, Found>();
   for (const [name, file] of lacked) {
-    const read = await downloadedFileOf(deps.adapter, file);
-    if (read.kind === 'unreadable' || read.answer !== undefined || signal?.aborted) {
-      found.set(name, { read });
-      continue;
+    const { read, underAnotherName, elsewhere, notes } = await downloadedFileHoldingPin(deps.adapter, file);
+    const why = [...notes, ...(elsewhere === undefined ? [] : [`${elsewhere.path} holds the pinned bytes of '${name}'`])];
+    if (read.kind === 'unreadable' || (read.answer !== undefined && underAnotherName === undefined) || signal?.aborted) {
+      found.set(name, { read, why });
+    } else if (underAnotherName !== undefined) {
+      try {
+        await deps.adapter.copyDownloadedFile(underAnotherName.path, name);
+        found.set(name, { read: await deps.adapter.downloadedFile(name), why });
+      } catch (err) {
+        found.set(name, { read: { kind: 'read', answer: undefined }, why: [...why, copyFailed(underAnotherName.path, err)] });
+      }
+    } else {
+      onDownload?.(name);
+      const failed = await downloadedOrWhy(deps, file);
+      found.set(name, failed === undefined ? { read: await deps.adapter.downloadedFile(name), why } : { read, why: [...why, failed] });
     }
-    onDownload?.(name);
-    const why = await downloadedOrWhy(deps, file);
-    found.set(name, why === undefined ? { read: await deps.adapter.downloadedFile(name) } : { read, notDownloaded: why });
   }
   const readOf = (name: string | undefined): Found | undefined => (name === undefined ? undefined : found.get(name));
   return {
@@ -66,6 +78,6 @@ export async function namedDownloadedFiles(
       const read = readOf(name)?.read;
       return read?.kind === 'unreadable' ? read.reason : undefined;
     },
-    notDownloaded: (name) => readOf(name)?.notDownloaded,
+    why: (name) => readOf(name)?.why ?? [],
   };
 }

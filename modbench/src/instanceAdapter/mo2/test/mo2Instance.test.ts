@@ -2046,26 +2046,30 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a downloaded file by its bytes', () => {
-      const reader = fakeInstallationFileReader(['textures/a.dds']);
-      const holding = (list: (path: string) => Promise<string[]> = (path) => reader.list(path)) => managerOver(root, { installationFileReader: { ...reader, list } });
+      const holding = () => managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
+      const renamed = (): string => join(root, 'downloads', 'Renamed-copy.7z');
 
       it('answers the file with that size and hash, whatever its name', async () => {
-        await actualRename(join(root, 'downloads', DOWNLOADED_FILE), join(root, 'downloads', 'Renamed-copy.7z'));
+        await actualRename(join(root, 'downloads', DOWNLOADED_FILE), renamed());
 
         expect(await holding().downloadedFileHolding({ size: 28, hash: 'yMPjZVarjmw=' })).toEqual({
-          kind: 'read', answer: { path: join(root, 'downloads', 'Renamed-copy.7z'), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
+          file: { path: renamed(), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] }, notes: [],
         });
       });
 
       it('answers none for a file of that size with other bytes', async () => {
-        expect(await holding().downloadedFileHolding({ size: 28, hash: 'AAAAAAAAAAA=' })).toEqual({ kind: 'read', answer: undefined });
+        expect(await holding().downloadedFileHolding({ size: 28, hash: 'AAAAAAAAAAA=' })).toEqual({ file: undefined, notes: [] });
       });
 
-      it('hashes no file of another size', async () => {
-        const list = vi.fn((path: string) => reader.list(path));
+      it('passes over a file it cannot read, saying why, and answers the one that holds the bytes', async () => {
+        await writeFile(join(root, 'downloads', 'Locked.7z'), 'x');
+        await actualRename(join(root, 'downloads', DOWNLOADED_FILE), renamed());
+        vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+          if (String(path).endsWith('Locked.7z')) throw new Error('EACCES');
+          return actualStat(path, ...rest);
+        });
 
-        expect(await holding(list).downloadedFileHolding({ size: 1, hash: 'yMPjZVarjmw=' })).toEqual({ kind: 'read', answer: undefined });
-        expect(list).not.toHaveBeenCalled();
+        expect(await holding().downloadedFileHolding({ size: 28, hash: 'yMPjZVarjmw=' })).toMatchObject({ file: { path: renamed() }, notes: ['Locked.7z could not be read: EACCES'] });
       });
     });
 
@@ -2979,6 +2983,31 @@ describe('the MO2 Instance adapter', () => {
           await expect(adapter.putDownloadedFile(name, theBytes(), { hash: HASH_OF_THE_BYTES, info: nexusInfo })).rejects.toThrow(refusal);
 
           assertOnlyChanged(before, await snapshotTree(root), new Set());
+        });
+
+        describe('copy as a downloaded file', () => {
+          const source = (): string => join(downloadsFolder(), 'manual.zip');
+
+          it('puts a copy of the file under the name, with its metadata, and nothing else', async () => {
+            await writeFile(`${source()}.meta`, '[General]\r\nmodID=4598\r\n');
+            const before = await snapshotTree(root);
+
+            await adapter.copyDownloadedFile(source(), 'copied.7z');
+
+            expect([await readFile(join(downloadsFolder(), 'copied.7z'), 'utf8'), await metaOf('copied.7z')]).toEqual([await readFile(source(), 'utf8'), '[General]\r\nmodID=4598\r\n']);
+            assertOnlyChanged(before, await snapshotTree(root), new Set(['downloads/copied.7z', 'downloads/copied.7z.meta']));
+          });
+
+          it.each([
+            ['a name the downloads folder already holds', 'manual.zip', "'manual.zip' is already in the downloads folder"],
+            ['a name that is no bare file name', '../copied.7z', "'../copied.7z' is not a file name"],
+          ])('refuses %s, writing nothing', async (_name, name, refusal) => {
+            const before = await snapshotTree(root);
+
+            await expect(adapter.copyDownloadedFile(source(), name)).rejects.toThrow(refusal);
+
+            assertOnlyChanged(before, await snapshotTree(root), new Set());
+          });
         });
 
         it('takes the file back when its metadata cannot be written', async () => {

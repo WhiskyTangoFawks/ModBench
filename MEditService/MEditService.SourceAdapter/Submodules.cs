@@ -28,17 +28,14 @@ internal static class Submodules
         return new SubmoduleHead(head, detachedAtThePin ? Landed(git, submodule, cloned) : null);
     }
 
-    // The branch the submodule follows first, then the remote's default; the note is the first branch's, when none holds the pin.
     private static string? Landed(SourceRepositoryGit git, Submodule submodule, bool cloned)
     {
-        string? note = null;
-        foreach (var branch in new[] { submodule.Branch, RemoteDefaultBranch(git) }.OfType<string>().Distinct())
-        {
-            note ??= OnTheBranch(git, branch, submodule.Pin, cloned);
-            if (git.Run("branch", "--show-current").Length > 0) return null;
-        }
-        return note;
+        if (submodule.Branch is { } followed && BranchExists(git, followed)) return OnTheBranch(git, followed, submodule.Pin, cloned);
+        return cloned && RemoteDefaultBranch(git) is { } fallback ? OnTheBranch(git, fallback, submodule.Pin, cloned) : null;
     }
+
+    private static bool BranchExists(SourceRepositoryGit git, string branch) =>
+        git.TryRun(out _, "rev-parse", "--verify", "-q", $"refs/heads/{branch}") || git.TryRun(out _, "rev-parse", "--verify", "-q", $"refs/remotes/{Origin}/{branch}");
 
     private static string? RemoteDefaultBranch(SourceRepositoryGit git) =>
         git.TryRun(out var head, "symbolic-ref", "--short", $"refs/remotes/{Origin}/HEAD") ? head.Trim()[(Origin.Length + 1)..] : null;

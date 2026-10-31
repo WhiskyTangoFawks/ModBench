@@ -658,9 +658,9 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
-  /** The downloaded file with the size and hash of `pinned`, under any name; undefined when the folder holds none. Only files of
-   *  that size are hashed. */
-  downloadedFileHolding(pinned: HashedFile): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded file with the size and hash of `pinned`, under any name; none when the folder holds none. `notes`: why a
+   *  file could not be checked. */
+  downloadedFileHolding(pinned: HashedFile): Promise<{ readonly file: InstallationFile | undefined; readonly notes: readonly string[] }>;
   /** Every downloaded file, with its entries, and why any could not be read. It hashes those the hash index lacks one at
    *  a time, keeping each hash; `onHashing` hears how many are left, and `signal` stops it before the next. */
   downloadedFilesHashed(options?: {
@@ -764,6 +764,9 @@ export interface InstanceAdapter {
   /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`, and
    *  puts nothing when it is not. Refuses a name the downloads folder holds, writing nothing. */
   putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
+  /** Puts a copy of the downloaded file at `from` as the downloaded file `name`, with its metadata. Refuses a name the
+   *  downloads folder holds, writing nothing. */
+  copyDownloadedFile(from: string, name: string): Promise<void>;
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.

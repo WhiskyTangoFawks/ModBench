@@ -92,6 +92,32 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
+    public void AClone_OfASubmoduleWhoseFollowedBranchHoldsOtherCommits_StaysDetached_AndNamesIt_WhateverTheRemotesDefaultHolds()
+    {
+        _submodule.Follow("dev");
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "branch", "dev", _commits["first"]);
+        Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal(
+            (new SubmoduleHead(_commits["second"], $"its branch 'dev' is at {_commits["first"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
+            (head, Branch()));
+    }
+
+    [Fact]
+    public void APresentSubmoduleDetachedAtThePin_FollowingNoBranch_IsNotMoved()
+    {
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "checkout", "-q", "--detach");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "HEAD"), (head, Branch()));
+    }
+
+    [Fact]
     public void AClone_IntoAGitDirectoryADeinitKept_LeavesTheBranchItHolds_AndSaysItIsLeftDetachedAtThePin()
     {
         _submodule.Follow("main");

@@ -294,7 +294,7 @@ describe('restore from manifest', () => {
       expect(cancelled).toBe(true);
     });
 
-    it('is taken in place from the downloaded file with its size and hash under another name, and fetched from nowhere', async () => {
+    it('is copied to the pinned name from the downloaded file with its size and hash under another name, fetching nothing', async () => {
       const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
       const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
       const { restore, fake } = await over({
@@ -304,9 +304,33 @@ describe('restore from manifest', () => {
 
       const outcome = await restore(['ModA']);
 
-      expect(writes(fake.calls)[0]).toEqual({ verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'entry', downloadedFile: '/downloads/Renamed-copy.7z', entry: 'a.nif' } }] });
-      expect(outcome.refused).toEqual([]);
-      expect(sent).toEqual([]);
+      expect(fake.calls).toContainEqual({ verb: 'copyDownloadedFile', from: '/downloads/Renamed-copy.7z', name: 'ModA.7z' });
+      expect(writes(fake.calls)[0]).toEqual({ verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'a.nif' } }] });
+      expect([outcome.refused, sent]).toEqual([[], []]);
+    });
+
+    it('refuses a file of the pinned name with other bytes, naming the file that holds the pinned bytes, and overwrites nothing', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { restore, fake } = await over({
+        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'mine' })], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' })]]) },
+      });
+
+      const outcome = await restore(['ModA']);
+
+      expect(outcome.refused).toEqual([{ item: 'ModA', reason: "was skipped: installation file 'ModA.7z' has other bytes. /downloads/Renamed-copy.7z holds the pinned bytes of 'ModA.7z'." }]);
+      expect(fake.calls.filter(({ verb }) => verb === 'copyDownloadedFile' || verb === 'putDownloadedFile')).toEqual([]);
+    });
+
+    it('refuses the mod, naming why, when the copy to the pinned name fails', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
+      const { restore } = await over({
+        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['Renamed-copy.7z', read(renamed)]]), refusals: refusing('copyDownloadedFile', 'ENOSPC') },
+      });
+
+      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: installation file 'ModA.7z' is missing. It could not be copied from /downloads/Renamed-copy.7z: ENOSPC." }]);
     });
 
     it('asks Nexus nothing for an installation file the downloads folder holds', async () => {

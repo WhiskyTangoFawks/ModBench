@@ -171,16 +171,27 @@ export function mo2Installation(
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
 
-    downloadedFileHolding: ({ size, hash }) => readOrReason(async () => {
-      const downloadsDir = await currentDownloadsDir(context);
-      for (const name of await downloadedFileNames(downloadsDir, ignoreSkippedLink) ?? []) {
-        const path = downloadedFilePath(downloadsDir, name);
-        if ((await stat(path)).size !== size) continue;
+    downloadedFileHolding: async ({ size, hash }) => {
+      const listed = await readOrReason(async () => {
+        const downloadsDir = await currentDownloadsDir(context);
+        return { downloadsDir, names: await downloadedFileNames(downloadsDir, ignoreSkippedLink) ?? [] };
+      });
+      if (listed.kind === 'unreadable') return { file: undefined, notes: [`the downloads folder could not be read: ${listed.reason}`] };
+      const notes: string[] = [];
+      for (const name of listed.answer.names) {
+        const path = downloadedFilePath(listed.answer.downloadsDir, name);
+        const sized = await readOrReason(() => stat(path));
+        if (sized.kind === 'unreadable') {
+          notes.push(`${name} could not be read: ${sized.reason}`);
+          continue;
+        }
+        if (sized.answer.size !== size) continue;
         const hashed = await downloadedFileHash(path);
-        if (hashed.kind === 'read' && hashed.answer.hash === hash) return { path, ...hashed.answer };
+        if (hashed.kind === 'unreadable') notes.push(`${name} could not be read: ${hashed.reason}`);
+        else if (hashed.answer.hash === hash) return { file: { path, ...hashed.answer }, notes };
       }
-      return undefined;
-    }),
+      return { file: undefined, notes };
+    },
 
     downloadedFilesHashed: async (options) => {
       const listed = await readOrReason(async () => {

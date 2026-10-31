@@ -1,7 +1,9 @@
 // MO2's changes to the plugin order, the profile, the mod folders and the downloaded files' metadata:
 // each file spliced through its own codec under its lock and written whole.
 
-import { basename } from 'node:path';
+import { constants } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
+import { basename, dirname } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
 import type { NexusFileInfo } from '../../ports/nexusFileInfo';
 import { firstLines } from '../../loadOrderFileCodec/firstLines';
@@ -22,7 +24,7 @@ import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
-  | 'putDownloadedFile' | 'trashDownloadedFile' | 'selectProfile'>;
+  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
@@ -83,6 +85,24 @@ async function putDownloadedFile(
       throw err;
     }
     return { put: true };
+  });
+}
+
+async function copyDownloadedFile(context: Mo2Context, from: string, name: string): Promise<void> {
+  if (basename(name) !== name || name === '..') throw new Error(`'${name}' is not a file name`);
+  const downloadsDir = await currentDownloadsDir(context);
+  const file = downloadedFilePath(downloadsDir, name);
+  await withLock(file, async () => {
+    if (await exists(file)) throw new Error(`'${name}' is already in the downloads folder`);
+    await ensureDir(downloadsDir);
+    await copyFile(from, file, constants.COPYFILE_EXCL);
+    const metadata = downloadedFileMetadataPath(dirname(from), basename(from));
+    try {
+      if (await exists(metadata)) await copyFile(metadata, downloadedFileMetadataPath(downloadsDir, name), constants.COPYFILE_EXCL);
+    } catch (err) {
+      await remove(file);
+      throw err;
+    }
   });
 }
 
@@ -156,6 +176,8 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     },
 
     putDownloadedFile: (name, bytes, file) => putDownloadedFile(context, name, bytes, file),
+
+    copyDownloadedFile: (from, name) => copyDownloadedFile(context, from, name),
 
     async trashDownloadedFile(name, trash) {
       const held = await heldDownloadedFile(context, name);
