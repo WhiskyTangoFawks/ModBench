@@ -107,6 +107,8 @@ interface InstanceSide {
   statuses?: ModStatuses;
   deployment?: DeploymentRead;
   toolbox: ToolboxView;
+  /** The lines the Downloads, Toolbox and Mods views show on their message lines. */
+  viewMessages: () => string[];
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
   downloadsSelection: () => readonly DownloadsTreeNode[];
@@ -121,6 +123,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolbox: own(createToolboxView({ instance: undefined })),
+    viewMessages: () => [],
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [], downloadsSelection: () => [],
   };
@@ -179,7 +182,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), pluginSync, modStatuses,
   }));
-  const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
+  const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporter: reporterFor('downloadedFiles'), trash,
     log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
@@ -218,14 +221,14 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerModlistCommands({ commands: modlist, instance, reporter: reporterFor('modlist') }));
   own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
   own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
-  own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloadsView));
+  own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloads.view));
   own(highlightFollowingFocus(
     deps.focusedView, new Map([[MODS_KEY_ARGS.view, mods.relatesRows], [PLUGINS_KEY_ARGS.view, plugins.relatesRows]]),
     [plugins.drawsHighlight, mods.drawsHighlight], (listener) => instance.subscribe(listener)));
   ownAll(own, registerNameFilterCommands(
     () => deps.focusedView.id(),
     new Map([
-      [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloadsFilter],
+      [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloads.nameFilter],
     ]),
   ));
   own(registerRefreshCommand({
@@ -241,10 +244,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   return {
     instance, toolbox, statuses: modStatuses,
+    viewMessages: () => [...downloads.messages(), ...toolbox.messages(), ...mods.messages()],
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
-    downloadsSelection: () => downloadsView.selection,
+    downloadsSelection: () => downloads.view.selection,
   };
 }
 
@@ -332,7 +336,7 @@ function start(context: vscode.ExtensionContext): void {
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, mEditStanding: plugins.mEditStanding, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, standing: { messages: () => [...plugins.mEditStanding.messages(), ...views.viewMessages()] }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,

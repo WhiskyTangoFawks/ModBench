@@ -685,6 +685,19 @@ describe('a gesture the agent runs', () => {
       rmSync(installed, { recursive: true, force: true });
     }
   });
+
+  it('answers beside the line the Mods view shows when it has no mods, which no other view says', async () => {
+    rmSync(modDir, { recursive: true, force: true });
+    writeFileSync(modlistPath, '');
+
+    const standing = await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
+      const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
+      const lines = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
+      return lines.some((line) => line.startsWith('No mods or separators.')) && lines;
+    });
+
+    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
+  });
 });
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
