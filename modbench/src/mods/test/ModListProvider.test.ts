@@ -570,6 +570,17 @@ describe('the Mods tree\'s rows', () => {
       expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move mods.', detail: 'Delta is being dragged, so nothing goes onto it.' }]);
     });
 
+    it('a payload that carries no focused row among its rows drops nothing', async () => {
+      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
+      const rows = await shownRows(provider);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.set(MIME, new DataTransferItem({ rows: [] }));
+
+      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
+
+      expect(executeCommand).not.toHaveBeenCalled();
+    });
+
     it('a drag that mixes kinds takes the kind of the row VS Code last added to the selection', async () => {
       const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
 

@@ -27,7 +27,8 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {
   if (typeof value !== 'object' || value === null || !('rows' in value) || !Array.isArray(value.rows)) return false;
-  return value.rows.every((row) => row instanceof ModNode || row instanceof SeparatorNode);
+  if (!value.rows.every((row) => row instanceof ModNode || row instanceof SeparatorNode)) return false;
+  return 'focused' in value && value.rows.some((row) => row === value.focused);
 }
 
 interface ModListProviderOptions {
@@ -282,8 +283,9 @@ export class ModListProvider
     _token: vscode.CancellationToken,
   ): void {
     const rows = source.filter(isEntryNode);
-    if (rows.length === 0) return;
-    const dragged: DraggedRows = { rows, focused: rows.at(-1) };
+    const focused = rows.at(-1);
+    if (focused === undefined) return;
+    const dragged: DraggedRows = { rows, focused };
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem(dragged));
   }
 
@@ -297,7 +299,7 @@ export class ModListProvider
     if (!payload || !isDraggedRows(payload.value)) return;
     const move = dropMove(payload.value, target, this.direction);
     if ('refusal' in move) {
-      this.reporter.report('error', `Could not move ${payload.value.focused?.kind ?? 'mod'}s.`, move.refusal);
+      this.reporter.report('error', `Could not move ${payload.value.focused.kind}s.`, move.refusal);
       return;
     }
     await vscode.commands.executeCommand('modbench.mod.move', move.argument[0], move.argument, move.target);

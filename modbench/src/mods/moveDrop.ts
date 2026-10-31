@@ -9,7 +9,7 @@ import type { OrderEnd } from '../modCommands/modCommands';
 /** The rows a drag carries, and the row whose kind a drag that mixes kinds takes. */
 export interface DraggedRows {
   readonly rows: readonly (ModNode | SeparatorNode)[];
-  readonly focused?: ModNode | SeparatorNode;
+  readonly focused: ModNode | SeparatorNode;
 }
 
 /** The move a drop is: its Argument and its target. */
@@ -40,11 +40,10 @@ function dragRefusal(target: ModNode | SeparatorNode, rows: DraggedRows['rows'])
  *  lands them; the rest land directly above the target, as shown. No target is below the last row. */
 export function dropMove(dragged: DraggedRows, target: ModlistNode | undefined, direction: SortDirection): Move | Refusal {
   const argument = pluralArgument({ focused: dragged.focused, selection: dragged.rows }, 'mod', 'separator');
-  const kind = argument[0]?.kind;
-  if (kind === undefined) return { refusal: 'Nothing is being dragged.' };
+  const { kind } = dragged.focused;
   const end = endAtTop(direction);
   if (target === undefined) return { argument, target: { place: { kind: 'modOrder' }, end: otherEnd(end) } };
-  if (target.kind === 'runtimeOutput') return { refusal: 'Nothing goes onto Overwrite.' };
+  if (target.kind === 'runtimeOutput') return { refusal: 'Overwrite is not a mod.' };
   if (target.kind !== 'mod' && target.kind !== 'separator') return { refusal: 'Nothing goes onto a file or a folder.' };
   const refusal = dragRefusal(target, dragged.rows);
   if (refusal !== undefined) return { refusal };

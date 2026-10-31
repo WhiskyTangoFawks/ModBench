@@ -126,7 +126,6 @@ export class PluginsTreeProvider
   constructor(options: PluginsTreeProviderOptions) {
     this.instance = options.instance;
     this.reporter = options.reporter;
-    this.reporter = options.reporter;
     this.records = options.records;
     this.facts = new PluginFactsFeed({
       client: options.client,

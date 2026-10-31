@@ -62,7 +62,7 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
   });
 
   it.each<[string, DraggedRows, ModlistNode, string]>([
-    ['mods on Overwrite', { rows: [delta], focused: delta }, new OverwriteNode([], 'MO2'), 'Nothing goes onto Overwrite.'],
+    ['mods on Overwrite', { rows: [delta], focused: delta }, new OverwriteNode([], 'MO2'), 'Overwrite is not a mod.'],
     ['mods on a mod being dragged', { rows: [alpha, delta], focused: delta }, alpha, 'Alpha is being dragged, so nothing goes onto it.'],
     ['separators on a separator being dragged', { rows: [groupA, groupB], focused: groupB }, groupA, 'Group A is being dragged, so nothing goes onto it.'],
     ['mods on a mod being dragged, as the view rebuilt it since the drag began', { rows: [alpha, delta], focused: delta }, modRow('Alpha'), 'Alpha is being dragged, so nothing goes onto it.'],
