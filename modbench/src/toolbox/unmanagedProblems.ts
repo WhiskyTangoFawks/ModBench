@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { overwritePathOf } from '../deployment/deployment';
+import { modbenchDiagnostic, PROBLEM_SOURCE } from '../drivingLib/modbenchDiagnostic';
 
 export const MOVE_TO_OVERWRITE = 'modbench.instance.moveToOverwrite';
-
-const SOURCE = 'modbench deployment';
 
 interface LeftOut {
   readonly path: string;
@@ -29,15 +28,14 @@ export function unmanagedProblems(collection: vscode.DiagnosticCollection) {
         const message = winner === undefined
           ? 'Deploy does not manage this file.'
           : `Deploy does not manage this file, and left out ${winner}, which the game would get at its path.`;
-        const diagnostic = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), message, vscode.DiagnosticSeverity.Warning);
-        diagnostic.source = SOURCE;
+        const diagnostic = modbenchDiagnostic(new vscode.Range(0, 0, 0, 0), message, vscode.DiagnosticSeverity.Warning);
         collection.set(vscode.Uri.file(file), [diagnostic]);
       }
     },
     quickFixes: {
       provideCodeActions(document: { readonly uri: { readonly fsPath: string } }, _range: unknown, { diagnostics }: { readonly diagnostics: readonly { readonly source?: string }[] }): vscode.CodeAction[] {
         const path = pathOf.get(document.uri.fsPath);
-        const ours = diagnostics.filter(({ source }) => source === SOURCE);
+        const ours = diagnostics.filter(({ source }) => source === PROBLEM_SOURCE);
         if (path === undefined || overwritePathOf(path) === undefined || ours.length === 0) return [];
         const fix = new vscode.CodeAction('Move to Overwrite', vscode.CodeActionKind.QuickFix);
         fix.diagnostics = ours.filter((diagnostic): diagnostic is vscode.Diagnostic => diagnostic instanceof vscode.Diagnostic);

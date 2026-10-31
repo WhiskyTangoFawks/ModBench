@@ -25,7 +25,7 @@ import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
-import { SOURCE_PROBLEMS } from './sourceProblems';
+import { PROBLEMS } from './problems';
 
 export interface AgentServerOptions {
   port: number;
@@ -115,7 +115,7 @@ function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deploymen
   register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, standing, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
+  register(server, log, standing, { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
   return server;
 }
 
