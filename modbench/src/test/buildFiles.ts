@@ -1,10 +1,10 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { manifestText, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { manifestText, type BuildFile as Read } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../wire/sourceMod';
 
 /** A build file as its author writes it, which holds no exclusion. */
-export type BuildFile = Omit<Manifest, 'exclude'>;
+export type BuildFile = Omit<Read, 'exclude'>;
 
 export const buildFileOf = (over: Partial<BuildFile> = {}): BuildFile => ({ packages: [], archives: [], steps: [], tools: [], files: [], ...over });
 

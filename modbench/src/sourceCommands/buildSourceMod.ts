@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { lineAtFolderPath, writeManifestIn, type Manifest, type ManifestFile } from '../manifestAdapter/manifestAdapter';
+import { lineAtFolderPath, writeManifestIn, type BuildFile, type ManifestFile } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
@@ -26,7 +26,7 @@ export interface SourceModToBuild {
   readonly folder: string;
   readonly exclude: readonly string[];
   readonly sourceFolder: string;
-  readonly buildFile: Manifest;
+  readonly buildFile: BuildFile;
   readonly packages: PackagesRead;
   readonly version: string | undefined;
   readonly isSubmodule: boolean;
@@ -107,7 +107,7 @@ async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly 
     const paths = [...new Set([...made.map(({ path }) => path), ...taken, ...stepped])].filter((path) => held.has(path));
     await writeManifestIn(mod.folder, {
       packages: [{ kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule }],
-      exclude: [], archives: [], steps: [], tools: [],
+      exclude: [], archives: [],
       files: paths.map((path): ManifestFile => ({ path, entry: { kind: 'held' } })),
       ...mod.version === undefined ? {} : { version: mod.version },
     });

@@ -1,4 +1,4 @@
-import type { Manifest, ManifestFile, ManifestPackage } from './manifest';
+import type { Manifest, ManifestFile, ManifestPackage, ManifestStep, ManifestTool } from './manifest';
 
 const upperUnit = (unit: string): string => {
   const upper = unit.toUpperCase();
@@ -55,7 +55,7 @@ const fileLine = (file: ManifestFile, first: string | undefined): object => {
 const lineEach = (key: string, items: readonly (object | string)[]): string[] =>
   items.length === 0 ? [] : [`"${key}": [\n${items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(',\n')}\n]`];
 
-export function manifestText(manifest: Manifest): string {
+export function manifestText(manifest: Manifest & { readonly steps?: readonly ManifestStep[]; readonly tools?: readonly ManifestTool[] }): string {
   const first = manifest.packages[0]?.name;
   const files = [...manifest.files].sort((a, b) => ordinalIgnoreCaseThenOrdinal(a.path, b.path));
   const members = [
@@ -64,8 +64,8 @@ export function manifestText(manifest: Manifest): string {
     ...(manifest.archives.length === 0
       ? []
       : [`"archives": {\n${manifest.archives.map((archive) => `${JSON.stringify(archive.path)}: ${JSON.stringify(archive.files)}`).join(',\n')}\n}`]),
-    ...lineEach('steps', manifest.steps.map((step) => (step.args.length === 0 ? { task: step.task } : { task: step.task, args: step.args }))),
-    ...lineEach('tools', manifest.tools),
+    ...lineEach('steps', (manifest.steps ?? []).map((step) => (step.args.length === 0 ? { task: step.task } : { task: step.task, args: step.args }))),
+    ...lineEach('tools', manifest.tools ?? []),
     ...(files.length === 0 ? ['"files": []'] : lineEach('files', files.map((file) => fileLine(file, first)))),
   ];
   return `{\n${members.join(',\n')}\n}\n`;

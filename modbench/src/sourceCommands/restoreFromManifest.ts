@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
 import type { InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, metadataOverwritten, repositoryOf, sourceModsOf, type FolderAgainst, type Manifest,
+  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, metadataOverwritten, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
   type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
@@ -134,11 +134,11 @@ async function manifestHeld(folder: string): Promise<Held> {
 }
 
 // Read once the submodule is cloned, as a clone holds no build file before.
-async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile: Manifest } | { readonly refusal: string }> {
+async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile: BuildFile } | { readonly refusal: string }> {
   try {
     const read = await buildFileIn(sourceFolder);
     if (read === undefined) return { refusal: skipped(`'${sourceFolder}' holds no build file`) };
-    return 'refused' in read ? { refusal: skipped(read.refused) } : { buildFile: read.manifest };
+    return 'refused' in read ? { refusal: skipped(read.refused) } : { buildFile: read.buildFile };
   } catch (err) {
     return { refusal: skipped(`its build file could not be read: ${errorMessage(err)}`) };
   }
@@ -184,7 +184,7 @@ async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead
     const why = found.unreadable(name);
     return why === undefined ? { kind: 'read', answer: found.handed(name) } : { kind: 'unreadable', reason: why };
   };
-  const packages = await packagesRead(adapter, manifest, { downloaded, game: pass.game, tasks: pass.build.tasks });
+  const packages = await packagesRead(adapter, manifest, { downloaded, game: pass.game });
   if (packages.lacks.length === 0) return packages;
   const notDownloaded = named.flatMap(({ name }) => {
     const why = found.notDownloaded(name);
@@ -216,20 +216,7 @@ async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest)
   return undefined;
 }
 
-// Restore runs a mod's steps once its folder holds what its packages give.
-async function whyNotStepped(pass: Pass, manifest: Manifest, folder: string): Promise<string | undefined> {
-  if (manifest.steps.length === 0) return undefined;
-  if (pass.options.signal?.aborted) return 'the restore was cancelled before its steps ran';
-  const failed = await pass.deps.tasks.whyStepsFailed(manifest.steps.map(({ task, args }) => ({ task, args: [...args] })), folder);
-  return failed === undefined ? undefined : `its ${failed}`;
-}
-
 async function whyNotFinished(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
-  return await trashedOrWhy(pass.deps, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest) ?? await whyNotStepped(pass, manifest, folder);
-}
-
-// A source mod's build ran its steps.
-async function whyNotFinishedBuilt(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
   return await trashedOrWhy(pass.deps, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest);
 }
 
@@ -325,7 +312,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
-  const why = await whyNotFinishedBuilt(pass, mod, recorded.manifest, folder, namedByNoLine);
+  const why = await whyNotFinished(pass, mod, recorded.manifest, folder, namedByNoLine);
   if (why !== undefined) return { refusal: notFinished(why) };
   return {
     landed: {
@@ -446,7 +433,7 @@ async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys |
   try {
     // The listing asks before restore downloads anything, so it reads what the downloads folder holds now.
     const downloaded = await downloadedNow(adapter, held.manifest);
-    const against = await compared(adapter, held.manifest, folder, await packagesRead(adapter, held.manifest, { downloaded, game: pass.game, tasks: pass.build.tasks }));
+    const against = await compared(adapter, held.manifest, folder, await packagesRead(adapter, held.manifest, { downloaded, game: pass.game }));
     return {
       mod, differing: against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : [])).sort(),
       namedByNoLine: against.namedByNoLine, metadataDiffers: metadata !== undefined && metadataOverwritten(metadata.answer, says),

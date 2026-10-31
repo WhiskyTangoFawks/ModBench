@@ -277,7 +277,7 @@ describe('uninstallMods', () => {
     for (const name of ['Harder VATS', 'ENBoost']) {
       await mkdir(join(mods, name));
       await writeFile(join(mods, name, `${name}.manifest.json`), manifestText({
-        packages: [{ kind: 'sourceRepository', name: 'Harder VATS', isSubmodule: false }], exclude: [], archives: [], steps: [], tools: [], files: [],
+        packages: [{ kind: 'sourceRepository', name: 'Harder VATS', isSubmodule: false }], exclude: [], archives: [], files: [],
       }));
     }
     const { fake, commands } = over(FIXTURE_ORDER, {}, {
