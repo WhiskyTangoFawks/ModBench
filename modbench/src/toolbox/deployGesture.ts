@@ -5,15 +5,13 @@ import { AgentCall } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { deployFailures, deployWarnings } from './deployProblems';
-import { coalesced } from '../ports/coalesced';
-import { errorMessage } from '../ports/errorMessage';
 import { MOVE_TO_OVERWRITE, unmanagedProblems } from './unmanagedProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface DeployGestureDeps {
-  commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite' | 'unmanaged' | 'watch'>;
-  instance: Pick<Instance, 'landed' | 'sequence' | 'refresh'>;
+  commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite' | 'unmanaged'>;
+  instance: Pick<Instance, 'landed' | 'sequence' | 'refresh' | 'subscribe'>;
   reporter: Reporter;
 }
 
@@ -21,27 +19,13 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
   const collection = vscode.languages.createDiagnosticCollection('modbench-deployment-unmanaged');
   const problems = unmanagedProblems(collection);
   let leftOut: readonly { path: string; winner: string }[] = [];
-  let watched: { folder: string; watcher: { dispose(): void } } | undefined;
-  // A change in the folder only triggers the read; the disk answers (ADR-0003).
-  const reread = coalesced(() => { void publishProblems(); });
-  const watch = (folder: string | undefined): void => {
-    if (watched?.folder === folder) return;
-    watched?.watcher.dispose();
-    watched = undefined;
-    if (folder === undefined) return;
-    watched = {
-      folder,
-      watcher: commands.watch(folder, reread, (err) => {
-        reporter.report('warning', 'The deployment folder cannot be watched, so its problems are read again at the next deploy, purge or move to Overwrite.', errorMessage(err));
-      }),
-    };
-  };
   const publishProblems = async (): Promise<void> => {
     const held = await commands.unmanaged();
-    watch(held.applied ? held.folder : undefined);
     if (held.applied) problems.publish(held.unmanaged, leftOut);
     else collection.clear();
   };
+  // A recompute reads the disk again, on window focus and on refresh: the files the user changed by hand are read there (ADR-0003).
+  const subscription = instance.subscribe(() => { void publishProblems(); });
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
@@ -82,12 +66,11 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
     vscode.commands.registerCommand('modbench.instance.purge', () => runWritingGesture(TOOLBOX_VIEW, instance, purge)),
     registerMoveToOverwriteCommand({ commands, instance, reporter }, publishProblems),
     collection,
-    { dispose: () => { watched?.watcher.dispose(); } },
+    subscription,
     vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, problems.quickFixes, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
   ];
 }
 
-// deployment-hardlink.md, Files deploy does not manage, story 4: the link on each problem fires it with that file.
 function registerMoveToOverwriteCommand({ commands, instance, reporter }: DeployGestureDeps, publishProblems: () => Promise<void>): vscode.Disposable {
   const move = async (paths: unknown): Promise<void> => {
     const named = Array.isArray(paths) && paths.every((path) => typeof path === 'string') ? paths : undefined;

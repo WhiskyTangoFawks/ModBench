@@ -1,7 +1,6 @@
 // Deployment (target-architecture.d2): a load order deployed into the deployment folder. Its one type
 // is hardlink (deployment-hardlink.md): each file the game gets is linked to its copy in the instance.
 
-import { watch } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
@@ -66,8 +65,6 @@ export interface Deployment {
   purge(folder: string): Promise<Purged>;
   /** Every file in `folder` that is not still as deploy last wrote it. */
   unmanaged(folder: string): Promise<string[]>;
-  /** Calls `onChange` after each change below `folder`, a trigger to read it again and never the answer; `onError` hears why it cannot. */
-  watch(folder: string, onChange: () => void, onError: (err: unknown) => void): { dispose(): void };
 }
 
 // A mod's Root folder holds what the game reads from beside its program; the rest is Data's.
@@ -357,16 +354,6 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Dep
       const run = last.then(async () => unmanagedIn(folder, (await record.of(folder)).files));
       last = run.catch(() => undefined);
       return run;
-    },
-    watch(folder, onChange, onError) {
-      try {
-        const watcher = watch(folder, { recursive: true }, onChange);
-        watcher.on('error', onError);
-        return { dispose: () => { watcher.close(); } };
-      } catch (err) {
-        onError(err);
-        return { dispose: () => undefined };
-      }
     },
     purge(folder) {
       const run = last.then(() => purgeFrom(record, folder));

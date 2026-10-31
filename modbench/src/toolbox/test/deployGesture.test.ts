@@ -35,13 +35,14 @@ import { registerDeployCommands } from '../deployGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import type { InstanceSubscriber } from '../../instanceLoader/instance';
 import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult } from '../../instanceCommands/deploy';
 
 const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 const NOTHING_DEPLOYED = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED } as const;
 
-const watched: { folder: string; onChange: () => void; disposed: boolean }[] = [];
+const subscribers: InstanceSubscriber[] = [];
 
 const inDeployed = (path: string) => ({ path, file: `/deployed/${path}` });
 
@@ -58,10 +59,9 @@ function deployAnswering(
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
   const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
   const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: unmanagedNow.map(inDeployed) }));
-  const watch = vi.fn<DeployCommands['watch']>((folder, onChange) => { watched.push({ folder, onChange, disposed: false }); return { dispose: () => undefined }; });
   registerDeployCommands({
-    commands: { deploy, purge, moveToOverwrite, unmanaged, watch },
-    instance: { landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
+    commands: { deploy, purge, moveToOverwrite, unmanaged },
+    instance: { subscribe: (subscriber) => { subscribers.push(subscriber); return { dispose: () => undefined }; }, landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
     reporter,
   });
   return { reporter, deploy, purge, moveToOverwrite, unmanaged, commands: { deploy }, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
@@ -70,7 +70,7 @@ function deployAnswering(
 beforeEach(() => {
   handlers.clear();
   collections.length = 0;
-  watched.length = 0;
+  subscribers.length = 0;
   actionProviders.length = 0;
   executeCommand.mockClear();
   progressSteps.length = 0;
@@ -225,22 +225,14 @@ describe('the problems on the files the deployment folder holds that deploy does
     expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]);
   });
 
-  it('are read again when the deployment folder changes, so a file the user deleted has none', async () => {
+  it('are read again when the instance is read again, so a file the user deleted has none', async () => {
     const { run, unmanaged } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['a.ini', 'b.ini'] });
     await run();
     unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
-    present(watched[0], 'the watch').onChange();
+    present(subscribers[0], 'the instance subscriber')(value, 2);
+
     await vi.waitFor(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
-  });
-
-  it('are watched in the deployment folder alone, and not again while it is the same', async () => {
-    const { run, runPurge } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['a.ini'] });
-
-    await run();
-    await runPurge();
-
-    expect(watched.map(({ folder }) => folder)).toEqual(['/deployed']);
   });
 
   it('name no file left out by an earlier deploy once a deploy fails', async () => {

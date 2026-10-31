@@ -918,40 +918,6 @@ describe('the path in Overwrite that the next deploy links back to a path below 
   });
 });
 
-describe('a watch on the deployment folder', () => {
-  const watched = (onChange: () => void, onError: (err: unknown) => void = () => undefined) => hardlinkDeployment(storage, place).watch(folder, onChange, onError);
-
-  it('hears a file made below a folder of it', async () => {
-    await mkdir(join(folder, 'Data'));
-    const heard = vi.fn();
-    const watch = watched(heard);
-
-    await writeFile(join(folder, 'Data', 'mine.ini'), 'mine');
-
-    await vi.waitFor(() => { expect(heard).toHaveBeenCalled(); });
-    watch.dispose();
-  });
-
-  it('hears a file deleted', async () => {
-    await writeFile(join(folder, 'mine.ini'), 'mine');
-    const heard = vi.fn();
-    const watch = watched(heard);
-
-    await rm(join(folder, 'mine.ini'));
-
-    await vi.waitFor(() => { expect(heard).toHaveBeenCalled(); });
-    watch.dispose();
-  });
-
-  it('says why it cannot watch a folder that is not there', () => {
-    const failed = vi.fn();
-
-    hardlinkDeployment(storage, place).watch(join(folder, 'gone'), () => undefined, failed);
-
-    expect(failed).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe('purge', () => {
   const listing = async () => (await readdir(folder, { recursive: true })).map((path) => path.split(sep).join('/')).sort();
 
