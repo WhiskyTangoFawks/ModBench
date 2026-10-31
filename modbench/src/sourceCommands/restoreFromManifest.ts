@@ -293,7 +293,6 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   };
 }
 
-// Metadata restore cannot write refuses the mod before it writes a file.
 async function whyMetadataUnwritable({ folders, deps: { adapter } }: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
   if (!folders.isMod(mod)) return undefined;
   const metadata = await adapter.modMetadata(mod);

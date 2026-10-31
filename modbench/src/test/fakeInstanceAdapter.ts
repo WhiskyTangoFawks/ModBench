@@ -556,7 +556,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         const outside = files.find(({ path }) => reachesOut(path));
         if (outside !== undefined) throw new Error(`Not a file of "${folder}": "${outside.path}"`);
       }),
-    trashingReplaced: async (_folder, _paths, _trash, run) => ({ answer: await run(), notTrashed: [] }),
+    trashingReplaced: async (_folder, _paths, _trash, run) => ({ answer: await run() }),
     trashSourceFolder: async (sourceFolder, trash) => {
       await write({ verb: 'trashSourceFolder', sourceFolder }, () => undefined);
       await trash(sourceFolder);

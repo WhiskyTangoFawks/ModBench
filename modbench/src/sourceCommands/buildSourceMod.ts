@@ -69,12 +69,17 @@ const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '
 
 const repositoryPackage = (mod: SourceModToBuild): ManifestPackage => ({ kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule });
 
+interface Taken {
+  readonly lines: readonly ManifestFile[];
+  readonly writes: readonly Parameters<Adapter['writeFilesIn']>[1][number][];
+}
+
 // mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
 // those bytes, before mEdit packs it or compiles beside it.
-async function takenWritten({ adapter, trash }: BuildDeps, mod: SourceModToBuild): Promise<{ lines: ManifestFile[]; wrote: boolean }> {
+async function takenOf(adapter: Adapter, mod: SourceModToBuild): Promise<Taken> {
   const { buildFile, packages, folder, exclude } = mod;
   const lines: ManifestFile[] = [];
-  const writes: Parameters<Adapter['writeFilesIn']>[1][number][] = [];
+  const writes: Taken['writes'][number][] = [];
   for (const line of buildFile.files) {
     const from = packages.packageFiles.get(line.path);
     const hash = packages.hashes.get(line.path);
@@ -85,8 +90,7 @@ async function takenWritten({ adapter, trash }: BuildDeps, mod: SourceModToBuild
     if (there.kind === 'read' && there.answer.hash === hash) continue;
     writes.push({ path, from });
   }
-  if (writes.length > 0) await adapter.writeFilesIn(folder, writes, trash);
-  return { lines, wrote: writes.length > 0 };
+  return { lines, writes };
 }
 
 const NO_LINE: Manifest = { packages: [], exclude: [], archives: [], files: [] };
@@ -252,45 +256,42 @@ async function builtAndStepped(deps: BuildDeps, mod: SourceModToBuild, taken: re
   return { outcome, output, beforeSteps, failure: stepFailed === undefined ? undefined : `The build stopped as its ${stepFailed}.` };
 }
 
-// A file whose old copy the trash refused holds that copy again, so what the build wrote there is not recorded.
-const withoutPaths = (output: Output, paths: readonly string[]): Output => {
-  const refused = new Set(paths.map((path) => path.toLowerCase()));
-  const kept = (path: string): boolean => !refused.has(path.toLowerCase());
-  return { ...output, vouched: new Set([...output.vouched].filter(kept)), taken: new Map([...output.taken].filter(([path]) => kept(path))) };
-};
-
-function failureOf(stopped: string | undefined, notTrashed: readonly { readonly why: string }[]): string | undefined {
-  if (notTrashed.length === 0) return stopped;
-  const why = notTrashed.map((one) => one.why).join('; ');
-  return stopped === undefined ? `The build stopped as ${why}.` : `${stopped} Then ${why}.`;
+// The taken files written, trashing each they replace, then mEdit and the steps.
+async function written(deps: BuildDeps, mod: SourceModToBuild, { lines, writes }: Taken, pass: BuildPass): Promise<Built | Ran> {
+  const stopped = (failure: string): Built => ({ landed: { mod: mod.name, compiled: [], refused: [], archivesRefused: [], failure: `The build stopped before compiling, as ${failure}` } });
+  if (writes.length > 0) {
+    try {
+      await deps.adapter.writeFilesIn(mod.folder, writes, deps.trash);
+    } catch (err) {
+      return stopped(`a file its packages give could not be written: ${errorMessage(err)}`);
+    }
+    try {
+      await writtenRecorded(mod, lines);
+    } catch (err) {
+      return stopped(`its manifest could not record the files its packages give: ${errorMessage(err)}`);
+    }
+  }
+  return builtAndStepped(deps, mod, lines, pass);
 }
 
 /** The mod built, refused before anything was written, or mEdit's refusal of the whole call. */
 export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built> {
   const refusal = refusedBeforeWriting(mod, pass);
   if (refusal !== undefined) return refusal;
-  const stopped = (failure: string): Built => ({ landed: { mod: mod.name, compiled: [], refused: [], archivesRefused: [], failure: `The build stopped before compiling, as ${failure}` } });
-  let written: Awaited<ReturnType<typeof takenWritten>>;
-  try {
-    written = await takenWritten(deps, mod);
-  } catch (err) {
-    return stopped(`a file its packages give could not be written: ${errorMessage(err)}`);
-  }
-  const taken = written.lines;
-  try {
-    if (written.wrote) await writtenRecorded(mod, taken);
-  } catch (err) {
-    return stopped(`its manifest could not record the files its packages give: ${errorMessage(err)}`);
-  }
+  let taken: Taken;
   let unrecorded: string[];
   try {
-    unrecorded = await unrecordedIn(deps.adapter, mod);
+    taken = await takenOf(deps.adapter, mod);
+    const writing = new Set(taken.writes.map(({ path }) => path.toLowerCase()));
+    unrecorded = (await unrecordedIn(deps.adapter, mod)).filter((path) => !writing.has(path.toLowerCase()));
   } catch (err) {
-    return stopped(`its folder could not be read: ${errorMessage(err)}`);
+    return refusedAs(mod.name, `its folder could not be read: ${errorMessage(err)}`);
   }
-  const { answer, notTrashed } = await deps.adapter.trashingReplaced(mod.folder, unrecorded, deps.trash, () => builtAndStepped(deps, mod, taken, pass));
+  // mods.md, A source mod, story 4: what no manifest records goes to the trash before anything is written.
+  const ran = await deps.adapter.trashingReplaced(mod.folder, unrecorded, deps.trash, () => written(deps, mod, taken, pass));
+  if ('notTrashed' in ran) return refusedAs(mod.name, ran.notTrashed);
+  const { answer } = ran;
   if (!('output' in answer)) return answer;
-  const failure = failureOf(answer.failure, notTrashed);
-  if (failure === undefined) return { landed: { ...answer.outcome, ...await recorded(deps, mod, answer.output, answer.beforeSteps) } };
-  return { landed: { ...answer.outcome, failure: await stoppedAs(deps, mod, withoutPaths(answer.output, notTrashed.map(({ path }) => path)), failure) } };
+  if (answer.failure !== undefined) return { landed: { ...answer.outcome, failure: await stoppedAs(deps, mod, answer.output, answer.failure) } };
+  return { landed: { ...answer.outcome, ...await recorded(deps, mod, answer.output, answer.beforeSteps) } };
 }

@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { effectiveModId } from './codecs/nexusFileName';
 import { type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
-import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, sameBytes, withLock, write } from '../files';
+import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, sameBytes, withLock, write, writeTrashing } from '../files';
 import type { MoveToTrash } from '../../ports/trash';
 import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
 import { isManifestPath } from '../../repositoriesLib/manifestPath';
@@ -77,35 +77,37 @@ async function filesUnder(folder: string, at = ''): Promise<string[]> {
   return paths;
 }
 
-// The mod's manifest and its metadata are the mod's, never the release's.
-const keptOver = (path: string): boolean => isManifestPath(path) || path === MOD_META_FILE_NAME;
+// mods.md, What install does, story 3: the manifest and the metadata at the folder's root are the mod's, so a release
+// that ships its own lands without them.
+const isTheMods = (path: string): boolean => isManifestPath(path) || path === MOD_META_FILE_NAME;
 
 // A folder that holds no file left as it was goes to the trash whole, so an upgrade that replaces it costs one move.
-async function trashedBut(folder: string, at: string, left: ReadonlySet<string>, trash: MoveToTrash): Promise<void> {
+async function trashEveryOther(folder: string, at: string, left: ReadonlySet<string>, trash: MoveToTrash): Promise<void> {
   for (const entry of await listDir(fileInFolder(folder, at))) {
     const path = pathIn(at, entry.name);
-    if (left.has(path) || (at === '' && keptOver(path))) continue;
-    if (entry.isDirectory() && [...left].some((held) => held.startsWith(`${path}/`))) await trashedBut(folder, path, left, trash);
+    if (left.has(path) || isTheMods(path)) continue;
+    if (entry.isDirectory() && [...left].some((held) => held.startsWith(`${path}/`))) await trashEveryOther(folder, path, left, trash);
     else await trash(fileInFolder(folder, path));
   }
 }
 
-// mods.md, What install does, story 3: a file the release holds with the same bytes is left as it was.
+// A file the release holds with the same bytes is left as it was, so it costs no copy in the trash.
 const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => async (root, keys) => {
   try {
     const carried = await get(modMetaFileIn(folder), '');
-    const release = (await filesUnder(root)).filter((path) => path !== MOD_META_FILE_NAME);
+    const release = (await filesUnder(root)).filter((path) => !isTheMods(path));
     const held = new Set(await filesUnder(folder));
     const left = new Set<string>();
     for (const path of release) {
-      if (held.has(path) && !keptOver(path) && await sameBytes(fileInFolder(folder, path), fileInFolder(root, path))) left.add(path);
+      if (held.has(path) && await sameBytes(fileInFolder(folder, path), fileInFolder(root, path))) left.add(path);
     }
-    await trashedBut(folder, '', left, trash);
+    await trashEveryOther(folder, '', left, trash);
     for (const path of release.filter((one) => !left.has(one))) {
       await ensureDir(dirname(fileInFolder(folder, path)));
       await moveEntry(fileInFolder(root, path), fileInFolder(folder, path));
     }
-    await write(modMetaFileIn(folder), setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
+    const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried)));
+    if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
   } catch (err) {
     throw new Error(`Upgrading "${mod}" failed partway and was not rolled back: ${errorMessage(err)}`, { cause: err });
   }

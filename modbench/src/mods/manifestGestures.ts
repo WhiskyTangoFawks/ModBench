@@ -148,7 +148,6 @@ const repositoryNotSetUp = ({ pushRefusalNotWritten, pathTokensNotWritten }: { r
   ...(pathTokensNotWritten === undefined ? [] : [`this machine's paths are not in place of every path token: ${pathTokensNotWritten}`]),
 ];
 
-// modlist-repository.md, Restore from manifest, story 2: restore asks nothing.
 async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   const { mods, view } = toRun;

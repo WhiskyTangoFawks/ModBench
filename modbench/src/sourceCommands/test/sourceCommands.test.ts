@@ -244,15 +244,13 @@ describe('sourceCommands build, in mod order', () => {
 });
 
 describe('sourceCommands build over a folder it cannot read', () => {
-  it('stops before mEdit builds, naming why', async () => {
+  it('refuses the mod before mEdit builds, naming why', async () => {
     const unreadable = { ...fakeAdapter(), folderValue: () => Promise.reject(new Error('EACCES')) };
     const client = new InMemoryMEditClient();
 
     const outcome = await sourceCommands({ client, adapter: unreadable, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
-    expect([outcome, client.calls]).toEqual([
-      { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], failure: 'The build stopped before compiling, as its folder could not be read: EACCES' }], refused: [] }, [],
-    ]);
+    expect([outcome, client.calls]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason: 'was not built: its folder could not be read: EACCES.' }] }, []]);
   });
 });
 

@@ -13,6 +13,7 @@ import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
 import { digestOf } from './fileContents/contentDigest';
+import type { MoveToTrash } from '../ports/trash';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -243,6 +244,19 @@ export async function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Arra
 /** Writes `text` to `path` outright — no read-back, no splice, no lock: install's own meta.ini. */
 export function write(path: string, text: string): Promise<void> {
   return writeAtomic(path, text);
+}
+
+/** Writes `text` to `path` as `write` does, trashing the file it replaces only once the text waits beside it. */
+export async function writeTrashing(path: string, text: string, trash: MoveToTrash): Promise<void> {
+  await removeStaleTempsFor(path);
+  const tmp = tempWritePath(path);
+  try {
+    await writeFile(tmp, text);
+    if (await exists(path)) await trash(path);
+    await fsRename(tmp, path);
+  } finally {
+    await rm(tmp, { force: true });
+  }
 }
 
 export function append(path: string, text: string): Promise<void> {

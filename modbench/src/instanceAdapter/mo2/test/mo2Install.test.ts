@@ -457,7 +457,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       expect(await snapshotTree(repository)).toEqual(before);
     });
 
-    it('sends each file it replaces or removes to the trash, a folder that keeps none whole, and leaves a file the release holds with the same bytes (mods.md, What install does, story 3)', async () => {
+    it('sends each file it replaces or removes to the trash (mods.md, What install does, story 3), a folder that keeps none whole, and leaves a file the release holds with the same bytes', async () => {
       await writeFile(join(folder(UPGRADED), 'Kept.esp'), 'bytes of Kept.esp');
       await writeFile(join(folder(UPGRADED), 'Changed.esp'), 'mine');
 
@@ -474,6 +474,29 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
 
       expect(await readFile(join(folder(UPGRADED), manifest), 'utf8')).toBe('{"kept":true}');
+    });
+
+    it('keeps the mod\'s manifest over one the release ships at its root, and lands none (mods.md, What install does, story 3)', async () => {
+      const manifest = `${UPGRADED}.manifest.json`;
+      await writeFile(join(folder(UPGRADED), manifest), '{"kept":true}');
+
+      await holding(['New.esp', manifest, 'Other.manifest.json']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
+
+      expect(await readFile(join(folder(UPGRADED), manifest), 'utf8')).toBe('{"kept":true}');
+      expect(await filesIn(folder(UPGRADED))).toEqual([manifest, 'New.esp', 'meta.ini'].sort());
+    });
+
+    it('sends the mod\'s metadata to the trash when the upgrade changes it, and leaves it when it does not', async () => {
+      const upgrade = (keys: object) => holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, keys, trash);
+      await upgrade(KEYS);
+      const before = await meta(UPGRADED);
+      inTrash = {};
+
+      await upgrade(KEYS);
+      const unchanged = { ...inTrash };
+      await upgrade({ version: '2.2' });
+
+      expect([unchanged, inTrash]).toEqual([{}, { 'meta.ini': before }]);
     });
 
     it('unwraps a release nested in a wrapper folder', async () => {

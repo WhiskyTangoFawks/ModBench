@@ -807,11 +807,11 @@ export interface InstanceAdapter {
   /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes, trashing
    *  the file it replaces. Rejects a path out of the folder, links resolved; a failed write keeps those before. */
   writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[], trash: MoveToTrash): Promise<void>;
-  /** Runs `write`, then trashes, from its own path, the old copy of each of the forward-slash `paths` in `folder` that
-   *  `write` replaced or removed. A file the trash refuses holds its old copy, and is named with why. */
-  trashingReplaced<T>(folder: string, paths: readonly string[], trash: MoveToTrash, write: () => Promise<T>): Promise<{
-    readonly answer: T; readonly notTrashed: readonly { readonly path: string; readonly why: string }[];
-  }>;
+  /** Trashes each file at the forward-slash `paths` in `folder`, a copy taking its place, then runs `write`. A file the
+   *  trash refuses is named with why, and `write` does not run. */
+  trashingReplaced<T>(folder: string, paths: readonly string[], trash: MoveToTrash, write: () => Promise<T>): Promise<
+    { readonly answer: T } | { readonly notTrashed: string }
+  >;
   /** Moves a source mod's repository folder into the trash. */
   trashSourceFolder(sourceFolder: string, trash: MoveToTrash): Promise<void>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an

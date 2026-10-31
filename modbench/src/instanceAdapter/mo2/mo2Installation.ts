@@ -6,7 +6,7 @@ import { basename, dirname, isAbsolute } from 'node:path';
 import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
-import { ensureDir, exists, get, ignoreSkippedLink, readOrReason, withLock, write } from '../files';
+import { ensureDir, exists, get, ignoreSkippedLink, readOrReason, withLock, write, writeTrashing } from '../files';
 import type { HashIndex } from '../fileContents/hashIndex';
 import { md5Of } from '../fileContents/contentDigest';
 import { errorMessage } from '../../ports/errorMessage';
@@ -144,8 +144,7 @@ export function mo2Installation(
       if ('unwritable' in plan) throw new Error(`the metadata changed after it was found writable: ${plan.unwritable}`);
       if (Reflect.ownKeys(plan.changes).length === 0) return;
       await ensureDir(dirname(plan.file));
-      if (await exists(plan.file)) await trash(plan.file);
-      await write(plan.file, changeOwnedKeysInText(plan.held, plan.changes));
+      await writeTrashing(plan.file, changeOwnedKeysInText(plan.held, plan.changes), trash);
     }),
 
     async installationFile(mod) {
