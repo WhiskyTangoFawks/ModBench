@@ -12,6 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
+import { digestOf } from './fileContents/contentDigest';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -327,6 +328,11 @@ export async function removeIfEmpty(path: string): Promise<boolean> {
     if (errnoCode(err) === 'ENOTEMPTY') return false;
     throw err;
   }
+}
+
+/** Whether the files at `one` and `other` hold the same bytes, as their manifest lines read them. */
+export async function sameBytes(one: string, other: string): Promise<boolean> {
+  return await digestOf(one) === await digestOf(other);
 }
 
 /** Deletes `path`, file or directory, and everything under it; already-gone is not an error. */

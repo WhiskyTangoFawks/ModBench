@@ -142,16 +142,6 @@ export function metadataOf(manifest: Manifest): HeldMetadata {
   };
 }
 
-/** Whether writing `says` into the metadata replaces a value `held` holds: another version, another installation file,
- *  or another page for the same one. A value either side lacks replaces nothing (modlist-repository.md, Restore from
- *  manifest, story 2). */
-export function metadataOverwritten(held: HeldMetadata, says: HeldMetadata): boolean {
-  const version = held.version !== undefined && says.version !== undefined && held.version !== says.version;
-  const file = held.installationFile !== undefined && says.installationFile !== undefined && (held.installationFile.name !== says.installationFile.name
-    || (held.installationFile.page !== undefined && says.installationFile.page !== undefined && held.installationFile.page !== says.installationFile.page));
-  return version || file;
-}
-
 /** The mod's folder and metadata against its manifest (modlist-repository.md, Status). A line whose package entry the
  *  values lack differs. */
 export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {

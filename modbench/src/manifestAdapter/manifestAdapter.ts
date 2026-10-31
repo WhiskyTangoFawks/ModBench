@@ -1,6 +1,6 @@
 export type * from './manifest';
 export {
-  folderAgainst, metadataOf, metadataOverwritten, statusFrom, type FolderAgainst, type ModAt, type ModStatus,
+  folderAgainst, metadataOf, statusFrom, type FolderAgainst, type ModAt, type ModStatus,
 } from './modStatus';
 export { manifestText, ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from './manifestText';
 export { buildFileIn, manifestAt, manifestIn, packagesAsked, packagesAskedAt, writeManifestIn } from './manifestFiles';

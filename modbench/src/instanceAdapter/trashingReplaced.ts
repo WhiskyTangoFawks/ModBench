@@ -8,8 +8,7 @@ import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { MoveToTrash } from '../ports/trash';
-import { exists, ownTempPrefix, remove, rename } from './files';
-import { sameBytes } from './fileContents/contentDigest';
+import { exists, ownTempPrefix, remove, rename, sameBytes } from './files';
 import type { InstanceAdapter } from './instanceAdapter';
 
 interface Kept {

@@ -5,7 +5,7 @@ import { dirname, join, relative } from 'node:path';
 import type { ManifestAt } from '../manifestFiles';
 import type { StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
-import { manifestAt, metadataOf, metadataOverwritten, packagesAskedAt, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { manifestAt, metadataOf, packagesAskedAt, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 let root: string;
 let folder: string;
@@ -281,22 +281,6 @@ describe('a mod\'s status against its manifest', () => {
 });
 
 describe('metadata a restore writes over what the metadata holds', () => {
-
-  it.each([
-    [says('1.0'), says('1.0'), false],
-    [says('1.0'), says('2.0'), true],
-    [says(), says('2.0'), false],
-    [says('1.0'), says(), false],
-    [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z', 'nexus:2']), true],
-    [says(undefined, ['a.7z']), says(undefined, ['a.7z', 'nexus:1']), false],
-    [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z']), false],
-    [says(undefined, ['old.7z']), says(undefined, ['new.7z']), true],
-    [says(), says(undefined, ['a.7z']), false],
-    [says(undefined, ['a.7z']), says(), false],
-  ])('held %j, the manifest saying %j, is overwritten: %s', (held, manifests, overwritten) => {
-    expect(metadataOverwritten(held, manifests)).toBe(overwritten);
-  });
-
   it('is the version and the installation file the manifest names, with its page', () => {
     const packages: ManifestPackage[] = [{ kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }, { kind: 'installationFile', name: 'a.7z', size: 1, hash: 'hash', page: 'nexus:1' }];
 
