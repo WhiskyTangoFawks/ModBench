@@ -150,7 +150,7 @@ interface ManifestsRead {
 const NOTHING_NAMED: ManifestsRead = { goneFrom: () => [], unread: () => undefined };
 
 // A plugin the game loads with no line has a row of its own, so earns no line (plugins.md, The tree, story 2). A
-// plugin a manifest names is on no disk until restore: its existing line is kept, none is added (story 10).
+// plugin a manifest names keeps its line until restore and never gains one (story 10).
 function pluginLinesDelta(
   listed: readonly string[], provided: Extract<PluginsProvided, { kind: 'listed' }>, manifests: ManifestsRead,
 ): PluginLinesDelta {
