@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
@@ -70,6 +70,18 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     await adapterOver(root).reading();
 
     expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['.env']) as unknown });
+  });
+
+  it('writes nothing at a reading once the list holds the files, so its own write starts no further write', async () => {
+    await writeFile(join(root, SETTINGS_FILE), '{}');
+    const adapter = adapterOver(root);
+    await adapter.reading();
+    const written = await stat(join(root, SETTINGS_FILE), { bigint: true });
+
+    await adapter.reading();
+
+    const again = await stat(join(root, SETTINGS_FILE), { bigint: true });
+    expect([again.ino, again.mtimeNs]).toEqual([written.ino, written.mtimeNs]);
   });
 
   it('lists the files after a change to a publisher tag', async () => {
