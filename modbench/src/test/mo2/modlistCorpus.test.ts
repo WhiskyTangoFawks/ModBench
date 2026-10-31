@@ -274,7 +274,9 @@ describe('compiler_settings.json corpus — a publisher tag change touches the p
 
     await commands.changePublisherTag('remove', 'Ignore', [row]);
 
-    expect(JSON.parse((await snapshotTree(dir)).get(SETTINGS)?.toString() ?? '')).toMatchObject({ Include: [], Source: 'somewhere', Ignore: [] });
+    const removed: unknown = JSON.parse((await snapshotTree(dir)).get(SETTINGS)?.toString() ?? '');
+    expect(removed).toMatchObject({ Include: [], Source: 'somewhere' });
+    expect(Reflect.get(removed as object, 'Ignore')).not.toContainEqual(expect.stringContaining('DragIn Manual Extract'));
   });
 
   it('follows a rename and leaves with an uninstall', async () => {

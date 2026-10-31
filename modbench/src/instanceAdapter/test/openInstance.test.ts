@@ -56,10 +56,10 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect(expectKind(publisherConfiguration, 'read').covering(join(root, 'overwrite', 'x.ini'), undefined)).toEqual([]);
   });
 
-  it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list', async () => {
+  it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list at a reading', async () => {
     await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Ignore: ['mine'] }));
 
-    await adapterOver(root).keepOutOfPublisher();
+    await adapterOver(root).reading();
 
     expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['modbench', '.gitignore', 'source']) as unknown });
   });
@@ -67,23 +67,39 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
   it('lists the script environment\'s file in the publisher\'s ignore list', async () => {
     await writeFile(join(root, SETTINGS_FILE), '{}');
 
-    await adapterOver(root).keepOutOfPublisher();
+    await adapterOver(root).reading();
 
     expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['.env']) as unknown });
   });
 
-  it('drops the entry of a manifest a rename left behind once update manifest keeps the files out again', async () => {
+  it('lists the files after a change to a publisher tag', async () => {
+    await writeFile(join(root, SETTINGS_FILE), '{}');
+
+    await adapterOver(root).changePublisherTag('add', 'Include', [join(root, 'mods', 'Harder VATS')]);
+
+    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Include: ['mods\\Harder VATS'], Ignore: expect.arrayContaining(['modbench', '.gitignore']) as unknown });
+  });
+
+  it('reads the configuration as unreadable, writing nothing, when the files cannot be listed in it', async () => {
+    await writeFile(join(root, SETTINGS_FILE), 'not json');
+
+    const { publisherConfiguration } = await adapterOver(root).reading();
+
+    expect([publisherConfiguration.kind, await readFile(join(root, SETTINGS_FILE), 'utf8')]).toEqual(['unreadable', 'not json']);
+  });
+
+  it('drops the entry of a manifest a rename left behind at the next reading', async () => {
     const adapter = adapterOver(root);
     await writeFile(join(root, SETTINGS_FILE), '{}');
     await mkdir(join(root, 'mods', 'X'), { recursive: true });
     await writeFile(join(root, 'mods', 'X', 'X.manifest.json'), '{}');
-    await adapter.keepOutOfPublisher();
+    await adapter.reading();
     await rename(join(root, 'mods', 'X'), join(root, 'mods', 'Y'));
     await adapter.followModFolders([{ from: join(root, 'mods', 'X'), to: join(root, 'mods', 'Y') }]);
     await rm(join(root, 'mods', 'Y', 'X.manifest.json'));
     await writeFile(join(root, 'mods', 'Y', 'Y.manifest.json'), '{}');
 
-    await adapter.keepOutOfPublisher();
+    await adapter.reading();
 
     const entries: unknown = Reflect.get(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8')), 'Ignore');
     expect(entries).toEqual(expect.arrayContaining(['mods\\Y\\Y.manifest.json']));

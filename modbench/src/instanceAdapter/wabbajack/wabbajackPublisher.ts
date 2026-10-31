@@ -420,24 +420,16 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       }, { ifMissing: '{}' });
     },
     keepOut: async ({ present, owns }) => {
-      if (await readOrAbsent(() => get(file), undefined) === undefined) return () => Promise.resolve();
+      if (await readOrAbsent(() => get(file), undefined) === undefined) return;
       const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
       const isGone = (entry: string): boolean => owns(join(instanceRoot, ...namesOf(entry))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
-      let written: { before: string; after: string } | undefined;
       await putIfChanged(file, (before) => {
         const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
         const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
         const remaining = entries.filter((_, at) => !changed.has(at));
         const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
-        const after = withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
-        if (after !== before) written = { before, after };
-        return after;
+        return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
       });
-      return async () => {
-        if (written === undefined) return;
-        const { before, after } = written;
-        await putIfChanged(file, (text) => (text === after ? before : text));
-      };
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

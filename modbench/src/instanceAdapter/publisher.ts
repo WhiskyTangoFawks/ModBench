@@ -2,11 +2,12 @@
 // (ADR-0024): the mod manager answers everything but the publisher's configuration.
 
 import type { InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Subscription } from './instanceAdapter';
+import { errorMessage } from '../ports/errorMessage';
 import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
-export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher' | 'scriptEnvironmentFile'> & {
+export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'scriptEnvironmentFile'> & {
   reading(): Promise<ManagerReading>;
   filesKept(): Promise<KeptFiles>;
 };
@@ -33,9 +34,9 @@ export interface Publisher {
   refusal(): Promise<string | undefined>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
-  /** Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none.
-   *  Answers the call that takes back what it wrote. */
-  keepOut(kept: KeptFiles): Promise<() => Promise<void>>;
+  /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
+   *  configuration it cannot read; does nothing when the instance holds none. */
+  keepOut(kept: KeptFiles): Promise<void>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
 }
@@ -43,15 +44,20 @@ export interface Publisher {
 const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: string): KeptFiles => ({ present: [...present, environmentFile], owns });
 
 export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scriptEnvironmentFilePath: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
+  const keepOut = async () => publisher.keepOut(withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath()));
+  const afterKeepingOut = async <T>(write: Promise<T>): Promise<T> => {
+    const written = await write;
+    await keepOut();
+    return written;
+  };
   return {
     ...manager,
     publisherTags: publisher.tags,
-    changePublisherTag: publisher.changeTag,
-    followModFolders: publisher.followFolders,
-    keepOutOfPublisher: async () => publisher.keepOut(withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath())),
+    changePublisherTag: (...change) => afterKeepingOut(publisher.changeTag(...change)),
+    followModFolders: (moves) => afterKeepingOut(publisher.followFolders(moves)),
     publisherConfigurationRefusal: () => publisher.refusal(),
     reading: async () => {
-      const [reading, publisherConfiguration] = await Promise.all([manager.reading(), publisher.configuration()]);
+      const [reading, publisherConfiguration] = await Promise.all([manager.reading(), keptOutConfiguration()]);
       return { ...reading, publisherConfiguration };
     },
     subscribe: (listener) => {
@@ -59,4 +65,13 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
       return { dispose: () => { for (const subscription of heard) subscription.dispose(); } };
     },
   };
+
+  async function keptOutConfiguration(): Promise<PublisherConfiguration> {
+    try {
+      await keepOut();
+    } catch (err) {
+      return { kind: 'unreadable', reason: errorMessage(err) };
+    }
+    return publisher.configuration();
+  }
 }

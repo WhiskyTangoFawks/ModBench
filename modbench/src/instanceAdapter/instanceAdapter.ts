@@ -629,7 +629,8 @@ export interface InstanceAdapter {
   /** Every repository in the source folder now, its folder by its name. */
   sourceRepositories(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
-  /** Each publisher tag the instance's publisher declares. */
+  /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each
+   *  file Modbench keeps in the instance is in its ignore list, every other entry as written. */
   readonly publisherTags: readonly PublisherTag[];
   /** Adds or removes the publisher tag named `tag` on each path; a path already so changes nothing. Answers the paths it
    *  refused; rejects, writing nothing, for an undeclared tag or a configuration it cannot read. */
@@ -639,9 +640,6 @@ export interface InstanceAdapter {
   /** Moves each publisher tag on or under a mod folder `from` to the same place under `to`, or drops it with no `to`.
    *  Rejects, writing nothing, for a configuration it cannot read. */
   followModFolders(moves: readonly FolderMove[]): Promise<void>;
-  /** Lists each file Modbench keeps in the instance in the publisher's ignore list, leaving every other entry as written.
-   *  Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
-  keepOutOfPublisher(): Promise<() => Promise<void>>;
   /** The file the Python tooling reads its environment from; reads empty when there is none yet. */
   readonly scriptEnvironmentFile: ScriptEnvironmentFile;
 
