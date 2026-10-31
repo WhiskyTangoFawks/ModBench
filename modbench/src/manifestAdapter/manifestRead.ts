@@ -214,9 +214,9 @@ const lineOf = (problem: SyntaxError, text: string): string => {
   return offending < 0 ? '' : ` at line ${text.slice(0, offending).split('\n').length}`;
 };
 
-const read = <Read extends Manifest>(text: string, file: string, keys: readonly string[], shaped: (read: BuildFile) => Read): { readonly manifest: Read } | { readonly refused: string } => {
+const read = (text: string, file: string, keys: readonly string[]): { readonly read: BuildFile } | { readonly refused: string } => {
   try {
-    return { manifest: shaped(buildFileOf(text, keys)) };
+    return { read: buildFileOf(text, keys) };
   } catch (problem) {
     if (problem instanceof Unreadable) return { refused: problem.says(file) };
     if (problem instanceof SyntaxError) return { refused: `its ${file} cannot be read${lineOf(problem, text)}` };
@@ -225,9 +225,16 @@ const read = <Read extends Manifest>(text: string, file: string, keys: readonly 
 };
 
 /** `text` read as a manifest. */
-export const readManifest = (text: string): ManifestRead =>
-  read(text, 'manifest', MANIFEST_KEYS, ({ steps: _steps, tools: _tools, ...manifest }) => manifest);
+export const readManifest = (text: string): ManifestRead => {
+  const parsed = read(text, 'manifest', MANIFEST_KEYS);
+  if ('refused' in parsed) return parsed;
+  const { steps: _steps, tools: _tools, ...manifest } = parsed.read;
+  return { manifest };
+};
 
 /** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A
  *  source mod, story 2). */
-export const readBuildFile = (text: string): BuildFileRead => read(text, 'build file', BUILD_FILE_KEYS, (file) => file);
+export const readBuildFile = (text: string): BuildFileRead => {
+  const parsed = read(text, 'build file', BUILD_FILE_KEYS);
+  return 'refused' in parsed ? parsed : { buildFile: parsed.read };
+};

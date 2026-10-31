@@ -112,7 +112,7 @@ describe('buildFileIn', () => {
   it('reads the build file at the root of the repository, in any case', async () => {
     await writeFile(join(folder, BUILD_FILE.toUpperCase()), manifestText(buildFile));
 
-    expect(await buildFileIn(folder)).toEqual({ manifest: { ...buildFile, steps: [], tools: [] } });
+    expect(await buildFileIn(folder)).toEqual({ buildFile: { ...buildFile, steps: [], tools: [] } });
   });
 
   it('is none when the repository holds none, whatever manifest it holds', async () => {

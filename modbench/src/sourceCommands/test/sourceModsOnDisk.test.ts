@@ -209,7 +209,7 @@ describe('decompile and commit over an instance on disk', () => {
 
     const [sent] = handed;
     const read = readBuildFile(sent?.repository.buildFile ?? '');
-    expect([sent?.repository.assets, 'manifest' in read ? [read.manifest.steps, read.manifest.files] : read]).toEqual([['a.nif', 'made.dds'], [[], []]]);
+    expect([sent?.repository.assets, 'buildFile' in read ? [read.buildFile.steps, read.buildFile.files] : read]).toEqual([['a.nif', 'made.dds'], [[], []]]);
   });
 
   it('refuses a mod whose folder\'s manifest names the game folder when the game folder was not found, handing mEdit nothing', async () => {

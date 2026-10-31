@@ -48,4 +48,4 @@ export type BuildFile = Manifest & { readonly steps: readonly ManifestStep[]; re
 
 export type ManifestRead = { readonly manifest: Manifest } | { readonly refused: string };
 
-export type BuildFileRead = { readonly manifest: BuildFile } | { readonly refused: string };
+export type BuildFileRead = { readonly buildFile: BuildFile } | { readonly refused: string };

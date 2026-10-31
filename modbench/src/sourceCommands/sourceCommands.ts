@@ -38,7 +38,7 @@ async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readon
   try {
     const held = await buildFileIn(sourceFolder);
     if (held === undefined) return { reason: `was not built: '${sourceFolder}' holds no build file.` };
-    return 'refused' in held ? { reason: `was not built: ${held.refused}.` } : held.manifest;
+    return 'refused' in held ? { reason: `was not built: ${held.refused}.` } : held.buildFile;
   } catch (err) {
     return { reason: `was not built: its build file could not be read: ${errorMessage(err)}.` };
   }

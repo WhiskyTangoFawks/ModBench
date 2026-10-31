@@ -160,8 +160,8 @@ describe('a manifest the adapter refuses', () => {
 describe('a build file the adapter reads and refuses', () => {
   it('round-trips its steps byte for byte', () => {
     const read = readBuildFile(withSteps);
-    if (!('manifest' in read)) throw new Error(read.refused);
-    expect(manifestText(read.manifest)).toBe(withSteps);
+    if (!('buildFile' in read)) throw new Error(read.refused);
+    expect(manifestText(read.buildFile)).toBe(withSteps);
   });
 
   it.each([

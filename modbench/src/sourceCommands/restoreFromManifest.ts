@@ -138,7 +138,7 @@ async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile
   try {
     const read = await buildFileIn(sourceFolder);
     if (read === undefined) return { refusal: skipped(`'${sourceFolder}' holds no build file`) };
-    return 'refused' in read ? { refusal: skipped(read.refused) } : { buildFile: read.manifest };
+    return 'refused' in read ? { refusal: skipped(read.refused) } : { buildFile: read.buildFile };
   } catch (err) {
     return { refusal: skipped(`its build file could not be read: ${errorMessage(err)}`) };
   }

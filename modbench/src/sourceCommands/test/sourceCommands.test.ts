@@ -272,7 +272,7 @@ describe('sourceCommands decompileAndCommit', () => {
   const buildFileHanded = (mod: DecompileAndCommitMod | undefined): BuildFile => {
     const read = readBuildFile(mod?.repository.buildFile ?? '');
     if ('refused' in read) throw new Error(read.refused);
-    return read.manifest;
+    return read.buildFile;
   };
 
   it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and its build file taking from its packages each file they give', async () => {
