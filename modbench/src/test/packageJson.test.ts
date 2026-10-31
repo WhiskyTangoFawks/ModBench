@@ -191,6 +191,7 @@ const paletteOffers = (command: string, context: Context): boolean =>
 const OPEN_DEPLOYMENT_FOLDER_SETTING = 'modbench.settings.openDeploymentFolderHere';
 const OPEN_PINNED = 'modbench.record.openPinned';
 const REFERENCED_BY = 'modbench.record.referencedBy';
+const REFERENCES_VIEW = 'modbench.referencesView';
 
 describe('package.json activation', () => {
   it('auto-activates on startup so the Activity Bar icon is never stuck hidden', () => {
@@ -637,7 +638,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const inPluginsView = (menu: string): MenuEntry[] =>
     present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`).filter((e) => requires(e.when, PLUGINS_VIEW));
   const menuOf = (contextValue: string): [string, string][] => placed(
-    inPluginsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.pluginListTree', viewItem: contextValue })));
+    inPluginsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.pluginListTree', viewItem: contextValue, [REFERENCES_VIEW]: true })));
 
   it('title bar: filter or clear, sort direction, filter records or clear, then create plugin, as icons, with Collapse All left to VS Code', () => {
     expect(inPluginsView('view/title').map((e) => [e.command, e.group])).toEqual(expect.arrayContaining([
@@ -841,6 +842,7 @@ describe('package.json field gestures\' palette entries', () => {
     ['modbench.record.moveElementUp', { [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveUp': true }],
     ['modbench.record.moveElementDown', { [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveDown': true }],
     ['modbench.record.editField', { [SECTION]: 'stringValue' }],
+    ['modbench.record.cut', { [SECTION]: 'editableCell' }],
     ['modbench.record.openFieldValue', { [SECTION]: 'stringValue' }],
   ] as const;
 
@@ -851,6 +853,10 @@ describe('package.json field gestures\' palette entries', () => {
 
   it.each(eachMissingFact(FIELD_PALETTE))('%s is not in the palette without %s', (command, fact, facts) => {
     expect(paletteOffers(command, { ...ON_A_RECORD_TAB, ...without(facts, fact) })).toBe(false);
+  });
+
+  it('cut is not in the palette on a cell that cannot be edited', () => {
+    expect(paletteOffers('modbench.record.cut', { ...ON_A_RECORD_TAB, [SECTION]: 'field' })).toBe(false);
   });
 
   it.each(['sideBarFocus', 'panelFocus', 'auxiliaryBarFocus'])('add element is not in the palette while %s', (focus) => {
@@ -936,7 +942,7 @@ describe('package.json record tab menus', () => {
     .filter((e) => requires(e.when, "webviewId == 'modbench.record'"));
   const tab = { webviewId: 'modbench.record' };
   const offered = (facts: Record<string, unknown>): string[] =>
-    placed(menu().filter((e) => holds(e.when, { ...tab, ...facts }))).map(([command]) => command);
+    placed(menu().filter((e) => holds(e.when, { ...tab, [REFERENCES_VIEW]: true, ...facts }))).map(([command]) => command);
 
   it('places each item in its group', () => {
     expect(placed(menu())).toEqual([
@@ -1363,6 +1369,22 @@ describe('package.json Delete keys', () => {
     expect(deleteKeys.map((k) => [k.key, k.args])).toEqual([
       ['Delete', { view: 'modbench.pluginListTree' }],
     ]);
+  });
+});
+
+describe('package.json Referenced By is not offered while VS Code\'s References view is disabled', () => {
+  const offers = (menu: 'commandPalette' | 'view/item/context' | 'webview/context', context: Context): boolean =>
+    present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`)
+      .some((e) => e.command === REFERENCED_BY && holds(e.when, context));
+  const places: [string, Parameters<typeof offers>[0], Context][] = [
+    ['the palette', 'commandPalette', { 'modbench.folder': 'instance' }],
+    ['a record row in Plugins', 'view/item/context', { view: 'modbench.pluginListTree', viewItem: 'record' }],
+    ['a column header in the record panel', 'webview/context', { webviewId: 'modbench.record', webviewSection: 'recordHeader' }],
+  ];
+
+  it.each(places)('%s offers it with the view enabled and not without', (_where, menu, context) => {
+    expect(offers(menu, { ...context, [REFERENCES_VIEW]: true })).toBe(true);
+    expect(offers(menu, context)).toBe(false);
   });
 });
 

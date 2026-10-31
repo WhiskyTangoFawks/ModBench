@@ -7,7 +7,7 @@ import { isReadFailed } from '../wire/readFailed';
 import { pickRecord } from './recordPicker';
 import { recordTitle } from './recordTitle';
 import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './referencedByList';
-import { REFERENCES_VIEW_EXTENSION, referencesView, type ReferencesViewInput } from './referencesView';
+import { referencesView, type ReferencesViewInput } from './referencesView';
 
 const REFERENCED_BY_SOURCE = 'modbench.referencedBy';
 
@@ -45,10 +45,7 @@ export function registerReferencedBy(deps: ReferencedByDeps): vscode.Disposable 
   let lists = 0;
   return vscode.commands.registerCommand('modbench.record.referencedBy', async (argument?: unknown) => {
     const view = await referencesView();
-    if (!view) {
-      reporter.report('error', 'Referenced By needs VS Code\'s built-in Reference Search View.', `Enable the extension ${REFERENCES_VIEW_EXTENSION}.`);
-      return;
-    }
+    if (!view) return;
     const record = await recordAskedAbout(deps, argument);
     if (record === 'none') {
       reporter.report('error', 'Could not list what references a record.', 'What was given names no record.');
