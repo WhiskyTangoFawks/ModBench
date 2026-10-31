@@ -1,7 +1,7 @@
 // mods.md, Build: mEdit compiles and packs the source folder, the steps run, and the extension records in the mod's manifest
 // what the build made (ADR-0016, ADR-0027).
 
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { folderAgainst, isExcludedBy, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter/manifestAdapter';
@@ -11,7 +11,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { ba2VersionsOf } from '../tables/gamePaths';
 import type { StepTasks } from './steps';
 
-type Adapter = Pick<InstanceAdapter, 'pathInFolder' | 'ownPath' | 'writeFilesIn' | 'filesIn' | 'originFileHash' | 'folderValue' | 'trashFileIn' | 'trashingReplaced'>;
+type Adapter = Pick<InstanceAdapter, 'pathInFolder' | 'ownPath' | 'writeFilesIn' | 'filesIn' | 'originFileHash' | 'folderValue' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp'>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
@@ -194,8 +194,26 @@ interface Ran {
   readonly failure?: string;
 }
 
-// mods.md, Build, story 1: mEdit makes the folder, each other file it held goes to the trash but those its steps made last
-// time, which they make again, and then the steps run.
+// A write changes the time of a file's change, whatever it writes, and a tool can keep the rest across one.
+async function stampsOf(adapter: Adapter, folder: string, paths: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  const stamps = new Map<string, string>();
+  for (const path of paths) {
+    const stamp = await adapter.fileStamp(join(folder, path));
+    stamps.set(path, stamp.kind === 'read' ? `${stamp.answer.size}:${stamp.answer.modifiedNs}:${stamp.answer.changedNs}` : `unreadable:${stamp.reason}`);
+  }
+  return stamps;
+}
+
+// Build, story 4 and ADR-0027: a file a step made last time that the steps did not write again is none of the folder's
+// output, so it goes to the trash. `before`: the stamps of those files before the steps ran.
+async function stepFilesNotMadeAgain(deps: BuildDeps, mod: SourceModToBuild, before: ReadonlyMap<string, string>): Promise<{ readonly why?: string; readonly trashed: string[] }> {
+  const after = await stampsOf(deps.adapter, mod.folder, [...before.keys()]);
+  const notMade = [...before].filter(([path, stamp]) => after.get(path) === stamp).map(([path]) => path);
+  return { trashed: notMade, why: await whyNotTrashed(deps.adapter, deps.trash, mod.folder, notMade) };
+}
+
+// Build, story 1: mEdit makes the folder, each other file it held goes to the trash but those its steps made last time,
+// and then the steps run.
 async function builtAndStepped(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built | Ran> {
   const answer = await deps.client.build([{
     name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude],
@@ -210,19 +228,29 @@ async function builtAndStepped(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
   const output = outputOf(made);
   if (outcome.failure !== undefined) return { outcome, output, failure: outcome.failure };
   let trashed: string[];
+  let stepFiles: ReadonlyMap<string, string>;
   try {
     const folder = await deps.adapter.folderValue(mod.folder);
     const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
     const stepsRemake = (path: string): boolean => mod.buildFile.steps.length > 0 && previous.get(deps.adapter.ownPath(path)) === null;
-    trashed = notInOutput(output, folder).filter((path) => !stepsRemake(path));
+    const others = notInOutput(output, folder);
+    trashed = others.filter((path) => !stepsRemake(path));
+    stepFiles = await stampsOf(deps.adapter, mod.folder, others.filter(stepsRemake));
   } catch (err) {
     return { landed: { ...outcome, failure: `The build stopped before its steps, as its folder could not be read: ${errorMessage(err)}` } };
   }
+  const ran = (failure: string | undefined): Ran => ({ outcome: { ...outcome, ...trashed.length === 0 ? {} : { trashed } }, output, failure });
   const why = await whyNotTrashed(deps.adapter, deps.trash, mod.folder, trashed);
-  const trashedToo = trashed.length === 0 ? {} : { trashed };
-  if (why !== undefined) return { outcome: { ...outcome, ...trashedToo }, output, failure: `The build stopped as ${why}.` };
+  if (why !== undefined) return ran(`The build stopped as ${why}.`);
   const stepFailed = mod.buildFile.steps.length === 0 ? undefined : await deps.tasks.whyStepsFailed(mod.buildFile.steps, mod.folder);
-  return { outcome: { ...outcome, ...trashedToo }, output, failure: stepFailed === undefined ? undefined : `The build stopped as its ${stepFailed}.` };
+  if (stepFailed !== undefined) return ran(`The build stopped as its ${stepFailed}.`);
+  try {
+    const old = await stepFilesNotMadeAgain(deps, mod, stepFiles);
+    trashed = [...trashed, ...old.trashed].sort();
+    return ran(old.why === undefined ? undefined : `The build stopped as ${old.why}.`);
+  } catch (err) {
+    return ran(`The build stopped after its steps, as their files could not be read: ${errorMessage(err)}`);
+  }
 }
 
 /** The mod built, refused before anything was written, or mEdit's refusal of the whole call. */

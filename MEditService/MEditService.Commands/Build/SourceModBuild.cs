@@ -29,11 +29,10 @@ internal sealed class SourceModBuild
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
 
         var written = new FolderWrite(_modFolders, mod.Folder, mod.Exclude, instance.ExclusionMark);
-        var taken = mod.Taken.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var plugins = Placed(loadOrder, mod, source.Plugins);
         var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
         var assets = source.Assets
-            .Where(asset => !compiled.Contains(asset.Path) && !taken.Contains(written.PathOf(asset.Path)))
+            .Where(asset => !compiled.Contains(asset.Path))
             .ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
         List<(ArchiveToPack Archive, List<Asset> Files)> archives = [];
         foreach (var archive in mod.Archives)
@@ -42,7 +41,6 @@ internal sealed class SourceModBuild
             foreach (var file in archive.Files.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 if (assets.TryGetValue(file, out var asset)) files.Add(asset);
-                else if (taken.Contains(written.PathOf(file))) files.Add(new Asset(file, () => _modFolders.OpenFile(mod.Folder, written.PathOf(file))));
                 else return Refused(BuildRefusal.ArchiveFileNotAnAsset, $"'{archive.Path}' takes '{file}', which is not an asset of its source.");
             }
             archives.Add((archive, files));
@@ -128,12 +126,10 @@ internal sealed class SourceModBuild
             $"{plugin.Name} cannot be compiled: the plugin sources {named} differ only in case, and one mod folder cannot hold them on Windows."));
     }
 
-    // mods.md, Build, story 2: a packed file is not loose in the output, so a taken file an archive packs leaves the folder.
     private List<ItemRefused<string, ArchiveRefusal>> Pack(
         ModToBuild mod, IReadOnlyList<(ArchiveToPack Archive, List<Asset> Files)> archives, ArchiveVariants? variants, FolderWrite written)
     {
         var packer = new ArchivePacker(_modFolders);
-        var taken = mod.Taken.ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<ItemRefused<string, ArchiveRefusal>> refused = [];
         foreach (var (archive, files) in archives)
         {
@@ -149,16 +145,6 @@ internal sealed class SourceModBuild
             if (packer.Pack(mod.Folder, at, [.. files.Select(file => new ArchiveFile(file.Path, file.Open))], variant) is { } refusal)
             {
                 refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
-                continue;
-            }
-            try
-            {
-                foreach (var file in files.Select(file => written.PathOf(file.Path)).Where(taken.Contains)) _modFolders.DeleteFile(mod.Folder, file);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, ArchiveRefusal.NotWritten,
-                    $"'{archive.Path}' was packed, and a file it took stays loose in the folder: {e.Message}"));
             }
         }
 

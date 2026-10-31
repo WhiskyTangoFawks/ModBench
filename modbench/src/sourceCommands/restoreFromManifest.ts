@@ -23,7 +23,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
-  | 'trashFileIn' | 'trashingReplaced' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
+  | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;

@@ -16,8 +16,7 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, " +
-                "and each archive packed from the assets and the taken files it is handed, a taken file it packs leaving the folder. " +
-                "A file of the source's under an excluded path is written under the exclusion mark, and no asset replaces a taken file. " +
+                "and each archive packed from the assets. A file of the source's under an excluded path is written under the exclusion mark. " +
                 "A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a " +
                 "read or write stopped it part way, and each file it made with whether the source vouches for it. " +
                 "Progress is the build-progress notification.")
@@ -69,9 +68,9 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest("Every mod needs a name, a source folder and a folder.");
         }
         if (mods.Any(mod => !FolderPaths.AreInTheFolder([
-            .. mod.Exclude ?? [], .. mod.Taken ?? [], .. (mod.Archives ?? []).SelectMany(archive => (IEnumerable<string>)[archive.Path, .. archive.Files ?? []])])))
+            .. mod.Exclude ?? [], .. (mod.Archives ?? []).SelectMany(archive => (IEnumerable<string>)[archive.Path, .. archive.Files ?? []])])))
         {
-            return EndpointMapping.BadRequest("Every path a mod excludes, takes or packs is a forward-slash path in its folder.");
+            return EndpointMapping.BadRequest("Every path a mod excludes or packs is a forward-slash path in its folder.");
         }
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
@@ -85,7 +84,6 @@ internal static class ModEndpoints
                 {
                     Exclude = mod.Exclude ?? [],
                     Archives = [.. (mod.Archives ?? []).Select(archive => new ArchiveToPack(archive.Path, archive.Files ?? []))],
-                    Taken = mod.Taken ?? [],
                 })],
                 new InstanceToBuild(req.ExclusionMark, variants)),
             EndpointMapping.Refusal);
@@ -103,11 +101,9 @@ internal static class FolderPaths
 /// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, and the archive variants, if any.</summary>
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives);
 
-/// <summary>A mod, the source folder that builds it, its folder, and what the extension hands its build (ADR-0016). Taken:
-/// each file the extension wrote into the folder from a package, by its path there.</summary>
+/// <summary>A mod, the source folder that builds it, its folder, and what the extension hands its build (ADR-0016).</summary>
 internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<string>? Exclude = null, IReadOnlyList<ArchiveRequest>? Archives = null,
-    IReadOnlyList<string>? Taken = null);
+    string Name, string SourceFolder, string Folder, IReadOnlyList<string>? Exclude = null, IReadOnlyList<ArchiveRequest>? Archives = null);
 
 /// <summary>An archive by its path in the mod folder, and the files it takes.</summary>
 internal sealed record ArchiveRequest(string Path, IReadOnlyList<string> Files);

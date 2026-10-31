@@ -4,18 +4,15 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to build, as the extension hands it (ADR-0016). Taken: each file the extension wrote into the folder from a
-/// package, by its path there, which no asset of the source replaces.</summary>
+/// <summary>A mod to build, as the extension hands it (ADR-0016).</summary>
 public sealed record ModToBuild(string Name, string SourceFolder, string Folder)
 {
     public IReadOnlyList<string> Exclude { get; init; } = [];
 
     public IReadOnlyList<ArchiveToPack> Archives { get; init; } = [];
-
-    public IReadOnlyList<string> Taken { get; init; } = [];
 }
 
-/// <summary>An archive by its path in the mod folder, and the files it takes: an asset of the source, or a taken file.</summary>
+/// <summary>An archive by its path in the mod folder, and the files it takes: an asset of the source.</summary>
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
 
 /// <summary>The instance's facts a build needs: the mod manager's exclusion mark, and the archive variants, none when the

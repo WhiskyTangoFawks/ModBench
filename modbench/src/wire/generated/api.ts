@@ -126,7 +126,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, and each archive packed from the assets and the taken files it is handed, a taken file it packs leaving the folder. A file of the source's under an excluded path is written under the exclusion mark, and no asset replaces a taken file. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a read or write stopped it part way, and each file it made with whether the source vouches for it. Progress is the build-progress notification. */
+        /** @description Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, and each archive packed from the assets. A file of the source's under an excluded path is written under the exclusion mark. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a read or write stopped it part way, and each file it made with whether the source vouches for it. Progress is the build-progress notification. */
         post: operations["BuildMod"];
         delete?: never;
         options?: never;
@@ -955,7 +955,6 @@ export interface components {
             folder: string;
             exclude?: string[] | null;
             archives?: components["schemas"]["ArchiveRequest"][] | null;
-            taken?: string[] | null;
         };
         /** @enum {string} */
         BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "ArchiveFileNotAnAsset";
