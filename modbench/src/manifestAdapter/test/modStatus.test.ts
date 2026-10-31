@@ -76,9 +76,9 @@ async function statusWith(values: (read: ReadValues) => StatusValues = (read) =>
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
-const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), ...over });
+const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), packages: [MOD_ZIP], ...over });
 
 describe('a mod\'s status against its manifest', () => {
   it('has no manifest, and lists nothing, when its folder holds none', async () => {
@@ -117,7 +117,7 @@ describe('a mod\'s status against its manifest', () => {
     await write('MOD.manifest.json', manifestText(manifest({ 'a.nif': HELLO })));
     entries = [{ path: 'a.nif', hash: HELLO }];
 
-    expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json') }));
+    expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json'), packages: [MOD_ZIP] }));
   });
 
   it('after a fresh clone, names every file its manifest names gone, and none differing or named by no line', async () => {
@@ -172,7 +172,7 @@ describe('a mod\'s status against its manifest', () => {
     await write('made.dds', 'whatever the step wrote');
     await manifested(manifest({ 'made.dds': null, 'lacked.dds': null }, { packages: [REPOSITORY] }));
 
-    expect(await status()).toEqual(heldAs({ gone: ['lacked.dds'] }));
+    expect(await status()).toEqual(heldAs({ packages: [REPOSITORY], gone: ['lacked.dds'] }));
   });
 
   it.each([
@@ -206,7 +206,7 @@ describe('a mod\'s status against its manifest', () => {
       await write('a.nif', HELLO);
       await manifested(manifest({ 'a.nif': HELLO }, { packages: [{ kind: 'gameFolder', host: { steam: { app: 1 } } }] }));
 
-      expect(await status()).toEqual(heldAs());
+      expect(await status()).toEqual(heldAs({ packages: [{ kind: 'gameFolder', host: { steam: { app: 1 } } }] }));
     });
 
     it('names none while this machine lacks a package, which could hold it', async () => {
@@ -221,7 +221,7 @@ describe('a mod\'s status against its manifest', () => {
       await write('a.esp', HELLO);
       await manifested(manifest({ 'a.esp': HELLO }, { packages: [REPOSITORY] }));
 
-      expect(await status()).toEqual(heldAs());
+      expect(await status()).toEqual(heldAs({ packages: [REPOSITORY] }));
     });
   });
 
