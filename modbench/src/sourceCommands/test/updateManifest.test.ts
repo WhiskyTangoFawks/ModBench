@@ -81,7 +81,7 @@ describe('update manifest', () => {
 
     expect([result.landed, await manifestOf('ModA')]).toEqual([
       [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }],
-      { manifest: { ...EMPTY, version: '1.2.3', packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: 'H', page: 'nexus:1' }], files: [{ path: 'a.nif', entry: { kind: 'held' } }] } },
+      { manifest: { ...EMPTY, version: '1.2.3', installationFile: 'ModA-1.0.7z', packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: 'H', page: 'nexus:1' }], files: [{ path: 'a.nif', entry: { kind: 'held' } }] } },
     ]);
   });
 

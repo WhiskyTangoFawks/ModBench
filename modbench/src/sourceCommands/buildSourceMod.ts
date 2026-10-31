@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter, ModMetadata } from '../instanceAdapter/instanceAdapter';
 import {
-  folderAgainst, lineAtFolderPath, manifestIn, packageOf, unmarked, writeManifestIn, type BuildFile, type ManifestFile, type ManifestPackage,
+  folderAgainst, lineAtFolderPath, manifestIn, packageOf, unmarked, writeManifestIn, type BuildFile, type Manifest, type ManifestFile, type ManifestPackage,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -66,23 +66,58 @@ export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
 
 const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '')}.`;
 
+/** A source mod's manifest: its repository, each package its build file names, and its metadata as update manifest
+ *  records it (commands.md, build). */
+export function sourceModManifest(
+  buildFile: Pick<BuildFile, 'packages'>, repository: ManifestPackage, metadata: ModMetadata, files: readonly ManifestFile[],
+): Manifest {
+  const installedFrom = buildFile.packages.find(({ kind, name }) => kind === 'installationFile' && name === metadata.installationFile?.name);
+  return {
+    packages: [repository, ...buildFile.packages], exclude: [], archives: [], files,
+    ...metadata.version === undefined ? {} : { version: metadata.version },
+    ...installedFrom === undefined ? {} : { installationFile: installedFrom.name },
+  };
+}
+
+const repositoryPackage = (mod: SourceModToBuild): ManifestPackage => ({ kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule });
+
 // mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
-// those bytes, before mEdit packs it or compiles beside it. Answers each one's line.
-async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<ManifestFile[]> {
+// those bytes, before mEdit packs it or compiles beside it. Answers each one's line, and whether it wrote any.
+async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<{ lines: ManifestFile[]; wrote: boolean }> {
   const { buildFile, packages, folder, exclude } = mod;
-  const at: ManifestFile[] = [];
+  const lines: ManifestFile[] = [];
   const writes: Parameters<Adapter['writeFilesIn']>[1][number][] = [];
   for (const line of buildFile.files) {
     const from = packages.packageFiles.get(line.path);
-    if (from === undefined) continue;
+    const hash = packages.hashes.get(line.path);
+    if (from === undefined || hash === undefined) continue;
     const { path, entry } = lineAtFolderPath({ ...buildFile, exclude }, line, adapter.exclusionMark);
-    at.push({ path, entry, package: packageOf(buildFile, line)?.name });
+    lines.push({ path, entry, package: packageOf(buildFile, line)?.name, hash });
     const there = await adapter.originFileHash(join(folder, path));
-    if (there.kind === 'read' && there.answer.hash === packages.hashes.get(line.path)) continue;
+    if (there.kind === 'read' && there.answer.hash === hash) continue;
     writes.push({ path, from });
   }
   if (writes.length > 0) await adapter.writeFilesIn(folder, writes);
-  return at;
+  return { lines, wrote: writes.length > 0 };
+}
+
+// A line that names the package it comes from, which another first package leaves it still naming.
+const namingItsPackage = (manifest: Manifest, line: ManifestFile): ManifestFile => {
+  const named = line.entry.kind === 'madeByStep' || line.package !== undefined ? undefined : packageOf(manifest, line)?.name;
+  return named === undefined ? line : { ...line, package: named };
+};
+
+// mods.md, Build, story 10: the manifest records each taken file once it is written, so a build that stops after leaves
+// none to read as changed outside Modbench. Every other line, and each package one names, stays.
+async function takenRecorded(mod: SourceModToBuild, taken: readonly ManifestFile[]): Promise<void> {
+  const read = await manifestIn(mod.folder);
+  const previous = read !== undefined && 'manifest' in read ? read.manifest : undefined;
+  const at = new Set(taken.map(({ path }) => path));
+  const kept = previous === undefined ? [] : previous.files.filter(({ path }) => !at.has(path)).map((line) => namingItsPackage(previous, line));
+  const record = sourceModManifest(mod.buildFile, repositoryPackage(mod), mod.metadata, [...kept, ...taken]);
+  const named = new Set(record.packages.map(({ name }) => name));
+  const stillNamed = (previous?.packages ?? []).filter(({ name }) => !named.has(name) && kept.some((line) => line.package === name));
+  await writeManifestIn(mod.folder, { ...record, packages: [...record.packages, ...stillNamed] });
 }
 
 /** Why one of `paths` in `folder` could not be moved to the trash, or a folder that left empty removed, if one could not. */
@@ -96,14 +131,6 @@ export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'
     }
   }
   return undefined;
-}
-
-/** Each file of `folder` holding the bytes its taken file's package gives, which the build writes again before an archive
- *  packs it, by the status rule (commands.md, Confirm what destroys). */
-export function takenHeld({ buildFile, packages, exclude }: Pick<SourceModToBuild, 'buildFile' | 'packages' | 'exclude'>, folder: FolderValue, mark: string): ReadonlySet<string> {
-  const files = buildFile.files.map((line) => lineAtFolderPath({ ...buildFile, exclude }, line, mark));
-  const taken = folderAgainst({ ...buildFile, archives: [], files }, folder, packages.entries);
-  return new Set(taken.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === true && onDisk !== undefined ? [onDisk] : [])));
 }
 
 interface Output {
@@ -145,20 +172,12 @@ function linesOf(output: Output, repository: string, onDisk: ReadonlyMap<string,
   })];
 }
 
-// commands.md, build: the manifest records the mod's metadata as update manifest does, so the installation file the
-// metadata names comes first, then the repository and each other package the build file names.
-function packagesOf({ buildFile, metadata }: SourceModToBuild, repository: ManifestPackage): ManifestPackage[] {
-  const installedFrom = buildFile.packages.find(({ kind, name }) => kind === 'installationFile' && name === metadata.installationFile?.name);
-  const others = buildFile.packages.filter((pkg) => pkg !== installedFrom);
-  return installedFrom === undefined ? [repository, ...others] : [installedFrom, repository, ...others];
-}
-
 // mods.md, A source mod, story 4, and Build, story 3: every other file goes to the trash, then the manifest names the
 // packages and each file the build made. `beforeSteps`: the folder's files before its steps ran.
 async function recorded(
   { adapter, trash }: BuildDeps, mod: SourceModToBuild, output: Output, beforeSteps: ReadonlySet<string> | undefined,
 ): Promise<Pick<ModBuilt, 'failure' | 'trashed' | 'undeclared'>> {
-  const repository: ManifestPackage = { kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule };
+  const repository = repositoryPackage(mod);
   try {
     const folder = await adapter.folderValue(mod.folder);
     const read = await manifestIn(mod.folder);
@@ -168,10 +187,7 @@ async function recorded(
     const why = await whyNotTrashed(adapter, trash, mod.folder, trashed);
     if (why !== undefined) return { failure: `The build stopped as ${why}, so its manifest was not written.` };
     const onDisk = new Map(against.lines.flatMap(({ line, onDisk: at }) => (at === undefined ? [] : [[line.path, at] as const])));
-    await writeManifestIn(mod.folder, {
-      packages: packagesOf(mod, repository), exclude: [], archives: [], files: linesOf(output, repository.name, onDisk, folder, previous),
-      ...mod.metadata.version === undefined ? {} : { version: mod.metadata.version },
-    });
+    await writeManifestIn(mod.folder, sourceModManifest(mod.buildFile, repository, mod.metadata, linesOf(output, repository.name, onDisk, folder, previous)));
     const undeclared = trashed.filter((path) => (beforeSteps !== undefined && !beforeSteps.has(path)) || output.stepped.has(unmarked(path, adapter.exclusionMark)));
     return { ...trashed.length === 0 ? {} : { trashed }, ...undeclared.length === 0 ? {} : { undeclared } };
   } catch (err) {
@@ -214,11 +230,18 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
   const { name, folder, buildFile, exclude } = mod;
   const refusal = refusedBeforeWriting(mod, pass);
   if (refusal !== undefined) return refusal;
-  let taken: ManifestFile[];
+  const stopped = (failure: string): Built => ({ landed: { mod: name, compiled: [], refused: [], archivesRefused: [], failure: `The build stopped before compiling, as ${failure}` } });
+  let written: Awaited<ReturnType<typeof takenWritten>>;
   try {
-    taken = await takenWritten(deps.adapter, mod);
+    written = await takenWritten(deps.adapter, mod);
   } catch (err) {
-    return { landed: { mod: name, compiled: [], refused: [], archivesRefused: [], failure: `The build stopped before compiling, as a file its packages give could not be written: ${errorMessage(err)}` } };
+    return stopped(`a file its packages give could not be written: ${errorMessage(err)}`);
+  }
+  const taken = written.lines;
+  try {
+    if (written.wrote) await takenRecorded(mod, taken);
+  } catch (err) {
+    return stopped(`its manifest could not record the files its packages give: ${errorMessage(err)}`);
   }
   const answer = await deps.client.build([{
     name, sourceFolder: mod.sourceFolder, folder, exclude: [...exclude], taken: taken.map(({ path }) => path),

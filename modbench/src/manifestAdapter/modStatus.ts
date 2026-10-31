@@ -117,9 +117,8 @@ const sameInstallationFile = (held: HeldMetadata['installationFile'], says: Held
 // Whether updating the manifest from the metadata would write another version or installation file. A manifest with no
 // package holds no version, so the version the metadata holds is no difference.
 function metadataDiffers(held: HeldMetadata, manifest: Manifest): boolean {
-  const [first] = manifest.packages;
-  const says = first?.kind === 'installationFile' ? { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } : undefined;
-  return (first === undefined ? undefined : held.version) !== manifest.version || !sameInstallationFile(held.installationFile, says);
+  const says = metadataOf(manifest);
+  return (manifest.packages.length === 0 ? undefined : held.version) !== says.version || !sameInstallationFile(held.installationFile, says.installationFile);
 }
 
 function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kind: 'read' }>): string[] {
@@ -137,10 +136,10 @@ function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kin
 
 /** The version and installation file the manifest holds, as a mod's metadata holds them. */
 export function metadataOf(manifest: Manifest): HeldMetadata {
-  const [first] = manifest.packages;
+  const named = manifest.packages.find(({ kind, name }) => kind === 'installationFile' && name === manifest.installationFile);
   return {
     ...(manifest.version === undefined ? {} : { version: manifest.version }),
-    ...(first?.kind === 'installationFile' ? { installationFile: { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } } : {}),
+    ...(named?.kind === 'installationFile' ? { installationFile: { name: named.name, ...(named.page === undefined ? {} : { page: named.page }) } } : {}),
   };
 }
 

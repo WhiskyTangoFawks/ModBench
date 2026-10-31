@@ -175,6 +175,7 @@ export async function buildManifest(
     exclude: base.exclude, archives: base.archives,
     files: [...recorded.files, ...[...madeByStep].map((path): ManifestFile => ({ path, entry: { kind: 'madeByStep' } }))],
     ...recorded.version === undefined ? {} : { version: recorded.version },
+    ...own === undefined ? {} : { installationFile: own.package.name },
   };
   return { manifest, gamePackage };
 }

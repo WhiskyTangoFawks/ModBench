@@ -13,7 +13,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
-import { archiveVariants, buildSourceMod, takenHeld, whyNotTrashed, type BuildPass } from './buildSourceMod';
+import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
@@ -403,18 +403,6 @@ export async function restoreFromManifest(
   };
 }
 
-// A source mod's taken file holding its package's bytes, which its build writes again. A build file the clone does not
-// hold yet takes nothing.
-async function builtAgainIn(pass: Pass, mod: string, manifest: Manifest, folder: string): Promise<ReadonlySet<string>> {
-  const { adapter } = pass.deps;
-  const sourceFolder = pass.sourceMods.folderOf(mod);
-  const held = repositoryOf(manifest) === undefined || sourceFolder === undefined ? undefined : await buildFileHeld(sourceFolder);
-  if (held === undefined || 'refusal' in held) return new Set();
-  const packages = await packagesRead(adapter, held.buildFile, { downloaded: await downloadedNow(adapter, held.buildFile), game: pass.game });
-  const exclude = exclusionsOf(manifest, [], adapter.exclusionMark);
-  return takenHeld({ buildFile: held.buildFile, packages, exclude }, await adapter.folderValue(folder), adapter.exclusionMark);
-}
-
 async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys | { readonly refusal: string } | undefined> {
   const { adapter } = pass.deps;
   const folder = await pass.folders.of(mod);
@@ -431,11 +419,9 @@ async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys |
     // The listing asks before restore downloads anything, so it reads what the downloads folder holds now.
     const downloaded = await downloadedNow(adapter, held.manifest);
     const against = await compared(adapter, held.manifest, folder, await packagesRead(adapter, held.manifest, { downloaded, game: pass.game }));
-    const writtenAgain = await builtAgainIn(pass, mod, held.manifest, folder);
-    const lost = (paths: readonly string[]): string[] => paths.filter((path) => !writtenAgain.has(path));
     return {
-      mod, differing: lost(against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : []))).sort(),
-      namedByNoLine: lost(against.namedByNoLine), metadataDiffers: metadata !== undefined && metadataOverwritten(metadata.answer, says),
+      mod, differing: against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : [])).sort(),
+      namedByNoLine: against.namedByNoLine, metadataDiffers: metadata !== undefined && metadataOverwritten(metadata.answer, says),
     };
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };

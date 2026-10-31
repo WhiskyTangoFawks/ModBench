@@ -100,32 +100,29 @@ describe('build over an instance on disk', () => {
     expect([await readdir(join(root, 'source', 'Mod')), await readFile(join(root, 'source', 'Mod', BUILD_FILE), 'utf8')]).toEqual([['.git', BUILD_FILE], buildFile]);
   });
 
-  it('records in the manifest in its folder the installation file its metadata names first, with the mod\'s version, then its repository, and each file the build made with its bytes and its package', async () => {
+  it('records in the manifest in its folder its repository and each package its build file names, the mod\'s version and the installation file its metadata names, and each file the build made with its bytes and its package', async () => {
     const { build, status, recorded } = await aSourceModTakingFromAnInstallationFile();
 
     await build();
 
     expect(await recorded()).toEqual({
-      packages: [expect.objectContaining({ kind: 'installationFile', name: 'Mod.7z' }) as unknown, { kind: 'sourceRepository', name: 'Mod', isSubmodule: false }],
-      version: '1.2', exclude: [], archives: [],
+      packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }, expect.objectContaining({ kind: 'installationFile', name: 'Mod.7z' }) as unknown],
+      version: '1.2', installationFile: 'Mod.7z', exclude: [], archives: [],
       files: [
-        { path: 'b.nif', entry: { kind: 'held' }, hash: 'OZFIfvr0kjo=' }, { path: 'Mod.esp', entry: { kind: 'held' }, package: 'Mod', hash: 'QnTauWK5/T8=' },
-        { path: 'textures/c.dds', entry: { kind: 'held' }, hash: 'RNWYjJS3keA=' },
+        { path: 'b.nif', entry: { kind: 'held' }, package: 'Mod.7z', hash: 'OZFIfvr0kjo=' }, { path: 'Mod.esp', entry: { kind: 'held' }, hash: 'QnTauWK5/T8=' },
+        { path: 'textures/c.dds', entry: { kind: 'held' }, package: 'Mod.7z', hash: 'RNWYjJS3keA=' },
       ],
     });
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: true });
   });
 
-  it('records its repository first when its metadata names no installation file, and each taken file\'s package by name', async () => {
+  it('names no installation file when its metadata names none, though its build file names one, and reads no metadata difference', async () => {
     const { build, status, recorded } = await aSourceModTakingFromAnInstallationFile();
     await put('mods/Mod/meta.ini', '[General]\r\nversion=1.2\r\n');
 
     await build();
 
-    const manifest = await recorded();
-    expect([manifest?.packages.map(({ name }) => name), manifest?.files.map((line) => [line.path, line.package])])
-      .toEqual([['Mod', 'Mod.7z'], [['b.nif', 'Mod.7z'], ['Mod.esp', undefined], ['textures/c.dds', 'Mod.7z']]]);
-    expect(await status()).toMatchObject({ differing: [], metadataDiffers: false });
+    expect([(await recorded())?.installationFile, (await status()).metadataDiffers]).toEqual([undefined, false]);
   });
 
   it('records each file a step makes that the folder holds, and reads it as the build made it', async () => {
@@ -304,6 +301,13 @@ describe('what build would destroy, over an instance on disk (mods.md, A source 
     return built;
   }
 
+  it('records each file a build mEdit refused wrote, so its folder reads as its manifest says but for a file of mine (mods.md, Build, story 10)', async () => {
+    const { status, recorded } = await aTakenFileARefusedBuildWrote();
+
+    expect((await recorded())?.files.find(({ path }) => path === 'textures/c.dds')).toMatchObject({ package: 'Mod.7z', hash: 'RNWYjJS3keA=' });
+    expect(await status()).toMatchObject({ differing: [], namedByNoLine: ['docs/mine.txt'], gone: [] });
+  });
+
   it('names no file a build mEdit refused wrote with the bytes its package gives, though an archive packs it, and names a file of mine beside it (mods.md, Build, story 10)', async () => {
     const { commands } = await aTakenFileARefusedBuildWrote();
 
@@ -389,13 +393,13 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
-  it('keeps it coming from the repository when its last manifest named the repository first', async () => {
+  it('keeps it coming from the repository when its last manifest named another package first', async () => {
     const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: true }];
     const { build, recorded } = await aSourceModTakingFromAnInstallationFile({}, made);
     await build();
     const manifest = await recorded();
     if (manifest === undefined) throw new Error('no manifest');
-    const [installedFrom, repository] = manifest.packages;
+    const [repository, installedFrom] = manifest.packages;
     if (installedFrom === undefined || repository === undefined) throw new Error('no packages');
     await writeManifestIn(join(root, 'mods', 'Mod'), { ...manifest, packages: [repository, installedFrom], files: manifest.files.filter(({ path }) => path === 'Mod - Main.ba2').map(({ path, entry, hash }) => ({ path, entry, ...hash === undefined ? {} : { hash } })) });
     made[1] = { path: 'Mod - Main.ba2', vouchedFor: false };
@@ -420,7 +424,7 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
 
     await build();
 
-    expect((await recorded())?.files.filter(({ path }) => path === 'Mod - Main.ba2')).toEqual([{ path: 'Mod - Main.ba2', entry: { kind: 'held' }, package: 'Mod' }]);
+    expect((await recorded())?.files.filter(({ path }) => path === 'Mod - Main.ba2')).toEqual([{ path: 'Mod - Main.ba2', entry: { kind: 'held' } }]);
   });
 
   it('names it as differing when the folder holds other bytes than the line recorded', async () => {
@@ -440,7 +444,7 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
 });
 
 describe('a mod installed from an installation file, then decompiled and committed, then built, over an instance on disk', () => {
-  async function anInstalledModBuilt() {
+  async function anInstalledModDecompiled() {
     root = await mkdtemp(join(tmpdir(), 'modbench-installed-source-'));
     await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
     await put('profiles/Default/modlist.txt', '# This file was automatically generated by Mod Organizer.\r\n+Mod\r\n');
@@ -456,21 +460,43 @@ describe('a mod installed from an installation file, then decompiled and committ
       return { landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] };
     });
     client.setCommandHandler('build', async () => {
-      await put('mods/Mod/Mod.esp', 'built');
+      await put('mods/Mod/Mod.esp', 'bytes of Mod.esp');
       return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...MADE] }], refused: [] };
     });
-    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => rm(path) });
+    const trashed: string[] = [];
+    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
     expect(await commands.decompileAndCommit(['Mod'])).toMatchObject({ refused: [] });
+    const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
+    return { adapter, commands, trashed, manifestText, status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
+  }
+
+  async function anInstalledModBuilt() {
+    const { commands, status } = await anInstalledModDecompiled();
     expect(await commands.build(['Mod'])).toMatchObject({ refused: [], landed: [{ mod: 'Mod' }] });
     const read = await manifestIn(join(root, 'mods', 'Mod'));
     assert(read !== undefined && 'manifest' in read);
-    return { manifest: read.manifest, status: await statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
+    return { manifest: read.manifest, status: await status() };
   }
+
+  it('reads as its manifest says right after decompile and commit, which records the folder as it is (GLOSSARY, Manifest)', async () => {
+    const { status } = await anInstalledModDecompiled();
+
+    expect(await status()).toMatchObject({ noManifest: false, metadataDiffers: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
+  });
+
+  it('changes nothing and trashes nothing at a first build that makes the folder it already holds (mods.md, Build, story 3)', async () => {
+    const { commands, trashed, manifestText } = await anInstalledModDecompiled();
+    const decompiled = await manifestText();
+
+    await commands.build(['Mod']);
+
+    expect([await manifestText(), trashed]).toEqual([decompiled, []]);
+  });
 
   it('records the installation file its metadata names and its repository as its packages, so its metadata reads as its manifest says (commands.md, build)', async () => {
     const { manifest, status } = await anInstalledModBuilt();
 
-    expect(manifest.packages.map(({ kind, name }) => [kind, name])).toEqual([['installationFile', 'Mod.7z'], ['sourceRepository', 'Mod']]);
+    expect([manifest.packages.map(({ kind, name }) => [kind, name]), manifest.installationFile]).toEqual([[['sourceRepository', 'Mod'], ['installationFile', 'Mod.7z']], 'Mod.7z']);
     expect(status).toMatchObject({ metadataDiffers: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
   });
 
@@ -499,7 +525,7 @@ describe('decompile and commit over an instance on disk', () => {
     return { client, decompileAndCommit: () => commands.decompileAndCommit(['Mod']) };
   }
 
-  it('hands mEdit the repository with its build file, then names the repository in the manifest the mod folder holds, which its first build records', async () => {
+  it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
     const { client, decompileAndCommit } = await aModWithItsManifest();
     const handed: DecompileAndCommitMod[] = [];
     client.setCommandHandler('decompileAndCommit', (mods) => {
@@ -513,7 +539,10 @@ describe('decompile and commit over an instance on disk', () => {
     expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'] });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'Mod.manifest.json', 'a.nif', 'meta.ini']));
-    expect(await manifestIn(join(root, 'mods', 'Mod'))).toMatchObject({ manifest: { packages: [{ kind: 'sourceRepository', name: 'Mod' }], files: [] } });
+    expect(await manifestIn(join(root, 'mods', 'Mod'))).toMatchObject({ manifest: {
+      packages: [{ kind: 'sourceRepository', name: 'Mod' }],
+      files: [{ path: 'a.nif', entry: { kind: 'held' }, hash: expect.any(String) as unknown }, { path: 'Mod.esp', entry: { kind: 'held' }, hash: expect.any(String) as unknown }],
+    } });
   });
 
   it('hands a file its manifest says a step made as an asset, as a build file holds the steps and a manifest holds none', async () => {

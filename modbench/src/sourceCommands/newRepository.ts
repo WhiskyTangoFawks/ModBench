@@ -5,12 +5,13 @@ import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  manifestIn, manifestText, packageOf, sourceModsOf, writeManifestIn, type BuildFile, type Manifest, type ManifestFile,
+  manifestIn, manifestText, packageOf, readBuildFile, sourceModsOf, writeManifestIn, type BuildFile, type Manifest, type ManifestFile, type ManifestPackage,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
+import { sourceModManifest } from './buildSourceMod';
 import { buildManifest, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
@@ -28,7 +29,7 @@ function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: stri
   return new Set([...plugins, ...paths.filter((path) => plugins.some((plugin) => rule?.isStringsFileOf(plugin, path) === true))]);
 }
 
-async function hashed(adapter: Adapter, folder: string, paths: readonly string[]): Promise<HashedModFile[] | { readonly refusal: string }> {
+async function hashed(adapter: Pick<Adapter, 'originFileHash'>, folder: string, paths: readonly string[]): Promise<HashedModFile[] | { readonly refusal: string }> {
   const files: HashedModFile[] = [];
   for (const path of paths) {
     const read = await adapter.originFileHash(join(folder, path));
@@ -83,8 +84,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, installationFile, held } = read;
-  const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
-  const all = await hashed(adapter, folder, (await adapter.filesIn(folder)).filter((path) => !leftOut.has(path.toLowerCase())));
+  const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
   const { manifest: recorded } = await buildManifest(
@@ -96,16 +96,35 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
-// The mod is a source mod once its folder's manifest names its repository, with the mod's version, and no file until its
-// first build records them (mods.md, Build, story 3).
-async function folderLinkedOrWhy(adapter: Pick<Adapter, 'modFolderPath' | 'modMetadata'>, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
+const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: readonly string[]): string[] => {
+  const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
+  return paths.filter((path) => !leftOut.has(path.toLowerCase()));
+};
+
+type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'modMetadata' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash'>;
+
+// The folder as it is, each file its build file takes from that file's package and every other from the repository.
+async function folderLines(adapter: LinkAdapter, folder: string, buildFile: BuildFile, repository: string): Promise<ManifestFile[] | { readonly refusal: string }> {
+  const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
+  if ('refusal' in all) return all;
+  return all.map(({ path, hash }): ManifestFile => {
+    const taken = buildFile.files.find((line) => line.path === path);
+    return taken === undefined ? { path, entry: { kind: 'held' }, package: repository, hash } : { ...taken, package: packageOf(buildFile, taken)?.name, hash };
+  });
+}
+
+// The mod is a source mod once its folder's manifest names its repository. It records the folder as it is, as its build
+// would, so a first build that makes the same folder changes nothing.
+async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
   const [folder, metadata] = await Promise.all([adapter.modFolderPath(mod), adapter.modMetadata(mod)]);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
+  const read = readBuildFile(repository.buildFile);
+  if ('refused' in read) return read.refused;
   try {
-    await writeManifestIn(folder, {
-      packages: [{ kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false }],
-      exclude: [], archives: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
-    });
+    const named: ManifestPackage = { kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false };
+    const files = await folderLines(adapter, folder, read.buildFile, named.name);
+    if ('refusal' in files) return files.refusal;
+    await writeManifestIn(folder, sourceModManifest(read.buildFile, named, metadata.kind === 'read' ? metadata.answer : {}, files));
     return undefined;
   } catch (err) {
     return `its manifest could not name its repository: ${errorMessage(err)}`;
@@ -114,7 +133,7 @@ async function folderLinkedOrWhy(adapter: Pick<Adapter, 'modFolderPath' | 'modMe
 
 /** Makes each mod of `committed` a source mod of the repository made for it; answers why not, by the mod. */
 export async function foldersNotLinked(
-  adapter: Pick<Adapter, 'modFolderPath' | 'modMetadata'>, made: ReadonlyMap<string, MadeRepository>, committed: readonly string[],
+  adapter: LinkAdapter, made: ReadonlyMap<string, MadeRepository>, committed: readonly string[],
 ): Promise<ReadonlyMap<string, string>> {
   const notLinked = new Map<string, string>();
   for (const mod of committed) {
