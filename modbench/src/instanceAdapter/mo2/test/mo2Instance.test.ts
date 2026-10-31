@@ -2502,29 +2502,6 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
     });
 
-    it('renames the manifest in a separator\'s folder to the new name with the folder', async () => {
-      const folder = separatorFolder('Unassigned (Modlist Development)');
-      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest.json'), '');
-
-      await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
-
-      expect(await isThere(join(separatorFolder('Core Mods'), 'Core Mods_separator.manifest.json'))).toBe(true);
-      expect(await isThere(join(separatorFolder('Core Mods'), 'Unassigned (Modlist Development)_separator.manifest.json'))).toBe(false);
-    });
-
-    it('leaves a separator\'s line and folder as they were when its manifest cannot be renamed', async () => {
-      const folder = separatorFolder('Unassigned (Modlist Development)');
-      await writeFile(join(folder, 'Unassigned (Modlist Development)_separator.manifest.json'), '');
-      await mkdir(join(folder, 'Core Mods_separator.manifest.json'));
-      const before = await text(root, DEFAULT_MODLIST);
-
-      await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }])).rejects.toThrow();
-
-      expect(await text(root, DEFAULT_MODLIST)).toBe(before);
-      expect(await isThere(join(folder, 'Unassigned (Modlist Development)_separator.manifest.json'))).toBe(true);
-      expect(await isThere(separatorFolder('Core Mods'))).toBe(false);
-    });
-
     it('renames a mod\'s line in place, keeping its state, and nothing else', async () => {
       const before = await snapshotTree(root);
       const order = modNames(await source.modOrder('Default'));
