@@ -12,7 +12,7 @@ import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
-import { restoreFromManifest, whatRestoreDestroys } from '../restoreFromManifest';
+import { restoreFromManifest } from '../restoreFromManifest';
 import { updateManifest } from '../updateManifest';
 
 let root: string;
@@ -50,28 +50,29 @@ async function aModFromADownloadedFileAndTheGameFolder() {
   const adapter = adapterOver(root, {
     gameFolder: { kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') }, installationFileReader: fakeInstallationFileReader(['a.nif', 'textures/b.dds']),
   });
-  const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash: (path: string) => rm(path), tasks: recordingTasks() };
+  const inTrash: Record<string, string> = {};
+  const trash = async (path: string): Promise<void> => { inTrash[relative(join(root, 'mods'), path).replaceAll('\\', '/')] = await readFile(path, 'utf8'); await rm(path); };
+  const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, tasks: recordingTasks() };
   return {
     update: () => updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false),
     restore: () => restoreFromManifest(deps, ['Mod'], {}, false, []),
-    destroys: () => whatRestoreDestroys(deps, ['Mod'], []),
+    inTrash,
   };
 }
 
 describe('restore from manifest over an instance on disk', () => {
-  it('writes no file of a mod whose manifest update manifest just wrote, and finds nothing it would destroy', async () => {
-    const { update, restore, destroys } = await aModFromADownloadedFileAndTheGameFolder();
+  it('writes no file of a mod whose manifest update manifest just wrote, and sends nothing to the trash', async () => {
+    const { update, restore, inTrash } = await aModFromADownloadedFileAndTheGameFolder();
     await update();
     const before = await stampsBelow(join(root, 'mods'));
 
-    const listing = await destroys();
     const outcome = await restore();
 
-    expect([listing, outcome.refused, await stampsBelow(join(root, 'mods'))]).toEqual([{ destroys: [], refused: [] }, [], before]);
+    expect([outcome.refused, await stampsBelow(join(root, 'mods')), inTrash]).toEqual([[], before, {}]);
   });
 
-  it('writes each file from its package and sends each file no line names to the trash', async () => {
-    const { update, restore } = await aModFromADownloadedFileAndTheGameFolder();
+  it('writes each file from its package, asking nothing, and sends my copy of each file it replaces and each file no line names to the trash (modlist-repository.md, Restore from manifest, stories 1 and 2)', async () => {
+    const { update, restore, inTrash } = await aModFromADownloadedFileAndTheGameFolder();
     await update();
     const updated = await textsBelow(join(root, 'mods'));
     await put('mods/Mod/a.nif', 'my edit');
@@ -81,10 +82,11 @@ describe('restore from manifest over an instance on disk', () => {
     const outcome = await restore();
 
     expect([outcome.landed, await textsBelow(join(root, 'mods'))]).toEqual([[{ mod: 'Mod', written: ['a.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], updated]);
+    expect(inTrash).toEqual({ 'Mod/a.nif': 'my edit', 'Mod/mine.txt': 'mine' });
   });
 
   it('puts a package held under another name in the downloads folder under the pinned name, with its metadata, so the mod\'s installation file is there', async () => {
-    const { update, restore, destroys } = await aModFromADownloadedFileAndTheGameFolder();
+    const { update, restore } = await aModFromADownloadedFileAndTheGameFolder();
     await update();
     await rename(join(root, 'downloads/Mod.7z'), join(root, 'downloads/Renamed-copy.7z'));
     await put('downloads/Renamed-copy.7z.meta', '[General]\r\nmodID=7\r\n');
@@ -97,6 +99,5 @@ describe('restore from manifest over an instance on disk', () => {
     expect(await textsBelow(join(root, 'downloads'))).toEqual({
       'Mod.7z': 'the downloaded file', 'Mod.7z.meta': '[General]\r\nmodID=7\r\n', 'Renamed-copy.7z': 'the downloaded file', 'Renamed-copy.7z.meta': '[General]\r\nmodID=7\r\n',
     });
-    expect(await destroys()).toEqual({ destroys: [], refused: [] });
   });
 });

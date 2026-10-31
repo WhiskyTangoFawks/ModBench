@@ -4,7 +4,8 @@
 import { randomUUID } from 'node:crypto';
 import { copyFile, rename } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
-import { ensureDir, makeTempDir, ownTempPrefix, realPathIfThere, remove, withLock } from '../files';
+import type { MoveToTrash } from '../../ports/trash';
+import { ensureDir, exists, makeTempDir, ownTempPrefix, realPathIfThere, remove, withLock } from '../files';
 import type { InstanceAdapter, PackageFile } from '../instanceAdapter';
 import { EXTRACTION_PREFIX } from './hashIndex';
 import type { InstallationFileReader } from './installationFileReader';
@@ -27,11 +28,12 @@ async function landsInside(folder: string, path: string): Promise<boolean> {
 }
 
 // A temp beside the target, then one rename, so a reader never meets half a file.
-async function putCopy(from: string, to: string): Promise<void> {
+async function putCopy(from: string, to: string, trash: MoveToTrash): Promise<void> {
   await ensureDir(dirname(to));
   const temp = `${ownTempPrefix(dirname(to), 'package')}_${randomUUID()}`;
   try {
     await copyFile(from, temp);
+    if (await exists(to)) await trash(to);
     await rename(temp, to);
   } finally {
     await remove(temp);
@@ -49,7 +51,7 @@ const entriesByDownloadedFile = (files: readonly { to: string; from: PackageFile
 /** Writes files from their packages, extracting a downloaded file in `scratch` as the hash index does, one at a time. */
 export function packageFilesWriter(scratch: string, reader: InstallationFileReader): Pick<InstanceAdapter, 'writeFilesIn'> {
   return {
-    async writeFilesIn(folder, files) {
+    async writeFilesIn(folder, files, trash) {
       const targets: { to: string; from: PackageFile }[] = [];
       for (const { path, from } of files) {
         const to = join(folder, path);
@@ -57,7 +59,7 @@ export function packageFilesWriter(scratch: string, reader: InstallationFileRead
         targets.push({ to, from });
       }
       for (const { to, from } of targets) {
-        if (from.kind === 'gameFile') await putCopy(join(from.root, from.path), to);
+        if (from.kind === 'gameFile') await putCopy(join(from.root, from.path), to, trash);
       }
       for (const [downloadedFile, entries] of entriesByDownloadedFile(targets)) {
         await withLock(join(scratch, EXTRACTION_PREFIX), async () => {
@@ -65,7 +67,7 @@ export function packageFilesWriter(scratch: string, reader: InstallationFileRead
           const extraction = await makeTempDir(join(scratch, EXTRACTION_PREFIX));
           try {
             await reader.extract(downloadedFile, extraction);
-            for (const { to, entry } of entries) await putCopy(join(extraction, entry), to);
+            for (const { to, entry } of entries) await putCopy(join(extraction, entry), to, trash);
           } finally {
             await remove(extraction);
           }

@@ -10,7 +10,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { installMod, upgradeLoss } from './install';
+import { installMod } from './install';
 import { sourceFolderTrashed, sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 export type { SelectionResult };
 export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
@@ -491,7 +491,6 @@ export function modCommands(adapter: InstanceAdapter) {
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusalInInstance>) => newModNameRefusalInInstance(adapter, ...args),
     names: adapter.names,
     installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, listMod: (name) => listMod(adapter, name) }, ...args),
-    upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter }, ...args),
   };
 }
 

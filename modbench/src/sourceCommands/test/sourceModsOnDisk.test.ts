@@ -18,8 +18,6 @@ import { readBuildFile } from '../../manifestAdapter/manifestRead';
 import { statusNow } from '../../test/statusNow';
 import { manifestIn, packageOf, sourceModsOf, writeManifestIn, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
-import { whatRestoreDestroys } from '../restoreFromManifest';
 import { sourceCommands } from '../sourceCommands';
 
 let root: string;
@@ -71,10 +69,13 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<BuildFi
     return typeof failed === 'string' ? failed : tasks.whyStepsFailed(...ran);
   } };
   const trashed: string[] = [];
+  const inTrash: Record<string, string> = {};
   let trashRefusal: string | undefined;
   const trash = async (path: string): Promise<void> => {
     if (trashRefusal !== undefined) throw new Error(trashRefusal);
-    trashed.push(relative(join(root, 'mods', 'Mod'), path).replaceAll('\\', '/'));
+    const inMod = relative(join(root, 'mods', 'Mod'), path).replaceAll('\\', '/');
+    trashed.push(inMod);
+    inTrash[inMod] = await readFile(path, 'utf8');
     await rm(path);
   };
   const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: stepping, trash });
@@ -84,7 +85,7 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<BuildFi
     return read === undefined || 'refused' in read ? undefined : read.manifest;
   };
   const refuseTrash = (why: string): void => { trashRefusal = why; };
-  return { client, build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter, trashed, refuseTrash };
+  return { client, build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter, trashed, inTrash, refuseTrash };
 }
 
 describe('build over an instance on disk', () => {
@@ -248,8 +249,8 @@ describe('build over an instance on disk', () => {
     expect(await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8')).toBe(first);
   });
 
-  it('makes the folder exactly its output: overwrites a file its package gives that holds other bytes, and sends every file it did not make to the trash, but the mod manager\'s (mods.md, A source mod, story 4)', async () => {
-    const { build, status, trashed } = await aSourceModTakingFromAnInstallationFile();
+  it('makes the folder exactly its output: sends to the trash the copy of a file its package gives that holds other bytes, and every file it did not make, but the mod manager\'s (mods.md, A source mod, story 4)', async () => {
+    const { build, status, inTrash } = await aSourceModTakingFromAnInstallationFile();
     await put('mods/Mod/b.nif', 'my edit');
     await put('mods/Mod/mine.txt', 'mine');
     await put('mods/Mod/docs/old.txt', 'old');
@@ -257,9 +258,70 @@ describe('build over an instance on disk', () => {
     await build();
 
     expect(await readFile(join(root, 'mods', 'Mod', 'b.nif'), 'utf8')).toBe('bytes of b.nif');
-    expect(trashed.sort()).toEqual(['docs/old.txt', 'mine.txt']);
+    expect(inTrash).toEqual({ 'b.nif': 'my edit', 'docs/old.txt': 'old', 'mine.txt': 'mine' });
     expect(Object.keys(await textsBelow(join(root, 'mods', 'Mod'))).sort()).toEqual(['b.nif', 'meta.ini', 'Mod.esp', 'Mod.manifest.json', 'textures/c.dds'].sort());
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [] });
+  });
+
+  describe('over a file of mine mEdit or a step replaces or removes (mods.md, A source mod, story 4)', () => {
+    const builtAgain = async () => {
+      await put('mods/Mod/Mod.esp', 'built again');
+      return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...MADE] }], refused: [] };
+    };
+    const folderFiles = async (): Promise<string[]> => Object.keys(await textsBelow(join(root, 'mods', 'Mod'))).sort();
+    const OUTPUT = ['b.nif', 'meta.ini', 'Mod.esp', 'Mod.manifest.json', 'textures/c.dds'].sort();
+
+    it('sends my copy of each file mEdit writes again to the trash, then each file it removes, and leaves the folder only its output', async () => {
+      const { build, client, status, inTrash } = await aSourceModTakingFromAnInstallationFile();
+      await build();
+      await put('mods/Mod/Mod.esp', 'my edit');
+      await put('mods/Mod/mine.txt', 'mine');
+      client.setCommandHandler('build', builtAgain);
+
+      const outcome = await build();
+
+      expect(outcome).toMatchObject({ landed: [{ mod: 'Mod', trashed: ['mine.txt'] }], refused: [] });
+      expect(inTrash).toEqual({ 'Mod.esp': 'my edit', 'mine.txt': 'mine' });
+      expect(await folderFiles()).toEqual(OUTPUT);
+      expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
+    });
+
+    it('sends my copy of a file a step removes to the trash', async () => {
+      const { build, inTrash } = await aSourceModTakingFromAnInstallationFile({
+        steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }],
+      }, MADE, () => rm(join(root, 'mods', 'Mod', 'mine.txt')));
+      await put('mods/Mod/mine.txt', 'mine');
+
+      await build();
+
+      expect(inTrash).toEqual({ 'mine.txt': 'mine' });
+    });
+
+    it('sends to the trash no copy of a file of mine the build leaves as it was', async () => {
+      const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: false }];
+      const { build, client, trashed } = await aSourceModTakingFromAnInstallationFile({}, made);
+      await build();
+      await put('mods/Mod/Mod - Main.ba2', 'my edit');
+      client.setCommandHandler('build', async () => ({ ...await builtAgain(), landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made }] }));
+
+      await build();
+
+      expect([trashed, await readFile(join(root, 'mods', 'Mod', 'Mod - Main.ba2'), 'utf8')]).toEqual([[], 'my edit']);
+    });
+
+    it('stops when my copy cannot be sent to the trash, naming it, puts my copy back, and keeps the line it held (Never silently wrong)', async () => {
+      const { build, client, status, refuseTrash } = await aSourceModTakingFromAnInstallationFile();
+      await build();
+      await put('mods/Mod/Mod.esp', 'my edit');
+      client.setCommandHandler('build', builtAgain);
+      refuseTrash('EBUSY');
+
+      const outcome = await build();
+
+      expect(outcome).toMatchObject({ landed: [{ mod: 'Mod', failure: "The build stopped as 'Mod.esp' could not be moved to the trash: EBUSY." }] });
+      expect([await folderFiles(), (await textsBelow(join(root, 'mods', 'Mod')))['Mod.esp']]).toEqual([OUTPUT, 'my edit']);
+      expect(await status()).toMatchObject({ differing: ['Mod.esp'], namedByNoLine: [], gone: [] });
+    });
   });
 
   it('keeps the folder\'s exclusion: writes a file its packages give where the folder holds it under the mark, records where its package holds it, and reads its folder as its manifest says', async () => {
@@ -275,7 +337,7 @@ describe('build over an instance on disk', () => {
 });
 
 describe('a build mEdit refuses after the taken files are written, over an instance on disk (mods.md, Build, story 10)', () => {
-  it('reaches the result, leaves each taken file whole and the manifest as it was, and reads as no change outside Modbench: status finds the rewritten file by its new bytes', async () => {
+  it('reaches the result, leaves each taken file whole, my copy of it in the trash, and the manifest as it was, and reads as no change outside Modbench: status finds the rewritten file by its new bytes', async () => {
     const { build, client, status, recorded, trashed } = await aSourceModTakingFromAnInstallationFile();
     await build();
     const manifestPath = join(root, 'mods', 'Mod', 'Mod.manifest.json');
@@ -291,22 +353,13 @@ describe('a build mEdit refuses after the taken files are written, over an insta
     expect(await textsBelow(join(root, 'mods', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds', 'Mod.esp': 'built' });
     expect(await readFile(manifestPath, 'utf8')).toBe(manifestBuilt);
     expect((await recorded())?.files.map(({ path }) => path)).toEqual(['b.nif', 'Mod.esp', 'textures/c.dds']);
-    expect([await status(), trashed]).toEqual([statusBuilt, []]);
+    expect([await status(), trashed]).toEqual([statusBuilt, ['b.nif']]);
   });
 });
 
-describe('what build would destroy, over an instance on disk (mods.md, A source mod, story 4)', () => {
-  it('names each file of the folder that differs from its manifest: one whose bytes differ, and one no line names', async () => {
-    const { build, commands } = await aSourceModTakingFromAnInstallationFile();
-    await build();
-    await put('mods/Mod/b.nif', 'my edit');
-    await put('mods/Mod/docs/mine.txt', 'mine');
-
-    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['b.nif', 'docs/mine.txt'] }], refused: [] });
-  });
-
-  it('names no file of a folder its last build made, though I excluded one since, and a step\'s file whatever its bytes', async () => {
-    const { build, commands } = await aSourceModTakingFromAnInstallationFile({
+describe('what build sends to the trash, over an instance on disk (mods.md, A source mod, story 4)', () => {
+  it('sends no copy of a file its last build made, though I excluded one since, nor of a step\'s file whatever its bytes', async () => {
+    const { build, commands, trashed } = await aSourceModTakingFromAnInstallationFile({
       steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }],
       files: [{ path: 'b.nif', entry: { kind: 'held' } }, { path: 'textures/c.dds', entry: { kind: 'held' } }, { path: 'made.dds', entry: { kind: 'madeByStep' } }],
     }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
@@ -314,16 +367,20 @@ describe('what build would destroy, over an instance on disk (mods.md, A source 
     await rename(join(root, 'mods', 'Mod', 'textures', 'c.dds'), join(root, 'mods', 'Mod', 'textures', 'c.dds.mohidden'));
     await put('mods/Mod/made.dds', 'made again');
 
-    expect(await commands.whatBuildDestroys([], true)).toEqual({ mods: ['Mod'], destroys: [], refused: [] });
+    await commands.build([], true);
+
+    expect(trashed).toEqual([]);
   });
 
-  it('names a file I excluded and changed since its last build', async () => {
-    const { build, commands } = await aSourceModTakingFromAnInstallationFile();
+  it('sends my copy of a file I excluded and changed since its last build', async () => {
+    const { build, inTrash } = await aSourceModTakingFromAnInstallationFile();
     await build();
     await rm(join(root, 'mods', 'Mod', 'textures', 'c.dds'));
     await put('mods/Mod/textures/c.dds.mohidden', 'my edit');
 
-    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['textures/c.dds.mohidden'] }], refused: [] });
+    await build();
+
+    expect(inTrash).toEqual({ 'textures/c.dds.mohidden': 'my edit' });
   });
 
   async function aTakenFileARefusedBuildWrote() {
@@ -348,46 +405,27 @@ describe('what build would destroy, over an instance on disk (mods.md, A source 
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: ['docs/mine.txt'], gone: [] });
   });
 
-  it('names no file a build mEdit refused wrote with the bytes its package gives, though an archive packs it, and names a file of mine beside it (mods.md, Build, story 10)', async () => {
-    const { commands } = await aTakenFileARefusedBuildWrote();
-
-    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['docs/mine.txt'] }], refused: [] });
-  });
-
-  it('names in restore\'s confirmation no file a build mEdit refused wrote with the bytes its package gives, and a file of mine beside it', async () => {
-    const { client, adapter } = await aTakenFileARefusedBuildWrote();
-    const deps = { client, adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash: (path: string) => rm(path), tasks: recordingTasks() };
-
-    expect(await whatRestoreDestroys(deps, ['Mod'], [])).toEqual({ destroys: [{ mod: 'Mod', differing: [], namedByNoLine: ['docs/mine.txt'], metadataDiffers: false }], refused: [] });
-  });
-
-  it('names no file of a mod build refuses before it writes, which loses nothing', async () => {
-    const { build, commands } = await aSourceModTakingFromAnInstallationFile();
-    await build();
-    await put('mods/Mod/docs/mine.txt', 'mine');
-    await rm(join(root, 'source', 'Mod', BUILD_FILE));
-
-    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [], refused: [] });
-  });
-
-  it('names no file of a mod whose packages could not be read, which build refuses naming that', async () => {
+  it('refuses a mod whose packages could not be read, naming that, and sends nothing to the trash', async () => {
     const { adapter, client } = await aSourceModTakingFromAnInstallationFile();
     await put('mods/Mod/docs/mine.txt', 'mine');
+    const trash = vi.fn();
     const commands = sourceCommands({
-      client, adapter: { ...adapter, downloadedFile: () => Promise.reject(new Error('EIO')) }, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn(),
+      client, adapter: { ...adapter, downloadedFile: () => Promise.reject(new Error('EIO')) }, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash,
     });
 
-    expect([await commands.whatBuildDestroys(['Mod']), await commands.build(['Mod'])]).toEqual([
-      { mods: ['Mod'], destroys: [], refused: [] }, { landed: [], refused: [{ item: 'Mod', reason: 'was not built: its packages could not be read: EIO.' }] },
+    expect([await commands.build(['Mod']), trash.mock.calls]).toEqual([
+      { landed: [], refused: [{ item: 'Mod', reason: 'was not built: its packages could not be read: EIO.' }] }, [],
     ]);
   });
 
-  it('names every file but the mod manager\'s in a folder whose manifest names no file yet', async () => {
-    const { commands } = await aSourceModTakingFromAnInstallationFile();
+  it('sends my copy of each file in a folder whose manifest names no file yet, but the mod manager\'s, when mEdit writes it', async () => {
+    const { build, inTrash } = await aSourceModTakingFromAnInstallationFile();
     await put('mods/Mod/Mod.manifest.json', manifestText({ packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], exclude: [], archives: [], files: [] }));
     await put('mods/Mod/Mod.esp', 'decompiled from');
 
-    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['Mod.esp'] }], refused: [] });
+    await build();
+
+    expect(inTrash).toEqual({ 'Mod.esp': 'decompiled from' });
   });
 });
 
@@ -488,7 +526,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     await put('profiles/Default/modlist.txt', '# This file was automatically generated by Mod Organizer.\r\n+Mod\r\n');
     await put('downloads/Mod.7z', 'the downloaded file');
     const adapter = adapterOver(root, { installationFileReader: fakeInstallationFileReader(['Mod.esp', ...PACK_ENTRIES]) });
-    expect(await adapter.install({ kind: 'archive', path: join(root, 'downloads', 'Mod.7z') }, { kind: 'new', name: 'Mod' }, { version: '1.2', installationFileName: 'Mod.7z' }))
+    expect(await adapter.install({ kind: 'archive', path: join(root, 'downloads', 'Mod.7z') }, { kind: 'new', name: 'Mod' }, { version: '1.2', installationFileName: 'Mod.7z' }, (path) => rm(path)))
       .toEqual({ landed: true });
     const client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndCommit', async ([mod]) => {

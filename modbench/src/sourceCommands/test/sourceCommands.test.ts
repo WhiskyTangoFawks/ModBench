@@ -243,14 +243,16 @@ describe('sourceCommands build, in mod order', () => {
   });
 });
 
-describe('sourceCommands whatBuildDestroys', () => {
-  it('refuses a mod whose folder could not be read, naming why', async () => {
+describe('sourceCommands build over a folder it cannot read', () => {
+  it('stops before mEdit builds, naming why', async () => {
     const unreadable = { ...fakeAdapter(), folderValue: () => Promise.reject(new Error('EACCES')) };
+    const client = new InMemoryMEditClient();
 
-    const listing = await sourceCommands({ client: new InMemoryMEditClient(), adapter: unreadable, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
-      .whatBuildDestroys(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: unreadable, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
-    expect(listing).toEqual({ mods: ['ModA'], destroys: [], refused: [{ item: 'ModA', reason: 'was not built: a file could not be read: EACCES.' }] });
+    expect([outcome, client.calls]).toEqual([
+      { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], failure: 'The build stopped before compiling, as its folder could not be read: EACCES' }], refused: [] }, [],
+    ]);
   });
 });
 

@@ -5,12 +5,9 @@ import { Refusal } from '../drivingLib/refusal';
 import type { Reporter } from '../ports/reporter';
 import { buildFailures, buildWarnings, builtWhole, type Built } from './buildCommand';
 
-/** mods.md, Build, story 14: the task builds the mods its definition names, or every source, and asks as the gesture does
- *  before it destroys a file (mods.md, A source mod, story 4). */
+/** mods.md, Build, story 14: the task builds the mods its definition names, or every source. */
 export function registerBuildTask(reporter: Reporter): vscode.Disposable {
-  return registerTaskGesture<Built>({
-    label: 'Build', command: 'modbench.mod.build', reporter, argument: modsOfDefinition, options: { asks: true }, settle: buildVerdict,
-  });
+  return registerTaskGesture<Built>({ label: 'Build', command: 'modbench.mod.build', reporter, argument: modsOfDefinition, settle: buildVerdict });
 }
 
 function modsOfDefinition({ mods = [] }: vscode.TaskDefinition): Argument[] {

@@ -1,10 +1,13 @@
 // How MO2's implementation installs a mod: extracted in a staging folder of its own, then settled as the mod's
 // contents. An upgrade keeps its folder, so every watcher armed on it survives the release.
 
+import { dirname } from 'node:path';
 import { effectiveModId } from './codecs/nexusFileName';
-import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
+import { type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
+import { sameBytes } from '../fileContents/contentDigest';
+import type { MoveToTrash } from '../../ports/trash';
 import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
 import { isManifestPath } from '../../repositoriesLib/manifestPath';
 import { modMetaFileIn, modsDir, stagingPrefix } from './layout';
@@ -64,13 +67,46 @@ const landNewMod = (context: Mo2Context, mod: string): Land => async (root, keys
   }
 };
 
-const landUpgrade = (mod: string, folder: string): Land => async (root, keys) => {
+const pathIn = (at: string, name: string): string => (at === '' ? name : `${at}/${name}`);
+
+async function filesUnder(folder: string, at = ''): Promise<string[]> {
+  const paths: string[] = [];
+  for (const entry of await listDir(fileInFolder(folder, at))) {
+    const path = pathIn(at, entry.name);
+    paths.push(...entry.isDirectory() ? await filesUnder(folder, path) : [path]);
+  }
+  return paths;
+}
+
+// The mod's manifest and its metadata are the mod's, never the release's.
+const keptOver = (path: string): boolean => isManifestPath(path) || path === MOD_META_FILE_NAME;
+
+// A folder that holds no file left as it was goes to the trash whole, so an upgrade that replaces it costs one move.
+async function trashedBut(folder: string, at: string, left: ReadonlySet<string>, trash: MoveToTrash): Promise<void> {
+  for (const entry of await listDir(fileInFolder(folder, at))) {
+    const path = pathIn(at, entry.name);
+    if (left.has(path) || (at === '' && keptOver(path))) continue;
+    if (entry.isDirectory() && [...left].some((held) => held.startsWith(`${path}/`))) await trashedBut(folder, path, left, trash);
+    else await trash(fileInFolder(folder, path));
+  }
+}
+
+// mods.md, What install does, story 3: a file the release holds with the same bytes is left as it was.
+const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => async (root, keys) => {
   try {
     const carried = await get(modMetaFileIn(folder), '');
-    for (const entry of await listDir(folder)) {
-      if (!(entry.isFile() && isManifestPath(entry.name))) await remove(fileInFolder(folder, entry.name));
+    const release = (await filesUnder(root)).filter((path) => path !== MOD_META_FILE_NAME);
+    const held = new Set(await filesUnder(folder));
+    const left = new Set<string>();
+    for (const path of release) {
+      if (held.has(path) && !keptOver(path) && await sameBytes(fileInFolder(folder, path), fileInFolder(root, path))) left.add(path);
     }
-    await settleInto(folder, root, setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
+    await trashedBut(folder, '', left, trash);
+    for (const path of release.filter((one) => !left.has(one))) {
+      await ensureDir(dirname(fileInFolder(folder, path)));
+      await moveEntry(fileInFolder(root, path), fileInFolder(folder, path));
+    }
+    await write(modMetaFileIn(folder), setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
   } catch (err) {
     throw new Error(`Upgrading "${mod}" failed partway and was not rolled back: ${errorMessage(err)}`, { cause: err });
   }
@@ -120,7 +156,7 @@ export function mo2Landing(
   };
 
   return {
-    install: async (installed, target, keys, answer) => {
+    install: async (installed, target, keys, trash, answer) => {
       const { gameName } = await source.settings();
       const claimed = await claim(target);
       if (claimed === undefined) return { landed: false };
@@ -137,7 +173,7 @@ export function mo2Landing(
             if (!(await claimHolds(target, claimed.holding))) return { landed: false as const };
             const land = claimed.holding === undefined
               ? landNewMod(context, target.name)
-              : landUpgrade(target.name, claimed.holding.path);
+              : landUpgrade(target.name, claimed.holding.path, trash);
             await land(landing.root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
             return landing.fomod === undefined ? { landed: true as const } : { landed: true as const, fomod: landing.fomod };
           });

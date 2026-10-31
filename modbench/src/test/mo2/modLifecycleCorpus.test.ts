@@ -86,7 +86,7 @@ describe('mod lifecycle corpus (install)', () => {
     const before = await snapshotTree(dir);
 
     const outcome = await modCommands(adapterOver(dir, { installationFileReader: fakeInstallationFileReader(['Manual.esp']) }))
-      .installMod({ kind: 'downloadedFile', name: MANUAL }, { kind: 'new', name: 'Manual' }, true);
+      .installMod({ kind: 'downloadedFile', name: MANUAL }, { kind: 'new', name: 'Manual' }, trash);
     const after = await snapshotTree(dir);
 
     expect(outcome).toEqual({ applied: true, downloadedFile: MANUAL });

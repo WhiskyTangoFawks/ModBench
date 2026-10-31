@@ -803,14 +803,19 @@ export interface InstanceAdapter {
   /** Trashes the file at the forward-slash `relativePath` in `folder`, a folder a manifest builds, and removes each folder
    *  it empties, answering why not. A file already gone is done. Rejects a path out of `folder`, links resolved. */
   trashFileIn(folder: string, relativePath: string, trash: MoveToTrash): Promise<string | undefined>;
-  /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes. Rejects a
-   *  path that leaves the folder, its links resolved; a write that fails leaves the files before it written. */
-  writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[]): Promise<void>;
+  /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes, trashing
+   *  the file it replaces. Rejects a path out of the folder, links resolved; a failed write keeps those before. */
+  writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[], trash: MoveToTrash): Promise<void>;
+  /** Runs `write`, then trashes, from its own path, the old copy of each of the forward-slash `paths` in `folder` that
+   *  `write` replaced or removed. A file the trash refuses holds its old copy, and is named with why. */
+  trashingReplaced<T>(folder: string, paths: readonly string[], trash: MoveToTrash, write: () => Promise<T>): Promise<{
+    readonly answer: T; readonly notTrashed: readonly { readonly path: string; readonly why: string }[];
+  }>;
   /** Moves a source mod's repository folder into the trash. */
   trashSourceFolder(sourceFolder: string, trash: MoveToTrash): Promise<void>;
-  /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a
-   *  new mod's folder goes, and a failed upgrade is not rolled back. */
-  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, fomod?: FomodAnswer): Promise<InstallOutcome>;
+  /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an
+   *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
+  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

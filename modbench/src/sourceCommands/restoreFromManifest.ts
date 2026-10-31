@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
 import type { InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, metadataOverwritten, packagesAsked, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
+  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, packagesAsked, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
   type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
@@ -17,14 +17,14 @@ import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from '
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
-import { downloadedNow, packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
+import { packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
 import { metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'textHash' | 'modMetadata'
-  | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
+  | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'submodule'
   | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 export interface RestoreDeps {
@@ -57,20 +57,6 @@ export type RestoreStatus =
   | { readonly phase: 'Cloning' }
   | { readonly phase: 'Downloading'; readonly file: string }
   | { readonly phase: 'Restoring'; readonly mod: string; readonly modsDone: number; readonly modsTotal: number };
-
-// A mod restore would destroy something in: each file whose bytes differ from its package's, each file no line names,
-// and whether it writes another version or page over its metadata's.
-interface ModRestoreDestroys {
-  readonly mod: string;
-  readonly differing: readonly string[];
-  readonly namedByNoLine: readonly string[];
-  readonly metadataDiffers: boolean;
-}
-
-export interface WhatRestoreDestroys {
-  readonly destroys: readonly ModRestoreDestroys[];
-  readonly refused: readonly ItemRefusal<string>[];
-}
 
 /** Every other manifest (modlist-repository.md, Every mod, story 1), and each folder the search could not read, or the
  *  search itself, refused on its own (commands.md, A selection is one gesture, and each item lands on its own). */
@@ -218,8 +204,8 @@ async function packageEntriesKept(adapter: Adapter, manifest: Manifest, packages
   return notes;
 }
 
-// modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written, and every file no line names
-// sent to the trash.
+// modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, and
+// every file no line names sent to the trash.
 async function restoreFromPackages(pass: Pass, mod: string, folder: string, manifest: Manifest): Promise<Answer> {
   const { adapter } = pass.deps;
   const packages = await packagesFor(pass, manifest);
@@ -235,7 +221,7 @@ async function restoreFromPackages(pass: Pass, mod: string, folder: string, mani
     return from === undefined || holdsItsBytes === true ? [] : [{ path: onDisk ?? line.path, from }];
   });
   try {
-    if (writes.length > 0) await adapter.writeFilesIn(folder, writes);
+    if (writes.length > 0) await adapter.writeFilesIn(folder, writes, pass.deps.trash);
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
@@ -307,12 +293,23 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   };
 }
 
+// Metadata restore cannot write refuses the mod before it writes a file.
+async function whyMetadataUnwritable({ folders, deps: { adapter } }: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
+  if (!folders.isMod(mod)) return undefined;
+  const metadata = await adapter.modMetadata(mod);
+  if (metadata.kind === 'unreadable') return skipped(metadataUnreadable(metadata.reason));
+  const unwritable = await adapter.unwritableMetadata(mod, metadataOf(manifest));
+  return unwritable === undefined ? undefined : skipped(unwritable);
+}
+
 async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   const folder = await pass.folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const held = await manifestHeld(folder);
   if (held === undefined) return { refusal: skipped('it has no manifest') };
   if ('refusal' in held) return held;
+  const unwritable = await whyMetadataUnwritable(pass, mod, held.manifest);
+  if (unwritable !== undefined) return { refusal: unwritable };
   const repository = repositoryOf(held.manifest);
   if (repository === undefined) return restoreFromPackages(pass, mod, folder, held.manifest);
   const sourceFolder = pass.sourceMods.folderOf(mod);
@@ -401,49 +398,4 @@ export async function restoreFromManifest(
     ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
     ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),
   };
-}
-
-async function destroysIn(pass: Pass, mod: string): Promise<ModRestoreDestroys | { readonly refusal: string } | undefined> {
-  const { adapter } = pass.deps;
-  const folder = await pass.folders.of(mod);
-  if (folder === undefined) return undefined;
-  const metadata = pass.folders.isMod(mod) ? await adapter.modMetadata(mod) : undefined;
-  if (metadata?.kind === 'unreadable') return { refusal: skipped(metadataUnreadable(metadata.reason)) };
-  const held = await manifestHeld(folder);
-  if (held === undefined) return undefined;
-  if ('refusal' in held) return held;
-  const says = metadataOf(held.manifest);
-  const unwritable = metadata === undefined ? undefined : await adapter.unwritableMetadata(mod, says);
-  if (unwritable !== undefined) return { refusal: skipped(unwritable) };
-  try {
-    // The listing asks before restore downloads anything, so it reads what the downloads folder holds now.
-    const downloaded = await downloadedNow(adapter, held.manifest);
-    const against = await compared(adapter, held.manifest, folder, await packagesRead(adapter, held.manifest, { downloaded, game: pass.game }));
-    return {
-      mod, differing: against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : [])).sort(),
-      namedByNoLine: against.namedByNoLine, metadataDiffers: metadata !== undefined && metadataOverwritten(metadata.answer, says),
-    };
-  } catch (err) {
-    return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
-  }
-}
-
-/** What restore from manifest of the mods would destroy, before anything is written, and each mod it would skip for a
- *  file or metadata it cannot read or write. */
-export async function whatRestoreDestroys(deps: RestoreDeps, mods: readonly string[], others: readonly OtherManifest[]): Promise<WhatRestoreDestroys> {
-  const { adapter } = deps;
-  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-  const names = namesOf(mods, others);
-  const { folders, refused } = await foldersCompared(adapter, names, others, sourceMods);
-  const refusedNames = new Set(refused.map(({ item }) => item));
-  const pass = await passOver(deps, folders, sourceMods, {});
-  const destroys: ModRestoreDestroys[] = [];
-  const skippedMods: ItemRefusal<string>[] = [...refused];
-  for (const mod of names.filter((name) => !refusedNames.has(name))) {
-    const listed = await destroysIn(pass, mod);
-    if (listed === undefined) continue;
-    if ('refusal' in listed) skippedMods.push({ item: mod, reason: listed.refusal });
-    else if (listed.differing.length + listed.namedByNoLine.length > 0 || listed.metadataDiffers) destroys.push(listed);
-  }
-  return { destroys, refused: skippedMods };
 }

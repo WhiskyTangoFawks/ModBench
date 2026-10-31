@@ -21,6 +21,11 @@ export async function digestOf(path: string): Promise<string> {
   return digest.toString('base64');
 }
 
+/** Whether the files at `one` and `other` hold the same bytes, as their manifest lines would read them. */
+export async function sameBytes(one: string, other: string): Promise<boolean> {
+  return await digestOf(one) === await digestOf(other);
+}
+
 /** The hash of `text`'s UTF-8 bytes, written as `digestOf` writes it. */
 export async function textHash(text: string): Promise<string> {
   const digest = Buffer.alloc(8);

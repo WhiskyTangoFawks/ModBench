@@ -13,7 +13,7 @@ import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, ref
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
-import { restoreFromManifest, whatRestoreDestroys, type RestoreStatus } from '../restoreFromManifest';
+import { restoreFromManifest, type RestoreStatus } from '../restoreFromManifest';
 
 const EMPTY: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 const MOD_7Z: ManifestPackage = { kind: 'installationFile', name: 'ModA.7z', size: 10, hash: 'H' };
@@ -69,7 +69,6 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
   return {
     fake, client, hashes, steps, deps,
     restore: (asked: readonly string[], options: Parameters<typeof restoreFromManifest>[2] = {}) => restoreFromManifest(deps, asked, options, false, []),
-    destroys: (asked: readonly string[]) => whatRestoreDestroys(deps, asked, []),
   };
 }
 
@@ -211,6 +210,18 @@ describe('restore from manifest', () => {
     });
 
     expect(await restore(['ModA'])).toEqual({ landed: [], refused: [{ item: 'ModA', reason }] });
+  });
+
+  it.each<[string, InstanceAnswers, string]>([
+    ['its metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'locked']]) }, 'was skipped: its metadata could not be read: locked.'],
+    ['its metadata cannot hold what its manifest says', { unwritableMetadata: new Map([['ModA', 'its metadata names another game']]) }, 'was skipped: its metadata names another game.'],
+  ])('skips a mod when %s, before it writes a file', async (_case, answers, reason) => {
+    const { restore, fake } = await over({
+      files: { ModA: { 'b.nif': 'edited' } }, manifests: { ModA: fromTheZip(held('b.nif')) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), ...answers },
+    });
+
+    expect([await restore(['ModA']), writes(fake.calls)]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason }] }, []]);
   });
 
   it('restores a folder outside the mod folders by its name, and writes no metadata', async () => {
@@ -541,39 +552,3 @@ describe('restore from manifest', () => {
   });
 });
 
-describe('what restore from manifest destroys', () => {
-  it('is each file whose bytes differ from what the installation file the downloads folder holds fixes, each file no line names, and metadata it overwrites', async () => {
-    const { destroys } = await over({
-      files: { ModA: { 'a.nif': 'HA', 'b.nif': 'edited', 'mine.txt': 'M' }, ModB: { 'a.nif': 'HA' } },
-      manifests: { ModA: { ...fromTheZip(held('a.nif'), held('b.nif')), version: '1.0' }, ModB: fromTheZip(held('a.nif')) },
-      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), metadata: new Map([['ModA', { version: '0.9' }]]) },
-    });
-
-    expect(await destroys(['ModA', 'ModB'])).toEqual({ destroys: [{ mod: 'ModA', differing: ['b.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: true }], refused: [] });
-  });
-
-  it('reads an installation file held under another name as restore does, by its size and hash', async () => {
-    const { destroys } = await over({
-      files: { ModA: { 'a.nif': 'HA', 'b.nif': 'edited' } },
-      manifests: { ModA: fromTheZip(held('a.nif'), held('b.nif')) },
-      answers: { downloadedFiles: new Map([['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z' })]]) },
-    });
-
-    expect(await destroys(['ModA'])).toEqual({ destroys: [{ mod: 'ModA', differing: ['b.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
-  });
-
-  it('is nothing after a fresh clone, whose folders hold no file the manifests name and no metadata', async () => {
-    const { destroys } = await over({ files: { ModA: {} }, manifests: { ModA: { ...fromTheZip(held('a.nif')), version: '1.0' } } });
-
-    expect(await destroys(['ModA'])).toEqual({ destroys: [], refused: [] });
-  });
-
-  it.each<[string, InstanceAnswers, string]>([
-    ['its metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'locked']]) }, 'was skipped: its metadata could not be read: locked.'],
-    ['its metadata cannot hold what its manifest says', { unwritableMetadata: new Map([['ModA', 'its metadata names another game']]) }, 'was skipped: its metadata names another game.'],
-  ])('skips a mod when %s', async (_case, answers, reason) => {
-    const { destroys } = await over({ manifests: { ModA: fromTheZip() }, answers });
-
-    expect(await destroys(['ModA'])).toEqual({ destroys: [], refused: [{ item: 'ModA', reason }] });
-  });
-});
