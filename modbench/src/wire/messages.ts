@@ -56,6 +56,7 @@ export const WEBVIEW_TO_EXTENSION = {
 export type UnreadableSource = components['schemas']['UnreadableSource'];
 /** A column header's status: the label under the file name, and the reason in its tooltip (editor.md, A column's header). */
 export interface ColumnStatus { readonly label: string; readonly reason: string }
+export type CompareResult = components['schemas']['CompareResult'];
 export type ConflictThis = components['schemas']['ConflictThis'];
 export type ConflictAll = components['schemas']['ConflictAll'];
 export type FieldMetadata = components['schemas']['FieldMetadata'];
@@ -257,7 +258,7 @@ export type RecordLoadAnswer =
 /** What the read gave: the comparison, or the records held by no plugin at all (editor.md, States, story 4)
  *  with mEdit's word on each copy only the plugin it names lacks (story 2). */
 export type RecordRead =
-  | { compare: components['schemas']['CompareResult'] }
+  | { compare: CompareResult }
   | { compare: null; gone: string[]; copiesLacking: string[] };
 
 export type ExtensionToWebview =

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { withMasterCellStates } from '../masterCellStates';
-import type { components } from '../../wire/generated/api';
+import type { CompareResult } from '../../wire/messages';
 
-type CompareResult = components['schemas']['CompareResult'];
-type FieldDiff = components['schemas']['FieldDiff'];
+type FieldDiff = CompareResult['diffs'][number];
 
 const copy = (plugin: string) => ({
   formKey: '000800:A.esp', plugin, origin: 'Data/', isWinner: false, fields: [], recordType: 'NPC_', isPartialForm: false, isInOverwrite: false, loadIndex: '00',

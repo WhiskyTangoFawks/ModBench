@@ -681,7 +681,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
     expect(answered).toMatchObject([
-      { status: { label: '(read-only)', reason: expect.stringContaining('Decompile and Commit Mod') } },
+      { status: { label: '(read-only)', reason: expect.stringContaining('Decompile and Commit Mod') as unknown } },
       { status: { label: '(read-only)', reason: 'The game’s plugins are not edited.' } },
     ]);
   });
@@ -707,9 +707,9 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
-    const [first] = await read(client, 'read_record', { name: 'SharedNpc' }) as object[];
+    const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
-    expect(first).not.toHaveProperty('status');
+    expect(answered).toEqual([expect.not.objectContaining({ status: expect.anything() }), expect.anything()]);
   });
 
   it('answers each active plugin\'s copy and marks the winner when it names no plugin', async () => {

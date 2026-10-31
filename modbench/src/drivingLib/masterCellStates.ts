@@ -1,8 +1,7 @@
 import { copyColumnKey } from '../wire/columnKey';
-import type { components } from '../wire/generated/api';
+import type { CompareResult } from '../wire/messages';
 
-type CompareResult = components['schemas']['CompareResult'];
-type FieldDiff = components['schemas']['FieldDiff'];
+type FieldDiff = CompareResult['diffs'][number];
 
 /** The first column's cell that holds a value reads Master, or OnlyOne when no other copy is compared, in every row
  *  mEdit left it unstated (editor-conflicts.md, Cells). A compare of several records states every cell itself. */

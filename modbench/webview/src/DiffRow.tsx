@@ -11,7 +11,7 @@ import {
   DIMMED_OPACITY, INDENT_PER_LEVEL, baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import { defaultOf, type Column } from './recordUtils';
-import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
+import type { ColumnKey, FieldMetadata, FormKeyResolution, PathHop } from './types';
 import type { FieldRow, TemplateReading, ValueCell } from './recordRows';
 import type { FocusedCell } from './gridNavigation';
 import { LABEL_COLUMN } from './labelColumn';
