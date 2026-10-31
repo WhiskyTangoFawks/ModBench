@@ -801,7 +801,7 @@ export interface InstanceAdapter {
    *  file cannot be trashed. `metadataLeftBehind` is the reason what is kept could not follow. */
   trashDownloadedFile(name: string, trash: MoveToTrash): Promise<DownloadedFileTrashed>;
   /** Trashes the file at the forward-slash `relativePath` in `folder`, a folder a manifest builds, and removes each folder
-   *  it empties, answering why one could not be. A file already gone is done. Rejects a path out of `folder`, links resolved. */
+   *  it empties, answering why not. A file already gone is done. Rejects a path out of `folder`, links resolved. */
   trashFileIn(folder: string, relativePath: string, trash: MoveToTrash): Promise<string | undefined>;
   /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes. Rejects a
    *  path that leaves the folder, its links resolved; a write that fails leaves the files before it written. */
