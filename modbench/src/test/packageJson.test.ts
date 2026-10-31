@@ -31,7 +31,8 @@ import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
 import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
-import { indicatorSetting, MOD_INDICATORS, PUBLISHER_TAG_INDICATOR } from '../mods/modIndicators';
+import { MOD_INDICATORS } from '../drivingLib/modFileStates';
+import { indicatorSetting, PUBLISHER_TAG_INDICATOR } from '../mods/modIndicators';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }

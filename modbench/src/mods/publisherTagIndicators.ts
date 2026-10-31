@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 import type { Covering, FileOrigin, InstanceValue, InstanceView, OriginFolder, PublisherTag } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { pathTagsOf } from '../drivingLib/modFileStates';
 import { fileRowUri } from './modFiles';
 import {
   IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorRowUri,
@@ -36,7 +37,7 @@ class CarriersRead implements Carriers {
   ): Set<PublisherTag> {
     const inOrigin = new Set<PublisherTag>();
     const beneath = new Map<string, Set<PublisherTag>>(folders.map(({ relativePath }) => [relativePath, new Set()]));
-    const own = new Map(entries.map((entry) => [entry, this.covering(entry.path, mod).filter(({ marksPaths }) => marksPaths)]));
+    const own = new Map(entries.map((entry) => [entry, pathTagsOf(this.covering, entry.path, mod)]));
     for (const [entry, tags] of own) {
       this.carry(vscode.Uri.file(entry.path).toString(), tags);
       for (const tag of tags) inOrigin.add(tag);
