@@ -889,7 +889,7 @@
         },
         {
           "command": "modbench.record.cut",
-          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection"
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\beditableCell\\b/"
         },
         {
           "command": "modbench.record.removeElement",

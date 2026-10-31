@@ -842,7 +842,7 @@ describe('package.json field gestures\' palette entries', () => {
     ['modbench.record.moveElementUp', { [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveUp': true }],
     ['modbench.record.moveElementDown', { [SECTION]: 'arrayElement', 'modbench.record.focusedCellCanMoveDown': true }],
     ['modbench.record.editField', { [SECTION]: 'stringValue' }],
-    ['modbench.record.cut', { [SECTION]: 'field' }],
+    ['modbench.record.cut', { [SECTION]: 'editableCell' }],
     ['modbench.record.openFieldValue', { [SECTION]: 'stringValue' }],
   ] as const;
 
@@ -853,6 +853,10 @@ describe('package.json field gestures\' palette entries', () => {
 
   it.each(eachMissingFact(FIELD_PALETTE))('%s is not in the palette without %s', (command, fact, facts) => {
     expect(paletteOffers(command, { ...ON_A_RECORD_TAB, ...without(facts, fact) })).toBe(false);
+  });
+
+  it('cut is not in the palette on a cell that cannot be edited', () => {
+    expect(paletteOffers('modbench.record.cut', { ...ON_A_RECORD_TAB, [SECTION]: 'field' })).toBe(false);
   });
 
   it.each(['sideBarFocus', 'panelFocus', 'auxiliaryBarFocus'])('add element is not in the palette while %s', (focus) => {
