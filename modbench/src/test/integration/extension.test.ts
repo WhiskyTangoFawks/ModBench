@@ -642,6 +642,13 @@ describe('a gesture the agent runs', () => {
     }
   });
 
+  it('answers a deploy with no deployment folder as a refusal naming the setting', async () => {
+    const answer = await callTool('instance_deploy');
+
+    assert.strictEqual(answer.isError, true, answer.text);
+    assert.ok(answer.text.includes('modbench.deployment.folder'), answer.text);
+  });
+
   it('installs a FOMOD with its choices, through the engine the extension ships', async () => {
     const release = mkdtempSync(path.join(os.tmpdir(), 'modbench-it-fomod-'));
     const installed = path.join(root, 'mods', 'Fomod Mod');

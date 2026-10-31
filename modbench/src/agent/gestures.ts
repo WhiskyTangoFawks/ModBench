@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { AgentCall, type DeployedFileArgument, type GestureResult, type ProfileArgument } from '../drivingLib/agentGesture';
+import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { Argument } from '../wire/argument';
 import { downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
-import { deployFailures, deployWarnings } from '../deployment/deployProblems';
+import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
 import type { Deployed } from '../deployment/deployment';
 import { Refusal } from '../drivingLib/refusal';
 import { formKeysNamed } from './recordNames';
@@ -15,16 +15,14 @@ interface GestureInput {
   /** The Argument the agent gives, as the tool's description teaches it. */
   readonly takes: string;
   readonly input: z.ZodRawShape;
-  readonly callOf: (value: InstanceValue, given: unknown, mEdit: NameResolver) => AnyCall | Promise<AnyCall>;
+  readonly callOf: (value: InstanceValue, given: unknown, mEdit: NameResolver) => AgentCall | Promise<AgentCall>;
 }
-
-type AnyCall = AgentCall<object, object>;
 
 type NameResolver = Pick<MEditClient, 'resolveNames'>;
 
 function gestureInput<Shape extends z.ZodRawShape>(
   takes: string, input: z.ZodObject<Shape>,
-  callOf: (value: InstanceValue, given: z.output<z.ZodObject<Shape>>, mEdit: NameResolver) => AnyCall | Promise<AnyCall>,
+  callOf: (value: InstanceValue, given: z.output<z.ZodObject<Shape>>, mEdit: NameResolver) => AgentCall | Promise<AgentCall>,
 ): GestureInput {
   return { takes, input: input.shape, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
 }
@@ -169,13 +167,13 @@ const NO_INPUT = gestureInput('', z.object({}), () => new AgentCall([], {}));
 const SWITCH_PROFILE = gestureInput(
   'argument: the one profile, { name } as list_profiles names it',
   z.object({ argument: z.array(z.object({ name: z.string() })) }),
-  (_value, { argument }) => new AgentCall<object, ProfileArgument>(argument.map(({ name }) => ({ kind: 'profile', name })), {}),
+  (_value, { argument }) => new AgentCall(argument.map(({ name }) => ({ kind: 'profile', name })), {}),
 );
 
 const MOVE_TO_OVERWRITE = gestureInput(
   'argument?: the files the deployment folder holds that deploy does not manage, each { path } below the deployment folder, or none for every one',
   z.object({ argument: z.array(z.object({ path: z.string() })).optional() }),
-  (_value, { argument }) => new AgentCall<object, DeployedFileArgument>((argument ?? []).map(({ path }) => ({ kind: 'deployedFile', path })), {}),
+  (_value, { argument }) => new AgentCall((argument ?? []).map(({ path }) => ({ kind: 'deployedFile', path })), {}),
 );
 
 

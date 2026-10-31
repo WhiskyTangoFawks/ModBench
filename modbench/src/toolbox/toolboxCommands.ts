@@ -19,7 +19,7 @@ interface ToolboxCommandDeps {
   reporterFor: (tag: string) => Reporter;
 }
 
-function profileOf(call: AgentCall<object, object>): string {
+function profileOf(call: AgentCall): string {
   const [only, ...more] = profilesOf(call);
   if (only === undefined || more.length > 0) throw new Refusal('Switching takes the one profile to switch to.');
   return only;
@@ -32,14 +32,15 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async (called?: unknown) => {
-      const switchTo = (profile: string) => runWritingGesture(TOOLBOX_VIEW, instance, () => commands.switchProfile(profile));
-      if (isAgentCall(called)) return answeredToAgent(await switchTo(profileOf(called)));
+      if (isAgentCall(called)) return answeredToAgent(await runWritingGesture(TOOLBOX_VIEW, instance, () => commands.switchProfile(profileOf(called))));
       const { activeProfile: active, profiles } = instance.value;
       const items = profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined }));
       const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
       if (!picked || picked.label === active) return undefined;
-      const outcome = await switchTo(picked.label);
-      if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
+      await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
+        const outcome = await commands.switchProfile(picked.label);
+        if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
+      });
       return undefined;
     }),
     vscode.commands.registerCommand('modbench.settings.open', () =>
@@ -63,22 +64,22 @@ interface RefreshGestureDeps {
 }
 
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
-  const run = async (): Promise<RefreshResult> => {
-    const refill = deps.nextRefill();
-    const outcome = await deps.commands.refresh();
-    if (outcome.applied) await refill.ended;
-    else refill.release();
-    return outcome;
-  };
   const refusalOf = (outcome: Extract<RefreshResult, { applied: false }>) => outcome.heldElsewhere
     ? { message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: deps.instanceRoot }
     : { message: 'Could not refresh.', detail: outcome.refusal };
-  return vscode.commands.registerCommand('modbench.instance.refresh', async (called?: unknown): Promise<GestureResult<never, string> | undefined> => {
-    const outcome = await runWritingGesture(TOOLBOX_VIEW, deps.instance, run);
-    if (outcome.applied) return called instanceof AgentCall ? answeredToAgent(outcome) : undefined;
+  const run = async (fromAgent: boolean): Promise<GestureResult<never, string> | undefined> => {
+    const refill = deps.nextRefill();
+    const outcome = await deps.commands.refresh();
+    if (outcome.applied) {
+      await refill.ended;
+      return fromAgent ? answeredToAgent(outcome) : undefined;
+    }
+    refill.release();
     const { message, detail } = refusalOf(outcome);
-    if (called instanceof AgentCall) return { applied: false, refusal: message, detail };
+    if (fromAgent) return { applied: false, refusal: message, detail };
     deps.reporter.report('error', message, detail);
     return undefined;
-  });
+  };
+  return vscode.commands.registerCommand('modbench.instance.refresh', (called?: unknown) =>
+    runWritingGesture(TOOLBOX_VIEW, deps.instance, () => run(called instanceof AgentCall)));
 }
