@@ -383,9 +383,9 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
 
 /** `lineRefusals` names each profile whose line could not be renamed: it loses the mod's place until
  *  `mod sync`. `tagRefusal`: the publisher tags could not follow, or Modbench's files could not be
- *  kept out of the publisher. `keepOutRefusal`: nothing sets it; mods/modManagementCommands.ts still reads it. */
+ *  kept out of the publisher. */
 export type RenameModResult =
-  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string; keepOutRefusal?: string }
+  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string }
   | { applied: false; refusal: string };
 
 async function refusalOf(attempt: () => Promise<unknown>): Promise<string | undefined> {
