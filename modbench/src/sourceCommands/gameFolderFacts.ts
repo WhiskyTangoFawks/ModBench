@@ -2,7 +2,7 @@ import type { GamePlace, InstanceAdapter } from '../instanceAdapter/instanceAdap
 import type { SourceMods } from '../manifestAdapter/manifestAdapter';
 import type { GameHeld, GamePlaceHeld } from './manifestBuilder';
 
-type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy'>;
+type GameAdapter = Pick<InstanceAdapter, 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy'>;
 
 export interface NamedGameFolder {
   readonly name: string;
@@ -25,8 +25,8 @@ export async function namedGameFolder(adapter: Pick<InstanceAdapter, 'gamePlaces
 }
 
 export async function gameToHand(adapter: GameAdapter, sourceMods: SourceMods): Promise<GameToHand> {
-  const [{ modFolders }, folder] = await Promise.all([adapter.modOrder(), namedGameFolder(adapter, await adapter.gameRelease())]);
-  return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined && modFolders?.find((entry) => entry.modName === mod)?.kind !== 'separator' };
+  const folder = await namedGameFolder(adapter, await adapter.gameRelease());
+  return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined };
 }
 
 /** The game folder with the files each place holds of a mod's, none when the game folder was not found. */
