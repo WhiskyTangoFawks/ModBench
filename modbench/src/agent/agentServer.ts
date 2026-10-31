@@ -13,7 +13,7 @@ import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
 import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
-import { INSTANCE_READS } from './instanceReads';
+import { INSTANCE_READS, type DeploymentRead } from './instanceReads';
 import { LIST_PLUGINS } from './listPlugins';
 import { withNotRestored } from './notRestored';
 import { Refusal } from '../drivingLib/refusal';
@@ -32,6 +32,7 @@ export interface AgentServerOptions {
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
+  deployment?: DeploymentRead;
   reporter: Reporter;
   log: Log;
 }
@@ -97,10 +98,10 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, log }: OpenOptions): McpServer {
+function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deployment, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const standing = () => instanceMessages(instance).filter((message) => message !== undefined);
-  for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
+  for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses)));
   register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));

@@ -13,7 +13,7 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { TerminalEnvironment } from '../scriptEnvironment';
-import { serveAgent, type AgentServer } from '../agentServer';
+import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -67,13 +67,13 @@ const NO_ENVIRONMENT = { forEach: () => undefined };
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
 const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment?: AgentServerOptions['deployment']) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, statuses,
+    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -81,8 +81,8 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment) {
-  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment);
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment?: AgentServerOptions['deployment']) {
+  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
@@ -149,7 +149,36 @@ describe('the agent server, given an instance value', () => {
   it('reads the profiles and the active one', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
-    expect(await read(client, 'list_profiles')).toEqual({ active: 'Survival', profiles: ['Default', 'Survival'] });
+    expect(await read(client, 'list_profiles')).toMatchObject({ active: 'Survival', profiles: ['Default', 'Survival'] });
+  });
+
+  it('reads the Toolbox: the game and where it was looked for, its versions, the links, the repository, the deployment folder and where plugins.txt goes', async () => {
+    const looked = [{ place: 'the setting', answer: 'not set' }];
+    const value = instanceValueFixture({
+      gameName: 'Fallout 4', holdsRepository: true, gameFolderLinks: 3,
+      gameFolder: { kind: 'notFound', looked, setting: 'modbench.gameFolder' },
+      programVersions: { kind: 'unresolved' },
+    });
+    const asked: string[] = [];
+    const { client } = await clientOf(new FakeInstance(value), undefined, undefined, {
+      folder: () => '/deploy',
+      pluginsTxtPlace: (game, folder) => { asked.push(`${game}@${folder}`); return Promise.resolve({ folder: '/prefix/plugins' }); },
+    });
+
+    expect(await read(client, 'list_profiles')).toMatchObject({
+      game: { name: 'Fallout 4', folder: { kind: 'notFound', looked, setting: 'modbench.gameFolder' }, versions: { kind: 'unresolved' } },
+      gameFolderLinks: 3, holdsRepository: true,
+      deployment: { folder: '/deploy', pluginsTxt: { folder: '/prefix/plugins' } },
+    });
+    expect(asked).toEqual(['Fallout 4@/deploy']);
+  });
+
+  it('reads no deployment folder as none, and asks nothing of where plugins.txt goes', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, {
+      folder: () => undefined, pluginsTxtPlace: () => Promise.reject(new Error('asked')),
+    });
+
+    expect(await read(client, 'list_profiles')).toMatchObject({ deployment: { folder: null } });
   });
 
   it('reads the mod order with each entry enabled or not', async () => {
@@ -320,7 +349,7 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(instance);
     instance.publish(instanceValueFixture({ activeProfile: 'Default', profiles: ['Default'] }));
 
-    expect(await read(client, 'list_profiles')).toEqual({ active: 'Default', profiles: ['Default'] });
+    expect(await read(client, 'list_profiles')).toMatchObject({ active: 'Default', profiles: ['Default'] });
   });
 
   it('refuses a read whose downloads folder is unresolved with the reason, in the Output and in no notification', async () => {
