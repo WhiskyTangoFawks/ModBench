@@ -356,6 +356,15 @@ describe('the MO2 adapter\'s path tokens', () => {
     });
   });
 
+  it('writes nothing in an instance folder that holds no repository', async () => {
+    const root = await folder('instance');
+    await put(root, 'ModOrganizer.ini', SETTINGS(['1\\binary=C:/Modding/x.exe']));
+    const adapter = managerOver(root, {}, PUBLISHER);
+
+    expect([await adapter.writePathTokens(), await readFile(join(root, 'ModOrganizer.ini'), 'utf8')])
+      .toEqual([undefined, SETTINGS(['1\\binary=C:/Modding/x.exe'])]);
+  });
+
   it('leaves the config of a repository that already holds its filters as it is', async () => {
     const { root, adapter } = await instanceRepository([]);
     await adapter.writePathTokens();
