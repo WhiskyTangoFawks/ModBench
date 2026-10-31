@@ -631,6 +631,33 @@ describe('the agent server, reading a record through mEdit', () => {
     { plugin: 'B.esp', origin: 'Big Rocks', isWinner: true },
   ]);
 
+  const STANDING = { loadIndex: '00', isPartialForm: false, fields: [] };
+
+  it('answers each copy\'s load index, Partial Form, parse diagnosis, column state and the conflict state of each row and cell', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getComparison', {
+      ...comparisonOf('000800:A.esp', [
+        { plugin: 'A.esp', origin: 'Big Rocks', isWinner: false },
+        { plugin: 'B.esp', origin: 'Big Rocks', isWinner: true },
+      ]),
+      diffs: [{
+        fieldName: 'Name', values: {}, winnerColumn: 'B.esp|Big Rocks', noWinner: false, conflictAll: 'Conflict',
+        cellStates: { 'A.esp|Big Rocks': 'ConflictLoses', 'B.esp|Big Rocks': 'ConflictWins' },
+        children: [{ fieldName: 'Full', values: {}, winnerColumn: '', noWinner: false, conflictAll: 'Override', cellStates: { 'B.esp|Big Rocks': 'Override' } }],
+      }],
+    });
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const answered = await read(client, 'read_record', { name: 'SharedNpc' });
+
+    expect(answered).toMatchObject([
+      { plugin: { name: 'A.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictLoses' }] },
+      { plugin: { name: 'B.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictWins', children: [{ field: 'Full', conflictAll: 'Override', conflictThis: 'Override' }] }] },
+    ]);
+  });
+
   it('answers each active plugin\'s copy and marks the winner when it names no plugin', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
@@ -642,8 +669,8 @@ describe('the agent server, reading a record through mEdit', () => {
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
     expect(answered).toEqual([
-      { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, kind: 'OwnFile', location: '/s/A.esp/000800.json' },
-      { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
+      { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, ...STANDING, kind: 'OwnFile', location: '/s/A.esp/000800.json' },
+      { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, ...STANDING, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
     ]);
     expect(mEdit.calls.filter(({ method }) => method === 'getCopyDocument').map(({ args }) => args[0])).toEqual([
       { name: 'A.esp', origin: 'Big Rocks' }, { name: 'B.esp', origin: 'Big Rocks' },
@@ -664,7 +691,7 @@ describe('the agent server, reading a record through mEdit', () => {
       isError: true,
       answer: [
         { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, reason: 'A.esp is unreadable.' },
-        { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
+        { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, ...STANDING, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
       ],
       warned: ['[agent] read_record: A.esp is unreadable.'],
     });
@@ -673,13 +700,14 @@ describe('the agent server, reading a record through mEdit', () => {
   it('answers the one plugin\'s copy when it names the plugin', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
     const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'b.esp' } });
 
     expect(mEdit.calls).toContainEqual({ method: 'getCopyDocument', args: [{ name: 'B.esp', origin: 'Big Rocks' }, '000800:A.esp'] });
-    expect(answered).toEqual({ kind: 'OwnFile', location: '/s/A.esp/000800.json' });
+    expect(answered).toEqual({ ...STANDING, kind: 'OwnFile', location: '/s/A.esp/000800.json' });
   });
 
   it('answers the text of a non-compiled plugin\'s copy, which has no file to open', async () => {
@@ -687,12 +715,13 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
     mEdit.setQueryAnswer('getRenderedDocument', { fileName: 'SharedNpc.txt', text: 'Name: Shared' });
+    mEdit.setQueryAnswer('getComparison', COPIES);
     const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
 
     expect(mEdit.calls).toContainEqual({ method: 'getRenderedDocument', args: [{ name: 'A.esp', origin: 'Big Rocks' }, '000800:A.esp'] });
-    expect(answered).toEqual({ kind: 'Rendered', text: 'Name: Shared' });
+    expect(answered).toEqual({ ...STANDING, kind: 'Rendered', text: 'Name: Shared' });
   });
 
   it.each([
