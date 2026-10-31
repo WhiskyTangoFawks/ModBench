@@ -60,8 +60,14 @@ internal static class ModEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return EndpointMapping.BadRequest("At least one mod is required.");
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || mod.Repository.WhyNotWhole is not null))
-            return EndpointMapping.BadRequest(mods.Select(mod => mod.Repository.WhyNotWhole).FirstOrDefault(why => why is not null) ?? NewRepositoryRequest.NotWhole);
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
+            return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
+        if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
+            return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile);
+        if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
+            return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsText);
+        if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestFileIsAPath))
+            return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestFileIsAPath);
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
@@ -174,12 +180,16 @@ internal sealed record NewRepositoryRequest(
             ? WhyManifestIsNotWhole
             : NotWhole;
 
+    internal const string ManifestLacksItsFile = "A manifest needs its file name: ManifestFile is missing.";
+    internal const string ManifestLacksItsText = "A manifest needs its text: Manifest is missing.";
+    internal const string ManifestFileIsAPath = "ManifestFile must be a bare file name, not a path.";
+
     private string? WhyManifestIsNotWhole => (ManifestFile, Manifest) switch
     {
         (null, null) => null,
-        (null, _) => "A manifest needs its file name: ManifestFile is missing.",
-        (_, null) => "A manifest needs its text: Manifest is missing.",
-        var (file, _) when !IsBareFileName(file) => $"The manifest's file name '{file}' must be a bare file name.",
+        (null, _) => ManifestLacksItsFile,
+        (_, null) => ManifestLacksItsText,
+        var (file, _) when !IsBareFileName(file) => ManifestFileIsAPath,
         _ => null,
     };
 
