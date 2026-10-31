@@ -38,9 +38,11 @@ export interface ManifestArchive {
   readonly files: readonly string[];
 }
 
+/** `installationFile`: the name of the package the mod's metadata names as what the mod was installed from. */
 export interface Manifest {
   readonly packages: readonly ManifestPackage[];
   readonly version?: string;
+  readonly installationFile?: string;
   readonly exclude: readonly string[];
   readonly archives: readonly ManifestArchive[];
   readonly files: readonly ManifestFile[];

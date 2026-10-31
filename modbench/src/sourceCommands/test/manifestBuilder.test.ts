@@ -30,13 +30,19 @@ describe('a mod\'s manifest from its files', () => {
     expect((await built({})).manifest).toEqual(EMPTY);
   });
 
-  it('names a file the installation file holds at its path by the short line, and the package as the installation file says it', async () => {
+  it('names a file the installation file holds at its path by the short line, and the package as the installation file says it, naming it the mod\'s installation file', async () => {
     const { manifest } = await built({ 'a.nif': 'HA' }, { installationFile: download('Mod-1.7z', { 'a.nif': 'HA' }, { size: 7, page: 'nexus:1' }) }, undefined, '1.2');
 
     expect(manifest).toEqual({
-      ...EMPTY, version: '1.2', files: [{ path: 'a.nif', entry: { kind: 'held' } }],
+      ...EMPTY, version: '1.2', installationFile: 'Mod-1.7z', files: [{ path: 'a.nif', entry: { kind: 'held' } }],
       packages: [{ kind: 'installationFile', name: 'Mod-1.7z', size: 7, hash: 'hash of Mod-1.7z', page: 'nexus:1' }],
     });
+  });
+
+  it('names no installation file for a mod that has none, though a downloaded file holds its files', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, { downloads: [download('Other.7z', { 'a.nif': 'HA' })] }, undefined, '1.2');
+
+    expect([manifest.packages.map(({ name }) => name), manifest.installationFile]).toEqual([['Other.7z'], undefined]);
   });
 
   it('records a version only when the mod has a package', async () => {

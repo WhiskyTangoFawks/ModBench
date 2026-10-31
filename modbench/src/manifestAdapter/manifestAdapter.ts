@@ -4,7 +4,8 @@ export {
 } from './modStatus';
 export { manifestText, ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from './manifestText';
 export { buildFileIn, manifestAt, manifestIn, packagesAsked, packagesAskedAt, writeManifestIn } from './manifestFiles';
+export { readBuildFile } from './manifestRead';
 export { exclusionsOf, lineAtFolderPath, unmarked } from './folderPaths';
 export { installationFileLack } from './packageLack';
-export { packageOf } from './packageOf';
-export { repositoryOf, sourceFolderTrashed, sourceModsOf, type SourceMods } from './sourceMods';
+export { installationFileIn, packageOf, repositoryOf } from './packageOf';
+export { sourceFolderTrashed, sourceModsOf, type SourceMods } from './sourceMods';

@@ -81,6 +81,10 @@ const sourceModWithExclusionsAndArchives = (
   + '"files": []\n}\n'
 );
 
+const namingItsInstallationFile = (
+  '{\n"installationFile": "Mod.7z",\n"packages": [\n{"repository":"Mod","version":"1.2"},\n{"installationFile":"Mod.7z","size":1,"hash":"H"}\n],\n"files": []\n}\n'
+);
+
 describe('a manifest the adapter reads and writes', () => {
   it.each([
     ['a version, and a file in each place', modWithVersion],
@@ -91,6 +95,7 @@ describe('a manifest the adapter reads and writes', () => {
     ['a game folder with its depots', gameFolder],
     ['depots whose ids differ in length, in ordinal order', depotsOfUnequalLength],
     ['exclusions and archives in a source mod', sourceModWithExclusionsAndArchives],
+    ['the installation file it names', namingItsInstallationFile],
   ])('round-trips %s byte for byte', (_name, text) => {
     const read = readManifest(text);
     if (!('manifest' in read)) throw new Error(read.refused);
@@ -159,6 +164,7 @@ describe('a manifest the adapter refuses', () => {
     ['{"exclude": ["../a"], "files": []}', "its manifest's 'exclude' names '../a', which is not a path in the folder"],
     ['{"archives": {"a.ba2": ["C:/x"]}, "files": []}', "its manifest's 'archives' names 'C:/x'"],
     ['{"extra": 1, "files": []}', "holds 'extra'"],
+    ['{"installationFile": "A.zip", "packages": [{"gameFolder":"A.zip","hash":"H"}], "files": []}', "names the installation file 'A.zip', which none of its packages is"],
   ])('refuses %j naming where', (text, where) => {
     const read = readManifest(text);
     expect('refused' in read ? read.refused : '').toContain(where);
