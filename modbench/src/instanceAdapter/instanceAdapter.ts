@@ -819,7 +819,7 @@ export interface InstanceAdapter {
    *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
   install(installed: InstallPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
   /** Writes the metadata of the mod in `folder` from its packages, each a downloaded file by name: the first is the installation
-   *  file, and every one's Nexus mod and file are recorded. Values the packages lack keep what the folder holds. */
+   *  file, and every one's Nexus mod and file are recorded. Other values stay. */
   writeInstalledFrom(folder: string, packages: readonly string[], trash: MoveToTrash): Promise<void>;
 
   // Subscribe: the instance changed.
