@@ -539,7 +539,7 @@ describe('RecordPanel — a Partial Form column', () => {
 
   it.each([
     ['(Partial Form)', partialFormCompiledPluginsResponse],
-    ['(no source)', pluginsResponse],
+    ['(Partial Form)', pluginsResponse],
   ])('dims the header of a Partial Form copy under its status %s, with no control on it', async (status, plugins) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(partialFormCompareResult, { plugins });
@@ -1934,7 +1934,7 @@ describe('RecordPanel — several records side by side', () => {
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
     const nameCells = Array.from(required(screen.getByText('Gun Name').closest('tr'), 'the Name row').querySelectorAll('td')).slice(1);
     expect(nameCells.map(cell => cell.textContent)).toEqual(['Gun Name', 'Ammo Name']);
-    expect(screen.getAllByText('(source)')).toHaveLength(2);
+    expect(screen.queryByText(/^\(/)).toBeNull();
   });
 
   it('opens another record\'s copy in this tab on a click on its header, with the same records as its columns, that one first as the file', async () => {

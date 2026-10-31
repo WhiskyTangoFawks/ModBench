@@ -68,18 +68,16 @@ describe('PluginHeader', () => {
     ['a file whose plugin is disabled, or in a disabled mod', { notActive: true }, '(not active)',
       'The game does not load it, so no other copy is compared.'],
     ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
-    ['a plugin in Overwrite', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(in Overwrite)',
+    ['a plugin in Overwrite', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(read-only)',
       'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.'],
-    ['a plugin that is not a compiled plugin', { isCompiledPlugin: false }, '(no source)',
+    ['a plugin that is not a compiled plugin', { isCompiledPlugin: false }, '(read-only)',
       '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
-    ['a compiled plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(plugin source unreadable)',
+    ['a compiled plugin whose plugin source is unreadable', { sourceUnreadable: WHY }, '(read-only)',
       `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
-    ['a compiled plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(plugin source unreadable)',
+    ['a compiled plugin whose plugin source decompile does not repair', { sourceUnreadable: TWINS }, '(read-only)',
       `${TWINS.reason} Its records are its plugin file’s.`],
     ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
       'The game ignores this copy’s own fields.'],
-    ['a compiled plugin', {}, '(source)',
-      'An edit lands in the mod’s working tree, for review in Source Control.'],
   ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(status);
@@ -92,16 +90,18 @@ describe('PluginHeader', () => {
     ['parse failure over overridden', { override: { parseDiagnosis: DIAGNOSIS }, overriddenBy: 'ModB' }, '(parse failure)', '(overridden)'],
     ['overridden over read-only', { overriddenBy: 'ModB', isImmutable: true }, '(overridden)', '(read-only)'],
     ['not active over read-only', { notActive: true, isImmutable: true }, '(not active)', '(read-only)'],
-    ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
-    ['in Overwrite over non-compiled plugin', { override: { isInOverwrite: true }, isCompiledPlugin: false }, '(in Overwrite)', '(no source)'],
-    ['non-compiled plugin over Partial Form', { override: { isPartialForm: true }, isCompiledPlugin: false }, '(no source)', '(Partial Form)'],
-    ['non-compiled plugin over unreadable', { isCompiledPlugin: false, sourceUnreadable: WHY }, '(no source)', '(plugin source unreadable)'],
-    ['unreadable over Partial Form', { override: { isPartialForm: true }, sourceUnreadable: WHY }, '(plugin source unreadable)', '(Partial Form)'],
-    ['Partial Form over compiled plugin', { override: { isPartialForm: true } }, '(Partial Form)', '(source)'],
+    ['Partial Form over read-only', { override: { isPartialForm: true }, isImmutable: true }, '(Partial Form)', '(read-only)'],
+    ['Partial Form over no source', { override: { isPartialForm: true }, isCompiledPlugin: false }, '(Partial Form)', '(read-only)'],
   ])('a column shows one status, the first that applies: %s', (_case, facts, shown, displaced) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(shown);
     expect(header).not.toHaveTextContent(displaced);
+  });
+
+  it('shows no status and a tooltip of the file name and the origin alone, on a copy the game uses and I can edit', () => {
+    const { header } = renderHeader();
+    expect(header).toHaveTextContent(/^\[01\] MyMod\.esp$/);
+    expect(header).toHaveAttribute('title', 'MyMod.esp\nModA');
   });
 
   it('holds no control but the collapse button, so nothing writes the Partial Form flag from here, even on a Partial Form column', () => {
@@ -117,10 +117,10 @@ describe('PluginHeader', () => {
   });
 
   it('toggles nothing on a click elsewhere on it', () => {
-    const { header, onToggleCollapse } = renderHeader();
+    const { header, onToggleCollapse } = renderHeader({ isImmutable: true });
     fireEvent.click(header);
     fireEvent.click(screen.getByText('MyMod.esp'));
-    fireEvent.click(screen.getByText('(source)'));
+    fireEvent.click(screen.getByText('(read-only)'));
     expect(onToggleCollapse).not.toHaveBeenCalled();
   });
 
