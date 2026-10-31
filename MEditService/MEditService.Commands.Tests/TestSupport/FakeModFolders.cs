@@ -35,7 +35,6 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string ExcludedName(string name, string exclusionMark) => name + exclusionMark;
 
-
     public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
 
     public void WriteFile(string folder, string path, Action<Stream> write)

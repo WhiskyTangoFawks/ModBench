@@ -35,8 +35,6 @@ export interface RestoreDeps {
   readonly tasks: StepTasks;
 }
 
-// A mod made what its manifest says: each file written, each file no line names sent to the trash, and what a source
-// mod's rebuild left. `notes`: each thing it could not record.
 interface ModRestored {
   readonly mod: string;
   readonly written: readonly string[];
