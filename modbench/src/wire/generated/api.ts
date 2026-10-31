@@ -1396,7 +1396,6 @@ export interface components {
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
-            pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
             decompileAndCommitPhase?: components["schemas"]["DecompileAndCommitPhase"] | null;
@@ -1483,10 +1482,6 @@ export interface components {
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
             newRepository?: components["schemas"]["NewRepositoryRequest"] | null;
-        };
-        PluginWithUnreadableSource: {
-            name: string;
-            source: components["schemas"]["UnreadableSource"];
         };
         ProblemDetails: {
             type?: string | null;
