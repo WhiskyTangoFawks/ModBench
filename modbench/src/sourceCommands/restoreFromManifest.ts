@@ -25,7 +25,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'textHash' | 'modMetadata'
   | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
-  | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
+  | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 export interface RestoreDeps {
   readonly client: Pick<MEditClient, 'cloneSubmodules' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -172,10 +172,10 @@ async function compared(adapter: Adapter, manifest: Manifest, folder: string, pa
 
 type Answer = { readonly landed: ModRestored } | { readonly refusal: string };
 
-// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is downloaded first.
+// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the file that holds its bytes, else downloaded.
 async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead | { readonly refusal: string }> {
   const { adapter, nexus } = pass.deps;
-  const named = manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [{ name: pkg.name, hash: pkg.hash, ...(pkg.page === undefined ? {} : { page: pkg.page }) }] : []));
+  const named = manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [{ name: pkg.name, size: pkg.size, hash: pkg.hash, ...(pkg.page === undefined ? {} : { page: pkg.page }) }] : []));
   const found = await namedDownloadedFiles({ adapter, nexus }, [{ installationFiles: named }], {
     onDownload: (file) => { pass.options.onProgress?.({ phase: 'Downloading', file }); }, signal: pass.options.signal,
   });
@@ -185,11 +185,8 @@ async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead
   };
   const packages = await packagesRead(adapter, manifest, { downloaded, game: pass.game });
   if (packages.lacks.length === 0) return packages;
-  const notDownloaded = named.flatMap(({ name }) => {
-    const why = found.notDownloaded(name);
-    return why === undefined ? [] : [sentence(why)];
-  });
-  return { refusal: `${skipped(packages.lacks.join('; '))}${notDownloaded.join('')}` };
+  const why = named.flatMap(({ name }) => found.why(name).map(sentence));
+  return { refusal: `${skipped(packages.lacks.join('; '))}${why.join('')}` };
 }
 
 // modlist-repository.md, The manifest, story 3: the manifest's version and installation file, and what else the

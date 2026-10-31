@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileProblemsFake } from '../../test/fileProblemsFake';
@@ -81,5 +81,22 @@ describe('restore from manifest over an instance on disk', () => {
     const outcome = await restore();
 
     expect([outcome.landed, await textsBelow(join(root, 'mods'))]).toEqual([[{ mod: 'Mod', written: ['a.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], updated]);
+  });
+
+  it('puts a package held under another name in the downloads folder under the pinned name, with its metadata, so the mod\'s installation file is there', async () => {
+    const { update, restore, destroys } = await aModFromADownloadedFileAndTheGameFolder();
+    await update();
+    await rename(join(root, 'downloads/Mod.7z'), join(root, 'downloads/Renamed-copy.7z'));
+    await put('downloads/Renamed-copy.7z.meta', '[General]\r\nmodID=7\r\n');
+    await put('mods/Mod/meta.ini', '[General]\r\n');
+
+    const outcome = await restore();
+
+    expect(outcome.refused).toEqual([]);
+    expect(await readFile(join(root, 'mods/Mod/meta.ini'), 'utf8')).toContain('installationFile=Mod.7z');
+    expect(await textsBelow(join(root, 'downloads'))).toEqual({
+      'Mod.7z': 'the downloaded file', 'Mod.7z.meta': '[General]\r\nmodID=7\r\n', 'Renamed-copy.7z': 'the downloaded file', 'Renamed-copy.7z.meta': '[General]\r\nmodID=7\r\n',
+    });
+    expect(await destroys()).toEqual({ destroys: [], refused: [] });
   });
 });

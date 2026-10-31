@@ -71,6 +71,7 @@ export type AdapterCall =
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
   | { readonly verb: 'writeNexusFileInfo'; readonly name: string; readonly info: NexusFileInfo }
   | { readonly verb: 'putDownloadedFile'; readonly name: string; readonly info: NexusFileInfo }
+  | { readonly verb: 'copyDownloadedFile'; readonly from: string; readonly name: string }
   | { readonly verb: 'trashDownloadedFile'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
   | { readonly verb: 'createModFolder'; readonly mod: string }
@@ -343,6 +344,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
+    downloadedFileHolding: ({ size, hash }) => Promise.resolve({
+      file: [...(answers.downloadedFiles?.values() ?? []), ...putHashedAsTheirText.values()].flatMap((read) => (read.kind === 'read' ? [read.answer] : []))
+        .find((file) => file.size === size && file.hash === hash),
+      notes: [],
+    }),
     downloadedFilesHashed: ({ onHashing, signal } = {}) => {
       const { files, lacking = [], notes } = answers.downloadedFilesHashed ?? { files: [], notes: [] };
       const hashed: InstallationFile[] = [];
@@ -448,6 +454,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       putHashedAsTheirText.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
       return { put: true };
     },
+    copyDownloadedFile: (from, name) =>
+      write({ verb: 'copyDownloadedFile', from, name }, () => {
+        if (answers.downloadedFiles?.has(name) || putHashedAsTheirText.has(name)) throw new Error(`'${name}' is already in the downloads folder`);
+        const source = [...(answers.downloadedFiles?.values() ?? []), ...putHashedAsTheirText.values()].flatMap((read) => (read.kind === 'read' ? [read.answer] : [])).find((file) => file.path === from);
+        if (source === undefined) throw new Error(`${from} is not a downloaded file`);
+        putHashedAsTheirText.set(name, { kind: 'read', answer: { ...source, path: `/downloads/${name}` } });
+      }),
     writeNexusFileInfo: (name, info) =>
       write({ verb: 'writeNexusFileInfo', name, info }, () => (downloadedFileNamed(name) === undefined ? { gone: true } as const : { gone: false, wrote: true } as const)),
     trashDownloadedFile: (name) =>

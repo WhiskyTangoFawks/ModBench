@@ -294,6 +294,45 @@ describe('restore from manifest', () => {
       expect(cancelled).toBe(true);
     });
 
+    it('is copied to the pinned name from the downloaded file with its size and hash under another name, fetching nothing', async () => {
+      const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
+      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
+      const { restore, fake } = await over({
+        files: { ModA: { 'a.nif': 'stale' } }, manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['Renamed-copy.7z', read(renamed)]]) },
+      });
+
+      const outcome = await restore(['ModA']);
+
+      expect(fake.calls).toContainEqual({ verb: 'copyDownloadedFile', from: '/downloads/Renamed-copy.7z', name: 'ModA.7z' });
+      expect(writes(fake.calls)[0]).toEqual({ verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'a.nif' } }] });
+      expect([outcome.refused, sent]).toEqual([[], []]);
+    });
+
+    it('refuses a file of the pinned name with other bytes, naming the file that holds the pinned bytes, and overwrites nothing', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { restore, fake } = await over({
+        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'mine' })], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' })]]) },
+      });
+
+      const outcome = await restore(['ModA']);
+
+      expect(outcome.refused).toEqual([{ item: 'ModA', reason: "was skipped: installation file 'ModA.7z' has other bytes. /downloads/Renamed-copy.7z holds the pinned bytes of 'ModA.7z'." }]);
+      expect(fake.calls.filter(({ verb }) => verb === 'copyDownloadedFile' || verb === 'putDownloadedFile')).toEqual([]);
+    });
+
+    it('refuses the mod, naming why, when the copy to the pinned name fails', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
+      const { restore } = await over({
+        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['Renamed-copy.7z', read(renamed)]]), refusals: refusing('copyDownloadedFile', 'ENOSPC') },
+      });
+
+      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: installation file 'ModA.7z' is missing. It could not be copied from /downloads/Renamed-copy.7z: ENOSPC." }]);
+    });
+
     it('asks Nexus nothing for an installation file the downloads folder holds', async () => {
       const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
       const { restore } = await over({ manifests, nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'the bytes' })]]) } });
@@ -489,6 +528,16 @@ describe('what restore from manifest destroys', () => {
     });
 
     expect(await destroys(['ModA', 'ModB'])).toEqual({ destroys: [{ mod: 'ModA', differing: ['b.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: true }], refused: [] });
+  });
+
+  it('reads an installation file held under another name as restore does, by its size and hash', async () => {
+    const { destroys } = await over({
+      files: { ModA: { 'a.nif': 'HA', 'b.nif': 'edited' } },
+      manifests: { ModA: fromTheZip(held('a.nif'), held('b.nif')) },
+      answers: { downloadedFiles: new Map([['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z' })]]) },
+    });
+
+    expect(await destroys(['ModA'])).toEqual({ destroys: [{ mod: 'ModA', differing: ['b.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
   });
 
   it('is nothing after a fresh clone, whose folders hold no file the manifests name and no metadata', async () => {
