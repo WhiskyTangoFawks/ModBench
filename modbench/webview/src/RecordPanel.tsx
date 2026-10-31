@@ -10,12 +10,11 @@ import type {
 import { LABEL_COLUMN } from './labelColumn';
 import { columnKey, copyColumnKey } from '../../src/wire/columnKey';
 import { pluginAddressOf } from '../../src/wire/pluginAddress';
-import type { UnreadableSource } from '../../src/wire/unreadableSource';
 import { addElement, editField, focusCell, keepViewState, listen, openColumns, pageGlobals } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, type ModRepository, type ViewState } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ColumnStatus, type ModRepository, type ViewState } from '../../src/wire/messages';
 import type { RecordCopy } from '../../src/wire/recordCopy';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
@@ -51,12 +50,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [formKey, setFormKey] = useState<string>(() => pageGlobals().mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [gone, setGone] = useState<{ records: string[]; copiesLacking: string[] } | null>(null);
-  const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
   // not heard from /plugins offers no editing, build or decompile and commit (commands.md, No dead entries).
-  const [compiledPluginSet, setCompiledPluginSet] = useState<Set<ColumnKey> | null>(null);
   const [editableSet, setEditableSet] = useState<Set<ColumnKey> | null>(null);
-  const [sourceUnreadableReasons, setSourceUnreadableReasons] = useState<Map<ColumnKey, UnreadableSource> | null>(null);
+  const [columnStatuses, setColumnStatuses] = useState<Readonly<Record<string, ColumnStatus>>>({});
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
   // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
@@ -154,12 +151,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setError(null);
       setResult(loaded.result);
       setGone(loaded.result === null ? { records: loaded.gone, copiesLacking: loaded.copiesLacking } : null);
-      if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
-      // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
-      // unknown state reads as neither a compiled plugin nor one with no plugin source.
-      setCompiledPluginSet(loaded.compiledPluginSet);
+      // A null must replace a previous record's answer, so an unknown state reads as nothing editable.
       setEditableSet(loaded.editableSet);
-      setSourceUnreadableReasons(loaded.sourceUnreadableReasons);
+      setColumnStatuses(loaded.columnStatuses);
       setModsByOrigin(loaded.modsByOrigin);
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
       // still shows the banner rather than reading as settled.
@@ -402,18 +396,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               {columns.map(col => {
                 // Keyed by col.key (ADR-0012), so two columns that share a file name collapse and
                 // resize apart; a status is the plugin's, by its compound key.
-                const isImmutable = immutableSet.has(pluginKeyOf(col.override));
-                const compiledPlugin = compiledPluginSet?.has(pluginKeyOf(col.override)) === true;
-                const sourceUnreadable = sourceUnreadableReasons?.get(pluginKeyOf(col.override));
                 return (
                   <PluginHeader
                     key={col.key}
                     override={col.override}
-                    overriddenBy={col.key === fileColumn ? fileOverriddenBy : null}
-                    notActive={fileCopyAlone && col.key === fileColumn}
-                    isImmutable={isImmutable}
-                    isCompiledPlugin={compiledPlugin}
-                    sourceUnreadable={sourceUnreadable}
+                    status={columnStatuses[col.key]}
                     isFile={col.key === fileColumn}
                     onOpen={() => openColumn(col.override)}
                     collapsed={collapsedColumns.has(col.key)}
