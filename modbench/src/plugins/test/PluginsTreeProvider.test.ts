@@ -36,6 +36,7 @@ import { PluginsTreeProvider, NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider'
 import { PluginNode, ImplicitMasterNode, type PluginsTreeNode } from '../pluginRows';
 import { RecordBrowser } from '../RecordBrowser';
 import { pluginsTreeOver } from './pluginsTreeOver';
+import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { status } from '../../test/modStatusFixture';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -102,6 +103,7 @@ function makeTree(
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
     loadedWithNoLine: readonly (string | PluginAddress)[];
+    reporter: RecordingReporter;
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
@@ -109,6 +111,7 @@ function makeTree(
   const records = new RecordBrowser(client);
   const tree = pluginsTreeOver(instance, {
     client, records,
+    ...(extra.reporter && { reporter: extra.reporter }),
     ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
     ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
   });
@@ -469,9 +472,12 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   const fixturePlugins = (names: string[] = ORDER) => names.map((name, line) => plugin({ name, line }));
   const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
 
+  const reporter = recordingReporter();
+  beforeEach(() => { reporter.reports.length = 0; });
+
   async function drag(moved: string[], target: string | undefined, names: string[] = ORDER) {
     const instance = Object.assign(new FakeInstance(valueOf(fixturePlugins(names))), { refresh: () => Promise.resolve() });
-    const tree = pluginsTreeOver(instance);
+    const tree = pluginsTreeOver(instance, { reporter });
     await tree.getChildren();
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
@@ -512,7 +518,8 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   ])('drop onto %s of this tree is refused, not treated as the end of the list', async (_name, targetBeneath) => {
     const plugins = fixturePlugins();
     const client = browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [recordSummaryFixture()], total: 1 } });
-    const h = makeTree(plugins, { client });
+    const reporter = recordingReporter();
+    const h = makeTree(plugins, { client, reporter });
     await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
     const [pluginRow] = await h.tree.getChildren();
     const [group] = await h.tree.getChildren(present(pluginRow, 'the first plugin row'));
@@ -523,11 +530,18 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     await h.tree.handleDrop(present(target, 'the browser row'), dt, IGNORED_TOKEN);
 
     expect(moves()).toEqual([]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not move plugins.',
+      detail: 'A plugin goes above a plugin row or at the bottom of the view, not on a record or a group.',
+    }]);
   });
 
   it.each(['C.esp', 'c.ESP'])('a drop on a row being dragged asks for nothing, the dragged name being %s', async (dragged) => {
     await drag(['A.esp', dragged], 'C.esp');
     expect(moves()).toEqual([]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not move plugins.', detail: 'C.esp is being dragged, so nothing goes above it.',
+    }]);
   });
 
   it('an empty drag payload is a no-op (no write)', async () => {

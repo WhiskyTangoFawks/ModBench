@@ -33,6 +33,7 @@ import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
 import { MOD_INDICATORS } from '../drivingLib/modFileStates';
 import { indicatorSetting, PUBLISHER_TAG_INDICATOR } from '../mods/modIndicators';
+import { recordingReporter } from './surfacingDoubles';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
@@ -1335,7 +1336,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
     const instance = new FakeInstance(instanceValueFixture({ mods: [] }));
-    const shown = present(new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) }).viewMessage(), 'the empty list\'s message');
+    const shown = present(new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) }).viewMessage(), 'the empty list\'s message');
     expect(overflowTitles.filter((title) => !shown.includes(title))).toEqual([]);
     expect(shown).toContain('overflow');
   });

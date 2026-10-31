@@ -1,6 +1,7 @@
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { RecordBrowser } from '../RecordBrowser';
 import { PluginsTreeProvider } from '../PluginsTreeProvider';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 
 type PluginsTreeProviderOptions = ConstructorParameters<typeof PluginsTreeProvider>[0];
@@ -21,6 +22,7 @@ export function pluginsTreeOver(
     publishSortingErrors: () => undefined,
     publishSortingWarnings: () => undefined,
     modStatuses: NO_MOD_STATUSES,
+    reporter: recordingReporter(),
     ...overrides,
   });
 }
