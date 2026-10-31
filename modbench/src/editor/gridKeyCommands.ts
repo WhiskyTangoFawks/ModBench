@@ -21,7 +21,8 @@ function clearing(cell: FocusedCellContext | undefined): Firing | undefined {
 }
 
 /** The grid's keys VS Code cannot hand the focused cell's Arguments. Clear fires its catalog
- *  command with them, and cut finds the focused cell itself; F2 and paste reach the focused cell, which writes through edit field. */
+ *  command with them, and cut finds the focused cell itself. F2 and paste reach the focused cell,
+ *  which writes through edit field. */
 export function registerGridKeyCommands(deps: GridKeyCommandDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand(`${GRID_VIEW}.editHere`, () => {

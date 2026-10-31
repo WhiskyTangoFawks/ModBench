@@ -30,7 +30,7 @@ export interface ValueCell extends GridCell {
   value: unknown;
   shown: unknown;
   editPath?: PathHop[];
-  dropAddsTo?: ArrayParentContext;
+  addsTo?: ArrayParentContext;
   // What a cell the game fills from a template reads, its tooltip, and the template it copies and drags as (editor-fields.md, Templated fields).
   template?: TemplateReading;
   // Per flag of a Flags row, what the flag reads when the game fills it from a template.
@@ -169,7 +169,7 @@ function fieldRow(
     const goesTo = goToTarget(templatedBy, shown, cellMeta, resolution);
     const hops = wirePath(at.rootField, at.path, key);
     const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
-    const dropAddsTo = editPath && !template && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
+    const addsTo = editPath && !template && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
     const element = editPath && !template && isArrayElementHop(last)
       ? arrayElementContext(
         o.formKey, o.plugin, o.origin, editPath, arrayLength(getAtPath(rootFieldOf(o, at.rootField)?.value, editPath.slice(1, -1))),
@@ -177,7 +177,7 @@ function fieldRow(
       : undefined;
     const context = cellContext(
       template?.copyText ?? copiedText(shown, cellMeta, resolution),
-      dropAddsTo,
+      addsTo,
       element,
       editPath && editableCellContext(o.formKey, o.plugin, o.origin, editPath, value != null),
       hops && meta.type === 'string'
@@ -188,7 +188,7 @@ function fieldRow(
     const templatedFlags = holds && readsAsFlags(cellMeta)
       ? templatedFlagsOf(o, at.rootField, at.path, flagNames(held, cellMeta), editable.has(key))
       : undefined;
-    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo, template, templatedFlags }];
+    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, addsTo, template, templatedFlags }];
   }));
   return {
     kind: 'field', diff, meta, ...place, expandable: (diff.children?.length ?? 0) > 0 || readsAsFlags(meta),

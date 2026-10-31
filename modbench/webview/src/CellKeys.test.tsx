@@ -9,7 +9,7 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, hasSection } from '../../src/wire/messages';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldCell, member, panelClient,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastAddElement, lastPostedEnvelope, lastToldCell, member, panelClient,
   required, tellPanel,
 } from './test/fixtures';
 
@@ -171,6 +171,18 @@ describe('RecordPanel — the keys\' commands reaching the focused cell', () => 
     await focusCell('Level', 2);
     pasteIntoCell('12');
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: 12 });
+  });
+
+  it('Ctrl+V\'s on an array row adds one element pasted as the array\'s elements are', async () => {
+    await focusCell('Values', 2);
+    pasteIntoCell('12');
+    expect(lastAddElement(vscode.postMessage)).toMatchObject({ value: 12, context: { webviewSection: 'arrayParent' } });
+  });
+
+  it('Ctrl+V\'s on an array row writes a pasted array in place of its own', async () => {
+    await focusCell('Values', 2);
+    pasteIntoCell('[1, 2]');
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Values')], value: [1, 2] });
   });
 
   it('Ctrl+V\'s writes nothing into a column that cannot be edited', async () => {

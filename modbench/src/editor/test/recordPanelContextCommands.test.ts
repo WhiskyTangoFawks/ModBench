@@ -34,7 +34,7 @@ const gateSendingEachWriteWhereItWasAddressed: RecordPanelContextCommandDeps['ed
   () => async (address, write) => { await write(address.formKey); };
 
 function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
-  const edit = vi.fn<FieldCommitDeps['edit']>(() => Promise.resolve(undefined));
+  const edit = vi.fn<FieldCommitDeps['edit']>(async (_address, _envelope, applied) => { await applied?.(); return undefined; });
   const deps: RecordPanelContextCommandDeps = {
     edit,
     extendedFields: { open: openExtendedFieldEditor },
@@ -49,6 +49,7 @@ const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 
 
 const ADDRESS = { formKey: IDENTITY.formKey, plugin: { name: IDENTITY.plugin, origin: IDENTITY.origin } };
 
+const editsOf = (edit: ReturnType<typeof makeDeps>['edit']) => edit.mock.calls.map(([address, envelope]) => [address, envelope]);
 const envelopesOf = (edit: ReturnType<typeof makeDeps>['edit']) => edit.mock.calls.map(([, envelope]) => envelope);
 
 function parentContext(path: ArrayParentContext['path']): ArrayParentContext {
@@ -94,7 +95,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
     await present(handlers.get(`modbench.record.${command}`), command)(context);
 
-    expect(edit.mock.calls).toEqual([[ADDRESS, envelope]]);
+    expect(editsOf(edit)).toEqual([[ADDRESS, envelope]]);
   });
 
   it('Add lands the value a drop supplies in its add envelope', async () => {
@@ -163,7 +164,7 @@ describe('the extended editor opens and saves from the host, from the context it
 
     await commitField(deps, fieldOf(stringContext({ path })), 'edited in the tab');
 
-    expect(edit.mock.calls).toEqual([[ADDRESS, { op: 'set', path, value: 'edited in the tab' }]]);
+    expect(editsOf(edit)).toEqual([[ADDRESS, { op: 'set', path, value: 'edited in the tab' }]]);
   });
 
   it('a second save of the same tab writes again', async () => {
@@ -221,7 +222,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
 
     await editField()(IDENTITY, envelope);
 
-    expect(edit.mock.calls).toEqual([[ADDRESS, envelope]]);
+    expect(editsOf(edit)).toEqual([[ADDRESS, envelope]]);
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
@@ -232,7 +233,7 @@ describe('modbench.record.editField, one command for the grid\'s edit and the pa
     await editField()();
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
-    expect(edit.mock.calls).toEqual([[
+    expect(editsOf(edit)).toEqual([[
       ADDRESS, { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
     ]]);
   });
@@ -299,7 +300,7 @@ describe('modbench.record.cut, the focused cell\'s value copied and removed in o
     await cut()();
 
     expect(writeText.mock.calls).toEqual([['7']]);
-    expect(edit.mock.calls).toEqual([[ADDRESS, { op: 'set', path: LEVEL, value: null }]]);
+    expect(envelopesOf(edit)).toEqual([{ op: 'set', path: LEVEL, value: null }]);
   });
 
   it('copies an element and removes it, in one edit', async () => {
@@ -310,7 +311,18 @@ describe('modbench.record.cut, the focused cell\'s value copied and removed in o
     await cut()();
 
     expect(writeText.mock.calls).toEqual([['4']]);
-    expect(edit.mock.calls).toEqual([[ADDRESS, { op: 'remove', path: ELEMENT }]]);
+    expect(envelopesOf(edit)).toEqual([{ op: 'remove', path: ELEMENT }]);
+  });
+
+  it('leaves the clipboard as it was when the edit is refused', async () => {
+    const refusing = vi.fn<FieldCommitDeps['edit']>(() => Promise.resolve(undefined));
+    const { deps } = makeDeps({ focusedCell: () => editableCell(true), edit: refusing });
+    registerRecordPanelContextCommands(deps);
+
+    await cut()();
+
+    expect(refusing).toHaveBeenCalled();
+    expect(writeText).not.toHaveBeenCalled();
   });
 
   it.each([

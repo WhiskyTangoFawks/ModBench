@@ -84,14 +84,20 @@ async function cellOf(rowLabel: string, column: number, occurrence = 0): Promise
   return required(required(label.closest('tr'), `${rowLabel}'s row`).querySelectorAll('td')[column], 'the cell');
 }
 
-const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' });
+const carrying = (text: string) => ({ types: ['text/plain'], getData: () => text, setData: vi.fn(), effectAllowed: '', dropEffect: '' });
+
+function dropText(text: string, onto: HTMLElement) {
+  const refused = fireEvent.dragOver(onto, { dataTransfer: carrying(text) });
+  fireEvent.drop(onto, { dataTransfer: carrying(text) });
+  return { landed: !refused };
+}
 
 function drag(from: HTMLElement, onto: HTMLElement) {
-  fireEvent.dragStart(from, { dataTransfer: dataTransfer() });
-  const refused = fireEvent.dragOver(onto, { dataTransfer: dataTransfer() });
-  fireEvent.drop(onto, { dataTransfer: dataTransfer() });
-  fireEvent.dragEnd(from, { dataTransfer: dataTransfer() });
-  return { landed: !refused };
+  const started = carrying('');
+  fireEvent.dragStart(from, { dataTransfer: started });
+  const result = dropText(String(started.setData.mock.calls[0]?.[1]), onto);
+  fireEvent.dragEnd(from, { dataTransfer: started });
+  return result;
 }
 
 describe('RecordPanel — drag and drop', () => {
@@ -109,34 +115,33 @@ describe('RecordPanel — drag and drop', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: 5 });
   });
 
-  it.each([
-    ['a cell dragged onto a column that cannot be edited', 'Level', MOD, 'Level', MASTER],
-    ['a cell dragged onto another field', 'Name', MASTER, 'Level', MOD],
-    ['a cell dragged onto a cell that already holds its value', '[0]', MASTER, '[0]', MOD],
-    ['a translated text dragged onto a cell that already holds it', 'Title', MASTER, 'Title', MOD],
-    ['an element dropped on its own row in a column that lacks it', '[1]', MASTER, '[1]', MOD],
-  ])('%s lands nowhere and writes nothing', async (_case, fromRow, fromColumn, toRow, toColumn) => {
-    const { landed } = drag(await cellOf(fromRow, fromColumn), await cellOf(toRow, toColumn));
+  it('a cell dragged onto another field is pasted there as text, as Ctrl+V pastes it', async () => {
+    drag(await cellOf('Name', MASTER), await cellOf('Level', MOD));
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: 'Master' });
+  });
+
+  it('text dragged in from outside the panel is pasted on the cell it lands on', async () => {
+    const { landed } = dropText('9', await cellOf('Level', MOD));
+
+    expect(landed).toBe(true);
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: 9 });
+  });
+
+  it('a cell in a column that cannot be edited takes no drop', async () => {
+    const { landed } = drag(await cellOf('Level', MOD), await cellOf('Level', MASTER));
 
     expect(landed).toBe(false);
     expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
   });
 
-  it('a drop from outside the panel changes nothing', async () => {
+  it('a drag that carries no text lands nowhere', async () => {
     const onto = await cellOf('Level', MOD);
-    const refused = fireEvent.dragOver(onto, { dataTransfer: dataTransfer() });
-    fireEvent.drop(onto, { dataTransfer: dataTransfer() });
+    const files = { types: ['Files'], getData: () => '', setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+    const refused = fireEvent.dragOver(onto, { dataTransfer: files });
+    fireEvent.drop(onto, { dataTransfer: files });
 
     expect(refused).toBe(true);
-    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
-  });
-
-  it('a drop after the drag has ended changes nothing', async () => {
-    const from = await cellOf('Level', MASTER);
-    fireEvent.dragStart(from, { dataTransfer: dataTransfer() });
-    fireEvent.dragEnd(from, { dataTransfer: dataTransfer() });
-    fireEvent.drop(await cellOf('Level', MOD), { dataTransfer: dataTransfer() });
-
     expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
   });
 
@@ -146,20 +151,19 @@ describe('RecordPanel — drag and drop', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Values')], value: [4, 6] });
   });
 
-  it('an element dropped on its array row in another column is added to that array', async () => {
-    drag(await cellOf('[1]', MASTER), await cellOf('Values', MOD));
+  it.each([
+    ['in another column', 'Values'],
+    ['of another array', 'Others'],
+  ])('an element dropped on an array row %s is added to that array', async (_case, toRow) => {
+    drag(await cellOf('[1]', MASTER), await cellOf(toRow, MOD));
 
     expect(lastAddElement(vscode.postMessage)).toMatchObject({
       value: 6, context: { webviewSection: 'arrayParent', plugin: 'MyMod.esp' },
     });
   });
 
-
-  it.each([
-    ['on another array row', '[1]', MASTER, 'Others', MOD],
-    ['on an array row in a column that cannot be edited', '[0]', MOD, 'Values', MASTER],
-  ])('an element dropped %s adds nothing', async (_case, fromRow, fromColumn, toRow, toColumn) => {
-    drag(await cellOf(fromRow, fromColumn), await cellOf(toRow, toColumn));
+  it('an element dropped on an array row in a column that cannot be edited adds nothing', async () => {
+    drag(await cellOf('[0]', MOD), await cellOf('Values', MASTER));
 
     expect(lastAddElement(vscode.postMessage)).toBeUndefined();
   });
