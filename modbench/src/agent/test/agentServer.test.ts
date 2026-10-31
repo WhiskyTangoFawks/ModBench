@@ -26,7 +26,7 @@ import { status } from '../../test/modStatusFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { fileIn } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
@@ -80,13 +80,15 @@ const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Ma
 const pluginsShown = { shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ };
 afterEach(() => { shownRead.answer = new Map(); });
 
+const copyAnswers: InstanceAnswers = {};
+
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
+    port, instance, copyReads: fakeInstanceAdapter(readingFixture(), copyAnswers).adapter, mEdit, terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -480,8 +482,10 @@ const CONFLICTED = instanceValueFixture({
     { kind: 'mod', name: 'C', enabled: true },
     { kind: 'mod', name: 'D', enabled: false },
   ],
+  overwriteFiles: [fileIn('/o', 'F.esp')],
   filesByMod: new Map([
-    ['B', [fileIn('/m', 'Textures/Rock.DDS')]],
+    ['A', [fileIn('/m', 'textures/rock.dds')]],
+    ['B', [fileIn('/m', 'Textures/Rock.DDS'), fileIn('/m', 'meshes/x.nif')]],
     ['C', [fileIn('/m', 'MESHES/x.nif'), fileIn('/m', 'F.esp'), fileIn('/m', 'readme.txt')]],
     ['D', [fileIn('/m', 'textures/rock.dds'), fileIn('/m', 'Docs/a.txt'), fileIn('/m', 'docs/A.TXT')]],
   ]),
@@ -528,7 +532,7 @@ describe('the agent server, reading file order conflicts', () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'B' }, { name: 'D' }] })).toMatchObject([
-      { files: [{ file: 'Textures/Rock.DDS', excluded: false, gotten: false, publisherTags: [] }] },
+      { files: [{ file: 'Textures/Rock.DDS', excluded: false, gotten: false, publisherTags: [] }, { file: 'meshes/x.nif', excluded: false, gotten: true, publisherTags: [] }] },
       {
         files: [
           { file: 'Docs/a.txt', excluded: false, gotten: false, publisherTags: [] },
