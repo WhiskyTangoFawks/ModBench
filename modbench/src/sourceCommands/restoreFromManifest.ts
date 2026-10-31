@@ -186,21 +186,32 @@ const depotsNamed = (manifest: Manifest): string[] => manifest.packages.flatMap(
   return depots.length === 0 ? [] : [`the game folder is ${depots.map(([id, version]) => `depot ${id} at version ${version}`).join(' and ')}`];
 });
 
-// The game files at the paths the folder's files may be, each by its path in the folder, with the place that holds it.
-async function gameFilesFor(pass: FolderPass, folder: string, paths: readonly string[]): Promise<{ readonly files: readonly { readonly path: string; readonly hash: string; readonly from: PackageFile }[] } | { readonly lack: string }> {
+/** The mod folder whose files, by hash, stand for a source folder's. */
+export interface ModFolder { readonly folder: string; readonly manifest: Manifest }
+
+// A source folder's layout moves its files, so they are found as the mod folder's files of the same hash.
+async function gameFilesFor(
+  pass: FolderPass, manifest: Manifest, folder: string, paths: readonly string[], through: ModFolder | undefined,
+): Promise<{ readonly files: readonly { readonly path: string; readonly hash: string; readonly from: PackageFile }[] } | { readonly lack: string }> {
   if (typeof pass.game === 'string') return { lack: pass.game };
+  const wanted = new Set(paths.map((path) => manifest.files.get(path)));
+  const asking = through === undefined ? { folder, paths } : { folder: through.folder, paths: [...through.manifest.files].filter(([, hash]) => wanted.has(hash ?? undefined)).map(([path]) => path) };
   const files: { path: string; hash: string; from: PackageFile }[] = [];
   for (const place of pass.game.places) {
-    const taken = await pass.deps.adapter.gameFilesTakenBy(place, folder, paths);
+    const taken = await pass.deps.adapter.gameFilesTakenBy(place, asking.folder, asking.paths);
     if (taken.kind === 'unreadable') return { lack: `the game files could not be read: ${taken.reason}` };
-    files.push(...taken.answer.gameFiles.map((file) => ({ path: file.pathInFolder, hash: file.hash, from: { kind: 'gameFile' as const, root: place.root, path: file.path } })));
+    for (const file of taken.answer.gameFiles) {
+      const from = { kind: 'gameFile' as const, root: place.root, path: file.path };
+      const ownPaths = through === undefined ? [file.pathInFolder] : paths.filter((path) => manifest.files.get(path) === file.hash);
+      files.push(...ownPaths.map((path) => ({ path, hash: file.hash, from })));
+    }
   }
   return { files };
 }
 
 // Where this machine holds the bytes of each file `manifest` names that `paths` asks for, found by hash in any package it
 // names, or why the mod is skipped.
-async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, paths: readonly string[]): Promise<ReadonlyMap<string, PackageFile> | { readonly refusal: string }> {
+async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, paths: readonly string[], through: ModFolder | undefined): Promise<ReadonlyMap<string, PackageFile> | { readonly refusal: string }> {
   const held = await installationFilesFor(pass, manifest);
   if ('refusal' in held) return held;
   const byHash = new Map<string, PackageFile>();
@@ -210,7 +221,7 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
   const fromTheGame = new Map<string, PackageFile>();
   const unheld = paths.filter((path) => !byHash.has(manifest.files.get(path) ?? ''));
   if (unheld.length > 0 && manifest.packages.some(({ kind }) => kind === 'gameFolder')) {
-    const game = await gameFilesFor(pass, folder, unheld);
+    const game = await gameFilesFor(pass, manifest, folder, unheld, through);
     if ('lack' in game) return { refusal: skipped([game.lack, ...depotsNamed(manifest)].join('; ')) };
     for (const { path, hash, from } of game.files) if (manifest.files.get(path) === hash && !fromTheGame.has(path)) fromTheGame.set(path, from);
   }
@@ -226,7 +237,7 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
 // modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
 // whose exclusion changed moved, and every file the manifest does not name sent to the trash.
 async function restoreFromPackages(
-  pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>,
+  pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>, through?: ModFolder,
 ): Promise<Answer> {
   const { adapter } = pass.deps;
   let against: FolderAgainst;
@@ -236,7 +247,7 @@ async function restoreFromPackages(
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
   const toWrite = against.files.filter(({ hash, holdsItsBytes }) => hash !== null && holdsItsBytes !== true);
-  const bytes = await bytesFor(pass, manifest, folder, toWrite.map(({ path }) => path));
+  const bytes = await bytesFor(pass, manifest, folder, toWrite.map(({ path }) => path), through);
   if ('refusal' in bytes) return bytes;
   const writes = toWrite.flatMap(({ path }) => {
     const from = bytes.get(path);
@@ -277,21 +288,21 @@ async function clonedAtThePin(pass: Pass, pinned: Submodule): Promise<Cloned> {
 
 /** A source folder made what its manifest says, the manifest it holds having been written by decompile and commit. Answers why not. */
 export async function sourceFolderRestoredFrom(
-  deps: FolderPass['deps'], mod: string, sourceFolder: string,
+  deps: FolderPass['deps'], mod: string, sourceFolder: string, through: ModFolder,
 ): Promise<string | undefined> {
   const game = await namedGameFolder(deps.adapter, await deps.adapter.gameRelease());
-  const restored = await sourceFolderRestored({ deps, game, options: {} }, mod, sourceFolder);
+  const restored = await sourceFolderRestored({ deps, game, options: {} }, mod, sourceFolder, through);
   return 'refusal' in restored ? restored.refusal : undefined;
 }
 
 // ADR-0022: a folder with no manifest is left alone. Its files are reported under the folder's name, beside the mod folder's.
 async function sourceFolderRestored(
-  pass: FolderPass, mod: string, sourceFolder: string,
+  pass: FolderPass, mod: string, sourceFolder: string, through: ModFolder,
 ): Promise<{ readonly refusal: string } | { readonly written: readonly string[]; readonly namedByNoLine: readonly string[] }> {
   const held = await manifestHeld(sourceFolder);
   if (held === undefined) return { written: [], namedByNoLine: [] };
   if ('refusal' in held) return held;
-  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, (at) => pass.deps.adapter.sourceFolderValue(at));
+  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, (at) => pass.deps.adapter.sourceFolderValue(at), through);
   if ('refusal' in answer) return answer;
   const inSource = (paths: readonly string[]): string[] => paths.map((path) => `${basename(sourceFolder)}/${path}`);
   return { written: inSource(answer.landed.written), namedByNoLine: inSource(answer.landed.namedByNoLine) };
@@ -304,7 +315,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const { adapter, client, tasks, trash } = pass.deps;
   const cloned = pinned === undefined ? {} : await clonedAtThePin(pass, pinned);
   if ('refusal' in cloned) return cloned;
-  const sourceRestored = await sourceFolderRestored(pass, mod, sourceFolder);
+  const sourceRestored = await sourceFolderRestored(pass, mod, sourceFolder, { folder, manifest });
   if ('refusal' in sourceRestored) return sourceRestored;
   const held = await buildFileHeld(sourceFolder);
   if ('refusal' in held) return held;
