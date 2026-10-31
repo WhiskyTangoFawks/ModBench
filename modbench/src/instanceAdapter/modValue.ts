@@ -4,7 +4,7 @@ import type { FileRead, FolderValue, InstallationFile, InstanceAdapter, ModValue
 
 type FolderReads = Pick<InstanceAdapter, 'filesIn' | 'originFileHash' | 'fileStamp'>;
 
-const otherCase = (path: string): string => [...path].map((char) => (char === char.toLowerCase() ? char.toUpperCase() : char.toLowerCase())).join('');
+const otherCase = (path: string): string => path.replace(/\p{L}/gu, (char) => (char === char.toLowerCase() ? char.toUpperCase() : char.toLowerCase()));
 
 /** `folder`'s files with their hashes, each kept in the hash index (ADR-0013). */
 export async function folderValueOver(reads: FolderReads, folder: string): Promise<FolderValue> {

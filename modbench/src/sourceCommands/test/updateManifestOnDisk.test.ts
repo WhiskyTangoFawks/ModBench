@@ -58,7 +58,7 @@ describe('update manifest over an instance on disk', () => {
 
     const status = await statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 
-    expect([status?.differing, status?.namedByNoLine, status?.gone]).toEqual([[], [], []]);
+    expect([status.differing, status.namedByNoLine, status.gone]).toEqual([[], [], []]);
   });
 
   it('leaves it with none differing in the next session, which reads the entries of the game folder package from the hash index', async () => {
@@ -68,6 +68,6 @@ describe('update manifest over an instance on disk', () => {
 
     const status = await statusNow(next, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 
-    expect(status?.differing).toEqual([]);
+    expect(status.differing).toEqual([]);
   });
 });
