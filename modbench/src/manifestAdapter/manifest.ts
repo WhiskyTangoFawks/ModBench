@@ -41,11 +41,10 @@ export interface Manifest {
   readonly version?: string;
   readonly exclude: readonly string[];
   readonly archives: readonly ManifestArchive[];
-  readonly tools: readonly ManifestTool[];
   readonly files: readonly ManifestFile[];
 }
 
-export type BuildFile = Manifest & { readonly steps: readonly ManifestStep[] };
+export type BuildFile = Manifest & { readonly steps: readonly ManifestStep[]; readonly tools: readonly ManifestTool[] };
 
 export type ManifestRead = { readonly manifest: Manifest } | { readonly refused: string };
 

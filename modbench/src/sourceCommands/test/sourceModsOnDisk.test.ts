@@ -50,7 +50,7 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<BuildFi
   const pack = await adapter.downloadedFile('Mod.7z');
   if (pack.kind !== 'read' || pack.answer === undefined) throw new Error('no installation file');
   await put(`source/Mod/${BUILD_FILE}`, manifestText({
-    exclude: [], archives: [], tools: [],
+    exclude: [], archives: [],
     packages: [{ kind: 'installationFile', name: 'Mod.7z', size: pack.answer.size, hash: pack.answer.hash }],
     files: [{ path: 'b.nif', entry: { kind: 'held' } }, { path: 'textures/c.dds', entry: { kind: 'held' } }],
     ...buildFile,
@@ -95,7 +95,7 @@ describe('build over an instance on disk', () => {
     await build();
 
     expect(await recorded()).toEqual({
-      packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], version: '1.2', exclude: [], archives: [], tools: [],
+      packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], version: '1.2', exclude: [], archives: [],
       files: [{ path: 'b.nif', entry: { kind: 'held' } }, { path: 'Mod.esp', entry: { kind: 'held' } }, { path: 'textures/c.dds', entry: { kind: 'held' } }],
     });
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: true });
@@ -173,7 +173,7 @@ describe('decompile and commit over an instance on disk', () => {
     await put('mods/Mod/Mod.esp', 'plugin');
     await put('mods/Mod/a.nif', 'mine');
     await put('mods/Mod/Mod.manifest.json', manifestText({
-      packages: [], exclude: [], archives: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }], ...manifest,
+      packages: [], exclude: [], archives: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }], ...manifest,
     }));
     const client = new InMemoryMEditClient();
     const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks() });

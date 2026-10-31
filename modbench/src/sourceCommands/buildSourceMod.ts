@@ -107,7 +107,7 @@ async function recorded(adapter: Adapter, mod: SourceModToBuild, made: readonly 
     const paths = [...new Set([...made.map(({ path }) => path), ...taken, ...stepped])].filter((path) => held.has(path));
     await writeManifestIn(mod.folder, {
       packages: [{ kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule }],
-      exclude: [], archives: [], tools: [],
+      exclude: [], archives: [],
       files: paths.map((path): ManifestFile => ({ path, entry: { kind: 'held' } })),
       ...mod.version === undefined ? {} : { version: mod.version },
     });

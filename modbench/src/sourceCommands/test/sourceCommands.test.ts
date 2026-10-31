@@ -68,7 +68,7 @@ describe('sourceCommands build', () => {
 
   it('keeps each exclusion the manifest records whose file the folder does not hold (mods.md, A source mod, story 2)', async () => {
     const recording: Manifest = {
-      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], exclude: [], archives: [], tools: [],
+      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], exclude: [], archives: [],
       files: [{ path: `docs${EXCLUSION_MARK}/readme.txt`, entry: { kind: 'held' } }],
     };
     await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), manifestText(recording));
@@ -302,7 +302,7 @@ describe('sourceCommands decompileAndCommit', () => {
 
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
     expect(await manifestIn(folder)).toEqual({ manifest: {
-      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], version: '1.2.3', exclude: [], archives: [], tools: [], files: [],
+      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], version: '1.2.3', exclude: [], archives: [], files: [],
     } });
   });
 

@@ -20,7 +20,6 @@ const modWithVersion = (
 const withoutSteps = (
   '{\n'
   + '"packages": [\n{"installationFile":"Mod.7z","size":100,"hash":"AAAA","page":"https://www.nexusmods.com/fallout4/mods/1"}\n],\n'
-  + '"tools": [\n{"task":"Optimise textures","page":"https://example.com/optimiser"},\n{"task":"Archive","page":"https://example.com/archive"}\n],\n'
   + '"files": [\n{"path":"a.nif"},\n{"path":"textures/a.dds","madeByStep":true}\n]\n}\n'
 );
 
@@ -84,7 +83,7 @@ const sourceModWithExclusionsAndArchives = (
 describe('a manifest the adapter reads and writes', () => {
   it.each([
     ['a version, and a file in each place', modWithVersion],
-    ['tools and a file a step makes', withoutSteps],
+    ['a file a step makes', withoutSteps],
     ['a source mod with its packages', sourceMod],
     ['a built source mod with its exclusions and archives', builtSourceMod],
     ['a source mod naming no file', sourceModWithoutFiles],
@@ -106,7 +105,7 @@ describe('a manifest the adapter reads and writes', () => {
 
   it('writes its files in path order, ignoring case first', () => {
     const manifest: Manifest = {
-      packages: [], exclude: [], archives: [], tools: [],
+      packages: [], exclude: [], archives: [],
       files: ['b.nif', 'B.nif', 'a.nif'].map((path) => ({ path, entry: { kind: 'held' } })),
     };
     expect(manifestText(manifest)).toBe('{\n"files": [\n{"path":"a.nif"},\n{"path":"B.nif"},\n{"path":"b.nif"}\n]\n}\n');
@@ -115,14 +114,14 @@ describe('a manifest the adapter reads and writes', () => {
   it('writes a file in the first package without naming it, and a file in another package naming it', () => {
     const second = { kind: 'installationFile', name: 'Zed.7z', size: 7, hash: 'ZZZZ' } as const;
     const manifest: Manifest = {
-      packages: [mod7z, second], exclude: [], archives: [], tools: [],
+      packages: [mod7z, second], exclude: [], archives: [],
       files: [{ path: 'a.nif', entry: { kind: 'held' }, package: 'Mod.7z' }, { path: 'b.nif', entry: { kind: 'held' }, package: 'Zed.7z' }],
     };
     expect(manifestText(manifest)).toContain('"files": [\n{"path":"a.nif"},\n{"path":"b.nif","package":"Zed.7z"}\n]');
   });
 
   it('writes a manifest of no file as an empty files array', () => {
-    expect(manifestText({ packages: [], exclude: [], archives: [], tools: [], files: [] })).toBe('{\n"files": []\n}\n');
+    expect(manifestText({ packages: [], exclude: [], archives: [], files: [] })).toBe('{\n"files": []\n}\n');
   });
 });
 
@@ -149,11 +148,6 @@ describe('a manifest the adapter refuses', () => {
     ['{"packages": [{"version": 7}], "files": []}', 'cannot be read'],
     ['{}', 'cannot be read'],
     ['[]', 'cannot be read'],
-    ['{"tools": [{"page":"https://example.com"}], "files": []}', 'its manifest cannot be read at its tool 1'],
-    ['{"tools": [{"task":"Zip"}], "files": []}', 'its manifest cannot be read at its tool 1'],
-    ['{"tools": [{"task":"Zip","page":" "}], "files": []}', 'its manifest cannot be read at its tool 1: it names no page'],
-    ['{"tools": [{"task":"","page":"https://example.com"}], "files": []}', 'its manifest cannot be read at its tool 1: it names no task'],
-    ['{"tools": [{"task":"Zip","page":"https://example.com","path":"C:/zip.exe"}], "files": []}', "its manifest's tool 1 holds 'path', which Modbench does not read"],
     ['{"exclude": ["../a"], "files": []}', "its manifest's 'exclude' names '../a', which is not a path in the folder"],
     ['{"archives": {"a.ba2": ["C:/x"]}, "files": []}', "its manifest's 'archives' names 'C:/x'"],
     ['{"extra": 1, "files": []}', "holds 'extra'"],
@@ -176,6 +170,11 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"steps": [{"task":"Zip"}], "files": [{"path":"a.txt","madeByStep":true,"otherBytes":true}]}', 'its file 1: it says both'],
     ['{"steps": [{"task":"Zip"}], "files": [{"path":"a.txt","madeByStep":true,"packagePath":"b.txt"}]}', 'its file 1: it names a path'],
     ['{"files": [{"path":"a.txt","madeByStep":true}]}', 'its file 1: it says a step makes the file, and the build file holds no step'],
+    ['{"tools": [{"page":"https://example.com"}], "files": []}', 'its build file cannot be read at its tool 1'],
+    ['{"tools": [{"task":"Zip"}], "files": []}', 'its build file cannot be read at its tool 1'],
+    ['{"tools": [{"task":"Zip","page":" "}], "files": []}', 'its build file cannot be read at its tool 1: it names no page'],
+    ['{"tools": [{"task":"","page":"https://example.com"}], "files": []}', 'its build file cannot be read at its tool 1: it names no task'],
+    ['{"tools": [{"task":"Zip","page":"https://example.com","path":"C:/zip.exe"}], "files": []}', "its build file's tool 1 holds 'path', which Modbench does not read"],
     ['{"steps": [{"task":""}], "files": []}', 'its build file cannot be read at its step 1: it names no task'],
     ['{"steps": [{"args":["a"]}], "files": []}', 'its build file cannot be read at its step 1'],
     ['{"steps": [{"task":"Zip","args":[1]}], "files": []}', 'its build file cannot be read at its step 1'],
@@ -185,10 +184,10 @@ describe('a build file the adapter reads and refuses', () => {
   });
 });
 
-describe('a manifest that holds no step', () => {
-  it('refuses a step, which only a build file holds', () => {
-    const read = readManifest('{"steps": [{"task":"Zip"}], "files": []}');
-    expect('refused' in read ? read.refused : '').toBe("its manifest holds 'steps', which Modbench does not read");
+describe('a manifest that holds no step or tool', () => {
+  it.each(['steps', 'tools'])('refuses %s, which only a build file holds', (key) => {
+    const read = readManifest(`{"${key}": [], "files": []}`);
+    expect('refused' in read ? read.refused : '').toBe(`its manifest holds '${key}', which Modbench does not read`);
   });
 
   it('records a file a step makes by its path alone', () => {

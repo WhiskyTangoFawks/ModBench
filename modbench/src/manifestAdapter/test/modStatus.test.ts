@@ -64,7 +64,7 @@ const says = (version?: string, file?: [string, string?]): Says =>
   ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
 const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: 'PACK1' };
 const line = (path: string, entry: ManifestFile['entry'] = { kind: 'held' }, pkg?: string): ManifestFile => ({ path, entry, ...(pkg === undefined ? {} : { package: pkg }) });
-const manifest = (files: ManifestFile[], over: Partial<Manifest> = {}): Manifest => ({ packages: [MOD_ZIP], exclude: [], archives: [], tools: [], files, ...over });
+const manifest = (files: ManifestFile[], over: Partial<Manifest> = {}): Manifest => ({ packages: [MOD_ZIP], exclude: [], archives: [], files, ...over });
 
 function heldAsItSays({ packages: [first], version }: Manifest): void {
   const installationFile = first?.kind === 'installationFile' ? { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } : undefined;

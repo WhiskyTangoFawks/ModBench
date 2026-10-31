@@ -12,7 +12,7 @@ import { updateManifest, type UpdateManifestStatus } from '../updateManifest';
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'a.nif', hash: 'HA' }] };
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], tools: [], files: [] };
+const EMPTY: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 
 let root: string;
 let modsDir: string;
@@ -341,7 +341,7 @@ describe('update manifest', () => {
 
       const { packages, ...rest } = await heldIn(folder);
       expect([result.refused, result.landed.map(({ mod }) => mod), packages.map(({ kind }) => kind), rest]).toEqual([
-        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], archives: [], tools: [], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
+        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], archives: [], files: [{ path: 'Data/a.nif', entry: { kind: 'held' } }] },
       ]);
     });
   });

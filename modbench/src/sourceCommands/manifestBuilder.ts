@@ -128,7 +128,7 @@ class Sourcing {
       return line === undefined ? [] : [line.package === first ? { path: line.path, entry: line.entry } : line];
     });
     return {
-      packages: this.packages.map(({ package: pkg }) => pkg), exclude: [], archives: [], tools: [], files,
+      packages: this.packages.map(({ package: pkg }) => pkg), exclude: [], archives: [], files,
       ...this.packages.length > 0 && version !== undefined ? { version } : {},
     };
   }
@@ -172,7 +172,7 @@ export async function buildManifest(
   const base = held ?? recorded;
   const manifest: Manifest = {
     packages: recorded.packages.map((pkg) => keepingDepots(pkg, held)),
-    exclude: base.exclude, archives: base.archives, tools: base.tools,
+    exclude: base.exclude, archives: base.archives,
     files: [...recorded.files, ...[...madeByStep].map((path): ManifestFile => ({ path, entry: { kind: 'madeByStep' } }))],
     ...recorded.version === undefined ? {} : { version: recorded.version },
   };

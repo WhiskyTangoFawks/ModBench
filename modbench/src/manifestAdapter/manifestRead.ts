@@ -158,7 +158,7 @@ const archivesOf = (value: unknown): ManifestArchive[] => {
   return archives;
 };
 
-const MANIFEST_KEYS = ['packages', 'archives', 'tools', 'files', 'exclude'];
+const MANIFEST_KEYS = ['packages', 'archives', 'files', 'exclude'];
 
 const BUILD_FILE_KEYS = ['packages', 'archives', 'steps', 'tools', 'files'];
 
@@ -226,7 +226,7 @@ const read = <Read extends Manifest>(text: string, file: string, keys: readonly 
 
 /** `text` read as a manifest. */
 export const readManifest = (text: string): ManifestRead =>
-  read(text, 'manifest', MANIFEST_KEYS, ({ steps: _none, ...manifest }) => manifest);
+  read(text, 'manifest', MANIFEST_KEYS, ({ steps: _steps, tools: _tools, ...manifest }) => manifest);
 
 /** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A
  *  source mod, story 2). */

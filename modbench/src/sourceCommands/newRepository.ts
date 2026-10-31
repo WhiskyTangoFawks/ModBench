@@ -92,7 +92,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     all.filter(({ path }) => !compiled.has(path)), undefined, held, (text) => adapter.textHash(text));
   const kept = recorded.files.filter((line) => isTaken(recorded, line));
   const notAssets = new Set([...kept.map(({ path }) => path), ...compiled]);
-  const buildFile: BuildFile = { packages: recorded.packages, exclude: [], archives: recorded.archives, steps: [], tools: recorded.tools, files: kept };
+  const buildFile: BuildFile = { packages: recorded.packages, exclude: [], archives: recorded.archives, steps: [], tools: [], files: kept };
   return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
@@ -104,7 +104,7 @@ async function folderLinkedOrWhy(adapter: Pick<Adapter, 'modFolderPath' | 'modMe
   try {
     await writeManifestIn(folder, {
       packages: [{ kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false }],
-      exclude: [], archives: [], tools: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
+      exclude: [], archives: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
     });
     return undefined;
   } catch (err) {

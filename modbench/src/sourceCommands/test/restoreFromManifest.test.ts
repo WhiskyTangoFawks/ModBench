@@ -15,7 +15,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
 import { restoreFromManifest, whatRestoreDestroys, type RestoreStatus } from '../restoreFromManifest';
 
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], tools: [], files: [] };
+const EMPTY: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 const MOD_7Z: ManifestPackage = { kind: 'installationFile', name: 'ModA.7z', size: 10, hash: 'H' };
 const DOWNLOADED: InstallationFile = {
   path: '/downloads/ModA.7z', size: 10, hash: 'H', entries: [{ path: 'a.nif', hash: 'HA' }, { path: 'b.nif', hash: 'HB' }, { path: 'Data/c.nif', hash: 'HC' }],
