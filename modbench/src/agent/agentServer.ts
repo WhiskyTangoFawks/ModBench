@@ -29,7 +29,7 @@ import { SOURCE_PROBLEMS } from './sourceProblems';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
+  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;

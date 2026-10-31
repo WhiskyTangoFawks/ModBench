@@ -20,7 +20,7 @@ function lastRequestId(): string {
 
 function answer(requestId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent('message', {
-    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null, ...data },
+    data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, documentPlugin: { name: 'A.esp', origin: 'ModA' }, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null, columnStatuses: {}, ...data },
   }));
 }
 
@@ -55,10 +55,10 @@ describe('RecordPanelClient, a record\'s read', () => {
 
   it('returns a composite view on success', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
-    answer(lastRequestId(), { ...read, plugins: [{ name: 'A.esp', origin: 'Data/', isImmutable: true, loadOrderIndex: 0 }] });
+    answer(lastRequestId(), { ...read, plugins: [{ name: 'A.esp', origin: 'Data/', isCompiledPlugin: true, loadOrderIndex: 0 }] });
 
     expect(await promise).toMatchObject({
-      ok: true, result: { conflictAll: 'OnlyOne' }, immutableSet: new Set([columnKey({ name: 'A.esp', origin: 'Data/' })]),
+      ok: true, result: { conflictAll: 'OnlyOne' }, editableSet: new Set([columnKey({ name: 'A.esp', origin: 'Data/' })]),
     });
   });
 
@@ -71,6 +71,7 @@ describe('RecordPanelClient, a record\'s read', () => {
     ['that mEdit reads every plugin', { loadFailures: [] }],
     ['that the sweep is still outstanding', { conflictsComputed: false }],
     ['that the sweep has run', { conflictsComputed: true }],
+    ['each column\'s status', { columnStatuses: { 'A.esp': { label: '(read-only)', reason: 'Why.' } } }],
   ])('says %s, as the host answered it', async (_case, field) => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), { ...read, ...field });
@@ -78,17 +79,17 @@ describe('RecordPanelClient, a record\'s read', () => {
     expect(await promise).toMatchObject({ ok: true, ...field });
   });
 
-  it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
+  it('keys editableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
     const promise = createRecordPanelClient().load('000001:A.esm');
     answer(lastRequestId(), {
       ...read,
       plugins: [
-        { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 0, origin: 'ModA' },
-        { name: 'Shared.esp', isImmutable: false, loadOrderIndex: 1, origin: 'ModB' },
+        { name: 'Shared.esp', isCompiledPlugin: true, loadOrderIndex: 0, origin: 'ModA' },
+        { name: 'Shared.esp', isCompiledPlugin: false, loadOrderIndex: 1, origin: 'ModB' },
       ],
     });
 
-    expect(await promise).toMatchObject({ ok: true, immutableSet: new Set([columnKey({ name: 'Shared.esp', origin: 'ModA' })]) });
+    expect(await promise).toMatchObject({ ok: true, editableSet: new Set([columnKey({ name: 'Shared.esp', origin: 'ModA' })]) });
   });
 
   it('fails the whole load when the host answers refused', async () => {
@@ -102,7 +103,7 @@ describe('RecordPanelClient, a record\'s read', () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), { ...read, plugins: null });
 
-    expect(await promise).toMatchObject({ ok: true, immutableSet: null });
+    expect(await promise).toMatchObject({ ok: true, editableSet: null });
   });
 
   it('names the file\'s column by the copy of its record the tab\'s document holds, the first of several records compared', async () => {

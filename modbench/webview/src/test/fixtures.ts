@@ -1,11 +1,11 @@
 import { pluginCanBeEdited } from '../../../src/wire/pluginEditable';
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, isString, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, isString, type EnumChoice, type ColumnStatus, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
-import { unreadableSources, type UnreadableSource } from '../../../src/wire/unreadableSource';
+import { type UnreadableSource } from '../../../src/wire/unreadableSource';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
 // module that reached it would throw in every test file that does not mock it.
@@ -62,6 +62,8 @@ export interface PanelOpts {
   fileColumn?: string;
   fileCopyAlone?: boolean;
   fileOverriddenBy?: string | null;
+  /** The status the host derived for each column, by column key. */
+  columnStatuses?: Record<string, ColumnStatus>;
   /** A whole `load` of the test's own — a rejection, or one that answers differently each call. */
   load?: RecordPanelClient['load'];
 }
@@ -85,11 +87,9 @@ export function loaded(
   return {
     ok: true,
     ...(result === null ? { result, gone: opts.gone ?? [], copiesLacking: opts.copiesLacking ?? [] } : { result }),
-    immutableSet: columnsWhere(p => p.isImmutable === true),
     // ADR-0007: an unstated plugin is non-compiled plugin.
-    compiledPluginSet: columnsWhere(p => p.isCompiledPlugin === true),
     editableSet: columnsWhere(pluginCanBeEdited),
-    sourceUnreadableReasons: unreadableSources(plugins.map(p => ({ ...p, origin: p.origin ?? 'Data/' }))),
+    columnStatuses: opts.columnStatuses ?? {},
     modsByOrigin: opts.modsByOrigin ?? {},
     conflictsComputed: opts.conflictsComputed ?? true,
     loadFailures: opts.loadFailures ?? [],

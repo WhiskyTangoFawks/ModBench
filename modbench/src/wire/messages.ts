@@ -54,6 +54,9 @@ export const WEBVIEW_TO_EXTENSION = {
 
 /** Why a compiled plugin's source does not read, and whether decompile gets past it. */
 export type UnreadableSource = components['schemas']['UnreadableSource'];
+/** A column header's status: the label under the file name, and the reason in its tooltip (editor.md, A column's header). */
+export interface ColumnStatus { readonly label: string; readonly reason: string }
+export type CompareResult = components['schemas']['CompareResult'];
 export type ConflictThis = components['schemas']['ConflictThis'];
 export type ConflictAll = components['schemas']['ConflictAll'];
 export type FieldMetadata = components['schemas']['FieldMetadata'];
@@ -232,9 +235,7 @@ export interface StringValueContext {
 
 export type ModRepository = 'sourceMod' | 'nonSourceMod';
 
-/** RecordPanelClient's own read, carried untransformed — the webview still derives its own column
- *  sets from `plugins` (ADR-0005). `plugins` is null exactly when that one read
- *  failed, degrading only that slice. */
+/** RecordPanelClient's own read. `plugins` is null exactly when that one read failed, degrading only that slice. */
 export type RecordLoadAnswer =
   | ({
       ok: true;
@@ -249,13 +250,15 @@ export type RecordLoadAnswer =
       fileCopyAlone: boolean;
       // The origin of the mod whose file overrides the tab's plugin; null when none does.
       fileOverriddenBy: string | null;
+      // Each column that has a status, by its column key; a column the game uses and the user can edit has none.
+      columnStatuses: Record<string, ColumnStatus>;
     } & RecordRead)
   | { ok: false; failure: ReadFailed };
 
 /** What the read gave: the comparison, or the records held by no plugin at all (editor.md, States, story 4)
  *  with mEdit's word on each copy only the plugin it names lacks (story 2). */
 export type RecordRead =
-  | { compare: components['schemas']['CompareResult'] }
+  | { compare: CompareResult }
   | { compare: null; gone: string[]; copiesLacking: string[] };
 
 export type ExtensionToWebview =
