@@ -6,9 +6,8 @@ import type { InstanceView } from '../instanceLoader/instance';
 import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import { pluginAddressKey } from '../wire/pluginAddress';
 
-/** The build's diagnostics in the Problems panel. A build replaces those of each plugin it compiled
- *  and no other plugin's, so one refused beside it in its mod keeps what its last build found. Those of a mod whose
- *  source folder the instance no longer holds go with it. */
+/** The build's diagnostics in the Problems panel. A build replaces those of each plugin it compiled and no other
+ *  plugin's. A mod the instance holds no source folder for keeps none. */
 export class BuildProblems {
   private readonly published = new Map<string, { readonly origin: string; readonly uris: vscode.Uri[] }>();
   private readonly subscription: { dispose(): void };

@@ -5,14 +5,15 @@ import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } 
 vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
 import { BuildProblems } from '../buildProblems';
+import type { InstanceSubscriber } from '../../instanceLoader/instance';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { valueWithSourceDirs } from './sourceDirsFixture';
 
 describe('a build\'s diagnostics in the Problems panel', () => {
   const diagnosticAt = (sourceRelativePath: string) => [{ formKey: '000000:MyPatch.esp', sourceRelativePath, message: 'bad' }];
 
-  let heard: ((value: ReturnType<typeof valueWithSourceDirs>) => void) | undefined;
-  const instance = { subscribe: (listener: (value: ReturnType<typeof valueWithSourceDirs>) => void) => { heard = listener; return { dispose: () => undefined }; } };
+  let heard: InstanceSubscriber | undefined;
+  const instance = { subscribe: (listener: InstanceSubscriber) => { heard = listener; return { dispose: () => undefined }; } };
 
   const publishedPaths = (diagnostics: FakeDiagnosticCollection) => [...diagnostics].map(([uri]) => uri.fsPath);
 
@@ -42,14 +43,14 @@ describe('a build\'s diagnostics in the Problems panel', () => {
     expect(publishedPaths(diagnostics)).toEqual([]);
   });
 
-  it('clears the entries of a mod whose source folder the instance no longer holds, and keeps the others', () => {
+  it('clears the entries of a mod whose source folder the instance does not hold, and keeps the others', () => {
     const diagnostics = new FakeDiagnosticCollection();
     const problems = new BuildProblems(diagnostics, instance);
     const both = valueWithSourceDirs(new Map([['ModA', normalize('/instance/source/ModA')], ['ModB', normalize('/instance/source/ModB')]]));
     problems.publish({ name: 'A.esp', origin: 'ModA' }, sourceFiles(both, 'ModA'), diagnosticAt('A.esp/Old.json'));
     problems.publish({ name: 'B.esp', origin: 'ModB' }, sourceFiles(both, 'ModB'), diagnosticAt('B.esp/Other.json'));
 
-    heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])));
+    heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])), 2);
 
     expect(publishedPaths(diagnostics)).toEqual([normalize('/instance/source/ModB/B.esp/Other.json')]);
   });
