@@ -11,7 +11,7 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { adapterOver, readModlistEntries } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { writeBuildFile } from './buildFiles';
-import { manifestText } from '../manifestAdapter/manifestAdapter';
+import { manifestText } from '../manifestAdapter/manifestText';
 
 const MOD = 'Built Mod';
 const roots: string[] = [];
@@ -31,7 +31,7 @@ async function instanceWithSourceMod(): Promise<{ root: string; source: string; 
   runGit(source, 'init', '--quiet', '--initial-branch=main');
   await mkdir(join(root, 'mods', MOD), { recursive: true });
   await writeFile(join(root, 'mods', MOD, `${MOD}.manifest.json`), manifestText({
-    packages: [{ kind: 'sourceRepository', name: 'Built Mod source', isSubmodule: false }], exclude: [], archives: [], files: [],
+    packages: [{ kind: 'repository', name: 'Built Mod source' }], exclude: [], files: new Map(),
   }));
   const adapter = adapterOver(root);
   const added = await modSyncOver(adapter)();

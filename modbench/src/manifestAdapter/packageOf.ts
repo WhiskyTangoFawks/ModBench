@@ -1,17 +1,28 @@
-import type { Manifest, ManifestFile, ManifestPackage } from './manifest';
+import type { PackagesAsked } from '../repositoriesLib/statusValues';
+import type { Manifest, ManifestPackage } from './manifest';
 
-type RepositoryPackage = Extract<ManifestPackage, { kind: 'sourceRepository' }>;
-
-type InstallationFilePackage = Extract<ManifestPackage, { kind: 'installationFile' }>;
-
-/** The package a line's file comes from: the one the line names, else the manifest's first. */
-export const packageOf = (manifest: Manifest, line: ManifestFile): ManifestPackage | undefined =>
-  (line.package === undefined ? manifest.packages[0] : manifest.packages.find(({ name }) => name === line.package));
+type RepositoryPackage = Extract<ManifestPackage, { kind: 'repository' }>;
 
 /** The repository package `manifest` names, which makes its folder a source mod's. */
 export const repositoryOf = (manifest: Manifest): RepositoryPackage | undefined =>
-  manifest.packages.find((pkg): pkg is RepositoryPackage => pkg.kind === 'sourceRepository');
+  manifest.packages.find((pkg): pkg is RepositoryPackage => pkg.kind === 'repository');
 
-/** The installation file package of `packages` named `name`. */
-export const installationFileIn = (packages: readonly ManifestPackage[], name: string | undefined): InstallationFilePackage | undefined =>
-  packages.find((pkg): pkg is InstallationFilePackage => pkg.kind === 'installationFile' && pkg.name === name);
+/** `pkg` as a problem names it when it has no host (modlist-repository.md, The manifest, story 5); none when it has one.
+ *  `repositoryHosted`: whether a repository package's repository is a submodule. */
+export function packageWithoutHost(pkg: ManifestPackage, repositoryHosted: boolean): string[] {
+  switch (pkg.kind) {
+    case 'installationFile': return pkg.host === undefined ? [`installation file '${pkg.name}'`] : [];
+    case 'gameFolder': return pkg.host === undefined ? ['the game folder'] : [];
+    case 'repository': return repositoryHosted ? [] : [`repository '${pkg.name}'`];
+  }
+}
+
+/** What the Instance adapter is asked to read for a status of `manifest`. */
+export function packagesAsked(manifest: Manifest): PackagesAsked {
+  const repository = repositoryOf(manifest)?.name;
+  return {
+    installationFiles: manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
+    ...manifest.packages.some(({ kind }) => kind === 'gameFolder') ? { gameFiles: [...manifest.files.keys()] } : {},
+    ...repository === undefined ? {} : { repository },
+  };
+}

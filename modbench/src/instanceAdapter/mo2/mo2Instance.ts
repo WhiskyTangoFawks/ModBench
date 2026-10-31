@@ -86,13 +86,11 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
     originFileHash: hashes.originFileHash,
-    packageEntries: hashes.packageEntries,
-    keepPackageEntries: (hash, entries) => hashes.keepPackageEntries(hash, entries),
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),
     trashingReplaced,
-    modValue: (mod, folder, asked) => modValueOver(adapter, mod, folder, asked),
+    modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
   return adapter;

@@ -36,13 +36,13 @@ async function instanceTakingFromTheGame() {
 }
 
 describe('update manifest over an instance on disk', () => {
-  it('writes the manifest of a mod whose files the game folder holds, naming the game folder as its package, pinned by the hash of the files it takes', async () => {
+  it('writes the manifest of a mod whose files the game folder holds, naming the game folder as its package and each file with its hash', async () => {
     const { update } = await instanceTakingFromTheGame();
 
     await update();
 
     expect(await readFile(join(root, 'mods/Mod/Mod.manifest.json'), 'utf8')).toBe(
-      '{\n"packages": [\n{"gameFolder":"Fallout4","hash":"1z6VjVzj28w="}\n],\n"files": [\n{"path":"a.nif","packagePath":"Data/a.nif"},\n{"path":"b.nif","packagePath":"Data/b.nif"}\n]\n}\n');
+      '{\n"version":1,\n"packages":[\n{"kind":"gameFolder"}\n],\n"files":{\n"a.nif":"W26MqfHETtI=",\n"b.nif":"m5/zGqEqRXg="\n}\n}\n');
   });
 
   it('names no line for a metadata file of the mod', async () => {
@@ -63,7 +63,7 @@ describe('update manifest over an instance on disk', () => {
     expect([status.differing, status.namedByNoLine, status.gone]).toEqual([[], [], []]);
   });
 
-  it('leaves it with none differing in the next session, which reads the entries of the game folder package from the hash index', async () => {
+  it('leaves it with none differing in the next session, which reads the hashes its manifest records', async () => {
     const { update } = await instanceTakingFromTheGame();
     await update();
     const next = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
@@ -89,11 +89,11 @@ describe('update manifest over an instance on disk, of a mod whose metadata name
     return { adapter, manifest: read.manifest };
   }
 
-  it('names the downloaded file its files come from, and reads no metadata difference (Never silently wrong)', async () => {
+  it('names the downloaded file its files come from, which status reads as holding them (Never silently wrong)', async () => {
     const { adapter, manifest } = await aModTakingFromADownloadedFile();
 
     const status = await statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 
-    expect([manifest.packages.map(({ name }) => name), status.metadataDiffers]).toEqual([['Other.7z'], false]);
+    expect([manifest.packages.map((pkg) => ('name' in pkg ? pkg.name : pkg.kind)), status.notInPackage, status.otherBytes]).toEqual([['Other.7z'], [], []]);
   });
 });

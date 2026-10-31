@@ -3,27 +3,33 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import type { ManifestAt } from '../manifestFiles';
-import type { StatusValues } from '../../repositoriesLib/statusValues';
+import type { HashedPath, StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
-import { manifestAt, metadataOf, packagesAskedAt, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { manifestAt, packagesAskedAt, statusFrom, type Manifest, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+
+const HELLO = 'AAAAAAAAAAA=';
+const EDITED = 'BBBBBBBBBBA=';
+const PACK = 'CCCCCCCCCCA=';
 
 let root: string;
 let folder: string;
-let entries: Map<string, ReadonlyMap<string, string>>;
+let entries: HashedPath[];
 let notDownloaded: Set<string>;
 let downloadedHash: Map<string, string>;
-let gameFolderFound: boolean;
-let metadata: StatusValues['metadata'];
+let gameFiles: HashedPath[] | undefined;
+let repositoryHosted: boolean;
+let exclude: string[];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-status-'));
   folder = join(root, 'mods', 'mod');
   await mkdir(folder, { recursive: true });
-  entries = new Map();
+  entries = [];
   notDownloaded = new Set();
   downloadedHash = new Map();
-  gameFolderFound = true;
-  metadata = { kind: 'read', answer: {} };
+  gameFiles = [];
+  repositoryHosted = true;
+  exclude = [];
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -36,16 +42,17 @@ async function filesBelow(at: string): Promise<string[]> {
 
 type ReadValues = Extract<StatusValues, { kind: 'read' }>;
 
-async function valuesOver(manifest: ManifestAt, ignoresCase: boolean): Promise<ReadValues> {
-  const asked = packagesAskedAt(manifest) ?? { entries: [], installationFiles: [] };
+async function valuesHashingEachFileAsItsText(manifest: ManifestAt, ignoresCase: boolean): Promise<ReadValues> {
+  const asked = packagesAskedAt(manifest) ?? { installationFiles: [] };
   const files = new Map(await Promise.all((await filesBelow(folder)).filter((path) => path !== 'meta.ini').map(
-    async (path) => [path, { kind: 'read' as const, answer: { hash: await readFile(join(folder, path), 'utf8') } }] as const,
+    async (path) => [path, { path, excluded: false, read: { kind: 'read' as const, answer: { hash: await readFile(join(folder, path), 'utf8') } } }] as const,
   )));
   return {
-    metadata, kind: 'read', folder: { files, ignoresCase },
-    packageEntries: new Map(asked.entries.flatMap((key) => { const held = entries.get(key); return held === undefined ? [] : [[key, held] as const]; })),
-    downloadedFiles: new Map(asked.installationFiles.map((name) => [name, { kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? 'PACK1' } }])),
-    gameFolder: { kind: gameFolderFound ? 'found' : 'notFound' },
+    kind: 'read', folder: { files, exclude, ignoresCase },
+    downloadedFiles: new Map(asked.installationFiles.map((name) => [name, {
+      kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? PACK, entries },
+    }])),
+    gameFiles, repositoryHosted,
   };
 }
 
@@ -54,33 +61,22 @@ async function write(path: string, text: string, at = folder): Promise<void> {
   await writeFile(join(at, path), text);
 }
 
-type Says = { version?: string; installationFile?: { name: string; page?: string } };
-const says = (version?: string, file?: [string, string?]): Says =>
-  ({ ...(version === undefined ? {} : { version }), ...(file === undefined ? {} : { installationFile: { name: file[0], ...(file[1] === undefined ? {} : { page: file[1] }) } }) });
-const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: 'PACK1' };
-const line = (path: string, entry: ManifestFile['entry'] = { kind: 'held' }, pkg?: string): ManifestFile => ({ path, entry, ...(pkg === undefined ? {} : { package: pkg }) });
-const manifest = (files: ManifestFile[], over: Partial<Manifest> = {}): Manifest => ({ packages: [MOD_ZIP], exclude: [], archives: [], files, ...over });
+const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } };
+const REPOSITORY: ManifestPackage = { kind: 'repository', name: 'Mod' };
+const manifest = (files: Record<string, string | null>, over: Partial<Manifest> = {}): Manifest =>
+  ({ packages: [MOD_ZIP], exclude: [], files: new Map(Object.entries(files)), ...over });
 
-function heldAsItSays({ packages, version, installationFile: name }: Manifest): void {
-  const named = packages.find((pkg) => pkg.name === name);
-  const installationFile = named?.kind === 'installationFile' ? { name: named.name, ...(named.page === undefined ? {} : { page: named.page }) } : undefined;
-  metadata = { kind: 'read', answer: { ...(version === undefined ? {} : { version }), ...(installationFile === undefined ? {} : { installationFile }) } };
-}
-
-async function manifested(held: Manifest): Promise<void> {
-  heldAsItSays(held);
-  await write('mod.manifest.json', manifestText(held));
-}
+const manifested = (held: Manifest): Promise<void> => write('mod.manifest.json', manifestText(held));
 
 async function statusWith(values: (read: ReadValues) => StatusValues = (read) => read, fileSystemIgnoresCase = false): Promise<ModStatus> {
   const manifest = await manifestAt(folder);
-  return statusFrom({ name: 'mod', folder }, manifest, values(await valuesOver(manifest, fileSystemIgnoresCase)));
+  return statusFrom({ name: 'mod', folder }, manifest, values(await valuesHashingEachFileAsItsText(manifest, fileSystemIgnoresCase)));
 }
 
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesLacking: [], ...over });
+  ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
 const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), ...over });
 
@@ -98,148 +94,172 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(nothing({ unreadable: 'its manifest cannot be read at line 1' }));
   });
 
+  it('is unreadable, naming both versions, when its manifest is of the format before version 1', async () => {
+    await write('mod.manifest.json', '{\n"files": []\n}\n');
+
+    expect(await status()).toEqual(nothing({ unreadable: 'its manifest is in a format before version 1, and Modbench reads only version 1' }));
+  });
+
   it('reads a manifest an editor wrote with a byte order mark', async () => {
-    const held = manifest([]);
-    await manifested(held);
-    await write('mod.manifest.json', `\uFEFF${manifestText(held)}`);
+    await write('mod.manifest.json', `\uFEFF${manifestText(manifest({}))}`);
 
     expect(await status()).toEqual(heldAs());
   });
 
-  it('names the manifest as the folder spells it', async () => {
-    heldAsItSays(manifest([]));
-    await write('MOD.Manifest.json', manifestText(manifest([])));
-
-    expect((await status()).manifestFile).toBe(join(folder, 'MOD.Manifest.json'));
-  });
-
   it('reads and names the manifest a folder renamed outside Modbench holds under the name it had (mods.md, Build, story 4)', async () => {
-    heldAsItSays(manifest([]));
-    await write('Old Name.manifest.json', manifestText(manifest([])));
+    await write('Old Name.manifest.json', manifestText(manifest({})));
 
     expect(await status()).toEqual(heldAs({ manifestFile: join(folder, 'Old Name.manifest.json') }));
   });
 
-  it('names each file no line names, but its metadata and its manifest in any case', async () => {
-    await Promise.all([write('mine.txt', 'mine'), write('meta.ini', 'metadata'), write('a.nif', 'hello')]);
-    heldAsItSays(manifest([]));
-    await write('MOD.manifest.json', manifestText(manifest([line('a.nif')])));
-    entries.set('PACK1', new Map([['a.nif', 'hello']]));
+  it('names each file the manifest does not, but its metadata and its manifest in any case', async () => {
+    await Promise.all([write('mine.txt', 'mine'), write('meta.ini', 'metadata'), write('a.nif', HELLO)]);
+    await write('MOD.manifest.json', manifestText(manifest({ 'a.nif': HELLO })));
+    entries = [{ path: 'a.nif', hash: HELLO }];
 
     expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json') }));
   });
 
   it('after a fresh clone, names every file its manifest names gone, and none differing or named by no line', async () => {
-    await manifested(manifest([line('a.nif')]));
+    entries = [{ path: 'a.nif', hash: HELLO }];
+    await manifested(manifest({ 'a.nif': HELLO }));
 
     expect(await status()).toEqual(heldAs({ gone: ['a.nif'] }));
   });
 
   it.each([
-    ['holds the bytes its package\'s entry holds', 'hello', 'PACK1', []],
-    ['was edited', 'edited', 'PACK1', ['a.nif']],
-    ['is pinned by a package whose entries the index lacks', 'hello', 'PACK2', ['a.nif']],
-  ])('says a file differs, or not, when it %s', async (_, written, pinned, differing) => {
-    entries.set('PACK1', new Map([['meshes/a.nif', 'hello']]));
+    ['holds the bytes its manifest records', HELLO, []],
+    ['was edited', EDITED, ['a.nif']],
+  ])('says a file differs, or not, when it %s, whatever its package holds (Status, story 3)', async (_, written, differing) => {
     await write('a.nif', written);
-    await manifested(manifest([line('a.nif', { kind: 'heldAt', path: 'meshes/a.nif' })], { packages: [{ ...MOD_ZIP, hash: pinned }] }));
+    await manifested(manifest({ 'a.nif': HELLO }));
 
     expect((await status()).differing).toEqual(differing);
   });
 
-  it('says a file differs whose package\'s entries lack its path', async () => {
-    entries.set('PACK1', new Map([['b.nif', 'hello']]));
-    await write('a.nif', 'hello');
-    await manifested(manifest([line('a.nif')]));
+  it.each([
+    ['the folder excludes it and the manifest does not', ['a.nif'], [], ['a.nif.mohidden']],
+    ['the manifest excludes it and the folder does not', [], ['a.nif'], ['a.nif']],
+    ['both exclude it', ['a.nif'], ['a.nif'], []],
+  ])('says a file differs when %s, by the path the folder holds it at', async (_, excludedOnDisk, excludedInManifest, differing) => {
+    const onDisk = excludedOnDisk.length > 0 ? 'a.nif.mohidden' : 'a.nif';
+    entries = [{ path: 'a.nif', hash: HELLO }];
+    await write('a.nif', HELLO);
+    exclude = excludedOnDisk;
+    await manifested(manifest({ 'a.nif': HELLO }, { exclude: excludedInManifest }));
+    const read = (values: ReadValues): ReadValues => {
+      const file = values.folder.files.get('a.nif');
+      return file === undefined ? values : { ...values, folder: { ...values.folder, files: new Map([[onDisk, { ...file, excluded: excludedOnDisk.length > 0 }]]) } };
+    };
 
-    expect((await status()).differing).toEqual(['a.nif']);
+    expect((await statusWith(read)).differing).toEqual(differing);
   });
 
-  it('reads a file taken from a package other than the first against that package\'s entries', async () => {
-    const zed: ManifestPackage = { kind: 'installationFile', name: 'Zed.7z', size: 7, hash: 'ZED' };
-    entries.set('ZED', new Map([['b.nif', 'hello']]));
-    await write('b.nif', 'hello');
-    await manifested(manifest([line('b.nif', { kind: 'held' }, 'Zed.7z')], { packages: [MOD_ZIP, zed] }));
+  it('reads the one of two files at the path it names that its exclusion fits, and names the other', async () => {
+    await write('a.nif', HELLO);
+    exclude = ['a.nif'];
+    entries = [{ path: 'a.nif', hash: HELLO }];
+    await manifested(manifest({ 'a.nif': HELLO }));
+    const read = (values: ReadValues): ReadValues => ({ ...values, folder: { ...values.folder, files: new Map([
+      ['a.nif.mohidden', { path: 'a.nif', excluded: true, read: { kind: 'read', answer: { hash: EDITED } } }],
+      ['a.nif', { path: 'a.nif', excluded: false, read: { kind: 'read', answer: { hash: HELLO } } }],
+    ]) } });
 
-    expect((await status()).differing).toEqual([]);
+    expect(await statusWith(read)).toEqual(heldAs({ namedByNoLine: ['a.nif.mohidden'] }));
   });
 
-  it('names a file a step makes no gap and never differing, but gone when the folder lacks it', async () => {
+  it('never checks a file a step makes, but names it gone when the folder lacks it', async () => {
     await write('made.dds', 'whatever the step wrote');
-    await manifested(manifest([line('made.dds', { kind: 'madeByStep' }), line('lacked.dds', { kind: 'madeByStep' })]));
+    await manifested(manifest({ 'made.dds': null, 'lacked.dds': null }, { packages: [REPOSITORY] }));
 
     expect(await status()).toEqual(heldAs({ gone: ['lacked.dds'] }));
-  });
-
-  it('names no file an archive of its manifest packs gone, though no loose copy is there', async () => {
-    await manifested(manifest([line('b.nif')], { archives: [{ path: 'Mod - Main.ba2', files: ['B.nif'] }] }));
-
-    expect((await status()).gone).toEqual([]);
   });
 
   it.each([
     [true, ['Meshes/A.nif'], [], []],
     [false, [], ['Meshes/A.nif'], ['meshes/a.nif']],
-  ])('finds a file a line names in another case only where the file system does (ignoring case: %s)', async (ignoresCase, differing, namedByNoLine, gone) => {
-    await write('Meshes/A.nif', 'edited');
-    entries.set('PACK1', new Map([['meshes/a.nif', 'hello']]));
-    await manifested(manifest([line('meshes/a.nif')]));
+  ])('finds a file the manifest names in another case only where the file system does (ignoring case: %s)', async (ignoresCase, differing, namedByNoLine, gone) => {
+    await write('Meshes/A.nif', EDITED);
+    entries = [{ path: 'meshes/a.nif', hash: HELLO }];
+    await manifested(manifest({ 'meshes/a.nif': HELLO }));
 
     const read = await status(ignoresCase);
 
     expect([read.differing, read.namedByNoLine, read.gone]).toEqual([differing, namedByNoLine, gone]);
   });
 
-  it('after a clone, reads a source mod\'s file against the bytes its line records, with no entry in the hash index (modlist-repository.md, Status, story 3)', async () => {
-    await Promise.all([write('a.esp', 'built'), write('b.esp', 'edited')]);
-    await manifested(manifest([{ ...line('a.esp'), hash: 'built' }, { ...line('b.esp'), hash: 'built' }], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
+  describe('a file a clone cannot rebuild (Status, story 5)', () => {
+    it.each([
+      ['a package holds its bytes at another path', [{ path: '00 Core/meshes/a.nif', hash: HELLO }], [], []],
+      ['a package holds a file of its name with other bytes', [{ path: '00 Core/A.NIF', hash: EDITED }], [], ['meshes/a.nif']],
+      ['no package holds its bytes', [{ path: 'b.nif', hash: EDITED }], ['meshes/a.nif'], []],
+    ])('says why when %s', async (_case, held, notInPackage, otherBytes) => {
+      entries = held;
+      await write('meshes/a.nif', HELLO);
+      await manifested(manifest({ 'meshes/a.nif': HELLO }));
 
-    expect(await status()).toEqual(heldAs({ differing: ['b.esp'] }));
+      expect(await status()).toEqual(heldAs({ notInPackage, otherBytes }));
+    });
+
+    it('reads the game folder as a package that holds the game files the folder\'s files may be', async () => {
+      gameFiles = [{ path: 'a.nif', hash: HELLO }];
+      await write('a.nif', HELLO);
+      await manifested(manifest({ 'a.nif': HELLO }, { packages: [{ kind: 'gameFolder', host: { steam: { app: 1 } } }] }));
+
+      expect(await status()).toEqual(heldAs());
+    });
+
+    it('names none while this machine lacks a package, which could hold it', async () => {
+      notDownloaded.add('Mod.zip');
+      await write('a.nif', HELLO);
+      await manifested(manifest({ 'a.nif': HELLO }));
+
+      expect(await status()).toEqual(heldAs({ packagesLacking: ["installation file 'Mod.zip' is missing"] }));
+    });
+
+    it('names none of a source mod\'s, whose build makes them', async () => {
+      await write('a.esp', HELLO);
+      await manifested(manifest({ 'a.esp': HELLO }, { packages: [REPOSITORY] }));
+
+      expect(await status()).toEqual(heldAs());
+    });
   });
 
-  it('neither checks nor names a gap a source mod\'s file its line records by its path alone, which a step makes (mods.md, Build, story 3)', async () => {
-    await write('made.dds', 'whatever the step wrote');
-    await manifested(manifest([line('made.dds')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
+  it.each<[string, ManifestPackage, boolean, string[]]>([
+    ['an installation file with no host', { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK }, true, ["installation file 'Mod.zip'"]],
+    ['a game folder with no host', { kind: 'gameFolder' }, true, ['the game folder']],
+    ['a repository that is no submodule', REPOSITORY, false, ["repository 'Mod'"]],
+    ['a repository that is a submodule', REPOSITORY, true, []],
+    ['an installation file on Nexus', MOD_ZIP, true, []],
+  ])('names each package with no host (The manifest, story 5): %s', async (_case, pkg, hosted, noHost) => {
+    repositoryHosted = hosted;
+    await manifested(manifest({}, { packages: [pkg] }));
 
-    expect(await status()).toEqual(heldAs());
-  });
-
-  it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule, whichever package its manifest names first (submodule: %s)', async (isSubmodule, noHost) => {
-    await write('a.esp', 'hello');
-    await manifested(manifest([line('a.esp')], { packages: [MOD_ZIP, { kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
-
-    expect((await status()).noHost).toBe(noHost);
+    expect((await status()).noHost).toEqual(noHost);
   });
 
   it.each([
     ['an installation file the downloads folder lacks', (): void => { notDownloaded.add('Mod.zip'); }, "installation file 'Mod.zip' is missing"],
-    ['an installation file with other bytes', (): void => { downloadedHash.set('Mod.zip', 'OTHER'); }, "installation file 'Mod.zip' has other bytes"],
-    ['a game folder that is not found', (): void => { gameFolderFound = false; }, 'the game folder was not found'],
-  ])('lists a package it pins that this machine lacks: %s', async (_case, lackIt, lack) => {
-    await manifested(manifest([], { packages: [MOD_ZIP, { kind: 'gameFolder', name: 'Fallout4', hash: 'G1', depots: [] }] }));
+    ['an installation file with other bytes', (): void => { downloadedHash.set('Mod.zip', EDITED); }, "installation file 'Mod.zip' has other bytes"],
+    ['a game folder that is not found', (): void => { gameFiles = undefined; }, 'the game folder was not found'],
+  ])('lists a package it names that this machine lacks: %s', async (_case, lackIt, lack) => {
+    await manifested(manifest({}, { packages: [MOD_ZIP, { kind: 'gameFolder', host: { steam: { app: 1 } } }] }));
     lackIt();
 
     expect((await status()).packagesLacking).toEqual([lack]);
   });
 
-  it('says why a downloaded file it pins cannot be looked up', async () => {
-    await manifested(manifest([]));
+  it('says why a downloaded file it names cannot be looked up', async () => {
+    await manifested(manifest({}));
     const read = (values: ReadValues): ReadValues => ({ ...values, downloadedFiles: new Map([['Mod.zip', { kind: 'unreadable' as const, reason: 'EACCES' }]]) });
 
     expect((await statusWith(read)).packagesLacking).toEqual(["installation file 'Mod.zip' could not be read: EACCES"]);
   });
 
-  it('is unreadable, saying why, when its metadata cannot be read', async () => {
-    await manifested(manifest([]));
-    metadata = { kind: 'unreadable', reason: 'access denied' };
-
-    expect(await status()).toEqual(nothing({ unreadable: 'its metadata could not be read: access denied' }));
-  });
-
   it('is unreadable, saying why, when the values say a read of its folder rejected', async () => {
-    await manifested(manifest([]));
+    await manifested(manifest({}));
 
-    expect(await statusWith(({ metadata: held }) => ({ metadata: held, kind: 'unreadable', reason: 'EACCES: permission denied' }))).toEqual(nothing({ unreadable: 'a file could not be read: EACCES: permission denied' }));
+    expect(await statusWith(() => ({ kind: 'unreadable', reason: 'EACCES: permission denied' }))).toEqual(nothing({ unreadable: 'a file could not be read: EACCES: permission denied' }));
   });
 
   it('is unreadable, saying why, when its folder cannot be read for its manifest', async () => {
@@ -249,45 +269,5 @@ describe('a mod\'s status against its manifest', () => {
     if (read === undefined || !('refused' in read)) throw new Error('expected a refusal');
 
     expect(read.refused).toMatch(/^a file could not be read: ENOTDIR/);
-  });
-
-  describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {
-
-    it.each([
-      [says('1.0'), says('1.0'), false],
-      [says('1.0'), says('2.0'), true],
-      [says(), says('2.0'), true],
-      [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z', 'nexus:1']), false],
-      [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z', 'nexus:2']), true],
-      [says(undefined, ['a.7z']), says(undefined, ['a.7z', 'nexus:1']), true],
-      [says(undefined, ['a.7z', 'nexus:1']), says(undefined, ['a.7z']), true],
-      [says(undefined, ['old.7z']), says(undefined, ['new.7z']), true],
-      [says(undefined, ['a.7z']), says(), true],
-      [says(), says(undefined, ['a.7z']), true],
-      [says(), says(), false],
-      [says('1.0', ['a.7z']), says(undefined, ['a.7z']), true],
-      [says('1.0'), says(), false],
-    ])('held %j against the manifest\'s %j differs: %s', async (held, manifests, differs) => {
-      const file = manifests.installationFile;
-      const packages: ManifestPackage[] = file !== undefined
-        ? [{ kind: 'installationFile', name: file.name, size: 1, hash: 'hash', ...(file.page === undefined ? {} : { page: file.page }) }]
-        : manifests.version !== undefined ? [{ kind: 'gameFolder', name: 'Fallout4', hash: 'hash', depots: [] }] : [];
-      await manifested(manifest([], { packages, ...(manifests.version === undefined ? {} : { version: manifests.version }), ...(file === undefined ? {} : { installationFile: file.name }) }));
-      metadata = { kind: 'read', answer: held };
-
-      expect((await status()).metadataDiffers).toBe(differs);
-    });
-  });
-});
-
-describe('metadata a restore writes over what the metadata holds', () => {
-  it('is the version and the installation file the manifest names, with its page', () => {
-    const packages: ManifestPackage[] = [{ kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }, { kind: 'installationFile', name: 'a.7z', size: 1, hash: 'hash', page: 'nexus:1' }];
-
-    expect(metadataOf(manifest([], { version: '2.0', packages, installationFile: 'a.7z' }))).toEqual({ version: '2.0', installationFile: { name: 'a.7z', page: 'nexus:1' } });
-  });
-
-  it('names no installation file when the manifest names none, though a package is one (Never silently wrong)', () => {
-    expect(metadataOf(manifest([], { version: '2.0' }))).toEqual({ version: '2.0' });
   });
 });

@@ -3,10 +3,10 @@
 
 import { join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
-import type { InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
+import type { InstallationFile, InstanceAdapter, OtherManifest, PackageFile, Submodule } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, packagesAsked, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
-  type SourceMods,
+  buildFileIn, exclusionsOf, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
+  type ManifestPackage, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
@@ -16,16 +16,19 @@ import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
+import { nexusFileOf } from './manifestBuilder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import { packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
-import { metadataUnreadable } from './sourceCommands';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'textHash' | 'modMetadata'
-  | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'submodule'
-  | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
+  'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
+  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'folderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
+  | 'trashFileIn' | 'trashingReplaced' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
+  | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
+
+type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
 export interface RestoreDeps {
   readonly client: Pick<MEditClient, 'cloneSubmodules' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -147,88 +150,98 @@ async function passOver(deps: RestoreDeps, folders: Folders, sourceMods: SourceM
   };
 }
 
-async function compared(adapter: Adapter, manifest: Manifest, folder: string, packages: PackagesRead): Promise<FolderAgainst> {
-  const entries = new Map<string, ReadonlyMap<string, string>>();
-  for (const key of packagesAsked(manifest).entries) {
-    const held = packages.entries.get(key) ?? await adapter.packageEntries(key);
-    if (held !== undefined) entries.set(key, held);
-  }
-  return folderAgainst(manifest, await adapter.folderValue(folder), entries);
-}
-
 type Answer = { readonly landed: ModRestored } | { readonly refusal: string };
 
-// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the file that holds its bytes, else downloaded.
-async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead | { readonly refusal: string }> {
+type InstallationFilePackage = Extract<ManifestPackage, { kind: 'installationFile' }>;
+
+const isInstallationFile = (pkg: ManifestPackage): pkg is InstallationFilePackage => pkg.kind === 'installationFile';
+
+// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the
+// file that holds its bytes, else downloaded.
+async function installationFilesFor(pass: Pass, manifest: Manifest): Promise<{ readonly held: readonly InstallationFile[] } | { readonly refusal: string }> {
   const { adapter, nexus } = pass.deps;
-  const named = manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [{ name: pkg.name, size: pkg.size, hash: pkg.hash, ...(pkg.page === undefined ? {} : { page: pkg.page }) }] : []));
+  const named = manifest.packages.filter(isInstallationFile);
   const found = await namedDownloadedFiles({ adapter, nexus }, [{ installationFiles: named }], {
     onDownload: (file) => { pass.options.onProgress?.({ phase: 'Downloading', file }); }, signal: pass.options.signal,
   });
-  const downloaded: PackagesHeld['downloaded'] = (name) => {
-    const why = found.unreadable(name);
-    return why === undefined ? { kind: 'read', answer: found.handed(name) } : { kind: 'unreadable', reason: why };
-  };
-  const packages = await packagesRead(adapter, manifest, { downloaded, game: pass.game });
-  if (packages.lacks.length === 0) return packages;
-  const why = named.flatMap(({ name }) => found.why(name).map(sentence));
-  return { refusal: `${skipped(packages.lacks.join('; '))}${why.join('')}` };
+  const lacks = named.flatMap((pkg) => {
+    const why = found.unreadable(pkg.name);
+    const lack = installationFileLack(pkg, why === undefined ? { kind: 'read', answer: found.handed(pkg.name) } : { kind: 'unreadable', reason: why });
+    return lack === undefined ? [] : [{ lack, why: found.why(pkg.name) }];
+  });
+  if (lacks.length > 0) return { refusal: `${skipped(lacks.map(({ lack }) => lack).join('; '))}${lacks.flatMap(({ why }) => why.map(sentence)).join('')}` };
+  return { held: named.flatMap(({ name }) => found.handed(name) ?? []) };
 }
 
-// modlist-repository.md, The manifest, story 3: the manifest's version and installation file, and what else the
-// metadata holds kept.
-async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
-  if (!pass.folders.isMod(mod)) return undefined;
-  try {
-    await pass.deps.adapter.writeModMetadata(mod, metadataOf(manifest), pass.deps.trash);
-  } catch (err) {
-    return `its metadata could not be written: ${errorMessage(err)}`;
+const depotsNamed = (manifest: Manifest): string[] => manifest.packages.flatMap((pkg) => {
+  const depots = pkg.kind === 'gameFolder' ? Object.entries(pkg.host?.steam.depots ?? {}) : [];
+  return depots.length === 0 ? [] : [`the game folder is ${depots.map(([id, version]) => `depot ${id} at version ${version}`).join(' and ')}`];
+});
+
+// The game files at the paths the folder's files may be, each by its path in the folder, with the place that holds it.
+async function gameFilesFor(pass: Pass, folder: string, paths: readonly string[]): Promise<{ readonly files: readonly { readonly path: string; readonly hash: string; readonly from: PackageFile }[] } | { readonly lack: string }> {
+  if (typeof pass.game === 'string') return { lack: pass.game };
+  const files: { path: string; hash: string; from: PackageFile }[] = [];
+  for (const place of pass.game.places) {
+    const taken = await pass.deps.adapter.gameFilesTakenBy(place, folder, paths);
+    if (taken.kind === 'unreadable') return { lack: `the game files could not be read: ${taken.reason}` };
+    files.push(...taken.answer.gameFiles.map((file) => ({ path: file.pathInFolder, hash: file.hash, from: { kind: 'gameFile' as const, root: place.root, path: file.path } })));
   }
-  return undefined;
+  return { files };
 }
 
-async function whyNotFinished(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
-  const { adapter, trash } = pass.deps;
-  return await whyNotTrashed(adapter, trash, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest);
-}
-
-// A status on this machine reads a game folder package's entries from the hash index.
-async function packageEntriesKept(adapter: Adapter, manifest: Manifest, packages: PackagesRead): Promise<readonly string[]> {
-  const notes: string[] = [];
-  for (const pkg of manifest.packages) {
-    const hash = pkg.kind === 'gameFolder' ? pkg.hash : undefined;
-    const entries = hash === undefined ? undefined : packages.entries.get(hash);
-    const why = hash === undefined || entries === undefined ? undefined : await adapter.keepPackageEntries(hash, entries);
-    if (why !== undefined) notes.push(`the files it takes from the game folder could not be recorded, so its status reads them as differing: ${why}`);
+// Where this machine holds the bytes of each file `manifest` names that `paths` asks for, found by hash in any package it
+// names, or why the mod is skipped.
+async function bytesFor(pass: Pass, manifest: Manifest, folder: string, paths: readonly string[]): Promise<ReadonlyMap<string, PackageFile> | { readonly refusal: string }> {
+  const held = await installationFilesFor(pass, manifest);
+  if ('refusal' in held) return held;
+  const byHash = new Map<string, PackageFile>();
+  for (const file of held.held) {
+    for (const entry of file.entries) if (!byHash.has(entry.hash)) byHash.set(entry.hash, { kind: 'entry', downloadedFile: file.path, entry: entry.path });
   }
-  return notes;
+  const fromTheGame = new Map<string, PackageFile>();
+  const unheld = paths.filter((path) => !byHash.has(manifest.files.get(path) ?? ''));
+  if (unheld.length > 0 && manifest.packages.some(({ kind }) => kind === 'gameFolder')) {
+    const game = await gameFilesFor(pass, folder, unheld);
+    if ('lack' in game) return { refusal: skipped([game.lack, ...depotsNamed(manifest)].join('; ')) };
+    for (const { path, hash, from } of game.files) if (manifest.files.get(path) === hash && !fromTheGame.has(path)) fromTheGame.set(path, from);
+  }
+  const sourceOf = (path: string): PackageFile | undefined => fromTheGame.get(path) ?? byHash.get(manifest.files.get(path) ?? '');
+  const lacked = paths.filter((path) => sourceOf(path) === undefined);
+  if (lacked.length > 0) return { refusal: skipped([...lacked.map((path) => `no package it names holds the bytes of '${path}'`), ...depotsNamed(manifest)].join('; ')) };
+  return new Map(paths.flatMap((path) => {
+    const from = sourceOf(path);
+    return from === undefined ? [] : [[path, from] as const];
+  }));
 }
 
-// modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, and
-// every file no line names sent to the trash.
+// modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
+// whose exclusion changed moved, and every file the manifest does not name sent to the trash.
 async function restoreFromPackages(pass: Pass, mod: string, folder: string, manifest: Manifest): Promise<Answer> {
   const { adapter } = pass.deps;
-  const packages = await packagesFor(pass, manifest);
-  if ('refusal' in packages) return packages;
   let against: FolderAgainst;
   try {
-    against = await compared(adapter, manifest, folder, packages);
+    against = folderAgainst(manifest, await adapter.folderValue(folder));
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
-  const writes = against.lines.flatMap(({ line, onDisk, holdsItsBytes }) => {
-    const from = packages.packageFiles.get(line.path);
-    return from === undefined || holdsItsBytes === true ? [] : [{ path: onDisk ?? line.path, from }];
+  const toWrite = against.files.filter(({ hash, holdsItsBytes }) => hash !== null && holdsItsBytes !== true);
+  const bytes = await bytesFor(pass, manifest, folder, toWrite.map(({ path }) => path));
+  if ('refusal' in bytes) return bytes;
+  const writes = toWrite.flatMap(({ path }) => {
+    const from = bytes.get(path);
+    return from === undefined ? [] : [{ path: adapter.pathInFolder(path, manifest.exclude), from }];
   });
+  const moved = toWrite.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined || pathInFolder === adapter.pathInFolder(path, manifest.exclude) ? [] : [pathInFolder]));
   try {
     if (writes.length > 0) await adapter.writeFilesIn(folder, writes, pass.deps.trash);
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
-  const notes = await packageEntriesKept(adapter, manifest, packages);
-  const why = await whyNotFinished(pass, mod, manifest, folder, against.namedByNoLine);
+  const trashed = [...moved, ...against.namedByNoLine];
+  const why = await whyNotTrashed(adapter, pass.deps.trash, folder, trashed);
   if (why !== undefined) return { refusal: notFinished(why) };
-  return { landed: { mod, written: writes.map(({ path }) => path), namedByNoLine: against.namedByNoLine, ...(notes.length === 0 ? {} : { notes }) } };
+  return { landed: { mod, written: writes.map(({ path }) => path), namedByNoLine: against.namedByNoLine } };
 }
 
 async function hashesIn(adapter: Adapter, folder: string): Promise<Map<string, string>> {
@@ -242,12 +255,9 @@ async function hashesIn(adapter: Adapter, folder: string): Promise<Map<string, s
 
 type Cloned = { readonly leftDetached?: string } | { readonly refusal: string };
 
-// ADR-0022: built only at the commit the instance repository pins.
-async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
-  const { adapter, client } = pass.deps;
-  const pinned = await adapter.submodule(name);
-  if ('lacks' in pinned) return { refusal: `${skipped(`its submodule '${name}' is missing`)}${sentence(pinned.lacks)}` };
-  const cloned = await client.cloneSubmodules([{ folder: pinned.folder, pin: pinned.pin, ...(pinned.branch === undefined ? {} : { branch: pinned.branch }) }]);
+// ADR-0022: a submodule is built only at the commit the instance repository pins.
+async function clonedAtThePin(pass: Pass, pinned: Submodule): Promise<Cloned> {
+  const cloned = await pass.deps.client.cloneSubmodules([{ folder: pinned.folder, pin: pinned.pin, ...(pinned.branch === undefined ? {} : { branch: pinned.branch }) }]);
   if (isRefused(cloned)) return { refusal: skipped(`its submodule could not be cloned or read: ${cloned.message}`) };
   const [refused] = cloned.refused;
   if (refused !== undefined) return { refusal: skipped(refused.refusal === 'AtAnotherCommit' ? refused.message : `its submodule could not be cloned or read: ${refused.message}`) };
@@ -255,20 +265,41 @@ async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
   return leftDetached ? { leftDetached } : {};
 }
 
+// mods.md, Build, story 1: the installation files a build file takes from, copied or downloaded as restore takes a manifest's.
+async function buildFilePackagesFor(pass: Pass, buildFile: BuildFile): Promise<PackagesRead | { readonly refusal: string }> {
+  const { adapter, nexus } = pass.deps;
+  const named = buildFile.packages.flatMap((pkg): InstallationFilePackage[] => {
+    if (pkg.kind !== 'installationFile') return [];
+    const nexusFile = pkg.page === undefined ? undefined : nexusFileOf(adapter)(pkg.page);
+    return [{ kind: 'installationFile', name: pkg.name, size: pkg.size, hash: pkg.hash, ...nexusFile === undefined ? {} : { host: { nexus: nexusFile } } }];
+  });
+  const found = await namedDownloadedFiles({ adapter, nexus }, [{ installationFiles: named }], {
+    onDownload: (file) => { pass.options.onProgress?.({ phase: 'Downloading', file }); }, signal: pass.options.signal,
+  });
+  const downloaded: PackagesHeld['downloaded'] = (name) => {
+    const why = found.unreadable(name);
+    return why === undefined ? { kind: 'read', answer: found.handed(name) } : { kind: 'unreadable', reason: why };
+  };
+  const packages = await packagesRead(adapter, buildFile, { downloaded, game: pass.game });
+  if (packages.lacks.length === 0) return packages;
+  return { refusal: `${skipped(packages.lacks.join('; '))}${named.flatMap(({ name }) => found.why(name).map(sentence)).join('')}` };
+}
+
+const NO_FILES: FolderValue = { files: new Map(), exclude: [], ignoresCase: false };
+
 // ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records.
-async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, submodule: string | undefined): Promise<Answer> {
+async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, pinned: Submodule | undefined): Promise<Answer> {
   const { adapter, client, tasks, trash } = pass.deps;
-  const cloned = submodule === undefined ? {} : await clonedAtThePin(pass, submodule);
+  const cloned = pinned === undefined ? {} : await clonedAtThePin(pass, pinned);
   if ('refusal' in cloned) return cloned;
   const held = await buildFileHeld(sourceFolder);
   if ('refusal' in held) return held;
   const { buildFile } = held;
-  const packages = await packagesFor(pass, buildFile);
+  const packages = await buildFilePackagesFor(pass, buildFile);
   if ('refusal' in packages) return packages;
   const before = await hashesIn(adapter, folder);
-  const exclude = exclusionsOf(manifest, [], adapter.exclusionMark);
-  const outcome = await buildSourceMod(
-    { client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile, packages, metadata: metadataOf(manifest), isSubmodule: submodule !== undefined }, pass.build);
+  const exclude = exclusionsOf(manifest, NO_FILES);
+  const outcome = await buildSourceMod({ client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile, packages }, pass.build);
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;
@@ -282,8 +313,6 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
-  const why = await metadataWrittenOrWhy(pass, mod, recorded.manifest);
-  if (why !== undefined) return { refusal: notFinished(why) };
   return {
     landed: {
       mod, written: [...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path).sort(),
@@ -293,27 +322,18 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   };
 }
 
-async function whyMetadataUnwritable({ folders, deps: { adapter } }: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
-  if (!folders.isMod(mod)) return undefined;
-  const metadata = await adapter.modMetadata(mod);
-  if (metadata.kind === 'unreadable') return skipped(metadataUnreadable(metadata.reason));
-  const unwritable = await adapter.unwritableMetadata(mod, metadataOf(manifest));
-  return unwritable === undefined ? undefined : skipped(unwritable);
-}
-
 async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   const folder = await pass.folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const held = await manifestHeld(folder);
   if (held === undefined) return { refusal: skipped('it has no manifest') };
   if ('refusal' in held) return held;
-  const unwritable = await whyMetadataUnwritable(pass, mod, held.manifest);
-  if (unwritable !== undefined) return { refusal: unwritable };
   const repository = repositoryOf(held.manifest);
   if (repository === undefined) return restoreFromPackages(pass, mod, folder, held.manifest);
   const sourceFolder = pass.sourceMods.folderOf(mod);
-  if (sourceFolder !== undefined) return rebuilt(pass, mod, folder, sourceFolder, held.manifest, repository.isSubmodule ? repository.name : undefined);
-  return { refusal: skipped(repository.isSubmodule ? `its submodule '${repository.name}' is not cloned` : `the source folder holds no repository '${repository.name}', and its package has no host`) };
+  const pinned = await pass.deps.adapter.submodule(repository.name);
+  if (sourceFolder !== undefined) return rebuilt(pass, mod, folder, sourceFolder, held.manifest, 'lacks' in pinned ? undefined : pinned);
+  return { refusal: skipped('lacks' in pinned ? `the source folder holds no repository '${repository.name}', and ${pinned.lacks}` : `its submodule '${repository.name}' is not cloned`) };
 }
 
 const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;

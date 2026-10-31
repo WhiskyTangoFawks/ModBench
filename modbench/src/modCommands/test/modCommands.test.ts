@@ -8,7 +8,7 @@ import type {
   EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { manifestText } from '../../manifestAdapter/manifestAdapter';
+import { manifestText } from '../../manifestAdapter/manifestText';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 const separator = (name: string, enabled = false): ModlistEntry => ({ kind: 'separator', name, enabled });
@@ -277,7 +277,7 @@ describe('uninstallMods', () => {
     for (const name of ['Harder VATS', 'ENBoost']) {
       await mkdir(join(mods, name));
       await writeFile(join(mods, name, `${name}.manifest.json`), manifestText({
-        packages: [{ kind: 'sourceRepository', name: 'Harder VATS', isSubmodule: false }], exclude: [], archives: [], files: [],
+        packages: [{ kind: 'repository', name: 'Harder VATS' }], exclude: [], files: new Map(),
       }));
     }
     const { fake, commands } = over(FIXTURE_ORDER, {}, {

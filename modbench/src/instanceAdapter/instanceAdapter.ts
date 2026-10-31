@@ -60,6 +60,8 @@ export type GameFolder =
 export type FoundGameFolder = Extract<GameFolder, { readonly kind: 'found' }>;
 
 interface PlaceDepots {
+  /** The Steam app the depots are of; none when no Steam install records them. */
+  readonly steamApp?: number;
   readonly depots: readonly Depot[];
   readonly depotProblems: readonly string[];
 }
@@ -689,9 +691,9 @@ export interface InstanceAdapter {
   /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files of `place` that the files below `folder`, a mod's or any folder a manifest builds, may be: a mod's
-   *  file where deploy puts it, another folder's at its own path. */
-  gameFilesTakenBy(place: GamePlace, folder: string): Promise<FileRead<GameFilesTaken>>;
+  /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, another folder's
+   *  at its own path. `paths`: the files asked for; else every file the folder holds. */
+  gameFilesTakenBy(place: GamePlace, folder: string, paths?: readonly string[]): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;
@@ -733,15 +735,12 @@ export interface InstanceAdapter {
   /** Each file below `folder`, a mod's or any folder a manifest builds, by forward-slash path, listed as a mod's files
    *  are; none when the folder is not there. */
   filesIn(folder: string): Promise<readonly string[]>;
-  /** `folder`'s files, each with its hash kept in the hash index. */
+  /** `folder`'s files by their own paths, each with its hash kept in the hash index, and the paths the manager excludes. */
   folderValue(folder: string): Promise<FolderValue>;
-  /** What the status of `mod`, whose files `folder` holds, reads of the instance, for the packages `asked`. */
-  modValue(mod: string, folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
-  /** Each entry's hash, by its path, of the downloaded file whose hash is `hash`; undefined when the index holds none. */
-  packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
-  /** Keeps `entries`, each package path's hash, under the hash of a game folder package a manifest pins, so
-   *  `packageEntries` answers them; answers why they could not be written, if so. */
-  keepPackageEntries(hash: string, entries: ReadonlyMap<string, string>): Promise<string | undefined>;
+  /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`. */
+  modValue(folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
+  /** The path a folder holds the file at `path` at, while `exclude` names the paths the modlist excludes. */
+  pathInFolder(path: string, exclude: readonly string[]): string;
   /** The hash of `text`'s UTF-8 bytes, as a manifest carries a hash. */
   textHash(text: string): Promise<string>;
 

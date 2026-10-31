@@ -1,248 +1,156 @@
-import type {
-  BuildFile, BuildFileRead, GameDepot, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
-} from './manifest';
-import { installationFileIn } from './packageOf';
+// spec/formats/manifest-1.schema.json and the rules manifest.md adds, read from any text the schema accepts.
 
-type Json = Record<string, unknown>;
+import { MANIFEST_VERSION, type Manifest, type ManifestPackage, type ManifestRead } from './manifest';
+import { arrayOf, isObject, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
-type Saying = (file: string) => string;
+const FILE = 'manifest';
 
-class Unreadable extends Error {
-  constructor(readonly says: Saying) {
-    super();
+const PATH = /^(?!\/)(?!.*\/$)(?!.*\/\/)(?!(?:.*\/)?\.{1,2}(?:\/|$))[^\\]+$/;
+const HASH = /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/;
+const NEXUS_GAME = /^[a-z0-9]+$/;
+const DIGITS = /^[0-9]+$/;
+
+class VersionRefused extends Error {}
+
+const at = (where: string): Unreadable => unreadable(FILE, where);
+
+const known = (members: Json, part: string | undefined, keys: readonly string[]): void => {
+  const unknownKey = Object.keys(members).find((key) => !keys.includes(key));
+  if (unknownKey !== undefined) {
+    throw new Unreadable(`its ${FILE}${part === undefined ? '' : `'s ${part}`} holds '${unknownKey}', which Modbench does not read`);
+  }
+};
+
+const countOf = (value: unknown, minimum: number, where: string): number => {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) throw at(where);
+  return value;
+};
+
+const matching = (value: unknown, pattern: RegExp, where: string): string => {
+  const text = textOf(FILE, value, where);
+  if (!pattern.test(text)) throw at(where);
+  return text;
+};
+
+const hostOf = (value: unknown, kind: string, where: string): Json => {
+  const host = objectOf(FILE, value, where);
+  if (Object.keys(host).length !== 1 || !Object.hasOwn(host, kind)) throw at(where);
+  return objectOf(FILE, host[kind], where);
+};
+
+const exactly = (members: Json, keys: readonly string[], where: string): void => {
+  if (Object.keys(members).some((key) => !keys.includes(key))) throw at(where);
+};
+
+function installationFileOf(members: Json, where: string, part: string): ManifestPackage {
+  known(members, part, ['kind', 'name', 'size', 'hash', 'host']);
+  const name = textOf(FILE, required(FILE, members, 'name', where), where);
+  if (name === '') throw at(where);
+  const size = countOf(required(FILE, members, 'size', where), 0, where);
+  const hash = matching(required(FILE, members, 'hash', where), HASH, where);
+  if (!Object.hasOwn(members, 'host')) return { kind: 'installationFile', name, size, hash };
+  const nexus = hostOf(members.host, 'nexus', where);
+  exactly(nexus, ['game', 'mod', 'file'], where);
+  const file = {
+    game: matching(required(FILE, nexus, 'game', where), NEXUS_GAME, where),
+    mod: countOf(required(FILE, nexus, 'mod', where), 1, where),
+    file: countOf(required(FILE, nexus, 'file', where), 1, where),
+  };
+  return { kind: 'installationFile', name, size, hash, host: { nexus: file } };
+}
+
+function gameFolderOf(members: Json, where: string, part: string): ManifestPackage {
+  known(members, part, ['kind', 'host']);
+  if (!Object.hasOwn(members, 'host')) return { kind: 'gameFolder' };
+  const steam = hostOf(members.host, 'steam', where);
+  exactly(steam, ['app', 'depots'], where);
+  const app = countOf(required(FILE, steam, 'app', where), 1, where);
+  if (!Object.hasOwn(steam, 'depots')) return { kind: 'gameFolder', host: { steam: { app } } };
+  const depots = Object.entries(objectOf(FILE, steam.depots, where)).map(([id, version]) => {
+    if (!DIGITS.test(id)) throw at(where);
+    return [id, matching(version, DIGITS, where)] as const;
+  });
+  return { kind: 'gameFolder', host: { steam: { app, depots: Object.fromEntries(depots) } } };
+}
+
+function packageOf(line: unknown, index: number): ManifestPackage {
+  const where = `its package ${index + 1}`;
+  const part = `package ${index + 1}`;
+  const members = objectOf(FILE, line, where);
+  switch (members.kind) {
+    case 'installationFile': return installationFileOf(members, where, part);
+    case 'gameFolder': return gameFolderOf(members, where, part);
+    case 'repository': {
+      known(members, part, ['kind', 'name']);
+      const name = textOf(FILE, required(FILE, members, 'name', where), where);
+      if (name === '') throw at(where);
+      return { kind: 'repository', name };
+    }
+    default: throw at(where);
   }
 }
 
-const unreadable = (where: string, why?: string | Saying): Unreadable => new Unreadable((file) => {
-  const because = typeof why === 'function' ? why(file) : why;
-  return `its ${file} cannot be read${where ? ` at ${where}` : ''}${because ? `: ${because}` : ''}`;
-});
+function packagesOf(value: unknown): ManifestPackage[] {
+  const packages = arrayOf(FILE, value, 'its packages').map(packageOf);
+  const names = packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : []));
+  const twice = names.find((name, index) => names.indexOf(name) !== index);
+  if (twice !== undefined) throw new Unreadable(`its ${FILE} names the installation file '${twice}' twice`);
+  if (packages.filter(({ kind }) => kind === 'gameFolder').length > 1) throw new Unreadable(`its ${FILE} names the game folder twice`);
+  const repository = packages.find((pkg) => pkg.kind === 'repository');
+  if (repository !== undefined && packages.length > 1) throw new Unreadable(`its ${FILE} names the repository '${repository.name}' beside another package`);
+  return packages;
+}
 
-const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const objectOf = (value: unknown, where: string): Json => {
-  if (!isObject(value)) throw unreadable(where);
-  return value;
+const pathOf = (path: string): string => {
+  if (!PATH.test(path)) throw new Unreadable(`its ${FILE} names '${path}', which is not a path in the folder`);
+  return path;
 };
 
-const textOf = (value: unknown, where: string): string => {
-  if (typeof value !== 'string') throw unreadable(where);
-  return value;
-};
-
-const arrayOf = (value: unknown, where: string): unknown[] => {
-  if (!Array.isArray(value)) throw unreadable(where);
-  return value;
-};
-
-const stringsOf = (value: unknown, where: string): string[] => arrayOf(value, where).map((item) => textOf(item, where));
-
-const required = (line: Json, key: string, where: string): unknown => {
-  if (!Object.hasOwn(line, key)) throw unreadable(where);
-  return line[key];
-};
-
-const known = (line: Json, part: string | undefined, keys: readonly string[]): void => {
-  const unknownKey = Object.keys(line).find((key) => !keys.includes(key));
-  if (unknownKey !== undefined) {
-    throw new Unreadable((file) => `its ${file}${part === undefined ? '' : `'s ${part}`} holds '${unknownKey}', which Modbench does not read`);
+function filesOf(value: unknown, built: boolean): Map<string, string | null> {
+  const files = new Map<string, string | null>();
+  const byFolded = new Map<string, string>();
+  for (const [path, hash] of Object.entries(objectOf(FILE, value, 'its files'))) {
+    const where = `its file '${path}'`;
+    if (hash === null && !built) throw unreadable(FILE, where, "only a source mod's manifest names a file a step makes");
+    files.set(pathOf(path), hash === null ? null : matching(hash, HASH, where));
+    const other = byFolded.get(path.toLowerCase());
+    if (other !== undefined) throw new Unreadable(`its ${FILE} names '${other}' and '${path}', which differ only by case`);
+    byFolded.set(path.toLowerCase(), path);
   }
-};
+  return files;
+}
 
-const isPathInTheFolder = (path: string): boolean =>
-  !path.includes('\\') && !/^([a-zA-Z]:|\/)/.test(path) && path.split('/').every((segment) => segment.trim() !== '' && segment !== '.' && segment !== '..');
+function excludeOf(value: unknown, files: ReadonlyMap<string, unknown>): string[] {
+  const exclude = arrayOf(FILE, value, 'its exclude').map((path) => pathOf(textOf(FILE, path, 'its exclude')));
+  const twice = exclude.find((path, index) => exclude.indexOf(path) !== index);
+  if (twice !== undefined) throw new Unreadable(`its ${FILE} excludes '${twice}' twice`);
+  const paths = [...files.keys()];
+  const stray = exclude.find((path) => !paths.some((file) => file === path || file.startsWith(`${path}/`)));
+  if (stray !== undefined) throw new Unreadable(`its ${FILE} excludes '${stray}', which is none of its files nor a folder above one`);
+  return exclude;
+}
 
-const inTheFolder = (key: string, paths: readonly string[]): void => {
-  const outside = paths.find((path) => !isPathInTheFolder(path));
-  if (outside !== undefined) throw new Unreadable((file) => `its ${file}'s '${key}' names '${outside}', which is not a path in the folder`);
-};
-
-const packageOf = (index: number, line: unknown): { pkg: ManifestPackage; version?: string } => {
-  const where = `its package ${index + 1}`;
-  const members = objectOf(line, where);
-  known(members, `package ${index + 1}`, [
-    'installationFile', 'size', 'hash', 'page', 'gameFolder', 'depots', 'submodule', 'repository', 'version',
-  ]);
-  const version = Object.hasOwn(members, 'version') ? textOf(members.version, where) : undefined;
-  if (version !== undefined && index > 0) {
-    throw new Unreadable((file) => `its ${file}'s package ${index + 1} holds a version, which belongs to the first package`);
+function manifestOf(value: unknown): Manifest {
+  if (isObject(value) && !Object.hasOwn(value, 'version')) {
+    throw new VersionRefused(`its ${FILE} is in a format before version ${MANIFEST_VERSION}, and Modbench reads only version ${MANIFEST_VERSION}`);
   }
-  const withVersion = (pkg: ManifestPackage): { pkg: ManifestPackage; version?: string } => (version === undefined ? { pkg } : { pkg, version });
-  if (Object.hasOwn(members, 'installationFile')) {
-    const size = required(members, 'size', where);
-    if (typeof size !== 'number' || !Number.isSafeInteger(size)) throw unreadable(where);
-    const name = textOf(members.installationFile, where);
-    const hash = textOf(required(members, 'hash', where), where);
-    return withVersion(Object.hasOwn(members, 'page') ? { kind: 'installationFile', name, size, hash, page: textOf(members.page, where) } : { kind: 'installationFile', name, size, hash });
+  const root = objectOf(FILE, value, '');
+  if (root.version !== MANIFEST_VERSION) {
+    throw new VersionRefused(`its ${FILE} is version ${JSON.stringify(root.version)}, and Modbench reads only version ${MANIFEST_VERSION}`);
   }
-  if (Object.hasOwn(members, 'gameFolder')) {
-    const depots: GameDepot[] = Object.hasOwn(members, 'depots')
-      ? Object.entries(objectOf(members.depots, where)).map(([id, depotVersion]) => ({ id, version: textOf(depotVersion, where) }))
-      : [];
-    return withVersion({ kind: 'gameFolder', name: textOf(members.gameFolder, where), hash: textOf(required(members, 'hash', where), where), depots });
-  }
-  if (Object.hasOwn(members, 'submodule')) return withVersion({ kind: 'sourceRepository', name: textOf(members.submodule, where), isSubmodule: true });
-  return withVersion({ kind: 'sourceRepository', name: textOf(required(members, 'repository', where), where), isSubmodule: false });
-};
+  known(root, undefined, ['version', 'packages', 'exclude', 'files']);
+  const packages = Object.hasOwn(root, 'packages') ? packagesOf(root.packages) : [];
+  const files = Object.hasOwn(root, 'files') ? filesOf(root.files, packages.some(({ kind }) => kind === 'repository')) : new Map<string, string | null>();
+  return { packages, exclude: Object.hasOwn(root, 'exclude') ? excludeOf(root.exclude, files) : [], files };
+}
 
-const packagesOf = (value: unknown): { packages: ManifestPackage[]; version?: string } => {
-  const packages: ManifestPackage[] = [];
-  let version: string | undefined;
-  arrayOf(value, 'its packages').forEach((line, index) => {
-    const read = packageOf(index, line);
-    if (packages.some((other) => other.name === read.pkg.name)) throw new Unreadable((file) => `its ${file} names the package '${read.pkg.name}' twice`);
-    packages.push(read.pkg);
-    if (index === 0) version = read.version;
-  });
-  return version === undefined ? { packages } : { packages, version };
-};
-
-const stepOf = (index: number, line: unknown): ManifestStep => {
-  const where = `its step ${index + 1}`;
-  const members = objectOf(line, where);
-  known(members, `step ${index + 1}`, ['task', 'args']);
-  const task = textOf(required(members, 'task', where), where);
-  if (task.trim() === '') throw unreadable(where, 'it names no task');
-  return { task, args: Object.hasOwn(members, 'args') ? stringsOf(members.args, where) : [] };
-};
-
-const toolOf = (index: number, line: unknown): ManifestTool => {
-  const where = `its tool ${index + 1}`;
-  const members = objectOf(line, where);
-  known(members, `tool ${index + 1}`, ['task', 'page']);
-  const task = textOf(required(members, 'task', where), where);
-  const page = textOf(required(members, 'page', where), where);
-  if (task.trim() === '') throw unreadable(where, 'it names no task');
-  if (page.trim() === '') throw unreadable(where, 'it names no page');
-  return { task, page };
-};
-
-const fileProblem = (index: number, why: string | Saying): Unreadable => unreadable(`its file ${index + 1}`, why);
-
-const flagOf = (index: number, line: Json, key: string, written: boolean): boolean => {
-  if (!Object.hasOwn(line, key)) return false;
-  const flag = line[key];
-  if (typeof flag !== 'boolean') throw unreadable(`its file ${index + 1}`);
-  if (flag !== written) throw fileProblem(index, `its ${key} is ${written ? 'false' : 'true'}`);
-  return true;
-};
-
-const fileOf = (index: number, line: unknown): ManifestFile => {
-  const where = `its file ${index + 1}`;
-  const members = objectOf(line, where);
-  known(members, `file ${index + 1}`, ['path', 'package', 'packagePath', 'inPackage', 'otherBytes', 'madeByStep', 'hash']);
-  const path = textOf(required(members, 'path', where), where);
-  const hash = Object.hasOwn(members, 'hash') ? textOf(members.hash, where) : undefined;
-  const flags: { set: boolean; says: string; entry: PackageEntry }[] = [
-    { set: flagOf(index, members, 'inPackage', false), says: 'its package does not hold the file', entry: { kind: 'notHeld' } },
-    { set: flagOf(index, members, 'otherBytes', true), says: 'its package holds it with other bytes', entry: { kind: 'otherBytes' } },
-    { set: flagOf(index, members, 'madeByStep', true), says: 'a step makes it', entry: { kind: 'madeByStep' } },
-  ];
-  const says = flags.filter((flag) => flag.set);
-  const movedTo = Object.hasOwn(members, 'packagePath') ? textOf(members.packagePath, where) : undefined;
-  const named = Object.hasOwn(members, 'package') ? textOf(members.package, where) : undefined;
-  const withPackage = (entry: PackageEntry): ManifestFile =>
-    ({ path, entry, ...(named === undefined ? {} : { package: named }), ...(hash === undefined ? {} : { hash }) });
-  const [only, other] = says;
-  if (only && other) throw fileProblem(index, `it says both that ${only.says} and that ${other.says}`);
-  if (only && movedTo !== undefined) {
-    throw fileProblem(index, 'it names a path in its package for a file its package does not hold with its bytes');
-  }
-  if (only) {
-    if (only.entry.kind === 'madeByStep' && named !== undefined) throw fileProblem(index, 'it names a package for a file a step makes');
-    return withPackage(only.entry);
-  }
-  return withPackage(movedTo === undefined ? { kind: 'held' } : { kind: 'heldAt', path: movedTo });
-};
-
-const archivesOf = (value: unknown): ManifestArchive[] => {
-  const archives = Object.entries(objectOf(value, 'its archives')).map(([path, files]) => ({ path, files: stringsOf(files, 'its archives') }));
-  inTheFolder('archives', [...archives.map((archive) => archive.path), ...archives.flatMap((archive) => archive.files)]);
-  return archives;
-};
-
-const MANIFEST_KEYS = ['installationFile', 'packages', 'archives', 'files', 'exclude'];
-
-const BUILD_FILE_KEYS = ['packages', 'archives', 'steps', 'tools', 'files'];
-
-const buildFileOf = (text: string, keys: readonly string[]): BuildFile => {
-  const root = objectOf(JSON.parse(text), '');
-  known(root, undefined, keys);
-  const files = arrayOf(required(root, 'files', ''), 'its files').map((line, index) => fileOf(index, line));
-  const steps = Object.hasOwn(root, 'steps') ? arrayOf(root.steps, 'its steps').map((line, index) => stepOf(index, line)) : [];
-  const tools = Object.hasOwn(root, 'tools') ? arrayOf(root.tools, 'its tools').map((line, index) => toolOf(index, line)) : [];
-  const { packages, version } = Object.hasOwn(root, 'packages') ? packagesOf(root.packages) : { packages: [] as ManifestPackage[], version: undefined };
-  const unnamed = files.findIndex((file) => file.package !== undefined && packages.every((pkg) => pkg.name !== file.package));
-  if (unnamed >= 0) throw fileProblem(unnamed, (file) => `it names a package the ${file} does not name`);
-  const madeByStep = files.findIndex((file) => file.entry.kind === 'madeByStep');
-  if (keys.includes('steps') && steps.length === 0 && madeByStep >= 0) throw fileProblem(madeByStep, (file) => `it says a step makes the file, and the ${file} holds no step`);
-  const exclude = Object.hasOwn(root, 'exclude') ? stringsOf(root.exclude, 'its exclude') : [];
-  inTheFolder('exclude', exclude);
-  const installationFile = Object.hasOwn(root, 'installationFile') ? textOf(root.installationFile, 'its installationFile') : undefined;
-  if (installationFile !== undefined && installationFileIn(packages, installationFile) === undefined) {
-    throw new Unreadable((file) => `its ${file} names the installation file '${installationFile}', which none of its packages is`);
-  }
-  return {
-    packages,
-    ...(version === undefined ? {} : { version }),
-    ...(installationFile === undefined ? {} : { installationFile }),
-    exclude,
-    archives: Object.hasOwn(root, 'archives') ? archivesOf(root.archives) : [],
-    steps,
-    tools,
-    files,
-  };
-};
-
-const leavesTheTextIncomplete = (prefix: string): boolean => {
+/** `text` read as a manifest of version 1. */
+export function readManifest(text: string): ManifestRead {
   try {
-    JSON.parse(prefix);
-    return false;
+    const read = parsed(text, FILE, manifestOf);
+    return 'refused' in read ? read : { manifest: read.read };
   } catch (problem) {
-    const message = problem instanceof Error ? problem.message : '';
-    const position = /at position (\d+)/.exec(message)?.[1];
-    return /end of JSON input/.test(message) || (position !== undefined && Number(position) >= prefix.length);
-  }
-};
-
-const firstUnparsableLength = (text: string): number => {
-  let [low, high] = [0, text.length];
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if (leavesTheTextIncomplete(text.slice(0, middle))) low = middle + 1;
-    else high = middle;
-  }
-  return low;
-};
-
-const lineOf = (problem: SyntaxError, text: string): string => {
-  const reported = /\(line (\d+) column/.exec(problem.message)?.[1];
-  if (reported !== undefined) return ` at line ${reported}`;
-  const offending = firstUnparsableLength(text) - 1;
-  return offending < 0 ? '' : ` at line ${text.slice(0, offending).split('\n').length}`;
-};
-
-const read = (text: string, file: string, keys: readonly string[]): { readonly read: BuildFile } | { readonly refused: string } => {
-  try {
-    return { read: buildFileOf(text, keys) };
-  } catch (problem) {
-    if (problem instanceof Unreadable) return { refused: problem.says(file) };
-    if (problem instanceof SyntaxError) return { refused: `its ${file} cannot be read${lineOf(problem, text)}` };
+    if (problem instanceof VersionRefused) return { refused: problem.message, versionRefused: true };
     throw problem;
   }
-};
-
-/** `text` read as a manifest. */
-export const readManifest = (text: string): ManifestRead => {
-  const parsed = read(text, 'manifest', MANIFEST_KEYS);
-  if ('refused' in parsed) return parsed;
-  const { packages, version, installationFile, exclude, archives, files } = parsed.read;
-  return { manifest: { packages, ...version === undefined ? {} : { version }, ...installationFile === undefined ? {} : { installationFile }, exclude, archives, files } };
-};
-
-/** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A
- *  source mod, story 2). */
-export const readBuildFile = (text: string): BuildFileRead => {
-  const parsed = read(text, 'build file', BUILD_FILE_KEYS);
-  return 'refused' in parsed ? parsed : { buildFile: parsed.read };
-};
+}

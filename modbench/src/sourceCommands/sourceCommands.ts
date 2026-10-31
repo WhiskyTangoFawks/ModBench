@@ -19,8 +19,8 @@ import { whyNotIndexed } from './whyNotIndexed';
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFileHolding' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
-    | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'sourceHost' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
+    | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
@@ -33,8 +33,6 @@ export type DecompileProgress = Omit<DecompileAndCommitProgress, 'phase'> & { ph
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
-
-export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
 type Adapter = SourceCommandsDeps['adapter'];
 
@@ -58,8 +56,8 @@ async function noRepository(folder: string | undefined): Promise<string> {
 async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly string[] | { readonly reason: string }> {
   try {
     const held = await manifestIn(folder);
-    if (held !== undefined && 'refused' in held) return { reason: `was not built: ${held.refused}.` };
-    return exclusionsOf(held?.manifest, await adapter.filesIn(folder), adapter.exclusionMark);
+    if (held !== undefined && 'refused' in held && !('versionRefused' in held)) return { reason: `was not built: ${held.refused}.` };
+    return exclusionsOf(held !== undefined && 'manifest' in held ? held.manifest : undefined, await adapter.folderValue(folder));
   } catch (err) {
     return { reason: `was not built: its folder could not be read: ${errorMessage(err)}.` };
   }
@@ -77,12 +75,8 @@ async function sourceModOf(
 async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMods): Promise<SourceModToBuild | ItemRefusal<string>> {
   const sourceFolder = sourceMods.folderOf(mod);
   const folder = await adapter.modFolderPath(mod);
-  const metadata = await adapter.modMetadata(mod);
-  const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
-  if (sourceFolder === undefined || host === undefined) return { item: mod, reason: await noRepository(folder) };
+  if (sourceFolder === undefined) return { item: mod, reason: await noRepository(folder) };
   if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
-  if (metadata.kind === 'unreadable') return { item: mod, reason: metadataUnreadable(metadata.reason) };
-  if (host.kind === 'unreadable') return { item: mod, reason: `its remote could not be read: ${host.reason}` };
   const buildFile = await heldBuildFile(sourceFolder);
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
   const exclude = await exclusionsIn(adapter, folder);
@@ -94,7 +88,7 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
   } catch (err) {
     return { item: mod, reason: `was not built: its packages could not be read: ${errorMessage(err)}.` };
   }
-  return { name: mod, folder, exclude, sourceFolder, buildFile, packages, metadata: metadata.answer, isSubmodule: host.answer.kind === 'host' };
+  return { name: mod, folder, exclude, sourceFolder, buildFile, packages };
 }
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,

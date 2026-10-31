@@ -1,18 +1,16 @@
 import { join } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import type { FileProblems } from '../ports/fileProblems';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFilesOf, type GameHeld, type HashedModFile, type PackageEntries } from './manifestBuilder';
-import { metadataUnreadable } from './sourceCommands';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile' | 'modMetadata'
-  | 'downloadedFilesHashed' | 'filesIn' | 'originFileHash' | 'fileStamp' | 'packageEntries' | 'textHash' | 'keepPackageEntries'
-  | 'writeSubmodules' | 'writeOtherManifestLines' | 'keepOutOfPublisher' | 'pathsOutsideFolders'>;
+  'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
+  | 'downloadedFilesHashed' | 'folderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines' | 'keepOutOfPublisher' | 'pathsOutsideFolders'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -50,7 +48,6 @@ interface ModToUpdate {
   readonly name: string;
   readonly folder: string;
   readonly installationFile?: InstallationFile;
-  readonly version?: string;
   readonly game?: GameHeld;
 }
 
@@ -61,7 +58,7 @@ interface UpdateOptions {
 
 async function readMod(
   adapter: Adapter, mod: string, folders: Folders, game: GameToHand,
-): Promise<{ read: Omit<ModToUpdate, 'version'>; notes: readonly string[] } | { refusal: string }> {
+): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
   const folder = await folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   if (!folders.isMod(mod)) {
@@ -82,7 +79,7 @@ async function readMod(
       ...taken.notes,
       ...installed.answer?.unpagedGame === undefined
         ? []
-        : [`its installation file comes from '${installed.answer.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no page`],
+        : [`its installation file comes from '${installed.answer.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no host`],
     ],
   };
 }
@@ -97,48 +94,35 @@ const takesFromTheGame = (mod: Pick<ModToUpdate, 'game'>): boolean => mod.game?.
 const depotProblemsOf = (game: GameToHand, mods: readonly ModToUpdate[]): readonly string[] =>
   (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.places.flatMap((place) => place.depotProblems));
 
-type Answer = { readonly refusal: string } | { readonly landed: ModUpdated; readonly notes: readonly string[] };
+type Answer = { readonly refusal: string } | { readonly landed: ModUpdated };
 
 const refusal = (why: string): { refusal: string } => ({ refusal: `was not updated: ${why}` });
-
-const pathsWhere = (manifest: Manifest, kind: 'notHeld' | 'otherBytes'): string[] =>
-  manifest.files.filter((file) => file.entry.kind === kind).map((file) => file.path).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 async function folderMissing(adapter: Adapter, folder: string): Promise<boolean> {
   const stamp = await adapter.fileStamp(folder);
   return stamp.kind === 'unreadable' && stamp.reason.includes('ENOENT');
 }
 
-type Hashed = { readonly files: readonly HashedModFile[] } | { readonly unreadable: string };
+type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[] } | { readonly unreadable: string };
 
-async function hashedFilesOf(adapter: Adapter, folder: string, madeByStep: ReadonlySet<string>): Promise<Hashed> {
-  const files: HashedModFile[] = [];
-  for (const path of await adapter.filesIn(folder)) {
-    if (madeByStep.has(path)) continue;
-    const read = await adapter.originFileHash(join(folder, path));
-    if (read.kind === 'unreadable') return { unreadable: read.reason };
-    files.push({ path, hash: read.answer.hash });
-  }
-  return { files };
+async function hashedFilesOf(adapter: Adapter, folder: string): Promise<Hashed> {
+  const value = await adapter.folderValue(folder);
+  const files = ownFilesOf(value);
+  return 'why' in files ? { unreadable: files.why } : { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: value.exclude };
 }
 
+// formats/CLAUDE.md, Versions: a manifest of another version is written over in this one.
 async function heldManifestOf(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
   try {
     const held = await manifestIn(folder);
-    if (held === undefined) return undefined;
+    if (held === undefined || ('versionRefused' in held)) return undefined;
     return 'refused' in held ? refusal(`${held.refused}.`) : held.manifest;
   } catch (err) {
     return refusal(`its manifest could not be read: ${errorMessage(err)}`);
   }
 }
 
-async function packageEntriesKept(adapter: Adapter, gamePackage: PackageEntries | undefined): Promise<readonly string[]> {
-  if (gamePackage === undefined) return [];
-  const why = await adapter.keepPackageEntries(gamePackage.hash, gamePackage.entries);
-  return why === undefined ? [] : [`the files it takes from the game folder could not be recorded, so its status reads them as differing: ${why}`];
-}
-
-async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: ReturnType<typeof downloadedFilesOf>): Promise<Answer> {
+async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[]): Promise<Answer> {
   const held = await heldManifestOf(mod.folder);
   if (held !== undefined && 'refusal' in held) return held;
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
@@ -146,28 +130,25 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: Re
   }
   if (await folderMissing(adapter, mod.folder)) return refusal('its folder does not exist.');
 
-  const madeByStep = new Set(held?.files.filter((line) => line.entry.kind === 'madeByStep').map((line) => line.path));
   let hashed: Hashed;
   try {
-    hashed = await hashedFilesOf(adapter, mod.folder, madeByStep);
+    hashed = await hashedFilesOf(adapter, mod.folder);
   } catch (err) {
-    hashed = { unreadable: errorMessage(err) };
+    hashed = { unreadable: `a file could not be read: ${errorMessage(err)}` };
   }
-  if ('unreadable' in hashed) return refusal(`a file could not be read: ${hashed.unreadable}`);
+  if ('unreadable' in hashed) return refusal(hashed.unreadable);
 
-  const { manifest, gamePackage } = await buildManifest(
-    { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...mod.installationFile === undefined ? {} : { installationFile: mod.installationFile } },
-    hashed.files, mod.version, held, (text) => adapter.textHash(text));
+  const installationFile = mod.installationFile === undefined ? undefined : downloadedFileOf(mod.installationFile, nexusFileOf(adapter));
+  const recorded = buildManifest(
+    { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
+    hashed.files, hashed.exclude, held);
   let written: boolean;
   try {
-    written = await writeManifestIn(mod.folder, manifest);
+    written = await writeManifestIn(mod.folder, recorded.manifest);
   } catch (err) {
     return refusal(`its manifest could not be written: ${errorMessage(err)}`);
   }
-  return {
-    landed: { mod: mod.name, manifestWritten: written, notInPackage: pathsWhere(manifest, 'notHeld'), otherBytes: pathsWhere(manifest, 'otherBytes') },
-    notes: await packageEntriesKept(adapter, gamePackage),
-  };
+  return { landed: { mod: mod.name, manifestWritten: written, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes } };
 }
 
 // publishing.md, What ships, story 1
@@ -227,7 +208,7 @@ export async function updateManifest(
   const folders = foldersOf(adapter, others);
   const refused: ItemRefusal<string>[] = [];
   const notes: ModNote[] = [];
-  const read: Omit<ModToUpdate, 'version'>[] = [];
+  const read: ModToUpdate[] = [];
   const passedOver: string[] = [];
   for (const mod of new Set(namesOf(mods, others))) {
     if (signal?.aborted) break;
@@ -248,35 +229,25 @@ export async function updateManifest(
   };
   if (signal?.aborted || read.length === 0) return nothingUpdated();
 
-  const versioned: ModToUpdate[] = [];
-  for (const mod of read) {
-    if (!folders.isMod(mod.name)) { versioned.push(mod); continue; }
-    const metadata = await adapter.modMetadata(mod.name);
-    if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
-    else versioned.push(metadata.answer.version === undefined ? mod : { ...mod, version: metadata.answer.version });
-  }
-  if (versioned.length === 0) return nothingUpdated();
-
   const downloaded = await adapter.downloadedFilesHashed({ onHashing: (left) => onProgress?.({ phase: 'Hashing', left }), signal });
   if (signal?.aborted) return nothingUpdated();
 
-  const downloadedFiles = downloadedFilesOf(downloaded.files);
+  const downloadedFiles = downloadedFilesOf(downloaded.files, nexusFileOf(adapter));
   const landed: ModUpdated[] = [];
   const acted = [...passedOver];
-  for (const [at, mod] of versioned.entries()) {
+  for (const [at, mod] of read.entries()) {
     if (signal?.aborted) break;
-    onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: versioned.length });
+    onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
     const answer = await updateMod(adapter, mod, downloadedFiles);
     acted.push(mod.name);
     if ('refusal' in answer) { refused.push({ item: mod.name, reason: answer.refusal }); continue; }
     landed.push(answer.landed);
-    notes.push(...answer.notes.map((note) => ({ mod: mod.name, note })));
   }
   const submodules = await submodulesWritten(adapter, everyMod ? 'every' : acted, sourceMods.folders);
   return {
     ...cancelledIf(signal), landed, refused, notes: [...notes, ...submodules.notes],
     repositoryNotes: [
-      ...downloaded.notes, ...depotProblemsOf(game, versioned), ...submodules.repositoryNotes,
+      ...downloaded.notes, ...depotProblemsOf(game, read), ...submodules.repositoryNotes,
       ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsShown(deps),
     ],
   };

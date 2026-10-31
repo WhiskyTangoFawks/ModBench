@@ -283,7 +283,7 @@ describe('the Steam install', () => {
 
     const install = await steamInstallResolver(detectors)(RELEASE_WITH_STEAM_FACTS);
 
-    expect(install).toEqual({ kind: 'found', root: dirname('/steam/Fallout 4/Data'), dataFolder: '/steam/Fallout 4/Data', depots: [], depotProblems: [] });
+    expect(install).toEqual({ kind: 'found', root: dirname('/steam/Fallout 4/Data'), dataFolder: '/steam/Fallout 4/Data', steamApp: 377160, depots: [], depotProblems: [] });
   });
 
   it('records the depots Steam installed of the game, from the app manifest of its library', async () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -10,7 +10,6 @@ import { pluginSyncOver, type PluginsDrop } from '../plugins';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
-import type { ManifestFile } from '../../manifestAdapter/manifestAdapter';
 import { manifestedIn } from '../../test/modStatusFixture';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 
@@ -192,7 +191,7 @@ describe('plugin participation is a change for each plugin the order lists', () 
 
 describe('syncPlugins decides the lines plugins.txt converges on, from what the Instance adapter says is provided', () => {
   const inData = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
-  const naming = (...paths: string[]): ManifestFile[] => paths.map((path) => ({ path, entry: { kind: 'held' } }));
+  const naming = (...paths: string[]): string[] => paths;
   let mods: string;
 
   beforeEach(async () => {
@@ -205,7 +204,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
   interface Run {
     order?: readonly string[]; provided?: readonly string[]; inData?: DataFolderPlugins; gameRelease?: string; creationClubList?: readonly string[];
     profile?: string;
-    repository?: { manifests: Readonly<Record<string, readonly ManifestFile[] | 'unreadable'>> };
+    repository?: { manifests: Readonly<Record<string, readonly string[] | 'unreadable'>> };
     otherMod?: { name: string; enabled: boolean };
   }
   const sync = async ({
@@ -222,7 +221,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: provided.map((name) => fileIn('/mods/Provider', name)), folders: [], notes: [] }]]),
     }), { repositoryOnDisk: repository !== undefined });
     const asked: string[] = [];
-    const reading = { ...fake.adapter, modValue: (mod: string, folder: string, wanted: Parameters<typeof fake.adapter.modValue>[2]) => { asked.push(mod); return fake.adapter.modValue(mod, folder, wanted); } };
+    const reading = { ...fake.adapter, modValue: (folder: string, wanted: Parameters<typeof fake.adapter.modValue>[1]) => { asked.push(basename(folder)); return fake.adapter.modValue(folder, wanted); } };
     const result = await pluginSyncOver(reading)();
     return { fake, result, asked };
   };

@@ -5,9 +5,12 @@ import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { BUILD_FILE } from '../wire/sourceMod';
-import type { BuildFileRead, Manifest, ManifestRead } from './manifest';
+import type { BuildFileRead } from './buildFile';
+import { readBuildFile } from './buildFileRead';
+import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
-import { readBuildFile, readManifest } from './manifestRead';
+import { readManifest } from './manifestRead';
+import { packagesAsked } from './packageOf';
 
 async function fileNamesIn(folder: string): Promise<string[]> {
   try {
@@ -87,14 +90,6 @@ export async function manifestAt(folder: string): Promise<ManifestAt> {
   } catch (err) {
     return { read: { refused: `a file could not be read: ${errorMessage(err)}` }, file: manifestNameOf(folder) };
   }
-}
-
-/** What the Instance adapter is asked to read for a status of `manifest`. */
-export function packagesAsked(manifest: Manifest): PackagesAsked {
-  return {
-    entries: manifest.packages.map((pkg) => (pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash)),
-    installationFiles: manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
-  };
 }
 
 /** What the Instance adapter is asked to read for a status of the manifest `at` holds; none when it holds none to compare. */
