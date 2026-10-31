@@ -10,11 +10,12 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The decompile and repair gesture's handler (plugin-source.md, Decompile and repair): a malformed plugin,
-/// repaired, into its mod's plugin source as one commit naming each repair.</summary>
+/// <summary>The decompile and repair gesture's handler (plugin-source.md, Decompile and repair): a malformed plugin into
+/// its mod's plugin source as two commits, the plugin as it was with each malformed record a placeholder, then repaired.</summary>
 public sealed class DecompileAndRepairPluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;
+    private readonly IPluginAdapter _adapter;
     private readonly ISourceAdapter _source;
     private readonly ILogger _logger;
     private readonly PluginRepairer _repairer;
@@ -26,7 +27,7 @@ public sealed class DecompileAndRepairPluginHandler
         ILogger<DecompileAndRepairPluginHandler> logger)
     {
         var decompiler = new PluginDecompiler(logger, adapter, source);
-        (_loadOrder, _source, _logger) = (loadOrder, source, logger);
+        (_loadOrder, _adapter, _source, _logger) = (loadOrder, adapter, source, logger);
         _repairer = new PluginRepairer(adapter, decompiler);
         _init = new ModInit(logger, source, modFolders, decompiler);
     }
@@ -84,8 +85,10 @@ public sealed class DecompileAndRepairPluginHandler
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
+        if (!_adapter.BaselineOf(plugin, repair, repaired.Files, loadOrder).Holds(out var baseline, out failure))
+            return RefusedAs(plugin, failure);
 
-        var body = RepairMessage(plugin, repair);
+        var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, repair));
         if (!inSourceMod)
         {
             if (item.NewRepository is not { } made)
@@ -93,14 +96,14 @@ public sealed class DecompileAndRepairPluginHandler
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
                 loadOrder, new ModToDecompileAndCommit(mod.Name, made),
-                leftOut, new RepairedInInit(plugin, repaired.Files, repair.OriginalSha256, body), _ => { }, cancel);
+                leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
             if (init is ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");
             leftOutOfANewRepository.UnionWith(leftOut);
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
-        switch (repository.CommitRepair(plugin.Key, new TreeCommit(repaired.Files, body), repair.OriginalSha256))
+        switch (repository.CommitRepair(plugin.Key, new TreeCommit(baseline, BaselineMessage(plugin, repair)), repairedCommit, repair.OriginalSha256))
         {
             case null:
                 return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
@@ -128,6 +131,10 @@ public sealed class DecompileAndRepairPluginHandler
         DecompileAndCommitRefusal.CommitFailed => DecompileAndRepairRefusal.WriteFailed,
         _ => DecompileAndRepairRefusal.OtherPluginRefused,
     };
+
+    private static string BaselineMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
+        $"Decompile {plugin.Name} as it was, each malformed record a placeholder\n\n"
+        + string.Join('\n', written.Repairs.Select(repair => repair.Diagnosis.Describe()));
 
     private static string RepairMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
         $"Repair {plugin.Name}\n\n" + string.Join('\n', written.Repairs.Select(repair => $"{repair.Diagnosis.Describe()}\n  {repair.Change.Description}"));

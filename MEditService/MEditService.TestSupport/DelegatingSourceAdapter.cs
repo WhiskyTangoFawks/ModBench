@@ -44,8 +44,8 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, string? body = null) =>
-        inner.Init(sourceFolder, buildFile, plugins, assets, body);
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null) =>
+        inner.Init(sourceFolder, buildFile, plugins, assets, repair);
 
     public virtual Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => inner.SourceToBuild(sourceFolder);
 

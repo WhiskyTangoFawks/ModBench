@@ -46,6 +46,10 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
     public virtual Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease) =>
         inner.VerifyRepaired(written, gameRelease);
 
+    public virtual Answer<IReadOnlyList<TreeFile>, PluginFailure> BaselineOf(
+        RegisteredPlugin plugin, RepairedPlugin written, IReadOnlyList<TreeFile> repaired, LoadOrderSnapshot loadOrder) =>
+        inner.BaselineOf(plugin, written, repaired, loadOrder);
+
     public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.StringsPlacesOf(modPath, loadOrder, strings);
 

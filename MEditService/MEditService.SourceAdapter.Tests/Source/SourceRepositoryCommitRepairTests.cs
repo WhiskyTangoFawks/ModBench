@@ -12,6 +12,7 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     private const string Sha = "ABCDEF0123";
     private const string Was = "plugin-source/A.esp/npc_/A.esp/000001.json";
     private static readonly PluginAddress Address = new(Plugin, "TestMod");
+    private static readonly TreeCommit Baseline = new([File("npc_/A.esp/000001.json", "{\"baseline\":1}")], "Decompile A.esp as it was");
     private static readonly TreeCommit Repaired = new([File("npc_/A.esp/000001.json", "{\"repaired\":1}")], "Repair A.esp");
     private readonly ScratchDirectory _modFolder = new("medit-commit-repair-");
 
@@ -21,14 +22,15 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void ARepair_CommitsTheRepairedTree_OnTheCheckedOutBranch_AndParksTheBinary()
+    public void ARepair_CommitsTheBaselineTree_ThenTheRepairedTree_OnTheCheckedOutBranch_AndParksTheBinary()
     {
         var before = Head();
 
-        Assert.Null(Repository.CommitRepair(Address, Repaired, Sha));
+        Assert.Null(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
 
-        Assert.Equal("Repair A.esp", Git("log", "-1", "--format=%s").TrimEnd('\n'));
-        Assert.Equal(before, Git("rev-parse", "HEAD~1").Trim());
+        Assert.Equal(["Repair A.esp", "Decompile A.esp as it was"], Git("log", "-2", "--format=%s").TrimEnd('\n').Split('\n'));
+        Assert.Equal(before, Git("rev-parse", "HEAD~2").Trim());
+        Assert.Equal("{\"baseline\":1}", Git("cat-file", "-p", $"HEAD~1:{Was}"));
         Assert.Equal("{\"repaired\":1}", Git("cat-file", "-p", $"HEAD:{Was}"));
         Assert.Empty(Git("status", "--porcelain"));
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
@@ -37,14 +39,27 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     [Fact]
     public void ARepairTheBranchAlreadyHolds_CommitsNothing()
     {
-        Assert.Null(Repository.CommitRepair(Address, Repaired, Sha));
+        Assert.Null(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
         var repaired = Head();
 
-        Assert.Null(Repository.CommitRepair(Address, Repaired, Sha));
+        Assert.Null(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
 
         Assert.Equal(repaired, Head());
         Assert.Empty(Git("status", "--porcelain"));
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
+    }
+
+    [Fact]
+    public void ARepairOverItsBaseline_CommitsOnlyTheRepair()
+    {
+        Assert.Null(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
+        Git("reset", "-q", "--hard", "HEAD~1");
+        var baseline = Head();
+
+        Assert.Null(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
+
+        Assert.Equal(baseline, Git("rev-parse", "HEAD~1").Trim());
+        Assert.Equal("{\"repaired\":1}", Git("cat-file", "-p", $"HEAD:{Was}"));
     }
 
     [Fact]
@@ -54,18 +69,18 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
         System.IO.File.WriteAllText(other, "{}");
         Git("add", "--", other);
 
-        Assert.Null(Repository.CommitRepair(Address, Repaired, Sha));
+        Assert.Null(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
 
         Assert.Equal("A  plugin-source/B.esp/b.json", Git("status", "--porcelain").TrimEnd('\n'));
     }
 
     [Fact]
-    public void ARepairWhoseCommitFails_LeavesTheBranchTheIndexAndTheSourceAsTheyWere()
+    public void ARepairWhoseSecondCommitFails_LeavesTheBranchTheIndexAndTheSourceAsTheyWere()
     {
         var before = Head();
         GitHooks.Write(_modFolder, "commit-msg", "grep -q Repair \"$1\" && exit 1\nexit 0");
 
-        Assert.IsType<SourceFailure.GitFailed>(Repository.CommitRepair(Address, Repaired, Sha));
+        Assert.IsType<SourceFailure.GitFailed>(Repository.CommitRepair(Address, Baseline, Repaired, Sha));
 
         Assert.Equal(before, Head());
         Assert.Empty(Git("status", "--porcelain"));

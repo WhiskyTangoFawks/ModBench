@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Text.Json;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using static MEditService.TestSupport.RawPlugin;
@@ -111,6 +113,40 @@ public sealed class PluginRepairTests
 
         Assert.Equal(reason, TestAdapters.Mutagen().VerifyRepaired(written, Release).Failure().Reason);
     }
+
+    [Theory]
+    [MemberData(nameof(RepairedFixtures))]
+    public async Task BaselineOf_TheRepairedSource_EachMalformedRecordAPlaceholderNamingItsDiagnosis_EveryOtherFileAsItIs(MalformationFixture fixture)
+    {
+        using var folder = new ScratchDirectory("repair-baseline");
+        using var repairedFolder = new ScratchDirectory("repair-baseline-repaired");
+        var adapter = TestAdapters.Mutagen();
+        var malformed = Write(folder, fixture.Malformed);
+        var written = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
+        var loadOrder = EmptyLoadOrder.Of(Release);
+        var repaired = (await adapter.ReadSourceOfAsync(Registered(written.Path), loadOrder)).Answered().Files;
+
+        var baseline = adapter.BaselineOf(Registered(malformed), written, repaired, loadOrder).Answered();
+
+        Assert.Equal(repaired.Select(f => f.RelativePath), baseline.Select(f => f.RelativePath));
+        var changed = Assert.Single(baseline.Zip(repaired), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content)).First;
+        var placeholder = Assert.Single(Objects(JsonDocument.Parse(changed.Content).RootElement.Clone()), o => o.TryGetProperty("Malformed", out _));
+        Assert.Equal(["FormKey", "Malformed"], placeholder.EnumerateObject().Select(member => member.Name));
+        Assert.Equal([fixture.Diagnosis], placeholder.GetProperty("Malformed").EnumerateArray().Select(diagnosis => diagnosis.GetString()));
+    }
+
+    private static RegisteredPlugin Registered(string path)
+    {
+        var folder = Path.GetDirectoryName(path) ?? throw new ArgumentException("No folder.", nameof(path));
+        return new RegisteredPlugin(Path.GetFileName(path), "FixtureMod", path, new PluginProvider.FromMod("FixtureMod", folder, null), Line: null, PluginStrings.None);
+    }
+
+    private static IEnumerable<JsonElement> Objects(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => [element, .. element.EnumerateObject().SelectMany(member => Objects(member.Value))],
+        JsonValueKind.Array => element.EnumerateArray().SelectMany(Objects),
+        _ => [],
+    };
 
     private static string MalformedPerkDiagnosis => $"{MisshapedPerkPlugin.Anchor} — entry-point-parameter-shape: "
         + "entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8";

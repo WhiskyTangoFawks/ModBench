@@ -15,7 +15,7 @@ public sealed record RepairChange(string Description);
 public sealed record MadeRepair(PluginDiagnosis Diagnosis, RepairChange Change);
 
 /// <summary>A plugin's repair written from one read of it: where it was written, what it repaired, and the bytes it was
-/// made from, which its verification answers to.</summary>
+/// made from, which its verification and its baseline answer to.</summary>
 public sealed class RepairedPlugin
 {
     internal RepairedPlugin(string path, IReadOnlyList<MadeRepair> repairs, byte[] original) =>

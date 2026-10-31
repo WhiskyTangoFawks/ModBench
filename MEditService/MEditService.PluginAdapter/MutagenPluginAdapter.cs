@@ -126,6 +126,25 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
+    public Answer<IReadOnlyList<TreeFile>, PluginFailure> BaselineOf(
+        RegisteredPlugin plugin, RepairedPlugin written, IReadOnlyList<TreeFile> repaired, LoadOrderSnapshot loadOrder)
+    {
+        try
+        {
+            var masters = PluginBinaryWalk.MastersOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder);
+            var malformed = Malformations.In(written.Original, loadOrder.GameRelease)
+                .GroupBy(found => found.Record.Location)
+                .Select(record => new MalformedPlaceholders.Malformed(
+                    masters.GetFormKey(record.First().Record.FormID, reference: false).ToString(),
+                    [.. record.Select(found => found.Diagnosis.Describe())]));
+            return PluginAnswer.Of(MalformedPlaceholders.In(repaired, [.. malformed], loadOrder.GameRelease));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginFailure.Inaccessible(ex);
+        }
+    }
+
     public Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease)
     {
         try

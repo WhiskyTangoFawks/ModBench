@@ -1,4 +1,4 @@
-// Decompile and repair (plugin-source.md, Decompile and repair): mEdit writes each plugin's one commit. A mod with
+// Decompile and repair (plugin-source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod with
 // no repository is handed the one decompile and commit would make.
 
 import { isRefused, type MEditClient, type NewRepository, type PluginAddress, type PluginToRepair } from '../client';

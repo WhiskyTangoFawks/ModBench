@@ -199,8 +199,9 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
-    /// <summary>Decompile and repair's commit of the plugin's source alone: what else is staged stays staged.</summary>
-    internal void CommitRepair(string pluginFileName, TreeCommit repaired, string binarySha256)
+    /// <summary>Decompile and repair's two commits of the plugin's source, both or neither, each of the plugin's source
+    /// alone: what else is staged stays staged.</summary>
+    internal void CommitRepair(string pluginFileName, TreeCommit baseline, TreeCommit repaired, string binarySha256)
     {
         if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
             throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
@@ -216,11 +217,18 @@ internal sealed class SourceRepositoryWrites(
                 {
                     git.Run("reset", "-q", "--soft", head);
                     git.Run("reset", "-q", head, "--", source);
-                }, description: $"the commit of {pluginFileName}'s repair");
-                ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, repaired.Tree));
-                git.Run("add", "-A", "--", source);
-                if (!git.TryRun(out _, "diff", "--cached", "--quiet", "--", source))
-                    git.Run("commit", "-q", "-m", repaired.Message, "--", source);
+                }, description: $"the commits of {pluginFileName}'s repair");
+                bool Staged(TreeCommit commit)
+                {
+                    ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, commit.Tree));
+                    git.Run("add", "-A", "--", source);
+                    return !git.TryRun(out _, "diff", "--cached", "--quiet", "--", source);
+                }
+                if (Staged(repaired))
+                {
+                    foreach (var commit in new[] { baseline, repaired }.Where(Staged))
+                        git.Run("commit", "-q", "-m", commit.Message, "--", source);
+                }
                 git.ParkDecompiled(pluginFileName, binarySha256);
             });
         }

@@ -8,17 +8,16 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A plugin whose source an init commits as it is given, not as decompile reads it: the repair of the binary
-/// <paramref name="OriginalSha256"/> names, which the init's commit message <paramref name="Body"/> describes.</summary>
-internal sealed record RepairedInInit(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Files, string OriginalSha256, string Body);
+/// <summary>A plugin whose source an init commits as <paramref name="Baseline"/>, not as decompile reads it, the binary
+/// <paramref name="OriginalSha256"/> names, and the commit after the init that repairs it.</summary>
+internal sealed record RepairedInInit(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Baseline, string OriginalSha256, TreeCommit Repaired);
 
 /// <summary>Decompile and commit's init of a mod's repository, which decompile and repair makes too: each plugin through
 /// the round-trip gate, the assets and its build file (ADR-0016), in one commit, or nothing.</summary>
 internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderRepository modFolders, PluginDecompiler decompiler)
 {
-    /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's
-    /// plugins but <paramref name="leftOut"/>, its commit naming <paramref name="repair"/> when given.
-    /// Answers the plugins whose source it holds.</summary>
+    /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's plugins but
+    /// <paramref name="leftOut"/>, a repaired one's as its baseline, then its repair. Answers the plugins it holds.</summary>
     internal async Task<ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>> InitAsync(
         LoadOrderSnapshot loadOrder, ModToDecompileAndCommit toCommit, IReadOnlySet<PluginAddress> leftOut,
         RepairedInInit? repair, Action<DecompileAndCommitPhase> setPhase, CancellationToken cancel)
@@ -52,7 +51,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
             cancel.ThrowIfCancellationRequested();
             if (repair is { } repaired && PluginAddress.Comparer.Equals(repaired.Plugin.Key, plugin.Key))
             {
-                verified.Add((repaired.Files, new DecompiledPlugin(plugin.Key, repaired.OriginalSha256)));
+                verified.Add((repaired.Baseline, new DecompiledPlugin(plugin.Key, repaired.OriginalSha256)));
                 continue;
             }
             setPhase(DecompileAndCommitPhase.Parsing);
@@ -108,6 +107,6 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
                 sourceFolder, verified.Count, verified.Sum(v => v.Tree.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, buildFile, verified, assets, repair?.Body);
+        return source.Init(sourceFolder, buildFile, verified, assets, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
     }
 }

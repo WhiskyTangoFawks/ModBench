@@ -30,10 +30,14 @@ internal static class EmbeddedChildSplice
     /// <summary>The owner's text with <paramref name="childText"/> in the child's place, spelled as
     /// the slot carries it: indented to the span's column, and behind the discriminator the text it
     /// replaces carried.</summary>
-    internal static string Replace(byte[] ownerBytes, EmbeddedChildSpan span, string childText)
+    internal static string Replace(byte[] ownerBytes, EmbeddedChildSpan span, string childText) =>
+        Spliced(ownerBytes, span, WithDiscriminator(childText, span.Discriminator));
+
+    /// <summary>The owner's text with <paramref name="text"/> in the child's place, indented to the span's column and
+    /// otherwise as it is.</summary>
+    internal static string Spliced(byte[] ownerBytes, EmbeddedChildSpan span, string text)
     {
-        var inline = TextIndentation.Indented(
-            WithDiscriminator(childText, span.Discriminator), TextIndentation.ColumnAt(ownerBytes, span.Start));
+        var inline = TextIndentation.Indented(text, TextIndentation.ColumnAt(ownerBytes, span.Start));
 
         return Encoding.UTF8.GetString(
             [.. ownerBytes[..span.Start], .. Encoding.UTF8.GetBytes(inline), .. ownerBytes[span.End..]]);
