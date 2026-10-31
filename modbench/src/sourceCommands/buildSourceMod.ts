@@ -118,8 +118,8 @@ function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly hash?
   };
 }
 
-// mods.md, Build, stories 3 and 8: each file by the path the build gives it, in any case the folder holds. A file mEdit
-// left as it was keeps its recorded hash while the folder holds those bytes; `stepped`, each file the steps made.
+// Build, stories 3 and 8: each file by the path the build gives it. A file mEdit left as it was keeps its recorded hash
+// while the folder holds those bytes; `stepped`: each file the steps made.
 function filesOf(
   ownPath: Adapter['ownPath'], output: Output, stepped: readonly string[], folder: FolderValue, previous: ReadonlyMap<string, string | null>,
 ): Map<string, string | null> {
@@ -177,8 +177,7 @@ type Built = { readonly landed: ModBuilt } | { readonly refusal: BuildRefusal } 
 const refusedAs = (mod: string, why: string, lacksATask = false): { readonly refusal: BuildRefusal } =>
   ({ refusal: { item: mod, reason: notBuilt(why), ...lacksATask ? { lacksATask: true } : {} } });
 
-/** Why this machine cannot run a build file's steps: each task it has none of, with the page where its tool comes from
- *  (mods.md, Build, story 13). */
+// Why this machine cannot run a build file's steps: each task it has none of, with the page its tool comes from (Build, story 13).
 function toolsWithoutTask({ steps }: BuildFile, tasks: ReadonlySet<string>): string | undefined {
   const pages = new Map<string, string | undefined>();
   for (const { task, page } of steps) if (!tasks.has(task) && pages.get(task) === undefined) pages.set(task, page);

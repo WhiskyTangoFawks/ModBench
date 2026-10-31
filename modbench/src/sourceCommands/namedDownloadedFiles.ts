@@ -3,7 +3,7 @@ import type { ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
 
-/** What this machine holds of the installation file a manifest pins. */
+// What this machine holds of the installation file a manifest pins.
 interface PinHeld {
   /** The downloaded file of the pinned name, else one under another name with the pinned size and hash. */
   readonly read: FileRead<InstallationFile | undefined>;
