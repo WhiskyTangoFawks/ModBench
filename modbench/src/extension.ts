@@ -174,7 +174,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks), pathProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-paths'))), outputChannel) });
+  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
   own(instance.subscribe((value) => { modStatuses.derive(value); }));
   const { modSync, pluginSync } = own(instanceSyncs({

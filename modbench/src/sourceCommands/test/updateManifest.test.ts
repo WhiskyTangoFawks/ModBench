@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import type { FileRead, FoundGameFolder, GamePlace, InstallationFile, InstanceAdapter, OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { updateManifest, type UpdateManifestStatus } from '../updateManifest';
 
@@ -46,10 +45,9 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const fake = fakeInstanceAdapter(
     readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
     { folderFiles, hashes, ...answers });
-  const pathProblems = fileProblemsFake();
-  const deps = { adapter: { ...fake.adapter, ...adapterOver }, pathProblems, instanceRoot: root };
+  const deps = { adapter: { ...fake.adapter, ...adapterOver } };
   return {
-    fake, pathProblems,
+    fake,
     update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false) =>
       updateManifest(deps, mods, options, others, everyMod),
     manifestOf: (mod: string) => manifestIn(join(modsDir, mod)),
@@ -439,33 +437,7 @@ describe('update manifest', () => {
       expect([fake.calls[0], result.refused.map(({ item }) => item)]).toEqual([{ verb: 'writeSubmodules', acted: 'every' }, ['ModB']]);
     });
 
-    it('shows each path no path token names as a problem on its line in its file, not in its report', async () => {
-      const { update, pathProblems } = await over({ answers: { pathsOutsideFolders: [{ file: 'ModOrganizer.ini', line: 7, path: 'C:/Modding/x.exe' }] } });
-
-      const result = await update(['ModA']);
-
-      expect([pathProblems.held, result.repositoryNotes]).toEqual([new Map([[join(root, 'ModOrganizer.ini'), [{ line: 7, message: 'holds a path no path token names: C:/Modding/x.exe' }]]]), []]);
-    });
-
-    it('clears the path problems of an earlier run, so a path I took out is no problem', async () => {
-      const { update, pathProblems } = await over();
-      pathProblems.set(join(root, 'ModOrganizer.ini'), [{ line: 7, message: 'old' }]);
-
-      await update(['ModA']);
-
-      expect(pathProblems.held).toEqual(new Map());
-    });
-
-    it('shows each path no path token names when every mod is refused', async () => {
-      const { update, pathProblems } = await over({ answers: { installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]), pathsOutsideFolders: [{ file: 'ModOrganizer.ini', line: 2, path: 'C:/x.exe' }] } });
-
-      await update(['ModA']);
-
-      expect([...pathProblems.held.keys()]).toEqual([join(root, 'ModOrganizer.ini')]);
-    });
-
     it.each([
-      ['read the paths', { unreadReads: { pathsOutsideFolders: 'git is not available' } }, "the paths the instance repository's files hold could not be read: git is not available"],
       ['write the submodules', { refusals: refusing('writeSubmodules', 'git is not available') }, 'git is not available'],
       ['write the lines of the other manifests', { refusals: refusing('writeOtherManifestLines', '.gitignore has a marker with no match') }, '.gitignore has a marker with no match'],
     ] as const)('names the failure to %s beside the manifests that landed', async (_what, answers, note) => {

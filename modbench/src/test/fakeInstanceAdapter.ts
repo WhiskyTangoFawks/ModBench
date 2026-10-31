@@ -150,14 +150,12 @@ export interface InstanceAnswers {
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceRepositories' | 'pathsOutsideFolders' | 'otherManifests', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceRepositories' | 'otherManifests', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
   /** Why a path token stays in the working tree once path tokens are written. */
   pathTokenLeft?: string;
-  /** Each path no path token names in a file the instance repository holds. */
-  pathsOutsideFolders?: Awaited<ReturnType<InstanceAdapter['pathsOutsideFolders']>>;
   /** Each folder outside the mod folders that holds its manifest. */
   otherManifests?: readonly OtherManifest[];
   /** Each folder the search for other manifests could not read. */
@@ -403,7 +401,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
-    pathsOutsideFolders: () => unreadable('pathsOutsideFolders', answers.pathsOutsideFolders ?? []),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
       hashed.push(path);
