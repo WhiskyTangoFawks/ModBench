@@ -584,6 +584,16 @@ describe('package.json command titles and categories', () => {
     expect(offenders.map((c) => c.command)).toEqual([]);
   });
 
+  it.each([
+    ['modbench.mod.viewOnNexus', 'Visit on Nexus'],
+    ['modbench.downloadedFile.open', 'Open File'],
+    ['modbench.downloadedFile.openMeta', 'Open Meta File'],
+    ['modbench.instance.logIn', 'Enter API Key Manually'],
+    ['modbench.instance.logOut', 'Disconnect from Nexus'],
+  ])('%s is titled with MO2\'s word, %s', (command, title) => {
+    expect(commands.find((c) => c.command === command)?.title).toBe(title);
+  });
+
   const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
   it('gates only the system commands and the entry points out of the palette', () => {

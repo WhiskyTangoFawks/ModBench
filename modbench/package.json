@@ -490,12 +490,12 @@
       },
       {
         "command": "modbench.instance.logIn",
-        "title": "Log In Instance to Nexus",
+        "title": "Enter API Key Manually",
         "category": "Modbench"
       },
       {
         "command": "modbench.instance.logOut",
-        "title": "Log Out Instance from Nexus",
+        "title": "Disconnect from Nexus",
         "category": "Modbench"
       },
       {
@@ -701,7 +701,7 @@
       },
       {
         "command": "modbench.mod.viewOnNexus",
-        "title": "View Mod on Nexus",
+        "title": "Visit on Nexus",
         "category": "Modbench"
       },
       {
@@ -716,12 +716,12 @@
       },
       {
         "command": "modbench.downloadedFile.open",
-        "title": "Open Downloaded File",
+        "title": "Open File",
         "category": "Modbench"
       },
       {
         "command": "modbench.downloadedFile.openMeta",
-        "title": "Open Downloaded File Metadata",
+        "title": "Open Meta File",
         "category": "Modbench"
       },
       {
