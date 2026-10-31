@@ -88,8 +88,6 @@ export type AdapterCall =
   | { readonly verb: 'writeNewestVersion'; readonly mod: string; readonly version: string }
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
-  | { readonly verb: 'keepOutOfPublisher' }
-  | { readonly verb: 'takeBackKeepOutOfPublisher' }
   | { readonly verb: 'takeBackIgnoreList' }
   | { readonly verb: 'takeBackPushRefusal' }
   | { readonly verb: 'removeRepository' }
@@ -393,7 +391,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     metadataFilesInModFolder: ['meta.ini'],
     scriptEnvironmentFile: { path: () => '/instance/.env', read: () => Promise.resolve(''), write: () => Promise.resolve() },
-    keepOutOfPublisher: () => record({ verb: 'keepOutOfPublisher' }, () => record({ verb: 'takeBackKeepOutOfPublisher' }, undefined)),
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, () => record({ verb: 'takeBackIgnoreList' }, undefined)),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
     sourceHost: (folder) => Promise.resolve(answers.hosts?.get(folder) ?? { kind: 'read', answer: { kind: 'noRemote' } }),

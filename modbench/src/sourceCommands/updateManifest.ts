@@ -10,7 +10,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedF
 
 type Adapter = Pick<InstanceAdapter,
   'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines' | 'keepOutOfPublisher' | 'pathsOutsideFolders'>;
+  | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines' | 'pathsOutsideFolders'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -167,16 +167,6 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
   return { landed: { mod: mod.name, manifestWritten: written, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes } };
 }
 
-// publishing.md, What ships, story 1
-async function keptOutOfPublisher(adapter: Adapter): Promise<readonly string[]> {
-  try {
-    await adapter.keepOutOfPublisher();
-    return [];
-  } catch (err) {
-    return [errorMessage(err)];
-  }
-}
-
 // modlist-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
 async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly string[]> {
   try {
@@ -265,7 +255,7 @@ export async function updateManifest(
     ...cancelledIf(signal), landed, refused, notes: [...notes, ...submodules.notes],
     repositoryNotes: [
       ...downloaded.notes, ...depotProblemsOf(game, read), ...submodules.repositoryNotes,
-      ...await otherManifestLinesWritten(adapter), ...await keptOutOfPublisher(adapter), ...await pathsShown(deps),
+      ...await otherManifestLinesWritten(adapter), ...await pathsShown(deps),
     ],
   };
 }

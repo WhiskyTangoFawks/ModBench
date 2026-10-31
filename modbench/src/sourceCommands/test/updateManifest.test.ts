@@ -426,7 +426,7 @@ describe('update manifest', () => {
       const result = await update(['ModA']);
 
       expect([fake.calls, result.notes, result.repositoryNotes]).toEqual([
-        [{ verb: 'writeSubmodules', acted: ['ModA'] }, { verb: 'writeOtherManifestLines' }, { verb: 'keepOutOfPublisher' }],
+        [{ verb: 'writeSubmodules', acted: ['ModA'] }, { verb: 'writeOtherManifestLines' }],
         [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], ['source/Odd is not a source mod'],
       ]);
     });
@@ -466,7 +466,6 @@ describe('update manifest', () => {
 
     it.each([
       ['read the paths', { unreadReads: { pathsOutsideFolders: 'git is not available' } }, "the paths the instance repository's files hold could not be read: git is not available"],
-      ['keep Modbench\'s files out of the publisher', { refusals: refusing('keepOutOfPublisher', 'compiler_settings.json is not JSON') }, 'compiler_settings.json is not JSON'],
       ['write the submodules', { refusals: refusing('writeSubmodules', 'git is not available') }, 'git is not available'],
       ['write the lines of the other manifests', { refusals: refusing('writeOtherManifestLines', '.gitignore has a marker with no match') }, '.gitignore has a marker with no match'],
     ] as const)('names the failure to %s beside the manifests that landed', async (_what, answers, note) => {

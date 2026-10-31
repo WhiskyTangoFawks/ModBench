@@ -12,7 +12,7 @@ import {
 export type { OtherManifests, RestoreResult, RestoreStatus } from './restoreFromManifest';
 
 type Adapter = UpdateManifestDeps['adapter'] & RestoreDeps['adapter'] & Pick<InstanceAdapter,
-  'checkPushRefusalFree' | 'publisherConfigurationRefusal' | 'writeIgnoreList' | 'removeRepository' | 'keepOutOfPublisher'>;
+  'checkPushRefusalFree' | 'publisherConfigurationRefusal' | 'writeIgnoreList' | 'removeRepository'>;
 
 interface ModlistRepositoryCommandsDeps extends Omit<RestoreDeps, 'adapter'>, Omit<UpdateManifestDeps, 'adapter'> {
   readonly adapter: Adapter;
@@ -66,7 +66,6 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
   }
   let pathTokensNotWritten: string | undefined;
   try {
-    takenBack = [{ what: 'the publisher\'s ignore list entries it wrote', undo: await adapter.keepOutOfPublisher() }, ...takenBack];
     pathTokensNotWritten = await adapter.writePathTokens();
   } catch (err) {
     return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
