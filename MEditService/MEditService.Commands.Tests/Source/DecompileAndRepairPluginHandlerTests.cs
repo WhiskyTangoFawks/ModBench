@@ -37,7 +37,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public async Task DecompileAndRepair_InASourceMod_CommitsTheMalformedRecordsFlagged_ThenTheRepairs_AndParksThePluginsBytes()
+    public async Task DecompileAndRepair_InASourceMod_CommitsThePluginAsItWas_ThenARepairOfOnlyItsPlaceholders_ThatCompiles()
     {
         var fixture = Lossless;
         var plugin = AddToSourceMod(fixture.Malformed);
@@ -47,16 +47,17 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
         Assert.Equal([plugin], result.Applied);
         Assert.Equal(before, Git(_sourceMod, "rev-parse", "HEAD~2").Trim());
-        Assert.Equal([$"Repair {Malformed}", $"Decompile {Malformed}, its malformed records flagged"], Subjects(_sourceMod, 2));
-        Assert.True(TreeHolds(_sourceMod, "HEAD~1", fixture.Diagnosis), "the flagged commit holds no diagnosis");
-        Assert.Contains(fixture.Change ?? "", Git(_sourceMod, "log", "-1", "--format=%B"), StringComparison.Ordinal);
-        Assert.False(TreeHolds(_sourceMod, "HEAD", "\"Diagnoses\""), "the repair commit still holds a flagged record");
+        Assert.Equal([$"Repair {Malformed}", $"Decompile {Malformed} as it was, each malformed record a placeholder"], Subjects(_sourceMod, 2));
+        Assert.True(TreeHolds(_sourceMod, "HEAD~1", fixture.Diagnosis), "no placeholder names the diagnosis");
+        Assert.Contains(fixture.Change.Require(), Git(_sourceMod, "log", "-1", "--format=%B"), StringComparison.Ordinal);
+        AssertTheRepairChangesOnlyThePlaceholders(_sourceMod);
         Assert.Empty(Git(_sourceMod, "status", "--porcelain"));
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
+        await AssertCompilesAsync(plugin);
     }
 
     [Fact]
-    public async Task DecompileAndRepair_InAModWithNoRepository_MakesOneHoldingItsOtherPluginsAndAssets_ThenCommitsTheRepair()
+    public async Task DecompileAndRepair_InAModWithNoRepository_MakesOneHoldingItsOtherPluginsAssetsAndThePluginAsItWas_ThenCommitsTheRepair()
     {
         var plugin = AddToNewMod(Lossless.Malformed);
         WriteCleanPlugin(_newMod, "Clean.esp");
@@ -70,12 +71,11 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var init = Git(_newMod, "show", "--name-only", "--format=", "HEAD~1");
         Assert.Contains("assets/textures/a.dds", init, StringComparison.Ordinal);
         Assert.Contains("plugin-source/Clean.esp/", init, StringComparison.Ordinal);
-        Assert.True(TreeHolds(_newMod, "HEAD~1", "\"Diagnoses\""), "the init commit holds no flagged record");
-        Assert.Equal(
-            [$"plugin-source/{Malformed}"],
-            Git(_newMod, "show", "--name-only", "--format=", "HEAD").Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select(path => string.Join('/', path.Split('/').Take(2))).Distinct());
+        Assert.True(TreeHolds(_newMod, "HEAD~1", Lossless.Diagnosis), "the init commit holds no placeholder");
+        AssertTheRepairChangesOnlyThePlaceholders(_newMod);
         Assert.Empty(Git(_newMod, "status", "--porcelain"));
+        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
+        await AssertCompilesAsync(plugin);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Empty(result.Refused);
         Assert.Equal([first, second], result.Applied);
         Assert.Equal(
-            ["Repair Second Malformed.esp", "Decompile Second Malformed.esp, its malformed records flagged", $"Repair {Malformed}", $"Init {NewModName}"],
+            ["Repair Second Malformed.esp", "Decompile Second Malformed.esp as it was, each malformed record a placeholder", $"Repair {Malformed}", $"Init {NewModName}"],
             Subjects(_newMod, 5));
     }
 
@@ -226,6 +226,20 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     private static bool TreeHolds(string mod, string revision, string text) =>
         GitProbe.TryRun(Path.Combine(mod, ".git"), mod, out _, "grep", "-q", "-F", text, revision, "--", "plugin-source");
+
+    private static void AssertTheRepairChangesOnlyThePlaceholders(string mod)
+    {
+        var placeholders = Git(mod, "grep", "-l", "-F", "\"Malformed\": [", "HEAD~1", "--", "plugin-source")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(found => found["HEAD~1:".Length..]);
+        Assert.NotEmpty(placeholders);
+        Assert.Equal(placeholders, Git(mod, "diff", "--name-only", "HEAD~1", "HEAD").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private async Task AssertCompilesAsync(PluginAddress plugin)
+    {
+        var applied = Assert.Single((await TestEditService.CompileHandler(_holder).CompileAsync([plugin])).Value().Applied);
+        Assert.Equal(plugin, new PluginAddress(applied.Name, applied.Origin));
+    }
 
     private static string Head(string mod) => Git(mod, "rev-parse", "HEAD").Trim();
 

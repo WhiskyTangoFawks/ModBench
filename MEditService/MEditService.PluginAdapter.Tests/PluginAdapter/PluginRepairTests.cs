@@ -1,7 +1,5 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
-using System.Text.Json;
-using MEditService.Codec.Serialization;
+using System.Text.Json.Nodes;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -59,7 +57,7 @@ public sealed class PluginRepairTests
 
         var repaired = RepairEverything(malformed, Path.Combine(folder.Path, "repaired.esp")).Answered();
 
-        Assert.Equal("pads RDAT from 6 to 8 bytes with zeros; pads RDAT from 6 to 8 bytes with zeros", Assert.Single(repaired.Repairs).Change?.Description);
+        Assert.Equal("pads RDAT from 6 to 8 bytes with zeros; pads RDAT from 6 to 8 bytes with zeros", Assert.Single(repaired.Repairs).Change.Description);
         Assert.Equal(TwoRegions(DeflatedRecord("REGN", 0x00000800, CompressionLevel.Optimal,
             EditorId("Harbor"), Subrecord("RDAT", new byte[8]), Subrecord("RDAT", new byte[8]))).Bytes, File.ReadAllBytes(repaired.Path));
     }
@@ -116,108 +114,81 @@ public sealed class PluginRepairTests
         Assert.Equal(reason, TestAdapters.Mutagen().VerifyRepaired(written, Release).Failure().Reason);
     }
 
-    public static TheoryData<MalformationFixture, string, string[]> RepairsAndTheFieldEachHoldsRaw() => new()
-    {
-        { FixtureOf("ShortFixedSizeSubrecord", "REGN"), "Map", ["RDAT", "RDMP"] },
-        { FixtureOf("ShortFixedSizeSubrecord", "PERK"), "Effects", ["PRKE", "DATA", "EPFT", "EPF2", "EPF3", "PRKF"] },
-        { FixtureOf("CounterDisagreeingWithEntries", "REFR"), "PowerGridConnections", ["XWPG", "XWPN", "XWPN"] },
-        { FixtureOf("TemplateCombinationOutOfOrder", "WEAP"), "ObjectTemplates", ["OBTE", "OBTS", "OBTF", "FULL", "STOP"] },
-        { FixtureOf("EntryPointMissingEpf3", "PERK"), "Effects", ["PRKE", "DATA", "EPFT", "EPF2", "PRKF"] },
-        { FixtureOf("EntryPointParametersOnAParameterlessFunction", "PERK"), "Effects", ["PRKE", "DATA", "EPFT", "EPFB", "EPFD", "PRKF"] },
-    };
-
     [Theory]
-    [MemberData(nameof(RepairsAndTheFieldEachHoldsRaw))]
-    public async Task FlaggedSourceOf_TheRepairedSource_HoldsEveryOtherRecordAndFieldAsItIs_AndTheFieldARepairedOrDroppedSubrecordSitsInAsItsOriginalSubrecords(
-        MalformationFixture fixture, string field, string[] originalSignatures)
+    [MemberData(nameof(RepairedFixtures))]
+    public async Task BaselineOf_TheRepairedSource_EachMalformedRecordAPlaceholderNamingItsDiagnosis_AllElseAsItIs(MalformationFixture fixture)
     {
-        var (malformed, repaired, flagged) = await FlaggedAsync(fixture);
+        var placeholder = Assert.Single(await PlaceholdersInTheOneChangedFileAsync(fixture.Malformed));
 
-        Assert.Equal(repaired.Files.Select(f => f.RelativePath), flagged.Files.Select(f => f.RelativePath));
-        var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
-        Assert.Equal(FormKeysIn(repaired.Files), FormKeysIn(flagged.Files));
-        var record = TheOneObjectHoldingDiagnosesIn(changed.First.Content);
-        var formKey = record.GetProperty("FormKey").GetString() ?? "";
-        var asRepaired = ObjectWithFormKey(changed.Second.Content, formKey);
-        Assert.Equal([.. asRepaired.EnumerateObject().Select(m => m.Name), "Diagnoses"], record.EnumerateObject().Select(m => m.Name));
-        Assert.Equal([fixture.Diagnosis], record.GetProperty("Diagnoses").EnumerateArray().Select(d => d.GetString()));
-        Assert.Equal(field, Assert.Single(asRepaired.EnumerateObject(), m => !JsonElement.DeepEquals(m.Value, record.GetProperty(m.Name))).Name);
-        Assert.Equal(["Subrecords"], record.GetProperty(field).EnumerateObject().Select(m => m.Name));
-        var own = OwnSubrecordsOf(malformed, uint.Parse(formKey.Split(':')[0], System.Globalization.NumberStyles.HexNumber));
-        var start = Assert.Single(Enumerable.Range(0, own.Count - originalSignatures.Length + 1),
-            at => own.Skip(at).Take(originalSignatures.Length).Select(s => s.Signature).SequenceEqual(originalSignatures));
-        Assert.Equal(
-            own.Skip(start).Take(originalSignatures.Length).Select(s => Subrecord(s.Signature, s.Payload)),
-            EncodedSubrecordsOf(record.GetProperty(field)));
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(fixture.Malformed.Bytes)), flagged.BinarySha256);
-    }
-
-    private static MalformationFixture FixtureOf(string malformation, string recordType) =>
-        MalformationFixtures.All.Single(f => f.Malformation == malformation && f.Diagnosis.StartsWith($"{recordType} ", StringComparison.Ordinal));
-
-    private static List<(string Signature, byte[] Payload)> OwnSubrecordsOf(byte[] plugin, uint formId)
-    {
-        List<(string Signature, byte[] Payload)> own = [];
-        EditRecord(plugin, formId, subrecords => own = subrecords);
-        return own;
+        Assert.Equal(["FormKey", "Malformed"], placeholder.Members);
+        Assert.Equal([fixture.Diagnosis], placeholder.Diagnoses);
     }
 
     [Fact]
-    public async Task FlaggedSourceOf_ARepairOfAListMutagenWritesWhateverItsFieldHolds_HoldsTheWholeRecordRaw()
+    public async Task BaselineOf_TwoMalformedChildrenOfOneContainer_IsAPlaceholderForEach()
     {
-        var fixture = MalformationFixtures.All.Single(f => f.Malformation == "WrongFixedCountList");
-        var (malformed, repaired, flagged) = await FlaggedAsync(fixture);
+        var placeholders = await PlaceholdersInTheOneChangedFileAsync(MalformationFixtures.TwoMiscountedReferencesInOneCell);
 
-        var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
-        var record = TheOneObjectHoldingDiagnosesIn(changed.First.Content);
-
-        Assert.Equal(["FormKey", "EditorID", "Diagnoses", "Subrecords"], record.EnumerateObject().Select(m => m.Name));
-        Assert.True(malformed.AsSpan().IndexOf([.. EncodedSubrecordsOf(record).SelectMany(bytes => bytes)]) >= 0, "the held subrecords are not the record's own");
+        Assert.Collection(placeholders.Select(placeholder => Assert.Single(placeholder.Diagnoses)),
+            one => Assert.Contains("HarborWorkshopRefOne", one, StringComparison.Ordinal),
+            two => Assert.Contains("HarborWorkshopRefTwo", two, StringComparison.Ordinal));
     }
 
-    private static async Task<(byte[] Malformed, PluginSource Repaired, PluginSource Flagged)> FlaggedAsync(MalformationFixture fixture)
+    private sealed record Placeholder(IReadOnlyList<string> Members, string? Record, IReadOnlyList<string?> Diagnoses)
     {
-        using var folder = new ScratchDirectory("repair-flagged");
-        using var repairedFolder = new ScratchDirectory("repair-flagged-repaired");
+        internal static Placeholder Of(JsonObject held) => new(
+            [.. held.Select(member => member.Key)],
+            held["FormKey"]?.GetValue<string>(),
+            held["Malformed"] is JsonArray diagnoses ? [.. diagnoses.Select(diagnosis => diagnosis?.GetValue<string>())] : []);
+    }
+
+    private static async Task<List<Placeholder>> PlaceholdersInTheOneChangedFileAsync(GeneratedPlugin plugin)
+    {
+        using var folder = new ScratchDirectory("repair-baseline");
+        using var repairedFolder = new ScratchDirectory("repair-baseline-repaired");
         var adapter = TestAdapters.Mutagen();
-        var malformed = Write(folder, fixture.Malformed);
-        var written = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
+        var malformed = Write(folder, plugin);
+        var written = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, plugin.FileName), Release).Answered();
         var loadOrder = EmptyLoadOrder.Of(Release);
-        var repaired = (await adapter.ReadSourceOfAsync(Registered(written.Path), loadOrder)).Answered();
-        var flagged = (await adapter.FlaggedSourceOfAsync(Registered(malformed), written, repaired, loadOrder)).Answered();
-        return (fixture.Malformed.Bytes, repaired, flagged);
+        var repaired = (await adapter.ReadSourceOfAsync(Registered(written.Path), loadOrder)).Answered().Files;
+
+        var baseline = adapter.BaselineOf(Registered(malformed), written, repaired, loadOrder).Answered();
+
+        Assert.Equal(repaired.Select(f => f.RelativePath), baseline.Select(f => f.RelativePath));
+        var (changed, asRepaired) = Assert.Single(baseline.Zip(repaired), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
+        var placeholders = Objects(Parsed(changed.Content)).Where(IsPlaceholder).Select(Placeholder.Of).ToList();
+        var formKeys = placeholders.Select(placeholder => placeholder.Record).ToHashSet();
+        Assert.True(JsonNode.DeepEquals(
+            Masked(Parsed(changed.Content), IsPlaceholder),
+            Masked(Parsed(asRepaired.Content), held => held["FormKey"] is JsonValue key && formKeys.Contains(key.GetValue<string>()))),
+            "the baseline changes more than the malformed records");
+        return placeholders;
     }
+
+    private static bool IsPlaceholder(JsonObject held) => held.ContainsKey("Malformed");
+
+    private static JsonNode Parsed(byte[] document) => JsonNode.Parse(document) ?? throw new InvalidOperationException("Expected a JSON document.");
+
+    private static JsonNode Masked(JsonNode node, Func<JsonObject, bool> isRecord) => node switch
+    {
+        JsonObject held when isRecord(held) => JsonValue.Create(0),
+        JsonObject held => new JsonObject(held.Select(member => KeyValuePair.Create(member.Key, member.Value is { } value ? Masked(value, isRecord) : null))),
+        JsonArray items => new JsonArray([.. items.Select(item => item is { } value ? Masked(value, isRecord) : null)]),
+        _ => node.DeepClone(),
+    };
+
+    private static IEnumerable<JsonObject> Objects(JsonNode node) => node switch
+    {
+        JsonObject held => [held, .. held.Select(member => member.Value).OfType<JsonNode>().SelectMany(Objects)],
+        JsonArray items => items.OfType<JsonNode>().SelectMany(Objects),
+        _ => [],
+    };
 
     private static RegisteredPlugin Registered(string path)
     {
         var folder = Path.GetDirectoryName(path) ?? throw new ArgumentException("No folder.", nameof(path));
         return new RegisteredPlugin(Path.GetFileName(path), "FixtureMod", path, new PluginProvider.FromMod("FixtureMod", folder, null), Line: null, PluginStrings.None);
     }
-
-    private static List<string> FormKeysIn(IReadOnlyList<TreeFile> files) =>
-        [.. files.SelectMany(file => DocumentTokens.FormKeysIn(file.Content, Release))
-            .Where(key => key.Position != FormKeyPosition.Other)
-            .Select(key => key.FormKey)
-            .Order(StringComparer.Ordinal)];
-
-    private static JsonElement TheOneObjectHoldingDiagnosesIn(byte[] document) =>
-        Assert.Single(Objects(JsonDocument.Parse(document).RootElement.Clone()), o => o.TryGetProperty("Diagnoses", out _));
-
-    private static JsonElement ObjectWithFormKey(byte[] document, string? formKey) =>
-        Assert.Single(Objects(JsonDocument.Parse(document).RootElement.Clone()), o => o.TryGetProperty("FormKey", out var key) && key.GetString() == formKey);
-
-    private static IEnumerable<JsonElement> Objects(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Object => [element, .. element.EnumerateObject().SelectMany(member => Objects(member.Value))],
-        JsonValueKind.Array => element.EnumerateArray().SelectMany(Objects),
-        _ => [],
-    };
-
-    private static List<byte[]> EncodedSubrecordsOf(JsonElement held) =>
-    [
-        .. held.GetProperty("Subrecords").EnumerateArray().Select(s => s.EnumerateObject().Single()).Select(s =>
-            Subrecord(s.Name, s.Value.GetString() is ['0', 'x', .. var hex] ? Convert.FromHexString(hex) : [])),
-    ];
 
     private static string MalformedPerkDiagnosis => $"{MisshapedPerkPlugin.Anchor} — entry-point-parameter-shape: "
         + "entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8";

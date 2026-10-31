@@ -241,7 +241,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         public SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
             throw Unreached();
 
-        public SourceFailure? CommitRepair(PluginAddress plugin, TreeCommit flagged, TreeCommit repaired, string binarySha256) => throw Unreached();
+        public SourceFailure? CommitRepair(PluginAddress plugin, TreeCommit baseline, TreeCommit repaired, string binarySha256) => throw Unreached();
 
         public SourceFailure? MoveLastWrittenTo(string treeName, string newName) => throw Unreached();
 

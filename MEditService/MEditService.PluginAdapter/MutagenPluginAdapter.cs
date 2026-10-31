@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -118,8 +117,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         {
             var original = File.ReadAllBytes(pluginPath);
             if (!PluginRepair.Repaired(original, gameRelease).Holds(out var repaired, out var refused)) return refused;
-            File.WriteAllBytes(destinationPath, repaired);
-            return new RepairedPlugin(destinationPath, PluginRepair.Preview(original, gameRelease), original);
+            File.WriteAllBytes(destinationPath, repaired.Bytes);
+            return new RepairedPlugin(destinationPath, repaired.Made, original);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -127,24 +126,18 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
-    public async Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, RepairedPlugin written, PluginSource repaired, LoadOrderSnapshot loadOrder,
-        CancellationToken cancel = default)
+    public Answer<IReadOnlyList<TreeFile>, PluginFailure> BaselineOf(
+        RegisteredPlugin plugin, RepairedPlugin written, IReadOnlyList<TreeFile> repaired, LoadOrderSnapshot loadOrder)
     {
         try
         {
-            var diagnosed = PluginRepair.Diagnosed(written.Original, loadOrder.GameRelease);
             var masters = PluginBinaryWalk.MastersOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder);
-            var flagged = diagnosed.Select(record => new FlaggedTrees.FlaggedRecord(
-                masters.GetFormKey(record[0].Record.FormID, reference: false).ToString(),
-                [.. record.Select(found => found.Diagnosis.Describe())],
-                record[0].Subrecords,
-                PluginRepair.RewriteOf(record)));
-            return repaired with
-            {
-                Files = await FlaggedTrees.FlaggedAsync(plugin.Name, repaired, [.. flagged], loadOrder, cancel),
-                BinarySha256 = Convert.ToHexString(SHA256.HashData(written.Original)),
-            };
+            var malformed = Malformations.In(written.Original, loadOrder.GameRelease)
+                .GroupBy(found => found.Record.Location)
+                .Select(record => new MalformedPlaceholders.Malformed(
+                    masters.GetFormKey(record.First().Record.FormID, reference: false).ToString(),
+                    [.. record.Select(found => found.Diagnosis.Describe())]));
+            return PluginAnswer.Of(MalformedPlaceholders.In(repaired, [.. malformed], loadOrder.GameRelease));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -282,7 +275,6 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
-    private static string HashOf(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
     public string PathOfEmpty(ModKey modKey, string folder) => Path.Combine(folder, modKey.FileName.String);
 
@@ -291,7 +283,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         {
             var path = PathOfEmpty(modKey, folder);
             if (!File.Exists(path)) return EmptyPluginTakeBack.Gone;
-            if (HashOf(File.ReadAllBytes(path)) != written)
+            if (PluginBinaryHash.TrailerFormOf(File.ReadAllBytes(path)) != written)
                 return EmptyPluginTakeBack.Changed;
 
             File.Delete(path);
@@ -317,7 +309,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         {
             TempName.RemoveLeftovers(folder);
             await WriteAsync(plugin, tempPath, noModKeySync: true);
-            var written = HashOf(await File.ReadAllBytesAsync(tempPath));
+            var written = PluginBinaryHash.TrailerFormOf(await File.ReadAllBytesAsync(tempPath));
             File.Move(tempPath, destinationPath, overwrite: false);
             return PluginAnswer.Of(new EmptyPluginCreated(EmptyPluginWrite.Written, written));
         }

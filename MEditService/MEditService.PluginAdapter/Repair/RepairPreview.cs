@@ -11,16 +11,22 @@ public sealed record RepairPreview(PluginDiagnosis Diagnosis, RepairChange? Chan
 /// <summary>What a repair changes in its record, naming any data it drops.</summary>
 public sealed record RepairChange(string Description);
 
+/// <summary>A diagnosis a repair answers, and the change it made.</summary>
+public sealed record MadeRepair(PluginDiagnosis Diagnosis, RepairChange Change);
+
 /// <summary>A plugin's repair written from one read of it: where it was written, what it repaired, and the bytes it was
-/// made from, which its verification and its flagged source answer to.</summary>
+/// made from, which its verification and its baseline answer to.</summary>
 public sealed class RepairedPlugin
 {
-    internal RepairedPlugin(string path, IReadOnlyList<RepairPreview> repairs, byte[] original) =>
-        (Path, Repairs, Original) = (path, repairs, original);
+    internal RepairedPlugin(string path, IReadOnlyList<MadeRepair> repairs, byte[] original) =>
+        (Path, Repairs, Original, OriginalSha256) = (path, repairs, original, PluginBinaryHash.TrailerFormOf(original));
 
     public string Path { get; }
 
-    public IReadOnlyList<RepairPreview> Repairs { get; }
+    public IReadOnlyList<MadeRepair> Repairs { get; }
+
+    /// <summary>The hash of the bytes it was made from, spelled as the last-compile ref records a binary.</summary>
+    public string OriginalSha256 { get; }
 
     internal byte[] Original { get; }
 }

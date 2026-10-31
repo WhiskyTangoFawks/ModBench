@@ -159,7 +159,8 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         }
     }
 
-    /// <summary>What the working tree now holds was made from this binary, as a landed compile's is.</summary>
+    /// <summary>The working tree now answers to this binary, as after a landed compile: the plugin it was decompiled
+    /// from, or the malformed plugin it repairs.</summary>
     internal void ParkDecompiled(string pluginFileName, string binarySha256)
     {
         var headSha = HeadCommit();

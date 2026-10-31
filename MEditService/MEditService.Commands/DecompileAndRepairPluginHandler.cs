@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>The decompile and repair gesture's handler (plugin-source.md, Decompile and repair): a malformed plugin into
-/// its mod's plugin source as two commits, the malformed records flagged, then repaired.</summary>
+/// its mod's plugin source as two commits, the plugin as it was with each malformed record a placeholder, then repaired.</summary>
 public sealed class DecompileAndRepairPluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;
@@ -85,7 +85,7 @@ public sealed class DecompileAndRepairPluginHandler
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
-        if (!(await _adapter.FlaggedSourceOfAsync(plugin, repair, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
+        if (!_adapter.BaselineOf(plugin, repair, repaired.Files, loadOrder).Holds(out var baseline, out failure))
             return RefusedAs(plugin, failure);
 
         var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, repair));
@@ -96,15 +96,14 @@ public sealed class DecompileAndRepairPluginHandler
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
                 loadOrder, new ModToDecompileAndCommit(mod.Name, made),
-                leftOut, new RepairedInInit(plugin, flagged, repairedCommit), _ => { }, cancel);
+                leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
             if (init is ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");
             leftOutOfANewRepository.UnionWith(leftOut);
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
-        var flaggedCommit = new TreeCommit(flagged.Files, FlaggedMessage(plugin, repair));
-        switch (repository.CommitRepair(plugin.Key, flaggedCommit, repairedCommit, flagged.BinarySha256))
+        switch (repository.CommitRepair(plugin.Key, new TreeCommit(baseline, BaselineMessage(plugin, repair)), repairedCommit, repair.OriginalSha256))
         {
             case null:
                 return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
@@ -133,13 +132,12 @@ public sealed class DecompileAndRepairPluginHandler
         _ => DecompileAndRepairRefusal.OtherPluginRefused,
     };
 
-    private static string Named(RepairPreview preview) => $"{preview.Diagnosis.Anchor ?? "the plugin"}: {preview.Change?.Description}";
-
-    private static string FlaggedMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
-        $"Decompile {plugin.Name}, its malformed records flagged\n\n" + string.Join('\n', written.Repairs.Select(repair => repair.Diagnosis.Describe()));
+    private static string BaselineMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
+        $"Decompile {plugin.Name} as it was, each malformed record a placeholder\n\n"
+        + string.Join('\n', written.Repairs.Select(repair => repair.Diagnosis.Describe()));
 
     private static string RepairMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
-        $"Repair {plugin.Name}\n\n" + string.Join('\n', written.Repairs.Select(Named));
+        $"Repair {plugin.Name}\n\n" + string.Join('\n', written.Repairs.Select(repair => $"{repair.Diagnosis.Describe()}\n  {repair.Change.Description}"));
 
     private sealed class SamePlugin : IEqualityComparer<PluginToRepair>
     {
