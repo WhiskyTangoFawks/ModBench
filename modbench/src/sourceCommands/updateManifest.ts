@@ -6,7 +6,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
@@ -123,12 +123,6 @@ async function heldManifestOf(folder: string): Promise<Manifest | undefined | { 
   }
 }
 
-// The host the downloaded file's own metadata gives, else the mod's.
-function withDownloadedHost(own: DownloadedFile, downloadedFiles: readonly DownloadedFile[]): DownloadedFile {
-  const host = downloadedFiles.find(({ file }) => file.path === own.file.path)?.package.host;
-  return host === undefined ? own : { ...own, package: { ...own.package, host } };
-}
-
 async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[]): Promise<Answer> {
   const held = await heldManifestOf(mod.folder);
   if (held !== undefined && 'refusal' in held) return held;
@@ -148,7 +142,9 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
   }
   if ('unreadable' in hashed) return refusal(hashed.unreadable);
 
-  const installationFile = mod.installationFile === undefined ? undefined : withDownloadedHost(downloadedFileOf(mod.installationFile, nexusFileOf(adapter)), downloadedFiles);
+  const own = mod.installationFile;
+  const installationFile = own === undefined ? undefined
+    : downloadedFileOf(pagedFrom(own, downloadedFiles.find(({ package: pkg }) => pkg.name === basename(own.path))?.file), nexusFileOf(adapter));
   const recorded = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
     hashed.files, hashed.exclude, held);

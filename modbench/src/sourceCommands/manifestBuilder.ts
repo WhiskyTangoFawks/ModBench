@@ -42,6 +42,10 @@ export function nexusFileOf(adapter: Pick<InstanceAdapter, 'nexusFileAt'>): (pag
 
 const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
+/** The installation file with the page its downloaded file's own metadata gives, else the page it has. */
+export const pagedFrom = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page'> | undefined): InstallationFile =>
+  (downloaded?.page === undefined ? file : { ...file, page: downloaded.page });
+
 /** The downloaded file as a package, its host the one `nexusFileOf` reads from its page. */
 export const downloadedFileOf = (file: InstallationFile, nexusFileOf: (page: string) => NexusFile | undefined): DownloadedFile => {
   const nexus = file.page === undefined ? undefined : nexusFileOf(file.page);

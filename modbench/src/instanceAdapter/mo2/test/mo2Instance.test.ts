@@ -2025,11 +2025,11 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a downloaded file by its name', () => {
-      it('answers the file of that name in the downloads folder, with its size and hash and each entry\'s', async () => {
+      it('answers the file of that name in the downloads folder, with its page, size and hash and each entry\'s', async () => {
         const answer = await managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) }).downloadedFile(DOWNLOADED_FILE);
 
         expect(answer).toEqual({
-          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
+          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
         });
       });
 

@@ -105,6 +105,26 @@ describe('update manifest', () => {
     });
   });
 
+  it.each([
+    ['the downloaded row is the same file by another path', '/elsewhere/ModA-1.0.7z'],
+    ['the downloaded row\'s page differs from the mod\'s', '/downloads/ModA-1.0.7z'],
+  ])('names the host of the downloaded file\'s metadata over the mod\'s, when %s', async (_name, rowPath) => {
+    const { update, manifestOf } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: {
+        installations: new Map([['ModA', read({ ...INSTALLED, page: 'https://www.nexusmods.com/fallout4/mods/9?tab=files&file_id=9' })]]),
+        downloadedFilesHashed: { files: [{ ...INSTALLED, path: rowPath, page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' }], notes: [] },
+      },
+    });
+
+    await update(['ModA']);
+
+    const held = await manifestOf('ModA');
+    expect(held !== undefined && 'manifest' in held && held.manifest.packages).toEqual([
+      { kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } },
+    ]);
+  });
+
   it('refuses a mod whose folder holds a file and its excluded copy, which its manifest names as one file', async () => {
     const { update } = await over({ files: { ModA: { 'b.esp': HA, 'b.esp.mohidden': HB } } });
 

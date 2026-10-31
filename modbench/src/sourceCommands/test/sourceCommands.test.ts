@@ -276,6 +276,20 @@ describe('sourceCommands decompileAndCommit', () => {
     });
   });
 
+  it('names the installation file\'s page from the downloaded file\'s own metadata when the mod\'s metadata names none (Query info, story 1)', async () => {
+    const { client, handed } = committing();
+    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
+    const page = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
+    const adapter = modsAt({
+      ...hashed({ 'textures/a.dds': 'A' }),
+      installations: new Map([['ModA', { kind: 'read', answer: pack }]]), downloadedFiles: new Map([['Pack.7z', { kind: 'read', answer: { ...pack, page } }]]),
+    });
+
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
+
+    expect(buildFileHanded(handed[0]).packages).toEqual([{ kind: 'installationFile', name: 'Pack.7z', size: 7, hash: 'H', page }]);
+  });
+
   it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, decompile and commit)', async () => {
     const folder = folderOf('ModA');
     const client = new InMemoryMEditClient();
