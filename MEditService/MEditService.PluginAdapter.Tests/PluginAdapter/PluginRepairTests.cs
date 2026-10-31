@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -116,37 +116,79 @@ public sealed class PluginRepairTests
 
     [Theory]
     [MemberData(nameof(RepairedFixtures))]
-    public async Task BaselineOf_TheRepairedSource_EachMalformedRecordAPlaceholderNamingItsDiagnosis_EveryOtherFileAsItIs(MalformationFixture fixture)
+    public async Task BaselineOf_TheRepairedSource_EachMalformedRecordAPlaceholderNamingItsDiagnosis_AllElseAsItIs(MalformationFixture fixture)
+    {
+        var placeholder = Assert.Single(await PlaceholdersInTheOneChangedFileAsync(fixture.Malformed));
+
+        Assert.Equal(["FormKey", "Malformed"], placeholder.Members);
+        Assert.Equal([fixture.Diagnosis], placeholder.Diagnoses);
+    }
+
+    [Fact]
+    public async Task BaselineOf_TwoMalformedChildrenOfOneContainer_IsAPlaceholderForEach()
+    {
+        var placeholders = await PlaceholdersInTheOneChangedFileAsync(MalformationFixtures.TwoMiscountedReferencesInOneCell);
+
+        Assert.Collection(placeholders.Select(placeholder => Assert.Single(placeholder.Diagnoses)),
+            one => Assert.Contains("HarborWorkshopRefOne", one, StringComparison.Ordinal),
+            two => Assert.Contains("HarborWorkshopRefTwo", two, StringComparison.Ordinal));
+    }
+
+    private sealed record Placeholder(IReadOnlyList<string> Members, string? Record, IReadOnlyList<string?> Diagnoses)
+    {
+        internal static Placeholder Of(JsonObject held) => new(
+            [.. held.Select(member => member.Key)],
+            held["FormKey"]?.GetValue<string>(),
+            held["Malformed"] is JsonArray diagnoses ? [.. diagnoses.Select(diagnosis => diagnosis?.GetValue<string>())] : []);
+    }
+
+    private static async Task<List<Placeholder>> PlaceholdersInTheOneChangedFileAsync(GeneratedPlugin plugin)
     {
         using var folder = new ScratchDirectory("repair-baseline");
         using var repairedFolder = new ScratchDirectory("repair-baseline-repaired");
         var adapter = TestAdapters.Mutagen();
-        var malformed = Write(folder, fixture.Malformed);
-        var written = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
+        var malformed = Write(folder, plugin);
+        var written = adapter.WriteRepaired(malformed, Path.Combine(repairedFolder.Path, plugin.FileName), Release).Answered();
         var loadOrder = EmptyLoadOrder.Of(Release);
         var repaired = (await adapter.ReadSourceOfAsync(Registered(written.Path), loadOrder)).Answered().Files;
 
         var baseline = adapter.BaselineOf(Registered(malformed), written, repaired, loadOrder).Answered();
 
         Assert.Equal(repaired.Select(f => f.RelativePath), baseline.Select(f => f.RelativePath));
-        var changed = Assert.Single(baseline.Zip(repaired), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content)).First;
-        var placeholder = Assert.Single(Objects(JsonDocument.Parse(changed.Content).RootElement.Clone()), o => o.TryGetProperty("Malformed", out _));
-        Assert.Equal(["FormKey", "Malformed"], placeholder.EnumerateObject().Select(member => member.Name));
-        Assert.Equal([fixture.Diagnosis], placeholder.GetProperty("Malformed").EnumerateArray().Select(diagnosis => diagnosis.GetString()));
+        var (changed, asRepaired) = Assert.Single(baseline.Zip(repaired), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
+        var placeholders = Objects(Parsed(changed.Content)).Where(IsPlaceholder).Select(Placeholder.Of).ToList();
+        var formKeys = placeholders.Select(placeholder => placeholder.Record).ToHashSet();
+        Assert.True(JsonNode.DeepEquals(
+            Masked(Parsed(changed.Content), IsPlaceholder),
+            Masked(Parsed(asRepaired.Content), held => held["FormKey"] is JsonValue key && formKeys.Contains(key.GetValue<string>()))),
+            "the baseline changes more than the malformed records");
+        return placeholders;
     }
+
+    private static bool IsPlaceholder(JsonObject held) => held.ContainsKey("Malformed");
+
+    private static JsonNode Parsed(byte[] document) => JsonNode.Parse(document) ?? throw new InvalidOperationException("Expected a JSON document.");
+
+    private static JsonNode Masked(JsonNode node, Func<JsonObject, bool> isRecord) => node switch
+    {
+        JsonObject held when isRecord(held) => JsonValue.Create(0),
+        JsonObject held => new JsonObject(held.Select(member => KeyValuePair.Create(member.Key, member.Value is { } value ? Masked(value, isRecord) : null))),
+        JsonArray items => new JsonArray([.. items.Select(item => item is { } value ? Masked(value, isRecord) : null)]),
+        _ => node.DeepClone(),
+    };
+
+    private static IEnumerable<JsonObject> Objects(JsonNode node) => node switch
+    {
+        JsonObject held => [held, .. held.Select(member => member.Value).OfType<JsonNode>().SelectMany(Objects)],
+        JsonArray items => items.OfType<JsonNode>().SelectMany(Objects),
+        _ => [],
+    };
 
     private static RegisteredPlugin Registered(string path)
     {
         var folder = Path.GetDirectoryName(path) ?? throw new ArgumentException("No folder.", nameof(path));
         return new RegisteredPlugin(Path.GetFileName(path), "FixtureMod", path, new PluginProvider.FromMod("FixtureMod", folder, null), Line: null, PluginStrings.None);
     }
-
-    private static IEnumerable<JsonElement> Objects(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Object => [element, .. element.EnumerateObject().SelectMany(member => Objects(member.Value))],
-        JsonValueKind.Array => element.EnumerateArray().SelectMany(Objects),
-        _ => [],
-    };
 
     private static string MalformedPerkDiagnosis => $"{MisshapedPerkPlugin.Anchor} — entry-point-parameter-shape: "
         + "entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8";
