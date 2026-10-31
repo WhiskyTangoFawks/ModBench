@@ -7,12 +7,14 @@ const registerCommand = vi.fn((command: string, handler: (ctx?: unknown, option?
 });
 const showInputBox = vi.fn<(options: { value?: string }) => Promise<string | undefined>>();
 const executeCommand = vi.fn<(command: string, ...args: unknown[]) => Promise<void>>();
+const writeText = vi.fn<(text: string) => Promise<void>>();
 vi.mock('vscode', () => ({
   commands: {
     registerCommand: (...args: [string, (ctx?: unknown, option?: unknown) => void]) => registerCommand(...args),
     executeCommand: (...args: [string, ...unknown[]]) => executeCommand(...args),
   },
   window: { showInputBox: (options: { value?: string }) => showInputBox(options) },
+  env: { clipboard: { writeText: (text: string) => writeText(text) } },
 }));
 
 import type { FieldAddress, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
@@ -24,7 +26,7 @@ import { commitField, registerRecordPanelContextCommands, type FieldCommitDeps }
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
 import { present } from '../../ports/present';
 
-beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); });
+beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); writeText.mockReset(); });
 
 type RecordPanelContextCommandDeps = Parameters<typeof registerRecordPanelContextCommands>[0];
 
@@ -279,5 +281,49 @@ describe('modbench.record.openReference', () => {
   it('opens nothing from a cell that holds no reference', async () => {
     await reference()({ webviewSection: 'cell', ...IDENTITY });
     expect(executeCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe('modbench.record.cut, the focused cell\'s value copied and removed in one edit', () => {
+  const LEVEL: ArrayElementContext['path'] = [{ kind: 'member', name: 'Level' }];
+  const ELEMENT: ArrayElementContext['path'] = [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }];
+  const editableCell = (holdsValue: boolean) => ({
+    webviewSection: 'cell editableCell', copyText: '7', ...IDENTITY, path: LEVEL, holdsValue,
+  });
+  const cut = () => present(handlers.get('modbench.record.cut'), 'the cut handler');
+
+  it('copies a field\'s value and sets the field to nothing, in one edit', async () => {
+    const { deps, edit } = makeDeps({ focusedCell: () => editableCell(true) });
+    registerRecordPanelContextCommands(deps);
+
+    await cut()();
+
+    expect(writeText.mock.calls).toEqual([['7']]);
+    expect(edit.mock.calls).toEqual([[ADDRESS, { op: 'set', path: LEVEL, value: null }]]);
+  });
+
+  it('copies an element and removes it, in one edit', async () => {
+    const element = { ...editableCell(true), webviewSection: 'cell arrayElement editableCell', copyText: '4', path: ELEMENT };
+    const { deps, edit } = makeDeps({ focusedCell: () => element });
+    registerRecordPanelContextCommands(deps);
+
+    await cut()();
+
+    expect(writeText.mock.calls).toEqual([['4']]);
+    expect(edit.mock.calls).toEqual([[ADDRESS, { op: 'remove', path: ELEMENT }]]);
+  });
+
+  it.each([
+    ['a field the plugin does not hold', editableCell(false)],
+    ['a cell that cannot be edited', { webviewSection: 'cell', copyText: '7' }],
+    ['no focused cell', undefined],
+  ])('copies nothing and edits nothing on %s', async (_what, cell) => {
+    const { deps, edit } = makeDeps({ focusedCell: () => cell });
+    registerRecordPanelContextCommands(deps);
+
+    await cut()();
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(edit).not.toHaveBeenCalled();
   });
 });
