@@ -1,24 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
-} from '../../test/vscodeMock';
+} from './vscodeMock';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   Uri,
 }));
 
-import { FILE_CONFLICTS } from '../../agent/fileConflicts';
-import type { PublisherConfiguration, PublisherTag } from '../../instanceAdapter/instanceAdapter';
-import { modOrigin } from '../../instanceLoader/fileConflictIndex';
-import { MOD_INDICATORS } from '../../drivingLib/modFileStates';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { InactiveFileDecorationProvider } from '../inactiveFiles';
-import { fileRowUri } from '../modFiles';
-import { indicatorSetting, ModIndicatorDecorations, modRowUri } from '../modIndicators';
-import { OpenRows } from '../openRows';
-import { PublisherTagDecorations } from '../publisherTagIndicators';
-import { file, indexedValueOf, mod } from './indexedValue';
+import { FILE_CONFLICTS } from '../agent/fileConflicts';
+import type { PublisherConfiguration, PublisherTag } from '../instanceAdapter/instanceAdapter';
+import { modOrigin } from '../instanceLoader/fileConflictIndex';
+import { MOD_INDICATORS } from '../drivingLib/modFileStates';
+import { FakeInstance } from './mo2/fakeInstance';
+import { InactiveFileDecorationProvider } from '../mods/inactiveFiles';
+import { fileRowUri } from '../mods/modFiles';
+import { indicatorSetting, ModIndicatorDecorations, modRowUri } from '../mods/modIndicators';
+import { OpenRows } from '../mods/openRows';
+import { PublisherTagDecorations } from '../mods/publisherTagIndicators';
+import { file, indexedValueOf, mod } from '../mods/test/indexedValue';
 
 const NM: PublisherTag = { name: 'NM tag', badge: 'NM', marksPaths: true };
 const AE: PublisherTag = { name: 'AE tag', badge: 'AE', marksPaths: false };
