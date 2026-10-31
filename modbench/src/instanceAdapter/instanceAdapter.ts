@@ -818,9 +818,8 @@ export interface InstanceAdapter {
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an
    *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
   install(installed: InstallPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
-  /** Writes the metadata of the mod in `folder` from its packages, each by its name in the downloads folder: the first is the
-   *  installation file, and the Nexus mod and file of every one are recorded. A value the packages do not know keeps what the
-   *  folder holds, and a changed metadata file is sent to the trash. */
+  /** Writes the metadata of the mod in `folder` from its packages, each a downloaded file by name: the first is the installation
+   *  file, and every one's Nexus mod and file are recorded. Values the packages lack keep what the folder holds. */
   writeInstalledFrom(folder: string, packages: readonly string[], trash: MoveToTrash): Promise<void>;
 
   // Subscribe: the instance changed.
