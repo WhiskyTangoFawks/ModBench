@@ -1,6 +1,7 @@
 import type {
   BuildFile, BuildFileRead, GameDepot, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
 } from './manifest';
+import { installationFileIn } from './packageOf';
 
 type Json = Record<string, unknown>;
 
@@ -160,7 +161,7 @@ const archivesOf = (value: unknown): ManifestArchive[] => {
   return archives;
 };
 
-const MANIFEST_KEYS = ['packages', 'archives', 'files', 'exclude'];
+const MANIFEST_KEYS = ['installationFile', 'packages', 'archives', 'files', 'exclude'];
 
 const BUILD_FILE_KEYS = ['packages', 'archives', 'steps', 'tools', 'files'];
 
@@ -177,9 +178,14 @@ const buildFileOf = (text: string, keys: readonly string[]): BuildFile => {
   if (keys.includes('steps') && steps.length === 0 && madeByStep >= 0) throw fileProblem(madeByStep, (file) => `it says a step makes the file, and the ${file} holds no step`);
   const exclude = Object.hasOwn(root, 'exclude') ? stringsOf(root.exclude, 'its exclude') : [];
   inTheFolder('exclude', exclude);
+  const installationFile = Object.hasOwn(root, 'installationFile') ? textOf(root.installationFile, 'its installationFile') : undefined;
+  if (installationFile !== undefined && installationFileIn(packages, installationFile) === undefined) {
+    throw new Unreadable((file) => `its ${file} names the installation file '${installationFile}', which none of its packages is`);
+  }
   return {
     packages,
     ...(version === undefined ? {} : { version }),
+    ...(installationFile === undefined ? {} : { installationFile }),
     exclude,
     archives: Object.hasOwn(root, 'archives') ? archivesOf(root.archives) : [],
     steps,
@@ -230,8 +236,8 @@ const read = (text: string, file: string, keys: readonly string[]): { readonly r
 export const readManifest = (text: string): ManifestRead => {
   const parsed = read(text, 'manifest', MANIFEST_KEYS);
   if ('refused' in parsed) return parsed;
-  const { packages, version, exclude, archives, files } = parsed.read;
-  return { manifest: { packages, ...version === undefined ? {} : { version }, exclude, archives, files } };
+  const { packages, version, installationFile, exclude, archives, files } = parsed.read;
+  return { manifest: { packages, ...version === undefined ? {} : { version }, ...installationFile === undefined ? {} : { installationFile }, exclude, archives, files } };
 };
 
 /** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A

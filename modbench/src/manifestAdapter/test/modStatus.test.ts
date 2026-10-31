@@ -61,8 +61,9 @@ const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', si
 const line = (path: string, entry: ManifestFile['entry'] = { kind: 'held' }, pkg?: string): ManifestFile => ({ path, entry, ...(pkg === undefined ? {} : { package: pkg }) });
 const manifest = (files: ManifestFile[], over: Partial<Manifest> = {}): Manifest => ({ packages: [MOD_ZIP], exclude: [], archives: [], files, ...over });
 
-function heldAsItSays({ packages: [first], version }: Manifest): void {
-  const installationFile = first?.kind === 'installationFile' ? { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } : undefined;
+function heldAsItSays({ packages, version, installationFile: name }: Manifest): void {
+  const named = packages.find((pkg) => pkg.name === name);
+  const installationFile = named?.kind === 'installationFile' ? { name: named.name, ...(named.page === undefined ? {} : { page: named.page }) } : undefined;
   metadata = { kind: 'read', answer: { ...(version === undefined ? {} : { version }), ...(installationFile === undefined ? {} : { installationFile }) } };
 }
 
@@ -203,9 +204,9 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(heldAs());
   });
 
-  it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule (submodule: %s)', async (isSubmodule, noHost) => {
+  it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule, whichever package its manifest names first (submodule: %s)', async (isSubmodule, noHost) => {
     await write('a.esp', 'hello');
-    await manifested(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
+    await manifested(manifest([line('a.esp')], { packages: [MOD_ZIP, { kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
 
     expect((await status()).noHost).toBe(noHost);
   });
@@ -271,7 +272,7 @@ describe('a mod\'s status against its manifest', () => {
       const packages: ManifestPackage[] = file !== undefined
         ? [{ kind: 'installationFile', name: file.name, size: 1, hash: 'hash', ...(file.page === undefined ? {} : { page: file.page }) }]
         : manifests.version !== undefined ? [{ kind: 'gameFolder', name: 'Fallout4', hash: 'hash', depots: [] }] : [];
-      await manifested(manifest([], { packages, ...(manifests.version === undefined ? {} : { version: manifests.version }) }));
+      await manifested(manifest([], { packages, ...(manifests.version === undefined ? {} : { version: manifests.version }), ...(file === undefined ? {} : { installationFile: file.name }) }));
       metadata = { kind: 'read', answer: held };
 
       expect((await status()).metadataDiffers).toBe(differs);
@@ -296,9 +297,13 @@ describe('metadata a restore writes over what the metadata holds', () => {
     expect(metadataOverwritten(held, manifests)).toBe(overwritten);
   });
 
-  it('is the version and the first package\'s installation file and its page, as the manifest holds them', () => {
-    const packages: ManifestPackage[] = [{ kind: 'installationFile', name: 'a.7z', size: 1, hash: 'hash', page: 'nexus:1' }, { kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }];
+  it('is the version and the installation file the manifest names, with its page', () => {
+    const packages: ManifestPackage[] = [{ kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }, { kind: 'installationFile', name: 'a.7z', size: 1, hash: 'hash', page: 'nexus:1' }];
 
-    expect(metadataOf(manifest([], { version: '2.0', packages }))).toEqual({ version: '2.0', installationFile: { name: 'a.7z', page: 'nexus:1' } });
+    expect(metadataOf(manifest([], { version: '2.0', packages, installationFile: 'a.7z' }))).toEqual({ version: '2.0', installationFile: { name: 'a.7z', page: 'nexus:1' } });
+  });
+
+  it('names no installation file when the manifest names none, though a package is one (Never silently wrong)', () => {
+    expect(metadataOf(manifest([], { version: '2.0' }))).toEqual({ version: '2.0' });
   });
 });

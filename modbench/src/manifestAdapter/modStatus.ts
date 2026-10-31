@@ -6,7 +6,7 @@ import type { Manifest, ManifestFile } from './manifest';
 import type { FolderValue, HeldMetadata, PackageEntries, StatusValues } from '../repositoriesLib/statusValues';
 import type { ManifestAt } from './manifestFiles';
 import { installationFileLack } from './packageLack';
-import { packageOf } from './packageOf';
+import { installationFileIn, packageOf, repositoryOf } from './packageOf';
 
 /** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
@@ -116,9 +116,8 @@ const sameInstallationFile = (held: HeldMetadata['installationFile'], says: Held
 // Whether updating the manifest from the metadata would write another version or installation file. A manifest with no
 // package holds no version, so the version the metadata holds is no difference.
 function metadataDiffers(held: HeldMetadata, manifest: Manifest): boolean {
-  const [first] = manifest.packages;
-  const says = first?.kind === 'installationFile' ? { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } : undefined;
-  return (first === undefined ? undefined : held.version) !== manifest.version || !sameInstallationFile(held.installationFile, says);
+  const says = metadataOf(manifest);
+  return (manifest.packages.length === 0 ? undefined : held.version) !== says.version || !sameInstallationFile(held.installationFile, says.installationFile);
 }
 
 function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kind: 'read' }>): string[] {
@@ -136,10 +135,10 @@ function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kin
 
 /** The version and installation file the manifest holds, as a mod's metadata holds them. */
 export function metadataOf(manifest: Manifest): HeldMetadata {
-  const [first] = manifest.packages;
+  const named = installationFileIn(manifest.packages, manifest.installationFile);
   return {
     ...(manifest.version === undefined ? {} : { version: manifest.version }),
-    ...(first?.kind === 'installationFile' ? { installationFile: { name: first.name, ...(first.page === undefined ? {} : { page: first.page }) } } : {}),
+    ...(named === undefined ? {} : { installationFile: { name: named.name, ...(named.page === undefined ? {} : { page: named.page }) } }),
   };
 }
 
@@ -162,10 +161,10 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   if (values.kind === 'metadataOnly') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;
-  const [first] = manifest.packages;
+  const repository = repositoryOf(manifest);
   return {
     ...nothing(mod.name, { manifestFile: file }), ...listsOf(manifest, folderAgainst(manifest, values.folder, values.packageEntries)),
-    metadataDiffers: metadataDiffers(values.metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
+    metadataDiffers: metadataDiffers(values.metadata.answer, manifest), noHost: repository?.isSubmodule === false,
     packagesLacking: packagesLacking(manifest, values),
   };
 }

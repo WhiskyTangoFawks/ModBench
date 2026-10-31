@@ -34,6 +34,15 @@ describe('sourceModsOf', () => {
     expect([[...linked.folders], linked.folderOf('renamed mod'), linked.notes]).toEqual([[['Renamed Mod', source('Mod')]], source('Mod'), []]);
   });
 
+  it('links a mod to its repository though its manifest names another package first', async () => {
+    const installedFrom: ManifestPackage = { kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'H' };
+    const mods = [await modFolder('Mod', { ...naming(installedFrom), packages: [installedFrom, repository('Mod')] })];
+
+    const linked = await sourceModsOf(mods, new Map([['Mod', source('Mod')]]), key);
+
+    expect(linked.folderOf('Mod')).toBe(source('Mod'));
+  });
+
   it('links no mod whose manifest names another package', async () => {
     const mods = [await modFolder('Mod', naming({ kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'H' }))];
 

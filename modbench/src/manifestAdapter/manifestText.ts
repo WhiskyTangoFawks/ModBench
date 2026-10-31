@@ -60,6 +60,7 @@ export function manifestText(manifest: Manifest & { readonly steps?: readonly Ma
   const first = manifest.packages[0]?.name;
   const files = [...manifest.files].sort((a, b) => ordinalIgnoreCaseThenOrdinal(a.path, b.path));
   const members = [
+    ...(manifest.installationFile === undefined ? [] : [`"installationFile": ${JSON.stringify(manifest.installationFile)}`]),
     ...lineEach('packages', manifest.packages.map((pkg, index) => packageLine(pkg, index === 0 ? manifest.version : undefined))),
     ...(manifest.exclude.length === 0 ? [] : [`"exclude": ${JSON.stringify([...manifest.exclude].sort(ordinalIgnoreCaseThenOrdinal))}`]),
     ...(manifest.archives.length === 0

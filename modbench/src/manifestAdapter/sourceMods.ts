@@ -2,16 +2,8 @@
 // cloned builds where it is (mods.md, Build, story 4).
 
 import { errorMessage } from '../ports/errorMessage';
-import type { Manifest, ManifestPackage } from './manifest';
 import { manifestIn } from './manifestFiles';
-
-type RepositoryPackage = Extract<ManifestPackage, { kind: 'sourceRepository' }>;
-
-/** The repository package `manifest` names first, which makes its folder a source mod's. */
-export function repositoryOf(manifest: Manifest): RepositoryPackage | undefined {
-  const [first] = manifest.packages;
-  return first?.kind === 'sourceRepository' ? first : undefined;
-}
+import { repositoryOf } from './packageOf';
 
 /** A folder of the mod manager's mods: a mod's or a separator's, by the name the mod manager knows it by. */
 export interface ModFolderAt {

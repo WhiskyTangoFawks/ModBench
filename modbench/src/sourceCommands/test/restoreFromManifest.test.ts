@@ -27,7 +27,7 @@ const NOT_FINISHED = 'was not finished: the restore was cancelled. Restoring it 
 
 const held = (path: string, inPackage?: string, pkg?: string): ManifestFile =>
   ({ path, entry: inPackage === undefined ? { kind: 'held' } : { kind: 'heldAt', path: inPackage }, ...(pkg === undefined ? {} : { package: pkg }) });
-const fromTheZip = (...files: ManifestFile[]): Manifest => ({ ...EMPTY, packages: [MOD_7Z], files });
+const fromTheZip = (...files: ManifestFile[]): Manifest => ({ ...EMPTY, packages: [MOD_7Z], installationFile: MOD_7Z.name, files });
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
 const gameFiles = (...files: [string, string][]) => new Map(files.map(([path, hash]) => [path.toLowerCase(), { path, hash }]));
 const pinOf = (...taken: { path: string; hash: string }[]): Promise<string> => textHash(pinText(taken));
@@ -398,6 +398,18 @@ describe('restore from manifest', () => {
         { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
       ]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
+    });
+
+    it('gives the mod manager back the installation file its manifest names, which its build records again (modlist-repository.md, The manifest, story 3)', async () => {
+      const { restore, fake, client } = await sourceMod();
+      await writeManifestIn(folderOf('ModA'), {
+        ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }, MOD_7Z], installationFile: MOD_7Z.name, files: [held('a.esp'), held('b.nif', undefined, MOD_7Z.name)],
+      });
+
+      await restore(['ModA']);
+
+      expect([client.calls.map(({ method }) => method), writes(fake.calls).filter(({ verb }) => verb === 'writeModMetadata')])
+        .toEqual([['cloneSubmodules', 'build'], [{ verb: 'writeModMetadata', mod: 'ModA', metadata: { installationFile: { name: 'ModA.7z' } } }]]);
     });
 
     it('is built from a repository with no host that the source folder holds, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
