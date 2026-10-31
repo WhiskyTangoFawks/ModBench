@@ -417,6 +417,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     const adapter = adapterOver(root, { installationFileReader: fakeInstallationFileReader(['Mod.esp', ...ASSETS]) });
     expect(await adapter.install({ kind: 'archive', path: join(root, 'downloads', 'Mod.7z') }, { kind: 'new', name: 'Mod' }, (path) => rm(path)))
       .toEqual({ landed: true });
+    await adapter.writeInstalledFrom(join(root, 'mods', 'Mod'), ['Mod.7z'], (path) => rm(path));
     const client = new InMemoryMEditClient();
     const handed: DecompileAndCommitMod[] = [];
     client.setCommandHandler('decompileAndCommit', async ([mod]) => {
