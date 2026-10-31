@@ -2005,14 +2005,12 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
+      it('answers unreadable, saying this machine does not hold the downloaded file and no system error, when it is gone', async () => {
         await rm(join(root, 'downloads', DOWNLOADED_FILE));
 
         const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
-        const { reason } = expectKind(answer, 'unreadable');
-        expect(reason).toContain('ENOENT');
-        expect(reason).toContain(DOWNLOADED_FILE);
+        expect(expectKind(answer, 'unreadable').reason).toBe(`this machine does not hold ${DOWNLOADED_FILE}, the file it is installed from`);
       });
 
       it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {

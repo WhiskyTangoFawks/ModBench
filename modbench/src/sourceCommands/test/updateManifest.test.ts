@@ -91,6 +91,20 @@ describe('update manifest', () => {
     ]);
   });
 
+  it('names the installation file\'s host from the downloaded file\'s own metadata when the mod\'s metadata names none (Query info, story 1)', async () => {
+    const page = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
+    const { update, manifestOf } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: { installations: new Map([['ModA', read(INSTALLED)]]), downloadedFilesHashed: { files: [{ ...INSTALLED, page }], notes: [] } },
+    });
+
+    await update(['ModA']);
+
+    expect(await manifestOf('ModA')).toEqual({
+      manifest: { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } }], files: holding({ 'a.nif': HA }) },
+    });
+  });
+
   it('refuses a mod whose folder holds a file and its excluded copy, which its manifest names as one file', async () => {
     const { update } = await over({ files: { ModA: { 'b.esp': HA, 'b.esp.mohidden': HB } } });
 
