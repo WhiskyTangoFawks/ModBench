@@ -66,7 +66,7 @@ const value = instanceValueFixture({
     { kind: 'mod', name: 'InAnotherProfile', path: '/instance/mods/InAnotherProfile', modName: 'InAnotherProfile' },
   ],
 });
-const EVERY_MOD = ['ModA', 'Weapons_separator', 'ModB', 'InAnotherProfile'];
+const EVERY_MOD = ['ModA', 'ModB', 'InAnotherProfile'];
 
 const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
 const separatorRow = (name: string) => ({ argument: { kind: 'separator', name }, name });
@@ -230,7 +230,7 @@ describe('Every other manifest', () => {
 
   it.each([
     ['update manifest', UPDATE, 'Update manifest: 0 mods unchanged, 0 updated, 1 refused; their packages do not hold 0 files and hold 0 files with other bytes.'],
-    ['restore from manifest', RESTORE, 'Could not restore 1 of 5 mods.'],
+    ['restore from manifest', RESTORE, 'Could not restore 1 of 4 mods.'],
   ])('%s names a folder the search could not read beside what it did, and still acts on every mod', async (_case, command, message) => {
     otherManifests.mockResolvedValueOnce({ others: [], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] });
     const { reporter, run } = register();
@@ -344,6 +344,14 @@ describe('Restore from manifest', () => {
 
     expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'ModB']]);
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'restore', 'Instance loader: read every file again', 'progress closes']);
+  });
+
+  it('restores the mods a selected separator holds, and not the separator, which has no manifest', async () => {
+    const { run } = register();
+
+    await run(RESTORE, separatorRow('Weapons'), [separatorRow('Weapons')]);
+
+    expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
   });
 
   it('restores every mod from the palette with no Mods selection', async () => {
@@ -466,79 +474,16 @@ describe('Restore from manifest', () => {
   });
 });
 
-describe('A separator in a report or an outcome', () => {
-  const separator = { kind: 'separator' as const, name: 'Weapons' };
-  const WIRE = 'Weapons_separator';
-  const NAMED = 'separator Weapons';
-
-  it('update manifest keeps it apart from a mod of the same name', async () => {
-    updateManifest.mockResolvedValueOnce({
-      notes: [], repositoryNotes: [],
-      landed: [{ mod: 'Weapons', manifestWritten: true, notInPackage: ['b.nif'], otherBytes: [] }, { mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
-      refused: [{ item: WIRE, reason: 'was not updated: its folder does not exist.' }, { item: 'Weapons', reason: 'was not updated: its folder does not exist.' }],
-    });
-    const sharing = instanceValueFixture({
-      modFolders: [...(value.modFolders ?? []), { kind: 'mod', name: 'Weapons', path: '/instance/mods/Weapons', modName: 'Weapons' }],
-    });
-    const { reporter, run } = register({ instance: { value: sharing, refresh: () => Promise.resolve(undefined) } });
-
-    await run(UPDATE);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Update manifest: 0 mods unchanged, 2 updated, 2 refused; their packages do not hold 2 files and hold 0 files with other bytes.',
-      detail: `"${NAMED}" (was not updated: its folder does not exist.)\n"Weapons" (was not updated: its folder does not exist.)\nWeapons: b.nif\n${NAMED}: a.nif`,
-    }]);
-  });
-
-  it('restore from manifest names it as a separator in its progress and its report', async () => {
-    restoreFromManifest.mockImplementationOnce((_mods, options) => {
-      options?.onProgress?.({ phase: 'Restoring', mod: WIRE, modsDone: 0, modsTotal: 1 });
-      return Promise.resolve({ landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
-    });
-    const { reporter, said, run } = register();
-
-    await run(RESTORE, separatorRow('Weapons'));
-
-    expect(said).toContain(`Restore from manifest — "${NAMED}", 0 of 1 mods done…`);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"${NAMED}" (was skipped: it has no manifest.)` }]);
-  });
-
-  it('an agent reads it as a separator in what landed and what was refused', async () => {
-    updateManifest.mockResolvedValueOnce({
-      notes: [], repositoryNotes: [], landed: [{ mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }],
-      refused: [{ item: 'ModB', reason: 'was not updated.' }],
-    });
-    const { run } = register();
-
-    const answer = await run(UPDATE, new AgentCall([separator], {}));
-
-    expect(answer).toEqual({
-      applied: true,
-      outcome: { landed: [{ mod: NAMED, manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }], refused: [{ item: 'ModB', reason: 'was not updated.' }] },
-      partial: [{ message: 'Update manifest:', detail: `${NAMED}: its package does not hold a.nif`, severity: 'warning' }],
-    });
-  });
-
-  it('an agent reads it as a separator in a restore it refused', async () => {
-    restoreFromManifest.mockResolvedValueOnce({ landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
-    const { run } = register();
-
-    const answer = await run(RESTORE, new AgentCall([separator], {}));
-
-    expect(answer).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: NAMED, reason: 'was skipped: it has no manifest.' }] }, partial: [] });
-  });
-});
-
 describe('An agent call', () => {
   const mod = (name: string) => ({ kind: 'mod' as const, name });
   const separator = (name: string) => ({ kind: 'separator' as const, name });
 
-  it('update manifest acts on the mods it is given, a separator for itself and the mods it holds, with no progress notification', async () => {
+  it('update manifest acts on the mods it is given, a separator for the mods it holds alone, with no progress notification', async () => {
     const { run } = register();
 
     await run(UPDATE, new AgentCall([mod('ModB'), separator('Weapons')], {}));
 
-    expect(sentMods(updateManifest)).toEqual([['ModB', 'Weapons_separator', 'ModA']]);
+    expect(sentMods(updateManifest)).toEqual([['ModB', 'ModA']]);
     expect(notification.cancellable).toEqual([]);
   });
 
