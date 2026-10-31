@@ -131,6 +131,10 @@
         ]
       }
     ],
+    "jsonValidation": [
+      { "fileMatch": ["*.manifest.json"], "url": "./schemas/manifest-1.schema.json" },
+      { "fileMatch": ["build.json"], "url": "./schemas/build-file-1.schema.json" }
+    ],
     "customEditors": [
       {
         "viewType": "modbench.conflicts",
