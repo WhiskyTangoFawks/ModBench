@@ -2,7 +2,7 @@
 // files its installation file does not yield with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
-import type { NewRepository } from '../client';
+import { isRefused, type MEditClient, type NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   BUILD_FILE_VERSION, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest,
@@ -19,6 +19,8 @@ type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
   & FolderRestoreAdapter;
+
+type SourcePathsClient = Pick<MEditClient, 'sourcePaths'>;
 
 /** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
@@ -86,7 +88,7 @@ async function downloadedRow(adapter: Pick<Adapter, 'downloadedFile'>, file: Ins
 
 /** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
  *  which takes from the mod's packages each file they give, and its assets. */
-export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
+export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, held } = read;
@@ -99,13 +101,14 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  const sourceManifest: Manifest = {
-    packages: recorded.manifest.packages, exclude: [], files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))),
-  };
+  const yielded = [...recorded.manifest.files].filter(([path]) => recorded.sources.has(path));
+  const placed = await client.sourcePaths(yielded.map(([path]) => path));
+  if (isRefused(placed)) return { refusal: `mEdit could not place its files in the source folder: ${placed.message}` };
+  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], files: new Map(yielded.map(([, hash], at) => [placed.paths[at] ?? '', hash])) };
   return {
     repository: {
       sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: `{"version":${BUILD_FILE_VERSION}}\n`,
-      manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest),
+      manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest), ignored: [...sourceManifest.files.keys()],
     },
   };
 }
@@ -162,12 +165,12 @@ export async function foldersNotLinked(
 
 /** The repository decompile and commit makes for each mod decompile and repair asks for, read as the instance is now. */
 export const newRepositoriesOver = (adapter: Adapter): {
-  readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
+  readonly of: (mod: string, client: SourcePathsClient) => Promise<MadeRepository | { readonly refusal: string }>;
   readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 } => ({
-  of: async (mod) => {
+  of: async (mod, client) => {
     const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-    return newRepositoryOf(adapter, mod, await gameToHand(adapter, sourceMods));
+    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods));
   },
   notLinked: (made, committed) => foldersNotLinked(adapter, made, committed),
 });

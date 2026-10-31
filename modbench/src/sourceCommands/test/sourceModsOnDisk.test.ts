@@ -19,8 +19,9 @@ import { buildFileText } from '../../test/buildFiles';
 import { readManifest } from '../../manifestAdapter/manifestRead';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
+import { updateManifest } from '../updateManifest';
+import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { sourceFolderRestoredFrom } from '../restoreFromManifest';
-import { manifestText as manifestTextOf } from '../../manifestAdapter/manifestAdapter';
 
 let root: string;
 
@@ -407,12 +408,6 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
   });
 });
 
-function placedAmongAssets(manifestText: string): string {
-  const read = readManifest(manifestText);
-  assert('manifest' in read);
-  return manifestTextOf({ ...read.manifest, files: new Map([...read.manifest.files].map(([path, hash]) => [`assets/${path}`, hash])) });
-}
-
 describe('a mod installed from an installation file, then decompiled and committed, then built, over an instance on disk', () => {
   async function anInstalledModDecompiled() {
     root = await mkdtemp(join(tmpdir(), 'modbench-installed-source-'));
@@ -428,8 +423,7 @@ describe('a mod installed from an installation file, then decompiled and committ
       if (mod === undefined) throw new Error('no mod');
       handed.push(mod);
       await put(`source/Mod/${BUILD_FILE}`, mod.repository.buildFile);
-      const placed = placedAmongAssets(mod.repository.manifest ?? '');
-      await put(`source/Mod/${mod.repository.manifestFile ?? ''}`, placed);
+      await put(`source/Mod/${mod.repository.manifestFile ?? ''}`, mod.repository.manifest ?? '');
       const sourceFolder = join(root, 'source', 'Mod');
       execFileSync('git', ['init', '-q', sourceFolder]);
       execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.repository.manifestFile ?? '']);
@@ -446,7 +440,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
     const restoreSourceFolder = (): Promise<string | undefined> =>
       sourceFolderRestoredFrom({ adapter, nexus: { download: () => Promise.reject(new Error('no download')) }, trash: (path) => rm(path) }, 'Mod', join(root, 'source', 'Mod'));
-    return { commands, trashed, handed, manifestText, restoreSourceFolder, status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
+    return { adapter, commands, trashed, handed, manifestText, restoreSourceFolder, status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
   }
 
   async function anInstalledModBuilt() {
@@ -469,8 +463,8 @@ describe('a mod installed from an installation file, then decompiled and committ
     const [sent] = handed;
     const manifest = readManifest(sent?.repository.manifest ?? '');
     assert('manifest' in manifest);
-    expect([sent?.repository.manifestFile, sent?.repository.assets, sent?.repository.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind)])
-      .toEqual(['Mod.manifest.json', [], '{"version":1}\n', ASSETS, ['installationFile']]);
+    expect([sent?.repository.manifestFile, sent?.repository.assets, sent?.repository.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.repository.ignored])
+      .toEqual(['Mod.manifest.json', [], '{"version":1}\n', ['assets/b.nif', 'assets/textures/c.dds'], ['installationFile'], ['assets/b.nif', 'assets/textures/c.dds']]);
     expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
       .toEqual(['Mod.manifest.json', 'assets/b.nif', 'assets/textures/c.dds', 'build.json']);
   });
@@ -482,6 +476,18 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await restoreSourceFolder()).toBeUndefined();
 
     expect(await textsBelow(join(root, 'source', 'Mod', 'assets'))).toEqual({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
+  });
+
+  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (modlist-repository.md, Update manifest, story 2)', async () => {
+    const { adapter } = await anInstalledModDecompiled();
+    const manifests = async (): Promise<string[]> => [
+      await readFile(join(root, 'source', 'Mod', 'Mod.manifest.json'), 'utf8'), await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8'),
+    ];
+    const before = await manifests();
+
+    const outcome = await updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false);
+
+    expect([await manifests(), outcome.refused]).toEqual([before, []]);
   });
 
   it('changes nothing and trashes nothing at a first build that makes the folder it already holds (mods.md, Build, story 3)', async () => {

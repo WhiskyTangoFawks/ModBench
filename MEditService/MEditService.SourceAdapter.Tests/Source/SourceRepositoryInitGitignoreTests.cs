@@ -76,23 +76,26 @@ public sealed class SourceRepositoryInitGitignoreTests
     }
 
     [Fact]
-    public void AManifestsPaths_AreWhereTheSourceFolderHoldsEachFileAsAnAsset_SoTheBuildReadsWhatRestoreWrites()
+    public void AnIgnoredPathUnderTheAssets_IsIgnored_WhileTheOtherAssetsStayTracked()
     {
-        using var sourceFolder = new ScratchDirectory("medit-init-manifest-");
-        const string Manifest =
-            "{\n\"version\":1,\n\"exclude\":[\n\"textures\"\n],\n\"files\":{\n\"textures/b.dds\":\"BBBBBBBBBBB=\"\n}\n}\n";
+        using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
         TestAdapters.Source().Init(
-            sourceFolder, SourceInits.BuildFile, [Plugin],
-            [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))], null,
-            new RootFile("Mod.manifest.json", System.Text.Encoding.UTF8.GetBytes(Manifest)));
+            sourceFolder, SourceInits.BuildFile, [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))], null,
+            new RootFile("Mod.manifest.json", "{}"u8.ToArray()), ["assets/textures/b [1].dds"]);
 
-        Assert.Equal(
-            "{\n\"version\":1,\n\"exclude\":[\n\"assets/textures\"\n],\n\"files\":{\n\"assets/textures/b.dds\":\"BBBBBBBBBBB=\"\n}\n}\n",
-            File.ReadAllText(Path.Combine(sourceFolder, "Mod.manifest.json")));
-        Directory.CreateDirectory(Path.Combine(sourceFolder, "assets", "textures"));
-        File.WriteAllText(Path.Combine(sourceFolder, "assets", "textures", "b.dds"), "a package yields it");
-        Assert.True(Ignored(sourceFolder, "assets/textures/b.dds"));
+        Assert.True(Ignored(sourceFolder, "assets/textures/b [1].dds"));
         Assert.False(Ignored(sourceFolder, "assets/meshes/a.nif"));
+    }
+
+    [Fact]
+    public void AManifestWhoseNameHoldsGlobCharacters_IsCommitted()
+    {
+        using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
+        const string Name = "Mod [Patch] #1!.manifest.json";
+
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [], null, new RootFile(Name, "{}"u8.ToArray()));
+
+        Assert.Contains(Name, CommittedPaths(sourceFolder));
     }
 }

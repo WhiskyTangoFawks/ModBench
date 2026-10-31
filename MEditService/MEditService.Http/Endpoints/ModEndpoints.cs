@@ -26,6 +26,13 @@ internal static class ModEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        app.MapPost("/source-paths", SourcePaths)
+            .WithName("SourcePaths")
+            .WithTags("Mods")
+            .WithDescription("Where a source folder holds each given file of a mod folder, as an asset, by its forward-slash path in the source folder.")
+            .Produces<SourcePathsResult>()
+            .ProducesProblem(400);
+
         app.MapPost("/decompile-and-commit", DecompileAndCommit)
             .WithName("DecompileAndCommitMod")
             .WithTags("Mods")
@@ -41,6 +48,11 @@ internal static class ModEndpoints
         return app;
     }
 
+    internal static IResult SourcePaths(SourcePathsRequest req, ISourceAdapter source) =>
+        req.Paths is { } paths && FolderPaths.AreInTheFolder(paths)
+            ? Results.Ok(new SourcePathsResult([.. paths.Select(source.AssetPathOf)]))
+            : EndpointMapping.BadRequest("Every path is a forward-slash path in the mod folder.");
+
     // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
     internal static async Task<IResult> DecompileAndCommit(DecompileAndCommitRequest req, DecompileAndCommitModHandler decompileAndCommitModHandler, ILoggerFactory loggerFactory)
     {
@@ -48,8 +60,8 @@ internal static class ModEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return EndpointMapping.BadRequest("At least one mod is required.");
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || !mod.Repository.IsWhole))
-            return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || mod.Repository.WhyNotWhole is not null))
+            return EndpointMapping.BadRequest(mods.Select(mod => mod.Repository.WhyNotWhole).FirstOrDefault(why => why is not null) ?? NewRepositoryRequest.NotWhole);
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
@@ -139,21 +151,43 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 /// <summary>The mods to decompile and commit (ADR-0013).</summary>
 internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
 
+/// <summary>Files of a mod folder, by forward-slash path.</summary>
+internal sealed record SourcePathsRequest(IReadOnlyList<string>? Paths);
+
+/// <summary>Where the source folder holds each file of the request, in the request's order.</summary>
+internal sealed record SourcePathsResult(IReadOnlyList<string> Paths);
+
 /// <summary>A mod by name, and the repository its decompile and commit makes.</summary>
 internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
 /// assets by path, its build file's text, and its manifest's name and text.</summary>
-internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null)
+internal sealed record NewRepositoryRequest(
+    string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null,
+    IReadOnlyList<string>? Ignored = null)
 {
     internal const string NotWhole =
         "A new repository needs its source folder, forward-slash paths in the mod folder for its assets, and its build file.";
 
-    internal bool IsWhole =>
-        !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null;
+    internal string? WhyNotWhole =>
+        !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null
+            ? WhyManifestIsNotWhole
+            : NotWhole;
+
+    private string? WhyManifestIsNotWhole => (ManifestFile, Manifest) switch
+    {
+        (null, null) => null,
+        (null, _) => "A manifest needs its file name: ManifestFile is missing.",
+        (_, null) => "A manifest needs its text: Manifest is missing.",
+        var (file, _) when !IsBareFileName(file) => $"The manifest's file name '{file}' must be a bare file name.",
+        _ => null,
+    };
+
+    private static bool IsBareFileName(string name) =>
+        !string.IsNullOrWhiteSpace(name) && name is not ("." or "..") && name.IndexOfAny(['/', '\\']) < 0;
 
     internal NewRepository ToNewRepository() =>
-        new(SourceFolder, Assets ?? [], Utf8(BuildFile), ManifestFile is { } name && Manifest is { } text ? new RootFile(name, Utf8(text)) : null);
+        new(SourceFolder, Assets ?? [], Utf8(BuildFile), ManifestFile is { } name && Manifest is { } text ? new RootFile(name, Utf8(text)) : null, Ignored);
 
     private static byte[] Utf8(string text) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text);
 }

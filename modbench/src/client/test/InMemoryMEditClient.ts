@@ -8,6 +8,8 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '
 import type { ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
+const ASSETS_FOLDER = 'assets';
+
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
@@ -19,7 +21,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'decompileAndCommit' | 'build' | 'cloneSubmodules' | 'sourcePaths' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile' | 'decompileAndRepair';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -323,6 +325,14 @@ export class InMemoryMEditClient implements MEditClient {
 
   cloneSubmodules(...args: Parameters<MEditClient['cloneSubmodules']>): ReturnType<MEditClient['cloneSubmodules']> {
     return this.command('cloneSubmodules', args);
+  }
+
+  sourcePaths(paths: readonly string[]): ReturnType<MEditClient['sourcePaths']> {
+    if (this.commandHandlers.sourcePaths === undefined && this.commandResults.sourcePaths === undefined) {
+      this.record('sourcePaths', [paths]);
+      return Promise.resolve({ paths: paths.map((path) => `${ASSETS_FOLDER}/${path}`) });
+    }
+    return this.command('sourcePaths', [paths]);
   }
 
   getPlugins(): ReturnType<MEditClient['getPlugins']> { return this.query('getPlugins', []); }

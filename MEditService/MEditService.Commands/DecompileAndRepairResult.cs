@@ -9,7 +9,7 @@ public sealed record PluginToRepair(PluginAddress Plugin, NewRepository? NewRepo
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): the
 /// assets, by their paths in the mod folder, the build file and the manifest.</summary>
-public sealed record NewRepository(string SourceFolder, IReadOnlyList<string> Assets, byte[] BuildFile, RootFile? Manifest = null);
+public sealed record NewRepository(string SourceFolder, IReadOnlyList<string> Assets, byte[] BuildFile, RootFile? Manifest = null, IReadOnlyList<string>? Ignored = null);
 
 public sealed record DecompileAndRepairResult(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileAndRepairRefused> Refused)
     : ISelectionAnswer<DecompileAndRepairRefused>;

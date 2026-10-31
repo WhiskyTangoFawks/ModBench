@@ -57,11 +57,15 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
+    /// <summary>Where the source folder holds the mod folder's file at <paramref name="pathInModFolder"/>, as an asset.</summary>
+    string AssetPathOf(string pathInModFolder);
+
     /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree, the
-    /// assets, <paramref name="buildFile"/> and <paramref name="manifest"/>, then any <paramref name="repair"/>.</summary>
+    /// assets, <paramref name="buildFile"/> and <paramref name="manifest"/>, then any <paramref name="repair"/>. Git ignores each
+    /// path of <paramref name="ignored"/> in the source folder.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null);
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null);
 
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);

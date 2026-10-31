@@ -20,12 +20,12 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null)
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
+        IReadOnlyList<string>? ignored = null)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
 
-        var placed = manifest is null ? null : manifest with { Content = AssetManifest.Placed(manifest.Content) };
         WriteJournal journal = new(sourceFolder);
         var git = new SourceRepositoryGit(sourceFolder);
         try
@@ -36,9 +36,9 @@ internal static class GitInit
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(placed)));
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, ignored ?? [])));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
-            if (placed is not null) journal.Write(Path.Combine(sourceFolder, placed.Name), placed.Content);
+            if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             if (repair is var (repaired, commit))
@@ -107,8 +107,8 @@ internal static class GitInit
     }
 
     // Root-anchored, so no same-named folder deeper is un-ignored. An un-ignore outranks the user's global
-    // excludes. The manifest's files come last, ignored: a package yields them (ADR-0022).
-    private static string GitignoreContent(RootFile? manifest) =>
+    // excludes. The ignored paths come last: a package yields them (ADR-0022).
+    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<string> ignored) =>
         "*\n" +
         "!/.gitignore\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
@@ -116,7 +116,8 @@ internal static class GitInit
         $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
         $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +
         $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n" +
-        (manifest is null ? "" : $"!/{manifest.Name}\n" + string.Concat(AssetManifest.PathsOf(manifest.Content).Select(path => $"/{Escaped(path)}\n")));
+        (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +
+        string.Concat(ignored.Select(path => $"/{Escaped(path)}\n"));
 
     private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }

@@ -33,6 +33,9 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>A folder of its own, so no asset's path can be the plugin source's or a file init writes.</summary>
     internal const string AssetsFolderName = "assets";
 
+    /// <summary>Where the source folder holds the mod folder's file at <paramref name="pathInModFolder"/>, as an asset.</summary>
+    internal static string AssetPathOf(string pathInModFolder) => $"{AssetsFolderName}/{pathInModFolder}";
+
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
