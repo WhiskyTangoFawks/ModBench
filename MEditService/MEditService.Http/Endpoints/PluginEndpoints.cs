@@ -352,8 +352,14 @@ internal static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var requested = req.Plugins ?? [];
-        if (requested.Any(p => p.NewRepository is { IsWhole: false }))
+        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.NotWhole))
             return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole));
+        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
+            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile));
+        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
+            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsText));
+        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.ManifestFileIsAPath))
+            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.ManifestFileIsAPath));
         return OverPlugins([.. requested.Select(p => p.Plugin)], _ => EndpointMapping.Answered(
             "Decompile and repair", logger,
             repairHandler.DecompileAndRepairAsync(

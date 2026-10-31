@@ -2,20 +2,25 @@
 // files its installation file does not yield with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
-import type { NewRepository } from '../client';
+import { isRefused, type MEditClient, type NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  BUILD_FILE_VERSION, manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest,
+  BUILD_FILE_VERSION, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
+import type { MoveToTrash } from '../ports/trash';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
+import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
 import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>;
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
+  & FolderRestoreAdapter;
+
+type SourcePathsClient = Pick<MEditClient, 'sourcePaths'>;
 
 /** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
@@ -83,7 +88,7 @@ async function downloadedRow(adapter: Pick<Adapter, 'downloadedFile'>, file: Ins
 
 /** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
  *  which takes from the mod's packages each file they give, and its assets. */
-export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
+export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, held } = read;
@@ -96,7 +101,16 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: `{"version":${BUILD_FILE_VERSION}}\n` } };
+  const yielded = [...recorded.manifest.files].filter(([path]) => recorded.sources.has(path));
+  const placed = await client.sourcePaths(yielded.map(([path]) => path));
+  if (isRefused(placed)) return { refusal: `mEdit could not place its files in the source folder: ${placed.message}` };
+  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], files: new Map(yielded.map(([, hash], at) => [placed.paths[at] ?? '', hash])) };
+  return {
+    repository: {
+      sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: `{"version":${BUILD_FILE_VERSION}}\n`,
+      manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest), ignored: [...sourceManifest.files.keys()],
+    },
+  };
 }
 
 const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: readonly string[]): string[] => {
@@ -104,11 +118,24 @@ const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: 
   return paths.filter((path) => !leftOut.has(path.toLowerCase()));
 };
 
-type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 'folderValue'>;
+type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 'folderValue'> & FolderRestoreAdapter;
+
+// The source folder is new, and the installation file a mod was made from is on this machine.
+const replacesNothing: MoveToTrash = (path) => Promise.reject(new Error(`'${path}' is in the source folder already`));
+const downloadsNothing: RestoreDeps['nexus'] = { download: () => Promise.resolve({ found: false, reason: 'decompile and commit downloads nothing' }) };
+
+// ADR-0022: the repository leaves out what a package yields, so the manifest it holds writes those files where the build reads them.
+async function sourceFolderRestoredOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
+  const why = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder);
+  return why === undefined ? undefined : `its source folder could not be restored from its manifest: ${why}`;
+}
 
 // The mod is a source mod once its folder's manifest names its repository. It records the folder as it is, as its build
 // would, so a first build that makes the same folder changes nothing.
-async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
+async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, made: MadeRepository): Promise<string | undefined> {
+  const { repository } = made;
+  const notRestored = await sourceFolderRestoredOrWhy(adapter, mod, made);
+  if (notRestored !== undefined) return notRestored;
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
   try {
@@ -138,12 +165,12 @@ export async function foldersNotLinked(
 
 /** The repository decompile and commit makes for each mod decompile and repair asks for, read as the instance is now. */
 export const newRepositoriesOver = (adapter: Adapter): {
-  readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
+  readonly of: (mod: string, client: SourcePathsClient) => Promise<MadeRepository | { readonly refusal: string }>;
   readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 } => ({
-  of: async (mod) => {
+  of: async (mod, client) => {
     const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-    return newRepositoryOf(adapter, mod, await gameToHand(adapter, sourceMods));
+    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods));
   },
   notLinked: (made, committed) => foldersNotLinked(adapter, made, committed),
 });

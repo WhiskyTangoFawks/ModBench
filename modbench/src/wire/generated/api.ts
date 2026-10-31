@@ -134,6 +134,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/source-paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Where a source folder holds each given file of a mod folder, as an asset, by its forward-slash path in the source folder. */
+        post: operations["SourcePaths"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/decompile-and-commit": {
         parameters: {
             query?: never;
@@ -1385,6 +1402,9 @@ export interface components {
             sourceFolder: string;
             assets?: string[] | null;
             buildFile: string;
+            manifestFile?: string | null;
+            manifest?: string | null;
+            ignored?: string[] | null;
         };
         NotificationEvent: {
             kind: string;
@@ -1647,6 +1667,12 @@ export interface components {
         SourceMove: {
             from: string;
             to: string;
+        };
+        SourcePathsRequest: {
+            paths?: string[] | null;
+        };
+        SourcePathsResult: {
+            paths: string[];
         };
         SourceProblem: {
             formKey?: string | null;
@@ -2069,6 +2095,39 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SourcePaths: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourcePathsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePathsResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,8 +16,12 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { statusNow } from '../../test/statusNow';
 import { manifestIn, sourceModsOf, writeManifestIn, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { buildFileText } from '../../test/buildFiles';
+import { readManifest } from '../../manifestAdapter/manifestRead';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
+import { updateManifest } from '../updateManifest';
+import { fileProblemsFake } from '../../test/fileProblemsFake';
+import { sourceFolderRestoredFrom } from '../restoreFromManifest';
 
 let root: string;
 
@@ -404,7 +408,7 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
   });
 });
 
-describe('a mod installed from an installation file, then decompiled and committed, over an instance on disk', () => {
+describe('a mod installed from an installation file, then decompiled and committed, then built, over an instance on disk', () => {
   async function anInstalledModDecompiled() {
     root = await mkdtemp(join(tmpdir(), 'modbench-installed-source-'));
     await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
@@ -414,10 +418,16 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await adapter.install({ kind: 'archive', path: join(root, 'downloads', 'Mod.7z') }, { kind: 'new', name: 'Mod' }, { version: '1.2', installationFileName: 'Mod.7z' }, (path) => rm(path)))
       .toEqual({ landed: true });
     const client = new InMemoryMEditClient();
+    const handed: DecompileAndCommitMod[] = [];
     client.setCommandHandler('decompileAndCommit', async ([mod]) => {
       if (mod === undefined) throw new Error('no mod');
+      handed.push(mod);
       await put(`source/Mod/${BUILD_FILE}`, mod.repository.buildFile);
-      execFileSync('git', ['init', '-q', join(root, 'source', 'Mod')]);
+      await put(`source/Mod/${mod.repository.manifestFile ?? ''}`, mod.repository.manifest ?? '');
+      const sourceFolder = join(root, 'source', 'Mod');
+      execFileSync('git', ['init', '-q', sourceFolder]);
+      execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.repository.manifestFile ?? '']);
+      execFileSync('git', ['-C', sourceFolder, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'Init Mod']);
       return { landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] };
     });
     client.setCommandHandler('build', async () => {
@@ -427,13 +437,73 @@ describe('a mod installed from an installation file, then decompiled and committ
     const trashed: string[] = [];
     const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
     expect(await commands.decompileAndCommit(['Mod'])).toMatchObject({ refused: [] });
-    return { status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
+    const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
+    const restoreSourceFolder = (): Promise<string | undefined> =>
+      sourceFolderRestoredFrom({ adapter, nexus: { download: () => Promise.reject(new Error('no download')) }, trash: (path) => rm(path) }, 'Mod', join(root, 'source', 'Mod'));
+    return { adapter, commands, trashed, handed, manifestText, restoreSourceFolder, status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
+  }
+
+  async function anInstalledModBuilt() {
+    const { commands, status } = await anInstalledModDecompiled();
+    expect(await commands.build(['Mod'])).toMatchObject({ refused: [], landed: [{ mod: 'Mod' }] });
+    const read = await manifestIn(join(root, 'mods', 'Mod'));
+    assert(read !== undefined && 'manifest' in read);
+    return { manifest: read.manifest, status: await status() };
   }
 
   it('reads as its manifest says right after decompile and commit, which records the folder as it is (GLOSSARY, Manifest)', async () => {
     const { status } = await anInstalledModDecompiled();
 
     expect(await status()).toMatchObject({ noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
+  });
+
+  it('hands mEdit its source folder\'s manifest, which names the files its installation file yields and no asset, and writes those files into the source folder (plugins.md, Decompile and commit, stories 2 and 3)', async () => {
+    const { handed } = await anInstalledModDecompiled();
+
+    const [sent] = handed;
+    const manifest = readManifest(sent?.repository.manifest ?? '');
+    assert('manifest' in manifest);
+    expect([sent?.repository.manifestFile, sent?.repository.assets, sent?.repository.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.repository.ignored])
+      .toEqual(['Mod.manifest.json', [], '{"version":1}\n', ['assets/b.nif', 'assets/textures/c.dds'], ['installationFile'], ['assets/b.nif', 'assets/textures/c.dds']]);
+    expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
+      .toEqual(['Mod.manifest.json', 'assets/b.nif', 'assets/textures/c.dds', 'build.json']);
+  });
+
+  it('restores the files its source folder\'s manifest names to the path that manifest gives them, which is where the build reads an asset', async () => {
+    const { restoreSourceFolder } = await anInstalledModDecompiled();
+    await rm(join(root, 'source', 'Mod', 'assets'), { recursive: true });
+
+    expect(await restoreSourceFolder()).toBeUndefined();
+
+    expect(await textsBelow(join(root, 'source', 'Mod', 'assets'))).toEqual({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
+  });
+
+  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (modlist-repository.md, Update manifest, story 2)', async () => {
+    const { adapter } = await anInstalledModDecompiled();
+    const manifests = async (): Promise<string[]> => [
+      await readFile(join(root, 'source', 'Mod', 'Mod.manifest.json'), 'utf8'), await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8'),
+    ];
+    const before = await manifests();
+
+    const outcome = await updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false);
+
+    expect([await manifests(), outcome.refused]).toEqual([before, []]);
+  });
+
+  it('changes nothing and trashes nothing at a first build that makes the folder it already holds (mods.md, Build, story 3)', async () => {
+    const { commands, trashed, manifestText } = await anInstalledModDecompiled();
+    const decompiled = await manifestText();
+
+    await commands.build(['Mod']);
+
+    expect([await manifestText(), trashed]).toEqual([decompiled, []]);
+  });
+
+  it('records its repository as its one package, and each file it made with its bytes, so it reads as its manifest says (commands.md, build)', async () => {
+    const { manifest, status } = await anInstalledModBuilt();
+
+    expect([manifest.packages, pathsIn(manifest), [...manifest.files.values()].every((hash) => hash !== null)]).toEqual([[REPOSITORY], ['Mod.esp', 'b.nif', 'textures/c.dds'], true]);
+    expect(status).toMatchObject({ differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
   });
 });
 

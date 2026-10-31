@@ -25,7 +25,7 @@ async function fileNamesIn(folder: string): Promise<string[]> {
 const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
   (await fileNamesIn(folder)).filter((held) => held.toLowerCase() === name.toLowerCase());
 
-const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
+export const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
 
 const manifestsIn = async (folder: string): Promise<string[]> => (await fileNamesIn(folder)).filter(isManifestPath);
 

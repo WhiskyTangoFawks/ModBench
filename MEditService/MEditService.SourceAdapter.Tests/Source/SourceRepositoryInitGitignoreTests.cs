@@ -60,4 +60,42 @@ public sealed class SourceRepositoryInitGitignoreTests
 
         Assert.True(Ignored(sourceFolder, "My-plugin-source/notes.txt"));
     }
+
+    [Fact]
+    public void AnInitWithAManifest_CommitsItAtTheRoot_AndLeavesAFileTheManifestNamesIgnored()
+    {
+        using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
+        File.WriteAllText(Path.Combine(sourceFolder, "assets.nif"), "a file a package yields");
+
+        TestAdapters.Source().Init(
+            sourceFolder, SourceInits.BuildFile, [Plugin], [], null, new RootFile("Mod.manifest.json", "{}"u8.ToArray()));
+
+        Assert.Equal(
+            [".gitignore", "Mod.manifest.json", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
+            CommittedPaths(sourceFolder));
+    }
+
+    [Fact]
+    public void AnIgnoredPathUnderTheAssets_IsIgnored_WhileTheOtherAssetsStayTracked()
+    {
+        using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
+
+        TestAdapters.Source().Init(
+            sourceFolder, SourceInits.BuildFile, [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))], null,
+            new RootFile("Mod.manifest.json", "{}"u8.ToArray()), ["assets/textures/b [1].dds"]);
+
+        Assert.True(Ignored(sourceFolder, "assets/textures/b [1].dds"));
+        Assert.False(Ignored(sourceFolder, "assets/meshes/a.nif"));
+    }
+
+    [Fact]
+    public void AManifestWhoseNameHoldsGlobCharacters_IsCommitted()
+    {
+        using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
+        const string Name = "Mod [Patch] #1!.manifest.json";
+
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [], null, new RootFile(Name, "{}"u8.ToArray()));
+
+        Assert.Contains(Name, CommittedPaths(sourceFolder));
+    }
 }

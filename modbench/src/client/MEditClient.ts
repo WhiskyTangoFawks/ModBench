@@ -198,6 +198,9 @@ export type Submodule = components['schemas']['SubmoduleRequest'];
  *  by that folder, with why. */
 export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
 
+/** Where the source folder holds each file of a mod folder, in the order asked. */
+export type SourcePaths = components['schemas']['SourcePathsResult'];
+
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAt = components['schemas']['RecordAt'];
@@ -258,6 +261,8 @@ export interface MEditClient {
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
   // ADR-0022: each submodule cloned at its pin, or named with why it was not.
   cloneSubmodules(submodules: readonly Submodule[]): Promise<SubmodulesCloned | WriteRefused>;
+  // The Source adapter's layout: where the source folder holds each file of a mod folder, which a manifest there names.
+  sourcePaths(paths: readonly string[]): Promise<SourcePaths | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).
