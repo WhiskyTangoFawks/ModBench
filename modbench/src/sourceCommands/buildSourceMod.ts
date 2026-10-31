@@ -204,8 +204,8 @@ async function stampsOf(adapter: Adapter, folder: string, paths: readonly string
   return stamps;
 }
 
-// Build, story 4 and ADR-0027: a file a step made last time that the steps did not write again is none of the folder's
-// output, so it goes to the trash. `before`: the stamps of those files before the steps ran.
+// ADR-0027: a file a step made last time that the steps did not write again is none of the folder's output, so it goes to
+// the trash. `before`: the stamps of those files before the steps ran.
 async function stepFilesNotMadeAgain(deps: BuildDeps, mod: SourceModToBuild, before: ReadonlyMap<string, string>): Promise<{ readonly why?: string; readonly trashed: string[] }> {
   const after = await stampsOf(deps.adapter, mod.folder, [...before.keys()]);
   const notMade = [...before].filter(([path, stamp]) => after.get(path) === stamp).map(([path]) => path);

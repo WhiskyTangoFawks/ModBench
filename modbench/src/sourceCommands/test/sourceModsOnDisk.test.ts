@@ -304,7 +304,7 @@ describe('what build sends to the trash, over an instance on disk (mods.md, A so
     expect([inTrash, pathsIn(await recorded())]).toEqual([{ 'made.dds': 'made' }, ['Mod.esp', 'b.nif', 'textures/c.dds']]);
   });
 
-  it('sends to the trash the file a step made before and no longer makes, and records no line for it, while the file it makes again stays', async () => {
+  it('sends to the trash the file a step made before and stops making, and records no line for it, while the file it makes again stays', async () => {
     let makes = ['made.dds', 'again.dds'];
     const { build, recorded, inTrash } = await aSourceMod({ steps: [STEP] }, MADE, async () => { for (const path of makes) await put(`mods/Mod/${path}`, 'made'); });
     await build();

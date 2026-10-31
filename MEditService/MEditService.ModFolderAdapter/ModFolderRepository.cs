@@ -37,15 +37,6 @@ public sealed class ModFolderRepository : IModFolderRepository
         }
     }
 
-    public void DeleteFile(string folder, string path)
-    {
-        File.Delete(Path.Combine(folder, path));
-        for (var above = Path.GetDirectoryName(path); !string.IsNullOrEmpty(above) && IsEmptyFolder(Path.Combine(folder, above)); above = Path.GetDirectoryName(above))
-            Directory.Delete(Path.Combine(folder, above));
-    }
-
-    private static bool IsEmptyFolder(string path) => Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any();
-
     private static bool SameBytes(string one, string other)
     {
         using var a = File.OpenRead(one);
