@@ -125,7 +125,7 @@ const outputAgainst = (repository: ManifestPackage, output: Output, folder: Fold
 // mods.md, Build, stories 3 and 8: a file mEdit left as it was keeps its last recorded line while the folder holds those
 // bytes; otherwise it has no line.
 function linesOf(output: Output, onDisk: ReadonlyMap<string, string>, folder: FolderValue, previous: readonly ManifestFile[]): ManifestFile[] {
-  const kept = output.leftAsItWas.flatMap((path): ManifestFile[] => {
+  const kept = output.leftAsItWas.filter((path) => !output.stepped.has(path)).flatMap((path): ManifestFile[] => {
     const line = previous.find((recorded) => recorded.path === path);
     const at = onDisk.get(path);
     const read = at === undefined ? undefined : folder.files.get(at);
@@ -149,14 +149,15 @@ async function recorded(
   const repository: ManifestPackage = { kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule };
   try {
     const folder = await adapter.folderValue(mod.folder);
-    const previous = await manifestIn(mod.folder);
+    const read = await manifestIn(mod.folder);
+    const previous = read !== undefined && 'manifest' in read ? read.manifest.files : [];
     const against = outputAgainst(repository, output, folder);
     const trashed = against.namedByNoLine;
     const why = await whyNotTrashed(adapter, trash, mod.folder, trashed);
     if (why !== undefined) return { failure: `The build stopped as ${why}, so its manifest was not written.` };
     const onDisk = new Map(against.lines.flatMap(({ line, onDisk: at }) => (at === undefined ? [] : [[line.path, at] as const])));
     await writeManifestIn(mod.folder, {
-      packages: [repository], exclude: [], archives: [], files: linesOf(output, onDisk, folder, previous !== undefined && 'manifest' in previous ? previous.manifest.files : []),
+      packages: [repository], exclude: [], archives: [], files: linesOf(output, onDisk, folder, previous),
       ...mod.version === undefined ? {} : { version: mod.version },
     });
     const undeclared = trashed.filter((path) => (beforeSteps !== undefined && !beforeSteps.has(path)) || output.stepped.has(unmarked(path, adapter.exclusionMark)));

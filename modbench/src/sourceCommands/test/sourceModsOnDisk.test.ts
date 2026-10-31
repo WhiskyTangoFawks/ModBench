@@ -375,6 +375,22 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
+  it('records one line for a file a step now makes, though its last manifest recorded its bytes', async () => {
+    const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: false }];
+    const { build, recorded } = await aSourceModTakingFromAnInstallationFile({
+      steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }],
+      files: [{ path: 'Mod - Main.ba2', entry: { kind: 'madeByStep' } }],
+    }, made);
+    await writeManifestIn(join(root, 'mods', 'Mod'), {
+      packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], exclude: [], archives: [],
+      files: [{ path: 'Mod - Main.ba2', entry: { kind: 'held' }, hash: 'QnTauWK5/T8=' }],
+    });
+
+    await build();
+
+    expect((await recorded())?.files.filter(({ path }) => path === 'Mod - Main.ba2')).toEqual([{ path: 'Mod - Main.ba2', entry: { kind: 'held' } }]);
+  });
+
   it('names it as differing when the folder holds other bytes than the line recorded', async () => {
     const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: true }];
     const { build, status, recorded } = await aSourceModTakingFromAnInstallationFile({}, made);
