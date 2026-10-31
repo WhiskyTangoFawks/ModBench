@@ -91,7 +91,7 @@ describe('the quick fix on a file deploy does not manage', () => {
     const problems = unmanagedProblems(collection);
     problems.publish([at('Data/a.esp')], []);
 
-    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } }, undefined, { diagnostics: [new Diagnostic(new Range(0, 0, 0, 0), 'other')] });
+    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } }, undefined, { diagnostics: [{ source: 'other' }] });
 
     expect(actions).toEqual([]);
   });
