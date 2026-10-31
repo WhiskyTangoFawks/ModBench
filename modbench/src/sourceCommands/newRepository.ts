@@ -11,8 +11,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
-import { sourceModManifest } from './buildSourceMod';
-import { buildManifest, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, sourceModManifest, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
@@ -104,12 +103,12 @@ const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: 
 type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'modMetadata' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash'>;
 
 // The folder as it is, each file its build file takes from that file's package and every other from the repository.
-async function folderLines(adapter: LinkAdapter, folder: string, buildFile: BuildFile, repository: string): Promise<ManifestFile[] | { readonly refusal: string }> {
+async function folderLines(adapter: LinkAdapter, folder: string, buildFile: BuildFile): Promise<ManifestFile[] | { readonly refusal: string }> {
   const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
   if ('refusal' in all) return all;
   return all.map(({ path, hash }): ManifestFile => {
     const taken = buildFile.files.find((line) => line.path === path);
-    return taken === undefined ? { path, entry: { kind: 'held' }, package: repository, hash } : { ...taken, package: packageOf(buildFile, taken)?.name, hash };
+    return taken === undefined ? { path, entry: { kind: 'held' }, hash } : { ...taken, package: packageOf(buildFile, taken)?.name, hash };
   });
 }
 
@@ -122,7 +121,7 @@ async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository
   if ('refused' in read) return read.refused;
   try {
     const named: ManifestPackage = { kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false };
-    const files = await folderLines(adapter, folder, read.buildFile, named.name);
+    const files = await folderLines(adapter, folder, read.buildFile);
     if ('refusal' in files) return files.refusal;
     await writeManifestIn(folder, sourceModManifest(read.buildFile, named, metadata.kind === 'read' ? metadata.answer : {}, files));
     return undefined;

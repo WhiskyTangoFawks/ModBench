@@ -1,6 +1,7 @@
 import type {
   BuildFile, BuildFileRead, GameDepot, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
 } from './manifest';
+import { installationFileIn } from './packageOf';
 
 type Json = Record<string, unknown>;
 
@@ -178,7 +179,7 @@ const buildFileOf = (text: string, keys: readonly string[]): BuildFile => {
   const exclude = Object.hasOwn(root, 'exclude') ? stringsOf(root.exclude, 'its exclude') : [];
   inTheFolder('exclude', exclude);
   const installationFile = Object.hasOwn(root, 'installationFile') ? textOf(root.installationFile, 'its installationFile') : undefined;
-  if (installationFile !== undefined && !packages.some(({ kind, name }) => kind === 'installationFile' && name === installationFile)) {
+  if (installationFile !== undefined && installationFileIn(packages, installationFile) === undefined) {
     throw new Unreadable((file) => `its ${file} names the installation file '${installationFile}', which none of its packages is`);
   }
   return {

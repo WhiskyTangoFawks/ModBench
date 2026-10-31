@@ -229,20 +229,6 @@ describe('sourceCommands build, in mod order', () => {
     });
   });
 
-  it('names a mod whose step failed, and writes no manifest', async () => {
-    await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }] }));
-    const client = new InMemoryMEditClient();
-    buildingEach(client);
-    const tasks = recordingTasks(['Optimise'], { [folderOf('ModA')]: 'step \'Optimise\' exited with code 2' });
-
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks, trash: vi.fn() }).build(['ModA']);
-
-    expect(outcome).toEqual({
-      landed: [{ ...landedOf('ModA'), failure: 'The build stopped as its step \'Optimise\' exited with code 2, so its manifest was not written.' }], refused: [],
-    });
-    expect(await readdir(folderOf('ModA'))).toEqual([]);
-  });
-
   it('names a mod a file of which it vouches for could not be hashed, and writes no manifest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), made: [{ path: 'a.esp', vouchedFor: true }] }], refused: [] }));

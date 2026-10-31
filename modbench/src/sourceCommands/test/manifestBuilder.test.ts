@@ -39,6 +39,12 @@ describe('a mod\'s manifest from its files', () => {
     });
   });
 
+  it('names no installation file for a mod that has none, though a downloaded file holds its files', async () => {
+    const { manifest } = await built({ 'a.nif': 'HA' }, { downloads: [download('Other.7z', { 'a.nif': 'HA' })] }, undefined, '1.2');
+
+    expect([manifest.packages.map(({ name }) => name), manifest.installationFile]).toEqual([['Other.7z'], undefined]);
+  });
+
   it('records a version only when the mod has a package', async () => {
     expect([(await built({ 'a.nif': 'HA' }, {}, undefined, '1.2')).manifest.version, (await built({}, { installationFile: download('M.7z', {}) }, undefined, '1.2')).manifest.version]).toEqual([undefined, '1.2']);
   });

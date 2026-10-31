@@ -6,8 +6,7 @@ import type { Manifest, ManifestFile } from './manifest';
 import type { FolderValue, HeldMetadata, PackageEntries, StatusValues } from '../repositoriesLib/statusValues';
 import type { ManifestAt } from './manifestFiles';
 import { installationFileLack } from './packageLack';
-import { packageOf } from './packageOf';
-import { repositoryOf } from './sourceMods';
+import { installationFileIn, packageOf, repositoryOf } from './packageOf';
 
 /** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
@@ -136,10 +135,10 @@ function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kin
 
 /** The version and installation file the manifest holds, as a mod's metadata holds them. */
 export function metadataOf(manifest: Manifest): HeldMetadata {
-  const named = manifest.packages.find(({ kind, name }) => kind === 'installationFile' && name === manifest.installationFile);
+  const named = installationFileIn(manifest.packages, manifest.installationFile);
   return {
     ...(manifest.version === undefined ? {} : { version: manifest.version }),
-    ...(named?.kind === 'installationFile' ? { installationFile: { name: named.name, ...(named.page === undefined ? {} : { page: named.page }) } } : {}),
+    ...(named === undefined ? {} : { installationFile: { name: named.name, ...(named.page === undefined ? {} : { page: named.page }) } }),
   };
 }
 

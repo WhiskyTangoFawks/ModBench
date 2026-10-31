@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
-import { ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from '../manifestAdapter/manifestAdapter';
-import type { GameDepot, Manifest, ManifestFile, ManifestPackage, PackageEntry } from '../manifestAdapter/manifestAdapter';
-import type { Depot, GameFileTaken, InstallationFile } from '../instanceAdapter/instanceAdapter';
+import { installationFileIn, ordinal, ordinalIgnoreCaseThenOrdinal, pinText } from '../manifestAdapter/manifestAdapter';
+import type { BuildFile, GameDepot, Manifest, ManifestFile, ManifestPackage, PackageEntry } from '../manifestAdapter/manifestAdapter';
+import type { Depot, GameFileTaken, InstallationFile, ModMetadata } from '../instanceAdapter/instanceAdapter';
 
 export interface HashedModFile {
   readonly path: string;
@@ -219,4 +219,17 @@ function takenFromOtherDownloadedFiles(sourcing: Sourcing, others: readonly Down
     sourcing.lines.set(file.path, lineIn(holding.other.holder.name, file.path, holding.path));
   }
   sourcing.packages.push(...used.map((other) => ({ holder: other.holder, package: other.package })));
+}
+
+/** A source mod's manifest: its repository, each package its build file names, and its metadata as update manifest
+ *  records it (commands.md, build). */
+export function sourceModManifest(
+  buildFile: Pick<BuildFile, 'packages'>, repository: ManifestPackage, metadata: ModMetadata, files: readonly ManifestFile[],
+): Manifest {
+  const installedFrom = installationFileIn(buildFile.packages, metadata.installationFile?.name);
+  return {
+    packages: [repository, ...buildFile.packages], exclude: [], archives: [], files,
+    ...metadata.version === undefined ? {} : { version: metadata.version },
+    ...installedFrom === undefined ? {} : { installationFile: installedFrom.name },
+  };
 }

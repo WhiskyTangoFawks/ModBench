@@ -9,7 +9,6 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
-import { metadataOf } from '../../manifestAdapter/manifestAdapter';
 import { manifestIn } from '../../manifestAdapter/manifestFiles';
 import { updateManifest } from '../updateManifest';
 import { statusNow } from '../../test/statusNow';
@@ -96,11 +95,5 @@ describe('update manifest over an instance on disk, of a mod whose metadata name
     const status = await statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 
     expect([manifest.packages.map(({ name }) => name), status.metadataDiffers]).toEqual([['Other.7z'], false]);
-  });
-
-  it('holds no installation file for restore to write into the metadata', async () => {
-    const { manifest } = await aModTakingFromADownloadedFile();
-
-    expect(metadataOf(manifest)).toEqual({ version: '1.2' });
   });
 });
