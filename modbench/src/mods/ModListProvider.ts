@@ -65,7 +65,7 @@ interface ModFacts {
   readonly status?: ModStatus;
 }
 
-/** A separator, which has no manifest, and the mods it shows: every mod it holds, or only the matching ones when a filter
+/** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
  *  shows it for them, and then it opens on its own. */
 export class SeparatorNode extends vscode.TreeItem {
   readonly kind = 'separator' as const;

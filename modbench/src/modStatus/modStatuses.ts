@@ -29,7 +29,7 @@ const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening
   return { dispose: () => { listeners.delete(listener); } };
 };
 
-/** Each mod's status, none for a separator, which has no manifest, derived from the latest instance value while the instance holds a repository. An unreadable
+/** Each mod's status, derived from the latest instance value while the instance holds a repository. An unreadable
  *  status keeps the last good one shown, and says why on the message line and once in the Output (common.md, Reporting). */
 export class ModStatuses {
   private derived: ReadonlyMap<string, ModStatus> = new Map();
