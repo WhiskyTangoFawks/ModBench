@@ -19,12 +19,24 @@ const stepOf = (index: number, line: unknown): ManifestStep => {
   const task = textOf(FILE, required(FILE, members, 'task', where), where);
   if (task.trim() === '') throw unreadable(FILE, where, 'it names no task');
   const args = Object.hasOwn(members, 'args') ? stringsOf(FILE, members.args, where) : [];
-  return Object.hasOwn(members, 'page') ? { task, args, page: textOf(FILE, members.page, where) } : { task, args };
+  if (!Object.hasOwn(members, 'page')) return { task, args };
+  const page = textOf(FILE, members.page, where);
+  if (!URL.canParse(page)) throw unreadable(FILE, where, 'its page is not a URI');
+  return { task, args, page };
 };
 
 const archivesOf = (value: unknown): ManifestArchive[] => {
   const archives = Object.entries(objectOf(FILE, value, 'its archives')).map(([path, files]) => ({ path, files: stringsOf(FILE, files, 'its archives') }));
   inTheFolder('archives', [...archives.map((archive) => archive.path), ...archives.flatMap((archive) => archive.files)]);
+  const packedBy = new Map<string, string>();
+  for (const { path: archive, files } of archives) {
+    for (const file of files) {
+      const other = packedBy.get(file);
+      if (other === archive) throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' twice in '${archive}'`);
+      if (other !== undefined) throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' in both '${other}' and '${archive}'`);
+      packedBy.set(file, archive);
+    }
+  }
   return archives;
 };
 

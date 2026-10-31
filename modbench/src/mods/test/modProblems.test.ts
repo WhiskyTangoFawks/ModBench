@@ -3,18 +3,18 @@ import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } 
 
 vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
-import type { PackagedStatus } from '../../modStatus/modStatuses';
+import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { status } from '../../test/modStatusFixture';
 import { ModProblems } from '../modProblems';
 
-const packaged = (mod: string, over: Partial<PackagedStatus> = {}): PackagedStatus => ({ ...status(mod), packages: [], ...over });
+const packaged = status;
 const FOLDER = '/instance/mods/ModA';
 const OTHER = '/instance/mods/ModB';
 
-function over(initial: readonly PackagedStatus[], plugins: InstanceValue['plugins'] = []) {
+function over(initial: readonly ModStatus[], plugins: InstanceValue['plugins'] = []) {
   let held = new Map(initial.map((one) => [one.mod, one]));
   const lastGood = new Map(initial.map((one) => [one.mod, one]));
   let changed = (): void => undefined;
@@ -22,7 +22,7 @@ function over(initial: readonly PackagedStatus[], plugins: InstanceValue['plugin
   const instance = new FakeInstance(instanceValueFixture({ plugins, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: OTHER }] }));
   const collection = new FakeDiagnosticCollection();
   new ModProblems(collection, instance, statuses);
-  return { collection, becomes: (next: readonly PackagedStatus[]) => {
+  return { collection, becomes: (next: readonly ModStatus[]) => {
     held = new Map(next.map((one) => [one.mod, one]));
     for (const one of next.filter(({ unreadable }) => unreadable === undefined)) lastGood.set(one.mod, one);
     changed();

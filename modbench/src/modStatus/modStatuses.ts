@@ -1,7 +1,6 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import type { ManifestPackage } from '../manifestAdapter/manifest';
 import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
@@ -11,9 +10,6 @@ export interface StatusSource {
   readonly modFolders: readonly ModFolder[] | undefined;
   readonly entryKey: (entry: EntryRef) => string;
 }
-
-/** A status with the packages its manifest names. */
-export type PackagedStatus = ModStatus & { readonly packages?: readonly ManifestPackage[] };
 
 interface Listening {
   dispose(): void;
@@ -36,8 +32,8 @@ const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening
 /** Each mod's status, derived from the latest instance value while the instance holds a repository. An unreadable
  *  status keeps the last good one shown, and says why on the message line and once in the Output (common.md, Reporting). */
 export class ModStatuses {
-  private derived: ReadonlyMap<string, PackagedStatus> = new Map();
-  private readonly shown = new Map<string, PackagedStatus>();
+  private derived: ReadonlyMap<string, ModStatus> = new Map();
+  private readonly shown = new Map<string, ModStatus>();
   private readonly unreadable = new Map<string, string>();
   private waiting: StatusSource | undefined;
   private deriving = false;
@@ -56,13 +52,13 @@ export class ModStatuses {
   }
 
   /** The statuses derived from the latest value handed, each as read, an unreadable one too. */
-  async current(): Promise<ReadonlyMap<string, PackagedStatus>> {
+  async current(): Promise<ReadonlyMap<string, ModStatus>> {
     await this.derivation;
     return this.derived;
   }
 
   /** The mod's last good status. */
-  of(mod: string): PackagedStatus | undefined {
+  of(mod: string): ModStatus | undefined {
     return this.shown.get(mod);
   }
 
@@ -96,13 +92,12 @@ export class ModStatuses {
     }
   }
 
-  private async statusOf(mod: ModAt): Promise<PackagedStatus> {
+  private async statusOf(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
-    const status = statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest)));
-    return { ...status, packages: manifest.read !== undefined && 'manifest' in manifest.read ? manifest.read.manifest.packages : [] };
+    return statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest)));
   }
 
-  private hold(derived: ReadonlyMap<string, PackagedStatus>): void {
+  private hold(derived: ReadonlyMap<string, ModStatus>): void {
     const before = JSON.stringify([...this.derived]);
     this.derived = derived;
     if (JSON.stringify([...derived]) === before) return;

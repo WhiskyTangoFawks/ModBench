@@ -3,8 +3,8 @@ import type { Manifest, ManifestPackage } from './manifest';
 
 type RepositoryPackage = Extract<ManifestPackage, { kind: 'repository' }>;
 
-/** The repository package `manifest` names, which makes its folder a source mod's. */
-export const repositoryOf = (manifest: Manifest): RepositoryPackage | undefined =>
+/** The repository package `manifest`, or a status, names, which makes its folder a source mod's. */
+export const repositoryOf = (manifest: Pick<Manifest, 'packages'>): RepositoryPackage | undefined =>
   manifest.packages.find((pkg): pkg is RepositoryPackage => pkg.kind === 'repository');
 
 /** `pkg` as a problem names it when it has no host (modlist-repository.md, The manifest, story 5); none when it has one.
