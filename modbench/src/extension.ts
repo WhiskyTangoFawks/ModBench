@@ -336,7 +336,10 @@ function start(context: vscode.ExtensionContext): void {
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, standing: { messages: () => [...plugins.mEditStanding.messages(), ...views.viewMessages()] }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const sourceLanguage = createSourceLanguage({
+    client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
+  });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, statuses: views.statuses, deployment: views.deployment, standing: { messages: () => [...plugins.mEditStanding.messages(), ...views.viewMessages(), ...sourceLanguage.messages()] }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,
@@ -348,9 +351,7 @@ function start(context: vscode.ExtensionContext): void {
       client: meditClient, scriptsPath, envFile: opened.scriptEnvironmentFile,
       fail: (message, detail) => { scriptEnvironmentFailures.threw(scriptEnvironmentFailures, message, detail); },
     }),
-    createSourceLanguage({
-      client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
-    }),
+    sourceLanguage,
   );
 }
 

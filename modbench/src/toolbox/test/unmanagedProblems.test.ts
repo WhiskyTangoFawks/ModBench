@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, Uri } from '../../test/vscodeMock';
+import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, Uri, uriParse } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => {
   class CodeAction {
@@ -7,7 +7,7 @@ vi.mock('vscode', () => {
     command: unknown;
     constructor(readonly title: string, readonly kind: string) {}
   }
-  return { Diagnostic, Range, DiagnosticSeverity, Uri, CodeAction, CodeActionKind: { QuickFix: 'quickfix' } };
+  return { Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse }, CodeAction, CodeActionKind: { QuickFix: 'quickfix' } };
 });
 
 import { unmanagedProblems } from '../unmanagedProblems';
@@ -32,6 +32,17 @@ describe('the problems on files deploy does not manage', () => {
       ['/deployed/Data/MCM/settings.ini', DiagnosticSeverity.Warning, 'Deploy does not manage this file.'],
       ['/deployed/game.exe', DiagnosticSeverity.Warning, 'Deploy does not manage this file.'],
     ]);
+  });
+
+  it('carries move to Overwrite as its code, a link that fires the gesture on its path', () => {
+    const collection = new FakeDiagnosticCollection();
+
+    unmanagedProblems(collection).publish([at('Data/a.esp')], []);
+
+    expect([...collection].flatMap(([, held]) => held.map(({ code }) => code))).toEqual([{
+      value: 'move to Overwrite',
+      target: uriParse(`command:modbench.instance.moveToOverwrite?${encodeURIComponent(JSON.stringify([['Data/a.esp']]))}`),
+    }]);
   });
 
   it('names the file it left out, when the path of a file the game gets holds this file', () => {
@@ -86,12 +97,14 @@ describe('the quick fix on a file deploy does not manage', () => {
     expect(actions).toEqual([]);
   });
 
-  it('is offered on no problem of another source', () => {
+  it('is offered on no problem of another code', () => {
     const collection = new FakeDiagnosticCollection();
     const problems = unmanagedProblems(collection);
     problems.publish([at('Data/a.esp')], []);
 
-    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } }, undefined, { diagnostics: [{ source: 'other' }] });
+    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } }, undefined, {
+      diagnostics: [{ code: 'other' }, {}, { code: { value: 'other' } }],
+    });
 
     expect(actions).toEqual([]);
   });

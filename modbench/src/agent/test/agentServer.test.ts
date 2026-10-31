@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string }[]][];
+type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
 const fired = vi.hoisted((): { calls: unknown[][]; outcome: unknown; failure: Error | undefined } => ({ calls: [], outcome: undefined, failure: undefined }));
 vi.mock('vscode', () => ({
@@ -124,7 +124,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
   });
 
   it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
@@ -361,18 +361,24 @@ describe('the agent server, given an instance value', () => {
     }]);
   });
 
-  it('reads the problems on plugin source files only, as the Problems panel holds them', async () => {
+  it('reads every problem Modbench shows, with its code, and none another extension shows', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
-    const problem = (severity: number, line: number, message: string) => ({ severity, range: { start: { line } }, message });
+    const problem = (severity: number, line: number, message: string, source?: string, code?: unknown) =>
+      ({ severity, range: { start: { line } }, message, source, code });
     diagnosticsHeld.held = [
-      [{ scheme: 'file', fsPath: '/i/source/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference'), problem(1, 9, 'odd value')]],
-      [{ scheme: 'file', fsPath: '/i/mods/Rocks/readme.json' }, [problem(0, 0, 'not source')]],
-      [{ scheme: 'untitled', fsPath: '/i/source/Rocks/plugin-source/Other.esp.json' }, [problem(0, 0, 'not a file')]],
+      [{ scheme: 'file', fsPath: '/i/Rocks.esp' }, [
+        problem(1, 0, 'malformed', 'Modbench', { value: 'decompile and repair', target: {} }),
+        problem(1, 0, 'not ours', 'ESLint'),
+        problem(1, 0, 'no source'),
+      ]],
+      [{ scheme: 'file', fsPath: '/i/source/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference', 'Modbench'), problem(2, 9, 'odd value', 'Modbench', 7)]],
+      [{ scheme: 'untitled', fsPath: '/i/Other.esp' }, [problem(0, 0, 'not a file', 'Modbench')]],
     ];
 
-    expect(await read(client, 'list_source_problems')).toEqual([
+    expect(await read(client, 'list_problems')).toEqual([
+      { file: '/i/Rocks.esp', severity: 'Warning', line: 1, message: 'malformed', code: 'decompile and repair' },
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
-      { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Warning', line: 10, message: 'odd value' },
+      { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Information', line: 10, message: 'odd value', code: 7 },
     ]);
   });
 

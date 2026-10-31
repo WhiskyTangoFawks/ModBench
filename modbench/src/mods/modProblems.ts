@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InstanceView } from '../instanceLoader/instance';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { severalPackagesNote, statusProblems } from '../modStatus/statusProblems';
@@ -26,7 +27,7 @@ export class ModProblems {
     const statuses = await this.statuses.current();
     const folders = new Map((this.instance.value.modFolders ?? []).map((folder) => [folder.modName, folder.path]));
     const range = new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER);
-    const diagnostic = (message: string, severity: vscode.DiagnosticSeverity) => new vscode.Diagnostic(range, message, severity);
+    const diagnostic = (message: string, severity: vscode.DiagnosticSeverity) => modbenchDiagnostic(range, message, severity);
     const problems = [...statuses.values()].flatMap((read) => {
       const status = read.unreadable === undefined ? read : this.statuses.of(read.mod);
       const folder = folders.get(read.mod);
