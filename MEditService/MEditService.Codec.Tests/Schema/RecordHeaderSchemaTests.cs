@@ -23,16 +23,14 @@ public sealed class RecordHeaderSchemaTests
     [Theory]
     [InlineData("weap")]
     [InlineData("gmst")]
-    public void TheHeaderMembers_AreXEditsRows_InItsOrder_UnderItsLabels_OnceEvenForATableOfSeveralRecordClasses(string table)
+    public void TheHeaderMembers_AreMutagensMembers_InItsOrder_UnderItsNames_OnceEvenForATableOfSeveralRecordClasses(string table)
     {
         var header = HeaderOf(table);
 
         Assert.Equal(
             ["MajorRecordFlagsRaw", "FormKey", "VersionControl", "FormVersion", "Version2"],
             header.Select(c => c.Name));
-        Assert.Equal(
-            ["Record Flags", "FormID", "Version Control Info 1", "Form Version", "Version Control Info 2"],
-            header.Select(c => c.Field.DisplayLabel));
+        Assert.All(header, c => Assert.Null(c.Field.DisplayLabel));
     }
 
     [Fact]
@@ -139,16 +137,14 @@ public sealed class RecordHeaderSchemaTests
     }
 
     [Fact]
-    public void APluginHeadersHeaderMembers_AreItsModHeaders_UnderTheSameLabels_WithItsFormIdReadOnly()
+    public void APluginHeadersHeaderMembers_AreItsModHeaders_UnderMutagensNames_WithItsFormIdReadOnly()
     {
         var header = HeaderOf("header");
 
         Assert.Equal(
             ["ModHeader.Flags", "ModHeader.FormID", "ModHeader.Version", "ModHeader.FormVersion", "ModHeader.Version2"],
             header.Select(c => c.PropertyName));
-        Assert.Equal(
-            ["Record Flags", "FormID", "Version Control Info 1", "Form Version", "Version Control Info 2"],
-            header.Select(c => c.Field.DisplayLabel));
+        Assert.All(header, c => Assert.Null(c.Field.DisplayLabel));
         Assert.NotNull(header.Single(c => c.Name == "FormID").Field.ReadOnlyReason);
         Assert.Contains(new EnumMember("Master", "1", "ESM"), header.Single(c => c.Name == "Flags").Field.EnumMembers);
     }

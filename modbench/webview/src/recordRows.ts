@@ -87,9 +87,13 @@ type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'de
   // Whether a column holds the object this row is a member of.
   present: (column: ColumnKey) => boolean;
   editable: ReadonlySet<ColumnKey>;
+  // The columns whose copy the game ignores in this row.
+  ignored: ReadonlySet<ColumnKey>;
   // Per column, the variant a member whose type varies by its owner's leaf takes there.
   cellMetas?: Partial<Record<string, FieldMetadata>>;
 };
+
+const NO_COLUMNS: ReadonlySet<ColumnKey> = new Set();
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
@@ -150,7 +154,7 @@ function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
   stringsLanguage: string,
 ): FieldRow {
-  const { present, editable, cellMetas, ...place } = at;
+  const { present, editable, ignored, cellMetas, ...place } = at;
   const name = meta.displayLabel ?? diff.fieldName;
   const last = at.path.at(-1);
   const elementOf = isArrayElementHop(last) ? at.parent : null;
@@ -159,7 +163,7 @@ function fieldRow(
   const cells = new Map(columns.map(({ key, override: o }): [ColumnKey, ValueCell] => {
     const cellMeta = cellMetas?.[key] ?? meta;
     const value = diff.values[key];
-    const holds = structural || (present(key) && columnHasNode(cellMeta, value));
+    const holds = structural || (present(key) && columnHasNode(cellMeta, value) && (value != null || !ignored.has(key)));
     const held = holds ? value ?? defaultOf(cellMeta) : undefined;
     const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];
@@ -275,18 +279,18 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
       }]
       : rowsOf(diff, meta, {
         path: [], rootField: diff.fieldName, key: `${RECORD_HEADER_ROW}.${diff.fieldName}`, parent: RECORD_HEADER_ROW,
-        present: () => true, editable: editableColumns, depth: 1,
+        present: () => true, editable: editableColumns, ignored: NO_COLUMNS, depth: 1,
       });
   });
-  // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
-  // since the record's own fields are not there to be members of.
+  // A Partial Form column's own fields show what the copy holds, and nothing where it holds none.
   const fieldRows = result.diffs.filter(d => !isHeaderMember(d)).flatMap(diff => {
     const meta = metaByName[diff.fieldName];
     const isEditorId = meta?.isEditorId === true;
     return rowsOf(diff, meta, {
       path: [], rootField: diff.fieldName, key: diff.fieldName, parent: null,
-      present: column => isEditorId || !partialFormColumns.has(column),
-      editable: isEditorId ? editableColumns : ownFieldEditableColumns, depth: 0,
+      present: () => true,
+      editable: isEditorId ? editableColumns : ownFieldEditableColumns,
+      ignored: isEditorId ? NO_COLUMNS : partialFormColumns, depth: 0,
     });
   });
   return [recordHeader, ...headerRows, ...fieldRows];
