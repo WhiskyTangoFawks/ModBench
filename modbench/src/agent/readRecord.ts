@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { CopyDocument, MEditClient } from '../client/MEditClient';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { copyColumnKey } from '../wire/columnKey';
+import { fileStanding } from '../drivingLib/fileStanding';
 import { copyStatus, NO_STANDING, pluginOf, type Standing } from '../drivingLib/columnStatus';
 import { withMasterCellStates } from '../drivingLib/masterCellStates';
 import { pluginStanding } from '../instanceLoader/pluginStanding';
@@ -72,12 +73,18 @@ const pluginsRead = async (mEdit: RecordReads): Promise<Plugins> => {
 const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: string, address: PluginAddress) => {
   const comparison = await mEdit.getComparison(formKey);
   if (isReadFailed(comparison)) throw new Refusal(failureReason(comparison));
-  const compared = comparison?.overrides.find((o) => samePluginAddress(pluginAddressOf(o), address));
-  if (comparison === null || compared === undefined) return {};
-  const instanceStanding = pluginStanding(value, address);
-  return standingOf(await pluginsRead(mEdit), withMasterCellStates(comparison), compared, {
-    overriddenBy: instanceStanding.kind === 'overridden' ? instanceStanding.by : null, notActive: instanceStanding.kind === 'disabled',
+  const plugins = await pluginsRead(mEdit);
+  const standing = fileStanding({
+    pluginActive: plugins.some((p) => p.inLoadOrder && samePluginAddress(p, address)),
+    columnsShown: false,
+    standing: pluginStanding(value, address),
   });
+  const compared = comparison?.overrides.find((o) => samePluginAddress(pluginAddressOf(o), address));
+  if (comparison !== null && compared !== undefined) return standingOf(plugins, withMasterCellStates(comparison), compared, standing);
+  const status = standing.overriddenBy !== null || standing.notActive
+    ? copyStatus({ plugin: address.name, origin: address.origin, isPartialForm: false, isInOverwrite: false }, undefined, standing)
+    : null;
+  return status === null ? {} : { status };
 };
 
 export const READ_RECORD = {

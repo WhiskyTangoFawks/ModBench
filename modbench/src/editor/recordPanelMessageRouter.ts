@@ -16,6 +16,7 @@ import type { FocusedCellContext } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
+import { fileStanding } from '../drivingLib/fileStanding';
 import { columnStatuses } from '../drivingLib/columnStatus';
 import { withMasterCellStates } from '../drivingLib/masterCellStates';
 import { copyColumnKey } from '../wire/columnKey';
@@ -220,7 +221,7 @@ function tellAnswered(
   deps.titleFromRead(m.formKey, overrides);
   deps.readAnswered(m.formKey, m.columns);
   const standing = deps.modFacts.standingOf(deps.plugin);
-  const fileOverriddenBy = !pluginActive && m.columns.length === 0 && standing.kind === 'overridden' ? standing.by : null;
+  const { overriddenBy: fileOverriddenBy } = fileStanding({ pluginActive, columnsShown: m.columns.length > 0, standing });
   const fileCopy = overrides?.find((o) => o.formKey === m.formKey && samePluginAddress(pluginAddressOf(o), deps.plugin));
   const statuses = columnStatuses(overrides ?? [], listed, {
     column: fileCopy && copyColumnKey(fileCopy), standing: { overriddenBy: fileOverriddenBy, notActive: answered.fileCopyAlone },
@@ -242,7 +243,7 @@ async function readRecord(
   const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
   if (m.columns.length > 0) return withFileCopy(readOf(deps, m.formKey, await deps.meditClient.getRecordsComparison([own, ...m.columns])), false);
   const text = documentText === undefined ? undefined
-    : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.standingOf(deps.plugin).kind === 'disabled' };
+    : { plugin: deps.plugin, documentText, alone: fileStanding({ pluginActive, columnsShown: false, standing: deps.modFacts.standingOf(deps.plugin) }).notActive };
   const compare = await deps.meditClient.getComparison(m.formKey, text);
   if (isReadFailed(compare)) return compare;
   if (compare) return { compare, fileCopyAlone: text?.alone ?? false };

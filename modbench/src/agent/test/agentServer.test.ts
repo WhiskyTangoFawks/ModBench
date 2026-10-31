@@ -687,19 +687,49 @@ describe('the agent server, reading a record through mEdit', () => {
     ]);
   });
 
-  it('gives the instance\'s standing to the copy of the plugin asked for alone, as the panel gives it to the tab\'s own column', async () => {
-    const mEdit = new InMemoryMEditClient();
-    mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getPlugins', PLUGINS);
-    mEdit.setQueryAnswer('getComparison', COPIES);
-    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
-    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+  describe('the standing the instance gives the plugin asked for', () => {
+    const OVERRIDDEN_A = { name: 'A.esp', path: '/m/A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: false };
+    const OTHER_A = { name: 'A.esp', path: '/m2/A.esp', origin: 'Other', line: 1, enabled: true, winning: true };
+    const listed = (inLoadOrder: boolean) => [{ ...pluginListed('A.esp'), inLoadOrder }, pluginListed('B.esp')];
 
-    const asked = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
-    const compared = await read(client, 'read_record', { name: 'SharedNpc' });
+    const asked = async (instance: FakeInstance, plugins: ReturnType<typeof listed>, comparison: typeof COPIES) => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', NPC);
+      mEdit.setQueryAnswer('getPlugins', plugins);
+      mEdit.setQueryAnswer('getComparison', comparison);
+      mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+      const { client } = await clientOf(instance, mEdit);
+      return {
+        alone: await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp', origin: 'Big Rocks' } }),
+        all: await read(client, 'read_record', { name: 'SharedNpc' }),
+      };
+    };
+    const comparedWithoutA = comparisonOf('000800:A.esp', [{ plugin: 'B.esp', origin: 'Big Rocks', isWinner: true }]);
 
-    expect(asked).toMatchObject({ status: { label: '(not active)' } });
-    expect(compared).toEqual([expect.not.objectContaining({ status: expect.anything() as unknown }), expect.not.objectContaining({ status: expect.anything() as unknown })]);
+    it('reads (not active) for a disabled plugin the comparison leaves out, and gives no copy of the comparison a standing', async () => {
+      const { alone, all } = await asked(new FakeInstance(VALUE), listed(false), comparedWithoutA);
+
+      expect(alone).toMatchObject({ status: { label: '(not active)' } });
+      expect(all).toEqual([expect.not.objectContaining({ status: expect.anything() as unknown })]);
+    });
+
+    it('reads (overridden) for a plugin another mod\'s file overrides when the game does not load it', async () => {
+      const instance = new FakeInstance({ ...ENABLED, mods: [...ENABLED.mods, { kind: 'mod' as const, name: 'Other', enabled: true }],
+        plugins: [OVERRIDDEN_A, OTHER_A] });
+
+      const { alone } = await asked(instance, listed(false), comparedWithoutA);
+
+      expect(alone).toMatchObject({ status: { label: '(overridden)', reason: 'The game loads Other’s file instead.' } });
+    });
+
+    it('reads no standing for a plugin the game loads, though the instance says another mod\'s file overrides it', async () => {
+      const instance = new FakeInstance({ ...ENABLED, mods: [...ENABLED.mods, { kind: 'mod' as const, name: 'Other', enabled: true }],
+        plugins: [OVERRIDDEN_A, OTHER_A] });
+
+      const { alone } = await asked(instance, listed(true), COPIES);
+
+      expect(alone).not.toHaveProperty('status');
+    });
   });
 
   it('answers a copy the game uses and I can edit with no status', async () => {
