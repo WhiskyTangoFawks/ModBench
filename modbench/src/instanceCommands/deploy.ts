@@ -118,6 +118,7 @@ export function deployCommands(
     deploy: (load: LoadOrderToDeploy | undefined) => deploy({ deployment, adapter }, deploymentFolder, load),
     purge: () => purge({ deployment, adapter }, deploymentFolder),
     unmanaged: () => unmanaged({ deployment, adapter }, deploymentFolder),
+    watch: (folder: string, onChange: () => void, onError: (err: unknown) => void) => deployment.watch(folder, onChange, onError),
     moveToOverwrite: (paths?: readonly string[]) => moveToOverwrite({ adapter, deployment }, deploymentFolder, paths),
   };
 }

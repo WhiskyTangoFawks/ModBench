@@ -29,6 +29,7 @@ function deploymentAnswering(answer: () => Promise<Deployed>, unmanaged: readonl
       return Promise.resolve(PURGED);
     },
     unmanaged: () => Promise.resolve([...unmanaged]),
+    watch: () => ({ dispose: () => undefined }),
   };
   return { deployment, deployedTo, purgedFrom };
 }

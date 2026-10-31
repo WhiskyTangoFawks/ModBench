@@ -6,12 +6,13 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { deployFailures, deployWarnings } from './deployProblems';
 import { coalesced } from '../ports/coalesced';
+import { errorMessage } from '../ports/errorMessage';
 import { MOVE_TO_OVERWRITE, unmanagedProblems } from './unmanagedProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface DeployGestureDeps {
-  commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite' | 'unmanaged'>;
+  commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite' | 'unmanaged' | 'watch'>;
   instance: Pick<Instance, 'landed' | 'sequence' | 'refresh'>;
   reporter: Reporter;
 }
@@ -20,7 +21,7 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
   const collection = vscode.languages.createDiagnosticCollection('modbench-deployment-unmanaged');
   const problems = unmanagedProblems(collection);
   let leftOut: readonly { path: string; winner: string }[] = [];
-  let watched: { folder: string; watcher: vscode.FileSystemWatcher } | undefined;
+  let watched: { folder: string; watcher: { dispose(): void } } | undefined;
   // A change in the folder only triggers the read; the disk answers (ADR-0003).
   const reread = coalesced(() => { void publishProblems(); });
   const watch = (folder: string | undefined): void => {
@@ -28,11 +29,12 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
     watched?.watcher.dispose();
     watched = undefined;
     if (folder === undefined) return;
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(folder), '**/*'));
-    watcher.onDidCreate(reread);
-    watcher.onDidChange(reread);
-    watcher.onDidDelete(reread);
-    watched = { folder, watcher };
+    watched = {
+      folder,
+      watcher: commands.watch(folder, reread, (err) => {
+        reporter.report('warning', 'The deployment folder cannot be watched, so its problems are read again at the next deploy, purge or move to Overwrite.', errorMessage(err));
+      }),
+    };
   };
   const publishProblems = async (): Promise<void> => {
     const held = await commands.unmanaged();

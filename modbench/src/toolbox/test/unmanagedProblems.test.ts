@@ -19,8 +19,7 @@ const published = (collection: FakeDiagnosticCollection) =>
 
 function fixesFor(problems: ReturnType<typeof unmanagedProblems>, collection: FakeDiagnosticCollection, file: string) {
   const diagnostics = [...collection].filter(([uri]) => uri.fsPath === file).flatMap(([, held]) => held);
-  const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: file } } as never, new Range(0, 0, 0, 0), { diagnostics } as never, {} as never);
-  return (actions ?? []) as unknown as { title: string; kind: string; command: unknown; diagnostics: unknown[] }[];
+  return problems.quickFixes.provideCodeActions({ uri: { fsPath: file } }, undefined, { diagnostics });
 }
 
 describe('the problems on files deploy does not manage', () => {
@@ -62,7 +61,7 @@ describe('the quick fix on a file deploy does not manage', () => {
 
     const [fix] = fixesFor(problems, collection, '/deployed/Data/MCM/settings.ini');
 
-    expect([fix?.title, fix?.kind, fix?.command, fix?.diagnostics.length]).toEqual([
+    expect([fix?.title, fix?.kind, fix?.command, fix?.diagnostics?.length]).toEqual([
       'Move to Overwrite', 'quickfix', { command: 'modbench.instance.moveToOverwrite', title: 'Move to Overwrite', arguments: [['Data/MCM/settings.ini']] }, 1,
     ]);
   });
@@ -82,7 +81,7 @@ describe('the quick fix on a file deploy does not manage', () => {
     const diagnostics = [...collection].flatMap(([, held]) => held);
     problems.publish([], []);
 
-    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } } as never, new Range(0, 0, 0, 0), { diagnostics } as never, {} as never);
+    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } }, undefined, { diagnostics });
 
     expect(actions).toEqual([]);
   });
@@ -92,7 +91,7 @@ describe('the quick fix on a file deploy does not manage', () => {
     const problems = unmanagedProblems(collection);
     problems.publish([at('Data/a.esp')], []);
 
-    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } } as never, new Range(0, 0, 0, 0), { diagnostics: [new Diagnostic(new Range(0, 0, 0, 0), 'other')] } as never, {} as never);
+    const actions = problems.quickFixes.provideCodeActions({ uri: { fsPath: '/deployed/Data/a.esp' } }, undefined, { diagnostics: [new Diagnostic(new Range(0, 0, 0, 0), 'other')] });
 
     expect(actions).toEqual([]);
   });

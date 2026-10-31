@@ -35,12 +35,12 @@ export function unmanagedProblems(collection: vscode.DiagnosticCollection) {
       }
     },
     quickFixes: {
-      provideCodeActions(document, _range, { diagnostics }) {
+      provideCodeActions(document: { readonly uri: { readonly fsPath: string } }, _range: unknown, { diagnostics }: { readonly diagnostics: readonly { readonly source?: string }[] }): vscode.CodeAction[] {
         const path = pathOf.get(document.uri.fsPath);
         const ours = diagnostics.filter(({ source }) => source === SOURCE);
         if (path === undefined || overwritePathOf(path) === undefined || ours.length === 0) return [];
         const fix = new vscode.CodeAction('Move to Overwrite', vscode.CodeActionKind.QuickFix);
-        fix.diagnostics = ours;
+        fix.diagnostics = ours.filter((diagnostic): diagnostic is vscode.Diagnostic => diagnostic instanceof vscode.Diagnostic);
         fix.command = { command: MOVE_TO_OVERWRITE, title: 'Move to Overwrite', arguments: [[path]] };
         return [fix];
       },

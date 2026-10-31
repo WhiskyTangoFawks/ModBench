@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handlers, registerCommand, executeCommand, collections, watchers, actionProviders } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, collections, actionProviders } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
   return {
     handlers,
@@ -9,7 +9,6 @@ const { handlers, registerCommand, executeCommand, collections, watchers, action
       return { dispose: vi.fn() };
     }),
     executeCommand: vi.fn(),
-    watchers: [] as { pattern: { base: { fsPath: string }; pattern: string }; disposed: boolean; fire(): void }[],
     actionProviders: [] as { provideCodeActions(...args: never[]): unknown }[],
     collections: [] as { clear(): void; [Symbol.iterator](): IterableIterator<[{ fsPath: string }, readonly { message: string }[]]> }[],
   };
@@ -19,19 +18,9 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   const { taskModule } = await import('../../test/taskDouble');
   const { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri } = await import('../../test/vscodeMock');
-  const { fakeVscodeModule } = await import('../../test/mo2/fakeVscodeWatcher');
   class CodeAction { diagnostics: unknown[] = []; command: unknown; constructor(readonly title: string, readonly kind: string) {} }
   return {
     ...taskModule(), Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse }, CodeAction, CodeActionKind: { QuickFix: 'quickfix' },
-    RelativePattern: fakeVscodeModule().RelativePattern,
-    workspace: {
-      createFileSystemWatcher: (pattern: { base: { fsPath: string }; pattern: string }) => {
-        const handlers: (() => void)[] = [];
-        const watcher = { pattern, disposed: false, fire: () => { handlers.forEach((h) => h()); }, onDidCreate: (h: () => void) => { handlers.push(h); }, onDidChange: () => undefined, onDidDelete: () => undefined, dispose: () => { watcher.disposed = true; } };
-        watchers.push(watcher);
-        return watcher;
-      },
-    },
     commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress },
     languages: {
       registerCodeActionsProvider: (_selector: unknown, provider: { provideCodeActions(...args: never[]): unknown }) => { actionProviders.push(provider); return { dispose: () => undefined }; },
@@ -52,6 +41,8 @@ const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 const NOTHING_DEPLOYED = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED } as const;
 
+const watched: { folder: string; onChange: () => void; disposed: boolean }[] = [];
+
 const inDeployed = (path: string) => ({ path, file: `/deployed/${path}` });
 
 const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
@@ -67,8 +58,9 @@ function deployAnswering(
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
   const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
   const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: unmanagedNow.map(inDeployed) }));
+  const watch = vi.fn<DeployCommands['watch']>((folder, onChange) => { watched.push({ folder, onChange, disposed: false }); return { dispose: () => undefined }; });
   registerDeployCommands({
-    commands: { deploy, purge, moveToOverwrite, unmanaged },
+    commands: { deploy, purge, moveToOverwrite, unmanaged, watch },
     instance: { landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
     reporter,
   });
@@ -78,7 +70,7 @@ function deployAnswering(
 beforeEach(() => {
   handlers.clear();
   collections.length = 0;
-  watchers.length = 0;
+  watched.length = 0;
   actionProviders.length = 0;
   executeCommand.mockClear();
   progressSteps.length = 0;
@@ -238,7 +230,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
     unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
-    present(watchers[0], 'the watcher').fire();
+    present(watched[0], 'the watch').onChange();
     await vi.waitFor(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
   });
 
@@ -248,7 +240,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
     await runPurge();
 
-    expect(watchers.map(({ pattern }) => [pattern.base.fsPath, pattern.pattern])).toEqual([['/deployed', '**/*']]);
+    expect(watched.map(({ folder }) => folder)).toEqual(['/deployed']);
   });
 
   it('name no file left out by an earlier deploy once a deploy fails', async () => {
@@ -263,7 +255,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     expect(held()).toEqual([['/deployed/a.ini', 'Deploy does not manage this file.']]);
   });
 
-  it('offer move to Overwrite as a quick fix', async () => {
+  it('are offered move to Overwrite as a quick fix, by a provider registered once', () => {
     deployAnswering(NOTHING_DEPLOYED);
 
     expect(actionProviders.length).toBe(1);
