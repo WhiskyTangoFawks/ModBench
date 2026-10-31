@@ -44,6 +44,13 @@ class PreCommit(unittest.TestCase):
         self.assertNotEqual(self.commit("spec/surfaces/mods.md").returncode, 0)
         self.assertEqual(self.git("rev-list", "--count", "HEAD").stdout.strip(), "1")
 
+    def test_the_gates_inherit_no_index_from_a_commit_of_named_paths(self):
+        self.gates.write_text('echo "index ${GIT_INDEX_FILE-unset}"\n')
+        (self.repo / "spec").mkdir()
+        (self.repo / "spec/mods.md").write_text("text\n")
+        self.git("add", "spec/mods.md")
+        self.assertIn("index unset", self.git("commit", "-q", "-m", "change", "--", "spec/mods.md").stdout)
+
     def test_a_commit_outside_spec_and_docs_runs_no_gate(self):
         run = self.commit("modbench/src/extension.ts")
         self.assertEqual(run.returncode, 0)
