@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
+import type { PackagedStatus } from './modStatuses';
 
 /** A problem on the file it concerns. */
 export interface StatusProblem {
@@ -23,4 +24,13 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     ...onManifest(status.noHost.map((pkg) => `${pkg.charAt(0).toUpperCase()}${pkg.slice(1)} has no host.`)),
     ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it names: ${lacking}.`)),
   ];
+}
+
+/** A mod made from several packages, on its manifest (modlist-repository.md, Status, story 6). */
+export function severalPackagesNote(status: PackagedStatus, holdsPlugin: boolean): StatusProblem | undefined {
+  const { packages = [], manifestFile } = status;
+  if (packages.length < 2 || manifestFile === undefined) return undefined;
+  const upgrade = `An upgrade replaces the files of every one of the ${packages.length} packages: ${packages.join(', ')}.`;
+  const decompile = holdsPlugin ? ' To keep edits to its plugin, run Decompile and Commit Mod.' : '';
+  return { file: manifestFile, message: `Made from several packages. ${upgrade}${decompile}` };
 }

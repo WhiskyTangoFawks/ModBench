@@ -77,6 +77,17 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     expect([derived.get('ModA')?.namedByNoLine, derived.get('Tools_separator')?.noManifest]).toEqual([['mine.txt'], true]);
   });
 
+  it('names the packages its manifest names, as noun phrases', async () => {
+    const mod = await folderOf('ModA');
+    const file = (name: string) => ({ kind: 'installationFile' as const, name, size: 1, hash: 'AAAAAAAAAAA=' });
+    await writeManifestIn(mod, { ...EMPTY, packages: [file('A.7z'), { kind: 'gameFolder' }] });
+    const statuses = statusesLogging();
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+
+    expect((await statuses.current()).get('ModA')?.packages).toEqual(["installation file 'A.7z'", 'the game folder']);
+  });
+
   it('hashes no file of a mod whose folder holds no manifest', async () => {
     const mod = await folderOf('ModA', { 'mine.txt': '' });
     const statuses = statusesLogging();

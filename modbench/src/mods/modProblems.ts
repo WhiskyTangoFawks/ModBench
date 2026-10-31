@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { InstanceView } from '../instanceLoader/instance';
 import type { ModStatuses } from '../modStatus/modStatuses';
-import { statusProblems } from '../modStatus/statusProblems';
+import { severalPackagesNote, statusProblems } from '../modStatus/statusProblems';
 import { diagnosticsByPath } from './diagnosticsByPath';
 
 /** The Problems panel's view of Mod status: a problem for each unfinished state of a mod, while it holds. */
@@ -26,12 +26,19 @@ export class ModProblems {
     const statuses = await this.statuses.current();
     const folders = new Map((this.instance.value.modFolders ?? []).map((folder) => [folder.modName, folder.path]));
     const range = new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER);
+    const diagnostic = (message: string, severity: vscode.DiagnosticSeverity) => new vscode.Diagnostic(range, message, severity);
     const problems = [...statuses.values()].flatMap((read) => {
       const status = read.unreadable === undefined ? read : this.statuses.of(read.mod);
       const folder = folders.get(read.mod);
-      return status === undefined || folder === undefined ? [] : statusProblems(status, folder);
+      if (status === undefined || folder === undefined) return [];
+      const holdsPlugin = this.instance.value.plugins.some(({ origin }) => origin === read.mod);
+      const note = severalPackagesNote(status, holdsPlugin);
+      return [
+        ...statusProblems(status, folder).map(({ file, message }): [string, vscode.Diagnostic] => [file, diagnostic(message, vscode.DiagnosticSeverity.Warning)]),
+        ...note === undefined ? [] : [[note.file, diagnostic(note.message, vscode.DiagnosticSeverity.Information)] as [string, vscode.Diagnostic]],
+      ];
     });
-    const byFile = diagnosticsByPath(problems.map(({ file, message }) => [file, new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Warning)]));
+    const byFile = diagnosticsByPath(problems);
     this.collection.clear();
     for (const [file, list] of byFile) this.collection.set(vscode.Uri.file(file), list);
   }
