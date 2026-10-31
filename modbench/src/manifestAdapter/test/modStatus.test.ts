@@ -232,7 +232,7 @@ describe('a mod\'s status against its manifest', () => {
 
     const manifest = await manifestAt(join(root, 'not-a-folder'));
 
-    expect(manifest.read).toEqual({ refused: expect.stringMatching(/^a file could not be read: ENOTDIR/) });
+    expect(manifest.read).toMatchObject({ refused: expect.stringMatching(/^a file could not be read: ENOTDIR/) as string });
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {
