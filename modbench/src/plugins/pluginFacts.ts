@@ -9,6 +9,8 @@ import type { PluginConditions } from '../drivingLib/recordRowContext';
 /** A diagnostic on one plugin's file, as the Problems panel shows it. */
 export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
+export type SourceUnreadableProblem = PluginProblem & { decompileRepairs: boolean };
+
 type StatusKind = 'notRestored' | 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
 
 export interface PluginStatus {
@@ -104,6 +106,7 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
+  private sourceUnreadableProblems: readonly SourceUnreadableProblem[] = [];
   private matches?: ByPluginAddress<boolean>;
   private diagnosisTexts = new ByPluginAddress<string[]>();
   private diagnosisReports: PluginDiagnosisReport[] = [];
@@ -173,6 +176,10 @@ export class PluginFacts {
       matches.set(p, p.hasMatchingRecords);
     }
     this.reads = reads;
+    this.sourceUnreadableProblems = plugins.flatMap((p) => p.pluginSourceUnreadable == null ? [] : [{
+      plugin: p.name, origin: p.origin, text: `Plugin source unreadable: ${p.pluginSourceUnreadable.reason}`,
+      decompileRepairs: p.pluginSourceUnreadable.decompileRepairs,
+    }]);
     this.matches = matches;
     this.laterFailures = new Map(plugins.flatMap((p) => p.laterReadFailure == null ? [] : [[
       pluginAddressKey(p),
@@ -321,9 +328,13 @@ export class PluginFacts {
   }
 
   /** What the Problems panel shows, read from the same answers as the rows' statuses. */
-  problems(): { malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginProblem[]; failedToRead: readonly PluginProblem[] } {
+  problems(): {
+    malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginProblem[]; failedToRead: readonly PluginProblem[];
+    sourceUnreadable: readonly SourceUnreadableProblem[];
+  } {
     return {
       malformed: this.diagnosisReports,
+      sourceUnreadable: this.sourceUnreadableProblems,
       failedToRead: this.loadFailures.values().flatMap(({ name, origin, diagnosis }) =>
         diagnosis == null ? [] : [{ plugin: name, origin, text: diagnosis }]),
       changedOutside: [...this.changedByMod.values()].flat()

@@ -48,7 +48,7 @@ export function registerDecompileCommand(
   const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
     fromView: (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
-      const plugins = header ? [header] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
+      const plugins = header ? [header] : isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
       return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile', replaced) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),

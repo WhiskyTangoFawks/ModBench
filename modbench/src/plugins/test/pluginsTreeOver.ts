@@ -17,6 +17,7 @@ export function pluginsTreeOver(
     publishDiagnoses: () => undefined,
     publishChangedOutside: () => undefined,
     publishFailedToRead: () => undefined,
+    publishSourceUnreadable: () => undefined,
     modStatuses: NO_MOD_STATUSES,
     ...overrides,
   });
