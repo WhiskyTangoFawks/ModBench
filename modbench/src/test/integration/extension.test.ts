@@ -628,6 +628,20 @@ describe('a gesture the agent runs', () => {
     assert.ok(readFileSync(modlistPath, 'utf8').includes('+Agent Mod'));
   });
 
+  it('reads the Toolbox\'s deployment folder from the setting the live wiring reads', async () => {
+    const folder = path.join(root, '..', 'agent-deployment');
+    await vscode.workspace.getConfiguration('modbench').update('deployment.folder', folder, vscode.ConfigurationTarget.Workspace);
+    try {
+      const read = await callTool('list_profiles');
+
+      assert.strictEqual(read.isError, false, read.text);
+      const answer: unknown = JSON.parse(read.text);
+      assert.ok(isRecord(answer) && isRecord(answer.deployment) && answer.deployment.folder === folder, read.text);
+    } finally {
+      await vscode.workspace.getConfiguration('modbench').update('deployment.folder', undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
   it('installs a FOMOD with its choices, through the engine the extension ships', async () => {
     const release = mkdtempSync(path.join(os.tmpdir(), 'modbench-it-fomod-'));
     const installed = path.join(root, 'mods', 'Fomod Mod');
