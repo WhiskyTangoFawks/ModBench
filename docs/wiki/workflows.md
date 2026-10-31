@@ -20,7 +20,7 @@ Run Git Init Modlist. It makes the instance folder a repository, with an ignore 
 
 A manifest can record any folder inside the instance, not only a mod: the folder it sits in. The cleanest setup holds every game file as a mod, puts a manifest in the stock game folder that records only the game's executable, which works once every other game file is in a mod, because restore sends whatever else the folder holds to the trash, and records each MO2 plugin in a manifest in its folder, such as `plugins/rootbuilder` for Root Builder. Git then holds a manifest for every file the game runs. Modbench works with any setup.
 
-Keep each mod folder to one installation file, as installing makes it, so where each folder comes from stays one fact. When a folder holds files from a second download or the game folder, Update Manifests finds it and names it as a second package, so the folder still restores. Then move the merged folder into a source mod, whose build file names the installation files its build reads.
+Keep each mod folder to one installation file, as installing makes it, so where each folder comes from stays one fact. When a folder holds files from a second download or the game folder, Update Manifests finds it and names it as a second package, so the folder still restores. Then move the merged folder into a source mod, whose source folder holds the files and whose own manifest restores them.
 
 GitIgnore is how the modlist knows which files to track, and what to ignore. It's setup with a default allow list, but can be managed by the user however they want. As the user, it is your responsibility to understand the limitations of git, and if you are going to publish this remotely, to only republish what you have permission to publish.
 

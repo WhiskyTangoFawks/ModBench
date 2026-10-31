@@ -36,12 +36,14 @@ describe('the build task', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([], {}));
   });
 
+  const WARNING = "Built 1 mod from changes no commit holds, so its manifest's commit does not rebuild it.";
+
   it('passes when the build only warned, and writes the warning to the terminal and the Output', async () => {
-    const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ undeclared: ['a.log'] })], refused: [] }));
+    const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ uncommitted: true })], refused: [] }));
 
     expect([written, closedWith, reporter.shownFailures]).toEqual([
-      'Build sent to the trash 1 file a step made that its build file does not name. "a.log (ModA)"\r\nBuilt "ModA".\r\n', [0],
-      [{ severity: 'warning', message: 'Build sent to the trash 1 file a step made that its build file does not name.', detail: '"a.log (ModA)"' }],
+      `${WARNING} "ModA"\r\nBuilt "ModA".\r\n`, [0],
+      [{ severity: 'warning', message: WARNING, detail: '"ModA"' }],
     ]);
   });
 

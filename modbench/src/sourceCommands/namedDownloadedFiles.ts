@@ -2,7 +2,28 @@ import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAda
 import type { ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
-import { downloadedFileHoldingPin } from './packagesRead';
+
+/** What this machine holds of the installation file a manifest pins. */
+interface PinHeld {
+  /** The downloaded file of the pinned name, else one under another name with the pinned size and hash. */
+  readonly read: FileRead<InstallationFile | undefined>;
+  /** The file under another name that holds the pinned bytes, when no file has the pinned name. */
+  readonly underAnotherName?: InstallationFile;
+  /** The file under another name that holds the pinned bytes, when the file of the pinned name holds other bytes or cannot be read. */
+  readonly elsewhere?: InstallationFile;
+  /** Why a downloaded file could not be checked for the pinned bytes. */
+  readonly notes: readonly string[];
+}
+
+async function downloadedFileHoldingPin(
+  adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding'>, pinned: { readonly name: string; readonly size: number; readonly hash: string },
+): Promise<PinHeld> {
+  const named = await adapter.downloadedFile(pinned.name);
+  if (named.kind === 'read' && named.answer?.hash === pinned.hash) return { read: named, notes: [] };
+  const { file, notes } = await adapter.downloadedFileHolding(pinned);
+  if (named.kind === 'read' && named.answer === undefined) return { read: { kind: 'read', answer: file }, ...(file === undefined ? {} : { underAnotherName: file }), notes };
+  return { read: named, ...(file === undefined ? {} : { elsewhere: file }), notes };
+}
 
 type Downloading = {
   readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'>;

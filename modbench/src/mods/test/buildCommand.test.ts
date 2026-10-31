@@ -203,18 +203,6 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
-  it('names each file a step made that its build file does not name, which the build sent to the trash, beside the landing', async () => {
-    const { handler, reporter } = registered({ landed: [{ ...built('ModA'), undeclared: ['logs/a.log', 'b.tmp'] }, built('ModB')], refused: [] });
-    const rows = [modRow('ModA'), modRow('ModB')];
-
-    await handler(rows[0], rows);
-
-    expect(reporter.landings).toEqual(['Built 2 mods.']);
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Build sent to the trash 2 files a step made that its build file does not name.', detail: '"logs/a.log (ModA)", "b.tmp (ModA)"',
-    }]);
-  });
-
   it('reports a refusal of the whole selection once, and lands nothing', async () => {
     const { handler, reporter } = registered({ refused: true, message: 'Could not build 1 mod — No load order has been received.' });
 

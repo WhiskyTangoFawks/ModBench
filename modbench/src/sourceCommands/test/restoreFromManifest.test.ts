@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
-import { writeManifestIn, type BuildFileLine, type Manifest, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
+import { writeManifestIn, type Manifest, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
@@ -369,13 +369,11 @@ describe('restore from manifest', () => {
   describe('a source mod with a remote', () => {
     const source = (): string => join(root, 'source', 'ModA');
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
-    const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [{ path: 'a.esp', vouchedFor: true }] };
-
-    const B_NIF: BuildFileLine = { path: 'b.nif', entry: { kind: 'held' } };
+    const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [{ path: 'a.esp', vouchedFor: true }, { path: 'b.nif', vouchedFor: true }] };
 
     async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string>; heldByGit: string[] }) {
       await mkdir(source(), { recursive: true });
-      await writeBuildFile(source(), buildFileOf({ packages: [MOD_7Z], files: [B_NIF] }));
+      await writeBuildFile(source(), buildFileOf());
       if (sourceFolderHolds !== undefined) await writeManifestIn(source(), sourceFolderHolds.manifest);
       const setup = await over({
         foldersOutsideMods: sourceFolderHolds === undefined ? {} : { [source()]: sourceFolderHolds.files },
@@ -391,14 +389,14 @@ describe('restore from manifest', () => {
       return setup;
     }
 
-    it('is built by mEdit at the commit the instance repository pins, with the installation files its build file names, and its files no line names sent to the trash', async () => {
+    it('is built by mEdit at the commit the instance repository pins, reading only its source folder, and its files the build does not make sent to the trash', async () => {
       const { restore, client, fake } = await sourceMod();
 
       const outcome = await restore(['ModA']);
 
       expect(client.calls.map(({ method, args }) => [method, args[0]])).toEqual([
         ['cloneSubmodules', [pinned()]],
-        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], taken: ['b.nif'], archives: [] }]],
+        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], archives: [] }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([{ verb: 'trashFileIn' }]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });

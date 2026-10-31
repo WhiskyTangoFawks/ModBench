@@ -5,13 +5,13 @@ import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileText, manifestIn, ownFilesOf, pinText, sourceModsOf, writeManifestIn, type BuildFile, type BuildFileLine, type BuildFilePackage, type Manifest,
+  BUILD_FILE_VERSION, manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile, type Recorded } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
@@ -76,28 +76,6 @@ async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise
   return { sourceFolder, folder, installationFile: installation.answer, game: gameHeld(game.folder, taken.gameFiles), held };
 }
 
-// The build file takes each file a package gives from where the package holds it: an installation file by its name, the
-// game folder by the game's release, pinned by the hash of the files it gives.
-async function buildFileOf(adapter: Adapter, { manifest, sources }: Recorded, installationFiles: readonly InstallationFile[]): Promise<BuildFile> {
-  const gameRelease = await adapter.gameRelease();
-  const fromTheGame = [...sources].flatMap(([path, { installationFile, hash }]) => (installationFile === undefined ? [{ path, hash }] : []));
-  const packages: BuildFilePackage[] = manifest.packages.flatMap((pkg): BuildFilePackage[] => {
-    if (pkg.kind === 'installationFile') {
-      const page = installationFiles.find((file) => basename(file.path) === pkg.name)?.page;
-      return [{ kind: 'installationFile', name: pkg.name, size: pkg.size, hash: pkg.hash, ...page === undefined ? {} : { page } }];
-    }
-    return [];
-  });
-  if (fromTheGame.length > 0) {
-    const depots = Object.entries(manifest.packages.find((pkg) => pkg.kind === 'gameFolder')?.host?.steam.depots ?? {}).map(([id, version]) => ({ id, version }));
-    packages.push({ kind: 'gameFolder', name: gameRelease, hash: await adapter.textHash(pinText(fromTheGame)), depots });
-  }
-  const files = [...sources].map(([path, { installationFile, packagePath }]): BuildFileLine => ({
-    path, entry: path.toLowerCase() === packagePath.toLowerCase() ? { kind: 'held' } : { kind: 'heldAt', path: packagePath }, package: installationFile ?? gameRelease,
-  }));
-  return { packages, archives: [], steps: [], tools: [], files };
-}
-
 async function downloadedRow(adapter: Pick<Adapter, 'downloadedFile'>, file: InstallationFile): Promise<InstallationFile | undefined> {
   const row = await adapter.downloadedFile(basename(file.path));
   return row.kind === 'read' ? row.answer : undefined;
@@ -118,8 +96,7 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  const buildFile = await buildFileOf(adapter, recorded, installationFile === undefined ? [] : [installationFile]);
-  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText(buildFile) } };
+  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: `{"version":${BUILD_FILE_VERSION}}\n` } };
 }
 
 const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: readonly string[]): string[] => {

@@ -9,10 +9,9 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
-import { gameToHand, namedGameFolder } from './gameFolderFacts';
+import { gameToHand } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
-import { downloadedNow, packagesRead, type PackagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
@@ -81,14 +80,7 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
   const exclude = await exclusionsIn(adapter, folder);
   if ('reason' in exclude) return { item: mod, reason: exclude.reason };
-  let packages: PackagesRead;
-  try {
-    const game = await namedGameFolder(adapter, await adapter.gameRelease());
-    packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game });
-  } catch (err) {
-    return { item: mod, reason: `was not built: its packages could not be read: ${errorMessage(err)}.` };
-  }
-  return { name: mod, folder, exclude, sourceFolder, buildFile, packages };
+  return { name: mod, folder, exclude, sourceFolder, buildFile };
 }
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,

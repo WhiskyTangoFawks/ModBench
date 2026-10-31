@@ -1,4 +1,4 @@
-# Build, orange: a source mod's folder written from its repository and the installation files its build file names, then recorded in its manifest.
+# Build, orange: a source mod's folder written from its source folder, then recorded in its manifest.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
@@ -39,16 +39,13 @@ textdocuments -> sourcecommands: "saved, or the file VS Code did not save" {clas
 sourcecommands -> manifestadapter: "get: each mod's build file · its manifest" {class: compile}
 instance -> manifestadapter: "build files · manifests" {class: compile}
 manifestadapter -> sourcecommands: "each mod's build file · its manifest, naming its repository" {class: compile}
-sourcecommands -> instanceadapter: "get: each mod's folder · each package, hashed" {class: compile}
-instance -> instanceadapter: "downloaded files" {class: compile}
-instanceadapter -> sourcecommands: "each mod's folder · each package, hashed" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder" {class: compile}
+instanceadapter -> sourcecommands: "each mod's folder" {class: compile}
 sourcecommands -> tasks: "get: each task's label" {class: outside}
 tasks -> sourcecommands: "each task's label" {class: outside}
 sourcecommands."refused when a tool has no task"
 sourcecommands -> driving: "confirm: each file I changed, and each file the build does not make" {class: compile}
 driving -> sourcecommands: "yes" {class: compile}
-sourcecommands -> instanceadapter: "each file the build file takes from a package" {class: compile}
-instanceadapter -> instance: "the files" {class: compile}
 sourcecommands -> client: "build: each mod's folder · the archives to pack and the files each takes" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}

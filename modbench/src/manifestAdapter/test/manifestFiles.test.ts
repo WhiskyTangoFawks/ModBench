@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { buildFileIn, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
-import { buildFileText } from '../buildFileText';
+import { buildFileText } from '../../test/buildFiles';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
@@ -108,7 +108,7 @@ describe('writeManifestIn', () => {
 });
 
 describe('buildFileIn', () => {
-  const buildFile: BuildFile = { packages: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
+  const buildFile: BuildFile = { archives: [{ path: 'a.ba2', files: ['a.nif'] }], steps: [{ task: 'Zip', args: [], page: 'https://example.com/zip' }] };
 
   it('reads the build file at the root of the repository, in any case', async () => {
     await writeFile(join(folder, BUILD_FILE.toUpperCase()), buildFileText(buildFile));
@@ -130,14 +130,14 @@ describe('buildFileIn', () => {
     expect(await buildFileIn(folder)).toEqual({ refused: `its repository holds two build files, '${BUILD_FILE.toUpperCase()}' and '${BUILD_FILE}'` });
   });
 
-  it('names the build file as what cannot be read', async () => {
-    await writeFile(join(folder, BUILD_FILE), '{"files": [{"path": "a.nif", "package": "Gone"}]}');
+  it('refuses a build file of the format before version 1, naming both versions', async () => {
+    await writeFile(join(folder, BUILD_FILE), '{"files": []}');
 
-    expect(await buildFileIn(folder)).toEqual({ refused: 'its build file cannot be read at its file 1: it names a package the build file does not name' });
+    expect(await buildFileIn(folder)).toEqual({ refused: 'its build file is in a format before version 1, and Modbench reads only version 1' });
   });
 
   it('refuses a build file that holds exclusions, which the modlist holds', async () => {
-    await writeFile(join(folder, BUILD_FILE), '{"exclude": [], "files": []}');
+    await writeFile(join(folder, BUILD_FILE), '{"version":1,"exclude":[]}');
 
     expect(await buildFileIn(folder)).toEqual({ refused: "its build file holds 'exclude', which Modbench does not read" });
   });
