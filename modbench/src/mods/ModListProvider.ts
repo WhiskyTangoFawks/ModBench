@@ -297,7 +297,7 @@ export class ModListProvider
     if (!payload || !isDraggedRows(payload.value)) return;
     const move = dropMove(payload.value, target, this.direction);
     if ('refusal' in move) {
-      this.reporter.report('error', `Could not move ${payload.value.focused?.kind === 'separator' ? 'separators' : 'mods'}.`, move.refusal);
+      this.reporter.report('error', `Could not move ${payload.value.focused?.kind ?? 'mod'}s.`, move.refusal);
       return;
     }
     await vscode.commands.executeCommand('modbench.mod.move', move.argument[0], move.argument, move.target);
