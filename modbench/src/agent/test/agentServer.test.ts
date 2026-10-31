@@ -687,7 +687,7 @@ describe('the agent server, reading a record through mEdit', () => {
     ]);
   });
 
-  it('answers (not active) for a copy of a plugin the instance does not load', async () => {
+  it('gives the instance\'s standing to the copy of the plugin asked for alone, as the panel gives it to the tab\'s own column', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getPlugins', PLUGINS);
@@ -695,9 +695,11 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
     const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
-    const answered = await read(client, 'read_record', { name: 'SharedNpc' });
+    const asked = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
+    const compared = await read(client, 'read_record', { name: 'SharedNpc' });
 
-    expect(answered).toMatchObject([{ status: { label: '(not active)' } }, { status: { label: '(not active)' } }]);
+    expect(asked).toMatchObject({ status: { label: '(not active)' } });
+    expect(compared).toEqual([expect.not.objectContaining({ status: expect.anything() as unknown }), expect.not.objectContaining({ status: expect.anything() as unknown })]);
   });
 
   it('answers a copy the game uses and I can edit with no status', async () => {

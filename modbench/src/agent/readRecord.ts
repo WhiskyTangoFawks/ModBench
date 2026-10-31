@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { CopyDocument, MEditClient } from '../client/MEditClient';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { copyColumnKey } from '../wire/columnKey';
-import { copyStatus, pluginOf } from '../drivingLib/columnStatus';
+import { copyStatus, NO_STANDING, pluginOf, type Standing } from '../drivingLib/columnStatus';
 import { withMasterCellStates } from '../drivingLib/masterCellStates';
 import { pluginStanding } from '../instanceLoader/pluginStanding';
 import type { CompareResult } from '../client';
@@ -51,11 +51,8 @@ const rowsOf = (diffs: readonly FieldDiff[], column: string): ConflictRow[] => d
 
 type Plugins = Extract<Awaited<ReturnType<RecordReads['getPlugins']>>, readonly unknown[]>;
 
-const standingOf = (value: InstanceValue, plugins: Plugins, comparison: CompareResult, copy: CompareOverride) => {
-  const instanceStanding = pluginStanding(value, pluginAddressOf(copy));
-  const status = copyStatus(copy, pluginOf(plugins, copy), {
-    overriddenBy: instanceStanding.kind === 'overridden' ? instanceStanding.by : null, notActive: instanceStanding.kind === 'disabled',
-  });
+const standingOf = (plugins: Plugins, comparison: CompareResult, copy: CompareOverride, standing: Standing) => {
+  const status = copyStatus(copy, pluginOf(plugins, copy), standing);
   return {
     loadIndex: copy.loadIndex,
     ...(status !== null && { status }),
@@ -77,7 +74,10 @@ const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: str
   if (isReadFailed(comparison)) throw new Refusal(failureReason(comparison));
   const compared = comparison?.overrides.find((o) => samePluginAddress(pluginAddressOf(o), address));
   if (comparison === null || compared === undefined) return {};
-  return standingOf(value, await pluginsRead(mEdit), withMasterCellStates(comparison), compared);
+  const instanceStanding = pluginStanding(value, address);
+  return standingOf(await pluginsRead(mEdit), withMasterCellStates(comparison), compared, {
+    overriddenBy: instanceStanding.kind === 'overridden' ? instanceStanding.by : null, notActive: instanceStanding.kind === 'disabled',
+  });
 };
 
 export const READ_RECORD = {
@@ -85,7 +85,7 @@ export const READ_RECORD = {
   description: 'A record in the load order, by its EditorID or FormKey: each active plugin\'s copy, as below, as { plugin: { name, origin }, isWinner, loadIndex, status?, isPartialForm, parseDiagnosis?, conflictThis?, fields, ...copy }, or { plugin, isWinner, reason } for a copy that could not be read, which refuses the read in part. '
     + 'loadIndex is the plugin\'s load index as the record panel writes it, status is { label, reason } as the record panel\'s column header shows it, and absent for a copy the game uses and I can edit, isPartialForm is a copy the game ignores the fields of, parseDiagnosis is why mEdit could not read the copy, conflictThis is the copy\'s worst cell state, '
     + 'and fields are the record panel\'s rows, each { field, conflictAll, conflictThis?, children? }: conflictAll is the row across every copy, and conflictThis the cell of this copy. '
-    + 'With plugin { name, origin? } as list_plugins shows it, that plugin\'s copy alone, whether the plugin is active or not, with the same standing when the plugin is compared. '
+    + 'With plugin { name, origin? } as list_plugins shows it, that plugin\'s copy alone, whether the plugin is active or not, with the same standing when the plugin is compared; only this one, the file asked for, takes the instance\'s word that the game loads it or loads another mod\'s file instead, as the panel gives that to the tab\'s own column alone. '
     + 'A copy is { kind: \'OwnFile\' | \'ContainersFile\', location } the path of the source file that holds it, or { kind: \'Rendered\', text } the copy\'s text, for a plugin with no source.',
   input: RECORD,
   of: async (
@@ -109,7 +109,7 @@ export const READ_RECORD = {
       const { isWinner } = copied;
       const copyAddress = pluginAddressOf(copied);
       const copy = await copyOf(mEdit, { formKey, plugin: copyAddress });
-      return 'refused' in copy ? { plugin: copyAddress, isWinner, reason: copy.refused } : { plugin: copyAddress, isWinner, ...standingOf(value, plugins, comparison, copied), ...copy };
+      return 'refused' in copy ? { plugin: copyAddress, isWinner, reason: copy.refused } : { plugin: copyAddress, isWinner, ...standingOf(plugins, comparison, copied, NO_STANDING), ...copy };
     }));
     const reasons = entries.flatMap((entry) => ('reason' in entry ? [entry.reason] : []));
     if (reasons.length > 0) throw new Refusal(reasons.join(' '), entries);
