@@ -122,8 +122,8 @@ const outputAgainst = (repository: ManifestPackage, output: Output, folder: Fold
   return folderAgainst({ packages: [repository], exclude: [], archives: [], files: lines }, folder, new Map());
 };
 
-// mods.md, Build, stories 3 and 8: each file the build vouches for by its bytes, and each a step makes by its path alone.
-// A file mEdit left as it was keeps the line the last manifest recorded while the folder holds those bytes; with none it has no line.
+// mods.md, Build, stories 3 and 8: a file mEdit left as it was keeps its last recorded line while the folder holds those
+// bytes; otherwise it has no line.
 function linesOf(output: Output, onDisk: ReadonlyMap<string, string>, folder: FolderValue, previous: readonly ManifestFile[]): ManifestFile[] {
   const kept = output.leftAsItWas.flatMap((path): ManifestFile[] => {
     const line = previous.find((recorded) => recorded.path === path);
