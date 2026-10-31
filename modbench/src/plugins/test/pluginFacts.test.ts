@@ -254,6 +254,23 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     expect(facts.problems().changedOutside).toEqual([{ plugin: 'C.esp', origin: 'OtherMod', text: CHANGED_TEXT }]);
   });
 
+  it('lists a warning for each plugin whose plugin source is unreadable, as the reconcile answered, and whether decompile repairs it', () => {
+    const facts = new PluginFacts();
+    const B = { name: 'B.esp', origin: 'SomeMod' };
+    facts.reconciled([
+      held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
+      held({ ...B, isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } }),
+    ], []);
+
+    expect(facts.problems().sourceUnreadable).toEqual([
+      { plugin: 'A.esp', origin: 'SomeMod', text: 'Plugin source unreadable: Its folder is gone.', decompileRepairs: true },
+      { plugin: 'B.esp', origin: 'SomeMod', text: 'Plugin source unreadable: Twin folders.', decompileRepairs: false },
+    ]);
+
+    facts.reconciled([held()], []);
+    expect(facts.problems().sourceUnreadable).toEqual([]);
+  });
+
   it('lists the diagnosis of each failed read that carries one, on its plugin, as the reconcile answered', () => {
     const facts = new PluginFacts();
     const B = { name: 'B.esp', origin: 'SomeMod' };

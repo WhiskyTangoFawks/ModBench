@@ -12,7 +12,7 @@ import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { exactPluginAddressKey, pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
-import { placeOf, type PluginPlace, type PluginProblem } from './pluginFacts';
+import { placeOf, type PluginPlace, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
@@ -53,6 +53,8 @@ interface PluginsTreeProviderOptions {
   /** The Failed to read status's other surface, the Problems panel, for a read a defect in the
    *  plugin's bytes stopped. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
+  /** The Plugin source unreadable status's other surface, the Problems panel, pointing at decompile. */
+  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
   /** Each mod's folder against its manifest, as mEdit last answered it. */
   modStatuses: LastModStatuses;
 }
@@ -126,6 +128,7 @@ export class PluginsTreeProvider
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
       publishFailedToRead: options.publishFailedToRead,
+      publishSourceUnreadable: options.publishSourceUnreadable,
     });
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);

@@ -16,7 +16,7 @@ import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
 import type { RecordBrowser } from './RecordBrowser';
-import { decompileAndRepairLink, publishPluginProblems } from './loadDiagnostics';
+import { decompileAndRepairLink, decompileLink, publishPluginProblems } from './loadDiagnostics';
 import { PLUGINS_KEY_ARGS, pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
@@ -89,6 +89,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
   const failedToReadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-failed-to-read');
+  const sourceUnreadableDiagnostics = vscode.languages.createDiagnosticCollection('modbench-source-unreadable');
   const tree = new PluginsTreeProvider({
     instance,
     records: recordBrowser,
@@ -99,6 +100,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
       (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),
     publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
+    publishSourceUnreadable: (warnings) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning,
+      (plugin, { decompileRepairs }) => decompileLink(plugin, decompileRepairs)),
   });
   const view = vscode.window.createTreeView(PLUGINS_KEY_ARGS.view, {
     treeDataProvider: tree,
@@ -150,7 +153,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
     nameFilter,
     ...keyContextSubscriptions,
-    selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, loadDiagnostics,
+    selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, sourceUnreadableDiagnostics, loadDiagnostics,
   );
   return {
     view, nameFilter,
