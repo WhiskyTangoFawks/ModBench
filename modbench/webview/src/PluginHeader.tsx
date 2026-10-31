@@ -25,33 +25,33 @@ interface PluginHeaderProps {
 interface Status { label: string; reason: string }
 
 // editor.md, A column's header, the Status table: the first row that applies.
-function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isCompiledPlugin: boolean, sourceUnreadable: UnreadableSource | undefined): Status {
+function statusOf(o: CompareOverride, overriddenBy: string | null, notActive: boolean, isImmutable: boolean, isCompiledPlugin: boolean, sourceUnreadable: UnreadableSource | undefined): Status | null {
   if (o.parseDiagnosis != null) return { label: '(parse failure)', reason: o.parseDiagnosis };
   if (overriddenBy !== null) return { label: '(overridden)', reason: `The game loads ${overriddenBy}’s file instead.` };
   if (notActive) return { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' };
+  if (o.isPartialForm) return { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' };
   if (isImmutable) return { label: '(read-only)', reason: 'The game’s plugins are not edited.' };
   if (o.isInOverwrite) {
     return {
-      label: '(in Overwrite)',
+      label: '(read-only)',
       reason: 'Overwrite is not a mod; move the plugin into a mod and decompile and commit that mod.',
     };
   }
   if (!isCompiledPlugin) {
     return {
-      label: '(no source)',
+      label: '(read-only)',
       reason: '“Decompile and Commit Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
         + 'makes it editable.',
     };
   }
   if (sourceUnreadable !== undefined) {
     return {
-      label: '(plugin source unreadable)',
+      label: '(read-only)',
       reason: `${sourceUnreadable.reason} Its records are its plugin file’s.`
         + (sourceUnreadable.decompileRepairs ? ' “Decompile Plugin”, in this header’s menu, makes it editable.' : ''),
     };
   }
-  if (o.isPartialForm) return { label: '(Partial Form)', reason: 'The game ignores this copy’s own fields.' };
-  return { label: '(source)', reason: 'An edit lands in the mod’s working tree, for review in Source Control.' };
+  return null;
 }
 
 export function PluginHeader({
@@ -72,7 +72,7 @@ export function PluginHeader({
           onOpen();
         }
       }}
-      title={[o.plugin, o.origin, ...(collapsed ? [status.label] : []), status.reason].join('\n')}
+      title={[o.plugin, o.origin, ...(status ? [...(collapsed ? [status.label] : []), status.reason] : [])].join('\n')}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span onClick={e => e.stopPropagation()}><ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} /></span>
@@ -85,7 +85,7 @@ export function PluginHeader({
       </div>
       {!collapsed && (
         <>
-          <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>{status.label}</div>
+          {status && <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>{status.label}</div>}
           <ColumnEdge onResize={onResize} />
         </>
       )}
