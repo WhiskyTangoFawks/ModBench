@@ -16,7 +16,8 @@ import { present } from '../../ports/present';
 import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';
 import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
-import { indicatorSetting, MOD_INDICATORS, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
+import { MOD_INDICATORS } from '../../drivingLib/modFileStates';
+import { indicatorSetting, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
