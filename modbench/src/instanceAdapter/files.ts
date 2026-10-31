@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto';
 import { constants, createWriteStream, type Dirent } from 'node:fs';
 import {
-  access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
+  access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, rmdir, stat, writeFile,
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -315,6 +315,11 @@ export async function listFolders(
 /** Creates `path` and every missing parent; a no-op when it is already there. */
 export async function ensureDir(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
+}
+
+/** Deletes `path` when it is an empty directory; answers whether it did. */
+export function removeIfEmpty(path: string): Promise<boolean> {
+  return rmdir(path).then(() => true, () => false);
 }
 
 /** Deletes `path`, file or directory, and everything under it; already-gone is not an error. */

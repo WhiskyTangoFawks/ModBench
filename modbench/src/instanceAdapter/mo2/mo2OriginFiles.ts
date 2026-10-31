@@ -2,7 +2,7 @@
 
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { ensureDir, exists, factsOf, realPathIfThere, remove, rename, undoAll, withLock, type Undo } from '../files';
+import { ensureDir, exists, factsOf, realPathIfThere, remove, removeIfEmpty, rename, undoAll, withLock, type Undo } from '../files';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
 import { originFileOf } from './mo2Files';
@@ -66,6 +66,8 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
       if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw notAFile;
       await trash(file);
+      const above = relativePath.split('/').slice(0, -1);
+      while (above.length > 0 && await removeIfEmpty(fileInFolder(folder, above.join('/')))) above.pop();
     },
 
     async moveIntoOverwrite(moves) {

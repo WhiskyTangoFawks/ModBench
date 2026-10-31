@@ -2344,6 +2344,19 @@ describe('the MO2 Instance adapter', () => {
       expect(trashed).toEqual([join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds')]);
     });
 
+    it('removes each folder the trashed file leaves empty, and keeps the mod\'s folder and a folder that holds more', async () => {
+      const mod = join(root, 'mods', 'Built');
+      await put(join(mod, 'Textures', 'sub', 'a.dds'));
+      await put(join(mod, 'Textures', 'b.dds'));
+      const trash: MoveToTrash = (file) => rm(file);
+
+      await adapter.trashFileIn(mod, 'Textures/sub/a.dds', trash);
+      const left = await readdir(mod, { recursive: true });
+      await adapter.trashFileIn(mod, 'Textures/b.dds', trash);
+
+      expect([left.sort(), await readdir(mod)]).toEqual([['Textures', join('Textures', 'b.dds')], []]);
+    });
+
     it('takes a file already gone as trashed', async () => {
       const trashed: string[] = [];
 
