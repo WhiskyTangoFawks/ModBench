@@ -53,7 +53,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     });
     return {
       ...sourceCommands({
-        client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') })).adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(),
+        client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') })).adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn()
       }),
       answers: (next: DecompileAndCommitOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,

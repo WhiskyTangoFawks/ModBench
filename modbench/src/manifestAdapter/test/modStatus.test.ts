@@ -198,6 +198,20 @@ describe('a mod\'s status against its manifest', () => {
     expect([read.differing, read.namedByNoLine, read.gone]).toEqual([differing, namedByNoLine, gone]);
   });
 
+  it('after a clone, reads a source mod\'s file against the bytes its line records, with no entry in the hash index (modlist-repository.md, Status, story 3)', async () => {
+    await Promise.all([write('a.esp', 'built'), write('b.esp', 'edited')]);
+    await manifested(manifest([{ ...line('a.esp'), hash: 'built' }, { ...line('b.esp'), hash: 'built' }], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
+
+    expect(await status()).toEqual(heldAs({ differing: ['b.esp'] }));
+  });
+
+  it('neither hashes nor names a gap a source mod\'s file its line records by its path alone, which a step makes (mods.md, Build, story 3)', async () => {
+    await write('made.dds', 'whatever the step wrote');
+    await manifested(manifest([line('made.dds')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
+
+    expect([await status(), hashed]).toEqual([heldAs(), []]);
+  });
+
   it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule (submodule: %s)', async (isSubmodule, noHost) => {
     await write('a.esp', 'hello');
     await manifested(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));

@@ -13,7 +13,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
-import { archiveVariants, buildSourceMod, type BuildPass } from './buildSourceMod';
+import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
@@ -193,17 +193,6 @@ async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead
   return { refusal: `${skipped(packages.lacks.join('; '))}${notDownloaded.join('')}` };
 }
 
-async function trashedOrWhy({ adapter, trash }: RestoreDeps, folder: string, paths: readonly string[]): Promise<string | undefined> {
-  for (const path of paths) {
-    try {
-      await adapter.trashFileIn(folder, path, trash);
-    } catch (err) {
-      return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
-    }
-  }
-  return undefined;
-}
-
 // modlist-repository.md, The manifest, story 3: the manifest's version and installation file, and what else the
 // metadata holds kept.
 async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
@@ -217,7 +206,8 @@ async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest)
 }
 
 async function whyNotFinished(pass: Pass, mod: string, manifest: Manifest, folder: string, namedByNoLine: readonly string[]): Promise<string | undefined> {
-  return await trashedOrWhy(pass.deps, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest);
+  const { adapter, trash } = pass.deps;
+  return await whyNotTrashed(adapter, trash, folder, namedByNoLine) ?? await metadataWrittenOrWhy(pass, mod, manifest);
 }
 
 // A status on this machine reads a game folder package's entries from the hash index.
@@ -283,9 +273,10 @@ async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
   return leftDetached ? { leftDetached } : {};
 }
 
-// ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records.
+// ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records, and the build
+// sends every other file to the trash.
 async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, submodule: string | undefined): Promise<Answer> {
-  const { adapter, client, tasks } = pass.deps;
+  const { adapter, client, tasks, trash } = pass.deps;
   const cloned = submodule === undefined ? {} : await clonedAtThePin(pass, submodule);
   if ('refusal' in cloned) return cloned;
   const held = await buildFileHeld(sourceFolder);
@@ -296,7 +287,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const before = await hashesIn(adapter, folder);
   const exclude = exclusionsOf(manifest, [], adapter.exclusionMark);
   const outcome = await buildSourceMod(
-    { client, adapter, tasks }, { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: manifest.version, isSubmodule: submodule !== undefined }, pass.build);
+    { client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: manifest.version, isSubmodule: submodule !== undefined }, pass.build);
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;
@@ -305,18 +296,17 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const recorded = await manifestHeld(folder);
   if (recorded === undefined || 'refusal' in recorded) return { refusal: notFinished(recorded?.refusal ?? 'its build wrote no manifest') };
   let after: Map<string, string>;
-  let namedByNoLine: readonly string[];
   try {
     after = await hashesIn(adapter, folder);
-    namedByNoLine = (await compared(adapter, recorded.manifest, folder, packages)).namedByNoLine;
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
-  const why = await whyNotFinished(pass, mod, recorded.manifest, folder, namedByNoLine);
+  const why = await metadataWrittenOrWhy(pass, mod, recorded.manifest);
   if (why !== undefined) return { refusal: notFinished(why) };
   return {
     landed: {
-      mod, written: [...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path).sort(), namedByNoLine,
+      mod, written: [...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path).sort(),
+      namedByNoLine: built.trashed ?? [],
       ...(built.uncommitted ? { uncommitted: true } : {}), ...cloned,
     },
   };

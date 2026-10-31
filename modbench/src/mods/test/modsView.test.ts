@@ -96,7 +96,7 @@ const otherDeps = () => ({
   extensionUri: Uri.file('/extension'), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
   sourceGestures: {
-    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks() }), rows: () => [],
+    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }), rows: () => [],
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
     registerRepositories: () => Promise.resolve(),
   },

@@ -346,7 +346,7 @@ describe('restore from manifest', () => {
         ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], taken: ['b.nif'], archives: [] }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([
-        { verb: 'keepPackageEntries', hash: 'ModA', entries: new Map([['a.esp', 'compiled'], ['b.nif', 'HB']]) }, { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
+        { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
       ]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
     });

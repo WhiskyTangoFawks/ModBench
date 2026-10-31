@@ -999,6 +999,15 @@ describe('the agent server, running a gesture', () => {
       options: {},
     },
     {
+      name: 'mod_build carries force as an Option',
+      value: CONFLICTED,
+      tool: 'mod_build',
+      args: { argument: [{ name: 'B' }], options: { force: true } },
+      command: 'modbench.mod.build',
+      argument: [mod('B')],
+      options: { force: true },
+    },
+    {
       name: 'mod_build carries no Argument for every source in the source folder',
       value: CONFLICTED,
       tool: 'mod_build',

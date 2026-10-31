@@ -57,8 +57,9 @@ const builtSourceMod = (
   + '"Mod - Textures.ba2": ["textures/a.dds"]\n'
   + '},\n'
   + '"files": [\n'
-  + '{"path":"Mod - Main.ba2"},\n'
-  + '{"path":"Mod.esp"}\n'
+  + '{"path":"Mod - Main.ba2","hash":"AAECAwQFBgc="},\n'
+  + '{"path":"Mod.esp","hash":"BwYFBAMCAQA="},\n'
+  + '{"path":"textures/made.dds"}\n'
   + ']\n'
   + '}\n'
 );
@@ -101,6 +102,12 @@ describe('a manifest the adapter reads and writes', () => {
     if (!('manifest' in read)) throw new Error(read.refused);
     expect(read.manifest).toMatchObject({ version: '1.2.3', packages: [mod7z] });
     expect(read.manifest.files[0]).toEqual({ path: 'a.nif', entry: { kind: 'held' } });
+  });
+
+  it('reads a built source mod\'s file by the bytes its line records, and one a step makes by its path alone (mods.md, Build, story 3)', () => {
+    const read = readManifest(builtSourceMod);
+    if (!('manifest' in read)) throw new Error(read.refused);
+    expect(read.manifest.files.slice(1)).toEqual([{ path: 'Mod.esp', entry: { kind: 'held' }, hash: 'BwYFBAMCAQA=' }, { path: 'textures/made.dds', entry: { kind: 'held' } }]);
   });
 
   it('writes its files in path order, ignoring case first', () => {
