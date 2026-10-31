@@ -55,10 +55,10 @@ describe('a downloaded file row', () => {
   });
 
   it.each<[string, DownloadedFileRow['status'], string | undefined, string]>([
-    ['a Downloaded file shows only the version, unmarked', 'Downloaded', '2.2.1', 'v2.2.1'],
+    ['a Downloaded file appends the status word after the version', 'Downloaded', '2.2.1', 'v2.2.1 Downloaded'],
     ['an Installed file appends the status word after the version', 'Installed', '2.2.1', 'v2.2.1 Installed'],
     ['an Uninstalled file appends the status word after the version', 'Uninstalled', '2.2.1', 'v2.2.1 Uninstalled'],
-    ['a Downloaded file with no version shows nothing', 'Downloaded', undefined, ''],
+    ['a Downloaded file with no version shows just the status word', 'Downloaded', undefined, 'Downloaded'],
     ['an Installed file with no version shows just the status word', 'Installed', undefined, 'Installed'],
   ])('description: %s', (_case, status, version, description) => {
     expect(new DownloadedFileNode(row({ status, version })).description).toBe(description);
