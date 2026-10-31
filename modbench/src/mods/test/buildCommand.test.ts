@@ -63,7 +63,7 @@ describe('modbench.mod.build', () => {
       },
       ask,
       instance: instanceThatReads,
-      reporter, problems: new BuildProblems(diagnostics),
+      reporter, problems: new BuildProblems(diagnostics, { subscribe: () => ({ dispose: () => undefined }) }),
       modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_MODS, pluginsView: 'modbench.pluginListTree',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
     }, () => options.selection ?? []);
