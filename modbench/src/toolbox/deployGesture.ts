@@ -5,7 +5,8 @@ import { AgentCall } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { deployFailures, deployWarnings } from './deployProblems';
-import { MOVE_TO_OVERWRITE, publishUnmanagedProblems } from './unmanagedProblems';
+import { coalesced } from '../ports/coalesced';
+import { MOVE_TO_OVERWRITE, unmanagedProblems } from './unmanagedProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
@@ -16,18 +17,33 @@ interface DeployGestureDeps {
 }
 
 export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
-  const problems = vscode.languages.createDiagnosticCollection('modbench-deployment-unmanaged');
+  const collection = vscode.languages.createDiagnosticCollection('modbench-deployment-unmanaged');
+  const problems = unmanagedProblems(collection);
   let leftOut: readonly { path: string; winner: string }[] = [];
-  // The folder is read again after each gesture that changes it, and a file the user changes by hand is read at the next of them.
+  let watched: { folder: string; watcher: vscode.FileSystemWatcher } | undefined;
+  // A change in the folder only triggers the read; the disk answers (ADR-0003).
+  const reread = coalesced(() => { void publishProblems(); });
+  const watch = (folder: string | undefined): void => {
+    if (watched?.folder === folder) return;
+    watched?.watcher.dispose();
+    watched = undefined;
+    if (folder === undefined) return;
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(folder), '**/*'));
+    watcher.onDidCreate(reread);
+    watcher.onDidChange(reread);
+    watcher.onDidDelete(reread);
+    watched = { folder, watcher };
+  };
   const publishProblems = async (): Promise<void> => {
     const held = await commands.unmanaged();
-    if (held.applied) publishUnmanagedProblems(problems, held.unmanaged, leftOut);
-    else problems.clear();
+    watch(held.applied ? held.folder : undefined);
+    if (held.applied) problems.publish(held.unmanaged, leftOut);
+    else collection.clear();
   };
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();
     const result = await commands.deploy(instance.sequence === 0 ? undefined : { files, plugins, gameName });
-    if (result.applied) leftOut = result.leftOut;
+    leftOut = result.applied ? result.leftOut : [];
     await publishProblems();
     if (reportsItself) return result;
     if (!result.applied) {
@@ -39,6 +55,7 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
   };
   const purge = async (): Promise<void> => {
     const result = await commands.purge();
+    leftOut = [];
     await publishProblems();
     if (!result.applied) {
       reporter.report('error', 'Could not purge.', result.refusal);
@@ -62,7 +79,9 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
     vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
     vscode.commands.registerCommand('modbench.instance.purge', () => runWritingGesture(TOOLBOX_VIEW, instance, purge)),
     registerMoveToOverwriteCommand({ commands, instance, reporter }, publishProblems),
-    problems,
+    collection,
+    { dispose: () => { watched?.watcher.dispose(); } },
+    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, problems.quickFixes, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
   ];
 }
 

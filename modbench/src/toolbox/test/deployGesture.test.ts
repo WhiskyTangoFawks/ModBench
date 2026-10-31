@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handlers, registerCommand, executeCommand, collections } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, collections, watchers, actionProviders } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
   return {
     handlers,
@@ -9,6 +9,8 @@ const { handlers, registerCommand, executeCommand, collections } = vi.hoisted(()
       return { dispose: vi.fn() };
     }),
     executeCommand: vi.fn(),
+    watchers: [] as { pattern: { base: { fsPath: string }; pattern: string }; disposed: boolean; fire(): void }[],
+    actionProviders: [] as { provideCodeActions(...args: never[]): unknown }[],
     collections: [] as { clear(): void; [Symbol.iterator](): IterableIterator<[{ fsPath: string }, readonly { message: string }[]]> }[],
   };
 });
@@ -17,10 +19,24 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   const { taskModule } = await import('../../test/taskDouble');
   const { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri } = await import('../../test/vscodeMock');
+  const { fakeVscodeModule } = await import('../../test/mo2/fakeVscodeWatcher');
+  class CodeAction { diagnostics: unknown[] = []; command: unknown; constructor(readonly title: string, readonly kind: string) {} }
   return {
-    ...taskModule(), Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse },
+    ...taskModule(), Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse }, CodeAction, CodeActionKind: { QuickFix: 'quickfix' },
+    RelativePattern: fakeVscodeModule().RelativePattern,
+    workspace: {
+      createFileSystemWatcher: (pattern: { base: { fsPath: string }; pattern: string }) => {
+        const handlers: (() => void)[] = [];
+        const watcher = { pattern, disposed: false, fire: () => { handlers.forEach((h) => h()); }, onDidCreate: (h: () => void) => { handlers.push(h); }, onDidChange: () => undefined, onDidDelete: () => undefined, dispose: () => { watcher.disposed = true; } };
+        watchers.push(watcher);
+        return watcher;
+      },
+    },
     commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress },
-    languages: { createDiagnosticCollection: () => { const collection = new FakeDiagnosticCollection(); collections.push(collection); return collection; } },
+    languages: {
+      registerCodeActionsProvider: (_selector: unknown, provider: { provideCodeActions(...args: never[]): unknown }) => { actionProviders.push(provider); return { dispose: () => undefined }; },
+      createDiagnosticCollection: () => { const collection = new FakeDiagnosticCollection(); collections.push(collection); return collection; },
+    },
   };
 });
 
@@ -50,18 +66,20 @@ function deployAnswering(
   const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
   const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
-  const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, unmanaged: unmanagedNow.map(inDeployed) }));
+  const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: unmanagedNow.map(inDeployed) }));
   registerDeployCommands({
     commands: { deploy, purge, moveToOverwrite, unmanaged },
     instance: { landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
     reporter,
   });
-  return { reporter, deploy, purge, moveToOverwrite, unmanaged, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
+  return { reporter, deploy, purge, moveToOverwrite, unmanaged, commands: { deploy }, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
 }
 
 beforeEach(() => {
   handlers.clear();
   collections.length = 0;
+  watchers.length = 0;
+  actionProviders.length = 0;
   executeCommand.mockClear();
   progressSteps.length = 0;
 });
@@ -208,11 +226,47 @@ describe('the problems on the files the deployment folder holds that deploy does
   it('are read again after a move to Overwrite, so a file it moved has none', async () => {
     const { run, runMove, unmanaged } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['a.ini', 'b.ini'] });
     await run();
-    unmanaged.mockResolvedValueOnce({ applied: true, unmanaged: [inDeployed('b.ini')] });
+    unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
     await runMove(['a.ini']);
 
     expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]);
+  });
+
+  it('are read again when the deployment folder changes, so a file the user deleted has none', async () => {
+    const { run, unmanaged } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['a.ini', 'b.ini'] });
+    await run();
+    unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
+
+    present(watchers[0], 'the watcher').fire();
+    await vi.waitFor(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
+  });
+
+  it('are watched in the deployment folder alone, and not again while it is the same', async () => {
+    const { run, runPurge } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['a.ini'] });
+
+    await run();
+    await runPurge();
+
+    expect(watchers.map(({ pattern }) => [pattern.base.fsPath, pattern.pattern])).toEqual([['/deployed', '**/*']]);
+  });
+
+  it('name no file left out by an earlier deploy once a deploy fails', async () => {
+    const { run, commands } = deployAnswering(
+      { ...NOTHING_DEPLOYED, leftOut: [{ path: 'a.ini', winner: '/m/A/a.ini' }] }, { unmanagedNow: ['a.ini'] },
+    );
+    await run();
+    commands.deploy.mockResolvedValueOnce({ applied: false, refusal: 'The instance has not been read.' });
+
+    await run();
+
+    expect(held()).toEqual([['/deployed/a.ini', 'Deploy does not manage this file.']]);
+  });
+
+  it('offer move to Overwrite as a quick fix', async () => {
+    deployAnswering(NOTHING_DEPLOYED);
+
+    expect(actionProviders.length).toBe(1);
   });
 
   it('are read again after a purge', async () => {
