@@ -75,9 +75,8 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
 
 const NO_LINE: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 
-// mods.md, A source mod, story 4: each file whose bytes differ from its line at the path the build writes it, and each
-// file no line names, but a taken file holding its package's bytes, which build writes again (commands.md, Confirm what
-// destroys). A taken file is written before an archive packs it.
+// mods.md, A source mod, story 4, and commands.md, Confirm what destroys: each file that differs from its manifest, but a
+// taken file holding its package's bytes, which build writes before an archive packs it.
 async function lostIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
   const read = await manifestIn(mod.folder);
   const manifest = read !== undefined && 'manifest' in read ? read.manifest : NO_LINE;
