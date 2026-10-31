@@ -14,8 +14,9 @@ export type { OtherManifests, RestoreResult, RestoreStatus } from './restoreFrom
 type Adapter = UpdateManifestDeps['adapter'] & RestoreDeps['adapter'] & Pick<InstanceAdapter,
   'checkPushRefusalFree' | 'publisherConfigurationRefusal' | 'writeIgnoreList' | 'removeRepository'>;
 
-interface ModlistRepositoryCommandsDeps extends Omit<RestoreDeps, 'adapter'>, Omit<UpdateManifestDeps, 'adapter'> {
+interface ModlistRepositoryCommandsDeps extends Omit<RestoreDeps, 'adapter'> {
   readonly adapter: Adapter;
+  readonly instanceRoot: string;
   readonly hostGit: HostGit<unknown>;
 }
 

@@ -204,22 +204,13 @@ describe('the MO2 adapter\'s path tokens', () => {
       .toEqual([undefined, SETTINGS(['[Settings]', `download_directory=${onWineDrive(join(clone, 'downloads'), '/')}`, `path=${onWineDrive(clone, '/')}/x`]), '']);
   });
 
-  it('answers no path in a downloads folder outside the instance folder', async () => {
-    const outside = await folder('downloads');
-    const { root, adapter } = await instanceRepository([]);
-    await put(root, 'ModOrganizer.ini', SETTINGS(['[Settings]', `download_directory=${onWineDrive(outside, '/')}`]));
-    await adapter.writePathTokens();
-
-    expect(await adapter.pathsOutsideFolders()).toEqual([]);
-  });
-
   it('drops the folders MO2\'s file dialogs last browsed', async () => {
     const { root, adapter } = await instanceRepository([]);
     await put(root, 'ModOrganizer.ini', SETTINGS(['[recentDirectories]', '1\\name=Mod', '1\\directory=D:/Elsewhere', '[Settings]', 'style=dark']));
 
     await adapter.writePathTokens();
 
-    expect([held(root, 'ModOrganizer.ini'), await adapter.pathsOutsideFolders()]).toEqual([SETTINGS(['[Settings]', 'style=dark']), []]);
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', 'style=dark']));
   });
 
   it.each([
@@ -314,18 +305,9 @@ describe('the MO2 adapter\'s path tokens', () => {
 
       await adapter.writePathTokens();
 
-      expect([held(root, PUBLISHER_FILE), await adapter.pathsOutsideFolders()]).toEqual([JSON.stringify({ Source: '{instance folder}', Output: '' }), []]);
+      expect(held(root, PUBLISHER_FILE)).toBe(JSON.stringify({ Source: '{instance folder}', Output: '' }));
     });
 
-    it('answers each path outside the two folders as a commit would hold it', async () => {
-      const game = await gameFolder();
-      const { root, adapter } = await instanceRepository([], game);
-      const outside = join(tmpdir(), 'Life in the Ruins.wabbajack');
-      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, GamePath: game, Image: outside }));
-      await adapter.writePathTokens();
-
-      expect(await adapter.pathsOutsideFolders()).toEqual([{ file: PUBLISHER_FILE, line: 1, path: JSON.stringify(outside).slice(1, -1) }]);
-    });
   });
 
   describe('on a clone', () => {
@@ -347,13 +329,12 @@ describe('the MO2 adapter\'s path tokens', () => {
         .toEqual([SETTINGS(['[Settings]', 'steam_username=']), '']);
     });
 
-    it('writes no object into the repository, neither writing the path tokens nor reading what a commit would hold', async () => {
+    it('writes no object into the repository, writing the path tokens', async () => {
       const { clone, adapter } = await cloned((origin) => [`1\\binary=${onWineDrive(origin, '/')}/tools/xEdit.exe`]);
       await put(clone, 'ModOrganizer.ini', SETTINGS(['1\\binary={instance folder:/}/tools/SSEEdit.exe']));
       const before = await objectsIn(clone);
 
       await adapter.writePathTokens();
-      await adapter.pathsOutsideFolders();
 
       expect(await objectsIn(clone)).toEqual(before);
     });
@@ -373,61 +354,6 @@ describe('the MO2 adapter\'s path tokens', () => {
       expect(await adapter.writePathTokens())
         .toBe('ModOrganizer.ini still holds a path token in place of this machine\'s path, because the game folder was not found');
     });
-  });
-
-  it('answers each path no path token names in each file git holds or would commit, once, and a file no path token covers with its folders\' paths', async () => {
-    const game = await gameFolder();
-    const { root, adapter } = await instanceRepository([], game);
-    await adapter.writeIgnoreList();
-    await put(root, 'ModOrganizer.ini', SETTINGS([
-      `1\\binary=${onWineDrive(root, '/')}/tools/xEdit.exe`, `2\\binary=${onWineDrive(game, '/')}/Fallout4.exe`,
-      '3\\binary=C:/Modding/Tools/CLASSIC.exe', '3\\workingDirectory=C:\\\\Modding\\\\Tools',
-      '4\\arguments=-o:\\"C:\\\\Modding\\\\Out\\" -D:\\"C:\\\\Modding\\\\Out\\"', 'url=https://www.nexusmods.com/fallout4',
-      '5\\binary=\\\\\\\\nas\\\\share\\\\x.exe', '6\\binary=//nas/share/y.exe', '7\\arguments=-o:\\\\\\\\nas\\\\share\\\\Inst\\\\out',
-    ]));
-    await put(root, 'profiles/Default/Fallout4Custom.ini', 'sScreenShotBaseName=/home/me/Pictures/shot\r\n');
-    await put(root, 'mods/Mod A/Mod A.manifest.json', `{"path": "C:/Modding/x", "folder": "${onWineDrive(root, '/')}/mods"}`);
-    await put(root, '.gitmodules', '[submodule "A"]\n\tpath = source/A\n\turl = https://example.test/a.git\n');
-    await adapter.writePathTokens();
-
-    expect(await adapter.pathsOutsideFolders()).toEqual([
-      { file: 'ModOrganizer.ini', line: 6, path: 'C:/Modding/Tools/CLASSIC.exe' },
-      { file: 'ModOrganizer.ini', line: 7, path: 'C:\\\\Modding\\\\Tools' },
-      { file: 'ModOrganizer.ini', line: 8, path: 'C:\\\\Modding\\\\Out' },
-      { file: 'ModOrganizer.ini', line: 10, path: '\\\\\\\\nas\\\\share\\\\x.exe' },
-      { file: 'ModOrganizer.ini', line: 11, path: '//nas/share/y.exe' },
-      { file: 'ModOrganizer.ini', line: 12, path: 'o:\\\\\\\\nas\\\\share\\\\Inst\\\\out' },
-      { file: 'mods/Mod A/Mod A.manifest.json', line: 1, path: 'C:/Modding/x' },
-      { file: 'mods/Mod A/Mod A.manifest.json', line: 1, path: `${onWineDrive(root, '/')}/mods` },
-      { file: 'profiles/Default/Fallout4Custom.ini', line: 1, path: '/home/me/Pictures/shot' },
-    ]);
-  });
-
-  it('finds no path in a hash a manifest holds, though it starts with a slash, and finds the path beside it', async () => {
-    const { root, adapter } = await instanceRepository([]);
-    await put(root, 'mods/Plain/Plain.manifest.json',
-      '{"installationFile": {"path": "C:/Modding/x.zip", "hash": "/emUNYLj+Fc=", "entries": [{"path": "a.txt", "hash": "/AAECAwQFBgc="}]}}');
-
-    expect(await adapter.pathsOutsideFolders()).toEqual([{ file: 'mods/Plain/Plain.manifest.json', line: 1, path: 'C:/Modding/x.zip' }]);
-  });
-
-  it('answers a path once for each line that holds it, and once for a line that holds it twice', async () => {
-    const { root, adapter } = await instanceRepository([]);
-    await put(root, 'mods/Plain/Plain.manifest.json', '{"a": "C:/Modding/x", "b": "C:/Modding/x"}\n{"c": "C:/Modding/x"}');
-
-    expect(await adapter.pathsOutsideFolders()).toEqual([
-      { file: 'mods/Plain/Plain.manifest.json', line: 1, path: 'C:/Modding/x' },
-      { file: 'mods/Plain/Plain.manifest.json', line: 2, path: 'C:/Modding/x' },
-    ]);
-  });
-
-  it('writes nothing in an instance folder that holds no repository, and finds no path in it', async () => {
-    const root = await folder('instance');
-    await put(root, 'ModOrganizer.ini', SETTINGS(['1\\binary=C:/Modding/x.exe']));
-    const adapter = managerOver(root, {}, PUBLISHER);
-
-    expect([await adapter.writePathTokens(), await adapter.pathsOutsideFolders(), await readFile(join(root, 'ModOrganizer.ini'), 'utf8')])
-      .toEqual([undefined, [], SETTINGS(['1\\binary=C:/Modding/x.exe'])]);
   });
 
   it('leaves the config of a repository that already holds its filters as it is', async () => {

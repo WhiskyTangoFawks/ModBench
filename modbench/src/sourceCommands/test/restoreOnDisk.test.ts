@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -54,7 +53,7 @@ async function aModFromADownloadedFileAndTheGameFolder() {
   const trash = async (path: string): Promise<void> => { inTrash[relative(join(root, 'mods'), path).replaceAll('\\', '/')] = await readFile(path, 'utf8'); await rm(path); };
   const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, tasks: recordingTasks() };
   return {
-    update: () => updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false),
+    update: () => updateManifest({ adapter }, ['Mod'], {}, [], false),
     restore: () => restoreFromManifest(deps, ['Mod'], {}, false, []),
     inTrash,
   };
