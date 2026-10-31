@@ -62,7 +62,7 @@ function deployAnswering(
   registerDeployCommands({
     commands: { deploy, purge, moveToOverwrite, unmanaged },
     instance: { subscribe: (subscriber) => { subscribers.push(subscriber); return { dispose: () => undefined }; }, landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
-    reporter,
+    reporterFor: () => reporter,
   });
   return { reporter, deploy, purge, moveToOverwrite, unmanaged, commands: { deploy }, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
 }

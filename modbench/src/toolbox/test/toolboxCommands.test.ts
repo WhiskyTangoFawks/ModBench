@@ -204,7 +204,7 @@ describe('Refresh', () => {
           return Promise.resolve(undefined);
         },
       },
-      reporter,
+      reporterFor: () => reporter,
       instanceRoot,
     });
     return { reporter, released, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };

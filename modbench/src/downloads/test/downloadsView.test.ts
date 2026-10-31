@@ -53,10 +53,9 @@ import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 
 const downloadsViewDeps = (instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
-  commands: downloadedFileCommands(fakeInstanceAdapter().adapter), queryInfo: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [] } }), instance, reporter: recordingReporter(),
+  commands: downloadedFileCommands(fakeInstanceAdapter().adapter), queryInfo: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [] } }), instance, reporterFor: recordingReporter,
   trash: () => Promise.resolve(),
-  log: () => undefined,
-  logUnresolved: () => undefined,
+  channel: { warn: () => undefined },
 });
 const command = commandInvoker(h.state);
 const treeViews = new FakeTreeViews();
@@ -198,14 +197,20 @@ describe('the Downloads view tells its palette entries, which are handed no row,
 });
 
 
+describe('the Downloads view contributes to the copy value catalog', () => {
+  it('under the downloaded file tag', () => {
+    expect(viewOver(instanceOver()).copyValue.reporterTag).toBe('downloadedFile.copyValue');
+  });
+});
+
 describe('the Downloads view writes the unresolved folder to the Output', () => {
   it('hands the reason to its log once the Instance value carries it', () => {
     const instance = new FakeInstance(instanceValueFixture());
     const lines: string[] = [];
-    createDownloadsView({ ...downloadsViewDeps(instance), logUnresolved: (line) => lines.push(line) });
+    createDownloadsView({ ...downloadsViewDeps(instance), channel: { warn: (line) => lines.push(line) } });
 
     instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no folder' } }));
 
-    expect(lines).toEqual(['no folder']);
+    expect(lines).toEqual(['[instance] no folder']);
   });
 });

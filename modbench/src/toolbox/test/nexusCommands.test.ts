@@ -67,7 +67,7 @@ function registered(secretsFail?: 'get' | 'delete') {
   if (secretsFail === 'get') over.secrets.get = () => Promise.reject(new Error('keyring locked'));
   if (secretsFail === 'delete') over.secrets.delete = () => Promise.reject(new Error('keyring locked'));
   const reporter = recordingReporter();
-  registerNexusCommands({ commands: nexusLogin(over.nexus), nexus: over.nexus, reporter });
+  registerNexusCommands({ commands: nexusLogin(over.nexus), nexus: over.nexus, reporterFor: () => reporter });
   return { ...over, reporter };
 }
 

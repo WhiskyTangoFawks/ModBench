@@ -33,7 +33,7 @@ function register() {
   registerModlistCommands({
     commands: { gitInit },
     instance: { value: instanceValueFixture({}), refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
-    reporter,
+    reporterFor: () => reporter,
   });
   return { reporter, run: (...args: unknown[]) => present(handlers.get(GIT_INIT), `the handler for "${GIT_INIT}"`)(...args) };
 }

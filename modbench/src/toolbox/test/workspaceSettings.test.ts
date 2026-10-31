@@ -5,6 +5,7 @@ let inspected: { workspaceValue?: string } | undefined;
 let configListener: ConfigListener | undefined;
 
 vi.mock('vscode', () => ({
+  Uri: { file: (path: string) => ({ path }) },
   workspace: {
     getConfiguration: () => ({ inspect: () => inspected }),
     onDidChangeConfiguration: (listener: ConfigListener) => {
@@ -14,19 +15,16 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { deploymentFolderSetting, gameFolderSetting, onStringsLanguageChange } from '../workspaceConfig';
+import { deploymentFolderSetting, gameFolderSetting } from '../workspaceSettings';
 
 const changeTo = (key: string): void => configListener?.({ affectsConfiguration: (section) => section === key });
 
 describe('a setting change signals the listener of that setting', () => {
-  it.each([
-    ['the game folder', 'modbench.mods.gameFolder', gameFolderSetting.changed],
-    ['the strings language', 'modbench.stringsLanguage', onStringsLanguageChange],
-  ])('%s, on a change to %s', (_, key, onChange) => {
+  it('the game folder, on a change to modbench.mods.gameFolder', () => {
     const listener = vi.fn();
-    onChange(listener);
+    gameFolderSetting.changed(listener);
 
-    changeTo(key);
+    changeTo('modbench.mods.gameFolder');
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -37,5 +35,9 @@ describe('the deployment folder setting', () => {
     inspected = { workspaceValue: undefined };
 
     expect(deploymentFolderSetting.inspect()).toEqual({ workspaceValue: undefined });
+  });
+
+  it('names a folder by its last part, whatever follows it', () => {
+    expect(deploymentFolderSetting.nameOf('/games/deploy/')).toBe('deploy');
   });
 });

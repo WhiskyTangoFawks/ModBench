@@ -13,7 +13,8 @@ interface ModlistGestureDeps {
   reporter: Reporter;
 }
 
-export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Disposable[] {
+export function registerModlistCommands({ reporterFor, ...rest }: Omit<ModlistGestureDeps, 'reporter'> & { reporterFor: (tag: string) => Reporter }): vscode.Disposable[] {
+  const deps = { ...rest, reporter: reporterFor('modlist') };
   return [
     vscode.commands.registerCommand('modbench.modlist.gitInit', (clicked?: unknown) => (clicked instanceof AgentCall ? gitInitForAgent(deps) : gitInit(deps))),
   ];

@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { createModSync, createPluginSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
-import type { Instance, InstanceValue } from './instanceLoader/instance';
+import type { Instance } from './instanceLoader/instance';
 import type { ModSyncRun } from './modCommands/modCommands';
 import type { PluginSyncRun } from './pluginCommands/plugins';
 
@@ -37,22 +37,4 @@ export function registerSyncCommands(
     register('modbench.mod.sync', () => modSync.run()),
     register('modbench.plugin.sync', () => pluginSync.run()),
   ];
-}
-
-type LoadOrderPut = (value: InstanceValue) => void;
-
-export function loadOrderPutHandler(
-  editing: { onRecompute(source: InstanceValue['loadOrderSnapshot'], stringsLanguage: string | undefined): void }, stringsLanguage: () => string | undefined,
-): LoadOrderPut {
-  return (value) => { editing.onRecompute(value.loadOrderSnapshot, stringsLanguage()); };
-}
-
-export function loadOrderPutOnEachValue(instance: Pick<Instance, 'subscribe'>, put: LoadOrderPut) {
-  return instance.subscribe(put);
-}
-
-export function loadOrderPutOnEachLanguageChange<S>(
-  onLanguageChange: (listener: () => void) => S, instance: Pick<Instance, 'value'>, put: LoadOrderPut,
-): S {
-  return onLanguageChange(() => { put(instance.value); });
 }
