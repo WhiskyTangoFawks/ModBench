@@ -10,7 +10,7 @@ import type { MEditClient } from '../../client';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const REFUSED = { item: { name: 'Clean.esp', origin: 'Harbor' }, reason: 'Clean.esp is not malformed.' };
-const MADE = { repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
+const MADE = { repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' }, yielded: [] };
 
 describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
