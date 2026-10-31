@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
+import type { ManifestPackage } from '../manifestAdapter/manifest';
+import type { PackagedStatus } from './modStatuses';
 
 /** A problem on the file it concerns. */
 export interface StatusProblem {
@@ -23,4 +25,17 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     ...onManifest(status.noHost.map((pkg) => `${pkg.charAt(0).toUpperCase()}${pkg.slice(1)} has no host.`)),
     ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it names: ${lacking}.`)),
   ];
+}
+
+const packageNoun = (pkg: ManifestPackage): string =>
+  (pkg.kind === 'gameFolder' ? 'the game folder' : `${pkg.kind === 'repository' ? 'repository' : 'installation file'} '${pkg.name}'`);
+
+/** A mod made from several packages, on its manifest (modlist-repository.md, Status, story 6). */
+export function severalPackagesNote(status: PackagedStatus, holdsPlugin: boolean): StatusProblem | undefined {
+  const { packages = [], manifestFile } = status;
+  if (packages.length < 2 || manifestFile === undefined) return undefined;
+  const isSourceMod = packages.some(({ kind }) => kind === 'repository');
+  const upgrade = `An upgrade replaces the files of every one of the ${packages.length} packages: ${packages.map(packageNoun).join(', ')}.`;
+  const decompile = holdsPlugin && !isSourceMod ? ' To keep edits to its plugin, run Decompile and Commit Mod.' : '';
+  return { file: manifestFile, message: `Made from several packages. ${upgrade}${decompile}` };
 }
