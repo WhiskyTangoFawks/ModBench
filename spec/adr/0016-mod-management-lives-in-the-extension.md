@@ -1,10 +1,10 @@
 # Mod Management lives in the extension
 
-Record editing is split across the extension and the C# service. Mod Management is not. Install, enable and disable, ordering, the file order conflict index, deploy and purge, game-path resolution, the manifest, the restore from it and a mod's status against it all live in the extension, in TypeScript. That work is file, HTTP and JSON work, which Node does natively. The trees and the status bar are already in the extension. A C# home would be a chatty HTTP API around UI-adjacent bookkeeping. The editing backend stays a pure Mutagen and DuckDB record service, and a source mod's build in it is compile and pack.
+Record editing is split across the extension and the C# service. Mod Management is not. It lives in the extension, in TypeScript. That work is file, HTTP and JSON work, which Node does natively. The trees and the status bar are already in the extension. A C# home would be a chatty HTTP API around UI-adjacent bookkeeping. The editing backend stays a pure Mutagen and DuckDB record service, and a source mod's build in it is compile and pack.
 
 ## Consequences
 
-- mEdit interprets no manifest. The extension hands build and init what they need as values, and a build file a commit must hold as bytes. Each reads what it is handed only to write it, and answers with what it made. The extension records a source mod's manifest from that answer.
+- mEdit interprets no manifest. The extension hands build and init what they need as values, and the files a commit must hold as bytes. Each reads what it is handed only to write it, and answers with what it made. The extension records a source mod's manifest from that answer.
 
 ## Alternatives rejected
 

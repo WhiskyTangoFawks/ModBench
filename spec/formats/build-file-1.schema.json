@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Build file",
+  "description": "How a source mod's build makes the mod's folder from its source folder.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "description": "The format's version.",
+      "const": 1
+    },
+    "steps": {
+      "description": "The steps the build runs, in order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "archives": {
+      "description": "Each archive to pack, by its path in the mod's folder, with the paths of the loose files it packs.",
+      "type": "object",
+      "propertyNames": { "$ref": "manifest-1.schema.json#/$defs/path" },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "manifest-1.schema.json#/$defs/path" },
+        "uniqueItems": true
+      }
+    }
+  },
+  "required": ["version"],
+  "additionalProperties": false,
+  "$defs": {
+    "step": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "description": "The label of the VS Code user task that runs the step.",
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "description": "The arguments the step hands its task.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "page": {
+          "description": "The page where the user gets the tool the task runs. Absent when the tool comes with the source folder.",
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": ["task"],
+      "additionalProperties": false
+    }
+  }
+}

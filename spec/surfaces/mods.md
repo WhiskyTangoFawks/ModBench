@@ -48,7 +48,7 @@ As a user, I want:
 |---|---|---|
 | Label | the separator's name | MO2 |
 | Check box, icon | none | MO2 draws a separator as a heading |
-| Description | its status against its manifest ([modlist-repository.md](modlist-repository.md), Status, story 1) | |
+| Description | none | |
 
 ### Overwrite
 
@@ -89,12 +89,12 @@ Each publisher tag is an indicator of its own, with the badge its publisher decl
 
 ## A source mod
 
-A source mod's folder is its build's output ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). As a user, I want:
+A source mod's folder is its build's output ([ADR-0027](../adr/0027-a-build-file-builds-a-source-mods-folder-from-its-source-folder.md)). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
 2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
-4. Build to make the folder hold what ADR-0007 names and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0007; commands.md, Confirm what destroys
+4. Build to make the folder hold what ADR-0027 names and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0027; commands.md, Confirm what destroys
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
 
 ## Order and view state
@@ -117,7 +117,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest, on every manifest · restore from manifest…, on every manifest (the instance has a repository). Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest (not a source mod) · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
@@ -181,9 +181,9 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from its repository and the installation files its build file names: its assets, its plugins compiled from their plugin source, and its steps run in order. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
+1. Build to write the mod folder from its source folder: its assets, its plugins compiled from their plugin source, and its steps run in order. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0027
 2. The build file to name, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
-3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a step makes is recorded by its path alone, since a tool's output follows the tool and my load order, and is not checked. Cites: ADR-0022; Existing tools; Never silently wrong
+3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a step makes is recorded by its path alone, since a tool's output follows the tool and my load order, and is not checked. Cites: ADR-0022; ADR-0027; Existing tools; Never silently wrong
 4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
@@ -214,7 +214,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder.
 2. A new mod to appear at the winning end of the mod order, disabled, as a mod new on disk is.
-3. An upgrade to replace the mod's files with the new file's, keeping its folder name and its manifest, and sending each file it replaces or removes to the trash. A source mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0022; commands.md, Confirm what destroys; commands.md, Refuse, do not repair
+3. An upgrade to replace the mod's files with the new file's, keeping its folder name and its manifest, and sending each file it replaces or removes to the trash. A source mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0027; commands.md, Confirm what destroys; commands.md, Refuse, do not repair
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery.
 6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2

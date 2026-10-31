@@ -17,6 +17,7 @@ When code work needs a sentence here changed, or a story needs an exception to o
 - `out-of-scope/`: a place Modbench diverges from its reference tool, or omits what it does.
 - `architecture/`: a box, a layer, or a reference between boxes.
 - `surfaces/`: what a user sees and does. A gesture lands in `surfaces/commands.md`.
+- `formats/`: a file that one machine or version writes and another reads.
 - `GLOSSARY.md`: a word of the maintainer's that a model would misread.
 - A tactical decision lands in the Notes of the ticket it bears on, as a default the implementer may override with a reason, or nowhere.
 

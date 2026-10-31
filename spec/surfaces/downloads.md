@@ -100,7 +100,7 @@ What install then does is in [mods.md](mods.md#what-install-does).
 
 As a user, I want:
 
-1. Each file looked up on Nexus, and its metadata written as the mod manager writes it. Install then finds the mod I upgrade, and the manifest names the file's page on Nexus. Cites: MO2's Query Info (MD5)
+1. Each file looked up on Nexus, and its metadata written as the mod manager writes it. Install then finds the mod I upgrade, and the manifest names the file's host. Cites: MO2's Query Info (MD5)
 2. A value already in the metadata that Nexus does not know kept, as an upgrade keeps a mod's (mods.md, What install does, story 4). Cites: Never silently wrong
 3. A file Nexus does not know left as it was, and named in the Output (Reporting, story 3). Cites: Never silently wrong
 

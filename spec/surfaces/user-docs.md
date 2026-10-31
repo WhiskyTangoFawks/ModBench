@@ -17,7 +17,7 @@ As a user who has not installed Modbench, I want:
 8. To learn that Modbench is a VS Code extension, so the editor, terminal, extensions and agents I already use work on my modlist. Cites: ADR-0001
 9. To learn that git holds my modlist and my mods' source, so I commit, diff, branch and merge them. Cites: ADR-0007; ADR-0022
 10. To learn that Modbench works on files, because VS Code edits files and git stores them.
-11. To learn that a mod is restored from its manifest, because git does not hold gigabytes of binary files. Cites: ADR-0022
+11. To learn that a mod is restored from its manifest. Cites: ADR-0022
 12. To learn that a plugin is decompiled into plugin source files and compiled back, so I edit and review its source and never the plugin in place. Cites: ADR-0006; ADR-0007
 13. Each thing I learn about to come with why I would want it.
 14. To learn that any language scripts Modbench through its HTTP API, and that Modbench ships a Python API that VS Code runs and debugs, so I script records with tools I already use. Cites: ADR-0004; scripts.md

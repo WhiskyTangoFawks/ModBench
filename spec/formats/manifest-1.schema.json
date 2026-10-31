@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Manifest",
+  "type": "object",
+  "properties": {
+    "version": {
+      "description": "The format's version.",
+      "const": 1
+    },
+    "packages": {
+      "description": "The packages the folder's files come from.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/package" },
+      "contains": { "$ref": "#/$defs/gameFolder" },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "exclude": {
+      "description": "The paths in the folder that the modlist excludes.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/path" },
+      "uniqueItems": true
+    },
+    "files": {
+      "description": "Each file the manifest names, by its path, with the hash of its bytes. Null marks a file that a build step makes.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/path" },
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/hash" },
+          { "type": "null" }
+        ]
+      }
+    }
+  },
+  "required": ["version"],
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "packages": { "type": "array", "contains": { "$ref": "#/$defs/repository" } }
+    },
+    "required": ["packages"]
+  },
+  "then": {
+    "properties": {
+      "packages": { "type": "array", "maxItems": 1 }
+    }
+  },
+  "else": {
+    "properties": {
+      "files": {
+        "type": "object",
+        "additionalProperties": { "$ref": "#/$defs/hash" }
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "description": "A path relative to the folder, with `/` between its segments.",
+      "type": "string",
+      "pattern": "^(?!/)(?!.*/$)(?!.*//)(?!(?:.*/)?\\.{1,2}(?:/|$))[^\\\\]+$"
+    },
+    "hash": {
+      "description": "The xxHash64 of the bytes: its eight bytes, little-endian, in base64.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$"
+    },
+    "package": {
+      "oneOf": [
+        { "$ref": "#/$defs/installationFile" },
+        { "$ref": "#/$defs/gameFolder" },
+        { "$ref": "#/$defs/repository" }
+      ]
+    },
+    "installationFile": {
+      "description": "A downloaded file the folder's files come from.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "installationFile" },
+        "name": {
+          "description": "The file's name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "description": "The file's size, in bytes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "hash": {
+          "description": "The hash of the file's bytes.",
+          "$ref": "#/$defs/hash"
+        },
+        "host": {
+          "description": "Where a clone fetches the file. Absent when Modbench knows no host for it.",
+          "type": "object",
+          "properties": {
+            "nexus": { "$ref": "#/$defs/nexusFile" }
+          },
+          "minProperties": 1,
+          "maxProperties": 1,
+          "additionalProperties": false
+        }
+      },
+      "required": ["kind", "name", "size", "hash"],
+      "additionalProperties": false
+    },
+    "nexusFile": {
+      "description": "A file on Nexus Mods.",
+      "type": "object",
+      "properties": {
+        "game": {
+          "description": "The game's domain name on Nexus Mods, such as `fallout4`.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+$"
+        },
+        "mod": {
+          "description": "The mod ID.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "file": {
+          "description": "The file ID.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["game", "mod", "file"],
+      "additionalProperties": false
+    },
+    "gameFolder": {
+      "description": "The game folder, for files that come with the game.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "gameFolder" },
+        "host": {
+          "description": "The store that installs the game. Absent when Modbench knows no store for it.",
+          "type": "object",
+          "properties": {
+            "steam": { "$ref": "#/$defs/steamApp" }
+          },
+          "minProperties": 1,
+          "maxProperties": 1,
+          "additionalProperties": false
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "steamApp": {
+      "description": "A game on Steam, at the version its depots name.",
+      "type": "object",
+      "properties": {
+        "app": {
+          "description": "The app ID.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "depots": {
+          "description": "Each depot the game folder holds, by its depot ID, with the ID Steam gives the depot's version.",
+          "type": "object",
+          "propertyNames": { "pattern": "^[0-9]+$" },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          }
+        }
+      },
+      "required": ["app"],
+      "additionalProperties": false
+    },
+    "repository": {
+      "description": "A source mod's repository, whose build makes the folder.",
+      "type": "object",
+      "properties": {
+        "kind": { "const": "repository" },
+        "name": {
+          "description": "The source folder's name.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["kind", "name"],
+      "additionalProperties": false
+    }
+  }
+}

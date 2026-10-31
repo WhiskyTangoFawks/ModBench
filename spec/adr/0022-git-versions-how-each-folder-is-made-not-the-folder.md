@@ -1,11 +1,13 @@
 # Git versions how each folder is made, not the folder
 
-Git holds the description of a folder, as a manifest file for mods, and as a build file for source mods. Git cannot hold a modlist's gigabytes of files, nor should it republish a mod author's work without their permission.
+Git holds the description of a folder as its manifest file. Git should not republish a mod author's work without their permission.
 
 ## Consequences
 
 - Restore and build are imperative, although build may include declarative steps.
 - A folder with no manifest is left alone, because it can be a mod the user has not recorded yet.
+- A manifest names any number of packages, because one folder can take files from several downloaded files.
+- Each of a source mod's two folders has a manifest: its source folder's in its repository, and its mod folder's in the modlist repository.
 - A source mod's repository is pinned as a git submodule, because git already pins one repository inside another ([principles](../principles.md): Existing tools).
 
 ## Alternatives rejected

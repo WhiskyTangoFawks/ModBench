@@ -17,21 +17,24 @@ As a user, I want:
 
 ## The manifest
 
-A mod's installation file is the downloaded file the mod's metadata names as what the mod was installed from. As a user, I want:
+A mod's installation files are the downloaded files the mod was installed from. As a user, I want:
 
 1. The manifest to be a record that restores its folder's contents from its packages, on any machine. Cites: ADR-0022
 2. A change to my modlist to read in a git diff as the change I made, so I review and merge it as source. Cites: Existing tools
-3. Restore to give the mod manager back what it had. Cites: Never break the instance for its owner
+3. Restore to write each mod's metadata from its packages as install writes it, so the mod manager sees the mod as installed from them. Cites: Never break the instance for its owner; mods.md, What install does
 4. Each package named with where a clone gets it, so a clone fetches what this machine lacks.
+5. A manifest to name each of its folder's own files that git does not hold, and each of its packages, even a file no package holds or a package with no host. Each such file and package is a problem (Status, story 2), so nothing a clone cannot rebuild drops out of the manifest. Cites: Never silently wrong
 
 ## Status
 
 As a user, I want:
 
-1. Each mod, separator and file in a mod to say, while the instance has a repository, differs when it or its metadata differs from its manifest, or no manifest when it has none, so a change I make in the mod manager reaches the commit. Cites: Never silently wrong
+1. Each mod and file in a mod to say, while the instance has a repository, differs when it differs from its manifest, or no manifest when it has none, so a change I make to a mod's files reaches the commit. Cites: Never silently wrong
 2. Each state in which my modlist would not rebuild my instance as it is, on any machine, in the Problems panel while it holds, on the file it concerns, so nothing I leave unfinished goes unseen. Cites: common, Reporting; Never silently wrong
 3. Status to cost only what changed since Modbench last read it on this machine, and a clone to read a file as differing only when its bytes do. Cites: ADR-0003
-4. The Mods view's badge to count the mods and separators that differ or have no manifest. Cites: VS Code's view badge
+4. The Mods view's badge to count the mods that differ or have no manifest. Cites: VS Code's view badge
+5. A file a clone cannot rebuild to say why: a package holds a file of its name with other bytes, or no package holds its bytes. Cites: Never silently wrong
+6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and, when the mod holds a plugin, points at decompile and commit. Cites: mods.md, What install does, story 3; Respect the user
 
 ## Git init
 
@@ -45,14 +48,14 @@ As a user, I want:
 As a user, I want:
 
 1. Update manifest and restore from manifest to run where I run them: on the folders I select, or with none selected on every manifest in the instance, not only those the Mods view shows.
-2. A separator in a selection to stand for itself and its mods, so a collapsed group acts whole. Cites: mods.md, The tree, story 2
+2. A separator in a selection to stand for its mods, so a collapsed group acts whole. Cites: mods.md, The tree, story 2
 3. Progress by mod, with Cancel. Cancel stops after the mod in hand, and the mods that landed stay. Cites: VS Code's progress notification
 
 ## Update manifest
 
 As a user, I want:
 
-1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none. A source mod's build records its manifest, so update manifest is not offered on a source mod's row, and passes over each source mod among the folders it runs on. Cites: ADR-0022; commands.md, No dead entries
+1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none. On a source mod it records the source folder, since build records the mod's folder. Cites: ADR-0022; ADR-0027
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
