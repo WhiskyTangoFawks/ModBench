@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginsTreeProvider } from './PluginsTreeProvider';
 import { type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import {
@@ -12,7 +11,7 @@ import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
-import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import { argumentOfKind, registerAgentGesture, type AgentCall, type AgentGesture } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { SelectionResult } from '../pluginCommands/plugins';
 import type { InstanceValue } from '../instanceLoader/instance';
@@ -102,7 +101,14 @@ function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name:
 
 interface CreateOptions {
   readonly name: string;
-  readonly place: string;
+}
+
+function placeOf(call: AgentCall<CreateOptions>): { origin: string; label: string } {
+  const [only, ...more] = call.argument;
+  if (only === undefined || more.length > 0) throw new Refusal('Create a plugin in one mod or Overwrite.');
+  const container = argumentOfKind(only, 'mod', 'runtimeOutput');
+  const origin = container.kind === 'runtimeOutput' ? OVERWRITE_ORIGIN : container.name;
+  return { origin, label: placeLabel(origin) };
 }
 
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
@@ -133,16 +139,17 @@ export function registerCreatePluginCommand(
       }
       return made;
     },
-    fromAgent: ({ options: { name, place } }) => {
-      const chosen = pluginPlaces(instance.value, name).find(({ name: origin }) => origin === (modOfOrigin(instance.value, place)?.name ?? place));
-      if (chosen === undefined) {
-        if (place.toLowerCase() === OVERWRITE_ORIGIN) {
-          const unread = placed(instance.value, name, { origin: OVERWRITE_ORIGIN, label: OVERWRITE_LABEL });
+    fromAgent: (call) => {
+      const { name } = call.options;
+      const { origin, label } = placeOf(call);
+      if (pluginPlaces(instance.value, name).every((place) => place.name !== origin)) {
+        if (origin === OVERWRITE_ORIGIN) {
+          const unread = placed(instance.value, name, { origin, label });
           if (typeof unread === 'string') throw new Refusal(unread);
         }
-        throw new Refusal(`"${place}" is not an enabled mod or Overwrite that lacks "${name}".`);
+        throw new Refusal(`"${label}" is not an enabled mod or Overwrite that lacks "${name}".`);
       }
-      const made = placed(instance.value, name, { origin: chosen.name, label: placeLabel(chosen.name) });
+      const made = placed(instance.value, name, { origin, label });
       if (typeof made === 'string') throw new Refusal(made);
       return made;
     },

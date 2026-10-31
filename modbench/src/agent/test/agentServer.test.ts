@@ -1058,13 +1058,40 @@ describe('the agent server, running a gesture', () => {
       options: { drop: { kind: 'before', name: 'Same.esp' } },
     },
     {
-      name: 'plugin_create carries the name and place as Options and no Argument',
+      name: 'plugin_create carries the mod it lands in as its Argument and the name as an Option',
       value: PLUGGED,
       tool: 'plugin_create',
-      args: { options: { name: 'New.esp', place: 'ModA' } },
+      args: { argument: [{ name: 'ModA' }], options: { name: 'New.esp' } },
       command: 'modbench.plugin.create',
-      argument: [],
-      options: { name: 'New.esp', place: 'ModA' },
+      argument: [mod('ModA')],
+      options: { name: 'New.esp' },
+    },
+    {
+      name: 'plugin_create names a mod that shares its name with a separator by its kind',
+      value: CONFLICTED,
+      tool: 'plugin_create',
+      args: { argument: [{ name: 'Textures', kind: 'mod' }], options: { name: 'New.esp' } },
+      command: 'modbench.plugin.create',
+      argument: [mod('Textures')],
+      options: { name: 'New.esp' },
+    },
+    {
+      name: 'plugin_create takes a mod named without regard to case, as its own spelling',
+      value: PLUGGED,
+      tool: 'plugin_create',
+      args: { argument: [{ name: 'moda' }], options: { name: 'New.esp' } },
+      command: 'modbench.plugin.create',
+      argument: [mod('ModA')],
+      options: { name: 'New.esp' },
+    },
+    {
+      name: 'plugin_create carries Overwrite, as list_mods names it, as the overwrite Argument',
+      value: PLUGGED,
+      tool: 'plugin_create',
+      args: { argument: [{ name: 'Overwrite', kind: 'runtimeOutput' }], options: { name: 'New.esp' } },
+      command: 'modbench.plugin.create',
+      argument: [{ kind: 'runtimeOutput' }],
+      options: { name: 'New.esp' },
     },
     {
       name: 'plugin_rename carries the one plugin as its Argument and the new name as an Option',
@@ -1403,12 +1430,12 @@ describe('the agent server, running a gesture', () => {
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
     });
 
-    it('refuses a create that leaves out its place, naming it', async () => {
+    it('refuses a create that leaves out its argument, naming it', async () => {
       const { client } = await served(PLUGGED);
 
       const answer = await call(client, 'plugin_create', { options: { name: 'New.esp' } });
 
-      expect(answer.text).toContain('place');
+      expect(answer.text).toContain('argument');
       expect(fired.calls).toEqual([]);
     });
   });
