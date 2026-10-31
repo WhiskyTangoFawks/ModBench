@@ -34,6 +34,7 @@ modbench/LICENSE
 modbench/README.md
 modbench/THIRD-PARTY-NOTICES.txt
 modbench/scripts/
+modbench/schemas/
 
 # OS
 .DS_Store
