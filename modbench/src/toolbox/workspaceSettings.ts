@@ -11,7 +11,7 @@ const GAME_FOLDER_SETTING_KEY = 'mods.gameFolder';
 export const gameFolderSetting = {
   id: `modbench.${GAME_FOLDER_SETTING_KEY}`,
   value: () => meditConfig().get<string>(GAME_FOLDER_SETTING_KEY),
-  changed: (listener) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${GAME_FOLDER_SETTING_KEY}`, listener),
+  changed: (listener: () => void) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${GAME_FOLDER_SETTING_KEY}`, listener),
 };
 
 const DEPLOYMENT_FOLDER_SETTING_KEY = 'deployment.folder';
