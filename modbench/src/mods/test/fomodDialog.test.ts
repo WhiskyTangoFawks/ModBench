@@ -72,6 +72,12 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     expect(createWebviewPanel).toHaveBeenCalledTimes(1);
   });
 
+  it('finds text in the page, as the record panel and the conflict table do (common.md, A view, story 12)', () => {
+    fomodDialog(EXTENSION, vi.fn(), PROGRESS).show(STATE, RELEASE);
+
+    expect(createWebviewPanel.mock.calls[0]?.[3]).toMatchObject({ enableFindWidget: true });
+  });
+
   it('lets the page load images from the release\'s folder and no other', () => {
     fomodDialog(EXTENSION, vi.fn(), PROGRESS).show(STATE, RELEASE);
 
