@@ -79,7 +79,7 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<BuildFi
     return read === undefined || 'refused' in read ? undefined : read.manifest;
   };
   const refuseTrash = (why: string): void => { trashRefusal = why; };
-  return { build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter, trashed, refuseTrash };
+  return { client, build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter, trashed, refuseTrash };
 }
 
 describe('build over an instance on disk', () => {
@@ -205,6 +205,27 @@ describe('build over an instance on disk', () => {
 
     expect(await readFile(join(root, 'mods', 'Mod', 'textures.mohidden', 'c.dds'), 'utf8')).toBe('bytes of textures/c.dds');
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
+  });
+});
+
+describe('a build mEdit refuses after the taken files are written, over an instance on disk (mods.md, Build, story 10)', () => {
+  it('reaches the result, leaves each taken file whole and the manifest as it was, and reads as no change outside Modbench: status finds the rewritten file by its new bytes', async () => {
+    const { build, client, status, recorded, trashed } = await aSourceModTakingFromAnInstallationFile();
+    await build();
+    const manifestPath = join(root, 'mods', 'Mod', 'Mod.manifest.json');
+    const manifestBuilt = await readFile(manifestPath, 'utf8');
+    const statusBuilt = await status();
+    await put('mods/Mod/b.nif', 'changed in the folder');
+    const refusal = { item: 'Mod', refusal: 'ArchiveFileNotAnAsset', message: "'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source." } as const;
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [refusal] }));
+
+    const outcome = await build();
+
+    expect(outcome).toEqual({ landed: [], refused: [refusal] });
+    expect(await textsBelow(join(root, 'mods', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds', 'Mod.esp': 'built' });
+    expect(await readFile(manifestPath, 'utf8')).toBe(manifestBuilt);
+    expect((await recorded())?.files.map(({ path }) => path)).toEqual(['b.nif', 'Mod.esp', 'textures/c.dds']);
+    expect([await status(), trashed]).toEqual([statusBuilt, []]);
   });
 });
 

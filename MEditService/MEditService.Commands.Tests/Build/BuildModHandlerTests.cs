@@ -131,7 +131,7 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ABuildRefusedAfterTheTakenFilesAreWritten_LeavesTheCompiledPluginAndItsStringsAsTheyWere_ReadingAsNoChangeOutsideModbench()
+    public async Task ARefusedBuild_WritesNothing_LeavingAFolderThatHoldsACompiledPluginAndItsStringsReadingAsNoChangeOutsideModbench()
     {
         await InitializedWithALocalizedPlugin();
         WriteInFolder("textures/taken.dds", "from the pack");
