@@ -12,6 +12,8 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
+import { digestOf } from './fileContents/contentDigest';
+import type { MoveToTrash } from '../ports/trash';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -244,6 +246,19 @@ export function write(path: string, text: string): Promise<void> {
   return writeAtomic(path, text);
 }
 
+/** Writes `text` to `path` as `write` does, trashing the file it replaces only once the text waits beside it. */
+export async function writeTrashing(path: string, text: string, trash: MoveToTrash): Promise<void> {
+  await removeStaleTempsFor(path);
+  const tmp = tempWritePath(path);
+  try {
+    await writeFile(tmp, text);
+    if (await exists(path)) await trash(path);
+    await fsRename(tmp, path);
+  } finally {
+    await rm(tmp, { force: true });
+  }
+}
+
 export function append(path: string, text: string): Promise<void> {
   return appendFile(path, text);
 }
@@ -327,6 +342,11 @@ export async function removeIfEmpty(path: string): Promise<boolean> {
     if (errnoCode(err) === 'ENOTEMPTY') return false;
     throw err;
   }
+}
+
+/** Whether the files at `one` and `other` hold the same bytes, as their manifest lines read them. */
+export async function sameBytes(one: string, other: string): Promise<boolean> {
+  return await digestOf(one) === await digestOf(other);
 }
 
 /** Deletes `path`, file or directory, and everything under it; already-gone is not an error. */

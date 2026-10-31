@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { packageFilesWriter } from '../packageFiles';
 
@@ -20,26 +20,30 @@ beforeEach(async () => {
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const writer = () => packageFilesWriter(scratch, fakeInstallationFileReader(['a.nif', 'textures/b.dds']));
+const NO_TRASH = (path: string): Promise<void> => Promise.reject(new Error(`nothing is there to trash: ${path}`));
 const textIn = (path: string): Promise<string> => readFile(join(folder, path), 'utf8');
 
 describe('writing files from their packages', () => {
-  it('writes each entry at its path in the folder, one entry at two paths, and a game file, replacing a file that is there', async () => {
+  it('writes each entry at its path in the folder, one entry at two paths, and a game file, sending a file that is there to the trash first', async () => {
     await writeFile(join(folder, 'a.nif'), 'my edit');
+    const inTrash: Record<string, string> = {};
+    const trash = async (path: string): Promise<void> => { inTrash[relative(folder, path)] = await readFile(path, 'utf8'); await rm(path); };
 
     await writer().writeFilesIn(folder, [
       { path: 'a.nif', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } },
       { path: 'textures/b.dds', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'textures/b.dds' } },
       { path: 'copy/b.dds', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'textures/b.dds' } },
       { path: 'Fallout4.esm', from: { kind: 'gameFile', root: join(root, 'Game'), path: 'Data/Fallout4.esm' } },
-    ]);
+    ], trash);
 
     expect(await Promise.all(['a.nif', 'textures/b.dds', 'copy/b.dds', 'Fallout4.esm'].map(textIn))).toEqual([
       'bytes of a.nif', 'bytes of textures/b.dds', 'bytes of textures/b.dds', 'the game\'s bytes',
     ]);
+    expect(inTrash).toEqual({ 'a.nif': 'my edit' });
   });
 
   it('leaves nothing of the downloaded file it extracted', async () => {
-    await writer().writeFilesIn(folder, [{ path: 'a.nif', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } }]);
+    await writer().writeFilesIn(folder, [{ path: 'a.nif', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } }], NO_TRASH);
 
     expect(await readdir(scratch)).toEqual([]);
   });
@@ -48,7 +52,7 @@ describe('writing files from their packages', () => {
     const writing = writer().writeFilesIn(folder, [
       { path: 'a.nif', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } },
       { path, from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } },
-    ]);
+    ], NO_TRASH);
 
     await expect(writing).rejects.toThrow(`Not a file of "${folder}": "${path}"`);
     expect(await readdir(folder)).toEqual([]);
@@ -58,7 +62,7 @@ describe('writing files from their packages', () => {
     await mkdir(join(root, 'elsewhere'));
     await symlink(join(root, 'elsewhere'), join(folder, 'linked'));
 
-    const writing = writer().writeFilesIn(folder, [{ path: 'linked/a.nif', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } }]);
+    const writing = writer().writeFilesIn(folder, [{ path: 'linked/a.nif', from: { kind: 'entry', downloadedFile: join(root, 'Mod.7z'), entry: 'a.nif' } }], NO_TRASH);
 
     await expect(writing).rejects.toThrow(`Not a file of "${folder}": "linked/a.nif"`);
     expect(await readdir(join(root, 'elsewhere'))).toEqual([]);

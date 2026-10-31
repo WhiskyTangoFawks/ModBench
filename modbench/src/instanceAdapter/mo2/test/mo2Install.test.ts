@@ -12,9 +12,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 
-import { mkdir, mkdtemp, readdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename as fsRename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import type { FomodAnswer, FomodDialog, InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
 import type { FomodMove } from '../../../wire/fomodPage';
 import { programsOf, SCRIPT_EXTENDER_FOLDERS } from '../../../tables/gamePaths';
@@ -45,9 +45,16 @@ describe('installing a mod through the MO2 Instance adapter', () => {
   const meta = (mod: string): Promise<string> => readFile(join(folder(mod), 'meta.ini'), 'utf8');
   const holding = (files: readonly string[], over: Partial<InstallationFileReader> = {}): InstanceAdapter =>
     adapterOver(root, { installationFileReader: { ...fakeInstallationFileReader(files), ...over } });
+  let inTrash: Record<string, string | string[]>;
+  const trash = async (path: string): Promise<void> => {
+    const isFolder = (await stat(path)).isDirectory();
+    inTrash[relative(folder(UPGRADED), path).split(sep).join('/')] = isFolder ? [...(await snapshotTree(path)).keys()].sort() : await readFile(path, 'utf8');
+    await rm(path, { recursive: true });
+  };
 
   beforeEach(() => {
     root = cloneCorpusFixture();
+    inTrash = {};
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
@@ -58,7 +65,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('puts an archive\'s files into a new folder and writes nothing else, its meta holding only the keys it is given', async () => {
       const before = await snapshotTree(root);
 
-      const outcome = await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { installationFileName: 'Release-1-0.7z' });
+      const outcome = await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { installationFileName: 'Release-1-0.7z' }, trash);
 
       expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
@@ -67,19 +74,19 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
 
     it('records the Nexus file status the new file knows', async () => {
-      await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { nexusFileStatus: 3 });
+      await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { nexusFileStatus: 3 }, trash);
 
       expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nnexusFileStatus=3\n');
     });
 
     it('takes the mod ID from the name of the file', async () => {
-      await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { installationFileName: 'Release-1234-1-0.7z' });
+      await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { installationFileName: 'Release-1234-1-0.7z' }, trash);
 
       expect(await meta(MOD)).toContain('modid=1234');
     });
 
     it('records the file it was installed from as a pair with the mod\'s Nexus id', async () => {
-      await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { nexusId: '111', installedFileKeys: ['111:222'] });
+      await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { nexusId: '111', installedFileKeys: ['111:222'] }, trash);
 
       expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nmodid=111\n[installedFiles]\n1\\modid=111\n1\\fileid=222\nsize=1\n');
     });
@@ -92,7 +99,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await writeFile(join(source, 'textures', 'a.dds'), 'texture');
         const before = await snapshotTree(root);
 
-        await holding([]).install({ kind: 'folder', path: source }, { kind: 'new', name: MOD }, KEYS);
+        await holding([]).install({ kind: 'folder', path: source }, { kind: 'new', name: MOD }, KEYS, trash);
 
         expect(await filesIn(folder(MOD))).toEqual(['Copied.esp', 'meta.ini', 'textures/a.dds']);
         assertOnlyChanged(before, await snapshotTree(root), new Set(['Copied.esp', 'meta.ini', 'textures/a.dds'].map((file) => `mods/${MOD}/${file}`)));
@@ -108,8 +115,8 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const before = await snapshotTree(root);
 
       const outcomes = [
-        await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: 'unlisted folder' }, KEYS),
-        await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: 'harder vats' }, KEYS),
+        await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: 'unlisted folder' }, KEYS, trash),
+        await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: 'harder vats' }, KEYS, trash),
       ];
 
       expect(outcomes).toEqual([{ landed: false }, { landed: false }]);
@@ -119,7 +126,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('lands the files by copying when a rename cannot cross volumes', async () => {
       vi.mocked(fsRename).mockRejectedValueOnce(errnoError('EXDEV', 'cross-device link'));
 
-      const outcome = await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
+      const outcome = await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash);
 
       expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
@@ -129,8 +136,8 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const adapter = holding(PAYLOAD);
 
       const outcomes = await Promise.all([
-        adapter.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS),
-        adapter.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS),
+        adapter.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash),
+        adapter.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash),
       ]);
 
       expect(outcomes).toEqual(expect.arrayContaining([{ landed: true }, { landed: false }]));
@@ -146,7 +153,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         },
       });
 
-      await expect(dies.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS)).rejects.toThrow('archive is truncated');
+      await expect(dies.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash)).rejects.toThrow('archive is truncated');
 
       expect(await readdir(join(root, 'mods'))).not.toContain(MOD);
       assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -164,7 +171,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         },
       });
 
-      await slowly.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
+      await slowly.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash);
 
       expect([...seen].filter((path) => !before.has(path) && !path.startsWith('.medit_tmp_'))).toEqual([]);
       expect([...seen].some((path) => path.startsWith('.medit_tmp_'))).toBe(true);
@@ -188,7 +195,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], MANUAL_COPY, MANUAL],
       ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], {}, CHOSE_NOTHING],
     ])('%s', async (_, release, landed, how, answer) => {
-      const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, answer);
+      const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash, answer);
 
       expect(outcome).toEqual({ landed: true, ...how });
       expect(await filesIn(folder(MOD))).toEqual([...landed, 'meta.ini'].sort());
@@ -199,7 +206,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       'textures', 'materials', 'sound', 'music', 'scripts', 'source', 'interface', 'strings', 'mcm', 'seq', 'video', 'vis',
       'lodsettings', 'shadersfx', 'grass', 'terrain', 'planetdata', 'programs', 'scaleform', 'facegen', 'actors', 'distantlod',
     ])('keeps a lone top-level data folder %s, never taking it for a wrapper', async (name) => {
-      await holding([`${name}/x.dat`]).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
+      await holding([`${name}/x.dat`]).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash);
 
       expect(await filesIn(folder(MOD))).toEqual([`${name}/x.dat`, 'meta.ini'].sort());
     });
@@ -207,7 +214,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('peels no more than 32 wrapper folders', async () => {
       const levels = Array.from({ length: 40 }, (_, i) => `L${i + 1}`);
 
-      await holding([`${levels.join('/')}/foo.esp`]).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
+      await holding([`${levels.join('/')}/foo.esp`]).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash);
 
       expect(await filesIn(folder(MOD))).toEqual([`${levels.slice(32).join('/')}/foo.esp`, 'meta.ini'].sort());
     });
@@ -243,7 +250,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('lands the files its choices select in the mod\'s folder, and nothing of the release else', async () => {
       const before = await snapshotTree(root);
 
-      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS,
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, trash,
         { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }] });
 
       expect(outcome).toEqual({ landed: true, fomod: { kind: 'installer', missing: [], notes: [] } });
@@ -251,7 +258,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
 
     it('lands the release as it is for Manual', async () => {
-      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'manual' });
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, trash, { kind: 'manual' });
 
       expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
       expect(await filesIn(folder(MOD))).toEqual(['a/A.esp', 'b/B.esp', 'fomod/ModuleConfig.xml', 'meta.ini']);
@@ -261,7 +268,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const before = await snapshotTree(root);
       const dialog = { ...FOMOD_PAGE, onMove: (handler: (move: FomodMove) => void) => { setImmediate(() => handler({ kind: 'cancel' })); } };
 
-      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'dialog', dialog });
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, trash, { kind: 'dialog', dialog });
 
       expect(outcome).toEqual({ landed: false, cancelled: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -285,10 +292,10 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       it('installs another mod, as the page is no write', async () => {
         const page = heldPage();
-        const installing = holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, page.answer);
+        const installing = holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, trash, page.answer);
         await page.shown;
 
-        const other = await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'new', name: 'Other' }, KEYS);
+        const other = await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'new', name: 'Other' }, KEYS, trash);
         page.move(INSTALL);
 
         expect(other).toEqual({ landed: true });
@@ -303,7 +310,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         const modsBefore = await readdir(join(root, 'mods'));
         const upgradedBefore = await filesIn(folder(UPGRADED));
         const page = heldPage();
-        const installing = holding([]).install(await fomod(PICK), target, KEYS, page.answer);
+        const installing = holding([]).install(await fomod(PICK), target, KEYS, trash, page.answer);
         await page.shown;
 
         expect(await readdir(join(root, 'mods'))).toEqual(modsBefore);
@@ -314,29 +321,29 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       it('keeps the name of a new mod from a second install of it', async () => {
         const page = heldPage();
-        const installing = holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, page.answer);
+        const installing = holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, trash, page.answer);
         await page.shown;
 
-        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS)).toEqual({ landed: false });
+        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, trash)).toEqual({ landed: false });
         page.move(INSTALL);
         await installing;
       });
 
       it('keeps a second install into an upgraded mod out while the page is open, and takes one after', async () => {
         const page = heldPage();
-        const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, page.answer);
+        const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, trash, page.answer);
         await page.shown;
 
-        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS)).toEqual({ landed: false });
+        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash)).toEqual({ landed: false });
         page.move(INSTALL);
         await installing;
 
-        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS)).toEqual({ landed: true });
+        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash)).toEqual({ landed: true });
       });
 
       it('answers as a claim its folder fails to meet when an upgrade\'s folder is gone by the time the user chooses Manual', async () => {
         const page = heldPage();
-        const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, page.answer);
+        const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, trash, page.answer);
         await page.shown;
 
         await rm(folder(UPGRADED), { recursive: true });
@@ -350,7 +357,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('writes nothing when its installer refuses the choices', async () => {
       const before = await snapshotTree(root);
 
-      await expect(holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] }))
+      await expect(holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, trash, { kind: 'choices', steps: [] }))
         .rejects.toThrow('The choices leave step "Main" unanswered.');
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -367,7 +374,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
           conditional('<fileDependency file="NonAsciiRetexture - Addon.esl" state="Inactive"/>', 'inactive.esp'),
           conditional('<fileDependency file="Unofficial Fallout 4 Patch.esp" state="Missing"/>', 'missing.esp'),
           conditional('<fileDependency file="NonAsciiRetexture - Addon.esl" state="Active"/>', 'wrong.esp'),
-        ].join('')}</patterns></conditionalFileInstalls>`), { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] });
+        ].join('')}</patterns></conditionalFileInstalls>`), { kind: 'new', name: MOD }, KEYS, trash, { kind: 'choices', steps: [] });
 
         expect(await filesIn(folder(MOD))).toEqual(['active.esp', 'inactive.esp', 'meta.ini', 'missing.esp']);
       } finally {
@@ -389,7 +396,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const installed = async (...dependencies: [string, string][]): Promise<unknown> =>
         adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }).install(
           await fomod(`<conditionalFileInstalls><patterns>${dependencies.map(([dependency, destination]) => conditional(dependency, destination)).join('')}</patterns></conditionalFileInstalls>`),
-          { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] },
+          { kind: 'new', name: MOD }, KEYS, trash, { kind: 'choices', steps: [] },
         );
 
       it('answers them from the versions of the game\'s program and the extender\'s loader in the game folder', async () => {
@@ -443,36 +450,70 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       await writeFile(join(repository, '.git', 'HEAD'), 'ref');
       const before = await snapshotTree(repository);
 
-      const outcome = await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: 'unofficial fallout 4 patch' }, KEYS);
+      const outcome = await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: 'unofficial fallout 4 patch' }, KEYS, trash);
 
       expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(UPGRADED))).toEqual(['New.esp', 'meta.ini']);
       expect(await snapshotTree(repository)).toEqual(before);
     });
 
+    it('sends each file it replaces or removes to the trash (mods.md, What install does, story 3), a folder that keeps none whole, and leaves a file the release holds with the same bytes', async () => {
+      await writeFile(join(folder(UPGRADED), 'Kept.esp'), 'bytes of Kept.esp');
+      await writeFile(join(folder(UPGRADED), 'Changed.esp'), 'mine');
+
+      await holding(['Kept.esp', 'Changed.esp', 'New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
+
+      expect(inTrash).toMatchObject({ 'Changed.esp': 'mine', 'Old.esp': '', '.gitignore': 'shipped', 'plugin-source': ['shipped/Old.json'] });
+      expect(Object.keys(inTrash)).not.toContain('Kept.esp');
+      expect(await filesIn(folder(UPGRADED))).toEqual(['Changed.esp', 'Kept.esp', 'New.esp', 'meta.ini']);
+    });
+
     it.each([`${UPGRADED}.manifest.json`, 'Old Name.manifest.json'])('keeps the mod\'s manifest %s, which the release does not replace', async (manifest) => {
       await writeFile(join(folder(UPGRADED), manifest), '{"kept":true}');
 
-      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS);
+      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
 
       expect(await readFile(join(folder(UPGRADED), manifest), 'utf8')).toBe('{"kept":true}');
     });
 
+    it('keeps the mod\'s manifest over one the release ships at its root, and lands none (mods.md, What install does, story 3)', async () => {
+      const manifest = `${UPGRADED}.manifest.json`;
+      await writeFile(join(folder(UPGRADED), manifest), '{"kept":true}');
+
+      await holding(['New.esp', manifest, 'Other.manifest.json']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
+
+      expect(await readFile(join(folder(UPGRADED), manifest), 'utf8')).toBe('{"kept":true}');
+      expect(await filesIn(folder(UPGRADED))).toEqual([manifest, 'New.esp', 'meta.ini'].sort());
+    });
+
+    it('sends the mod\'s metadata to the trash when the upgrade changes it, and leaves it when it does not', async () => {
+      const upgrade = (keys: object) => holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, keys, trash);
+      await upgrade(KEYS);
+      const before = await meta(UPGRADED);
+      inTrash = {};
+
+      await upgrade(KEYS);
+      const unchanged = { ...inTrash };
+      await upgrade({ version: '2.2' });
+
+      expect([unchanged, inTrash]).toEqual([{}, { 'meta.ini': before }]);
+    });
+
     it('unwraps a release nested in a wrapper folder', async () => {
-      const outcome = await holding(['Wrapper/Nested.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS);
+      const outcome = await holding(['Wrapper/Nested.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
 
       expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(UPGRADED))).toEqual(['Nested.esp', 'meta.ini']);
     });
 
     it('lands a release holding .git, .gitignore and plugin-source as any content', async () => {
-      await holding(['.git/HEAD', '.gitignore', 'plugin-source/released.json']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS);
+      await holding(['.git/HEAD', '.gitignore', 'plugin-source/released.json']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
 
       expect(await filesIn(folder(UPGRADED))).toEqual(['.git/HEAD', '.gitignore', 'meta.ini', 'plugin-source/released.json']);
     });
 
     it('sets the keys it is given over the meta the mod had, keeping each value they leave out, and never over a meta the release ships', async () => {
-      await holding(['meta.ini']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { version: '2.2' });
+      await holding(['meta.ini']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { version: '2.2' }, trash);
 
       expect(await meta(UPGRADED)).toBe(
         `[General]\r\ngameName=Fallout 4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`,
@@ -483,9 +524,9 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       ['keeps the status the mod carried when the new file knows none', undefined, 'nexusFileStatus=3'],
       ['replaces it when the new file knows one', 5, 'nexusFileStatus=5'],
     ])('%s', async (_, status, expected) => {
-      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: 3 });
+      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: 3 }, trash);
 
-      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: status });
+      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: status }, trash);
 
       const text = await meta(UPGRADED);
       expect(text).toContain(expected);
@@ -495,7 +536,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('lands nothing and writes nothing for a mod no folder holds', async () => {
       const before = await snapshotTree(root);
 
-      const outcome = await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: 'Vanished Mod' }, KEYS);
+      const outcome = await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: 'Vanished Mod' }, KEYS, trash);
 
       expect(outcome).toEqual({ landed: false });
       assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -510,7 +551,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         },
       });
 
-      await expect(dies.install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS)).rejects.toThrow('archive is truncated');
+      await expect(dies.install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash)).rejects.toThrow('archive is truncated');
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -518,7 +559,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('says when it fails part way, naming the mod and what failed, and that nothing was rolled back', async () => {
       vi.mocked(fsRename).mockRejectedValueOnce(errnoError('EACCES', 'permission denied'));
 
-      await expect(holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS)).rejects.toThrow(
+      await expect(holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash)).rejects.toThrow(
         `Upgrading "${UPGRADED}" failed partway and was not rolled back: EACCES: permission denied`,
       );
     });
@@ -527,7 +568,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const heard: string[] = [];
       const watcher = watch(folder(UPGRADED), (_, name) => { if (name !== null) heard.push(name); });
       try {
-        await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS);
+        await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS, trash);
 
         await writeFile(join(folder(UPGRADED), 'after-upgrade.txt'), 'x');
         await vi.waitFor(() => expect(heard).toContain('after-upgrade.txt'));

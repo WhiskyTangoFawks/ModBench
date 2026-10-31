@@ -15,7 +15,7 @@ import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { valueWithSourceDirs } from './sourceDirsFixture';
 import { type PluginAddress } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
@@ -44,24 +44,17 @@ describe('modbench.mod.build', () => {
   const row = (plugin: { name: string; origin: string }) => new PluginRowStandIn(plugin);
   const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
-  type Listing = Awaited<ReturnType<BuildDeps['commands']['whatBuildDestroys']>>;
-  type Registered = { selection?: readonly unknown[]; destroys?: Listing['destroys']; listingRefused?: Listing['refused']; answers?: (string | undefined)[] };
-
-  function registered(outcome: BuildAnswer, options: Registered = {}) {
+  function registered(outcome: BuildAnswer, options: { selection?: readonly unknown[] } = {}) {
     const reporter = recordingReporter();
     const diagnostics = new FakeDiagnosticCollection();
-    const ask = scriptedDialog(...options.answers ?? []);
     registerBuildCommand({
       commands: {
-        whatBuildDestroys: (mods, everySource) =>
-          Promise.resolve({ mods: everySource === true ? SOURCE_MODS : mods, destroys: options.destroys ?? [], refused: options.listingRefused ?? [] }),
         build: (mods, everySource) => {
           progressSteps.push('build');
           builds.push(everySource === true ? 'every source' : mods);
           return Promise.resolve(outcome);
         },
       },
-      ask,
       instance: instanceThatReads,
       reporter, problems: new BuildProblems(diagnostics, { subscribe: () => ({ dispose: () => undefined }) }),
       modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_MODS, pluginsView: 'modbench.pluginListTree',
@@ -69,91 +62,9 @@ describe('modbench.mod.build', () => {
     }, () => options.selection ?? []);
     return {
       handler: present(handlers.get('modbench.mod.build'), 'the build command registerBuildCommand registers'),
-      reporter, diagnostics, ask,
+      reporter, diagnostics,
     };
   }
-
-  describe('of a mod whose folder holds a file that differs from its manifest (mods.md, A source mod, story 4)', () => {
-    const DESTROYS = [{ mod: 'ModA', files: ['a.esp', 'mine.txt'] }, { mod: 'ModB', files: ['b.nif'] }];
-    const QUESTION = {
-      message: 'Build overwrites or sends to the trash each file that differs from its mod\'s manifest.', detail: 'a.esp (ModA)\nmine.txt (ModA)\nb.nif (ModB)', buttons: ['Build'],
-    };
-
-    it('asks once for the selection, naming each file, and builds when I confirm', async () => {
-      const { handler, ask } = registered({ landed: [built('ModA'), built('ModB')], refused: [] }, { destroys: DESTROYS, answers: ['Build'] });
-      const rows = [modRow('ModA'), modRow('ModB')];
-
-      await handler(rows[0], rows);
-
-      expect([ask.asked, builds]).toEqual([[QUESTION], [['ModA', 'ModB']]]);
-    });
-
-    it('builds nothing and says nothing when I dismiss it', async () => {
-      const { handler, reporter } = registered({ landed: [], refused: [] }, { destroys: DESTROYS, answers: [undefined] });
-
-      await handler(modRow('ModA'));
-
-      expect([builds, reporter.reports, reporter.landings]).toEqual([[], [], []]);
-    });
-
-    it('asks nothing when no file would be lost', async () => {
-      const { handler, ask } = registered({ landed: [built('ModA')], refused: [] });
-
-      await handler(modRow('ModA'));
-
-      expect([ask.asked, builds]).toEqual([[], [['ModA']]]);
-    });
-
-    it('names a mod whose folder could not be read among the refused, and builds the rest', async () => {
-      const unread = { item: 'ModB', reason: 'was not built: a file could not be read: EACCES.' };
-      const { handler, reporter } = registered({ landed: [built('ModA')], refused: [] }, { listingRefused: [unread] });
-      const rows = [modRow('ModA'), modRow('ModB')];
-
-      await handler(rows[0], rows);
-
-      expect([builds, reporter.reports.map(({ detail }) => detail)]).toEqual([[['ModA']], [`"ModB" (${unread.reason})`]]);
-    });
-
-    describe('called by the agent (agent.md, Any agent, story 7)', () => {
-      const call = (options: object, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
-
-      it('refuses each such mod, naming its files and force, and builds the rest, asking nothing', async () => {
-        const { handler, ask } = registered({ landed: [built('ModS')], refused: [] }, { destroys: DESTROYS });
-
-        const answered = await handler(call({}, 'ModA', 'ModB', 'ModS'));
-
-        expect([ask.asked, builds]).toEqual([[], [['ModS']]]);
-        expect(answered).toMatchObject({ applied: true, outcome: { refused: [
-          { item: 'ModA', reason: 'was not built: it would overwrite or send to the trash each file that differs from its manifest: a.esp, mine.txt. Request it again with force to build it.' },
-          { item: 'ModB', reason: 'was not built: it would overwrite or send to the trash each file that differs from its manifest: b.nif. Request it again with force to build it.' },
-        ] } });
-      });
-
-      it('with no mod named, builds every other source mod by name', async () => {
-        const { handler } = registered({ landed: [], refused: [] }, { destroys: DESTROYS });
-
-        await handler(call({}));
-
-        expect(builds).toEqual([['ModS']]);
-      });
-
-      it('with force, builds them, asking nothing', async () => {
-        const { handler, ask } = registered({ landed: [built('ModA'), built('ModB')], refused: [] }, { destroys: DESTROYS });
-
-        await handler(call({ force: true }, 'ModA', 'ModB'));
-
-        expect([ask.asked, builds]).toEqual([[], [['ModA', 'ModB']]]);
-      });
-
-      it('from a task, asks as a view does, and is refused whole when I dismiss it', async () => {
-        const { handler, ask } = registered({ landed: [], refused: [] }, { destroys: DESTROYS, answers: [undefined] });
-
-        const answered = await handler(call({ asks: true }));
-
-        expect([ask.asked, builds, answered]).toEqual([[QUESTION], [], { applied: false, refusal: 'Build was cancelled.' }]);
-      });
-    });
-  });
 
   it('on a Mods row, builds the mod, and the Mods view\'s progress bar closes once the Instance loader has read again, and lands once', async () => {
     const { handler, reporter } = registered({ landed: [built('ModA', [PATCH])], refused: [] });

@@ -999,15 +999,6 @@ describe('the agent server, running a gesture', () => {
       options: {},
     },
     {
-      name: 'mod_build carries force as an Option',
-      value: CONFLICTED,
-      tool: 'mod_build',
-      args: { argument: [{ name: 'B' }], options: { force: true } },
-      command: 'modbench.mod.build',
-      argument: [mod('B')],
-      options: { force: true },
-    },
-    {
       name: 'mod_build carries no Argument for every source in the source folder',
       value: CONFLICTED,
       tool: 'mod_build',
@@ -1033,15 +1024,6 @@ describe('the agent server, running a gesture', () => {
       command: 'modbench.mod.restoreFromManifest',
       argument: [],
       options: {},
-    },
-    {
-      name: 'mod_restore_from_manifest carries force as an Option',
-      value: CONFLICTED,
-      tool: 'mod_restore_from_manifest',
-      args: { argument: [{ name: 'B' }], options: { force: true } },
-      command: 'modbench.mod.restoreFromManifest',
-      argument: [mod('B')],
-      options: { force: true },
     },
     {
       name: 'downloaded_file_exclude carries the downloaded files named',
@@ -1114,15 +1096,6 @@ describe('the agent server, running a gesture', () => {
       command: 'modbench.mod.install',
       argument: [outside],
       options: {},
-    },
-    {
-      name: 'mod_install carries force as an Option',
-      value: CONFLICTED_WITH_DOWNLOADED_FILES,
-      tool: 'mod_install',
-      args: { argument: [outside], options: { target: 'B', force: true } },
-      command: 'modbench.mod.install',
-      argument: [outside],
-      options: { target: 'B', force: true },
     },
   ];
 

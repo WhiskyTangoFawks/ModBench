@@ -149,7 +149,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       log,
     }),
     ...registerSourceGestures(deps, provider),
-    ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist'), ask }),
+    ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist') }),
     ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
@@ -168,7 +168,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, ask, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
+      commands, instance, reporterFor, trash, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),
@@ -186,7 +186,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
 }
 
 function registerSourceGestures(
-  { instance, reporterFor, sourceGestures, ask }: ModsViewDeps, provider: ModListProvider,
+  { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider,
 ): vscode.Disposable[] {
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
@@ -199,7 +199,7 @@ function registerSourceGestures(
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({
-      commands, instance, reporter: reporterFor('mod.build'), problems, ask,
+      commands, instance, reporter: reporterFor('mod.build'), problems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin),
       modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),

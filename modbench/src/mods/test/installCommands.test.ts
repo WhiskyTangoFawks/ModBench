@@ -27,18 +27,14 @@ import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { modCommands } from '../../modCommands/modCommands';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import {
-  downloadedFilesOf, fakeInstanceAdapter, modFoldersIn, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
+  downloadedFilesOf, fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type FakeInstanceAdapter, type InstanceAnswers,
 } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
-import { manifestedIn } from '../../test/modStatusFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const [, handler] = present(registerCommand.mock.calls.find((c) => c[0] === commandId), `the ${commandId} handler`);
@@ -58,7 +54,7 @@ function register(
     commands: modCommands(fake.adapter),
     instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
-    ask: vi.fn(),
+    trash: vi.fn(),
     fomodDialog: () => FOMOD_PAGE,
     downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
@@ -246,21 +242,11 @@ describe('modbench.mod.install called by the agent', () => {
   });
 
   it('installs over the target mod named, as an upgrade', async () => {
-    const mods = await mkdtemp(join(tmpdir(), 'modbench-upgrade-'));
-    await manifestedIn(join(mods, 'Harder VATS'));
-    register({}, {}, modFoldersIn(mods, 'Harder VATS'));
+    register();
     const answered = await install([outsideInstallationFile], { target: 'Harder VATS' });
 
     expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
-    await rm(mods, { recursive: true });
-  });
-
-  it('installs over a target that would lose files when the options carry force', async () => {
-    register();
-    await install([outsideInstallationFile], { target: 'Harder VATS', force: true });
-
-    expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'upgrade', name: 'Harder VATS' }, fomod: NO_CHOICES }]);
   });
 
   const EXACTLY_ONE = new Refusal('An agent call to install carries exactly one of the name of a new mod and the target mod to upgrade.');

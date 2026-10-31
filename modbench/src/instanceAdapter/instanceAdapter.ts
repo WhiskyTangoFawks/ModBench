@@ -680,9 +680,10 @@ export interface InstanceAdapter {
   metadataOf(meta: ModMeta): Promise<ModMetadata>;
   /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */
   unwritableMetadata(mod: string, metadata: ModMetadata): Promise<string | undefined>;
-  /** Sets the version of `mod` and its installation file, in a metadata made when it has none. Changes only a
-   *  value that differs, and gives no file another's source. Rejects, writing nothing, when `unwritableMetadata` says why. */
-  writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
+  /** Sets the version of `mod` and its installation file, in a metadata made when it has none, trashing the file it
+   *  changes. Changes only a differing value, and gives no file another's source. Rejects, writing nothing, what
+   *  `unwritableMetadata` refuses. */
+  writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
   /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that
@@ -803,14 +804,19 @@ export interface InstanceAdapter {
   /** Trashes the file at the forward-slash `relativePath` in `folder`, a folder a manifest builds, and removes each folder
    *  it empties, answering why not. A file already gone is done. Rejects a path out of `folder`, links resolved. */
   trashFileIn(folder: string, relativePath: string, trash: MoveToTrash): Promise<string | undefined>;
-  /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes. Rejects a
-   *  path that leaves the folder, its links resolved; a write that fails leaves the files before it written. */
-  writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[]): Promise<void>;
+  /** Writes each file at its forward-slash path in `folder`, a folder a manifest builds, with its package's bytes, trashing
+   *  the file it replaces. Rejects a path out of the folder, links resolved; a failed write keeps those before. */
+  writeFilesIn(folder: string, files: readonly { readonly path: string; readonly from: PackageFile }[], trash: MoveToTrash): Promise<void>;
+  /** Trashes each file at the forward-slash `paths` in `folder`, a copy taking its place, then runs `write`. A file the
+   *  trash refuses is named with why, and `write` does not run. */
+  trashingReplaced<T>(folder: string, paths: readonly string[], trash: MoveToTrash, write: () => Promise<T>): Promise<
+    { readonly answer: T } | { readonly notTrashed: string }
+  >;
   /** Moves a source mod's repository folder into the trash. */
   trashSourceFolder(sourceFolder: string, trash: MoveToTrash): Promise<void>;
-  /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a
-   *  new mod's folder goes, and a failed upgrade is not rolled back. */
-  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, fomod?: FomodAnswer): Promise<InstallOutcome>;
+  /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an
+   *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
+  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

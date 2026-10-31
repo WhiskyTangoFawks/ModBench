@@ -142,21 +142,21 @@ const FOMOD_CHOICE = z.object({
 
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
-    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two, and force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold or holds with other bytes, which is otherwise refused; '
+    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two; '
     + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none, '
     + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
   z.object({
     argument: z.array(INSTALL_SOURCE),
     options: z.object({
-      name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional(),
+      name: z.string().optional(), target: z.string().optional(),
       choices: z.array(FOMOD_CHOICE).optional(), manual: z.boolean().optional(), installAnyway: z.boolean().optional(),
     }).default({}),
   }),
-  (value, { argument, options: { name, target, force, choices, manual, installAnyway } }) => new AgentCall(
+  (value, { argument, options: { name, target, choices, manual, installAnyway } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
       ? { kind: source.kind, name: downloadedFilesNamed(value.downloadedFiles, [source.name])[0] ?? source.name }
       : source)),
-    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, force, choices, manual, installAnyway },
+    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, choices, manual, installAnyway },
   ),
 );
 
@@ -172,16 +172,9 @@ const MODS_OR_EVERY_MOD = gestureInput(
 );
 
 const BUILD = gestureInput(
-  'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder; '
-    + 'options: { force?: true to build a mod whose folder holds a file that differs from its manifest, which build overwrites or sends to the trash, otherwise refused for that mod, listing the files }',
-  EVERY_MOD_BY_DEFAULT.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
-  (value, { argument, options }) => new AgentCall(modArguments(value, argument ?? []), { force: options?.force }),
-);
-
-const RESTORE_FROM_MANIFEST = gestureInput(
-  `${EVERY_MOD_BY_DEFAULT_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, or the version or installation files in its metadata, each otherwise refused for that mod, listing what it would overwrite }`,
-  EVERY_MOD_BY_DEFAULT.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
-  (value, { argument, options }) => new AgentCall(entryArguments(value, argument ?? []), { force: options?.force }),
+  'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder',
+  EVERY_MOD_BY_DEFAULT,
+  (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {}),
 );
 
 const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
@@ -286,7 +279,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.modlist.gitInit', GIT_INIT],
   ['modbench.mod.updateManifest', MODS_OR_EVERY_MOD],
   ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],
-  ['modbench.mod.restoreFromManifest', RESTORE_FROM_MANIFEST],
+  ['modbench.mod.restoreFromManifest', MODS_OR_EVERY_MOD],
 ]);
 
 type GestureOutcome = GestureResult<unknown>;

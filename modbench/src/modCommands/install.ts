@@ -4,12 +4,11 @@ import { refuse } from '../coreLib/refuse';
 import type {
   FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
-import { sameEntry } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { ModStatus } from '../manifestAdapter/manifestAdapter';
-import { manifestAt, packagesAskedAt, sourceModsOf, statusFrom } from '../manifestAdapter/manifestAdapter';
+import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
+import type { MoveToTrash } from '../ports/trash';
 import { BUILD_FILE } from '../wire/sourceMod';
 
 /** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
@@ -57,36 +56,6 @@ const claimRefusal = (target: InstallTarget): string => (target.kind === 'new'
 const sourceModRefusal = (mod: string): string =>
   `Cannot upgrade "${mod}": it is a source mod, and its next build overwrites what an upgrade writes. Change its ${BUILD_FILE} instead.`;
 
-const listed = (what: string, files: readonly string[]): string | undefined =>
-  (files.length > 0 ? `${what}: ${files.join(', ')}` : undefined);
-
-const lossOf = (status: ModStatus): string | undefined => {
-  const parts = [
-    status.noManifest ? 'it has no manifest' : undefined,
-    listed('files whose bytes differ from its manifest', status.differing),
-    listed('files no line of its manifest names', status.namedByNoLine),
-    listed('files its package does not hold', status.notInPackage),
-    listed('files its package holds with other bytes', status.otherBytes),
-  ].filter((part) => part !== undefined);
-  return parts.length === 0 ? undefined : parts.join('; ');
-};
-
-const statusUnread = (mod: string, why: string): string => `"${mod}" status could not be read: ${why.replace(/\.$/, '')}.`;
-
-/** What an upgrade over the mod would lose, or why its status could not say (agent.md, Any agent, story 7). Nothing for a
- *  new mod, a mod no folder holds, or an upgrade that loses nothing. */
-export async function upgradeLoss({ adapter }: { adapter: InstanceAdapter }, target: InstallTarget): Promise<string | undefined> {
-  if (target.kind !== 'upgrade') return undefined;
-  const mod = target.name;
-  const folder = (await adapter.modOrder()).modFolders?.find((held) => sameEntry(adapter, held, { kind: 'mod', name: mod }));
-  if (folder === undefined) return undefined;
-  const manifest = await manifestAt(folder.path);
-  const status = statusFrom({ name: mod, folder: folder.path }, manifest, await adapter.modValue(mod, folder.path, packagesAskedAt(manifest)));
-  if (status.unreadable !== undefined) return statusUnread(mod, status.unreadable);
-  const loss = lossOf(status);
-  return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}.`;
-}
-
 async function markInstalled(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
   try {
     const marked = await adapter.markDownloadedFile(name, 'Installed');
@@ -100,7 +69,7 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
  *  says why that step failed, and the install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
   deps: { adapter: InstanceAdapter; listMod: (name: string) => Promise<CommandResult> },
-  installed: ModPackage, target: InstallTarget, force: boolean, fomod?: FomodAnswer,
+  installed: ModPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer,
 ): Promise<CommandResult<{ cancelled?: true; fomod?: FomodLanded; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   if (target.kind === 'upgrade') {
@@ -112,14 +81,12 @@ export async function installMod(
       return refuse(err);
     }
   }
-  const loss = force ? undefined : await upgradeLoss(deps, target);
-  if (loss !== undefined) return { applied: false, refusal: `${loss} Request it again with force to replace its files.` };
   let outcome: InstallOutcome;
   let file: DownloadedFile | undefined;
   try {
     const resolved = await resolve(deps.adapter, installed);
     ({ file } = resolved);
-    outcome = await deps.adapter.install(resolved.extracted, target, keysFor(installed, file), fomod);
+    outcome = await deps.adapter.install(resolved.extracted, target, keysFor(installed, file), trash, fomod);
   } catch (err) {
     return refuse(err);
   }

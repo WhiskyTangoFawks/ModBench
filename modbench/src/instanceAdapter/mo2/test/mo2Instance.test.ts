@@ -60,6 +60,7 @@ import {
 } from '../../../test/mo2/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
+const TRASH: MoveToTrash = (file) => rm(file);
 const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 'subscribe'> =>
@@ -1367,7 +1368,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('writes none, so a restore leaves its meta.ini as it was', async () => {
-        await adapter.writeModMetadata(SEPARATOR, { version: '1', installationFile: { name: 'Other.7z' } });
+        await adapter.writeModMetadata(SEPARATOR, { version: '1', installationFile: { name: 'Other.7z' } }, TRASH);
 
         expect(await readFile(join(root, 'mods', SEPARATOR, 'meta.ini'), 'utf8')).toBe('[General]\nversion=9\ninstallationFile=Held.7z\n');
       });
@@ -1375,7 +1376,7 @@ describe('the MO2 Instance adapter', () => {
       it('writes no meta.ini it has none of', async () => {
         await mkdir(join(root, 'mods', 'Bare_separator'));
 
-        await adapter.writeModMetadata('Bare_separator', { version: undefined });
+        await adapter.writeModMetadata('Bare_separator', { version: undefined }, TRASH);
 
         expect(await readdir(join(root, 'mods', 'Bare_separator'))).toEqual([]);
       });
@@ -1767,7 +1768,7 @@ describe('the MO2 Instance adapter', () => {
 
           await adapter.writeModMetadata(PATCH, {
             version: '3.0', installationFile: { name: 'Patch-3.7z', page: 'https://www.nexusmods.com/skyrimspecialedition/mods/12?tab=files&file_id=99' },
-          });
+          }, TRASH);
 
           const text = await readFile(metaOf(PATCH), 'utf8');
           expect(text).toContain('version=3.0');
@@ -1785,7 +1786,7 @@ describe('the MO2 Instance adapter', () => {
         ])('leaves metadata MO2 wrote byte for byte when the manifest says %s', async (_name, metadata) => {
           const held = await holding(mo2Written(''));
 
-          await adapter.writeModMetadata(PATCH, metadata);
+          await adapter.writeModMetadata(PATCH, metadata, TRASH);
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
@@ -1793,7 +1794,7 @@ describe('the MO2 Instance adapter', () => {
         it('leaves metadata byte for byte when the manifest says the version it holds', async () => {
           const held = await holding(mo2Written('2.0'));
 
-          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOADED_FILE } });
+          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOADED_FILE } }, TRASH);
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
@@ -1817,7 +1818,7 @@ describe('the MO2 Instance adapter', () => {
         it.each(WRITTEN)('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
           await holding(text);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } }, TRASH);
 
           const written = await readFile(metaOf(PATCH), 'utf8');
           expect(generalModId(written)).toBe(modId);
@@ -1833,7 +1834,7 @@ describe('the MO2 Instance adapter', () => {
             const held = await holding(text);
             expect(await pageHeld()).toBe(!differed);
 
-            await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
+            await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } }, TRASH);
 
             expect(await pageHeld()).toBe(true);
             expect((await readFile(metaOf(PATCH), 'utf8')) === held).toBe(!differed);
@@ -1843,7 +1844,7 @@ describe('the MO2 Instance adapter', () => {
         it('changes only the value that differs', async () => {
           const held = await holding(mo2Written('1.0'));
 
-          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOADED_FILE } });
+          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOADED_FILE } }, TRASH);
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held.replace('version=1.0', 'version=2.0'));
         });
@@ -1851,7 +1852,7 @@ describe('the MO2 Instance adapter', () => {
         it('keeps the version the manifest lacks', async () => {
           await patchMeta(`installationFile=${DOWNLOADED_FILE}\r\n`);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE } }, TRASH);
 
           expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFile: { name: DOWNLOADED_FILE, page: 'https://www.nexusmods.com/fallout4/mods/4598' } }));
         });
@@ -1859,7 +1860,7 @@ describe('the MO2 Instance adapter', () => {
         it('gives a file the manifest names another name no page of the file it replaces, and keeps every other key', async () => {
           await patchMeta(`installationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: 'Patch-3.7z' } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: 'Patch-3.7z' } }, TRASH);
 
           expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFile: { name: 'Patch-3.7z' } }));
           expect(await readFile(metaOf(PATCH), 'utf8')).toContain(CHROME);
@@ -1869,19 +1870,19 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(root, INI), (await readFile(join(root, INI), 'utf8')).replace(/gameName=.*/, 'gameName=Fallout 4 VR'));
           await holding(`[General]\r\ngameName=SkyrimSE\r\n`);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: 'P.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: 'P.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }, TRASH);
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toContain('gameName=Fallout 4 VR');
         });
 
         it('writes nothing for metadata that says nothing', async () => {
-          await adapter.writeModMetadata('Brand New', {});
+          await adapter.writeModMetadata('Brand New', {}, TRASH);
 
           await expect(access(metaOf('Brand New'))).rejects.toThrow();
         });
 
         it('makes the metadata of a mod with none, in its folder', async () => {
-          await adapter.writeModMetadata('Brand New', { version: '1.0' });
+          await adapter.writeModMetadata('Brand New', { version: '1.0' }, TRASH);
 
           expect(await readFile(metaOf('Brand New'), 'utf8')).toContain('version=1.0');
         });
@@ -1894,7 +1895,7 @@ describe('the MO2 Instance adapter', () => {
           const metadata = { version: '9', installationFile: { name: 'P.7z', page } };
 
           expect(await adapter.unwritableMetadata(PATCH, metadata)).toContain(mentioned);
-          await expect(adapter.writeModMetadata(PATCH, metadata)).rejects.toThrow(mentioned);
+          await expect(adapter.writeModMetadata(PATCH, metadata, TRASH)).rejects.toThrow(mentioned);
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
@@ -1906,7 +1907,7 @@ describe('the MO2 Instance adapter', () => {
         it('reads back as what it was handed', async () => {
           const written = { version: '3.0', installationFile: { name: 'Patch-3.7z', page: 'https://www.nexusmods.com/starfield/mods/5?tab=files&file_id=6' } };
 
-          await adapter.writeModMetadata('Brand New', written);
+          await adapter.writeModMetadata('Brand New', written, TRASH);
 
           expect(await adapter.modMetadata('Brand New')).toEqual(read(written));
         });

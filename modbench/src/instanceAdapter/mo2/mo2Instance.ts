@@ -33,6 +33,7 @@ import { textHash } from '../fileContents/contentDigest';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
 import { parseModlist } from './codecs/modlistText';
 import { get } from '../files';
+import { trashingReplaced } from '../trashingReplaced';
 import { gamePlacesOf } from '../gameFolder/gamePlaces';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
 
@@ -90,6 +91,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),
+    trashingReplaced,
     modValue: (mod, folder, asked) => modValueOver(adapter, mod, folder, asked),
     subscribe: (listener) => context.watch.subscribe(listener),
   };

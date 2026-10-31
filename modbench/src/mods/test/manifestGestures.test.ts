@@ -40,7 +40,7 @@ import { TreeItem } from 'vscode';
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { restoredMod } from '../../test/restoredMod';
 import { registerManifestGestures } from '../manifestGestures';
-import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -48,7 +48,6 @@ import type { ModlistRepositoryCommands } from '../../sourceCommands/modlistRepo
 
 const updateManifest = vi.fn<ModlistRepositoryCommands['updateManifest']>();
 const restoreFromManifest = vi.fn<ModlistRepositoryCommands['restoreFromManifest']>();
-const whatRestoreDestroys = vi.fn<ModlistRepositoryCommands['whatRestoreDestroys']>();
 const otherManifests = vi.fn<ModlistRepositoryCommands['otherManifests']>();
 
 const UPDATE = 'modbench.mod.updateManifest';
@@ -73,16 +72,16 @@ const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
 const separatorRow = (name: string) => ({ argument: { kind: 'separator', name }, name });
 const folderRow = { argument: { kind: 'folder', path: '/instance/mods/ModA/meshes' }, name: 'meshes' };
 
-function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> = {}, ask: ScriptedDialog = scriptedDialog('Restore')) {
+function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> = {}) {
   const reporter = recordingReporter();
   const said: (string | undefined)[] = [];
   registerManifestGestures({
-    toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest, whatRestoreDestroys, otherManifests }, ask,
+    toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest, otherManifests },
     instance: { value, ...instanceThatReads },
     reporter, say: (message) => { said.push(message); },
     focusedView: { id: () => undefined, selection: () => [] }, ...over,
   });
-  return { reporter, said, ask, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
+  return { reporter, said, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
 }
 
 const sentMods = (mock: typeof updateManifest | typeof restoreFromManifest): unknown[] => mock.mock.calls.map(([mods]) => mods);
@@ -95,7 +94,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   updateManifest.mockResolvedValue({ notes: [], repositoryNotes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ landed: [], refused: [] });
-  whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
   otherManifests.mockResolvedValue({ others: [], refused: [] });
 });
 
@@ -204,16 +202,15 @@ describe('Every mod (update manifest and restore from manifest)', () => {
 describe('Every other manifest', () => {
   const STOCK_GAME = { name: 'Stock Game/', folder: '/instance/Stock Game' };
   const othersHanded = (): unknown[] => [
-    ...updateManifest.mock.calls.map(([, , others]) => others), ...whatRestoreDestroys.mock.calls.map(([, others]) => others),
-    ...restoreFromManifest.mock.calls.map(([, , , others]) => others),
+    ...updateManifest.mock.calls.map(([, , others]) => others), ...restoreFromManifest.mock.calls.map(([, , , others]) => others),
   ];
 
   it.each([
     ['update manifest from the palette', UPDATE, [], 1],
-    ['restore from manifest from the palette', RESTORE, [], 2],
+    ['restore from manifest from the palette', RESTORE, [], 1],
     ['update manifest from the Mods view\'s title bar', 'modbench.modList.updateManifestHere', [], 1],
     ['an agent\'s update manifest that names no mod', UPDATE, [new AgentCall([], {})], 1],
-    ['an agent\'s restore from manifest that names no mod', RESTORE, [new AgentCall([], { force: true })], 2],
+    ['an agent\'s restore from manifest that names no mod', RESTORE, [new AgentCall([], {})], 1],
   ])('joins every mod in %s', async (_case, command, args, calls) => {
     otherManifests.mockResolvedValueOnce({ others: [STOCK_GAME], refused: [] });
     const { run } = register();
@@ -229,16 +226,6 @@ describe('Every other manifest', () => {
     await run(UPDATE, modRow('ModA'));
 
     expect([otherManifests.mock.calls, othersHanded()]).toEqual([[], [[]]]);
-  });
-
-  it('is not restored when what restore destroys skipped it', async () => {
-    otherManifests.mockResolvedValueOnce({ others: [STOCK_GAME], refused: [] });
-    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'Stock Game/', reason: 'was skipped: a file could not be read' }] });
-    const { run } = register();
-
-    await run(RESTORE);
-
-    expect(restoreFromManifest.mock.calls.map(([, , , others]) => others)).toEqual([[]]);
   });
 
   it.each([
@@ -291,14 +278,13 @@ describe('Update manifest', () => {
     expect(said).toEqual([undefined]);
   });
 
-  it('runs under the Mods view\'s progress when a Mods row asked, and asks nothing', async () => {
+  it('runs under the Mods view\'s progress when a Mods row asked', async () => {
     updateManifest.mockImplementationOnce(() => { progressSteps.push('update manifest'); return Promise.resolve({ notes: [], repositoryNotes: [], landed: [], refused: [] }); });
-    const { ask, run } = register();
+    const { run } = register();
 
     await run(UPDATE, modRow('ModA'));
 
     expect(progressSteps).toEqual(['progress opens on modbench.modList', 'update manifest', 'Instance loader: read every file again', 'progress closes']);
-    expect(ask.asked).toEqual([]);
   });
 
   it('says in one line how many mods were unchanged, updated and refused, and that no file is outside its package', async () => {
@@ -350,82 +336,30 @@ describe('Update manifest', () => {
 });
 
 describe('Restore from manifest', () => {
-  const asked = (ask: ScriptedDialog) => ask.asked.map(({ message, detail, buttons }) => ({ message, detail, buttons }));
-
-  it('asks once, naming the selected mods and that a change no manifest holds is lost, then restores them under the Mods view\'s progress', async () => {
+  it('restores the selected mods under the Mods view\'s progress (modlist-repository.md, Restore from manifest, story 2)', async () => {
     restoreFromManifest.mockImplementationOnce(() => { progressSteps.push('restore'); return Promise.resolve({ landed: [], refused: [] }); });
-    const { ask, run } = register();
-
-    await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
-
-    expect(asked(ask)).toEqual([{
-      message: 'Are you sure you want to restore "ModA", "ModB" from their manifests?', detail: 'A change no manifest holds is lost.', buttons: ['Restore'],
-    }]);
-    expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'ModB']]);
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'restore', 'Instance loader: read every file again', 'progress closes']);
-  });
-
-  it('asks about every mod, and restores every mod, from the palette with no Mods selection', async () => {
-    const { ask, run } = register();
-
-    await run(RESTORE);
-
-    expect(ask.asked.map(({ message }) => message)).toEqual(['Are you sure you want to restore every mod from its manifest?']);
-    expect([sentMods(restoreFromManifest), progressSteps[0]]).toEqual([[EVERY_MOD], 'progress opens on modbench.toolbox']);
-  });
-
-  it('asks nothing when restore destroys nothing, as after a fresh clone, and restores', async () => {
-    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [] });
-    const { ask, run } = register();
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect([ask.asked, sentMods(restoreFromManifest)]).toEqual([[], [['ModA']]]);
-  });
-
-  it('asks when only the metadata would lose a version or a source its manifest replaces', async () => {
-    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
-    const { ask, run } = register();
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect(ask.asked.map(({ message }) => message)).toEqual(['Are you sure you want to restore "ModA" from its manifest?']);
-  });
-
-  it('asks about the mods it was handed, never whatever else the instance holds', async () => {
     const { run } = register();
 
     await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
 
-    expect(whatRestoreDestroys.mock.calls).toEqual([[['ModA', 'ModB'], []]]);
+    expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'ModB']]);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'restore', 'Instance loader: read every file again', 'progress closes']);
   });
 
-  it('restores only the mods it could ask about, naming each it skipped in its one line', async () => {
-    const skipped = "was skipped: a file could not be read: denied";
-    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: skipped }] });
-    restoreFromManifest.mockResolvedValueOnce({ landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [] });
-    const { reporter, run } = register();
-
-    await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
-
-    expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (${skipped})` }]);
-  });
-
-  it('restores nothing and says nothing when the question is cancelled', async () => {
-    const { reporter, run } = register({}, scriptedDialog(undefined));
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect([restoreFromManifest.mock.calls, progressSteps, reporter.reports, reporter.landings]).toEqual([[], [], [], []]);
-  });
-
-  it('asks nothing when no selected row is a mod or a separator, and names each', async () => {
-    const { ask, reporter, run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [folderRow] } });
+  it('restores every mod from the palette with no Mods selection', async () => {
+    const { run } = register();
 
     await run(RESTORE);
 
-    expect([ask.asked, restoreFromManifest.mock.calls, whatRestoreDestroys.mock.calls]).toEqual([[], [], []]);
+    expect([sentMods(restoreFromManifest), progressSteps[0]]).toEqual([[EVERY_MOD], 'progress opens on modbench.toolbox']);
+  });
+
+  it('restores nothing when no selected row is a mod or a separator, and names each', async () => {
+    const { reporter, run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [folderRow] } });
+
+    await run(RESTORE);
+
+    expect(restoreFromManifest.mock.calls).toEqual([]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not restore 1 of 1 mods.', detail: '"meshes" (it is not a mod or a separator)' }]);
   });
 
@@ -440,7 +374,6 @@ describe('Restore from manifest', () => {
     await run(RESTORE);
 
     expect(said).toEqual([
-      'Restore from manifest — reading what it would destroy…', undefined,
       'Restore from manifest — "ModA", 0 of 2 mods done…',
       'Restore from manifest — downloading "ModB.7z" from Nexus…', undefined,
     ]);
@@ -523,16 +456,13 @@ describe('Restore from manifest', () => {
     }]);
   });
 
-  it.each([
-    ['asking what it would destroy', () => whatRestoreDestroys.mockRejectedValueOnce(new Error('boom')), [undefined]],
-    ['restore', () => restoreFromManifest.mockRejectedValueOnce(new Error('boom')), [undefined, undefined]],
-  ])('gives the message line back when %s throws', async (_phase, throws, givenBack) => {
-    throws();
+  it('gives the message line back when restore throws', async () => {
+    restoreFromManifest.mockRejectedValueOnce(new Error('boom'));
     const { said, run } = register();
 
     await expect(run(RESTORE)).rejects.toThrow('boom');
 
-    expect(said).toEqual(['Restore from manifest — reading what it would destroy…', ...givenBack]);
+    expect(said).toEqual([undefined]);
   });
 });
 
@@ -590,7 +520,7 @@ describe('A separator in a report or an outcome', () => {
   });
 
   it('an agent reads it as a separator in a restore it refused', async () => {
-    whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
+    restoreFromManifest.mockResolvedValueOnce({ landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
     const { run } = register();
 
     const answer = await run(RESTORE, new AgentCall([separator], {}));
@@ -636,51 +566,14 @@ describe('An agent call', () => {
   });
 
   describe('restore from manifest', () => {
-    const differs = { mod: 'ModA', differing: ['a.nif', 'b.nif'], namedByNoLine: ['stray.txt'], metadataDiffers: false };
-
-    const METADATA_REFUSAL = "it would overwrite the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.";
-    const BOTH_REFUSAL = "it would overwrite files whose bytes differ from its manifest: a.nif, b.nif and the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.";
-    const BYTES_REFUSAL = 'it would overwrite files whose bytes differ from its manifest: a.nif, b.nif. Request it again with force to overwrite them.';
-    const onlyMetadata = { mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true };
-
-    it.each<[string, (typeof differs)[], string[], boolean, string[][], { item: string; reason: string }[]]>([
-      ['restores a mod whose only loss is files no line names, which the trash keeps', [{ mod: 'ModA', differing: [], namedByNoLine: ['stray.txt'], metadataDiffers: false }],
-        ['ModA'], false, [['ModA']], []],
-      ['refuses a mod whose only loss is metadata, naming force, since no history or trash keeps it', [onlyMetadata], ['ModA'], false, [], [{ item: 'ModA', reason: METADATA_REFUSAL }]],
-      ['lists the files and the metadata together when a mod would lose both', [{ ...differs, metadataDiffers: true }], ['ModA'], false, [], [{ item: 'ModA', reason: BOTH_REFUSAL }]],
-      ['restores a mod whose only loss is metadata when forced', [onlyMetadata], ['ModA'], true, [['ModA']], []],
-      ['refuses a mod that would overwrite files whose bytes differ, listing them and naming force, and restores the rest', [differs], ['ModA', 'ModB'], false,
-        [['ModB']], [{ item: 'ModA', reason: BYTES_REFUSAL }]],
-      ['restores a mod that differs when forced', [differs], ['ModA'], true, [['ModA']], []],
-    ])('%s, asking and reporting nothing', async (_case, destroys, mods, force, sent, refused) => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys, refused: [] });
-      const { ask, reporter, run } = register();
-
-      const answer = await run(RESTORE, new AgentCall(mods.map(mod), { force }));
-
-      expect([sentMods(restoreFromManifest), ask.asked, reporter.reports]).toEqual([sent, [], []]);
-      expect(answer).toMatchObject({ applied: true, outcome: { refused } });
-    });
-
-    it('writes nothing when every mod is refused', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [differs], refused: [] });
-      const { run } = register();
-
-      const answer = await run(RESTORE, new AgentCall([mod('ModA')], {}));
-
-      expect([sentMods(restoreFromManifest), progressSteps]).toEqual([[], []]);
-      expect(answer).toMatchObject({ applied: true, outcome: { landed: [], refused: [{ item: 'ModA' }] } });
-    });
-
     it('answers what it restored, the mods it would not restore refused with why, and what it could not record as a part that failed', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] });
       const landed = restoredMod({ mod: 'ModA', notes: ['disk full'] });
-      restoreFromManifest.mockResolvedValueOnce({ landed: [landed], refused: [] });
+      restoreFromManifest.mockResolvedValueOnce({ landed: [landed], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] });
       const { run } = register();
 
       const answer = await run(RESTORE, new AgentCall([], {}));
 
-      expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'Weapons_separator', 'InAnotherProfile']]);
+      expect(sentMods(restoreFromManifest)).toEqual([EVERY_MOD]);
       expect(answer).toEqual({
         applied: true,
         outcome: { landed: [landed], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] },

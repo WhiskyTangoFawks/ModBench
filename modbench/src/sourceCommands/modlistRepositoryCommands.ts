@@ -6,11 +6,10 @@ import type { HostGit } from '../ports/repository';
 import { initRepositoryIn } from './initRepositoryIn';
 import { updateManifest, type UpdateManifestDeps, type UpdateManifestResult, type UpdateManifestStatus } from './updateManifest';
 import {
-  otherManifestsOf, restoreFromManifest, whatRestoreDestroys, type OtherManifests, type RestoreDeps, type RestoreResult, type RestoreStatus,
-  type WhatRestoreDestroys,
+  otherManifestsOf, restoreFromManifest, type OtherManifests, type RestoreDeps, type RestoreResult, type RestoreStatus,
 } from './restoreFromManifest';
 
-export type { OtherManifests, RestoreResult, RestoreStatus, WhatRestoreDestroys } from './restoreFromManifest';
+export type { OtherManifests, RestoreResult, RestoreStatus } from './restoreFromManifest';
 
 type Adapter = UpdateManifestDeps['adapter'] & RestoreDeps['adapter'] & Pick<InstanceAdapter,
   'checkPushRefusalFree' | 'publisherConfigurationRefusal' | 'writeIgnoreList' | 'removeRepository' | 'keepOutOfPublisher'>;
@@ -93,8 +92,6 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     updateManifest: (
       mods: readonly string[], options: { onProgress?: (status: UpdateManifestStatus) => void; signal?: AbortSignal } = {}, others: readonly OtherManifest[] = [], everyMod = false,
     ): Promise<UpdateManifestResult> => updateManifest(deps, mods, options, others, everyMod),
-
-    whatRestoreDestroys: (mods: readonly string[], others: readonly OtherManifest[] = []): Promise<WhatRestoreDestroys> => whatRestoreDestroys(deps, mods, others),
 
     /** `everyManifest`: the mods are every mod, so a source mod whose folder its build has not made joins them. */
     restoreFromManifest: (
