@@ -2047,7 +2047,7 @@ describe('the MO2 Instance adapter', () => {
 
     describe('a downloaded file by its bytes', () => {
       const reader = fakeInstallationFileReader(['textures/a.dds']);
-      const holding = (list = reader.list) => managerOver(root, { installationFileReader: { ...reader, list } });
+      const holding = (list: (path: string) => Promise<string[]> = (path) => reader.list(path)) => managerOver(root, { installationFileReader: { ...reader, list } });
 
       it('answers the file with that size and hash, whatever its name', async () => {
         await actualRename(join(root, 'downloads', DOWNLOADED_FILE), join(root, 'downloads', 'Renamed-copy.7z'));
@@ -2062,7 +2062,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('hashes no file of another size', async () => {
-        const list = vi.fn(reader.list);
+        const list = vi.fn((path: string) => reader.list(path));
 
         expect(await holding(list).downloadedFileHolding({ size: 1, hash: 'yMPjZVarjmw=' })).toEqual({ kind: 'read', answer: undefined });
         expect(list).not.toHaveBeenCalled();

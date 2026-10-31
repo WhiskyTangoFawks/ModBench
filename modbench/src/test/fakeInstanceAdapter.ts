@@ -343,7 +343,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
-    downloadedFileHolding: ({ size, hash }) => Promise.resolve({ kind: 'read', answer: [...(answers.downloadedFiles?.values() ?? [])].flatMap((read) => (read.kind === 'read' && read.answer?.size === size && read.answer.hash === hash ? [read.answer] : []))[0] }),
+    downloadedFileHolding: ({ size, hash }) => Promise.resolve({ kind: 'read', answer: [...(answers.downloadedFiles?.values() ?? [])].flatMap((read) => (read.kind === 'read' && read.answer.size === size && read.answer.hash === hash ? [read.answer] : []))[0] }),
     downloadedFilesHashed: ({ onHashing, signal } = {}) => {
       const { files, lacking = [], notes } = answers.downloadedFilesHashed ?? { files: [], notes: [] };
       const hashed: InstallationFile[] = [];
