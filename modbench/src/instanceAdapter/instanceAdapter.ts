@@ -680,9 +680,10 @@ export interface InstanceAdapter {
   metadataOf(meta: ModMeta): Promise<ModMetadata>;
   /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */
   unwritableMetadata(mod: string, metadata: ModMetadata): Promise<string | undefined>;
-  /** Sets the version of `mod` and its installation file, in a metadata made when it has none. Changes only a
-   *  value that differs, and gives no file another's source. Rejects, writing nothing, when `unwritableMetadata` says why. */
-  writeModMetadata(mod: string, metadata: ModMetadata): Promise<void>;
+  /** Sets the version of `mod` and its installation file, in a metadata made when it has none, trashing the file it
+   *  changes. Changes only a differing value, and gives no file another's source. Rejects, writing nothing, what
+   *  `unwritableMetadata` refuses. */
+  writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
   /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that

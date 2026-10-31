@@ -139,11 +139,12 @@ export function mo2Installation(
       return 'unwritable' in plan ? plan.unwritable : undefined;
     },
 
-    writeModMetadata: (mod, metadata) => withLock(context.instanceRoot, async () => {
+    writeModMetadata: (mod, metadata, trash) => withLock(context.instanceRoot, async () => {
       const plan = await planMetadata(context, mod, metadata);
       if ('unwritable' in plan) throw new Error(`the metadata changed after it was found writable: ${plan.unwritable}`);
       if (Reflect.ownKeys(plan.changes).length === 0) return;
       await ensureDir(dirname(plan.file));
+      if (await exists(plan.file)) await trash(plan.file);
       await write(plan.file, changeOwnedKeysInText(plan.held, plan.changes));
     }),
 

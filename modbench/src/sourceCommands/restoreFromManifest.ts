@@ -180,7 +180,7 @@ async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead
 async function metadataWrittenOrWhy(pass: Pass, mod: string, manifest: Manifest): Promise<string | undefined> {
   if (!pass.folders.isMod(mod)) return undefined;
   try {
-    await pass.deps.adapter.writeModMetadata(mod, metadataOf(manifest));
+    await pass.deps.adapter.writeModMetadata(mod, metadataOf(manifest), pass.deps.trash);
   } catch (err) {
     return `its metadata could not be written: ${errorMessage(err)}`;
   }
