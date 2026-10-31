@@ -73,6 +73,15 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     expect(fake.calls).toEqual([]);
   });
 
+  it('refuses a name that is not a folder name before the source moves', async () => {
+    const { fake, result } = rename('a/b.esp');
+
+    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: 'A name cannot be . or .. or contain / or \\' });
+    expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
+    expect(apply).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
+  });
+
   it('refuses with the reason, writing nothing, when mEdit cannot say which extensions a plugin may take', async () => {
     client.setQueryFailure('getCreatablePluginExtensions', { failed: 'refused', refusal: 'mEdit is not ready.' });
     const { fake, result } = rename('Renamed Patch.esp');

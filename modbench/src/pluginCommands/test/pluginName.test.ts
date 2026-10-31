@@ -12,8 +12,12 @@ describe('pluginNameRefusal', () => {
     expect(pluginNameRefusal('', ALL)).toBe('Name is required');
   });
 
-  it.each(['MyPatch.txt', 'MyPatch', '.esp', 'Folder/.esp'])('refuses %s, naming the extensions mEdit allows', (name) => {
+  it.each(['MyPatch.txt', 'MyPatch', '.esp'])('refuses %s, naming the extensions mEdit allows', (name) => {
     expect(pluginNameRefusal(name, ALL)).toBe('Extension must be .esm, .esl, or .esp');
+  });
+
+  it.each(['Folder/MyPatch.esp', 'Folder\\MyPatch.esp', '.', '..'])('refuses %s as not a folder name', (name) => {
+    expect(pluginNameRefusal(name, ALL)).toBe('A name cannot be . or .. or contain / or \\');
   });
 
   it('refuses an extension mEdit leaves out, in any case, naming the ones it allows', () => {

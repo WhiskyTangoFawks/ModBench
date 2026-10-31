@@ -171,6 +171,13 @@ describe('installMod', () => {
     expect(fake.calls).toEqual([]);
   });
 
+  it.each(['a/b', 'a\\b', '.', '..'])('refuses the new mod name %s, installing nothing', async (name) => {
+    const { result, calls } = await install(DOWNLOADED_FILE, { kind: 'new', name });
+
+    expect(result).toEqual({ applied: false, refusal: 'A name cannot be . or .. or contain / or \\' });
+    expect(calls).toEqual([]);
+  });
+
   it('marks no downloaded file when nothing landed', async () => {
     const { calls } = await install(DOWNLOADED_FILE, NEW_MOD, { installed: { landed: false } });
 
