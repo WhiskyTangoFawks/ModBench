@@ -25,7 +25,6 @@ const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFES
 
 const manifestsIn = async (folder: string): Promise<string[]> => (await fileNamesIn(folder)).filter(isManifestPath);
 
-/** The path of the manifest `folder` holds, else of the one named for it. */
 const manifestFileIn = async (folder: string): Promise<string> => join(folder, (await manifestsIn(folder))[0] ?? manifestNameOf(folder));
 
 // An editor may write a byte order mark, which JSON does not allow.
