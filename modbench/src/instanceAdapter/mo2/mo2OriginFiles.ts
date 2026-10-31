@@ -2,7 +2,8 @@
 
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { ensureDir, exists, factsOf, realPathIfThere, remove, rename, undoAll, withLock, type Undo } from '../files';
+import { errorMessage } from '../../ports/errorMessage';
+import { ensureDir, exists, factsOf, realPathIfThere, remove, removeIfEmpty, rename, undoAll, withLock, type Undo } from '../files';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
 import { originFileOf } from './mo2Files';
@@ -62,10 +63,17 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       const notAFile = new Error(`Not a file of "${folder}": "${relativePath}"`);
       if (file === undefined) throw notAFile;
       const real = await realPathIfThere(file);
-      if (real === undefined) return;
+      if (real === undefined) return undefined;
       const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
       if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw notAFile;
       await trash(file);
+      const above = relativePath.split('/').slice(0, -1);
+      try {
+        while (above.length > 0 && await removeIfEmpty(fileInFolder(folder, above.join('/')))) above.pop();
+        return undefined;
+      } catch (err) {
+        return `trashing '${relativePath}' left the folder '${above.join('/')}' empty, and it could not be removed: ${errorMessage(err)}`;
+      }
     },
 
     async moveIntoOverwrite(moves) {

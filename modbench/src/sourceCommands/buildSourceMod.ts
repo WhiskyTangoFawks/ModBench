@@ -83,16 +83,25 @@ async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<st
   return at;
 }
 
-/** Why one of `paths` in `folder` could not be moved to the trash, if one could not. */
+/** Why one of `paths` in `folder` could not be moved to the trash, or a folder that left empty removed, if one could not. */
 export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'>, trash: MoveToTrash, folder: string, paths: readonly string[]): Promise<string | undefined> {
   for (const path of paths) {
     try {
-      await adapter.trashFileIn(folder, path, trash);
+      const emptied = await adapter.trashFileIn(folder, path, trash);
+      if (emptied !== undefined) return emptied;
     } catch (err) {
       return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
     }
   }
   return undefined;
+}
+
+/** Each file of `folder` holding the bytes its taken file's package gives, which the build writes again before an archive
+ *  packs it, by the status rule (commands.md, Confirm what destroys). */
+export function takenHeld({ buildFile, packages, exclude }: Pick<SourceModToBuild, 'buildFile' | 'packages' | 'exclude'>, folder: FolderValue, mark: string): ReadonlySet<string> {
+  const files = buildFile.files.map((line) => lineAtFolderPath({ ...buildFile, exclude }, line, mark));
+  const taken = folderAgainst({ ...buildFile, archives: [], files }, folder, packages.entries);
+  return new Set(taken.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === true && onDisk !== undefined ? [onDisk] : [])));
 }
 
 interface Output {

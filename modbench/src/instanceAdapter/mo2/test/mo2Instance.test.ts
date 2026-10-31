@@ -2372,6 +2372,30 @@ describe('the MO2 Instance adapter', () => {
       expect(trashed).toEqual([join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds')]);
     });
 
+    it('removes each folder the trashed file leaves empty, and keeps the mod\'s folder and a folder that holds more', async () => {
+      const mod = join(root, 'mods', 'Built');
+      await put(join(mod, 'Textures', 'sub', 'a.dds'));
+      await put(join(mod, 'Textures', 'b.dds'));
+      const trash: MoveToTrash = (file) => rm(file);
+
+      await adapter.trashFileIn(mod, 'Textures/sub/a.dds', trash);
+      const left = await readdir(mod, { recursive: true });
+      await adapter.trashFileIn(mod, 'Textures/b.dds', trash);
+
+      expect([left.sort(), await readdir(mod)]).toEqual([['Textures', join('Textures', 'b.dds')], []]);
+    });
+
+    it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root writes every folder) trashes the file and answers why a folder it emptied could not be removed, naming the folder', async () => {
+      const mod = join(root, 'mods', 'Built');
+      await put(join(mod, 'locked', 'sub', 'a.dds'));
+      await chmod(join(mod, 'locked'), 0o555);
+
+      const why = await adapter.trashFileIn(mod, 'locked/sub/a.dds', (file) => rm(file)).finally(() => chmod(join(mod, 'locked'), 0o755));
+
+      expect([why, await readdir(join(mod, 'locked', 'sub'))])
+        .toEqual([expect.stringMatching(/^trashing 'locked\/sub\/a.dds' left the folder 'locked\/sub' empty, and it could not be removed: EACCES/), []]);
+    });
+
     it('takes a file already gone as trashed', async () => {
       const trashed: string[] = [];
 

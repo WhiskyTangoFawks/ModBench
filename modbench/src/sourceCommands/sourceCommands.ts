@@ -8,11 +8,11 @@ import {
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
+import { archiveVariants, buildSourceMod, takenHeld, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand, namedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
-import { downloadedNow, packagesRead } from './packagesRead';
+import { downloadedNow, packagesRead, type PackagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
@@ -28,8 +28,8 @@ interface SourceCommandsDeps {
   trash: MoveToTrash;
 }
 
-/** In each source mod's folder, each file that differs from its manifest, which build overwrites or sends to the trash.
- *  A mod whose files could not be read is refused. */
+/** In each source mod's folder, each file build would lose: one that differs from its manifest and does not hold what
+ *  build puts there. A mod whose files could not be read is refused. */
 export interface WhatBuildDestroys {
   readonly mods: readonly string[];
   readonly destroys: readonly { readonly mod: string; readonly files: readonly string[] }[];
@@ -75,18 +75,16 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
 
 const NO_LINE: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 
-// mods.md, A source mod, story 4: each file whose bytes differ from its line at the path the build writes it, and each
-// file no line names. A manifest that cannot be read refuses the build, which writes nothing.
-async function differingIn(adapter: Adapter, folder: string): Promise<string[]> {
-  const read = await manifestIn(folder);
-  if (read !== undefined && 'refused' in read) return [];
-  const manifest = read?.manifest ?? NO_LINE;
-  const held = await adapter.folderValue(folder);
-  const exclude = exclusionsOf(manifest, [...held.files.keys()], adapter.exclusionMark);
-  const lines = manifest.files.map((line) => lineAtFolderPath({ ...manifest, exclude }, line, adapter.exclusionMark));
+// mods.md, A source mod, story 4: each file that differs from its manifest, but one build writes again.
+async function lostIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
+  const read = await manifestIn(mod.folder);
+  const manifest = read !== undefined && 'manifest' in read ? read.manifest : NO_LINE;
+  const held = await adapter.folderValue(mod.folder);
+  const lines = manifest.files.map((line) => lineAtFolderPath({ ...manifest, exclude: mod.exclude }, line, adapter.exclusionMark));
   const against = folderAgainst({ ...manifest, files: lines }, held, new Map());
+  const writtenAgain = takenHeld(mod, held, adapter.exclusionMark);
   const differing = against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : []));
-  return [...differing, ...against.namedByNoLine].sort();
+  return [...differing, ...against.namedByNoLine].filter((path) => !writtenAgain.has(path)).sort();
 }
 
 // mods.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
@@ -95,7 +93,11 @@ async function sourceModOf(
 ): Promise<SourceModToBuild | ItemRefusal<string>> {
   const sourceFolder = sourceMods.folderOf(mod);
   const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
-  if (unsaved.length > 0) return unsavedRefusal(mod, unsaved);
+  return unsaved.length > 0 ? unsavedRefusal(mod, unsaved) : sourceModRead(adapter, mod, sourceMods);
+}
+
+async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMods): Promise<SourceModToBuild | ItemRefusal<string>> {
+  const sourceFolder = sourceMods.folderOf(mod);
   const folder = await adapter.modFolderPath(mod);
   const metadata = await adapter.modMetadata(mod);
   const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
@@ -107,8 +109,13 @@ async function sourceModOf(
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
   const exclude = await exclusionsIn(adapter, folder);
   if ('reason' in exclude) return { item: mod, reason: exclude.reason };
-  const game = await namedGameFolder(adapter, await adapter.gameRelease());
-  const packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game });
+  let packages: PackagesRead;
+  try {
+    const game = await namedGameFolder(adapter, await adapter.gameRelease());
+    packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game });
+  } catch (err) {
+    return { item: mod, reason: `was not built: its packages could not be read: ${errorMessage(err)}.` };
+  }
   return { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: metadata.answer.version, isSubmodule: host.answer.kind === 'host' };
 }
 
@@ -126,10 +133,10 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       const destroys: { mod: string; files: string[] }[] = [];
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
-        const folder = sourceMods.folderOf(mod) === undefined ? undefined : await adapter.modFolderPath(mod);
-        if (folder === undefined) continue;
         try {
-          const files = await differingIn(adapter, folder);
+          // A mod that build refuses before it writes loses nothing.
+          const read = await sourceModRead(adapter, mod, sourceMods);
+          const files = 'reason' in read ? [] : await lostIn(adapter, read);
           if (files.length > 0) destroys.push({ mod, files });
         } catch (err) {
           refused.push({ item: mod, reason: `was not built: a file could not be read: ${errorMessage(err)}.` });

@@ -12,7 +12,8 @@ public interface IModFolderRepository
     /// seekable stream. A throwing write, or the bytes already there, leave the folder as it was.</summary>
     void WriteFile(string folder, string path, Action<Stream> write);
 
-    /// <summary>Deletes the file at <paramref name="path"/> under <paramref name="folder"/>; one already gone is done.</summary>
+    /// <summary>Deletes the file at <paramref name="path"/> under <paramref name="folder"/>, and each folder under
+    /// <paramref name="folder"/> this leaves empty; one already gone is done.</summary>
     void DeleteFile(string folder, string path);
 
     bool DataFolderExists(string dataFolder);

@@ -549,6 +549,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     trashFileIn: (folder, relativePath) =>
       write({ verb: 'trashFileIn', folder, relativePath }, () => {
         if (reachesOut(relativePath)) throw new Error(`Not a file of "${folder}": "${relativePath}"`);
+        return undefined;
       }),
     writeFilesIn: (folder, files) =>
       write({ verb: 'writeFilesIn', folder, files }, () => {
