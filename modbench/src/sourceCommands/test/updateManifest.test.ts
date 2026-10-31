@@ -274,8 +274,9 @@ describe('update manifest', () => {
       return over({ files: { ModA: {}, ModB: files }, sourceFolders: { ModB: SOURCE() }, answers, sourceFiles: { [SOURCE()]: sourceFiles } });
     };
 
-    it('has its mod folder left to its build, and its source folder recorded in a manifest of its own, git\'s own files left out', async () => {
-      const { update, manifestOf } = await among({ 'extra.nif': HX }, {}, { 'tool.dll': HA, '.git': HB, '.git/HEAD': HB });
+    it('has its mod folder left to its build, and its source folder recorded in a manifest of its own, naming no file git holds', async () => {
+      const { update, manifestOf } = await among(
+        { 'extra.nif': HX }, { heldByGit: new Map([[SOURCE(), ['plugin.json']]]) }, { 'tool.dll': HA, 'plugin.json': HX, '.git': HB, '.git/HEAD': HB });
 
       const result = await update(['ModA', 'ModB']);
 

@@ -737,6 +737,9 @@ export interface InstanceAdapter {
   filesIn(folder: string): Promise<readonly string[]>;
   /** `folder`'s files by their own paths, each with its hash kept in the hash index, and the paths the manager excludes. */
   folderValue(folder: string): Promise<FolderValue>;
+  /** `folderValue` of a source folder, less the files git holds there and git's own: its manifest names the rest. Rejects
+   *  when git cannot list the folder. */
+  sourceFolderValue(folder: string): Promise<FolderValue>;
   /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`. */
   modValue(folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
   /** The path a folder holds the file at `path` at, while `exclude` names the paths the modlist excludes. */

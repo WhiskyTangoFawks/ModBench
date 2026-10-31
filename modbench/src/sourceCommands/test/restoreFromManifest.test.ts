@@ -373,7 +373,7 @@ describe('restore from manifest', () => {
 
     const B_NIF: BuildFileLine = { path: 'b.nif', entry: { kind: 'held' } };
 
-    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string> }) {
+    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string>; heldByGit: string[] }) {
       await mkdir(source(), { recursive: true });
       await writeBuildFile(source(), buildFileOf({ packages: [MOD_7Z], files: [B_NIF] }));
       if (sourceFolderHolds !== undefined) await writeManifestIn(source(), sourceFolderHolds.manifest);
@@ -381,7 +381,7 @@ describe('restore from manifest', () => {
         foldersOutsideMods: sourceFolderHolds === undefined ? {} : { [source()]: sourceFolderHolds.files },
         files: { ModA: { 'a.esp': EDITED, 'b.nif': HB, 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
         manifests: { ModA: { packages: [REPOSITORY], exclude, files: holding({ 'a.esp': HA, 'b.nif': HB }) } },
-        answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), ...answers },
+        answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), heldByGit: new Map([[source(), sourceFolderHolds?.heldByGit ?? []]]), ...answers },
       });
       setup.client.setCommandResult('cloneSubmodules', { applied: [{ folder: source(), leftDetached: "its branch 'main' is at def" }], refused: [] });
       setup.client.setCommandHandler('build', () => {
@@ -405,9 +405,13 @@ describe('restore from manifest', () => {
     });
 
     describe('whose source folder has a manifest', () => {
-      const sourceHolds = { manifest: fromTheZip({ 'a.nif': HA }), files: { 'a.nif': EDITED, '.git': 'G', '.git/HEAD': 'H', '.gitignore': 'I' } };
+      const sourceHolds = {
+        manifest: fromTheZip({ 'a.nif': HA }),
+        files: { 'a.nif': EDITED, 'junk.txt': 'J', 'plugin.json': EDITED, '.git': 'G', '.git/HEAD': 'H' },
+        heldByGit: ['plugin.json'],
+      };
 
-      it('has its source folder restored from it before the build, git\'s own files spared', async () => {
+      it('has its source folder restored from it before the build, leaving alone a file git holds, edited or not, and git\'s own', async () => {
         const { restore, client, fake } = await sourceMod({}, [], sourceHolds);
 
         const outcome = await restore(['ModA']);
@@ -415,9 +419,17 @@ describe('restore from manifest', () => {
         const entry = { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'a.nif' };
         expect(writes(fake.calls).filter((call) => 'folder' in call && call.folder === source())).toEqual([
           { verb: 'writeFilesIn', folder: source(), files: [{ path: 'a.nif', from: entry }] },
-          { verb: 'trashFileIn', folder: source(), relativePath: '.gitignore' },
+          { verb: 'trashFileIn', folder: source(), relativePath: 'junk.txt' },
         ]);
         expect([client.calls.map(({ method }) => method), outcome.refused]).toEqual([['cloneSubmodules', 'build'], []]);
+      });
+
+      it('reports the files restored in its source folder with the mod\'s, under the folder\'s name', async () => {
+        const { restore } = await sourceMod({}, [], sourceHolds);
+
+        const [landed] = (await restore(['ModA'])).landed;
+
+        expect([landed?.written, landed?.namedByNoLine]).toEqual([['ModA/a.nif', 'a.esp'], ['ModA/junk.txt', 'mine.txt']]);
       });
 
       it('is skipped, and not built, when a file of its source folder is held by no package', async () => {
