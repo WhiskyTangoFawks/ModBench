@@ -35,7 +35,6 @@ class RecordSymbolInformation extends vscode.SymbolInformation {
   }
 }
 
-/** The words the language status item shows of a problem, for the agent, beside the Problems panel. */
 interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
 }
