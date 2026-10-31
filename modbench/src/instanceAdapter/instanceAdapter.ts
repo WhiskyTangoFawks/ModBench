@@ -151,9 +151,6 @@ export type MovePlace =
 /** Where moved separators land: beside a separator and its mods, or at an end of mod order. */
 export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
-/** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
-export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'installationFileName' | 'installedFileKeys'> & { readonly nexusFileStatus?: number };
-
 export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
 /** What a downloaded file's metadata says. `status` is the metadata's own claim, never
@@ -820,7 +817,11 @@ export interface InstanceAdapter {
   trashSourceFolder(sourceFolder: string, trash: MoveToTrash): Promise<void>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an
    *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
-  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
+  install(installed: InstallPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
+  /** Writes the metadata of the mod in `folder` from its packages, each by its name in the downloads folder: the first is the
+   *  installation file, and the Nexus mod and file of every one are recorded. A value the packages do not know keeps what the
+   *  folder holds, and a changed metadata file is sent to the trash. */
+  writeInstalledFrom(folder: string, packages: readonly string[], trash: MoveToTrash): Promise<void>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

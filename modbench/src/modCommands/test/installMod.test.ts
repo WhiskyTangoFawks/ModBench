@@ -82,7 +82,7 @@ describe('installMod', () => {
     const { result, calls } = await install(INSTALLATION_FILE, NEW_MOD);
 
     expect(result).toEqual({ applied: true });
-    expect(calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder']);
+    expect(calls.map((call) => call.verb)).toEqual(['install', 'writeInstalledFrom', 'changeModOrder']);
     expect(calls[1]).toMatchObject({ changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: MOD } }] });
   });
 
@@ -106,46 +106,33 @@ describe('installMod', () => {
   });
 
   it.each([
-    ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, {}],
-    ['an installation file, recording its file name', INSTALLATION_FILE, INSTALLATION_FILE, { installationFileName: 'Freshly-1-0.7z' }],
-    ['a downloaded file, recording its name, Nexus ids and version', DOWNLOADED_FILE, { kind: 'archive', path: DOWNLOADED_FILE_PATH },
-      { installationFileName: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileKeys: ['111:222'] }],
-    ['an archive that is a downloaded file, recording what the file\'s metadata holds', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, { kind: 'archive', path: DOWNLOADED_FILE_PATH },
-      { installationFileName: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileKeys: ['111:222'] }],
-  ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, installed, handed, keys) => {
+    ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, []],
+    ['an installation file', INSTALLATION_FILE, INSTALLATION_FILE, ['Freshly-1-0.7z']],
+    ['a downloaded file', DOWNLOADED_FILE, { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['Freshly-1-0.7z']],
+    ['an archive that is a downloaded file', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['Freshly-1-0.7z']],
+  ] as const)('installs %s, then has the adapter write the mod\'s metadata from the packages it names', async (_, installed, handed, packages) => {
     const { calls } = await install(installed);
 
-    expect(calls[0]).toEqual({ verb: 'install', package: handed, target: NEW_MOD, keys });
+    expect(calls[0]).toEqual({ verb: 'install', package: handed, target: NEW_MOD });
+    expect(calls.flatMap((call) => (call.verb === 'writeInstalledFrom' ? [call.packages] : []))).toEqual(packages.length === 0 ? [] : [packages]);
   });
 
-  it.each([
-    ['the metadata records', { fileCategory: 3 }, 3],
-    ['the metadata records none', {}, undefined],
-    ['there is no metadata', undefined, undefined],
-  ])('records the Nexus file status when %s', async (_, meta, expected) => {
-    const file = downloadedFile(DOWNLOADED_FILE.name, DOWNLOADED_FILE_PATH, meta);
+  it('writes no metadata for an install that did not land', async () => {
+    const { calls } = await install(INSTALLATION_FILE, NEW_MOD, { installed: { landed: false } });
 
-    const { calls } = await install(DOWNLOADED_FILE, NEW_MOD, {}, [file]);
-
-    expect(calls[0]).toMatchObject({ verb: 'install', keys: { nexusFileStatus: expected } });
-  });
-
-  it('records no Nexus id for a downloaded file whose metadata holds none', async () => {
-    const { calls } = await install(DOWNLOADED_FILE, NEW_MOD, {}, [downloadedFile(DOWNLOADED_FILE.name, DOWNLOADED_FILE_PATH)]);
-
-    expect(calls[0]).toMatchObject({ verb: 'install', keys: { installationFileName: 'Freshly-1-0.7z', nexusId: undefined, installedFileKeys: undefined } });
+    expect(calls.map(({ verb }) => verb)).not.toContain('writeInstalledFrom');
   });
 
   const MARKED: AdapterCall = { verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' };
 
   it.each<[string, ModPackage, AdapterCall['verb'][], AdapterCall | undefined]>([
-    ['marks a downloaded file installed once it landed', DOWNLOADED_FILE, ['install', 'changeModOrder', 'markDownloadedFile'], MARKED],
-    ['marks a downloaded file installed for an archive at its path', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['install', 'changeModOrder', 'markDownloadedFile'], MARKED],
-    ['marks no file for an installation file elsewhere, though a downloaded file bears its name', INSTALLATION_FILE, ['install', 'changeModOrder'], undefined],
+    ['marks a downloaded file installed once it landed', DOWNLOADED_FILE, ['install', 'writeInstalledFrom', 'changeModOrder', 'markDownloadedFile'], MARKED],
+    ['marks a downloaded file installed for an archive at its path', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['install', 'writeInstalledFrom', 'changeModOrder', 'markDownloadedFile'], MARKED],
+    ['marks no file for an installation file elsewhere, though a downloaded file bears its name', INSTALLATION_FILE, ['install', 'writeInstalledFrom', 'changeModOrder'], undefined],
   ])('%s', async (_case, installed, verbs, mark) => {
     const { calls } = await install(installed);
 
-    expect([calls.map((call) => call.verb), calls[2]]).toEqual([verbs, mark]);
+    expect([calls.map((call) => call.verb), calls[3]]).toEqual([verbs, mark]);
   });
 
   it('refuses a downloaded file the downloads folder lacks, installing nothing', async () => {
