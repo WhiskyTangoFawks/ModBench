@@ -5,7 +5,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { EditingDeps } from '../instanceCommands/editing';
 import { RecordBrowser } from './RecordBrowser';
 import { createStatusBar } from './statusBar';
-import type { MEditStanding } from '../drivingLib/mEditState';
+import type { StandingMessages } from '../drivingLib/mEditState';
 import { recordWriteOver } from '../drivingLib/recordWrite';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { editingView } from './editingView';
@@ -45,7 +45,7 @@ interface PluginsOnInstance extends vscode.Disposable {
 
 export interface Plugins extends vscode.Disposable {
   /** What the status bar and the Plugins view's message line say of mEdit, for the agent. */
-  readonly mEditStanding: MEditStanding;
+  readonly mEditStanding: StandingMessages;
   /** The Plugins view, over an Instance that was found. */
   onInstance(deps: PluginsInstanceDeps): PluginsOnInstance;
 }

@@ -32,6 +32,21 @@ describe('the Toolbox view', () => {
     expect([id, during, view.message]).toEqual(['modbench.toolbox', 'Update manifest — reading…', undefined]);
   });
 
+  it('gives the agent the line it shows, a gesture\'s phase in place of the instance\'s lines', () => {
+    const toolbox = createToolboxView({ instance: undefined });
+    const { view } = present(h.created.at(-1), 'the created tree view');
+    const shown = () => [view.message, toolbox.messages()];
+
+    toolbox.say('Update manifest — reading…');
+    const during = shown();
+    toolbox.say(undefined);
+
+    expect([during, shown()]).toEqual([
+      ['Update manifest — reading…', ['Update manifest — reading…']],
+      [undefined, []],
+    ]);
+  });
+
   it('is a readout: its rows select one at a time and it has no Collapse All (toolbox.md)', () => {
     createToolboxView({ instance: undefined });
 

@@ -1,5 +1,5 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
-import type { UnreadableSource } from '../wire/unreadableSource';
+import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';

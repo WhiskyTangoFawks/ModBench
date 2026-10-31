@@ -12,7 +12,7 @@ export function mEditState(status: MEditStatus, indexedActivePlugins: number | u
   return indexedActivePlugins === undefined ? SHOWN[status] : { icon: 'check', state: `Ready (${indexedActivePlugins} plugins)` };
 }
 
-/** What the agent reads of mEdit's state: what the status bar and the Plugins view's message line say of it. */
-export interface MEditStanding {
+/** What the agent reads beside each answer: the words the status bar and each view's message line show. */
+export interface StandingMessages {
   messages(): readonly string[];
 }
