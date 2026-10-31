@@ -68,7 +68,7 @@ Planned:
 - Compatibility with Vortex instances.
 - Creating a new instance. Today Modbench only opens an existing one.
 - LOOT integration.
-- Including Deltas for changed manually changed files in a comitted modlist, as wabbajack does. To fit in a git repo, all files must match the hash of their providing package. This may eventually be implemented through providing the delta as an external download.
+- Deltas, as Wabbajack has them: a file you changed by hand, recorded as a binary diff from its package's copy. Today a clone restores each mod from its manifest, and a change ships as a patch.
 
 ## Get started
 

@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type {
-  FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
+  FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { modNameTakenRefusal, newNameRefusal } from './nameRefusals';
@@ -36,16 +36,10 @@ async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise
   return { extracted: { kind: 'archive', path: file.path }, file };
 }
 
-function keysFor(installed: ModPackage, file: DownloadedFile | undefined): InstallKeys {
-  if (file !== undefined) {
-    const { modID, installedKey, version, fileCategory } = file.meta ?? {};
-    return {
-      installationFileName: file.name, nexusId: modID, version, nexusFileStatus: fileCategory,
-      installedFileKeys: installedKey === undefined ? undefined : [installedKey],
-    };
-  }
-  return installed.kind === 'archive' ? { installationFileName: basename(installed.path) } : {};
-}
+const packagesOf = (installed: ModPackage, file: DownloadedFile | undefined): string[] => {
+  if (file !== undefined) return [file.name];
+  return installed.kind === 'archive' ? [basename(installed.path)] : [];
+};
 
 // The folder can appear or vanish between the caller's decision and the install, as the mod
 // manager, xEdit or the user own it too, so a claim that disagrees with disk is refused.
@@ -62,6 +56,22 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
     return marked.gone ? goneFromDisk(name) : undefined;
   } catch (err) {
     return errorMessage(err);
+  }
+}
+
+// A new mod whose metadata could not be written is sent to the trash with its folder, so a failed install leaves none behind; an
+// upgrade stays, as it does when it fails part way.
+async function metadataWritten(adapter: InstanceAdapter, folder: string, packages: readonly string[], target: InstallTarget, trash: MoveToTrash): Promise<void> {
+  try {
+    await adapter.writeInstalledFrom(folder, packages, trash);
+  } catch (err) {
+    if (target.kind === 'upgrade') throw err;
+    try {
+      await trash(folder);
+    } catch (trashing) {
+      throw new Error(`${errorMessage(err)} Removing the new folder failed too: ${errorMessage(trashing)}`, { cause: err });
+    }
+    throw err;
   }
 }
 
@@ -87,7 +97,12 @@ export async function installMod(
   try {
     const resolved = await resolve(deps.adapter, installed);
     ({ file } = resolved);
-    outcome = await deps.adapter.install(resolved.extracted, target, keysFor(installed, file), trash, fomod);
+    outcome = await deps.adapter.install(resolved.extracted, target, trash, fomod);
+    if (outcome.landed) {
+      const packages = packagesOf(installed, file);
+      const folder = packages.length === 0 ? undefined : await deps.adapter.modFolderPath(target.name);
+      if (folder !== undefined) await metadataWritten(deps.adapter, folder, packages, target, trash);
+    }
   } catch (err) {
     return refuse(err);
   }
