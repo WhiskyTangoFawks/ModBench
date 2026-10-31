@@ -18,7 +18,7 @@ interface Listening {
 function modsAt(value: StatusSource): ModAt[] {
   const keyOf = (entry: EntryRef): string => `${entry.kind}:${value.entryKey(entry)}`;
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
-  return value.mods.flatMap((entry) => {
+  return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
     return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path }];
   });

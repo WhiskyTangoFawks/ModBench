@@ -63,7 +63,7 @@ const instance: Pick<InstanceAdapter, 'modValue'> = {
 const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); });
 
 describe('Mod status, derived from each instance value (mod-status trace)', () => {
-  it('derives each listed mod\'s and separator\'s status by its folder\'s mod name, and none for an entry with no folder', async () => {
+  it('derives each listed mod\'s status by its folder\'s mod name, and none for a separator, which has no manifest, or an entry with no folder', async () => {
     const mod = await folderOf('ModA', { 'mine.txt': '' });
     await writeManifestIn(mod, EMPTY);
     const separator = await folderOf('Tools_separator');
@@ -75,8 +75,8 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     ));
     const derived = await statuses.current();
 
-    expect([...derived.keys()]).toEqual(['ModA', 'Tools_separator']);
-    expect([derived.get('ModA')?.namedByNoLine, derived.get('Tools_separator')?.noManifest]).toEqual([['mine.txt'], true]);
+    expect([...derived.keys()]).toEqual(['ModA']);
+    expect(derived.get('ModA')?.namedByNoLine).toEqual(['mine.txt']);
   });
 
   it('carries the packages its manifest names', async () => {
