@@ -3,6 +3,7 @@ import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
+import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { BUILD_FILE } from '../wire/sourceMod';
 import type { BuildFileRead, Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
@@ -88,9 +89,8 @@ export async function manifestAt(folder: string): Promise<ManifestAt> {
   }
 }
 
-/** What the Instance adapter is asked to read for a status of `at`: the package entries by the key that names each
- *  package, and the downloaded files by name. */
-export function packagesAsked({ read }: ManifestAt): { readonly entries: readonly string[]; readonly installationFiles: readonly string[] } {
+/** What the Instance adapter is asked to read for a status of `at`. */
+export function packagesAsked({ read }: ManifestAt): PackagesAsked {
   const packages = read !== undefined && 'manifest' in read ? read.manifest.packages : [];
   return {
     entries: packages.map((pkg) => (pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash)),

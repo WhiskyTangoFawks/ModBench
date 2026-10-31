@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import type { ManifestAt } from '../manifestFiles';
-import type { StatusValues } from '../modStatus';
+import type { StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
 import { manifestAt, metadataOf, metadataOverwritten, packagesAsked, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 

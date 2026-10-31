@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import type { FileRead, FolderValue, InstallationFile, InstanceAdapter, ModValue, PackagesAsked } from './instanceAdapter';
+import type { FolderValue, PackagesAsked, StatusValues } from '../repositoriesLib/statusValues';
+import type { FileRead, InstallationFile, InstanceAdapter } from './instanceAdapter';
 
 type FolderReads = Pick<InstanceAdapter, 'filesIn' | 'originFileHash' | 'fileStamp'>;
 
@@ -18,7 +19,7 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
 type ModReads = FolderReads & Pick<InstanceAdapter, 'modMetadata' | 'packageEntries' | 'downloadedFile' | 'gameFolder'>;
 
 /** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. */
-export async function modValueOver(reads: ModReads, mod: string, folder: string, asked: PackagesAsked): Promise<ModValue> {
+export async function modValueOver(reads: ModReads, mod: string, folder: string, asked: PackagesAsked): Promise<StatusValues> {
   const metadata = await reads.modMetadata(mod);
   try {
     const folderValue = await folderValueOver(reads, folder);

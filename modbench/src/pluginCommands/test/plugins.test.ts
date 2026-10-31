@@ -253,6 +253,15 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Unrestored.esp'] });
   });
 
+  it('reads no manifest for a mod whose name gives no folder, and drops the line of a plugin nothing names', async () => {
+    const { result } = await sync({
+      order: ['Base.esp', 'Gone.esp'], provided: ['Base.esp'], otherMod: { name: '../Nameless', enabled: true },
+      repository: { manifests: { Provider: [] } },
+    });
+
+    expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
+  });
+
   it('drops the line of a plugin only a disabled mod\'s manifest names', async () => {
     const { result } = await sync({
       order: ['Base.esp', 'Off.esp'], provided: ['Base.esp'], otherMod: { name: 'Off', enabled: false },
