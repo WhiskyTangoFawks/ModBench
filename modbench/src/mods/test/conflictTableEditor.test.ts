@@ -23,7 +23,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
 import type { FileOrigin } from '../../instanceLoader/instance';
-import { sameCopies, type FileCopies } from '../sameCopies';
+import { sameCopies, type FileCopies } from '../../drivingLib/sameCopies';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
