@@ -116,7 +116,7 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
   } catch (err) {
     return { item: mod, reason: `was not built: its packages could not be read: ${errorMessage(err)}.` };
   }
-  return { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: metadata.answer.version, isSubmodule: host.answer.kind === 'host' };
+  return { name: mod, folder, exclude, sourceFolder, buildFile, packages, metadata: metadata.answer, isSubmodule: host.answer.kind === 'host' };
 }
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,

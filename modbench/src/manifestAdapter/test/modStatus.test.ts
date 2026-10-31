@@ -203,9 +203,9 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(heldAs());
   });
 
-  it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule (submodule: %s)', async (isSubmodule, noHost) => {
+  it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule, whichever package its manifest names first (submodule: %s)', async (isSubmodule, noHost) => {
     await write('a.esp', 'hello');
-    await manifested(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
+    await manifested(manifest([line('a.esp')], { packages: [MOD_ZIP, { kind: 'sourceRepository', name: 'Mod', isSubmodule }] }));
 
     expect((await status()).noHost).toBe(noHost);
   });

@@ -282,7 +282,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const before = await hashesIn(adapter, folder);
   const exclude = exclusionsOf(manifest, [], adapter.exclusionMark);
   const outcome = await buildSourceMod(
-    { client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: manifest.version, isSubmodule: submodule !== undefined }, pass.build);
+    { client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile, packages, metadata: metadataOf(manifest), isSubmodule: submodule !== undefined }, pass.build);
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;

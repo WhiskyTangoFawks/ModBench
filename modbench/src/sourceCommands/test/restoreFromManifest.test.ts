@@ -390,6 +390,16 @@ describe('restore from manifest', () => {
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
     });
 
+    it('gives the mod manager back the installation file its manifest names, which its build records again (modlist-repository.md, The manifest, story 3)', async () => {
+      const { restore, fake, client } = await sourceMod();
+      await writeManifestIn(folderOf('ModA'), { ...EMPTY, packages: [MOD_7Z, { kind: 'sourceRepository', name: 'ModA', isSubmodule: true }], files: [held('a.esp', undefined, 'ModA'), held('b.nif')] });
+
+      await restore(['ModA']);
+
+      expect([client.calls.map(({ method }) => method), writes(fake.calls).filter(({ verb }) => verb === 'writeModMetadata')])
+        .toEqual([['cloneSubmodules', 'build'], [{ verb: 'writeModMetadata', mod: 'ModA', metadata: { installationFile: { name: 'ModA.7z' } } }]]);
+    });
+
     it('is built from a repository with no host that the source folder holds, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
       const { restore, client } = await sourceMod({}, { isSubmodule: false });
 

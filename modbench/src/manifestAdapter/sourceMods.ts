@@ -7,11 +7,9 @@ import { manifestIn } from './manifestFiles';
 
 type RepositoryPackage = Extract<ManifestPackage, { kind: 'sourceRepository' }>;
 
-/** The repository package `manifest` names first, which makes its folder a source mod's. */
-export function repositoryOf(manifest: Manifest): RepositoryPackage | undefined {
-  const [first] = manifest.packages;
-  return first?.kind === 'sourceRepository' ? first : undefined;
-}
+/** The repository package `manifest` names, which makes its folder a source mod's. */
+export const repositoryOf = (manifest: Manifest): RepositoryPackage | undefined =>
+  manifest.packages.find((pkg): pkg is RepositoryPackage => pkg.kind === 'sourceRepository');
 
 /** A folder of the mod manager's mods: a mod's or a separator's, by the name the mod manager knows it by. */
 export interface ModFolderAt {

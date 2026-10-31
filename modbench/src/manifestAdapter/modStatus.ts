@@ -7,6 +7,7 @@ import type { FolderValue, HeldMetadata, PackageEntries, StatusValues } from '..
 import type { ManifestAt } from './manifestFiles';
 import { installationFileLack } from './packageLack';
 import { packageOf } from './packageOf';
+import { repositoryOf } from './sourceMods';
 
 /** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
@@ -162,10 +163,10 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   if (values.kind === 'metadataOnly') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;
-  const [first] = manifest.packages;
+  const repository = repositoryOf(manifest);
   return {
     ...nothing(mod.name, { manifestFile: file }), ...listsOf(manifest, folderAgainst(manifest, values.folder, values.packageEntries)),
-    metadataDiffers: metadataDiffers(values.metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
+    metadataDiffers: metadataDiffers(values.metadata.answer, manifest), noHost: repository?.isSubmodule === false,
     packagesLacking: packagesLacking(manifest, values),
   };
 }
