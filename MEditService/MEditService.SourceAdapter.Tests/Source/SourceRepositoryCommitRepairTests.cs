@@ -35,6 +35,19 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     }
 
     [Fact]
+    public void ARepairTheBranchAlreadyHolds_CommitsNothing()
+    {
+        Assert.Null(Repository.CommitRepair(Address, Repaired, Sha));
+        var repaired = Head();
+
+        Assert.Null(Repository.CommitRepair(Address, Repaired, Sha));
+
+        Assert.Equal(repaired, Head());
+        Assert.Empty(Git("status", "--porcelain"));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
+    }
+
+    [Fact]
     public void ARepair_LeavesWhatIsStagedOutsideThePluginsSource_StagedAndUncommitted()
     {
         var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_modFolder, "plugin-source", "B.esp")).FullName, "b.json");

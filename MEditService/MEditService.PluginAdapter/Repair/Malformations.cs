@@ -22,9 +22,11 @@ internal static class Malformations
     /// <summary>A malformation found in one record of a plugin.</summary>
     internal sealed record Found(MajorRecordPinFrame Record, IReadOnlyList<Subrecord> Subrecords, PluginDiagnosis Diagnosis, IReadOnlyList<SubrecordEdit>? Repair)
     {
-        internal RepairPreview Preview => new(Diagnosis, Repair is null
+        internal MadeRepair? Made => Repair is null
             ? null
-            : new RepairChange(string.Join("; ", Repair.Select(edit => edit.Describe(Subrecords)))));
+            : new(Diagnosis, new RepairChange(string.Join("; ", Repair.Select(edit => edit.Describe(Subrecords)))));
+
+        internal RepairPreview Preview => new(Diagnosis, Made?.Change);
     }
 
     /// <summary>Every malformation the plugin's own bytes prove, in record order.</summary>

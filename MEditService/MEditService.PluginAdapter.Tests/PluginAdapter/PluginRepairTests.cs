@@ -55,7 +55,7 @@ public sealed class PluginRepairTests
 
         var repaired = RepairEverything(malformed, Path.Combine(folder.Path, "repaired.esp")).Answered();
 
-        Assert.Equal("pads RDAT from 6 to 8 bytes with zeros; pads RDAT from 6 to 8 bytes with zeros", Assert.Single(repaired.Repairs).Change?.Description);
+        Assert.Equal("pads RDAT from 6 to 8 bytes with zeros; pads RDAT from 6 to 8 bytes with zeros", Assert.Single(repaired.Repairs).Change.Description);
         Assert.Equal(TwoRegions(DeflatedRecord("REGN", 0x00000800, CompressionLevel.Optimal,
             EditorId("Harbor"), Subrecord("RDAT", new byte[8]), Subrecord("RDAT", new byte[8]))).Bytes, File.ReadAllBytes(repaired.Path));
     }

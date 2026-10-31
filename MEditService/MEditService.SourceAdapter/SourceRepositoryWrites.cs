@@ -219,7 +219,8 @@ internal sealed class SourceRepositoryWrites(
                 }, description: $"the commit of {pluginFileName}'s repair");
                 ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, repaired.Tree));
                 git.Run("add", "-A", "--", source);
-                git.Run("commit", "-q", "-m", repaired.Message, "--", source);
+                if (!git.TryRun(out _, "diff", "--cached", "--quiet", "--", source))
+                    git.Run("commit", "-q", "-m", repaired.Message, "--", source);
                 git.ParkDecompiled(pluginFileName, binarySha256);
             });
         }

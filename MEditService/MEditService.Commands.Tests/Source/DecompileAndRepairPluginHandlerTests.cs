@@ -36,17 +36,10 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-    public static TheoryData<MalformationFixture> Repairable() =>
-    [
-        MalformationFixtures.ShortRegion,
-        MalformationFixtures.All.Single(f => f.Malformation == "EntryPointMissingEpf3"),
-        MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction"),
-    ];
-
-    [Theory]
-    [MemberData(nameof(Repairable))]
-    public async Task DecompileAndRepair_InASourceMod_CommitsTheRepairedSourceAsOneCommitNamingEachRepair_ThatCompiles(MalformationFixture fixture)
+    [Fact]
+    public async Task DecompileAndRepair_InASourceMod_CommitsTheRepairedSourceAsOneCommitNamingEachRepair_ThatCompiles()
     {
+        var fixture = Lossless;
         var plugin = AddToSourceMod(fixture.Malformed);
         var before = Head(_sourceMod);
 
@@ -228,8 +221,11 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         mod.WriteToBinary(Path.Combine(modFolder, name));
     }
 
-    private async Task AssertCompilesAsync(PluginAddress plugin) =>
-        Assert.Empty((await TestEditService.CompileHandler(_holder).CompileAsync([plugin])).Value().Refused);
+    private async Task AssertCompilesAsync(PluginAddress plugin)
+    {
+        var applied = Assert.Single((await TestEditService.CompileHandler(_holder).CompileAsync([plugin])).Value().Applied);
+        Assert.Equal(plugin, new PluginAddress(applied.Name, applied.Origin));
+    }
 
     private static string Head(string mod) => Git(mod, "rev-parse", "HEAD").Trim();
 

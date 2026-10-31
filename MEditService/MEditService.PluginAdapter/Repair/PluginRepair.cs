@@ -16,15 +16,18 @@ internal static class PluginRepair
 
     private sealed record PlannedRecord(MajorRecordPinFrame Record, List<Subrecord> Subrecords);
 
+    private sealed record Plan(Dictionary<int, PlannedRecord> Records, List<MadeRepair> Made);
+
     internal static IReadOnlyList<RepairPreview> Preview(byte[] plugin, GameRelease release) =>
         [.. Malformations.In(plugin, release).Select(found => found.Preview)];
 
-    /// <summary>The plugin with the repair of each malformation it holds made.</summary>
-    internal static Answer<byte[], PluginFailure> Repaired(byte[] plugin, GameRelease release)
+    /// <summary>The plugin with the repair of each malformation it holds made, and those repairs.</summary>
+    internal static Answer<(byte[] Bytes, IReadOnlyList<MadeRepair> Made), PluginFailure> Repaired(byte[] plugin, GameRelease release)
     {
         if (!Planned(plugin, release).Holds(out var planned, out var refused)) return refused;
-        return Spliced(plugin, release, planned.ToDictionary(
+        var bytes = Spliced(plugin, release, planned.Records.ToDictionary(
             p => p.Key, p => (OriginalLength: checked((int)p.Value.Record.TotalLength), Bytes: RecordBytes(plugin, p.Value))));
+        return (bytes, planned.Made);
     }
 
     /// <summary>Null when <paramref name="repaired"/> holds every record of <paramref name="original"/>, and
@@ -40,7 +43,7 @@ internal static class PluginRepair
 
         foreach (var (was, now) in before.Zip(after))
         {
-            var expected = planned.GetValueOrDefault(was.Location)?.Subrecords ?? SubrecordsOf(was);
+            var expected = planned.Records.GetValueOrDefault(was.Location)?.Subrecords ?? SubrecordsOf(was);
             var actual = SubrecordsOf(now);
             var sameSubrecords = expected is null
                 ? was.Frame.Content.Span.SequenceEqual(now.Frame.Content.Span)
@@ -51,15 +54,17 @@ internal static class PluginRepair
         return null;
     }
 
-    private static Answer<Dictionary<int, PlannedRecord>, PluginFailure> Planned(byte[] plugin, GameRelease release)
+    private static Answer<Plan, PluginFailure> Planned(byte[] plugin, GameRelease release)
     {
         var repairing = Malformations.In(plugin, release).ToList();
-        var unanswered = repairing.Where(found => found.Repair is null).ToList();
-        if (unanswered.Count > 0) return new PluginFailure.NoRepair(unanswered.Select(found => found.Diagnosis));
+        var made = repairing.Select(found => found.Made).OfType<MadeRepair>().ToList();
+        if (made.Count < repairing.Count) return new PluginFailure.NoRepair(repairing.Where(found => found.Made is null).Select(found => found.Diagnosis));
 
-        return repairing
-            .GroupBy(found => found.Record.Location)
-            .ToDictionary(record => record.Key, record => new PlannedRecord(record.First().Record, RewriteOf([.. record]).Result()));
+        return new Plan(
+            repairing
+                .GroupBy(found => found.Record.Location)
+                .ToDictionary(record => record.Key, record => new PlannedRecord(record.First().Record, RewriteOf([.. record]).Result())),
+            made);
     }
 
     private static RecordRewrite RewriteOf(IReadOnlyList<Malformations.Found> record)

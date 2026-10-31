@@ -17,7 +17,6 @@ public sealed class SourceRepositoryInitTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-
     [Fact]
     public void EveryPristineFile_IsCommittedToMainWithItsExactBytes()
     {

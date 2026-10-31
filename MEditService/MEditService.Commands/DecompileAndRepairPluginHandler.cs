@@ -85,7 +85,7 @@ public sealed class DecompileAndRepairPluginHandler
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
 
-        var message = RepairMessage(plugin, repair);
+        var body = RepairMessage(plugin, repair);
         if (!inSourceMod)
         {
             if (item.NewRepository is not { } made)
@@ -93,14 +93,14 @@ public sealed class DecompileAndRepairPluginHandler
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
                 loadOrder, new ModToDecompileAndCommit(mod.Name, made),
-                leftOut, new RepairedInInit(plugin, repaired, message), _ => { }, cancel);
+                leftOut, new RepairedInInit(plugin, repaired.Files, repair.OriginalSha256, body), _ => { }, cancel);
             if (init is ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");
             leftOutOfANewRepository.UnionWith(leftOut);
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
-        switch (repository.CommitRepair(plugin.Key, new TreeCommit(repaired.Files, message), repaired.BinarySha256))
+        switch (repository.CommitRepair(plugin.Key, new TreeCommit(repaired.Files, body), repair.OriginalSha256))
         {
             case null:
                 return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
@@ -130,7 +130,7 @@ public sealed class DecompileAndRepairPluginHandler
     };
 
     private static string RepairMessage(RegisteredPlugin plugin, RepairedPlugin written) =>
-        $"Repair {plugin.Name}\n\n" + string.Join('\n', written.Repairs.Select(repair => $"{repair.Diagnosis.Describe()}\n  {repair.Change?.Description}"));
+        $"Repair {plugin.Name}\n\n" + string.Join('\n', written.Repairs.Select(repair => $"{repair.Diagnosis.Describe()}\n  {repair.Change.Description}"));
 
     private sealed class SamePlugin : IEqualityComparer<PluginToRepair>
     {

@@ -98,8 +98,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// were.</summary>
     SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256);
 
-    /// <summary><paramref name="repaired"/> committed as the plugin's source alone on the checked-out branch. The
-    /// last-compile ref then names <paramref name="binarySha256"/>. A failure leaves both as they were.</summary>
+    /// <summary><paramref name="repaired"/> committed as the plugin's source alone on the checked-out branch, unless it
+    /// holds it already; the last-compile ref then names <paramref name="binarySha256"/>. A failure changes nothing.</summary>
     SourceFailure? CommitRepair(PluginAddress plugin, TreeCommit repaired, string binarySha256);
 
     /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
