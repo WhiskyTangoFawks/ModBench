@@ -32,7 +32,10 @@ internal static class Submodules
     {
         if (submodule.Branch is { } followed && BranchExists(git, followed)) return OnTheBranch(git, followed, submodule.Pin, cloned);
         if (!cloned) return null;
-        if (RemoteDefaultBranch(git) is { } fallback) return OnTheBranch(git, fallback, submodule.Pin, cloned);
+        if (RemoteDefaultBranch(git) is { } fallback)
+            return RemoteBranchIsAt(git, fallback, submodule.Pin)
+                ? OnTheBranch(git, fallback, submodule.Pin, cloned)
+                : $"its remote's default branch '{fallback}' is not at the pin, so it is left detached at the pin";
         var atThePin = RemoteBranchesAt(git, submodule.Pin);
         return atThePin.Count == 1
             ? OnTheBranch(git, atThePin[0], submodule.Pin, cloned)
