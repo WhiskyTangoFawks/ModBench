@@ -24,6 +24,7 @@ A mod's installation files are the downloaded files the mod was installed from. 
 3. Restore to write each mod's metadata from its packages as install writes it, so the mod manager sees the mod as installed from them. Cites: Never break the instance for its owner; mods.md, What install does
 4. Each package named with where a clone gets it, so a clone fetches what this machine lacks.
 5. A manifest to name each of its folder's own files that git does not hold, and each of its packages, even a file no package holds or a package with no host. Each such file and package is a problem (Status, story 2), so nothing a clone cannot rebuild drops out of the manifest. Cites: Never silently wrong
+6. A manifest I open to show each value's meaning on hover, and to mark a hand edit its schema refuses as I type, as VS Code does for any JSON file with a schema. Cites: Existing tools; formats/manifest.md
 
 ## Status
 

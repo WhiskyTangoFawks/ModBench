@@ -76,7 +76,7 @@
       "description": "A downloaded file the folder's files come from.",
       "type": "object",
       "properties": {
-        "kind": { "const": "installationFile" },
+        "kind": { "description": "The package's kind.", "const": "installationFile" },
         "name": {
           "description": "The file's name.",
           "type": "string",
@@ -132,7 +132,7 @@
       "description": "The game folder, for files that come with the game.",
       "type": "object",
       "properties": {
-        "kind": { "const": "gameFolder" },
+        "kind": { "description": "The package's kind.", "const": "gameFolder" },
         "host": {
           "description": "The store that installs the game. Absent when Modbench knows no store for it.",
           "type": "object",
@@ -173,7 +173,7 @@
       "description": "A source mod's repository, whose build makes the folder.",
       "type": "object",
       "properties": {
-        "kind": { "const": "repository" },
+        "kind": { "description": "The package's kind.", "const": "repository" },
         "name": {
           "description": "The source folder's name.",
           "type": "string",

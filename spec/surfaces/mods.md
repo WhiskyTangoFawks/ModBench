@@ -96,6 +96,7 @@ A source mod's folder is its build's output ([ADR-0027](../adr/0027-a-build-file
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
 4. Build to make the folder hold what ADR-0027 names and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0027; commands.md, Confirm what destroys
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
+6. Its build file checked against its schema as I type, with completion and each value's meaning on hover, as VS Code checks any JSON file with a schema. Cites: Existing tools; formats/build-file.md
 
 ## Order and view state
 
