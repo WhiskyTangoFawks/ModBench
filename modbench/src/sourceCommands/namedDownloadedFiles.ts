@@ -2,6 +2,7 @@ import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAda
 import type { ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
+import { downloadedFileOf } from './packagesRead';
 
 type Downloading = {
   readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'nexusFileAt' | 'putDownloadedFile'>;
@@ -46,14 +47,9 @@ export async function namedDownloadedFiles(
   const lacked = new Map(notFound.flatMap(({ installationFiles }) => installationFiles.map((file) => [file.name, file] as const)));
   const found = new Map<string, Found>();
   for (const [name, file] of lacked) {
-    const read = await deps.adapter.downloadedFile(name);
+    const read = await downloadedFileOf(deps.adapter, file);
     if (read.kind === 'unreadable' || read.answer !== undefined || signal?.aborted) {
       found.set(name, { read });
-      continue;
-    }
-    const held = await deps.adapter.downloadedFileHolding(file);
-    if (held.kind === 'unreadable' || held.answer !== undefined) {
-      found.set(name, { read: held });
       continue;
     }
     onDownload?.(name);

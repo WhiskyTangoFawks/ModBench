@@ -506,6 +506,16 @@ describe('what restore from manifest destroys', () => {
     expect(await destroys(['ModA', 'ModB'])).toEqual({ destroys: [{ mod: 'ModA', differing: ['b.nif'], namedByNoLine: ['mine.txt'], metadataDiffers: true }], refused: [] });
   });
 
+  it('reads an installation file held under another name as restore does, by its size and hash', async () => {
+    const { destroys } = await over({
+      files: { ModA: { 'a.nif': 'HA', 'b.nif': 'edited' } },
+      manifests: { ModA: fromTheZip(held('a.nif'), held('b.nif')) },
+      answers: { downloadedFiles: new Map([['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z' })]]) },
+    });
+
+    expect(await destroys(['ModA'])).toEqual({ destroys: [{ mod: 'ModA', differing: ['b.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
+  });
+
   it('is nothing after a fresh clone, whose folders hold no file the manifests name and no metadata', async () => {
     const { destroys } = await over({ files: { ModA: {} }, manifests: { ModA: { ...fromTheZip(held('a.nif')), version: '1.0' } } });
 

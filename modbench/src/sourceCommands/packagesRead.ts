@@ -7,11 +7,19 @@ import type { NamedGameFolder } from './gameFolderFacts';
 
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
 
+/** The downloaded file of the installation file `pinned` names: the one of its name, else any with its size and hash. */
+export async function downloadedFileOf(
+  adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding'>, pinned: { readonly name: string; readonly size: number; readonly hash: string },
+): Promise<FileRead<InstallationFile | undefined>> {
+  const named = await adapter.downloadedFile(pinned.name);
+  return named.kind === 'unreadable' || named.answer !== undefined ? named : adapter.downloadedFileHolding(pinned);
+}
+
 /** The downloaded file of each name `manifest` names, as the downloads folder holds it now. */
-export async function downloadedNow(adapter: Pick<InstanceAdapter, 'downloadedFile'>, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
+export async function downloadedNow(adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding'>, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
   const read = new Map<string, FileRead<InstallationFile | undefined>>();
   for (const pkg of manifest.packages) {
-    if (pkg.kind === 'installationFile') read.set(pkg.name, await adapter.downloadedFile(pkg.name));
+    if (pkg.kind === 'installationFile') read.set(pkg.name, await downloadedFileOf(adapter, pkg));
   }
   return (name) => read.get(name) ?? { kind: 'read', answer: undefined };
 }
