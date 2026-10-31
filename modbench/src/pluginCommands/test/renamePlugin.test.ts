@@ -1,11 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { manifestIn } from '../../manifestAdapter/manifestAdapter';
+import { manifestedIn } from '../../test/modStatusFixture';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
@@ -116,6 +121,36 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { result } = rename('Renamed Patch.esp', PLUGIN, { refusals: refusing('renamePlugin', 'disk full') });
 
     expect(await result).toEqual({ applied: false, sourceRenamed: true, refusal: 'disk full' });
+  });
+});
+
+describe('renamePlugin — the manifest of a mod that holds the plugin follows it', () => {
+  let mods: string;
+  beforeEach(async () => {
+    mods = await mkdtemp(join(tmpdir(), 'modbench-plugin-rename-'));
+  });
+  afterEach(async () => {
+    await rm(mods, { recursive: true, force: true });
+  });
+
+  it('names the renamed plugin where it named the old one, so plugin sync finds no plugin not restored', async () => {
+    await manifestedIn(join(mods, PLUGIN.origin), [
+      { path: 'Patch Mod.esp', entry: { kind: 'held' }, hash: 'H' }, { path: 'textures/a.dds', entry: { kind: 'held' } },
+    ]);
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('getRenameSourceChanges', CHANGES);
+    client.setCommandResult('moveLastWritten', { moved: true });
+    client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
+    const fake = fakeInstanceAdapter(readingFixture({
+      ...pluginFilesHeld({ origin: { kind: 'mod', name: PLUGIN.origin }, name: PLUGIN.name }), modFolders: modFoldersIn(mods, PLUGIN.origin),
+    }));
+
+    await pluginCommandsWith(fake.adapter, client).renamePlugin({ apply: () => Promise.resolve(undefined) }, PLUGIN, 'Renamed Patch.esp');
+
+    const read = await manifestIn(join(mods, PLUGIN.origin));
+    expect(read !== undefined && 'manifest' in read ? read.manifest.files : read).toEqual([
+      { path: 'Renamed Patch.esp', entry: { kind: 'heldAt', path: 'Patch Mod.esp' }, hash: 'H' }, { path: 'textures/a.dds', entry: { kind: 'held' } },
+    ]);
   });
 });
 

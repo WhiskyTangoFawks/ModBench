@@ -190,7 +190,7 @@ function registerSourceGestures(
 ): vscode.Disposable[] {
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
-  const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'));
+  const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'), instance);
   const { commands, rows, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [

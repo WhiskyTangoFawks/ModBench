@@ -11,11 +11,14 @@ import { valueWithSourceDirs } from './sourceDirsFixture';
 describe('a build\'s diagnostics in the Problems panel', () => {
   const diagnosticAt = (sourceRelativePath: string) => [{ formKey: '000000:MyPatch.esp', sourceRelativePath, message: 'bad' }];
 
+  let heard: ((value: ReturnType<typeof valueWithSourceDirs>) => void) | undefined;
+  const instance = { subscribe: (listener: (value: ReturnType<typeof valueWithSourceDirs>) => void) => { heard = listener; return { dispose: () => undefined }; } };
+
   const publishedPaths = (diagnostics: FakeDiagnosticCollection) => [...diagnostics].map(([uri]) => uri.fsPath);
 
   it("replaces the plugin's own entries, and leaves every other plugin's, its mod's included", () => {
     const diagnostics = new FakeDiagnosticCollection();
-    const problems = new BuildProblems(diagnostics);
+    const problems = new BuildProblems(diagnostics, instance);
     const value = valueWithSourceDirs(new Map([['ModA', normalize('/instance/source/ModA')], ['ModB', normalize('/instance/source/ModB')]]));
     const a = { name: 'A.esp', origin: 'ModA' };
     const also = { name: 'Also.esp', origin: 'ModA' };
@@ -34,10 +37,20 @@ describe('a build\'s diagnostics in the Problems panel', () => {
   it('publishes nothing when the value knows no folder for the origin', () => {
     const diagnostics = new FakeDiagnosticCollection();
 
-    new BuildProblems(diagnostics).publish({ name: 'A.esp', origin: 'ModA' }, undefined, diagnosticAt('Source/A.psc'));
+    new BuildProblems(diagnostics, instance).publish({ name: 'A.esp', origin: 'ModA' }, undefined, diagnosticAt('Source/A.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual([]);
   });
+
+  it('clears the entries of a mod whose source folder the instance no longer holds, and keeps the others', () => {
+    const diagnostics = new FakeDiagnosticCollection();
+    const problems = new BuildProblems(diagnostics, instance);
+    const both = valueWithSourceDirs(new Map([['ModA', normalize('/instance/source/ModA')], ['ModB', normalize('/instance/source/ModB')]]));
+    problems.publish({ name: 'A.esp', origin: 'ModA' }, sourceFiles(both, 'ModA'), diagnosticAt('A.esp/Old.json'));
+    problems.publish({ name: 'B.esp', origin: 'ModB' }, sourceFiles(both, 'ModB'), diagnosticAt('B.esp/Other.json'));
+
+    heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])));
+
+    expect(publishedPaths(diagnostics)).toEqual([normalize('/instance/source/ModB/B.esp/Other.json')]);
+  });
 });
-
-
