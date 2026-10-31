@@ -46,5 +46,4 @@ internal sealed class FakeModFolders : IModFolderRepository
         WithBytes(folder, path, bytes);
     }
 
-    public void DeleteFile(string folder, string path) => _files.Remove((folder, path));
 }

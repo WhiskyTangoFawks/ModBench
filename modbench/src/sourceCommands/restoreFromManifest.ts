@@ -16,16 +16,14 @@ import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
-import { nexusFileOf } from './manifestBuilder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
-import { packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
-  | 'trashFileIn' | 'trashingReplaced' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
+  | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
@@ -267,26 +265,6 @@ async function clonedAtThePin(pass: Pass, pinned: Submodule): Promise<Cloned> {
   return leftDetached ? { leftDetached } : {};
 }
 
-// mods.md, Build, story 1: the installation files a build file takes from, copied or downloaded as restore takes a manifest's.
-async function buildFilePackagesFor(pass: Pass, buildFile: BuildFile): Promise<PackagesRead | { readonly refusal: string }> {
-  const { adapter, nexus } = pass.deps;
-  const named = buildFile.packages.flatMap((pkg): InstallationFilePackage[] => {
-    if (pkg.kind !== 'installationFile') return [];
-    const nexusFile = pkg.page === undefined ? undefined : nexusFileOf(adapter)(pkg.page);
-    return [{ kind: 'installationFile', name: pkg.name, size: pkg.size, hash: pkg.hash, ...nexusFile === undefined ? {} : { host: { nexus: nexusFile } } }];
-  });
-  const found = await namedDownloadedFiles({ adapter, nexus }, [{ installationFiles: named }], {
-    onDownload: (file) => { pass.options.onProgress?.({ phase: 'Downloading', file }); }, signal: pass.options.signal,
-  });
-  const downloaded: PackagesHeld['downloaded'] = (name) => {
-    const why = found.unreadable(name);
-    return why === undefined ? { kind: 'read', answer: found.handed(name) } : { kind: 'unreadable', reason: why };
-  };
-  const packages = await packagesRead(adapter, buildFile, { downloaded, game: pass.game });
-  if (packages.lacks.length === 0) return packages;
-  return { refusal: `${skipped(packages.lacks.join('; '))}${named.flatMap(({ name }) => found.why(name).map(sentence)).join('')}` };
-}
-
 // ADR-0022: a folder with no manifest is left alone. Its files are reported under the folder's name, beside the mod folder's.
 async function sourceFolderRestored(
   pass: Pass, mod: string, sourceFolder: string,
@@ -312,11 +290,9 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const held = await buildFileHeld(sourceFolder);
   if ('refusal' in held) return held;
   const { buildFile } = held;
-  const packages = await buildFilePackagesFor(pass, buildFile);
-  if ('refusal' in packages) return packages;
   const before = await hashesIn(adapter, folder);
   const exclude = exclusionsOf(manifest, NO_FILES);
-  const outcome = await buildSourceMod({ client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile, packages }, pass.build);
+  const outcome = await buildSourceMod({ client, adapter, tasks, trash }, { name: mod, folder, exclude, sourceFolder, buildFile }, pass.build);
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;

@@ -115,7 +115,7 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AnArchiveTakingAFileThatIsNeitherAnAssetNorTaken_RefusesTheMod_WritingNothing()
+    public async Task AnArchiveTakingAFileThatIsNotAnAsset_RefusesTheMod_WritingNothing()
     {
         WriteSource(("meshes/c.nif", "c"));
 
@@ -141,7 +141,6 @@ public sealed class BuildModHandlerTests : IDisposable
         var result = (await TestEditService.BuildModHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder)
         {
             Archives = [new ArchiveToPack("Mod - Main.ba2", ["not-an-asset.nif"])],
-            Taken = ["textures/taken.dds"],
         }], NoArchives)).Value();
 
         Assert.Equal([BuildRefusal.ArchiveFileNotAnAsset], result.Refused.Select(refused => refused.Refusal));
@@ -232,27 +231,13 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ATakenFile_IsNotReplacedByTheSourcesPlaceholder_NorAnswered()
+    public async Task AnArchive_PacksAnAsset_LeavingNoLooseCopy()
     {
-        WriteSource(("textures/a.dds", "placeholder"), ("meshes/c.nif", "c"));
-        WriteInFolder("textures/a.dds", "from the pack");
-
-        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder) { Taken = ["textures/a.dds"] });
-
-        Assert.Equal([("meshes/c.nif", "c"), ("textures/a.dds", "from the pack")], FilesIn(ModFolder));
-        Assert.Equal([new MadeFile("meshes/c.nif", VouchedFor: true)], built.Made);
-    }
-
-    [Fact]
-    public async Task AnArchive_PacksATakenFile_LeavingNoLooseCopy()
-    {
-        WriteSource(("meshes/d.nif", "d"));
-        WriteInFolder("meshes/c.nif", "from the pack");
+        WriteSource(("meshes/c.nif", "c"), ("meshes/d.nif", "d"));
 
         var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder)
         {
             Archives = [new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif", "meshes/d.nif"])],
-            Taken = ["meshes/c.nif"],
         }, Packing);
 
         Assert.Empty(built.ArchivesRefused);

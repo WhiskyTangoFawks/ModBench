@@ -8,8 +8,8 @@ const upperUnit = (unit: string): string => {
 };
 const upperUnits = (text: string): string => Array.from(text, upperUnit).join('');
 export const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-/** The order a manifest lists paths and installation files in. */
-export const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
+// The order a manifest lists paths and installation files in.
+const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
   ordinal(upperUnits(a), upperUnits(b)) || ordinal(a, b);
 
 const KINDS: readonly ManifestPackage['kind'][] = ['installationFile', 'gameFolder', 'repository'];
