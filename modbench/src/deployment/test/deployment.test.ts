@@ -148,6 +148,28 @@ describe('a deploy after another', () => {
     expect(await inode(join(folder, 'Data', 'a.esp'))).toBe(await inode(winner.winner));
   });
 
+  it('links again a file whose link was deleted since', async () => {
+    const files = [await modFile('Mod', 'a.esp'), await modFile('Mod', 'Root/b.dll')];
+    await deploy(files);
+    await rm(join(folder, 'Data', 'a.esp'));
+    await rm(join(folder, 'b.dll'));
+
+    const deployed = await deploy(files);
+
+    expect([deployed.wrote, await inode(join(folder, 'Data', 'a.esp')), await inode(join(folder, 'b.dll'))])
+      .toEqual([true, await inode(files[0]!.winner), await inode(files[1]!.winner)]);
+  });
+
+  it('links again a file whose folder was deleted since', async () => {
+    const file = await modFile('Mod', 'meshes/a.nif');
+    await deploy([file]);
+    await rm(join(folder, 'Data'), { recursive: true });
+
+    await deploy([file]);
+
+    expect(await inode(join(folder, 'Data', 'meshes', 'a.nif'))).toBe(await inode(file.winner));
+  });
+
   it('keeps the casing of a path it wrote, so a winner whose casing changed writes nothing', async () => {
     await deploy([await modFile('Mod', 'Meshes/A.nif')]);
 
