@@ -172,7 +172,7 @@ export function DiffRow({
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const { meta: cellMeta, holds, value: own, shown, editPath, template, templatedFlags } = cell;
+        const { meta: cellMeta, holds, shown, editPath, template, templatedFlags } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
