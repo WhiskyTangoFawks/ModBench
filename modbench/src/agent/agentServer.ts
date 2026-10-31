@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import type { StandingMessages } from '../drivingLib/mEditState';
+import type { CopyReads } from '../drivingLib/sameCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import type { InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
@@ -31,6 +32,7 @@ import { PROBLEMS } from './problems';
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
+  copyReads: CopyReads | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
@@ -47,7 +49,7 @@ export interface AgentServer {
 }
 
 type Instance = NonNullable<AgentServerOptions['instance']>;
-type OpenOptions = AgentServerOptions & { instance: Instance; statuses: Pick<ModStatuses, 'current'>; deployment: DeploymentRead; pluginsShown: PluginsShown };
+type OpenOptions = AgentServerOptions & { instance: Instance; copyReads: CopyReads; statuses: Pick<ModStatuses, 'current'>; deployment: DeploymentRead; pluginsShown: PluginsShown };
 
 function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal(instance.readFailure === undefined ? 'The instance has not been read yet.' : `Failed to load: ${instance.readFailure}`);
@@ -102,14 +104,14 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deployment, standing: standingMessages, pluginsShown, log }: OpenOptions): McpServer {
+function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingMessages, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const standing = () => [...new Set(standingMessages.messages())];
   for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
   register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
-  register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
+  register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
   register(server, log, standing, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, standing, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
   register(server, log, standing, READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
@@ -159,9 +161,9 @@ async function handle(options: OpenOptions, request: IncomingMessage, response: 
 const NOT_SERVING: AgentServer = { listening: Promise.resolve(undefined), dispose: () => undefined };
 
 export function serveAgent(options: AgentServerOptions): AgentServer {
-  const { instance, statuses, deployment, pluginsShown, port, reporter, log } = options;
-  if (instance === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
-  const open = { ...options, instance, statuses, deployment, pluginsShown };
+  const { instance, copyReads, statuses, deployment, pluginsShown, port, reporter, log } = options;
+  if (instance === undefined || copyReads === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
+  const open = { ...options, instance, copyReads, statuses, deployment, pluginsShown };
   const http = createServer((request, response) => {
     handle(open, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);

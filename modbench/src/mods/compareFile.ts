@@ -6,7 +6,7 @@ import { reportFailure } from '../drivingLib/reportFailure';
 import { copyOfConflictCell } from '../wire/conflictTable';
 import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
-import { copyPathsOf } from './copiesToRead';
+import { copyPathsOf } from '../drivingLib/copiesToRead';
 
 function copyOf(
   clicked: unknown, selected: readonly ModlistNode[] | undefined, viewSelection: () => readonly ModlistNode[],

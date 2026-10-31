@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import type { FileOrigin } from '../../instanceLoader/instance';
-import type { FileStamp } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { sameCopies, type FileToCompare } from '../sameCopies';
 
@@ -12,7 +11,7 @@ const mod = (name: string) => ({ kind: 'mod', name } as const);
 const NONO = mod('Ñoño\'s Retexture');
 const PATCH = mod('Unofficial Fallout 4 Patch');
 const pathOf = (origin: FileOrigin): string => `/${origin.kind === 'mod' ? origin.name : 'overwrite'}/${SHARED}`;
-const stampOf = (size: number): FileStamp => ({ size: BigInt(size), modifiedNs: NS, changedNs: NS });
+const stampOf = (size: number) => ({ size: BigInt(size), modifiedNs: NS, changedNs: NS });
 
 function over(copies: readonly (readonly [FileOrigin, { size: number; hash?: string }])[]) {
   const entries = copies.map(([origin, copy]) => [pathOf(origin), copy] as const);

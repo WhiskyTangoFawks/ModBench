@@ -11,8 +11,8 @@ import {
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
-import type { FileCopies, FileToCompare } from './sameCopies';
-import { copiesToRead } from './copiesToRead';
+import type { FileCopies, FileToCompare } from '../drivingLib/sameCopies';
+import { copiesToRead } from '../drivingLib/copiesToRead';
 import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
