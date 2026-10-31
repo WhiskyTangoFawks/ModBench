@@ -407,12 +407,6 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
   });
 });
 
-function readManifestOf(text: string): Manifest {
-  const read = readManifest(text);
-  assert('manifest' in read);
-  return read.manifest;
-}
-
 function placedAmongAssets(manifestText: string): string {
   const read = readManifest(manifestText);
   assert('manifest' in read);

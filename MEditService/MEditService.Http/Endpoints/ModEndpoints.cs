@@ -143,7 +143,7 @@ internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommi
 internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
-/// assets by path in its folder, its build file's text, and its manifest's name and text.</summary>
+/// assets by path, its build file's text, and its manifest's name and text.</summary>
 internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null)
 {
     internal const string NotWhole =
