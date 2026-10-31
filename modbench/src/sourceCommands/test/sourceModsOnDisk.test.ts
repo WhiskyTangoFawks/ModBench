@@ -260,6 +260,43 @@ describe('what build would destroy, over an instance on disk (mods.md, A source 
     expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['textures/c.dds.mohidden'] }], refused: [] });
   });
 
+  it('names no file a build mEdit refused wrote with the bytes its package gives, and a file of mine beside it (mods.md, Build, story 10)', async () => {
+    const { build, client, commands } = await aSourceModTakingFromAnInstallationFile({ files: [{ path: 'b.nif', entry: { kind: 'held' } }] });
+    await build();
+    const held = readBuildFile(await readFile(join(root, 'source', 'Mod', BUILD_FILE), 'utf8'));
+    if (!('buildFile' in held)) throw new Error(held.refused);
+    await put(`source/Mod/${BUILD_FILE}`, manifestText({ ...held.buildFile, files: [...held.buildFile.files, { path: 'textures/c.dds', entry: { kind: 'held' } }] }));
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'Mod', reason: 'was not built: refused.' }] }));
+    await build();
+    await put('mods/Mod/docs/mine.txt', 'mine');
+
+    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['docs/mine.txt'] }], refused: [] });
+  });
+
+  it('names no file a build that stopped wrote with its repository\'s bytes, and one I changed (mods.md, Build, story 10)', async () => {
+    const { client, build, commands } = await aSourceModTakingFromAnInstallationFile();
+    await put('source/Mod/docs/a.txt', 'asset a');
+    await put('source/Mod/docs/b.txt', 'asset b');
+    client.setCommandHandler('build', async () => {
+      await put('mods/Mod/docs/a.txt', 'asset a');
+      await put('mods/Mod/docs/b.txt', 'asset b');
+      return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [], failure: 'The build stopped before compiling.' }], refused: [] };
+    });
+    await build();
+    await put('mods/Mod/docs/b.txt', 'my edit');
+
+    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['docs/b.txt'] }], refused: [] });
+  });
+
+  it('names no file of a mod build refuses before it writes, which loses nothing', async () => {
+    const { build, commands } = await aSourceModTakingFromAnInstallationFile();
+    await build();
+    await put('mods/Mod/docs/mine.txt', 'mine');
+    await rm(join(root, 'source', 'Mod', BUILD_FILE));
+
+    expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [], refused: [] });
+  });
+
   it('names every file but the mod manager\'s in a folder whose manifest names no file yet', async () => {
     const { commands } = await aSourceModTakingFromAnInstallationFile();
     await put('mods/Mod/Mod.manifest.json', manifestText({ packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], exclude: [], archives: [], files: [] }));
@@ -309,12 +346,13 @@ describe('decompile and commit over an instance on disk', () => {
       packages: [], exclude: [], archives: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }], ...manifest,
     }));
     const client = new InMemoryMEditClient();
-    const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
-    return { client, decompileAndCommit: () => commands.decompileAndCommit(['Mod']) };
+    const adapter = adapterOver(root);
+    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
+    return { client, adapter, decompileAndCommit: () => commands.decompileAndCommit(['Mod']) };
   }
 
-  it('hands mEdit the repository with its build file, then names the repository in the manifest the mod folder holds, which its first build records', async () => {
-    const { client, decompileAndCommit } = await aModWithItsManifest();
+  it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds the repository and each file of the folder with its bytes, so nothing reads as differing (commands.md, Confirm what destroys)', async () => {
+    const { client, adapter, decompileAndCommit } = await aModWithItsManifest();
     const handed: DecompileAndCommitMod[] = [];
     client.setCommandHandler('decompileAndCommit', (mods) => {
       handed.push(...mods);
@@ -327,7 +365,11 @@ describe('decompile and commit over an instance on disk', () => {
     expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'] });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'Mod.manifest.json', 'a.nif', 'meta.ini']));
-    expect(await manifestIn(join(root, 'mods', 'Mod'))).toMatchObject({ manifest: { packages: [{ kind: 'sourceRepository', name: 'Mod' }], files: [] } });
+    const read = await manifestIn(join(root, 'mods', 'Mod'));
+    const manifest = read === undefined || 'refused' in read ? undefined : read.manifest;
+    expect(manifest?.packages).toEqual([{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }]);
+    expect(manifest?.files.map(({ path, entry, hash }) => [path, entry.kind, hash !== undefined])).toEqual([['a.nif', 'held', true], ['Mod.esp', 'held', true]]);
+    expect(await statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') })).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
   it('hands a file its manifest says a step made as an asset, as a build file holds the steps and a manifest holds none', async () => {
