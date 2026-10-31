@@ -5,6 +5,7 @@ import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress } from './pluginAddress';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
+import type { PluginShown } from '../drivingLib/pluginsShown';
 
 /** A diagnostic on one plugin's file, as the Problems panel shows it. */
 export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
@@ -289,6 +290,14 @@ export class PluginFacts {
       changedOutside(this.changed.has(address)),
       malformed(this.diagnosisTexts.get(address) ?? []),
     ].filter((s): s is PluginStatus => s !== undefined);
+  }
+
+  shown(address: PluginAddress): PluginShown {
+    const read = this.reads.get(address);
+    return {
+      statuses: this.statuses(address).map(({ words, tooltipLine }) => ({ status: words, tooltip: tooltipLine })),
+      readOnly: read?.readOnly ?? null, compiled: read?.compiledPlugin ?? null, masters: read?.masters ?? null,
+    };
   }
 
   /** The file names of the plugin's masters; none until mEdit has read it. */

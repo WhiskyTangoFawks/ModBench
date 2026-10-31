@@ -31,7 +31,8 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
-import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
+import type { PluginShown } from '../../drivingLib/pluginsShown';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -74,13 +75,18 @@ const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
 const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
+const NOT_READ: PluginShown = { statuses: [], readOnly: null, compiled: null, masters: null };
+const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Map() };
+const pluginsShown = { shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ };
+afterEach(() => { shownRead.answer = new Map(); });
+
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment, standing,
+    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -246,9 +252,26 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' }] }));
 
     expect(await read(client, 'list_plugins')).toEqual({ plugins: [
-      { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true },
-      { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
-      { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
+      { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true, ...NOT_READ },
+      { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true, ...NOT_READ },
+      { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ },
+    ] });
+  });
+
+  it('reads what the Plugins view shows of each plugin, its own by origin: its statuses, whether it is read-only, whether it is a compiled plugin and its masters', async () => {
+    const failed: PluginShown = { statuses: [{ status: 'failed to read', tooltip: 'Failed to read: Malformed record' }], readOnly: true, compiled: false, masters: ['Fallout4.esm'] };
+    const game: PluginShown = { statuses: [], readOnly: true, compiled: false, masters: [] };
+    shownRead.answer = new Map([
+      [exactPluginAddressKey({ name: 'A.esp', origin: 'Big Rocks' }), failed],
+      [exactPluginAddressKey({ name: 'B.esp', origin: 'Other Mod' }), failed],
+      [exactPluginAddressKey({ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN }), game],
+    ]);
+    const { client } = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' }] }));
+
+    expect(await read(client, 'list_plugins')).toEqual({ plugins: [
+      { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true, ...game },
+      { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true, ...failed },
+      { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ },
     ] });
   });
 
@@ -267,6 +290,14 @@ describe('the agent server, given an instance value', () => {
       statusRead.answer = answer;
 
       expect(await read((await clientOf(cloned('AccC.esp'))).client, 'list_plugins')).toMatchObject({ plugins: [{ name: 'AccC.esp', origin }] });
+    });
+
+    it('reads what the Plugins view shows of a line its manifest names, the view\'s row as the load order holds it', async () => {
+      statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'] })];
+      const notRestored: PluginShown = { ...NOT_READ, statuses: [{ status: 'not restored', tooltip: 'Not restored: its mod\'s manifest names it, and the mod\'s folder lacks it.' }] };
+      shownRead.answer = new Map([[exactPluginAddressKey({ name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN }), notRestored]]);
+
+      expect(await read((await clientOf(cloned('AccC.esp'))).client, 'list_plugins')).toMatchObject({ plugins: [{ name: 'AccC.esp', origin: 'Acc Mod C', ...notRestored }] });
     });
 
     it('answers in part when a mod\'s status cannot be read, naming each line it could not place', async () => {
