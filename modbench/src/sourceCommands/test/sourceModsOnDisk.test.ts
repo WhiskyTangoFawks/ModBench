@@ -16,7 +16,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { manifestText } from '../../manifestAdapter/manifestText';
 import { readBuildFile } from '../../manifestAdapter/manifestRead';
 import { statusNow } from '../../test/statusNow';
-import { manifestIn, sourceModsOf, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, sourceModsOf, writeManifestIn, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
 import { whatRestoreDestroys } from '../restoreFromManifest';
@@ -357,6 +357,52 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
     await build();
 
     expect([trashed, (await recorded())?.files.map(({ path }) => path)]).toEqual([[], ['b.nif', 'Mod.esp', 'textures/c.dds']]);
+    expect(await status()).toMatchObject({ namedByNoLine: ['Mod - Main.ba2'] });
+  });
+});
+
+describe('build over an instance on disk, of a file mEdit left as it was, which its last build recorded', () => {
+  it('keeps the line its manifest recorded while the folder holds those bytes, so the next build asks about nothing (mods.md, Build, story 8)', async () => {
+    const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: true }];
+    const { build, status, recorded } = await aSourceModTakingFromAnInstallationFile({}, made);
+    await build();
+    const before = (await recorded())?.files.find(({ path }) => path === 'Mod - Main.ba2');
+    made[1] = { path: 'Mod - Main.ba2', vouchedFor: false };
+
+    await build();
+
+    expect([before, (await recorded())?.files.find(({ path }) => path === 'Mod - Main.ba2')]).toEqual([expect.objectContaining({ hash: expect.any(String) as unknown }), before]);
+    expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
+  });
+
+  it('records one line for a file a step now makes, though its last manifest recorded its bytes', async () => {
+    const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: false }];
+    const { build, recorded } = await aSourceModTakingFromAnInstallationFile({
+      steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }],
+      files: [{ path: 'Mod - Main.ba2', entry: { kind: 'madeByStep' } }],
+    }, made);
+    await writeManifestIn(join(root, 'mods', 'Mod'), {
+      packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], exclude: [], archives: [],
+      files: [{ path: 'Mod - Main.ba2', entry: { kind: 'held' }, hash: 'QnTauWK5/T8=' }],
+    });
+
+    await build();
+
+    expect((await recorded())?.files.filter(({ path }) => path === 'Mod - Main.ba2')).toEqual([{ path: 'Mod - Main.ba2', entry: { kind: 'held' } }]);
+  });
+
+  it('names it as differing when the folder holds other bytes than the line recorded', async () => {
+    const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: true }];
+    const { build, status, recorded } = await aSourceModTakingFromAnInstallationFile({}, made);
+    await build();
+    const manifest = await recorded();
+    if (manifest === undefined) throw new Error('no manifest');
+    await writeManifestIn(join(root, 'mods', 'Mod'), { ...manifest, files: manifest.files.map((line) => (line.path === 'Mod - Main.ba2' ? { ...line, hash: 'AAAAAAAAAAA=' } : line)) });
+    made[1] = { path: 'Mod - Main.ba2', vouchedFor: false };
+
+    await build();
+
+    expect((await recorded())?.files.map(({ path }) => path)).not.toContain('Mod - Main.ba2');
     expect(await status()).toMatchObject({ namedByNoLine: ['Mod - Main.ba2'] });
   });
 });
