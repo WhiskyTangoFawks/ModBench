@@ -38,18 +38,18 @@ Present the lanes with one line per ticket, and the model tier the ticket will r
 
 Before the first dispatch, confirm that `git symbolic-ref -q HEAD` names `refs/heads/main` and that `git status --porcelain` lists no file outside the maintainer's documents. If either check fails, refuse and give the reason.
 
-For each ticket, assign yourself and start one fresh `general-purpose` agent with `isolation: "worktree"` and `run_in_background: true` on the specified model tier. The agent's working directory is its own worktree under `.claude/worktrees/`, cut from local `HEAD` (`worktree.baseRef` is `head`, since a run never pushes), and its first act is `git checkout -b fix-<n>-<slug>`. A global hook blocks EnterWorktree for subagents, so the executor never leaves that directory. If the ticket touches a directory whose dependencies are gitignored and slow to install, such as `node_modules`, tell the executor to symlink it from the checkout.
+For each ticket, assign yourself and start one fresh `general-purpose` agent with `isolation: "worktree"` and `run_in_background: true` on the specified model tier. The agent's working directory is its own worktree under `.claude/worktrees/`, cut from local `HEAD` (`worktree.baseRef` is `head`, since a run never pushes), and its first act is `git checkout -b fix-<n>-<slug>`. A global hook blocks EnterWorktree for subagents, so the executor never leaves that directory.
 
-Keep the agentId, because `SendMessage` carries every later exchange. Within a minute, confirm the agent's transcript is still growing: one that stopped at its first tool call is dead, and a message to a dead agent is queued, never delivered, so respawn rather than wait. The prompt is `BRIEF.md` verbatim, followed by the fillings it needs:
+Keep the agentId, because `SendMessage` carries every later exchange. Within a minute, confirm the agent's transcript is still growing: one that stopped at its first tool call is dead, and a message to a dead agent is queued, never delivered, so respawn rather than wait. Every brief in this skill goes by path, never pasted. The executor's prompt opens with `Read .claude/skills/orchestrate/BRIEF.md and follow it.`, then the fillings:
 
-- the ticket number, its body, and every comment on the ticket and on its epic, oldest first (`gh issue view <n> --json number,title,body,labels,comments`). The ticket's spec lines are its work, and the comments are context.
+- the ticket number
 - **landed since**, the list of what this run has already merged only if it changes the ticket's ground
 - the branch name to create; the worktree is the agent's working directory
 - **its boxes**: the boxes its lane owns, and the boxes the open lanes hold, which it stays out of
 
 Dispatch each further lane while the first executor is still implementing, and create each worktree only after the one before it exists, since two created at once race.
 
-**Criterion:** the agentId is held, the prompt is the brief plus fillings, the executor is running in the background, and its transcript grew past the first call.
+**Criterion:** the agentId is held, the prompt names the brief and carries the fillings, the executor is running in the background, and its transcript grew past the first call.
 
 ## 3. Land
 
