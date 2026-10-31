@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
 import { manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import type { FileProblems } from '../ports/fileProblems';
@@ -126,9 +126,12 @@ async function heldManifestOf(folder: string): Promise<Manifest | undefined | { 
 async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[]): Promise<Answer> {
   const held = await heldManifestOf(mod.folder);
   if (held !== undefined && 'refusal' in held) return held;
+  const holds = (name: string): boolean => name === (mod.installationFile === undefined ? undefined : basename(mod.installationFile.path)) || downloadedFiles.some(({ package: pkg }) => pkg.name === name);
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
     return refusal('its manifest names the game folder, and the game folder was not found.');
   }
+  const absent = held?.packages.flatMap((pkg) => (pkg.kind === 'installationFile' && !holds(pkg.name) ? [`'${pkg.name}'`] : [])) ?? [];
+  if (absent.length > 0) return refusal(`its manifest names ${absent.join(', ')}, and this machine does not hold ${absent.length === 1 ? 'it' : 'them'}.`);
   if (await folderMissing(adapter, mod.folder)) return refusal('its folder does not exist.');
 
   let hashed: Hashed;
