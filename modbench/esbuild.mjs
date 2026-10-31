@@ -4,6 +4,9 @@ import * as esbuild from 'esbuild';
 rmSync('scripts', { recursive: true, force: true });
 cpSync('../scripts/medit.py', 'scripts/medit.py');
 
+rmSync('schemas', { recursive: true, force: true });
+cpSync('../spec/formats', 'schemas', { recursive: true, filter: (source) => !source.endsWith('.md') });
+
 // The FOMOD engine's add-on for one platform: this machine's, unless package.mjs names a target's.
 const fomodTarget = process.env.FOMOD_ENGINE_TARGET ?? `${process.platform}-${process.arch}`;
 rmSync('out/fomodEngine', { recursive: true, force: true });
