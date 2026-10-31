@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
 import type { Manifest } from '../../manifestAdapter/manifestAdapter';
@@ -30,16 +30,14 @@ const reads: Parameters<typeof modValueOver>[0] = {
     hashed.push(path);
     return Promise.resolve({ kind: 'unreadable', reason: 'unhashed' });
   },
-  packageEntries: () => Promise.resolve(undefined),
+  exclusionMark: '.mohidden',
   downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gameFolder: () => Promise.resolve({ kind: 'found', root: '/game', dataFolder: '/game/Data' }),
-  modMetadata: (mod) => {
-    asked.push(mod);
-    return Promise.resolve({ kind: 'read', answer: {} });
-  },
+  gamePlaces: () => Promise.resolve([]),
+  gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
+  submodule: () => Promise.resolve({ lacks: 'no submodule' }),
 };
 
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], files: [] };
+const EMPTY: Manifest = { packages: [], exclude: [], files: new Map() };
 
 async function folderOf(name: string, files: Record<string, string> = {}): Promise<string> {
   const folder = join(root, 'mods', name);
@@ -53,7 +51,12 @@ const folder = (kind: EntryRef['kind'], name: string, path: string, modName = na
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
   ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), ...over });
 
-const instance: Pick<InstanceAdapter, 'modValue'> = { modValue: (mod, folder, wanted) => modValueOver(reads, mod, folder, wanted) };
+const instance: Pick<InstanceAdapter, 'modValue'> = {
+  modValue: (folder, wanted) => {
+    asked.push(basename(folder));
+    return modValueOver(reads, folder, wanted);
+  },
+};
 
 const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); });
 

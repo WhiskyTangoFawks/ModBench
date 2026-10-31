@@ -10,6 +10,7 @@ import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
 import { folderValueOver, modValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
@@ -65,7 +66,6 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
 export const md5Of = (name: string): string => `md5-of-${name}`;
 
 export type AdapterCall =
-  | { readonly verb: 'keepPackageEntries'; readonly hash: string; readonly entries: ReadonlyMap<string, string> }
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
   | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
@@ -113,10 +113,6 @@ export interface InstanceAnswers {
   stamps?: ReadonlyMap<string, FileStamp>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
   folderFiles?: ReadonlyMap<string, readonly string[]>;
-  /** Each downloaded file's entries by its hash; a hash not there has none in the index. */
-  packageEntries?: ReadonlyMap<string, ReadonlyMap<string, string>>;
-  /** Why the entries of a game folder package cannot be written to the hash index. */
-  packageEntriesNotWritten?: string;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -375,7 +371,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         })),
       });
     },
-    gameFilesTakenBy: ({ root }, folder) => Promise.resolve(placeAnswers(root).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
+    gameFilesTakenBy: ({ root }, folder, paths) => {
+      const taken = placeAnswers(root).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } };
+      const asked = paths === undefined ? undefined : new Set(paths.map((path) => path.toLowerCase()));
+      return Promise.resolve(taken.kind === 'read' && asked !== undefined
+        ? { kind: 'read', answer: { ...taken.answer, gameFiles: taken.answer.gameFiles.filter(({ pathInFolder }) => asked.has(pathInFolder.toLowerCase())) } }
+        : taken);
+    },
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });
@@ -409,9 +411,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
     folderValue: (folder) => folderValueOver(adapter, folder),
-    modValue: (mod, folder, asked) => modValueOver(adapter, mod, folder, asked),
-    packageEntries: (hash) => Promise.resolve(answers.packageEntries?.get(hash)),
-    keepPackageEntries: (hash, entries) => record({ verb: 'keepPackageEntries', hash, entries }, answers.packageEntriesNotWritten),
+    modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
@@ -525,6 +525,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     moveIntoOverwrite: (moves) => write<string | undefined>({ verb: 'moveIntoOverwrite', moves }, () => undefined),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
+    pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUSION_MARK),
+    carriesExclusionMark: (path) => ownPathOf(path, EXCLUSION_MARK).excluded.length > 0,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
     renamePlugin: (origin, from, to) =>
       write({ verb: 'renamePlugin', origin, from, to }, () => {

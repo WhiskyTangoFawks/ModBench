@@ -19,7 +19,6 @@ export const EXTRACTION_PREFIX = 'entries-';
 const SETTLED_AFTER_MS = 2_000;
 
 type Kind = 'origin' | 'game' | 'downloadedFile';
-type LineKind = Kind | 'package';
 
 interface Kept {
   readonly stamp: FileStamp;
@@ -32,16 +31,16 @@ const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
 const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
   stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
-const lineOf = (kind: LineKind, path: string, stamp: FileStamp, hashed: HashedDownloadedFile): string =>
+const lineOf = (kind: Kind, path: string, stamp: FileStamp, hashed: HashedDownloadedFile): string =>
   `${JSON.stringify([kind, path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs), hashed.hash, ...hashed.entries.flatMap((entry) => [entry.path, entry.hash])])}\n`;
 
-type Line = [LineKind, string, string, string, string, string, ...string[]];
+type Line = [Kind, string, string, string, string, string, ...string[]];
 
 const isLine = (fields: unknown): fields is Line =>
   Array.isArray(fields) && fields.length >= 6 && fields.length % 2 === 0 && fields.every((field) => typeof field === 'string')
-  && (fields[0] === 'origin' || fields[0] === 'game' || fields[0] === 'downloadedFile' || fields[0] === 'package');
+  && (fields[0] === 'origin' || fields[0] === 'game' || fields[0] === 'downloadedFile');
 
-function keptAt(line: string): { kind: LineKind; path: string; stamp: FileStamp; read: FileRead<HashedDownloadedFile> } | undefined {
+function keptAt(line: string): { kind: Kind; path: string; stamp: FileStamp; read: FileRead<HashedDownloadedFile> } | undefined {
   try {
     const fields: unknown = JSON.parse(line);
     if (!isLine(fields)) return undefined;
@@ -77,14 +76,11 @@ interface DownloadedFilesHashed {
 
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
  *  its extraction there. */
-export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash' | 'packageEntries' | 'keepPackageEntries'> {
+export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
   /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the record index (ADR-0013). */
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
   /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the hash index. */
   downloadedFileHash(path: string): Promise<FileRead<HashedDownloadedFile>>;
-  /** Keeps `entries`, each package path's hash, under the hash of a game folder package a manifest pins, so a status reads
-   *  them in this session and the next; answers why they could not be written, if so. */
-  keepPackageEntries(hash: string, entries: ReadonlyMap<string, string>): Promise<string | undefined>;
   /** As `downloadedFileHash`, each downloaded file at `paths`, and why any could not be read, as
    *  `InstanceAdapter.downloadedFilesHashed` answers them. */
   downloadedFilesHashed(paths: readonly string[], options?: Parameters<InstanceAdapter['downloadedFilesHashed']>[0]): Promise<DownloadedFilesHashed>;
@@ -93,32 +89,15 @@ export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash' | 'pac
 export function hashIndex(folder: string, installationFileReader: InstallationFileReader, problems: FileProblems): HashIndex {
   const indexFile = join(folder, INDEX_FILE);
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), downloadedFile: new Map() };
-  const entriesByHash = new Map<string, ReadonlyMap<string, string>>();
-  // The package lines the index file holds, so a write that failed is tried again.
-  const packageLinesWritten = new Map<string, ReadonlyMap<string, string>>();
   let loaded: Promise<void> | undefined;
   let unwritten: string | undefined;
-
-  // A hash fixes a downloaded file's bytes, so its entries stay true after the file is gone or another takes its path.
-  const keepEntries = (kind: Kind, read: FileRead<HashedDownloadedFile>): void => {
-    if (kind === 'downloadedFile' && read.kind === 'read') entriesByHash.set(read.answer.hash, new Map(read.answer.entries.map(({ path, hash }) => [path, hash])));
-  };
 
   // The record index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
   const load = (): Promise<void> => (loaded ??= removeLeftoverExtractions(folder).then(() => get(indexFile, '')).then((text) => {
     for (const line of text.split('\n')) {
       const known = keptAt(line);
       if (known === undefined) continue;
-      if (known.kind === 'package') {
-        if (known.read.kind === 'read') {
-          const entries = new Map(known.read.answer.entries.map(({ path, hash }) => [path, hash]));
-          entriesByHash.set(known.path, entries);
-          packageLinesWritten.set(known.path, entries);
-        }
-        continue;
-      }
       kept[known.kind].set(known.path, { stamp: known.stamp, hashed: Promise.resolve(known.read) });
-      keepEntries(known.kind, known.read);
     }
   }, () => undefined));
 
@@ -171,7 +150,6 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       hashed: readOrReason(() => (kind === 'downloadedFile' ? hashedWithEntries(path, stamp) : hashedAlone(path, stamp)))
         .then(async (read) => {
           shown(path, read);
-          keepEntries(kind, read);
           await keep(kind, path, entry, read, readFromMs);
           return read;
         }),
@@ -233,21 +211,5 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     gameFileHash: (path) => hashAlone('game', path),
     downloadedFileHash: (path) => hashOf('downloadedFile', path),
     downloadedFilesHashed,
-    keepPackageEntries: async (hash, entries) => {
-      await load();
-      entriesByHash.set(hash, entries);
-      const written = packageLinesWritten.get(hash);
-      if (written?.size === entries.size && [...entries].every(([path, entryHash]) => written.get(path) === entryHash)) return undefined;
-      const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
-      const line = lineOf('package', hash, stamp, { size: 0, hash, entries: [...entries].map(([path, entryHash]) => ({ path, hash: entryHash })) });
-      return ensureDir(folder).then(() => append(indexFile, line)).then(
-        () => { packageLinesWritten.set(hash, entries); return undefined; },
-        (err: unknown) => errorMessage(err),
-      );
-    },
-    packageEntries: async (hash) => {
-      await load();
-      return entriesByHash.get(hash);
-    },
   };
 }

@@ -32,9 +32,9 @@ export async function gameToHand(adapter: GameAdapter, sourceMods: SourceMods): 
 /** The game folder with the files each place holds of a mod's, none when the game folder was not found. */
 export function gameHeld(folder: NamedGameFolder | string, held: HeldGameFiles): GameHeld | undefined {
   if (typeof folder === 'string') return undefined;
-  const placeHeld = (place: GamePlace): GamePlaceHeld => ({ files: held.get(place) ?? [], depots: place.depots });
+  const placeHeld = (place: GamePlace): GamePlaceHeld => ({ files: held.get(place) ?? [], depots: place.depots, ...place.steamApp === undefined ? {} : { steamApp: place.steamApp } });
   const [first, ...others] = folder.places;
-  return { name: folder.name, places: [placeHeld(first), ...others.map(placeHeld)] };
+  return { places: [placeHeld(first), ...others.map(placeHeld)] };
 }
 
 export async function gameFilesOf(

@@ -128,7 +128,7 @@ describe('the MO2 Instance adapter', () => {
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
             { root: game, holdsDataFiles: true, depots: [], depotProblems: [] },
-            { root: '/steam/Fallout 4', holdsDataFiles: true, depots: [], depotProblems: [] },
+            { root: '/steam/Fallout 4', holdsDataFiles: true, steamApp: 377160, depots: [], depotProblems: [] },
           ]);
         } finally {
           await rm(game, { recursive: true, force: true });
@@ -146,7 +146,7 @@ describe('the MO2 Instance adapter', () => {
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, holdsDataFiles: true, depots: [INSTALLED_DEPOT], depotProblems: [] },
+            { root: game, holdsDataFiles: true, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [] },
           ]);
         } finally {
           await rm(linked, { force: true });
@@ -166,7 +166,7 @@ describe('the MO2 Instance adapter', () => {
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
             { root: game, holdsDataFiles: false, depots: [], depotProblems: [] },
-            { root: steam, holdsDataFiles: true, depots: [INSTALLED_DEPOT], depotProblems: [] },
+            { root: steam, holdsDataFiles: true, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [] },
           ]);
         } finally {
           await rm(game, { recursive: true, force: true });

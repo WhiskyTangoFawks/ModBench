@@ -26,11 +26,10 @@ describe('a mod\'s unfinished states, each on the file it concerns (modlist-repo
 
   it.each([
     ['a file that is gone', { gone: ['b.nif'] }, "Names 'b.nif', which the mod's folder lacks."],
-    ['a file no package holds', { notInPackage: ['b.esp'] }, "Its package does not hold 'b.esp'."],
-    ['a file a package holds with other bytes', { otherBytes: ['b.esp'] }, "Its package holds 'b.esp' with other bytes."],
-    ['metadata that differs', { metadataDiffers: true }, 'The mod\'s metadata differs from this manifest.'],
-    ['a package with no host', { noHost: true }, 'Its package has no host.'],
-    ['a package this machine lacks', { packagesLacking: ['the game folder was not found'] }, 'This machine does not hold a package it pins: the game folder was not found.'],
+    ['a file no package holds', { notInPackage: ['b.esp'] }, "No package it names holds the bytes of 'b.esp'."],
+    ['a file a package holds one of its name of with other bytes', { otherBytes: ['b.esp'] }, "No package it names holds the bytes of 'b.esp'; one holds a file of its name."],
+    ['a package with no host', { noHost: ['the game folder'] }, 'The game folder has no host.'],
+    ['a package this machine lacks', { packagesLacking: ['the game folder was not found'] }, 'This machine does not hold a package it names: the game folder was not found.'],
   ])('puts %s on the manifest, as the folder spells it', (_state, over, message) => {
     expect(statusProblems(held(over), folder)).toEqual([{ file: manifestFile, message }]);
   });

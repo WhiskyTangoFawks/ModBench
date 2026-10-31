@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import {
@@ -61,6 +61,10 @@ import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { ModStatuses } from '../../modStatus/modStatuses';
 import { modValueOver } from '../../instanceAdapter/modValue';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { manifestedIn } from '../../test/modStatusFixture';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
@@ -76,16 +80,17 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingTasks } from '../../test/recordingTasks';
 
 
-const foldersHoldingNothing = (metadata: Awaited<ReturnType<InstanceAdapter['modMetadata']>> = { kind: 'read', answer: {} }): Pick<InstanceAdapter, 'modValue'> => ({
-  modValue: (mod, folder, asked) => modValueOver({
-  filesIn: () => Promise.resolve([]),
+const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue'> => ({
+  modValue: (folder, asked) => modValueOver({
+  filesIn: listing,
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  packageEntries: () => Promise.resolve(undefined),
+  exclusionMark: '.mohidden',
   downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gameFolder: () => Promise.resolve({ kind: 'found', root: '/game', dataFolder: '/game/Data' }),
-  modMetadata: () => Promise.resolve(metadata),
-  }, mod, folder, asked),
+  gamePlaces: () => Promise.resolve([]),
+  gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
+  submodule: () => Promise.resolve({ lacks: 'no submodule' }),
+  }, folder, asked),
 });
 
 const treeViews = new FakeTreeViews();
@@ -459,12 +464,17 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
   });
 
   it('says on the message line that a status could not be read, while the instance holds a repository', async () => {
-    const statuses = new ModStatuses(foldersHoldingNothing({ kind: 'unreadable', reason: 'EACCES' }), () => undefined);
-    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), log: () => undefined, ...noSync(), statuses });
+    const root = await mkdtemp(join(tmpdir(), 'modsView-'));
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
+    const folder = join(root, 'ModA');
+    await manifestedIn(folder);
+    const holdingManifested = instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')], modFolders: [{ kind: 'mod', name: 'ModA', path: folder, modName: 'ModA' }] });
+    const statuses = new ModStatuses(foldersHoldingNothing(() => Promise.reject(new Error('EACCES'))), () => undefined);
+    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingManifested), log: () => undefined, ...noSync(), statuses });
 
-    statuses.derive(holdingModA);
+    statuses.derive(holdingManifested);
 
-    await waitForMessage(view, (message) => message === 'Showing the last good read: the status of "ModA" could not be read: its metadata could not be read: EACCES.',
+    await waitForMessage(view, (message) => message === 'Showing the last good read: the status of "ModA" could not be read: a file could not be read: EACCES.',
       'the unreadable status');
   });
 });
