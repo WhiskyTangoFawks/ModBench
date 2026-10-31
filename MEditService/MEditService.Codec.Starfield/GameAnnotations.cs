@@ -56,7 +56,7 @@ internal static class GameAnnotations
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetterName, "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetterName, "Version2", IgnoredInConflicts: true),
             ],
             // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
             RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],

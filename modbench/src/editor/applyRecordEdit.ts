@@ -57,7 +57,7 @@ async function editDocuments(
     return undefined;
   }
   if (isNoChange(outcome)) {
-    await applied?.();
+    await afterApplied(deps, field, applied);
     return outcome.newFormKey;
   }
 
@@ -70,11 +70,20 @@ async function editDocuments(
   };
   const failure = await applyAnswered(applying, [outcome], [address.plugin]);
   if (failure === undefined) {
-    await applied?.();
+    await afterApplied(deps, field, applied);
     return outcome.newFormKey;
   }
   deps.reporter.report('error', `Could not edit ${field}.`, failure);
   return undefined;
+}
+
+// The edit landed, so a failure here is the copy's (ADR-0019; editor.md, Reporting, story 2).
+async function afterApplied(deps: RecordWriteDeps, field: string, applied?: () => PromiseLike<void>): Promise<void> {
+  try {
+    await applied?.();
+  } catch (err) {
+    deps.reporter.report('error', `Could not copy ${field}.`, errorMessage(err));
+  }
 }
 
 const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>

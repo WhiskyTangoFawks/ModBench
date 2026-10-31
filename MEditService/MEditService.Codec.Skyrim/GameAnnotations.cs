@@ -60,7 +60,7 @@ internal static class GameAnnotations
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetterName, "Version2", "Version Control Info 2", IgnoredInConflicts: true),
+                new(MajorRecordGetterName, "Version2", IgnoredInConflicts: true),
             ],
             // Mutagen names bit 14 on no Skyrim type; wbDefinitionsTES5.pas gives it to CELL, DIAL and WRLD.
             RecordFlagNames:

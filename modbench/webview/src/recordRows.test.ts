@@ -126,6 +126,35 @@ describe('recordRows', () => {
   });
 });
 
+describe('a Partial Form column\'s own fields', () => {
+  const rows = fieldRowsOf(rowsFor(
+    answer([editorId, bounds], [
+      diffNode({ fieldName: 'EditorID', values: { [MASTER]: 'Id', [MOD]: 'Id' } }),
+      diffNode({ fieldName: 'Bounds', values: { [MASTER]: { X: 1 }, [MOD]: { X: 2 } } }),
+    ]),
+    [MASTER, MOD], [MOD],
+  ));
+  const [, struct] = rows;
+
+  it('show their values, read-only', () => {
+    const cell = struct?.cells.get(MOD);
+
+    expect([cell?.holds, cell?.value, cell?.editPath]).toEqual([true, { X: 2 }, undefined]);
+  });
+
+  it('show nothing where the copy holds none', () => {
+    const [, lone] = fieldRowsOf(rowsFor(
+      answer([editorId, bounds], [
+        diffNode({ fieldName: 'EditorID', values: { [MASTER]: 'Id', [MOD]: 'Id' } }),
+        diffNode({ fieldName: 'Bounds', values: { [MASTER]: { X: 1 }, [MOD]: null } }),
+      ]),
+      [MASTER, MOD], [MOD],
+    ));
+
+    expect(lone?.cells.get(MOD)?.holds).toBe(false);
+  });
+});
+
 describe('what the rows show of what is collapsed', () => {
   const rows = rowsFor(answer([bounds, editorId, version], [
     diffNode({ fieldName: 'Version', values: {} }), boundsDiff, diffNode({ fieldName: 'EditorID', values: {} }),

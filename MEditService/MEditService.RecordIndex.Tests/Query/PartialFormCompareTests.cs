@@ -88,6 +88,16 @@ public sealed class PartialFormCompareTests : IDisposable
     }
 
     [Fact]
+    public void APartialFormCopysOwnField_ShowsItsValue_ThoughTheGameIgnoresIt()
+    {
+        var waterHeight = Compare(_cellKey).Diffs.Single(d => d.FieldName == "WaterHeight");
+
+        Assert.Equal(
+            OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement,
+            Assert.IsType<JsonElement>(waterHeight.Values["Partial.esp"]).GetSingle());
+    }
+
+    [Fact]
     public void APartialFormCopysOwnField_IsWonByTheMaster_NotByTheRecordWideWinnerTheCopyIs()
     {
         var waterHeight = Compare(_cellKey).Diffs.Single(d => d.FieldName == "WaterHeight");
