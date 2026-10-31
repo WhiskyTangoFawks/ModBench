@@ -566,3 +566,24 @@ describe('PluginFacts — a plugin\'s masters (plugins.md, The highlight, story 
     expect(new PluginFacts().mastersOf(A)).toEqual([]);
   });
 });
+
+describe('PluginFacts — what a row shows of its plugin, as data for the agent (agent.md, Any agent, story 8)', () => {
+  it('is each status\'s words and tooltip line, whether it is read-only, whether it is a compiled plugin, and its masters', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ isImmutable: true, masters: ['Fallout4.esm', 'Ghost.esm'], missingMasters: ['Ghost.esm'] })], [failure('Malformed record')]);
+    changed(facts);
+
+    expect(facts.shown(A)).toEqual({
+      statuses: [
+        { status: 'failed to read', tooltip: 'Failed to read: Malformed record' },
+        { status: '1 master issue', tooltip: 'Missing masters: Ghost.esm' },
+        { status: 'changed outside Modbench', tooltip: CHANGED_TEXT },
+      ],
+      readOnly: true, compiled: true, masters: ['Fallout4.esm', 'Ghost.esm'],
+    });
+  });
+
+  it('is no status, and null for what mEdit has not read', () => {
+    expect(new PluginFacts().shown(A)).toEqual({ statuses: [], readOnly: null, compiled: null, masters: null });
+  });
+});

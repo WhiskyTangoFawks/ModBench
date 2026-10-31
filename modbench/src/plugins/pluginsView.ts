@@ -10,6 +10,7 @@ import type { AskQuestion } from '../ports/dialog';
 import type { DrawsHighlight, RelatesRows } from '../drivingLib/highlightFollowsFocus';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
+import type { PluginsShown } from '../drivingLib/pluginsShown';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Instance } from '../instanceLoader/instance';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
@@ -80,6 +81,7 @@ export interface PluginsView extends vscode.Disposable {
   narrator: ReconcileNarrator;
   /** What the view shows of mEdit's state, for the agent: its message line, and the record index another window holds. */
   messages: () => string[];
+  pluginsShown: PluginsShown;
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
@@ -162,6 +164,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   return {
     view, nameFilter,
     messages: () => [viewMessage(), tree.facts.rows.heldElsewhereMessage()].filter((message) => message !== undefined),
+    pluginsShown: tree.facts.rows,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,

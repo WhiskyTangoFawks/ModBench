@@ -698,6 +698,32 @@ describe('a gesture the agent runs', () => {
 
     assert.ok(standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
   });
+
+  it('reads what the Plugins view\'s row shows of a plugin once mEdit has read it', async () => {
+    const originalPlugins = readFileSync(pluginsTxtPath, 'utf8');
+    const gameFolder = gameFolderHolding('medit-agent-plugins-', ['TestMod.esp']);
+    await setGameFolder(gameFolder);
+    try {
+      await holdPluginsTxt('*TestMod.esp\r\n');
+
+      const plugin = await waitFor('the agent to read TestMod.esp as mEdit read it', async () => {
+        const read = await callTool('list_plugins');
+        const answer: unknown = JSON.parse(read.text);
+        const plugins: unknown = isRecord(answer) ? answer.plugins : undefined;
+        const found: unknown = Array.isArray(plugins) ? plugins.find((one) => isRecord(one) && one.name === 'TestMod.esp') : undefined;
+        return isRecord(found) && found.compiled !== null && found;
+      });
+
+      assert.deepStrictEqual(
+        { statuses: plugin.statuses, readOnly: plugin.readOnly, compiled: plugin.compiled, masters: plugin.masters },
+        { statuses: [], readOnly: true, compiled: false, masters: [] },
+      );
+    } finally {
+      await setGameFolder(FIXTURE_GAME_FOLDER);
+      writeFileSync(pluginsTxtPath, originalPlugins);
+      rmSync(gameFolder, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
+    }
+  });
 });
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
