@@ -10,7 +10,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedF
 
 type Adapter = Pick<InstanceAdapter,
   'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'folderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines' | 'keepOutOfPublisher' | 'pathsOutsideFolders'>;
+  | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines' | 'keepOutOfPublisher' | 'pathsOutsideFolders'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -49,6 +49,7 @@ interface ModToUpdate {
   readonly folder: string;
   readonly installationFile?: InstallationFile;
   readonly game?: GameHeld;
+  readonly isSourceFolder?: true;
 }
 
 interface UpdateOptions {
@@ -84,6 +85,15 @@ async function readMod(
   };
 }
 
+// ADR-0022: a source mod's mod folder is its build's to record, and its source folder is recorded here.
+async function readSourceFolder(
+  adapter: Adapter, mod: string, folder: string, game: GameToHand,
+): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
+  const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, false);
+  if ('refusal' in taken) return taken;
+  return { read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
+}
+
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
   const places = gameHeld(game.folder, held);
   return places === undefined ? {} : { game: places };
@@ -105,8 +115,8 @@ async function folderMissing(adapter: Adapter, folder: string): Promise<boolean>
 
 type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[] } | { readonly unreadable: string };
 
-async function hashedFilesOf(adapter: Adapter, folder: string): Promise<Hashed> {
-  const value = await adapter.folderValue(folder);
+async function hashedFilesOf(adapter: Adapter, { folder, isSourceFolder }: Pick<ModToUpdate, 'folder' | 'isSourceFolder'>): Promise<Hashed> {
+  const value = await (isSourceFolder ? adapter.sourceFolderValue(folder) : adapter.folderValue(folder));
   const files = ownFilesOf(value);
   return 'why' in files ? { unreadable: files.why } : { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: value.exclude };
 }
@@ -136,7 +146,7 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
 
   let hashed: Hashed;
   try {
-    hashed = await hashedFilesOf(adapter, mod.folder);
+    hashed = await hashedFilesOf(adapter, mod);
   } catch (err) {
     hashed = { unreadable: `a file could not be read: ${errorMessage(err)}` };
   }
@@ -218,9 +228,10 @@ export async function updateManifest(
   const passedOver: string[] = [];
   for (const mod of new Set(namesOf(mods, others))) {
     if (signal?.aborted) break;
-    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) { passedOver.push(mod); continue; }
+    const sourceFolder = folders.isMod(mod) ? sourceMods.folderOf(mod) : undefined;
+    if (sourceFolder !== undefined) passedOver.push(mod);
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const answer = await readMod(adapter, mod, folders, game);
+    const answer = sourceFolder === undefined ? await readMod(adapter, mod, folders, game) : await readSourceFolder(adapter, mod, sourceFolder, game);
     if ('refusal' in answer) { refused.push({ item: mod, reason: answer.refusal }); continue; }
     read.push(answer.read);
     notes.push(...answer.notes.map((note) => ({ mod, note })));
@@ -245,7 +256,7 @@ export async function updateManifest(
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
     const answer = await updateMod(adapter, mod, downloadedFiles);
-    acted.push(mod.name);
+    if (!mod.isSourceFolder) acted.push(mod.name);
     if ('refusal' in answer) { refused.push({ item: mod.name, reason: answer.refusal }); continue; }
     landed.push(answer.landed);
   }
