@@ -322,6 +322,16 @@ describe('restore from manifest', () => {
       expect(fake.calls.filter(({ verb }) => verb === 'copyDownloadedFile' || verb === 'putDownloadedFile')).toEqual([]);
     });
 
+    it('refuses a file of the pinned name that cannot be read, naming the file that holds the pinned bytes', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { restore } = await over({
+        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['ModA.7z', { kind: 'unreadable', reason: 'Is not archive' }], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' })]]) },
+      });
+
+      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: installation file 'ModA.7z' could not be read: Is not archive. /downloads/Renamed-copy.7z holds the pinned bytes of 'ModA.7z'." }]);
+    });
+
     it('refuses the mod, naming why, when the copy to the pinned name fails', async () => {
       const { nexus } = await nexusServing(servingFile78('the bytes'));
       const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };

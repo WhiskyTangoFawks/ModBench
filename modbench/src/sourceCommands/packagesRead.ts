@@ -13,7 +13,7 @@ export interface PinHeld {
   readonly read: FileRead<InstallationFile | undefined>;
   /** The file under another name that holds the pinned bytes, when no file has the pinned name. */
   readonly underAnotherName?: InstallationFile;
-  /** The file under another name that holds the pinned bytes, when the file of the pinned name holds other bytes. */
+  /** The file under another name that holds the pinned bytes, when the file of the pinned name holds other bytes or cannot be read. */
   readonly elsewhere?: InstallationFile;
   /** Why a downloaded file could not be checked for the pinned bytes. */
   readonly notes: readonly string[];
@@ -23,9 +23,9 @@ export async function downloadedFileHoldingPin(
   adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding'>, pinned: { readonly name: string; readonly size: number; readonly hash: string },
 ): Promise<PinHeld> {
   const named = await adapter.downloadedFile(pinned.name);
-  if (named.kind === 'unreadable' || named.answer?.hash === pinned.hash) return { read: named, notes: [] };
+  if (named.kind === 'read' && named.answer?.hash === pinned.hash) return { read: named, notes: [] };
   const { file, notes } = await adapter.downloadedFileHolding(pinned);
-  if (named.answer === undefined) return { read: { kind: 'read', answer: file }, ...(file === undefined ? {} : { underAnotherName: file }), notes };
+  if (named.kind === 'read' && named.answer === undefined) return { read: { kind: 'read', answer: file }, ...(file === undefined ? {} : { underAnotherName: file }), notes };
   return { read: named, ...(file === undefined ? {} : { elsewhere: file }), notes };
 }
 
