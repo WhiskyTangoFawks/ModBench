@@ -69,7 +69,7 @@ describe('the Problems panel follows Mod status (modlist-repository.md, Status, 
 
   describe('a mod with several packages (Status, story 6)', () => {
     const manifestFile = `${FOLDER}/MOD.Manifest.json`;
-    const several = { manifestFile, packages: ["installation file 'A.7z'", 'the game folder'] };
+    const several = { manifestFile, packages: [{ kind: 'installationFile' as const, name: 'A.7z', size: 1, hash: 'AAAAAAAAAAA=' }, { kind: 'gameFolder' as const }] };
 
     it('shows Information on its manifest that names the packages and says an upgrade replaces every one', async () => {
       const { collection } = over([packaged('ModA', several)]);
@@ -90,8 +90,16 @@ describe('the Problems panel follows Mod status (modlist-repository.md, Status, 
       await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Decompile and Commit Mod/); });
     });
 
+    it('points at no decompile and commit for a source mod, which the gesture is not offered on', async () => {
+      const source = { manifestFile, packages: [{ kind: 'repository' as const, name: 'src' }, { kind: 'gameFolder' as const }] };
+      const { collection } = over([packaged('ModA', source)], [{ name: 'A.esp', path: `${FOLDER}/A.esp`, origin: 'ModA', line: 0, enabled: true, winning: true }]);
+
+      await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/^Made from several packages/); });
+      expect(messagesOn(collection, manifestFile)[0]?.[0]).not.toMatch(/Decompile/);
+    });
+
     it('shows nothing for a mod of one package', async () => {
-      const { collection } = over([packaged('ModA', { manifestFile, packages: ['the game folder'] })]);
+      const { collection } = over([packaged('ModA', { manifestFile, packages: [{ kind: 'gameFolder' }] })]);
 
       await vi.waitFor(() => { expect(collection.has(Uri.file(FOLDER))).toBe(false); });
       expect(collection.has(Uri.file(manifestFile))).toBe(false);

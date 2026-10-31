@@ -12,10 +12,8 @@ export interface StatusSource {
   readonly entryKey: (entry: EntryRef) => string;
 }
 
-/** A status with the packages its manifest names, each as a noun phrase. */
-export type PackagedStatus = ModStatus & { readonly packages?: readonly string[] };
-
-const packageNoun = (pkg: ManifestPackage): string => (pkg.kind === 'gameFolder' ? 'the game folder' : `${pkg.kind === 'repository' ? 'repository' : 'installation file'} '${pkg.name}'`);
+/** A status with the packages its manifest names. */
+export type PackagedStatus = ModStatus & { readonly packages?: readonly ManifestPackage[] };
 
 interface Listening {
   dispose(): void;
@@ -101,7 +99,7 @@ export class ModStatuses {
   private async statusOf(mod: ModAt): Promise<PackagedStatus> {
     const manifest = await manifestAt(mod.folder);
     const status = statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest)));
-    return { ...status, packages: manifest.read !== undefined && 'manifest' in manifest.read ? manifest.read.manifest.packages.map(packageNoun) : [] };
+    return { ...status, packages: manifest.read !== undefined && 'manifest' in manifest.read ? manifest.read.manifest.packages : [] };
   }
 
   private hold(derived: ReadonlyMap<string, PackagedStatus>): void {
