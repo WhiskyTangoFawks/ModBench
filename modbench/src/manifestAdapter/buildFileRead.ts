@@ -28,13 +28,16 @@ const stepOf = (index: number, line: unknown): ManifestStep => {
 const archivesOf = (value: unknown): ManifestArchive[] => {
   const archives = Object.entries(objectOf(FILE, value, 'its archives')).map(([path, files]) => ({ path, files: stringsOf(FILE, files, 'its archives') }));
   inTheFolder('archives', [...archives.map((archive) => archive.path), ...archives.flatMap((archive) => archive.files)]);
-  const packedBy = new Map<string, string>();
+  const packedBy = new Map<string, { readonly archive: string; readonly file: string }>();
   for (const { path: archive, files } of archives) {
     for (const file of files) {
-      const other = packedBy.get(file);
-      if (other === archive) throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' twice in '${archive}'`);
-      if (other !== undefined) throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' in both '${other}' and '${archive}'`);
-      packedBy.set(file, archive);
+      const other = packedBy.get(file.toLowerCase());
+      if (other?.archive === archive) {
+        const same = other.file === file ? `twice in '${archive}'` : `as '${other.file}' and '${file}' in '${archive}', which differ only by case`;
+        throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' ${same}`);
+      }
+      if (other !== undefined) throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' in both '${other.archive}' and '${archive}'`);
+      packedBy.set(file.toLowerCase(), { archive, file });
     }
   }
   return archives;
