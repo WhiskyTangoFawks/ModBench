@@ -131,8 +131,8 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
-# The tests that read docs/ and spec/: the backend's architecture scans, and the frontend's
-# check of every Command ID against commands.md. The backend and frontend runs already hold them.
+# The tests that read docs/ and spec/: the backend's architecture scans, and every frontend test
+# importing one of the two modules that read spec/. The backend and frontend runs already hold them.
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
@@ -141,7 +141,7 @@ if $DOCS; then
   fi
   if ! $FRONTEND; then
     [[ -x "$ROOT/modbench/node_modules/.bin/vitest" ]] || (cd "$ROOT/modbench" && npm ci >/dev/null 2>&1)
-    (cd "$ROOT/modbench" && npm run test:unit -- src/test/packageJson.test.ts) \
+    (cd "$ROOT/modbench" && npx vitest related --run eslint-rules/boxes.mjs src/test/commandsCatalog.ts) \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
 fi

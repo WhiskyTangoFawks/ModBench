@@ -62,6 +62,19 @@ class GateTimeout(unittest.TestCase):
     def test_gate_named_inside_quotes_is_data(self):
         self.assertEqual(hook("Bash", TOP, command="git commit -m 'run-gates.sh --wait'").returncode, 0)
 
+    def test_a_commit_of_spec_or_docs_runs_the_docs_gate_and_without_timeout_is_blocked(self):
+        for command in ('git add -- spec/surfaces/mods.md && git commit -m "Spec: x" -- spec/surfaces/mods.md',
+                        'git add spec/surfaces/mods.md && git commit -q -m "Spec: x"',
+                        'git -C /home/x/modbench commit -m "x" -- /home/x/modbench/docs/traces/build.d2'):
+            with self.subTest(command=command):
+                self.assertEqual(hook("Bash", TOP, command=command).returncode, 2)
+                self.assertEqual(hook("Bash", TOP, command=command, timeout=600000).returncode, 0)
+
+    def test_a_commit_naming_spec_only_in_its_message_needs_no_timeout(self):
+        for command in ('git add modbench/src/a.ts && git commit -m "x"', 'git commit -qm "WIP: spec/surfaces line"'):
+            with self.subTest(command=command):
+                self.assertEqual(hook("Bash", TOP, command=command).returncode, 0)
+
 
 class BuildSlot(unittest.TestCase):
     def check(self, command, tool="Bash", **tool_input):
@@ -118,6 +131,21 @@ class BuildSlot(unittest.TestCase):
                         "cat <<EOF > x && echo done\ndotnet test\nEOF"):
             with self.subTest(command=command):
                 self.assertEqual(self.check(command).returncode, 0)
+
+
+class Typecheck(unittest.TestCase):
+    def test_a_tsc_of_no_named_project_is_blocked_with_the_form_to_use(self):
+        for command in ("npx tsc --noEmit -p .", "cd modbench && npx tsc --noEmit", "tsc -p tsconfig.json"):
+            with self.subTest(command=command):
+                run = hook("Bash", TOP, command=command)
+                self.assertEqual(run.returncode, 2)
+                self.assertIn("tsc -b src/<box>", run.stderr)
+
+    def test_a_tsc_build_or_of_a_named_project_passes(self):
+        for command in ("npx tsc -b", "npx tsc -b src/mods", "npx tsc --build", "npx tsc -p tsconfig.integration.json",
+                        "git commit -m 'npx tsc --noEmit -p .'"):
+            with self.subTest(command=command):
+                self.assertEqual(hook("Bash", TOP, command=command).returncode, 0)
 
 
 class SubagentForeground(unittest.TestCase):
