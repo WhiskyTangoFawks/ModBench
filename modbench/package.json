@@ -413,6 +413,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.record.cut",
+        "title": "Cut Record Field",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.moveElementUp",
         "title": "Move Record Element Up",
         "category": "Modbench"
@@ -883,6 +888,10 @@
           "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
         },
         {
+          "command": "modbench.record.cut",
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection"
+        },
+        {
           "command": "modbench.record.removeElement",
           "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
         },
@@ -1208,7 +1217,7 @@
         },
         {
           "command": "modbench.record.referencedBy",
-          "when": "modbench.folder == instance"
+          "when": "modbench.folder == instance && modbench.referencesView"
         },
         {
           "command": "modbench.record.filter",
@@ -1753,7 +1762,7 @@
         },
         {
           "command": "modbench.record.referencedBy",
-          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/ && modbench.referencesView",
           "group": "1_open@2"
         },
         {
@@ -1800,7 +1809,7 @@
         },
         {
           "command": "modbench.record.referencedBy",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && modbench.referencesView",
           "group": "1_open@3"
         },
         {
