@@ -32,8 +32,6 @@ export interface BuildDeps {
 
 export type Built = GestureResult<BuildOutcome['landed'][number], string>;
 
-// `force`: build a mod whose build would destroy a file, otherwise refused; `asks`: ask as a view call does, as a task's
-// call does.
 type BuildOptions = { readonly force?: boolean; readonly asks?: boolean };
 
 /** commands.md, `build`: the mods a row, the selection or the palette's pick names, and from an agent call naming none, every source. */
@@ -42,14 +40,13 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const named = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
-      if (named) return confirmed(deps, { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView), everySource: false });
+      if (named) return decided(deps, { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView), everySource: false }, 'ask');
       const mods = await pickSourceMods(deps.sourceModNames());
-      return mods === undefined ? undefined : confirmed(deps, { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view, everySource: false });
+      return mods === undefined ? undefined : decided(deps, { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view, everySource: false }, 'ask');
     },
     fromAgent: async ({ argument, options }) => {
       const given = { ...givenByAgent(argument), everySource: argument.length === 0 };
-      if (options.asks === true) return await confirmed(deps, given) ?? { ...given, cancelled: true };
-      return refusedUnlessForced(deps, given, options.force === true);
+      return await decided(deps, given, options.asks === true ? 'ask' : options.force === true ? 'force' : 'refuse') ?? { ...given, cancelled: true };
     },
     run: (given) => buildMods(deps, given),
     report: (result) => reportBuildResult(deps.reporter, result),
@@ -69,35 +66,26 @@ interface BuildGiven extends ModsGiven {
   readonly cancelled?: true;
 }
 
-// Each mod `refused` names is not built, so the rest are built by name.
-function without(given: BuildGiven, { mods }: WhatBuildDestroys, refused: readonly ItemRefusal<string>[]): BuildGiven {
-  if (refused.length === 0) return given;
-  const named = new Set(refused.map(({ item }) => item));
-  return { ...given, mods: mods.filter((mod) => !named.has(mod)), everySource: false, refusedRows: [...given.refusedRows, ...refused] };
-}
-
 const BUILD = 'Build';
 
-// mods.md, A source mod, story 4: one confirmation for the selection, naming each file the build overwrites or sends to the
-// trash; none when it destroys nothing.
-async function confirmed(deps: BuildDeps, given: BuildGiven): Promise<BuildGiven | undefined> {
+const destroysRefusal = ({ mod, files }: WhatBuildDestroys['destroys'][number]): ItemRefusal<string> => ({
+  item: mod,
+  reason: `was not built: it would overwrite or send to the trash each file that differs from its manifest: ${files.join(', ')}. Request it again with force to build it.`,
+});
+
+// mods.md, A source mod, story 4: one confirmation naming each file the build would destroy. agent.md, Any agent,
+// story 7: an agent's mod that would destroy a file is refused until the call forces.
+async function decided(deps: BuildDeps, given: BuildGiven, how: 'ask' | 'refuse' | 'force'): Promise<BuildGiven | undefined> {
   const listing = await deps.commands.whatBuildDestroys(given.mods, given.everySource);
-  if (listing.destroys.length > 0) {
+  if (how === 'ask' && listing.destroys.length > 0) {
     const detail = listing.destroys.flatMap(({ mod, files }) => files.map((path) => inMod(path, mod))).join('\n');
     const message = 'Build overwrites or sends to the trash each file that differs from its mod\'s manifest.';
     if (await deps.ask(message, { modal: true, detail }, BUILD) !== BUILD) return undefined;
   }
-  return without(given, listing, listing.refused);
-}
-
-// agent.md, Any agent, story 7: a mod whose build would destroy a file is refused, naming the files, until the call forces.
-async function refusedUnlessForced(deps: BuildDeps, given: BuildGiven, force: boolean): Promise<BuildGiven> {
-  const listing = await deps.commands.whatBuildDestroys(given.mods, given.everySource);
-  const unforced = force ? [] : listing.destroys.map(({ mod, files }) => ({
-    item: mod,
-    reason: `was not built: it would overwrite or send to the trash each file that differs from its manifest: ${files.join(', ')}. Request it again with force to build it.`,
-  }));
-  return without(given, listing, [...listing.refused, ...unforced]);
+  const refused = [...listing.refused, ...how === 'refuse' ? listing.destroys.map(destroysRefusal) : []];
+  if (refused.length === 0) return given;
+  const named = new Set(refused.map(({ item }) => item));
+  return { ...given, mods: listing.mods.filter((mod) => !named.has(mod)), everySource: false, refusedRows: [...given.refusedRows, ...refused] };
 }
 
 async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource, cancelled }: BuildGiven): Promise<Built> {
@@ -170,7 +158,7 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
+  [...undeclared(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
@@ -180,11 +168,11 @@ function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
   }];
 }
 
-// mods.md, A source mod, story 4: a file the build overwrote is named, whatever else the build did.
-function overwritten(outcome: BuildOutcome): PartialFailure[] {
-  const paths = outcome.landed.flatMap(({ mod, overwritten: files }) => files.map((path) => inMod(path, mod)));
+// Never silently wrong: a file of a step's that its build file does not name is sent to the trash, and named.
+function undeclared(outcome: BuildOutcome): PartialFailure[] {
+  const paths = outcome.landed.flatMap(({ mod, undeclared: files = [] }) => files.map((path) => inMod(path, mod)));
   return paths.length === 0 ? [] : [{
-    message: `Build overwrote ${paths.length} ${paths.length === 1 ? 'file' : 'files'} that differed.`,
+    message: `Build sent to the trash ${paths.length} ${paths.length === 1 ? 'file' : 'files'} a step made that its build file does not name.`,
     detail: paths.map((name) => `"${name}"`).join(', '), severity: 'warning',
   }];
 }

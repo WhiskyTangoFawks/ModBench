@@ -25,7 +25,6 @@ export interface TaskGesture<Outcome> {
   readonly reporter: Reporter;
   /** The Argument the task's definition supplies. */
   readonly argument: (definition: vscode.TaskDefinition) => readonly Argument[];
-  /** The Options of the call, as the gesture takes them. */
   readonly options?: object;
   readonly settle: (outcome: Outcome) => TaskVerdict;
 }

@@ -44,8 +44,8 @@ const EXCLUSION_MARK = fakeInstanceAdapter().adapter.exclusionMark;
 const savedAll = () => Promise.resolve([]);
 const BA2 = { ba2: { version: 1, compressed: true } };
 
-const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [] });
-const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [] });
+const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], made: [] });
+const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [] });
 const buildingEach = (client: InMemoryMEditClient): void => {
   client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] }));
 };
@@ -241,6 +241,30 @@ describe('sourceCommands build, in mod order', () => {
       landed: [{ ...landedOf('ModA'), failure: 'The build stopped as its step \'Optimise\' exited with code 2, so its manifest was not written.' }], refused: [],
     });
     expect(await readdir(folderOf('ModA'))).toEqual([]);
+  });
+
+  it('names a mod a file of which it vouches for could not be hashed, and writes no manifest', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), made: [{ path: 'a.esp', vouchedFor: true }] }], refused: [] }));
+    const adapter = fakeAdapter({ folderFiles: new Map([[folderOf('ModA'), ['a.esp']]]) });
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect(outcome).toEqual({
+      landed: [{ ...landedOf('ModA'), failure: `The build could not write its manifest: 'a.esp' could not be read: no answer fixed for ${join(folderOf('ModA'), 'a.esp')}` }], refused: [],
+    });
+    expect(await readdir(folderOf('ModA'))).toEqual([]);
+  });
+});
+
+describe('sourceCommands whatBuildDestroys', () => {
+  it('refuses a mod whose folder could not be read, naming why', async () => {
+    const unreadable = { ...fakeAdapter(), folderValue: () => Promise.reject(new Error('EACCES')) };
+
+    const listing = await sourceCommands({ client: new InMemoryMEditClient(), adapter: unreadable, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
+      .whatBuildDestroys(['ModA']);
+
+    expect(listing).toEqual({ mods: ['ModA'], destroys: [], refused: [{ item: 'ModA', reason: 'was not built: a file could not be read: EACCES.' }] });
   });
 });
 

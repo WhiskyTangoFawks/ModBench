@@ -10,6 +10,7 @@ import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { folderValueOver, modValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -401,6 +402,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return answer(answers.hashes?.get(path), path);
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
+    folderValue: (folder) => folderValueOver(adapter, folder),
+    modValue: (mod, folder, asked) => modValueOver(adapter, mod, folder, asked),
     packageEntries: (hash) => Promise.resolve(answers.packageEntries?.get(hash)),
     keepPackageEntries: (hash, entries) => record({ verb: 'keepPackageEntries', hash, entries }, answers.packageEntriesNotWritten),
     textHash,

@@ -10,7 +10,7 @@ import { registerBuildTask } from '../buildTask';
 
 type Landed = BuildOutcome['landed'][number];
 const landed = (overrides: Partial<Landed> = {}): Landed =>
-  ({ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], ...overrides });
+  ({ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], ...overrides });
 const applied = (outcome: BuildOutcome) => ({ applied: true, outcome });
 const DEFINITION = { type: 'modbench.mod.build' };
 
@@ -37,11 +37,11 @@ describe('the build task', () => {
   });
 
   it('passes when the build only warned, and writes the warning to the terminal and the Output', async () => {
-    const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ overwritten: ['a.txt'] })], refused: [] }));
+    const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ undeclared: ['a.log'] })], refused: [] }));
 
     expect([written, closedWith, reporter.shownFailures]).toEqual([
-      'Build overwrote 1 file that differed. "a.txt (ModA)"\r\nBuilt "ModA".\r\n', [0],
-      [{ severity: 'warning', message: 'Build overwrote 1 file that differed.', detail: '"a.txt (ModA)"' }],
+      'Build sent to the trash 1 file a step made that its build file does not name. "a.log (ModA)"\r\nBuilt "ModA".\r\n', [0],
+      [{ severity: 'warning', message: 'Build sent to the trash 1 file a step made that its build file does not name.', detail: '"a.log (ModA)"' }],
     ]);
   });
 

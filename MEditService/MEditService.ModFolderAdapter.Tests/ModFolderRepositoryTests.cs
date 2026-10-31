@@ -15,20 +15,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void Dispose() => _scratch.Dispose();
 
     [Fact]
-    public void Hashes_HashEachFileByItsForwardSlashPath_AlikeForAlikeBytes()
-    {
-        Write("readme.txt", "abc");
-        Write(Path.Combine("meshes", "deep", "a.nif"), "hello");
-        Write("b.nif", "hello");
-
-        var hashes = _repository.Hashes(_root);
-
-        Assert.Equal(["b.nif", "meshes/deep/a.nif", "readme.txt"], hashes.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(hashes["b.nif"], hashes["meshes/deep/a.nif"]);
-        Assert.NotEqual(hashes["b.nif"], hashes["readme.txt"]);
-    }
-
-    [Fact]
     public void DeleteFile_RemovesTheFile_AndAFileAlreadyGoneIsDone()
     {
         Write("a.nif", "a");
@@ -57,7 +43,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         TempLeftover.DeadWriters(_root);
         Write(Path.Combine(".medit_tmp_1_dir", "mod.esp"), "half");
 
-        Assert.Equal(["a.txt"], _repository.Hashes(_root).Keys);
         Assert.Equal(["a.txt"], _repository.FilePaths(_root));
     }
 
@@ -106,15 +91,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("mod.ba2", "old archive, longer than the new one", true)]
-    [InlineData("mod.ba2", "old", true)]
-    [InlineData("mod.ba2", "new", false)]
-    [InlineData("another.ba2", "old", false)]
-    public void WriteFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string pathThere, string there, bool replaced)
+    [InlineData("mod.ba2", "old archive, longer than the new one")]
+    [InlineData("mod.ba2", "old")]
+    [InlineData("mod.ba2", "new")]
+    [InlineData("another.ba2", "old")]
+    public void WriteFile_PutsTheStreamsBytesAtThePath(string pathThere, string there)
     {
         Write(pathThere, there);
 
-        Assert.Equal(replaced, _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
+        _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8));
 
         Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
     }

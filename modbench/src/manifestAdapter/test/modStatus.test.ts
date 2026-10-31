@@ -2,23 +2,23 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
+import type { ManifestAt } from '../manifestFiles';
+import type { StatusValues } from '../../repositoriesLib/statusValues';
 import { manifestText } from '../manifestText';
-import { metadataOf, metadataOverwritten, statusOf, statusesNow, type FolderReads, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
+import { manifestAt, metadataOf, metadataOverwritten, packagesAskedAt, statusFrom, type Manifest, type ManifestFile, type ManifestPackage, type ModStatus } from '../manifestAdapter';
 
 let root: string;
 let folder: string;
-let hashed: string[];
 let entries: Map<string, ReadonlyMap<string, string>>;
 let notDownloaded: Set<string>;
 let downloadedHash: Map<string, string>;
 let gameFolderFound: boolean;
-let metadata: Awaited<ReturnType<FolderReads['modMetadata']>>;
+let metadata: StatusValues['metadata'];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-status-'));
   folder = join(root, 'mods', 'mod');
   await mkdir(folder, { recursive: true });
-  hashed = [];
   entries = new Map();
   notDownloaded = new Set();
   downloadedHash = new Map();
@@ -34,25 +34,20 @@ async function filesBelow(at: string): Promise<string[]> {
   return listed.filter((entry) => entry.isFile()).map((entry) => relative(at, join(entry.parentPath, entry.name)).split('\\').join('/'));
 }
 
-const inFolder = (path: string): string => relative(folder, path).split('\\').join('/');
-const spelled = (path: string, ignoresCase: boolean): string => (ignoresCase ? path.toLowerCase() : path);
+type ReadValues = Extract<StatusValues, { kind: 'read' }>;
 
-const foundByListing = async (path: string, ignoresCase: boolean): Promise<boolean> =>
-  (await filesBelow(folder)).some((held) => spelled(held, ignoresCase) === spelled(inFolder(path), ignoresCase));
-
-const readsHashingAFileAsItsText = (fileSystemIgnoresCase = false): FolderReads => ({
-  filesIn: async (at) => (await filesBelow(at)).filter((path) => path !== 'meta.ini'),
-  fileStamp: async (path) =>
-    ((await foundByListing(path, fileSystemIgnoresCase)) ? { kind: 'read', answer: undefined } : { kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: async (path) => {
-    hashed.push(inFolder(path));
-    return { kind: 'read', answer: { hash: await readFile(path, 'utf8') } };
-  },
-  packageEntries: (hash) => Promise.resolve(entries.get(hash)),
-  modMetadata: () => Promise.resolve(metadata),
-  downloadedFile: (name) => Promise.resolve({ kind: 'read', answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? 'PACK1' } }),
-  gameFolder: () => Promise.resolve({ kind: gameFolderFound ? 'found' : 'notFound' }),
-});
+async function valuesOver(manifest: ManifestAt, ignoresCase: boolean): Promise<ReadValues> {
+  const asked = packagesAskedAt(manifest) ?? { entries: [], installationFiles: [] };
+  const files = new Map(await Promise.all((await filesBelow(folder)).filter((path) => path !== 'meta.ini').map(
+    async (path) => [path, { kind: 'read' as const, answer: { hash: await readFile(join(folder, path), 'utf8') } }] as const,
+  )));
+  return {
+    metadata, kind: 'read', folder: { files, ignoresCase },
+    packageEntries: new Map(asked.entries.flatMap((key) => { const held = entries.get(key); return held === undefined ? [] : [[key, held] as const]; })),
+    downloadedFiles: new Map(asked.installationFiles.map((name) => [name, { kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? 'PACK1' } }])),
+    gameFolder: { kind: gameFolderFound ? 'found' : 'notFound' },
+  };
+}
 
 async function write(path: string, text: string, at = folder): Promise<void> {
   await mkdir(dirname(join(at, path)), { recursive: true });
@@ -76,7 +71,12 @@ async function manifested(held: Manifest): Promise<void> {
   await write('mod.manifest.json', manifestText(held));
 }
 
-const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusOf({ name: 'mod', folder }, readsHashingAFileAsItsText(fileSystemIgnoresCase));
+async function statusWith(values: (read: ReadValues) => StatusValues = (read) => read, fileSystemIgnoresCase = false): Promise<ModStatus> {
+  const manifest = await manifestAt(folder);
+  return statusFrom({ name: 'mod', folder }, manifest, values(await valuesOver(manifest, fileSystemIgnoresCase)));
+}
+
+const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
   ({ mod: 'mod', noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesLacking: [], ...over });
@@ -163,15 +163,6 @@ describe('a mod\'s status against its manifest', () => {
     expect((await status()).differing).toEqual([]);
   });
 
-  it('hashes no file whose line its package does not fix', async () => {
-    await Promise.all([write('a.nif', 'edited'), write('b.nif', 'added'), write('mine.txt', 'mine')]);
-    await manifested(manifest([line('a.nif', { kind: 'otherBytes' }), line('b.nif', { kind: 'notHeld' })]));
-
-    const read = await status();
-
-    expect([read, hashed]).toEqual([heldAs({ notInPackage: ['b.nif'], otherBytes: ['a.nif'], namedByNoLine: ['mine.txt'] }), []]);
-  });
-
   it('names a file a step makes no gap and never differing, but gone when the folder lacks it', async () => {
     await write('made.dds', 'whatever the step wrote');
     await manifested(manifest([line('made.dds', { kind: 'madeByStep' }), line('lacked.dds', { kind: 'madeByStep' })]));
@@ -205,11 +196,11 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(heldAs({ differing: ['b.esp'] }));
   });
 
-  it('neither hashes nor names a gap a source mod\'s file its line records by its path alone, which a step makes (mods.md, Build, story 3)', async () => {
+  it('neither checks nor names a gap a source mod\'s file its line records by its path alone, which a step makes (mods.md, Build, story 3)', async () => {
     await write('made.dds', 'whatever the step wrote');
     await manifested(manifest([line('made.dds')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
 
-    expect([await status(), hashed]).toEqual([heldAs(), []]);
+    expect(await status()).toEqual(heldAs());
   });
 
   it.each([[true, false], [false, true]])('says a source mod has no host only when its repository is no submodule (submodule: %s)', async (isSubmodule, noHost) => {
@@ -232,9 +223,9 @@ describe('a mod\'s status against its manifest', () => {
 
   it('says why a downloaded file it pins cannot be looked up', async () => {
     await manifested(manifest([]));
-    const reads = { ...readsHashingAFileAsItsText(), downloadedFile: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
+    const read = (values: ReadValues): ReadValues => ({ ...values, downloadedFiles: new Map([['Mod.zip', { kind: 'unreadable' as const, reason: 'EACCES' }]]) });
 
-    expect((await statusOf({ name: 'mod', folder }, reads)).packagesLacking).toEqual(["installation file 'Mod.zip' could not be read: EACCES"]);
+    expect((await statusWith(read)).packagesLacking).toEqual(["installation file 'Mod.zip' could not be read: EACCES"]);
   });
 
   it('is unreadable, saying why, when its metadata cannot be read', async () => {
@@ -244,21 +235,19 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(nothing({ unreadable: 'its metadata could not be read: access denied' }));
   });
 
-  it('is unreadable, saying why, when its folder cannot be listed', async () => {
+  it('is unreadable, saying why, when the values say a read of its folder rejected', async () => {
     await manifested(manifest([]));
-    const listing: FolderReads = { ...readsHashingAFileAsItsText(), filesIn: () => Promise.reject(new Error('EACCES: permission denied')) };
 
-    expect(await statusOf({ name: 'mod', folder }, listing)).toEqual(nothing({ unreadable: 'a file could not be read: EACCES: permission denied' }));
+    expect(await statusWith(({ metadata: held }) => ({ metadata: held, kind: 'unreadable', reason: 'EACCES: permission denied' }))).toEqual(nothing({ unreadable: 'a file could not be read: EACCES: permission denied' }));
   });
 
-  it('read now, finds each mod\'s folder as the adapter answers it, and none for a mod its name gives no folder', async () => {
-    await manifested(manifest([line('a.esp')], { packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: true }] }));
-    const reads = {
-      ...readsHashingAFileAsItsText(),
-      modFolderPath: (mod: string) => Promise.resolve(mod === 'mod' ? folder : undefined),
-    };
+  it('is unreadable, saying why, when its folder cannot be read for its manifest', async () => {
+    await write('not-a-folder', 'x', root);
 
-    expect(await statusesNow(reads, ['mod', 'Nameless'])).toEqual([heldAs({ gone: ['a.esp'] })]);
+    const { read } = await manifestAt(join(root, 'not-a-folder'));
+    if (read === undefined || !('refused' in read)) throw new Error('expected a refusal');
+
+    expect(read.refused).toMatch(/^a file could not be read: ENOTDIR/);
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {

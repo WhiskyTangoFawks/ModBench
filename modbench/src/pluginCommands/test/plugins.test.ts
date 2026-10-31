@@ -222,7 +222,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: provided.map((name) => fileIn('/mods/Provider', name)), folders: [], notes: [] }]]),
     }), { repositoryOnDisk: repository !== undefined });
     const asked: string[] = [];
-    const reading = { ...fake.adapter, modMetadata: (mod: string) => { asked.push(mod); return fake.adapter.modMetadata(mod); } };
+    const reading = { ...fake.adapter, modValue: (mod: string, folder: string, wanted: Parameters<typeof fake.adapter.modValue>[2]) => { asked.push(mod); return fake.adapter.modValue(mod, folder, wanted); } };
     const result = await pluginSyncOver(reading)();
     return { fake, result, asked };
   };
@@ -251,6 +251,15 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     const { result } = await sync({ order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp'], repository: { manifests: { Unrestored: [] } } });
 
     expect(result).toEqual({ applied: true, wrote: true, added: [], dropped: ['Unrestored.esp'] });
+  });
+
+  it('reads the values of no mod whose name gives no folder, and drops the line of a plugin nothing names', async () => {
+    const { result, asked } = await sync({
+      order: ['Base.esp', 'Gone.esp'], provided: ['Base.esp'], otherMod: { name: '../Nameless', enabled: true },
+      repository: { manifests: { Provider: [] } },
+    });
+
+    expect([result, asked]).toEqual([{ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] }, ['Provider']]);
   });
 
   it('drops the line of a plugin only a disabled mod\'s manifest names', async () => {

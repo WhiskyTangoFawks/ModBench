@@ -13,7 +13,7 @@ import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 let root: string;
 let SOURCES: Record<string, string>;
 const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
-const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [] });
+const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [] });
 const builtOf = (mod: string) => ({ ...landedOf(mod), made: [] });
 const NOT_YET = { state: 'NotYet' } as const;
 const AS_ON_DISK = { state: 'AsOnDisk' } as const;

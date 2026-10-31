@@ -29,13 +29,11 @@ public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Te
 /// plugin's or archive's file does not.</summary>
 public sealed record MadeFile(string Path, bool VouchedFor);
 
-/// <summary>A mod that built. Overwritten: each replaced file that held other bytes (A source mod, story 4). Made: each file
-/// it made, none after a Failure. Uncommitted and Unpushed: its source's.</summary>
+/// <summary>A mod that built. Made: each file it made, none after a Failure. Uncommitted and Unpushed: its source's.</summary>
 internal sealed record ModBuildOutcome(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
     IReadOnlyList<ItemRefused<string, ArchiveRefusal>> ArchivesRefused,
-    IReadOnlyList<string> Overwritten,
     string? Failure,
     bool Uncommitted = false,
     bool Unpushed = false)

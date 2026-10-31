@@ -1,7 +1,9 @@
 import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
+import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { BUILD_FILE } from '../wire/sourceMod';
 import type { BuildFileRead, Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
@@ -24,8 +26,7 @@ const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFES
 
 const manifestsIn = async (folder: string): Promise<string[]> => (await fileNamesIn(folder)).filter(isManifestPath);
 
-/** The path of the manifest `folder` holds, else of the one named for it. */
-export const manifestFileIn = async (folder: string): Promise<string> => join(folder, (await manifestsIn(folder))[0] ?? manifestNameOf(folder));
+const manifestFileIn = async (folder: string): Promise<string> => join(folder, (await manifestsIn(folder))[0] ?? manifestNameOf(folder));
 
 // An editor may write a byte order mark, which JSON does not allow.
 const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
@@ -72,3 +73,29 @@ export async function buildFileIn(sourceFolder: string): Promise<BuildFileRead |
   if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
   return one === undefined ? undefined : readBuildFile(await textAt(join(sourceFolder, one)));
 }
+
+/** What a folder holds of its manifest: the read, none when it holds none, and the path as the folder spells it. */
+export interface ManifestAt {
+  readonly read: ManifestRead | undefined;
+  readonly file: string;
+}
+
+/** The manifest `folder` holds; a file that could not be read is a refusal that says so. */
+export async function manifestAt(folder: string): Promise<ManifestAt> {
+  try {
+    return { read: await manifestIn(folder), file: await manifestFileIn(folder) };
+  } catch (err) {
+    return { read: { refused: `a file could not be read: ${errorMessage(err)}` }, file: manifestNameOf(folder) };
+  }
+}
+
+/** What the Instance adapter is asked to read for a status of `manifest`. */
+export function packagesAsked(manifest: Manifest): PackagesAsked {
+  return {
+    entries: manifest.packages.map((pkg) => (pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash)),
+    installationFiles: manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
+  };
+}
+
+/** What the Instance adapter is asked to read for a status of the manifest `at` holds; none when it holds none to compare. */
+export const packagesAskedAt = ({ read }: ManifestAt): PackagesAsked | undefined => (read !== undefined && 'manifest' in read ? packagesAsked(read.manifest) : undefined);

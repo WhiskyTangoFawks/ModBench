@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
 import type { InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, metadataOverwritten, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
+  buildFileIn, exclusionsOf, folderAgainst, manifestIn, metadataOf, metadataOverwritten, packagesAsked, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
   type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
@@ -24,7 +24,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'textHash' | 'modMetadata'
-  | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'filesIn' | 'fileStamp' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
+  | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
   | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 export interface RestoreDeps {
@@ -163,13 +163,14 @@ async function passOver(deps: RestoreDeps, folders: Folders, sourceMods: SourceM
   };
 }
 
-const compared = (adapter: Adapter, manifest: Manifest, folder: string, packages: PackagesRead): Promise<FolderAgainst> =>
-  folderAgainst(manifest, folder, {
-    filesIn: (at) => adapter.filesIn(at),
-    fileStamp: (path) => adapter.fileStamp(path),
-    originFileHash: (path) => adapter.originFileHash(path),
-    packageEntries: async (hash) => packages.entries.get(hash) ?? adapter.packageEntries(hash),
-  });
+async function compared(adapter: Adapter, manifest: Manifest, folder: string, packages: PackagesRead): Promise<FolderAgainst> {
+  const entries = new Map<string, ReadonlyMap<string, string>>();
+  for (const key of packagesAsked(manifest).entries) {
+    const held = packages.entries.get(key) ?? await adapter.packageEntries(key);
+    if (held !== undefined) entries.set(key, held);
+  }
+  return folderAgainst(manifest, await adapter.folderValue(folder), entries);
+}
 
 type Answer = { readonly landed: ModRestored } | { readonly refusal: string };
 
@@ -273,8 +274,7 @@ async function clonedAtThePin(pass: Pass, name: string): Promise<Cloned> {
   return leftDetached ? { leftDetached } : {};
 }
 
-// ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records, and the build
-// sends every other file to the trash.
+// ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records.
 async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, submodule: string | undefined): Promise<Answer> {
   const { adapter, client, tasks, trash } = pass.deps;
   const cloned = submodule === undefined ? {} : await clonedAtThePin(pass, submodule);

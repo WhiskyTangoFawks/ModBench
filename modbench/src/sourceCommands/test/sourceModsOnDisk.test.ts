@@ -15,9 +15,9 @@ import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
 import { manifestText } from '../../manifestAdapter/manifestText';
 import { readBuildFile } from '../../manifestAdapter/manifestRead';
-import { manifestIn, sourceModsOf, statusOf, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { statusNow } from '../../test/statusNow';
+import { manifestIn, sourceModsOf, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { textHash } from '../../instanceAdapter/fileContents/contentDigest';
 import { sourceCommands } from '../sourceCommands';
 
 let root: string;
@@ -61,19 +61,25 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<BuildFi
   client.setCommandHandler('build', async (mods: readonly BuildMod[]) => {
     sent.push(...mods);
     for (const { path } of made) await put(`mods/Mod/${path}`, 'built');
-    return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [...made] }], refused: [] };
+    return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...made] }], refused: [] };
   });
   const tasks = recordingTasks(['Optimise']);
   const stepping = { ...tasks, whyStepsFailed: async (...ran: Parameters<typeof tasks.whyStepsFailed>) => { await step(); return tasks.whyStepsFailed(...ran); } };
   const trashed: string[] = [];
-  const trash = async (path: string): Promise<void> => { trashed.push(relative(join(root, 'mods', 'Mod'), path).replaceAll('\\', '/')); await rm(path); };
+  let trashRefusal: string | undefined;
+  const trash = async (path: string): Promise<void> => {
+    if (trashRefusal !== undefined) throw new Error(trashRefusal);
+    trashed.push(relative(join(root, 'mods', 'Mod'), path).replaceAll('\\', '/'));
+    await rm(path);
+  };
   const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: stepping, trash });
-  const status = async () => statusOf({ name: 'Mod', folder: join(root, 'mods', 'Mod') }, adapter);
+  const status = async () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
   const recorded = async (): Promise<Manifest | undefined> => {
     const read = await manifestIn(join(root, 'mods', 'Mod'));
     return read === undefined || 'refused' in read ? undefined : read.manifest;
   };
-  return { build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter, trashed };
+  const refuseTrash = (why: string): void => { trashRefusal = why; };
+  return { build: () => commands.build(['Mod']), sent, status, recorded, commands, adapter, trashed, refuseTrash };
 }
 
 describe('build over an instance on disk', () => {
@@ -83,7 +89,7 @@ describe('build over an instance on disk', () => {
 
     const outcome = await build();
 
-    expect(outcome).toEqual({ landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] });
+    expect(outcome).toEqual({ landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [] }], refused: [] });
     expect(sent).toMatchObject([{ taken: ['b.nif', 'textures/c.dds'] }]);
     expect(await textsBelow(join(root, 'mods', 'Mod'))).toEqual({
       'meta.ini': '[General]\r\nversion=1.2\r\ninstallationFile=Mod.7z\r\n', 'Mod.esp': 'built', 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds',
@@ -100,8 +106,8 @@ describe('build over an instance on disk', () => {
     expect(await recorded()).toEqual({
       packages: [{ kind: 'sourceRepository', name: 'Mod', isSubmodule: false }], version: '1.2', exclude: [], archives: [],
       files: [
-        { path: 'b.nif', entry: { kind: 'held' }, hash: await textHash('bytes of b.nif') }, { path: 'Mod.esp', entry: { kind: 'held' }, hash: await textHash('built') },
-        { path: 'textures/c.dds', entry: { kind: 'held' }, hash: await textHash('bytes of textures/c.dds') },
+        { path: 'b.nif', entry: { kind: 'held' }, hash: 'OZFIfvr0kjo=' }, { path: 'Mod.esp', entry: { kind: 'held' }, hash: 'QnTauWK5/T8=' },
+        { path: 'textures/c.dds', entry: { kind: 'held' }, hash: 'RNWYjJS3keA=' },
       ],
     });
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: true });
@@ -117,6 +123,54 @@ describe('build over an instance on disk', () => {
 
     expect((await recorded())?.files.map(({ path, hash }) => [path, hash !== undefined])).toEqual([['b.nif', true], ['made.dds', false], ['Mod.esp', true]]);
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
+  });
+
+  it('sends to the trash a file a step makes that its build file does not name, and names it apart from the other files it trashed (Never silently wrong)', async () => {
+    const { build, trashed } = await aSourceModTakingFromAnInstallationFile({
+      steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }],
+      files: [{ path: 'b.nif', entry: { kind: 'held' } }, { path: 'made.dds', entry: { kind: 'madeByStep' } }],
+    }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); await put('mods/Mod/logs/optimise.log', 'log'); });
+    await put('mods/Mod/mine.txt', 'mine');
+
+    const outcome = await build();
+
+    expect([trashed.sort(), outcome]).toMatchObject([['logs/optimise.log', 'mine.txt'], { landed: [{ mod: 'Mod', undeclared: ['logs/optimise.log'] }] }]);
+  });
+
+  it('names, beside what a step made that its build file does not name, the copy I excluded of a file a step makes, which the step writes again', async () => {
+    const { build } = await aSourceModTakingFromAnInstallationFile({
+      steps: [{ task: 'Optimise', args: [] }], tools: [{ task: 'Optimise', page: 'https://example.com/o' }],
+      files: [{ path: 'b.nif', entry: { kind: 'held' } }, { path: 'made.dds', entry: { kind: 'madeByStep' } }],
+    }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
+    await put('mods/Mod/made.dds.mohidden', 'made before');
+
+    expect(await build()).toMatchObject({ landed: [{ mod: 'Mod', undeclared: ['made.dds.mohidden'] }] });
+  });
+
+  it('stops before its manifest when a file cannot be sent to the trash, naming it, and leaves the manifest as it was', async () => {
+    const { build, recorded, refuseTrash } = await aSourceModTakingFromAnInstallationFile();
+    await build();
+    const before = await recorded();
+    await put('mods/Mod/mine.txt', 'mine');
+    await put('mods/Mod/meta.ini', '[General]\r\nversion=2.0\r\ninstallationFile=Mod.7z\r\n');
+    refuseTrash('EBUSY');
+
+    const outcome = await build();
+
+    expect(outcome).toMatchObject({ landed: [{ mod: 'Mod', failure: "The build stopped as 'mine.txt' could not be moved to the trash: EBUSY, so its manifest was not written." }] });
+    expect(await recorded()).toEqual(before);
+  });
+
+  it('keeps a file the build makes in another case only where the folder\'s file system finds it by that name, and sends it to the trash where it does not', async () => {
+    const { build, recorded, trashed } = await aSourceModTakingFromAnInstallationFile();
+    await put('mods/Mod/Textures/C.dds', 'an earlier build');
+    await put('probe', 'x');
+    const ignoresCase = await readFile(join(root, 'PROBE')).then(() => true, () => false);
+
+    await build();
+
+    expect([trashed, (await recorded())?.files.map(({ path }) => path)])
+      .toEqual([ignoresCase ? [] : ['Textures/C.dds'], ['b.nif', 'Mod.esp', 'textures/c.dds']]);
   });
 
   it('rewrites its manifest byte for byte when it comes out the same', async () => {
@@ -200,7 +254,7 @@ describe('build over an instance on disk, of a source mod renamed outside Modben
     await build();
     const renamed = join(root, 'mods', 'Renamed');
     await rename(join(root, 'mods', 'Mod'), renamed);
-    const before = { status: await statusOf({ name: 'Renamed', folder: renamed }, adapter), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
+    const before = { status: await statusNow(adapter, { name: 'Renamed', folder: renamed }), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
 
     const outcome = await commands.build(['Renamed']);
 

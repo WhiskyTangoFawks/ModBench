@@ -105,9 +105,10 @@ describe('a manifest the adapter reads and writes', () => {
   });
 
   it('reads a built source mod\'s file by the bytes its line records, and one a step makes by its path alone (mods.md, Build, story 3)', () => {
-    const read = readManifest(builtSourceMod);
-    if (!('manifest' in read)) throw new Error(read.refused);
-    expect(read.manifest.files.slice(1)).toEqual([{ path: 'Mod.esp', entry: { kind: 'held' }, hash: 'BwYFBAMCAQA=' }, { path: 'textures/made.dds', entry: { kind: 'held' } }]);
+    expect(readManifest(builtSourceMod)).toMatchObject({ manifest: { files: [
+      { path: 'Mod - Main.ba2', entry: { kind: 'held' }, hash: 'AAECAwQFBgc=' }, { path: 'Mod.esp', entry: { kind: 'held' }, hash: 'BwYFBAMCAQA=' },
+      { path: 'textures/made.dds', entry: { kind: 'held' } },
+    ] } });
   });
 
   it('writes its files in path order, ignoring case first', () => {

@@ -14,7 +14,8 @@ function atFolderPath(path: string, exclude: readonly string[], mark: string): s
   return path;
 }
 
-const unmarked = (path: string, mark: string): string =>
+/** `path` with the mark off each segment the mark excludes. */
+export const unmarked = (path: string, mark: string): string =>
   path.split('/').map((segment) => (segment.endsWith(mark) ? segment.slice(0, -mark.length) : segment)).join('/');
 
 const entryAt = (path: string, packagePath: string): PackageEntry =>

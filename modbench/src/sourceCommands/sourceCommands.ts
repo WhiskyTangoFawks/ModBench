@@ -21,7 +21,7 @@ interface SourceCommandsDeps {
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'sourceHost' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
-    | 'originFileHash' | 'fileStamp' | 'packageEntries' | 'writeFilesIn' | 'trashFileIn'>;
+    | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -81,9 +81,10 @@ async function differingIn(adapter: Adapter, folder: string): Promise<string[]> 
   const read = await manifestIn(folder);
   if (read !== undefined && 'refused' in read) return [];
   const manifest = read?.manifest ?? NO_LINE;
-  const exclude = exclusionsOf(manifest, await adapter.filesIn(folder), adapter.exclusionMark);
+  const held = await adapter.folderValue(folder);
+  const exclude = exclusionsOf(manifest, [...held.files.keys()], adapter.exclusionMark);
   const lines = manifest.files.map((line) => lineAtFolderPath({ ...manifest, exclude }, line, adapter.exclusionMark));
-  const against = await folderAgainst({ ...manifest, files: lines }, folder, adapter);
+  const against = folderAgainst({ ...manifest, files: lines }, held, new Map());
   const differing = against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : []));
   return [...differing, ...against.namedByNoLine].sort();
 }
@@ -116,10 +117,12 @@ async function sourceModOf(
 export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: SourceCommandsDeps) {
   const sourceModsNow = async (): Promise<SourceMods> =>
     sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const toBuild = (sourceMods: SourceMods, asked: readonly string[], everySource: boolean): readonly string[] =>
+    (everySource ? [...sourceMods.folders.keys()] : asked);
   return {
     whatBuildDestroys: async (asked: readonly string[], everySource = false): Promise<WhatBuildDestroys> => {
       const sourceMods = await sourceModsNow();
-      const mods = everySource ? [...sourceMods.folders.keys()] : asked;
+      const mods = toBuild(sourceMods, asked, everySource);
       const destroys: { mod: string; files: string[] }[] = [];
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
@@ -135,12 +138,11 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       return { mods, destroys, refused };
     },
 
-
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder, metadata or package the
      *  Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest. */
     build: async (asked: readonly string[], everySource = false): Promise<SourceBuildOutcome | WriteRefused> => {
       const sourceMods = await sourceModsNow();
-      const mods = everySource ? [...sourceMods.folders.keys()] : asked;
+      const mods = toBuild(sourceMods, asked, everySource);
       const pass: BuildPass = {
         facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()) }, tasks: new Set(await tasks.labels()),
       };

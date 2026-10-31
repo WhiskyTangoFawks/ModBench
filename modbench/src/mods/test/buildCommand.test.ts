@@ -37,7 +37,7 @@ describe('modbench.mod.build', () => {
   const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
-    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
+    ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [] });
   const builds: (readonly string[] | 'every source')[] = [];
   beforeEach(() => { builds.length = 0; });
 
@@ -226,7 +226,7 @@ describe('modbench.mod.build', () => {
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
     const { handler, reporter, diagnostics } = registered({
       landed: [{
-        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
+        mod: 'ModA', refused: [], archivesRefused: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [{ formKey: '000800:MyPatch.esp', sourceRelativePath: 'Source/A.json', message: 'Race: points at nothing' }],
@@ -246,7 +246,7 @@ describe('modbench.mod.build', () => {
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {
     const { handler, reporter } = registered({
       landed: [{
-        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [],
+        mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
           diagnostics: [
@@ -280,46 +280,28 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
-  it('names the part of a mod\'s build that failed after it began writing, beside the files it overwrote', async () => {
+  it('names the part of a mod\'s build that failed after it began writing', async () => {
     const { handler, reporter } = registered({
-      landed: [{ ...built('ModA'), overwritten: ['a.txt'], failure: 'The build stopped before compiling: z.txt is held.' }], refused: [],
+      landed: [{ ...built('ModA'), failure: 'The build stopped before compiling: z.txt is held.' }], refused: [],
     });
 
     await handler(modRow('ModA'));
 
     expect(reporter.reports).toEqual([
       { severity: 'warning', message: 'Built 1 mod only in part.', detail: '"ModA" (The build stopped before compiling: z.txt is held.)' },
-      { severity: 'warning', message: 'Build overwrote 1 file that differed.', detail: '"a.txt (ModA)"' },
     ]);
   });
 
-  it('names each file the build overwrote that differed, beside the landing', async () => {
-    const { handler, reporter } = registered({
-      landed: [{ ...built('ModA', [PATCH]), overwritten: ['MyPatch.esp', 'textures/a.dds'] }, { ...built('ModB'), overwritten: ['b.nif'] }],
-      refused: [],
-    });
+  it('names each file a step made that its build file does not name, which the build sent to the trash, beside the landing', async () => {
+    const { handler, reporter } = registered({ landed: [{ ...built('ModA'), undeclared: ['logs/a.log', 'b.tmp'] }, built('ModB')], refused: [] });
     const rows = [modRow('ModA'), modRow('ModB')];
 
     await handler(rows[0], rows);
 
     expect(reporter.landings).toEqual(['Built 2 mods.']);
     expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Build overwrote 3 files that differed.', detail: '"MyPatch.esp (ModA)", "textures/a.dds (ModA)", "b.nif (ModB)"',
+      severity: 'warning', message: 'Build sent to the trash 2 files a step made that its build file does not name.', detail: '"logs/a.log (ModA)", "b.tmp (ModA)"',
     }]);
-  });
-
-  it.each([
-    ['uncommitted', ['ModA'], 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.', '"ModA"'],
-    ['uncommitted', ['ModA', 'ModB'], 'Built 2 mods from changes no commit holds, so their manifests\' commits do not rebuild them.', '"ModA", "ModB"'],
-    ['unpushed', ['ModA'], 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.', '"ModA"'],
-    ['unpushed', ['ModA', 'ModB'], 'Built 2 mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.', '"ModA", "ModB"'],
-  ] as const)('names each mod whose manifest\'s commit does not rebuild it, %s, beside the landing', async (flag, mods, message, detail) => {
-    const { handler, reporter } = registered({ landed: mods.map((mod) => ({ ...built(mod), [flag]: true })), refused: [] });
-    const rows = mods.map(modRow);
-
-    await handler(rows[0], rows);
-
-    expect(reporter.reports).toEqual([{ severity: 'warning', message, detail }]);
   });
 
   it('reports a refusal of the whole selection once, and lands nothing', async () => {

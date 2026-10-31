@@ -8,11 +8,11 @@ namespace MEditService.Commands;
 public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<BuildRefused> Refused)
     : ISelectionAnswer<BuildRefused>;
 
-/// <summary>A mod that built, with what it compiled, refused, replaced, what stopped it, and each file it made, from which
-/// the extension records its manifest (ADR-0016).</summary>
+/// <summary>A mod that built, with what it compiled, refused, what stopped it, and each file it made, from which the
+/// extension records its manifest (ADR-0016).</summary>
 public sealed record ModBuilt(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
-    IReadOnlyList<ArchiveRefused> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure, bool Uncommitted, bool Unpushed,
+    IReadOnlyList<ArchiveRefused> ArchivesRefused, string? Failure, bool Uncommitted, bool Unpushed,
     IReadOnlyList<MadeFile> Made);
 
 /// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>

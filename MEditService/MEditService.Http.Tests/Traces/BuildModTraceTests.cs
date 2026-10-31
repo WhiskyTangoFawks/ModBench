@@ -60,7 +60,6 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Equal(
             [SecondPlugin, Plugin],
             built.GetProperty("compiled").EnumerateArray().Select(p => p.GetProperty("name").GetString()).Order());
-        Assert.Equal([Plugin], built.GetProperty("overwritten").EnumerateArray().Select(p => p.GetString()));
         Assert.Equal(0.75, await HeightMaxInTheBytesAt(Path.Combine(_builtFolder, Plugin), formKey), 3);
         Assert.Equal(0.5, await HeightMaxInTheBytesAt(Path.Combine(_builtFolder, SecondPlugin), otherFormKey), 3);
 
