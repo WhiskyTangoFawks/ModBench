@@ -87,15 +87,15 @@ describe('the Downloads view is a flat list whose rows select several at once (c
 describe('the Downloads view gives the agent the line it shows', () => {
   it('reads it through the function the line is composed with, and says nothing while the line is empty', async () => {
     const instance = instanceOver(downloadedFileRowFixture('other.7z'));
-    const { nameFilter, messages } = viewOver(instance);
+    const { nameFilter, ...downloads } = viewOver(instance);
     nameFilter.refresh();
-    const empty = messages();
+    const empty = downloads.messages();
 
     instance.fail('the modlist is unreadable');
     nameFilter.refresh();
 
     await vi.waitFor(() => expect(downloadsTree().message).toBe('Showing the last good read: the modlist is unreadable'));
-    expect([empty, messages()]).toEqual([[], [downloadsTree().message]]);
+    expect([empty, downloads.messages()]).toEqual([[], [downloadsTree().message]]);
   });
 });
 
