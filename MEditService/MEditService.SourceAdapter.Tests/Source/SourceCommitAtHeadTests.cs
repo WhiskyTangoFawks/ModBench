@@ -92,6 +92,29 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
+    public void AClone_FromARemoteWhoseHeadIsUnborn_LandsOnTheOneRemoteBranchAtThePin()
+    {
+        Git(_submodule.Remote, "symbolic-ref", "HEAD", "refs/heads/unborn");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
+    }
+
+    [Fact]
+    public void AClone_FromARemoteWhoseHeadIsUnborn_StaysDetached_AndSaysWhy_WhenSeveralRemoteBranchesAreAtThePin()
+    {
+        Git(_submodule.Remote, "symbolic-ref", "HEAD", "refs/heads/unborn");
+        Git(_submodule.Remote, "branch", "other", _commits["second"]);
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal(
+            (new SubmoduleHead(_commits["second"], "its remote names no default branch and not exactly one of its branches is at the pin, so it is left detached at the pin"), "HEAD"),
+            (head, Branch()));
+    }
+
+    [Fact]
     public void AClone_OfASubmoduleWhoseFollowedBranchHoldsOtherCommits_StaysDetached_AndNamesIt_WhateverTheRemotesDefaultHolds()
     {
         _submodule.Follow("dev");
