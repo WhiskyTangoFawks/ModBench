@@ -78,6 +78,7 @@ export interface PluginsView extends vscode.Disposable {
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
   narrator: ReconcileNarrator;
+  mEditMessages: () => string[];
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
@@ -156,7 +157,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, sourceUnreadableDiagnostics, loadDiagnostics,
   );
   return {
-    view, nameFilter,
+    view, nameFilter, mEditMessages: () => tree.mEditMessages(),
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,

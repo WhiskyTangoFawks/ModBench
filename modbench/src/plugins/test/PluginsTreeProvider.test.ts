@@ -1728,3 +1728,31 @@ describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', ()
     expect(expectInstancesOf(changed, PluginNode).map((row) => row.plugin.name)).toEqual(['Bee.esp']);
   });
 });
+
+describe('PluginsTreeProvider — what mEdit says of the index, for the agent (agent.md, Any agent, story 8)', () => {
+  it('says nothing while the index holds', () => {
+    expect(makeTree([A_ROW()]).tree.mEditMessages()).toEqual([]);
+  });
+
+  it('says the index failed', () => {
+    const h = makeTree([A_ROW()]);
+    h.tree.facts.refused({ kind: 'failed', message: 'the record index threw' });
+
+    expect(h.tree.mEditMessages()).toEqual(['Indexing failed: the record index threw']);
+  });
+
+  it('says another window holds the index, which the failed index does not', () => {
+    const h = makeTree([A_ROW()]);
+    h.tree.facts.refused({ kind: 'heldElsewhere', message: 'another window holds this instance' });
+
+    expect(h.tree.mEditMessages()).toEqual(['another window holds this instance']);
+  });
+
+  it('says the later read that failed, and not the instance\'s own read failure', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
+    await h.tree.getChildren();
+    await reconcile(h, [held('A.esp', { laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message: 'bad' }] })]);
+
+    expect(h.tree.mEditMessages()).toEqual([expect.stringContaining('A.esp/Npc.json: bad')]);
+  });
+});

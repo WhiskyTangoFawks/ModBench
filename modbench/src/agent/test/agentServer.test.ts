@@ -73,13 +73,13 @@ const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
 const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, mEditStanding?: AgentServerOptions['mEditStanding']) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment,
+    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment, mEditStanding,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -87,8 +87,8 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
-  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment);
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, mEditStanding?: AgentServerOptions['mEditStanding']) {
+  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment, mEditStanding);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
@@ -390,6 +390,17 @@ describe('the agent server, given an instance value', () => {
     expect(await call(client, 'list_downloads')).toEqual({ isError: true, text: 'no downloads folder' });
     expect(lines.join('\n')).toContain('no downloads folder');
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('answers beside the words the status bar and the Plugins view say of mEdit, as they stand at each call', async () => {
+    let said = ['mEdit: Running'];
+    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => said });
+    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+
+    expect((await blocks()).slice(1)).toEqual(['mEdit: Running']);
+
+    said = ['mEdit: Ready (2 plugins)', 'Indexing failed: the record index threw'];
+    expect((await blocks()).slice(1)).toEqual(said);
   });
 
   it.each([

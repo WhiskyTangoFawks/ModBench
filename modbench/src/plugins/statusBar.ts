@@ -1,13 +1,7 @@
 import * as vscode from 'vscode';
-import type { BackendStatus, MEditClient } from '../client';
+import type { MEditClient } from '../client';
+import { mEditState } from '../drivingLib/mEditState';
 import type { Reporter } from '../ports/reporter';
-
-const STATUS_TEXT: Record<BackendStatus, string> = {
-  starting:     '$(loading~spin) mEdit: Starting…',
-  running:      '$(plug) mEdit: Running',
-  disconnected: '$(error) mEdit: Disconnected',
-  stopped:      '$(circle-slash) mEdit: Stopped',
-};
 
 const STOPPED = 'mEdit stopped. Reload the window to start it again.';
 
@@ -16,6 +10,8 @@ export interface StatusBar extends vscode.Disposable {
   ready(activePlugins: number): void;
   /** While the snapshot is not indexed. */
   showMEditState(): void;
+  /** The words the item shows, without its icon. */
+  standing(): string;
 }
 
 export function createStatusBar(
@@ -23,7 +19,12 @@ export function createStatusBar(
   reporterFor: (tag: string) => Reporter,
 ): StatusBar {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  const showStatus = () => { item.text = STATUS_TEXT[client.status]; };
+  let indexedActivePlugins: number | undefined;
+  const show = () => {
+    const { icon, text } = mEditState(client.status, indexedActivePlugins);
+    item.text = `$(${icon}) ${text}`;
+  };
+  const showStatus = () => { indexedActivePlugins = undefined; show(); };
   showStatus();
   item.show();
   const reportStopped = (tag: string, detail?: string): void => { reporterFor(tag).report('error', STOPPED, detail); };
@@ -39,8 +40,9 @@ export function createStatusBar(
     }),
   ];
   return {
-    ready: (activePlugins) => { item.text = `$(check) mEdit: Ready (${activePlugins} plugins)`; },
+    ready: (activePlugins) => { indexedActivePlugins = activePlugins; show(); },
     showMEditState: showStatus,
+    standing: () => mEditState(client.status, indexedActivePlugins).text,
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); item.dispose(); },
   };
 }

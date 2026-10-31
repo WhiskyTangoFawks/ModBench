@@ -165,6 +165,12 @@ export class PluginsTreeProvider
     return messageLine(this.firstHeldMessage(), this.standingMessage());
   }
 
+  /** What mEdit says of the index and of its reads, the part of the message line the agent cannot get from the instance. */
+  mEditMessages(): string[] {
+    return [this.facts.rows.indexFailureMessage(), this.facts.rows.heldElsewhereMessage(), this.facts.rows.readFailureMessage()]
+      .filter((message) => message !== undefined);
+  }
+
   standingMessage(): string | undefined {
     return messageLine(managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)));
   }
