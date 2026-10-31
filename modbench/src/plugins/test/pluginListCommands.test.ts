@@ -261,7 +261,7 @@ describe('registerCreatePluginCommand', () => {
 
 describe('modbench.plugin.create, called by the agent', () => {
   const place = (origin: string, name = 'MyPatch.esp') =>
-    new AgentCall([origin === 'overwrite/' ? { kind: 'overwrite' } : { kind: 'mod', name: origin }], { name });
+    new AgentCall([origin === 'overwrite/' ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin }], { name });
   const placeless = new AgentCall([], { name: 'MyPatch.esp' });
 
   function invokeAgent(call: AgentCall<{ name: string }>, client = new InMemoryMEditClient(), paths: Partial<InstanceValue['paths']> = {}) {
@@ -307,7 +307,7 @@ describe('modbench.plugin.create, called by the agent', () => {
   });
 
   it('refuses a call that names two places, creating nothing', async () => {
-    const { client, answer } = invokeAgent(new AgentCall([{ kind: 'mod', name: 'Winning Mod' }, { kind: 'overwrite' }], { name: 'MyPatch.esp' }));
+    const { client, answer } = invokeAgent(new AgentCall([{ kind: 'mod', name: 'Winning Mod' }, { kind: 'runtimeOutput' }], { name: 'MyPatch.esp' }));
 
     await expect(answer()).rejects.toThrow('Create a plugin in one mod or Overwrite.');
 
@@ -317,7 +317,7 @@ describe('modbench.plugin.create, called by the agent', () => {
   it('refuses a call whose Argument is not a place', async () => {
     const { client, answer } = invokeAgent(new AgentCall([{ kind: 'profile', name: 'Default' }], { name: 'MyPatch.esp' }));
 
-    await expect(answer()).rejects.toThrow('carries mod or overwrites only');
+    await expect(answer()).rejects.toThrow('carries mod or runtimeOutputs only');
 
     expect(client.calls).toEqual([]);
   });

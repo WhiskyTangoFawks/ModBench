@@ -238,7 +238,7 @@ const CREATE_PLUGIN = gestureInput(
   z.object({ argument: z.array(CONTAINER_NAME), options: z.object({ name: z.string() }) }),
   (value, { argument, options }) => new AgentCall(
     argument.flatMap((container): Argument[] => (container.kind === 'runtimeOutput'
-      ? [{ kind: 'overwrite' }]
+      ? [{ kind: 'runtimeOutput' }]
       : modArguments(value, [{ name: container.name }]))),
     options,
   ),

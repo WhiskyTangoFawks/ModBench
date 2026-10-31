@@ -1072,7 +1072,7 @@ describe('the agent server, running a gesture', () => {
       tool: 'plugin_create',
       args: { argument: [{ name: 'Overwrite', kind: 'runtimeOutput' }], options: { name: 'New.esp' } },
       command: 'modbench.plugin.create',
-      argument: [{ kind: 'overwrite' }],
+      argument: [{ kind: 'runtimeOutput' }],
       options: { name: 'New.esp' },
     },
     {

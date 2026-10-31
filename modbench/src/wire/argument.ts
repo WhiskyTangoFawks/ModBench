@@ -6,7 +6,7 @@ export type Argument =
   | { readonly kind: 'record'; readonly formKey: string; readonly plugin?: PluginAddress }
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress }
   | { readonly kind: 'mod'; readonly name: string }
-  | { readonly kind: 'overwrite' }
+  | { readonly kind: 'runtimeOutput' }
   | { readonly kind: 'separator'; readonly name: string }
   | { readonly kind: 'profile'; readonly name: string }
   | { readonly kind: 'deployedFile'; readonly path: string }

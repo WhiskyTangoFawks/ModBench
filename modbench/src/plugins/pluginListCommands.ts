@@ -106,8 +106,8 @@ interface CreateOptions {
 function placeOf(call: AgentCall<CreateOptions>): { origin: string; label: string } {
   const [only, ...more] = call.argument;
   if (only === undefined || more.length > 0) throw new Refusal('Create a plugin in one mod or Overwrite.');
-  const container = argumentOfKind(only, 'mod', 'overwrite');
-  const origin = container.kind === 'overwrite' ? OVERWRITE_ORIGIN : container.name;
+  const container = argumentOfKind(only, 'mod', 'runtimeOutput');
+  const origin = container.kind === 'runtimeOutput' ? OVERWRITE_ORIGIN : container.name;
   return { origin, label: placeLabel(origin) };
 }
 
