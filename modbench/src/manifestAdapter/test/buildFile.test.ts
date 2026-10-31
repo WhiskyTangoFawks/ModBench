@@ -49,7 +49,7 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"files": [{"path":"a.txt","package":"A.zip"}]}', 'its file 1: it names a package the build file does not name'],
     ['{"packages": [{"installationFile":"A.zip"}], "files": []}', 'its build file cannot be read at its package 1'],
     ['{"packages": [{"installationFile":"A.zip","size":1,"hash":"H"}, {"installationFile":"A.zip","size":2,"hash":"G"}], "files": []}', "names the package 'A.zip' twice"],
-    ['{"archives": {"a.ba2": ["C:/x"]}, "files": []}', "its build file's 'archives' names 'C:/x'"],
+    ['{"archives": {"a.ba2": ["../x"]}, "files": []}', "its build file's 'archives' names '../x'"],
     ['{"exclude": [], "files": []}', "its build file holds 'exclude', which Modbench does not read"],
     ['{"tools": [{"page":"https://example.com"}], "files": []}', 'its build file cannot be read at its tool 1'],
     ['{"tools": [{"task":"Zip"}], "files": []}', 'its build file cannot be read at its tool 1'],

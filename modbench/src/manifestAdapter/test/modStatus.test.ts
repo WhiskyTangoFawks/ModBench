@@ -191,8 +191,8 @@ describe('a mod\'s status against its manifest', () => {
   describe('a file a clone cannot rebuild (Status, story 5)', () => {
     it.each([
       ['a package holds its bytes at another path', [{ path: '00 Core/meshes/a.nif', hash: HELLO }], [], []],
-      ['a package holds a file of its name with other bytes', [{ path: '00 Core/A.NIF', hash: EDITED }], [], ['meshes/a.nif']],
-      ['no package holds its bytes', [{ path: 'b.nif', hash: EDITED }], ['meshes/a.nif'], []],
+      ['a package holds a file of its name, its path in any case, with other bytes', [{ path: 'Meshes/A.NIF', hash: EDITED }], [], ['meshes/a.nif']],
+      ['no package holds its bytes, though one holds a file of its base name at another path', [{ path: '00 Core/a.nif', hash: EDITED }], ['meshes/a.nif'], []],
     ])('says why when %s', async (_case, held, notInPackage, otherBytes) => {
       entries = held;
       await write('meshes/a.nif', HELLO);

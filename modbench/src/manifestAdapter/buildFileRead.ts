@@ -1,16 +1,11 @@
 import type {
   BuildFile, BuildFileLine, BuildFilePackage, BuildFileRead, GameDepot, ManifestArchive, ManifestStep, ManifestTool, PackageEntry,
 } from './buildFile';
-import { arrayOf, isPathInTheFolder, objectOf, parsed, required, stringsOf, textOf, unreadable, Unreadable, type Json } from './jsonRead';
+import { arrayOf, isPathInTheFolder, known as knownIn, objectOf, parsed, required, stringsOf, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
 const FILE = 'build file';
 
-const known = (line: Json, part: string | undefined, keys: readonly string[]): void => {
-  const unknownKey = Object.keys(line).find((key) => !keys.includes(key));
-  if (unknownKey !== undefined) {
-    throw new Unreadable(`its ${FILE}${part === undefined ? '' : `'s ${part}`} holds '${unknownKey}', which Modbench does not read`);
-  }
-};
+const known = (members: Json, part: string | undefined, keys: readonly string[]): void => { knownIn(FILE, members, part, keys); };
 
 const inTheFolder = (key: string, paths: readonly string[]): void => {
   const outside = paths.find((path) => !isPathInTheFolder(path));

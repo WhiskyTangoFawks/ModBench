@@ -97,11 +97,14 @@ describe('a manifest the adapter reads and writes', () => {
 });
 
 describe('a manifest the adapter refuses', () => {
-  it.each([
-    ['{\n"files": [\n{"path":"a.txt"}\n]\n}\n', 'its manifest is in a format before version 1, and Modbench reads only version 1'],
-    ['{"version":2}', 'its manifest is version 2, and Modbench reads only version 1'],
-  ])('refuses %j, naming both versions', (text, refused) => {
-    expect(readManifest(text)).toEqual({ refused, versionRefused: true });
+  it('refuses a manifest of the format before version 1, saying update manifest may write it over', () => {
+    expect(readManifest('{\n"files": [\n{"path":"a.txt"}\n]\n}\n')).toEqual({
+      refused: 'its manifest is in a format before version 1, and Modbench reads only version 1', olderFormat: true,
+    });
+  });
+
+  it('refuses a manifest of another version, naming both (formats/CLAUDE.md, Versions)', () => {
+    expect(readManifest('{"version":2}')).toEqual({ refused: 'its manifest is version 2, and Modbench reads only version 1' });
   });
 
   it.each([

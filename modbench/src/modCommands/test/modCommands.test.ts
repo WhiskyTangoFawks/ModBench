@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
@@ -8,7 +8,7 @@ import type {
   EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { manifestText } from '../../manifestAdapter/manifestText';
+import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 const separator = (name: string, enabled = false): ModlistEntry => ({ kind: 'separator', name, enabled });
@@ -276,9 +276,9 @@ describe('uninstallMods', () => {
     const mods = await mkdtemp(join(tmpdir(), 'shared-repository-'));
     for (const name of ['Harder VATS', 'ENBoost']) {
       await mkdir(join(mods, name));
-      await writeFile(join(mods, name, `${name}.manifest.json`), manifestText({
+      await writeManifestIn(join(mods, name), {
         packages: [{ kind: 'repository', name: 'Harder VATS' }], exclude: [], files: new Map(),
-      }));
+      });
     }
     const { fake, commands } = over(FIXTURE_ORDER, {}, {
       modFolders: modFoldersIn(mods, 'Harder VATS', 'ENBoost'), ...sourceMods(new Map([['Harder VATS', SOURCE]])),

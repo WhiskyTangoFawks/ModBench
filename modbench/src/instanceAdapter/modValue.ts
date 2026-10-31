@@ -12,29 +12,30 @@ const otherCase = (path: string): string => path.replace(/\p{L}/gu, (char) => (c
 export async function folderValueOver(reads: FolderReads, folder: string): Promise<FolderValue> {
   const paths = await reads.filesIn(folder);
   const files = new Map<string, FolderFile>();
-  const exclude = new Map<string, string>();
+  const exclude = new Set<string>();
   for (const pathInFolder of paths) {
     const { path, excluded } = ownPathOf(pathInFolder, reads.exclusionMark);
     files.set(pathInFolder, { path, excluded: excluded.length > 0, read: await reads.originFileHash(join(folder, pathInFolder)) });
-    for (const one of excluded) exclude.set(one.toLowerCase(), one);
+    for (const one of excluded) exclude.add(one);
   }
   const holdsCasePair = new Set(paths.map((path) => path.toLowerCase())).size < paths.length;
   const cased = holdsCasePair ? undefined : paths.find((path) => otherCase(path) !== path);
-  return { files, exclude: [...exclude.values()], ignoresCase: cased !== undefined && (await reads.fileStamp(join(folder, otherCase(cased)))).kind === 'read' };
+  return { files, exclude: [...exclude], ignoresCase: cased !== undefined && (await reads.fileStamp(join(folder, otherCase(cased)))).kind === 'read' };
 }
 
 type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule'>;
 
-async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<HashedPath[] | undefined> {
+// None when the game folder is not found.
+async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<FileRead<HashedPath[] | undefined>> {
   const places = await reads.gamePlaces();
-  if (places.length === 0) return undefined;
+  if (places.length === 0) return { kind: 'read', answer: undefined };
   const files: HashedPath[] = [];
   for (const place of places) {
     const taken = await reads.gameFilesTakenBy(place, folder, paths);
-    if (taken.kind === 'unreadable') throw new Error(taken.reason);
+    if (taken.kind === 'unreadable') return taken;
     files.push(...taken.answer.gameFiles.map(({ pathInFolder, hash }) => ({ path: pathInFolder, hash })));
   }
-  return files;
+  return { kind: 'read', answer: files };
 }
 
 /** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. Nothing
@@ -45,9 +46,10 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
     const folderValue = await folderValueOver(reads, folder);
     const downloadedFiles = new Map<string, FileRead<InstallationFile | undefined>>();
     for (const name of asked.installationFiles) downloadedFiles.set(name, await reads.downloadedFile(name));
-    const gameFiles = asked.gameFiles === undefined ? [] : await gameFilesOver(reads, folder, asked.gameFiles);
+    const gameFiles: FileRead<HashedPath[] | undefined> = asked.gameFiles === undefined ? { kind: 'read', answer: [] } : await gameFilesOver(reads, folder, asked.gameFiles);
+    if (gameFiles.kind === 'unreadable') return { kind: 'unreadable', reason: gameFiles.reason };
     const repositoryHosted = asked.repository !== undefined && !('lacks' in await reads.submodule(asked.repository));
-    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles, repositoryHosted };
+    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, repositoryHosted };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
   }

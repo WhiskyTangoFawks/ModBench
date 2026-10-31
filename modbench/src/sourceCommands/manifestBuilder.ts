@@ -20,10 +20,11 @@ export interface GameHeld {
   readonly places: readonly [GamePlaceHeld, ...GamePlaceHeld[]];
 }
 
-// Where a package holds a file's bytes: the installation file by its name, or the game folder, and the path in it.
+// Where a package holds a file's bytes: the installation file by its name, or the game folder, the path in it, and the hash.
 interface Source {
   readonly installationFile?: string;
   readonly packagePath: string;
+  readonly hash: string;
 }
 
 export interface DownloadedFile {
@@ -111,10 +112,10 @@ export function buildManifest(
   const places = rankedPlaces(game, files);
   for (const file of files) {
     const own = installationFile === undefined ? undefined : entryHolding(installationFile.file.entries, file);
-    if (own !== undefined && installationFile !== undefined) { sources.set(file.path, { installationFile: installationFile.package.name, packagePath: own }); continue; }
+    if (own !== undefined && installationFile !== undefined) { sources.set(file.path, { installationFile: installationFile.package.name, packagePath: own, hash: file.hash }); continue; }
     const fromGame = places.map((place) => ({ place, path: gameFileHolding(place, file) })).find(({ path }) => path !== undefined);
     if (fromGame?.path !== undefined) {
-      sources.set(file.path, { packagePath: fromGame.path });
+      sources.set(file.path, { packagePath: fromGame.path, hash: file.hash });
       takenFromTheGame.push(file);
       placesTaken.add(fromGame.place);
       continue;
@@ -123,7 +124,7 @@ export function buildManifest(
       .find(({ path }) => path !== undefined);
     if (other?.path === undefined) continue;
     if (!used.includes(other.one)) used.push(other.one);
-    sources.set(file.path, { installationFile: other.one.package.name, packagePath: other.path });
+    sources.set(file.path, { installationFile: other.one.package.name, packagePath: other.path, hash: file.hash });
   }
   const manifest: Manifest = {
     packages: [

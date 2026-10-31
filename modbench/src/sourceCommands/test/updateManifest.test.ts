@@ -154,6 +154,12 @@ describe('update manifest', () => {
       ]);
     });
 
+    it('whose manifest is of another version, naming both, and leaving it as it was (formats/CLAUDE.md, Versions)', async () => {
+      const { result } = await refusedBy({}, () => writeFile(join(modsDir, 'ModA', 'ModA.manifest.json'), '{"version": 2}'));
+
+      expect(result.refused).toEqual([{ item: 'ModA', reason: 'was not updated: its manifest is version 2, and Modbench reads only version 1.' }]);
+    });
+
     it('whose manifest names the game folder when the game folder was not found', async () => {
       const { result } = await refusedBy({ gameFolder: GAME_FOLDER_NOT_FOUND }, () => writeManifestIn(
         join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'gameFolder' }] }));

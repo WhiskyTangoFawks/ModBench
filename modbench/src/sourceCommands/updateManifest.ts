@@ -111,11 +111,12 @@ async function hashedFilesOf(adapter: Adapter, folder: string): Promise<Hashed> 
   return 'why' in files ? { unreadable: files.why } : { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: value.exclude };
 }
 
-// formats/CLAUDE.md, Versions: a manifest of another version is written over in this one.
+// A manifest of the format before version 1 is written over, as pre-alpha Modbench migrates none; one of another version
+// is refused, naming both (formats/CLAUDE.md, Versions).
 async function heldManifestOf(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
   try {
     const held = await manifestIn(folder);
-    if (held === undefined || ('versionRefused' in held)) return undefined;
+    if (held === undefined || 'olderFormat' in held) return undefined;
     return 'refused' in held ? refusal(`${held.refused}.`) : held.manifest;
   } catch (err) {
     return refusal(`its manifest could not be read: ${errorMessage(err)}`);

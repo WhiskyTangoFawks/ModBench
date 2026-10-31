@@ -14,9 +14,7 @@ import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReade
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
 import { statusNow } from '../../test/statusNow';
-import { buildFileText, manifestIn, sourceModsOf, writeManifestIn, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { readBuildFile } from '../../manifestAdapter/buildFileRead';
-import { manifestText } from '../../manifestAdapter/manifestText';
+import { buildFileIn, buildFileText, manifestIn, sourceModsOf, writeManifestIn, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
 
@@ -365,8 +363,8 @@ describe('what build sends to the trash, over an instance on disk (mods.md, A so
   async function aTakenFileARefusedBuildWrote() {
     const built = await aSourceModTakingFromAnInstallationFile({ files: [{ path: 'b.nif', entry: { kind: 'held' } }] });
     await built.build();
-    const held = readBuildFile(await readFile(join(root, 'source', 'Mod', BUILD_FILE), 'utf8'));
-    assert('buildFile' in held);
+    const held = await buildFileIn(join(root, 'source', 'Mod'));
+    assert(held !== undefined && 'buildFile' in held);
     await put(`source/Mod/${BUILD_FILE}`, buildFileText({
       ...held.buildFile, archives: [{ path: 'Mod - Main.ba2', files: ['textures/c.dds'] }],
       files: [...held.buildFile.files, { path: 'textures/c.dds', entry: { kind: 'held' } }],
@@ -399,7 +397,7 @@ describe('what build sends to the trash, over an instance on disk (mods.md, A so
 
   it('sends my copy of each file in a folder whose manifest names no file yet, but the mod manager\'s, when mEdit writes it', async () => {
     const { build, inTrash } = await aSourceModTakingFromAnInstallationFile();
-    await put('mods/Mod/Mod.manifest.json', manifestText({ packages: [REPOSITORY], exclude: [], files: new Map() }));
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], files: new Map() });
     await put('mods/Mod/Mod.esp', 'decompiled from');
 
     await build();
@@ -546,7 +544,7 @@ describe('decompile and commit over an instance on disk', () => {
     await put('mods/Mod/meta.ini', '[General]\r\n');
     await put('mods/Mod/Mod.esp', 'plugin');
     await put('mods/Mod/a.nif', 'mine');
-    await put('mods/Mod/Mod.manifest.json', manifestText({ packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest }));
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
     const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
     return { client, decompileAndCommit: () => commands.decompileAndCommit(['Mod']) };

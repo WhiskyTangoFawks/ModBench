@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 
@@ -11,7 +11,7 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { adapterOver, readModlistEntries } from './mo2/adapterOver';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { writeBuildFile } from './buildFiles';
-import { manifestText } from '../manifestAdapter/manifestText';
+import { writeManifestIn } from '../manifestAdapter/manifestAdapter';
 
 const MOD = 'Built Mod';
 const roots: string[] = [];
@@ -30,9 +30,9 @@ async function instanceWithSourceMod(): Promise<{ root: string; source: string; 
   await writeBuildFile(source);
   runGit(source, 'init', '--quiet', '--initial-branch=main');
   await mkdir(join(root, 'mods', MOD), { recursive: true });
-  await writeFile(join(root, 'mods', MOD, `${MOD}.manifest.json`), manifestText({
+  await writeManifestIn(join(root, 'mods', MOD), {
     packages: [{ kind: 'repository', name: 'Built Mod source' }], exclude: [], files: new Map(),
-  }));
+  });
   const adapter = adapterOver(root);
   const added = await modSyncOver(adapter)();
   expect(added.applied && added.added).toContain(MOD);

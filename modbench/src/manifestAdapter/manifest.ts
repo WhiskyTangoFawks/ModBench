@@ -24,7 +24,8 @@ export interface Manifest {
   readonly files: ReadonlyMap<string, string | null>;
 }
 
-/** `versionRefused`: the text is a manifest of another version, which update manifest writes over. */
-export type ManifestRead = { readonly manifest: Manifest } | { readonly refused: string; readonly versionRefused?: true };
+/** `olderFormat`: the text is a manifest of the format before version 1, which names no version and update manifest writes
+ *  over (pre-alpha: no migration). */
+export type ManifestRead = { readonly manifest: Manifest } | { readonly refused: string; readonly olderFormat?: true };
 
 export const MANIFEST_VERSION = 1;

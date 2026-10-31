@@ -38,11 +38,11 @@ async function hashed(adapter: Pick<Adapter, 'originFileHash'>, folder: string, 
   return files;
 }
 
-// A manifest of another version names nothing decompile and commit keeps.
+// A manifest of the format before version 1 names nothing decompile and commit keeps.
 async function heldManifest(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
   try {
     const read = await manifestIn(folder);
-    if (read === undefined || 'versionRefused' in read) return undefined;
+    if (read === undefined || 'olderFormat' in read) return undefined;
     return 'refused' in read ? { refusal: `its manifest cannot be read: ${read.refused}` } : read.manifest;
   } catch (err) {
     return { refusal: `its manifest could not be read: ${errorMessage(err)}` };
@@ -80,7 +80,7 @@ async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise
 // game folder by the game's release, pinned by the hash of the files it gives.
 async function buildFileOf(adapter: Adapter, { manifest, sources }: Recorded, installationFiles: readonly InstallationFile[]): Promise<BuildFile> {
   const gameRelease = await adapter.gameRelease();
-  const fromTheGame = [...sources].flatMap(([path, source]) => (source.installationFile === undefined ? [{ path, hash: manifest.files.get(path) ?? '' }] : []));
+  const fromTheGame = [...sources].flatMap(([path, { installationFile, hash }]) => (installationFile === undefined ? [{ path, hash }] : []));
   const packages: BuildFilePackage[] = manifest.packages.flatMap((pkg): BuildFilePackage[] => {
     if (pkg.kind === 'installationFile') {
       const page = installationFiles.find((file) => basename(file.path) === pkg.name)?.page;

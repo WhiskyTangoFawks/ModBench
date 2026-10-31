@@ -10,7 +10,7 @@ import { readBuildFile } from './buildFileRead';
 import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
-import { packagesAsked } from './packageOf';
+import { packagesAsked } from './manifestPackages';
 
 async function fileNamesIn(folder: string): Promise<string[]> {
   try {

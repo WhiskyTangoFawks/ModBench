@@ -30,8 +30,18 @@ export const required = (file: string, line: Json, key: string, where: string): 
   return line[key];
 };
 
-export const isPathInTheFolder = (path: string): boolean =>
-  !path.includes('\\') && !/^([a-zA-Z]:|\/)/.test(path) && path.split('/').every((segment) => segment.trim() !== '' && segment !== '.' && segment !== '..');
+const PATH = /^(?!\/)(?!.*\/$)(?!.*\/\/)(?!(?:.*\/)?\.{1,2}(?:\/|$))[^\\]+$/;
+
+/** Whether `path` is a path relative to a folder, as the formats' schemas state it. */
+export const isPathInTheFolder = (path: string): boolean => PATH.test(path);
+
+/** Refuses a member of `members` that `keys` does not name; `part` names the object in the file. */
+export const known = (file: string, members: Json, part: string | undefined, keys: readonly string[]): void => {
+  const unknownKey = Object.keys(members).find((key) => !keys.includes(key));
+  if (unknownKey !== undefined) {
+    throw new Unreadable(`its ${file}${part === undefined ? '' : `'s ${part}`} holds '${unknownKey}', which Modbench does not read`);
+  }
+};
 
 const leavesTheTextIncomplete = (prefix: string): boolean => {
   try {

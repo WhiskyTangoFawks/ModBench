@@ -52,15 +52,15 @@ describe('a mod\'s manifest from its files', () => {
   });
 
   it('takes a file from wherever its package holds its bytes, as a FOMOD install moves files', () => {
-    expect(built({ 'a.nif': 'HA' }, { installationFile: download('M.7z', { 'Data/a.nif': 'HA' }) }).sources.get('a.nif')).toEqual({ installationFile: 'M.7z', packagePath: 'Data/a.nif' });
+    expect(built({ 'a.nif': 'HA' }, { installationFile: download('M.7z', { 'Data/a.nif': 'HA' }) }).sources.get('a.nif')).toEqual({ installationFile: 'M.7z', packagePath: 'Data/a.nif', hash: 'HA' });
   });
 
   it('takes a file at its own path before another path holding the same bytes', () => {
-    expect(built({ 'b.nif': 'HA' }, { installationFile: download('M.7z', { 'a.nif': 'HA', 'b.nif': 'HA' }) }).sources.get('b.nif')).toEqual({ installationFile: 'M.7z', packagePath: 'b.nif' });
+    expect(built({ 'b.nif': 'HA' }, { installationFile: download('M.7z', { 'a.nif': 'HA', 'b.nif': 'HA' }) }).sources.get('b.nif')).toEqual({ installationFile: 'M.7z', packagePath: 'b.nif', hash: 'HA' });
   });
 
   it('names each file no package holds the bytes of, apart from those a package holds a file of its name of (Status, story 5)', () => {
-    const recorded = built({ 'meshes/A.nif': 'HX', 'z.txt': 'HZ', 'b.nif': 'HB' }, { installationFile: download('M.7z', { '00 Core/a.nif': 'HA', 'b.nif': 'HB' }) });
+    const recorded = built({ 'meshes/A.nif': 'HX', 'z.txt': 'HZ', 'b.nif': 'HB' }, { installationFile: download('M.7z', { 'Meshes/a.nif': 'HA', 'b.nif': 'HB' }) });
 
     expect([recorded.notInPackage, recorded.otherBytes, recorded.manifest.files.get('z.txt')]).toEqual([['z.txt'], ['meshes/A.nif'], 'HZ']);
   });
@@ -100,7 +100,7 @@ describe('a mod\'s files that the game folder holds', () => {
   it('are named by the game folder, from the game file handed for their path though another holds the same bytes', () => {
     const recorded = built({ 'a.nif': 'HA' }, { game: gameOf(place({ 'Data/zz.nif': 'HA', 'Data/a.nif': 'HA' }, {}, { 'Data/zz.nif': 'zz.nif', 'Data/a.nif': 'a.nif' })) });
 
-    expect([recorded.manifest.packages, recorded.sources.get('a.nif')]).toEqual([[{ kind: 'gameFolder' }], { packagePath: 'Data/a.nif' }]);
+    expect([recorded.manifest.packages, recorded.sources.get('a.nif')]).toEqual([[{ kind: 'gameFolder' }], { packagePath: 'Data/a.nif', hash: 'HA' }]);
   });
 
   it('name no package when the game holds none of the mod\'s files', () => {

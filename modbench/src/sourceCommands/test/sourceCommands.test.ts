@@ -7,9 +7,8 @@ import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import { manifestIn, type BuildFile, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, writeManifestIn, type BuildFile, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
 import { readBuildFile } from '../../manifestAdapter/buildFileRead';
-import { manifestText } from '../../manifestAdapter/manifestText';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import type { DecompileAndCommitMod } from '../../client';
@@ -69,7 +68,7 @@ describe('sourceCommands build', () => {
 
   it('keeps each exclusion the manifest records whose file the folder does not hold (mods.md, A source mod, story 2)', async () => {
     const recording: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: ['docs'], files: new Map([['docs/readme.txt', 'AAAAAAAAAAA=']]) };
-    await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), manifestText(recording));
+    await writeManifestIn(folderOf('ModA'), recording);
     const client = new InMemoryMEditClient();
     buildingEach(client);
 

@@ -40,6 +40,7 @@ describe('a folder as a value', () => {
 });
 
 describe('a mod as a value', () => {
+  const PLACE = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
   const modReads = {
     ...reads(['a.esp']),
     downloadedFile: () => Promise.resolve({ kind: 'read' as const, answer: undefined }),
@@ -58,13 +59,13 @@ describe('a mod as a value', () => {
   it('reads no game file when the game folder is not found', async () => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] });
 
-    expect(value.kind === 'read' ? value.gameFiles : 'unread').toBeUndefined();
+    expect(value).toMatchObject({ kind: 'read', gameFiles: undefined });
   });
 
   it.each([['Hosted', true], ['Local', false]])('says whether the repository %s is a submodule', async (repository, hosted) => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository });
 
-    expect(value.kind === 'read' ? value.repositoryHosted : 'unread').toBe(hosted);
+    expect(value).toMatchObject({ kind: 'read', repositoryHosted: hosted });
   });
 
   it('reads and hashes no file of a folder when no manifest is asked for', async () => {
@@ -72,6 +73,12 @@ describe('a mod as a value', () => {
     const value = await modValueOver({ ...modReads, originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } }, '/mods/Mod', undefined);
 
     expect([value.kind, hashed]).toEqual(['notAsked', []]);
+  });
+
+  it('is unreadable, saying why, when the game files cannot be read', async () => {
+    const reading = { ...modReads, gamePlaces: () => Promise.resolve([PLACE]), gameFilesTakenBy: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
+
+    expect(await modValueOver(reading, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] })).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });
 
   it('is unreadable, saying why, when a read rejects', async () => {

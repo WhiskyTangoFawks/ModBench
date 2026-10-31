@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { folderAgainst, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { folderAgainst, isExcludedBy, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -99,8 +99,7 @@ const heldManifest = async (folder: string): Promise<Manifest | undefined> => {
 
 // A manifest names only the exclusions of the files it names (formats/manifest.md).
 function sourceModManifest(mod: SourceModToBuild, files: ReadonlyMap<string, string | null>): Manifest {
-  const paths = [...files.keys()].map((path) => path.toLowerCase());
-  const exclude = mod.exclude.filter((excluded) => paths.some((path) => path === excluded.toLowerCase() || path.startsWith(`${excluded.toLowerCase()}/`)));
+  const exclude = mod.exclude.filter((excluded) => [...files.keys()].some((path) => isExcludedBy([excluded], path)));
   return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, files };
 }
 

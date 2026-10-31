@@ -10,7 +10,7 @@ import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
-import { pathInFolderOf } from '../instanceAdapter/excludedPaths';
+import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
 import { folderValueOver, modValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
@@ -526,6 +526,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
     pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUSION_MARK),
+    carriesExclusionMark: (path) => ownPathOf(path, EXCLUSION_MARK).excluded.length > 0,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
     renamePlugin: (origin, from, to) =>
       write({ verb: 'renamePlugin', origin, from, to }, () => {

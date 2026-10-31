@@ -56,7 +56,7 @@ async function noRepository(folder: string | undefined): Promise<string> {
 async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly string[] | { readonly reason: string }> {
   try {
     const held = await manifestIn(folder);
-    if (held !== undefined && 'refused' in held && !('versionRefused' in held)) return { reason: `was not built: ${held.refused}.` };
+    if (held !== undefined && 'refused' in held && !('olderFormat' in held)) return { reason: `was not built: ${held.refused}.` };
     return exclusionsOf(held !== undefined && 'manifest' in held ? held.manifest : undefined, await adapter.folderValue(folder));
   } catch (err) {
     return { reason: `was not built: its folder could not be read: ${errorMessage(err)}.` };

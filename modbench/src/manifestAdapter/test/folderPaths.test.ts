@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FolderValue } from '../../repositoriesLib/statusValues';
-import { exclusionsOf } from '../manifestAdapter';
+import { exclusionsOf, isExcludedBy } from '../manifestAdapter';
 
 const holding = (paths: readonly string[], exclude: readonly string[] = []): Pick<FolderValue, 'files' | 'exclude'> => ({
   files: new Map(paths.map((path) => {
@@ -25,7 +25,18 @@ describe('exclusionsOf', () => {
     expect(exclusionsOf({ exclude: ['a.esp'] }, holding(['a.esp']))).toEqual([]);
   });
 
-  it('names a path the folder and the manifest both exclude once, whatever its case', () => {
-    expect(exclusionsOf({ exclude: ['A.esp'] }, holding(['a.esp'], ['a.esp']))).toEqual(['a.esp']);
+  it('names a path the folder and the manifest both exclude once', () => {
+    expect(exclusionsOf({ exclude: ['a.esp'] }, holding(['a.esp'], ['a.esp']))).toEqual(['a.esp']);
+  });
+});
+
+describe('isExcludedBy', () => {
+  it.each([
+    ['the path itself', ['a.esp'], 'a.esp', true],
+    ['a folder above it', ['docs'], 'docs/a.txt', true],
+    ['a path in another case, as a manifest names paths in their case', ['Docs'], 'docs/a.txt', false],
+    ['a path its own begins with', ['docs'], 'docsx/a.txt', false],
+  ])('matches %s: %s', (_case, exclude, path, excluded) => {
+    expect(isExcludedBy(exclude, path)).toBe(excluded);
   });
 });

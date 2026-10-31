@@ -741,6 +741,8 @@ export interface InstanceAdapter {
   modValue(folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
   /** The path a folder holds the file at `path` at, while `exclude` names the paths the modlist excludes. */
   pathInFolder(path: string, exclude: readonly string[]): string;
+  /** Whether `path` carries the mark the manager reads as excluded, which a manifest's path never does. */
+  carriesExclusionMark(path: string): boolean;
   /** The hash of `text`'s UTF-8 bytes, as a manifest carries a hash. */
   textHash(text: string): Promise<string>;
 

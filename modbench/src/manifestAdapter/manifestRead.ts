@@ -1,25 +1,20 @@
 // spec/formats/manifest-1.schema.json and the rules manifest.md adds, read from any text the schema accepts.
 
+import { isExcludedBy } from './folderPaths';
 import { MANIFEST_VERSION, type Manifest, type ManifestPackage, type ManifestRead } from './manifest';
-import { arrayOf, isObject, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
+import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
 const FILE = 'manifest';
 
-const PATH = /^(?!\/)(?!.*\/$)(?!.*\/\/)(?!(?:.*\/)?\.{1,2}(?:\/|$))[^\\]+$/;
 const HASH = /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/;
 const NEXUS_GAME = /^[a-z0-9]+$/;
 const DIGITS = /^[0-9]+$/;
 
-class VersionRefused extends Error {}
+class OlderFormat extends Error {}
 
 const at = (where: string): Unreadable => unreadable(FILE, where);
 
-const known = (members: Json, part: string | undefined, keys: readonly string[]): void => {
-  const unknownKey = Object.keys(members).find((key) => !keys.includes(key));
-  if (unknownKey !== undefined) {
-    throw new Unreadable(`its ${FILE}${part === undefined ? '' : `'s ${part}`} holds '${unknownKey}', which Modbench does not read`);
-  }
-};
+const known = (members: Json, part: string | undefined, keys: readonly string[]): void => { knownIn(FILE, members, part, keys); };
 
 const countOf = (value: unknown, minimum: number, where: string): number => {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) throw at(where);
@@ -102,7 +97,7 @@ function packagesOf(value: unknown): ManifestPackage[] {
 }
 
 const pathOf = (path: string): string => {
-  if (!PATH.test(path)) throw new Unreadable(`its ${FILE} names '${path}', which is not a path in the folder`);
+  if (!isPathInTheFolder(path)) throw new Unreadable(`its ${FILE} names '${path}', which is not a path in the folder`);
   return path;
 };
 
@@ -125,18 +120,18 @@ function excludeOf(value: unknown, files: ReadonlyMap<string, unknown>): string[
   const twice = exclude.find((path, index) => exclude.indexOf(path) !== index);
   if (twice !== undefined) throw new Unreadable(`its ${FILE} excludes '${twice}' twice`);
   const paths = [...files.keys()];
-  const stray = exclude.find((path) => !paths.some((file) => file === path || file.startsWith(`${path}/`)));
+  const stray = exclude.find((excluded) => !paths.some((file) => isExcludedBy([excluded], file)));
   if (stray !== undefined) throw new Unreadable(`its ${FILE} excludes '${stray}', which is none of its files nor a folder above one`);
   return exclude;
 }
 
 function manifestOf(value: unknown): Manifest {
   if (isObject(value) && !Object.hasOwn(value, 'version')) {
-    throw new VersionRefused(`its ${FILE} is in a format before version ${MANIFEST_VERSION}, and Modbench reads only version ${MANIFEST_VERSION}`);
+    throw new OlderFormat(`its ${FILE} is in a format before version ${MANIFEST_VERSION}, and Modbench reads only version ${MANIFEST_VERSION}`);
   }
   const root = objectOf(FILE, value, '');
   if (root.version !== MANIFEST_VERSION) {
-    throw new VersionRefused(`its ${FILE} is version ${JSON.stringify(root.version)}, and Modbench reads only version ${MANIFEST_VERSION}`);
+    throw new Unreadable(`its ${FILE} is version ${JSON.stringify(root.version)}, and Modbench reads only version ${MANIFEST_VERSION}`);
   }
   known(root, undefined, ['version', 'packages', 'exclude', 'files']);
   const packages = Object.hasOwn(root, 'packages') ? packagesOf(root.packages) : [];
@@ -150,7 +145,7 @@ export function readManifest(text: string): ManifestRead {
     const read = parsed(text, FILE, manifestOf);
     return 'refused' in read ? read : { manifest: read.read };
   } catch (problem) {
-    if (problem instanceof VersionRefused) return { refused: problem.message, versionRefused: true };
+    if (problem instanceof OlderFormat) return { refused: problem.message, olderFormat: true };
     throw problem;
   }
 }

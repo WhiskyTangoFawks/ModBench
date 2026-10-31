@@ -177,16 +177,22 @@ describe('restore from manifest', () => {
       { manifests: { ModA: { ...EMPTY, packages: [REPOSITORY] } }, answers: { pins: new Map([['ModA', { folder: '/source/ModA', pin: 'abc' }]]) } },
       "was skipped: its submodule 'ModA' is not cloned."],
     ['it has no manifest', { files: { ModA: { 'a.nif': HA } } }, 'was skipped: it has no manifest.'],
-    ['its manifest is of the format before version 1',
-      { files: { ModA: {} }, answers: {} },
-      'was skipped: its manifest is in a format before version 1, and Modbench reads only version 1.'],
+    ['a path its manifest names carries the mod manager\'s mark for an excluded file',
+      { files: { ModA: {} }, manifests: { ModA: fromTheZip({ 'a.nif.mohidden': HA }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
+      "was skipped: its manifest names 'a.nif.mohidden', which carries the mod manager's mark for an excluded file."],
   ])('skips a mod, writing nothing, when %s', async (_case, setup, reason) => {
     const { restore, fake } = await over(setup);
-    if (reason.includes('before version 1')) await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{\n"files": []\n}\n');
 
     const outcome = await restore(['ModA']);
 
     expect([outcome, writes(fake.calls)]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason }] }, []]);
+  });
+
+  it('skips a mod whose manifest is of the format before version 1, naming both versions', async () => {
+    const { restore } = await over({ files: { ModA: {} } });
+    await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{\n"files": []\n}\n');
+
+    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was skipped: its manifest is in a format before version 1, and Modbench reads only version 1.' }]);
   });
 
   it('skips a mod whose manifest cannot be read, naming where', async () => {
