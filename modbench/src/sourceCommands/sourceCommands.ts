@@ -1,19 +1,18 @@
-import { join } from 'node:path';
 import {
   isRefused, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, lineAtFolderPath, manifestIn, sourceModsOf, unmarked, type BuildFile, type Manifest, type SourceMods,
+  buildFileIn, exclusionsOf, folderAgainst, lineAtFolderPath, manifestIn, sourceModsOf, type BuildFile, type Manifest, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { archiveVariants, buildSourceMod, takenOf, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
+import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand, namedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
-import { downloadedNow, packagesRead } from './packagesRead';
+import { downloadedNow, packagesRead, type PackagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
@@ -76,35 +75,20 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
 
 const NO_LINE: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 
-type FolderValue = Awaited<ReturnType<Adapter['folderValue']>>;
-
-// commands.md, Confirm what destroys: build puts a taken file's bytes from its package and an asset's from its repository,
-// so a file already holding them loses nothing.
-function holdsWhatBuildPuts(adapter: Adapter, mod: SourceModToBuild, held: FolderValue): (path: string) => Promise<boolean> {
-  const key = (path: string): string => (held.ignoresCase ? path.toLowerCase() : path);
-  const taken = new Map(takenOf(mod, adapter.exclusionMark).map(({ path, hash }) => [key(path), hash]));
-  return async (path) => {
-    const there = held.files.get(path);
-    if (there?.kind !== 'read') return false;
-    if (taken.has(key(path))) return taken.get(key(path)) === there.answer.hash;
-    const asset = await adapter.originFileHash(join(mod.sourceFolder, unmarked(path, adapter.exclusionMark)));
-    return asset.kind === 'read' && asset.answer.hash === there.answer.hash;
-  };
-}
-
 // mods.md, A source mod, story 4: each file whose bytes differ from its line at the path the build writes it, and each
-// file no line names, but one that holds what build puts there.
+// file no line names, but a taken file holding its package's bytes, which build writes again (commands.md, Confirm what
+// destroys). A taken file is written before an archive packs it.
 async function lostIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
   const read = await manifestIn(mod.folder);
   const manifest = read !== undefined && 'manifest' in read ? read.manifest : NO_LINE;
   const held = await adapter.folderValue(mod.folder);
-  const lines = manifest.files.map((line) => lineAtFolderPath({ ...manifest, exclude: mod.exclude }, line, adapter.exclusionMark));
-  const against = folderAgainst({ ...manifest, files: lines }, held, new Map());
+  const atFolderPaths = (lines: Manifest): Manifest =>
+    ({ ...lines, files: lines.files.map((line) => lineAtFolderPath({ ...lines, exclude: mod.exclude }, line, adapter.exclusionMark)) });
+  const against = folderAgainst(atFolderPaths(manifest), held, new Map());
+  const taken = folderAgainst(atFolderPaths({ ...mod.buildFile, archives: [] }), held, mod.packages.entries);
+  const writtenAgain = new Set(taken.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === true && onDisk !== undefined ? [onDisk] : [])));
   const differing = against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : []));
-  const putBack = holdsWhatBuildPuts(adapter, mod, held);
-  const lost: string[] = [];
-  for (const path of [...differing, ...against.namedByNoLine]) if (!await putBack(path)) lost.push(path);
-  return lost.sort();
+  return [...differing, ...against.namedByNoLine].filter((path) => !writtenAgain.has(path)).sort();
 }
 
 // mods.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
@@ -129,8 +113,13 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
   const exclude = await exclusionsIn(adapter, folder);
   if ('reason' in exclude) return { item: mod, reason: exclude.reason };
-  const game = await namedGameFolder(adapter, await adapter.gameRelease());
-  const packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game });
+  let packages: PackagesRead;
+  try {
+    const game = await namedGameFolder(adapter, await adapter.gameRelease());
+    packages = await packagesRead(adapter, buildFile, { downloaded: await downloadedNow(adapter, buildFile), game });
+  } catch (err) {
+    return { item: mod, reason: `was not built: its packages could not be read: ${errorMessage(err)}.` };
+  }
   return { name: mod, folder, exclude, sourceFolder, buildFile, packages, version: metadata.answer.version, isSubmodule: host.answer.kind === 'host' };
 }
 

@@ -3,7 +3,7 @@
 
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
-import type { InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { folderAgainst, lineAtFolderPath, unmarked, writeManifestIn, type BuildFile, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -64,27 +64,23 @@ export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
 
 const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '')}.`;
 
-/** Each file the build file takes from a package: where the folder holds it, where this machine holds its bytes, and their hash. */
-export function takenOf({ buildFile, packages, exclude }: SourceModToBuild, mark: string): { path: string; from: PackageFile; hash: string | undefined }[] {
-  return buildFile.files.flatMap((line) => {
-    const from = packages.packageFiles.get(line.path);
-    if (from === undefined) return [];
-    return [{ path: lineAtFolderPath({ ...buildFile, exclude }, line, mark).path, from, hash: packages.hashes.get(line.path) }];
-  });
-}
-
 // mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
 // those bytes, before mEdit packs it or compiles beside it.
 async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
-  const taken = takenOf(mod, adapter.exclusionMark);
+  const { buildFile, packages, folder, exclude } = mod;
+  const at: string[] = [];
   const writes: Parameters<Adapter['writeFilesIn']>[1][number][] = [];
-  for (const { path, from, hash } of taken) {
-    const there = await adapter.originFileHash(join(mod.folder, path));
-    if (there.kind === 'read' && there.answer.hash === hash) continue;
+  for (const line of buildFile.files) {
+    const from = packages.packageFiles.get(line.path);
+    if (from === undefined) continue;
+    const path = lineAtFolderPath({ ...buildFile, exclude }, line, adapter.exclusionMark).path;
+    at.push(path);
+    const there = await adapter.originFileHash(join(folder, path));
+    if (there.kind === 'read' && there.answer.hash === packages.hashes.get(line.path)) continue;
     writes.push({ path, from });
   }
-  if (writes.length > 0) await adapter.writeFilesIn(mod.folder, writes);
-  return taken.map(({ path }) => path);
+  if (writes.length > 0) await adapter.writeFilesIn(folder, writes);
+  return at;
 }
 
 /** Why one of `paths` in `folder` could not be moved to the trash, if one could not. */

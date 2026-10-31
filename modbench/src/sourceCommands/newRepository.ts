@@ -28,13 +28,9 @@ function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: stri
   return new Set([...plugins, ...paths.filter((path) => plugins.some((plugin) => rule?.isStringsFileOf(plugin, path) === true))]);
 }
 
-// Each file of the mod's folder but the mod manager's, with its bytes.
-async function hashed(
-  adapter: Pick<Adapter, 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash'>, folder: string,
-): Promise<HashedModFile[] | { readonly refusal: string }> {
-  const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
+async function hashed(adapter: Adapter, folder: string, paths: readonly string[]): Promise<HashedModFile[] | { readonly refusal: string }> {
   const files: HashedModFile[] = [];
-  for (const path of (await adapter.filesIn(folder)).filter((one) => !leftOut.has(one.toLowerCase()))) {
+  for (const path of paths) {
     const read = await adapter.originFileHash(join(folder, path));
     if (read.kind === 'unreadable') return { refusal: `a file of its folder could not be read: ${read.reason}` };
     files.push({ path, hash: read.answer.hash });
@@ -87,7 +83,8 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, installationFile, held } = read;
-  const all = await hashed(adapter, folder);
+  const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
+  const all = await hashed(adapter, folder, (await adapter.filesIn(folder)).filter((path) => !leftOut.has(path.toLowerCase())));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
   const { manifest: recorded } = await buildManifest(
@@ -99,20 +96,15 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
-type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'modMetadata' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash'>;
-
-// The mod is a source mod once its folder's manifest names its repository, with the mod's version, and each file with its
-// bytes, so a first build that makes them again destroys nothing (commands.md, Confirm what destroys).
-async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
+// The mod is a source mod once its folder's manifest names its repository, with the mod's version, and no file until its
+// first build records them (mods.md, Build, story 3).
+async function folderLinkedOrWhy(adapter: Pick<Adapter, 'modFolderPath' | 'modMetadata'>, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
   const [folder, metadata] = await Promise.all([adapter.modFolderPath(mod), adapter.modMetadata(mod)]);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
   try {
-    const files = await hashed(adapter, folder);
-    if ('refusal' in files) return `its manifest could not name its repository: ${files.refusal}`;
     await writeManifestIn(folder, {
       packages: [{ kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false }],
-      exclude: [], archives: [], files: files.map(({ path, hash }) => ({ path, entry: { kind: 'held' }, hash })),
-      ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
+      exclude: [], archives: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
     });
     return undefined;
   } catch (err) {
@@ -122,7 +114,7 @@ async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository
 
 /** Makes each mod of `committed` a source mod of the repository made for it; answers why not, by the mod. */
 export async function foldersNotLinked(
-  adapter: LinkAdapter, made: ReadonlyMap<string, MadeRepository>, committed: readonly string[],
+  adapter: Pick<Adapter, 'modFolderPath' | 'modMetadata'>, made: ReadonlyMap<string, MadeRepository>, committed: readonly string[],
 ): Promise<ReadonlyMap<string, string>> {
   const notLinked = new Map<string, string>();
   for (const mod of committed) {

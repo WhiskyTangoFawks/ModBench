@@ -317,9 +317,16 @@ export async function ensureDir(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
 }
 
-/** Deletes `path` when it is an empty directory; answers whether it did. */
-export function removeIfEmpty(path: string): Promise<boolean> {
-  return rmdir(path).then(() => true, () => false);
+/** Deletes `path` when it is an empty directory; answers whether it is gone, and false when it holds an entry. */
+export async function removeIfEmpty(path: string): Promise<boolean> {
+  try {
+    await rmdir(path);
+    return true;
+  } catch (err) {
+    if (errnoCode(err) === 'ENOENT') return true;
+    if (errnoCode(err) === 'ENOTEMPTY') return false;
+    throw err;
+  }
 }
 
 /** Deletes `path`, file or directory, and everything under it; already-gone is not an error. */
