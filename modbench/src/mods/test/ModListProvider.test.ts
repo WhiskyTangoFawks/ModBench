@@ -27,6 +27,7 @@ import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, folder, indexedValueOf } from './indexedValue';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 
 beforeEach(() => {
   executeCommand.mockClear();
@@ -48,10 +49,10 @@ const SEQUENCE_NOT_READ_YET = 0;
 
 const makeProvider = (
   mods: ModlistEntry[],
-  extra: Partial<{ instance: FakeInstance }> = {},
+  extra: Partial<{ instance: FakeInstance; reporter: RecordingReporter }> = {},
 ) => {
   const instance = extra.instance ?? new FakeInstance(valueOf(mods));
-  return new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+  return new ModListProvider({ reporter: extra.reporter ?? recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 };
 
 const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = ():ModlistEntry[] => [
@@ -207,7 +208,7 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
   const openScene = () => {
     const instance = new FakeInstance(valueOf(entries()));
     const open = new OpenRows(instance);
-    return { instance, open, provider: new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open }) };
+    return { instance, open, provider: new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open }) };
   };
   const scene = () => openScene().provider;
 
@@ -441,7 +442,7 @@ describe('the Mods tree\'s rows', () => {
 
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
-    const provider = new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+    const provider = new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 
     const pending = provider.getChildren();
     instance.publish(valueOf([mod('A'), mod('B')]));
@@ -557,6 +558,27 @@ describe('the Mods tree\'s rows', () => {
       await dragAndDrop(provider, ['Group B'], undefined);
 
       expect(movesFired().map((call) => call[3])).toEqual([{ place: { kind: 'modOrder' }, end: 'losing' }]);
+    });
+
+    it('a refused drop reports why and moves nothing', async () => {
+      const reporter = recordingReporter();
+      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt, { reporter });
+
+      await dragAndDrop(provider, ['Delta'], 'Delta');
+
+      expect(movesFired()).toEqual([]);
+      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not move mods.', detail: 'Delta is being dragged, so nothing goes onto it.' }]);
+    });
+
+    it('a payload that carries no focused row among its rows drops nothing', async () => {
+      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
+      const rows = await shownRows(provider);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.set(MIME, new DataTransferItem({ rows: [] }));
+
+      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
+
+      expect(executeCommand).not.toHaveBeenCalled();
     });
 
     it('a drag that mixes kinds takes the kind of the row VS Code last added to the selection', async () => {

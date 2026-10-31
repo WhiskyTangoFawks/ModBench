@@ -20,13 +20,15 @@ import type { ModStatuses } from '../modStatus/modStatuses';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import { blankIcon } from '../drivingLib/blankIcon';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
+import type { Reporter } from '../ports/reporter';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {
   if (typeof value !== 'object' || value === null || !('rows' in value) || !Array.isArray(value.rows)) return false;
-  return value.rows.every((row) => row instanceof ModNode || row instanceof SeparatorNode);
+  if (!value.rows.every((row) => row instanceof ModNode || row instanceof SeparatorNode)) return false;
+  return 'focused' in value && value.rows.some((row) => row === value.focused);
 }
 
 interface ModListProviderOptions {
@@ -37,6 +39,8 @@ interface ModListProviderOptions {
   statuses: Pick<ModStatuses, 'of' | 'onDidChange'>;
   /** The rows the view shows open. */
   open: OpenRows;
+  /** Says why a drop cannot land. */
+  reporter: Reporter;
 }
 
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
@@ -183,6 +187,7 @@ export class ModListProvider
   private readonly openSubscription: vscode.Disposable;
   private readonly statuses: ModListProviderOptions['statuses'];
   private readonly open: OpenRows;
+  private readonly reporter: Reporter;
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
@@ -196,6 +201,7 @@ export class ModListProvider
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
     this.statuses = options.statuses;
     this.open = options.open;
+    this.reporter = options.reporter;
     this.statusSubscription = options.statuses.onDidChange(() => this.render());
     this.openSubscription = options.open.onDidChange(() => {
       const before = this.marks;
@@ -277,8 +283,9 @@ export class ModListProvider
     _token: vscode.CancellationToken,
   ): void {
     const rows = source.filter(isEntryNode);
-    if (rows.length === 0) return;
-    const dragged: DraggedRows = { rows, focused: rows.at(-1) };
+    const focused = rows.at(-1);
+    if (focused === undefined) return;
+    const dragged: DraggedRows = { rows, focused };
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem(dragged));
   }
 
@@ -291,7 +298,10 @@ export class ModListProvider
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDraggedRows(payload.value)) return;
     const move = dropMove(payload.value, target, this.direction);
-    if (!move) return;
+    if ('refusal' in move) {
+      this.reporter.report('error', `Could not move ${payload.value.focused.kind}s.`, move.refusal);
+      return;
+    }
     await vscode.commands.executeCommand('modbench.mod.move', move.argument[0], move.argument, move.target);
   }
 

@@ -17,6 +17,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 
 import { file, folder, mod as unversioned } from './indexedValue';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 const mod = (name: string) => ({ ...unversioned(name), version: '1.0' });
 
@@ -31,7 +32,7 @@ function providerOver(statuses: readonly ModStatus[], holdsRepository = true, ov
     ...over,
   });
   const instance = new FakeInstance(value);
-  const provider = new ModListProvider({ instance, open: new OpenRows(instance), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
+  const provider = new ModListProvider({ reporter: recordingReporter(), instance, open: new OpenRows(instance), statuses: { of: (name) => byMod.get(name), onDidChange: changed.event } });
   return { provider, byMod, changed };
 }
 

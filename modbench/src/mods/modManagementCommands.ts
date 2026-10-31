@@ -14,7 +14,7 @@ import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { EntryRef, ModCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
+import type { EntryRef, ModCommands, MovePlace, OrderEnd, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import { sourceFolderTrashed } from '../manifestAdapter/manifestAdapter';
 import {
@@ -116,16 +116,16 @@ export function registerModMoveCommand(
       const { modGroups } = instance.value;
       const direction = view.direction();
       const given = moveTargetOf(option);
-      const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeholder: string) => {
+      const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeholder: string, end: OrderEnd) => {
         const picked = await pickWithMarked(items, onlyCurrent(items), placeholder);
-        return picked && { place: picked.target, end: endAtTop(direction) };
+        return picked && { place: picked.target, end };
       };
       if (modNames.length > 0 && separatorNames.length === 0) {
-        const target = given ?? await pick(modsMovePick(modGroups, direction, modNames), 'Move to…');
+        const target = given ?? await pick(modsMovePick(modGroups, direction, modNames), 'Move to…', 'winning');
         return target && { kind: 'mod', names: modNames, target };
       }
       if (separatorNames.length > 0 && modNames.length === 0) {
-        const target = given ?? await pick(separatorsMovePick(modGroups, direction, separatorNames), 'Move above…');
+        const target = given ?? await pick(separatorsMovePick(modGroups, direction, separatorNames), 'Move above…', endAtTop(direction));
         return target && { kind: 'separator', names: separatorNames, target };
       }
       return undefined;
