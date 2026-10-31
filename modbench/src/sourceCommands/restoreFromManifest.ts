@@ -20,6 +20,7 @@ import { nexusFileOf } from './manifestBuilder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import { packagesRead, type PackagesHeld, type PackagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
+import { sourceFolderValue } from './sourceFolderValue';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
@@ -217,11 +218,13 @@ async function bytesFor(pass: Pass, manifest: Manifest, folder: string, paths: r
 
 // modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
 // whose exclusion changed moved, and every file the manifest does not name sent to the trash.
-async function restoreFromPackages(pass: Pass, mod: string, folder: string, manifest: Manifest): Promise<Answer> {
+async function restoreFromPackages(
+  pass: Pass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>,
+): Promise<Answer> {
   const { adapter } = pass.deps;
   let against: FolderAgainst;
   try {
-    against = folderAgainst(manifest, await adapter.folderValue(folder));
+    against = folderAgainst(manifest, await valueOf(folder));
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
@@ -285,6 +288,15 @@ async function buildFilePackagesFor(pass: Pass, buildFile: BuildFile): Promise<P
   return { refusal: `${skipped(packages.lacks.join('; '))}${named.flatMap(({ name }) => found.why(name).map(sentence)).join('')}` };
 }
 
+// ADR-0022: a source folder with no manifest is left alone, as it can be one the user has not recorded yet.
+async function sourceFolderRestored(pass: Pass, mod: string, sourceFolder: string): Promise<{ readonly refusal: string } | undefined> {
+  const held = await manifestHeld(sourceFolder);
+  if (held === undefined) return undefined;
+  if ('refusal' in held) return held;
+  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, (at) => sourceFolderValue(pass.deps.adapter, at));
+  return 'refusal' in answer ? answer : undefined;
+}
+
 const NO_FILES: FolderValue = { files: new Map(), exclude: [], ignoresCase: false };
 
 // ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records.
@@ -292,6 +304,8 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   const { adapter, client, tasks, trash } = pass.deps;
   const cloned = pinned === undefined ? {} : await clonedAtThePin(pass, pinned);
   if ('refusal' in cloned) return cloned;
+  const sourceRestored = await sourceFolderRestored(pass, mod, sourceFolder);
+  if (sourceRestored !== undefined) return sourceRestored;
   const held = await buildFileHeld(sourceFolder);
   if ('refusal' in held) return held;
   const { buildFile } = held;
@@ -332,7 +346,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   const marked = [...held.manifest.files.keys(), ...held.manifest.exclude].find((path) => pass.deps.adapter.ownPath(path) !== path);
   if (marked !== undefined) return { refusal: skipped(`its manifest names '${marked}', which carries the mod manager's mark for an excluded file`) };
   const repository = repositoryOf(held.manifest);
-  if (repository === undefined) return restoreFromPackages(pass, mod, folder, held.manifest);
+  if (repository === undefined) return restoreFromPackages(pass, mod, folder, held.manifest, (at) => pass.deps.adapter.folderValue(at));
   const sourceFolder = pass.sourceMods.folderOf(mod);
   const pinned = await pass.deps.adapter.submodule(repository.name);
   if (sourceFolder !== undefined) return rebuilt(pass, mod, folder, sourceFolder, held.manifest, 'lacks' in pinned ? undefined : pinned);

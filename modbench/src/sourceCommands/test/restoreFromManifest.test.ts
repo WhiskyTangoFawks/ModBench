@@ -56,17 +56,19 @@ interface Setup {
   readonly tasks?: readonly string[];
   readonly failures?: Readonly<Record<string, string>>;
   readonly nexus?: Nexus;
+  readonly foldersOutsideMods?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
-async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = {}, reading = {}, gameFolder = FOUND, tasks = [], failures = {}, nexus }: Setup = {}) {
+async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = {}, reading = {}, gameFolder = FOUND, tasks = [], failures = {}, nexus, foldersOutsideMods = {} }: Setup = {}) {
   const mods = [...new Set([...Object.keys(files), ...Object.keys(manifests)])];
   for (const mod of mods) await mkdir(join(modsDir, mod), { recursive: true });
   for (const [mod, manifest] of Object.entries(manifests)) await writeManifestIn(join(modsDir, mod), manifest);
-  const hashes = new Map<string, HashedFile>(Object.entries(files).flatMap(([mod, inFolder]) =>
-    Object.entries(inFolder).map(([path, hash]) => [join(modsDir, mod, path), { size: 1, hash }] as const)));
+  const inFolders = [...Object.entries(files).map(([mod, inFolder]) => [join(modsDir, mod), inFolder] as const), ...Object.entries(foldersOutsideMods)];
+  const hashes = new Map<string, HashedFile>(inFolders.flatMap(([folder, inFolder]) =>
+    Object.entries(inFolder).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
     readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
-    { folderFiles: new Map(Object.entries(files).map(([mod, inFolder]) => [join(modsDir, mod), Object.keys(inFolder)])), hashes, ...answers });
+    { folderFiles: new Map(inFolders.map(([folder, inFolder]) => [folder, Object.keys(inFolder)])), hashes, ...answers });
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);
   const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), tasks: steps };
@@ -371,10 +373,12 @@ describe('restore from manifest', () => {
 
     const B_NIF: BuildFileLine = { path: 'b.nif', entry: { kind: 'held' } };
 
-    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = []) {
+    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string> }) {
       await mkdir(source(), { recursive: true });
       await writeBuildFile(source(), buildFileOf({ packages: [MOD_7Z], files: [B_NIF] }));
+      if (sourceFolderHolds !== undefined) await writeManifestIn(source(), sourceFolderHolds.manifest);
       const setup = await over({
+        foldersOutsideMods: sourceFolderHolds === undefined ? {} : { [source()]: sourceFolderHolds.files },
         files: { ModA: { 'a.esp': EDITED, 'b.nif': HB, 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
         manifests: { ModA: { packages: [REPOSITORY], exclude, files: holding({ 'a.esp': HA, 'b.nif': HB }) } },
         answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), ...answers },
@@ -398,6 +402,31 @@ describe('restore from manifest', () => {
       ]);
       expect(writes(fake.calls)).toMatchObject([{ verb: 'trashFileIn' }]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
+    });
+
+    describe('whose source folder has a manifest', () => {
+      const sourceHolds = { manifest: fromTheZip({ 'a.nif': HA }), files: { 'a.nif': EDITED, '.git': 'G', '.git/HEAD': 'H', '.gitignore': 'I' } };
+
+      it('has its source folder restored from it before the build, git\'s own files spared', async () => {
+        const { restore, client, fake } = await sourceMod({}, [], sourceHolds);
+
+        const outcome = await restore(['ModA']);
+
+        const entry = { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'a.nif' };
+        expect(writes(fake.calls).filter((call) => 'folder' in call && call.folder === source())).toEqual([
+          { verb: 'writeFilesIn', folder: source(), files: [{ path: 'a.nif', from: entry }] },
+          { verb: 'trashFileIn', folder: source(), relativePath: '.gitignore' },
+        ]);
+        expect([client.calls.map(({ method }) => method), outcome.refused]).toEqual([['cloneSubmodules', 'build'], []]);
+      });
+
+      it('is skipped, and not built, when a file of its source folder is held by no package', async () => {
+        const { restore, client } = await sourceMod({}, [], { ...sourceHolds, manifest: fromTheZip({ 'a.nif': HC.replace('C', 'Z') }) });
+
+        const outcome = await restore(['ModA']);
+
+        expect([outcome.refused.map(({ item }) => item), client.calls.map(({ method }) => method)]).toEqual([['ModA'], ['cloneSubmodules']]);
+      });
     });
 
     it('is built from a repository the source folder holds that is no submodule, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
