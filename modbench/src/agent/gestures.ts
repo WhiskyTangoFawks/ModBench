@@ -239,7 +239,7 @@ const CREATE_PLUGIN = gestureInput(
   (value, { argument, options }) => new AgentCall(
     argument.flatMap((container): Argument[] => (container.kind === 'runtimeOutput'
       ? [{ kind: 'runtimeOutput' }]
-      : modArguments(value, [{ name: container.name }]))),
+      : modArguments(value, [{ name: container.name, kind: container.kind }]))),
     options,
   ),
 );
