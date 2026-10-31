@@ -687,6 +687,7 @@ describe('a gesture the agent runs', () => {
   });
 
   it('answers beside the line the Mods view shows when it has no mods, which no other view says', async () => {
+    rmSync(modDir, { recursive: true, force: true });
     writeFileSync(modlistPath, '');
 
     const standing = await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
