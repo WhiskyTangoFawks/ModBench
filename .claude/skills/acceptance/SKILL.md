@@ -25,4 +25,4 @@ A cold index takes minutes: about 8 for Fallout 4, 3 for Skyrim, under 15 for St
 
 ## Outside a run's reach
 
-The agent's requests open no picker, prompt or confirmation (agent.md, Reporting, story 2), and the agent never refreshes (agent.md, Gestures, story 3). A run cannot see menus, keys, what a tree row draws, or MO2 itself. The report names each such claim as unverified.
+The agent's requests open no picker, prompt or confirmation (agent.md, Reporting, story 2). A run cannot see menus, keys, what a tree row draws, or MO2 itself. The report names each such claim as unverified.

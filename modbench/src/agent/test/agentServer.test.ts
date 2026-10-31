@@ -768,6 +768,30 @@ describe('the agent server, running a gesture', () => {
     expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: ['A', 'Textures'], refused: [] }) });
   });
 
+  it('fires switch with the profile named, deploy with none, and answers a deploy that left a file out as a landed one with that warning', async () => {
+    fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+    const { client } = await served();
+
+    await call(client, 'profile_switch', { argument: [{ name: 'Modding' }] });
+    fired.outcome = { applied: true, wrote: true, leftOut: [{ path: 'Data/a.esp', winner: '/m/A/a.esp' }], unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] } };
+    const answer = await call(client, 'instance_deploy', {});
+
+    expect(fired.calls).toEqual([
+      ['modbench.profile.switch', new AgentCall([{ kind: 'profile', name: 'Modding' }], {})],
+      ['modbench.instance.deploy', new AgentCall([], {})],
+    ]);
+    expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: [], refused: [], partial: [{
+      message: 'Deploy left out each file whose path holds a file it did not write:', detail: '/m/A/a.esp at Data/a.esp', severity: 'warning',
+    }] }) });
+  });
+
+  it('answers a refused deploy with its refusal', async () => {
+    fired.outcome = { applied: false, refusal: 'No deployment folder: set modbench.deployment.folder.' };
+    const { client } = await served();
+
+    expect(await call(client, 'instance_deploy', {})).toEqual({ isError: true, text: JSON.stringify({ refusal: 'No deployment folder: set modbench.deployment.folder.' }) });
+  });
+
   it('refuses in part, answering what landed and what was refused and why, in the Output and in no notification', async () => {
     fired.outcome = { applied: true, outcome: { landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] } };
     const { client, lines, reporter } = await served();

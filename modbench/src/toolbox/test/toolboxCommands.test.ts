@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { handlers, registerCommand, executeCommand, createQuickPick } = vi.hoisted(() => {
-  const handlers = new Map<string, () => Promise<void> | void>();
+  const handlers = new Map<string, (...args: unknown[]) => unknown>();
   return {
     handlers,
-    registerCommand: vi.fn((command: string, handler: () => Promise<void> | void) => {
+    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
@@ -21,6 +21,7 @@ vi.mock('vscode', async () => {
   };
 });
 
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { progressSteps } from '../../test/recordedProgress';
 
 const switchProfile = vi.fn<InstanceCommands['switchProfile']>();
@@ -48,7 +49,7 @@ function register(over: Partial<ToolboxCommandDeps> = {}) {
   });
   return {
     reporter,
-    run: (id: string) => present(handlers.get(id), `the registered handler for "${id}"`)(),
+    run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the registered handler for "${id}"`)(...args),
   };
 }
 
@@ -158,6 +159,34 @@ describe('Switch profile', () => {
   });
 });
 
+describe('Switch profile, called by an agent', () => {
+  const call = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'profile' as const, name })), {});
+
+  it('switches to the profile it names, opens no picker, says nothing and answers it landed', async () => {
+    const { reporter, run } = register();
+
+    const answer = await run('modbench.profile.switch', call('Modding'));
+
+    expect([switchProfile.mock.calls, createQuickPick.mock.calls, reporter.reports, answer]).toEqual([
+      [['Modding']], [], [], { applied: true, outcome: { landed: [], refused: [] } },
+    ]);
+  });
+
+  it('answers a refusal as the reason, and reports it nowhere', async () => {
+    switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'No such profile: Nope' });
+    const { reporter, run } = register();
+
+    expect([await run('modbench.profile.switch', call('Nope')), reporter.reports]).toEqual([{ applied: false, refusal: 'No such profile: Nope' }, []]);
+  });
+
+  it('is refused when it names no profile or several', async () => {
+    const { run } = register();
+
+    await expect(run('modbench.profile.switch', call())).rejects.toThrow('one profile');
+    await expect(run('modbench.profile.switch', call('A', 'B'))).rejects.toThrow('one profile');
+  });
+});
+
 describe('Refresh', () => {
   function registerRefresh(
     result: RefreshResult, instanceRoot = '/instance',
@@ -178,7 +207,7 @@ describe('Refresh', () => {
       reporter,
       instanceRoot,
     });
-    return { reporter, released, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
+    return { reporter, released, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
   }
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
@@ -224,6 +253,17 @@ describe('Refresh', () => {
       'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([report]);
+  });
+
+  it('answers an agent call that it landed, and a refusal with its reason, reporting neither', async () => {
+    const landed = registerRefresh({ applied: true });
+    expect([await landed.run(new AgentCall([], {})), landed.reporter.reports]).toEqual([{ applied: true, outcome: { landed: [], refused: [] } }, []]);
+
+    handlers.clear();
+    const held = registerRefresh({ applied: false, heldElsewhere: true }, '/instance/FO4');
+    expect([await held.run(new AgentCall([], {})), held.reporter.reports]).toEqual([
+      { applied: false, refusal: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4' }, [],
+    ]);
   });
 
   it('releases the wait it armed for a refill, since a refused rebuild starts none', async () => {

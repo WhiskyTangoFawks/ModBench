@@ -10,6 +10,22 @@ export class AgentCall<Options extends object = object> {
   constructor(readonly argument: readonly Argument[], readonly options: Options) {}
 }
 
+export const isAgentCall = (value: unknown): value is AgentCall => value instanceof AgentCall;
+
+/** The profiles an agent's call of switch names. */
+export const profilesOf = (call: AgentCall): string[] =>
+  call.argument.flatMap((given) => (given.kind === 'profile' ? [given.name] : []));
+
+/** The paths an agent's call of move to Overwrite names. */
+export const deployedPathsOf = (call: AgentCall): string[] =>
+  call.argument.flatMap((given) => (given.kind === 'deployedFile' ? [given.path] : []));
+
+/** What a gesture over no items answers an agent: it landed, or it was refused. */
+export function answeredToAgent(result: { applied: true } | { applied: false; refusal: string }, partial: readonly PartialFailure[] = []): GestureResult<never, string> {
+  if (!result.applied) return { applied: false, refusal: result.refusal };
+  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
+}
+
 /** A part of a landed gesture that failed: a view warns of it, or logs it when its severity is `log`, and an agent
  *  is answered it with the Output line the server writes. */
 export interface PartialFailure {

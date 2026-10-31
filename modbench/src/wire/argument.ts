@@ -7,6 +7,8 @@ export type Argument =
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress }
   | { readonly kind: 'mod'; readonly name: string }
   | { readonly kind: 'separator'; readonly name: string }
+  | { readonly kind: 'profile'; readonly name: string }
+  | { readonly kind: 'deployedFile'; readonly path: string }
   | { readonly kind: 'downloadedFile'; readonly name: string }
   | { readonly kind: 'archive' | 'folder'; readonly path: string }
   | { readonly kind: 'file'; readonly origin: { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' }; readonly relativePath: string };

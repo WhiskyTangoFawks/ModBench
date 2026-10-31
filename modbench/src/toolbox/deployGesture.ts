@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { DeployCommands, DeployResult } from '../instanceCommands/deploy';
-import { AgentCall } from '../drivingLib/agentGesture';
+import type { DeployCommands, DeployResult, PurgeResult } from '../instanceCommands/deploy';
+import { AgentCall, answeredToAgent, deployedPathsOf, isAgentCall, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
-import { deployFailures, deployWarnings } from './deployProblems';
+import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
 import { MOVE_TO_OVERWRITE, unmanagedProblems } from './unmanagedProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';
@@ -39,31 +39,28 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
     for (const { message, detail } of [...deployFailures(result), ...deployWarnings(result)]) reporter.report('warning', message, detail);
     return result;
   };
-  const purge = async (): Promise<void> => {
+  const purge = async (called: unknown): Promise<GestureResult<never, string> | undefined> => {
     const result = await commands.purge();
     leftOut = [];
     await publishProblems();
+    if (called instanceof AgentCall) return answeredToAgent(result, result.applied ? purgePartials(result) : []);
     if (!result.applied) {
       reporter.report('error', 'Could not purge.', result.refusal);
-      return;
+      return undefined;
     }
     if (result.unmanaged.length > 0) {
       reporter.shownOnSurface('warning', 'The deployment folder holds files purge did not remove:', result.unmanaged.join(', '));
       reporter.report('warning', `The deployment folder holds ${result.unmanaged.length} files purge did not remove, each named in the Output.`);
     }
-    if (result.leftRenamed.length > 0) {
-      reporter.report('warning', 'Purge left each plugins.txt deploy renamed, which is yours to put back:', result.leftRenamed.join(', '));
-    }
-    if (result.unfinished.length > 0) {
-      reporter.report('warning', 'Purge landed, and could not finish:', result.unfinished.join(', '));
-    }
+    reportPartial(reporter, purgeLeftovers(result));
+    return undefined;
   };
   // The game folder can be the deployment folder (deployment-hardlink.md, The deployment folder, story 4), and
   // the instance value reads its Data folder.
   return [
     registerDeployTask(reporter),
     vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
-    vscode.commands.registerCommand('modbench.instance.purge', () => runWritingGesture(TOOLBOX_VIEW, instance, purge)),
+    vscode.commands.registerCommand('modbench.instance.purge', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => purge(called))),
     registerMoveToOverwriteCommand({ commands, instance, reporter }, publishProblems),
     collection,
     subscription,
@@ -71,16 +68,44 @@ export function registerDeployCommands({ commands, instance, reporter }: DeployG
   ];
 }
 
+const warning = (message: string, detail: string): PartialFailure => ({ message, detail, severity: 'warning' });
+
+function purgeLeftovers({ leftRenamed, unfinished }: Extract<PurgeResult, { applied: true }>): PartialFailure[] {
+  return [
+    ...(leftRenamed.length > 0 ? [warning('Purge left each plugins.txt deploy renamed, which is yours to put back:', leftRenamed.join(', '))] : []),
+    ...(unfinished.length > 0 ? [warning('Purge landed, and could not finish:', unfinished.join(', '))] : []),
+  ];
+}
+
+function purgePartials(result: Extract<PurgeResult, { applied: true }>): PartialFailure[] {
+  const { unmanaged } = result;
+  return [
+    ...(unmanaged.length > 0 ? [warning('The deployment folder holds files purge did not remove:', unmanaged.join(', '))] : []),
+    ...purgeLeftovers(result),
+  ];
+}
+
+const leftWarning = (left: readonly string[]) => warning('Left in the deployment folder, because no mod file lands at their path:', left.join(', '));
+
+function pathsOf(called: unknown): readonly string[] | undefined {
+  if (isAgentCall(called)) {
+    const paths = deployedPathsOf(called);
+    return paths.length === 0 ? undefined : paths;
+  }
+  return Array.isArray(called) && called.every((path) => typeof path === 'string') ? called : undefined;
+}
+
 function registerMoveToOverwriteCommand({ commands, instance, reporter }: DeployGestureDeps, publishProblems: () => Promise<void>): vscode.Disposable {
-  const move = async (paths: unknown): Promise<void> => {
-    const named = Array.isArray(paths) && paths.every((path) => typeof path === 'string') ? paths : undefined;
-    const result = await commands.moveToOverwrite(named);
+  const move = async (called: unknown): Promise<GestureResult<never, string> | undefined> => {
+    const result = await commands.moveToOverwrite(pathsOf(called));
     await publishProblems();
+    if (called instanceof AgentCall) return answeredToAgent(result, result.applied && result.left.length > 0 ? [leftWarning(result.left)] : []);
     if (!result.applied) {
       reporter.report('error', 'Could not move to Overwrite.', result.refusal);
     } else if (result.left.length > 0) {
-      reporter.report('warning', 'Left in the deployment folder, because no mod file lands at their path:', result.left.join(', '));
+      reportPartial(reporter, [leftWarning(result.left)]);
     }
+    return undefined;
   };
-  return vscode.commands.registerCommand(MOVE_TO_OVERWRITE, (paths: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => move(paths)));
+  return vscode.commands.registerCommand(MOVE_TO_OVERWRITE, (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => move(called)));
 }
