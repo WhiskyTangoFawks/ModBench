@@ -3,7 +3,7 @@
 
 import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
-import type { InstallationFile, InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
+import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   BUILD_FILE_VERSION, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
@@ -12,26 +12,17 @@ import type { MoveToTrash } from '../ports/trash';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile, type Source } from './manifestBuilder';
+import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
+import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'
-  | 'writeFilesIn'>;
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
+  & FolderRestoreAdapter;
 
-/** The repository a mod's decompile and commit makes, and the files its manifest names, which the repository leaves out
- *  and a package yields (ADR-0022). */
+/** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
   readonly repository: NewRepository;
-  readonly yielded: readonly { readonly path: string; readonly from: PackageFile }[];
-}
-
-function packageFileOf(source: Source, installationFile: InstallationFile | undefined, game: GameHeld | undefined): PackageFile | undefined {
-  if (source.installationFile !== undefined) {
-    return installationFile === undefined ? undefined : { kind: 'entry', downloadedFile: installationFile.path, entry: source.packagePath };
-  }
-  const place = game?.places.find(({ files }) => files.some(({ path, hash }) => path === source.packagePath && hash === source.hash));
-  return place === undefined ? undefined : { kind: 'gameFile', root: place.root, path: source.packagePath };
 }
 
 function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
@@ -108,10 +99,6 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
     { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  const yielded = [...recorded.sources].flatMap(([path, source]) => {
-    const from = packageFileOf(source, installationFile, read.game);
-    return from === undefined ? [] : [{ path, from }];
-  });
   const sourceManifest: Manifest = {
     packages: recorded.manifest.packages, exclude: [], files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))),
   };
@@ -120,7 +107,6 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
       sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: `{"version":${BUILD_FILE_VERSION}}\n`,
       manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest),
     },
-    yielded,
   };
 }
 
@@ -129,26 +115,24 @@ const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: 
   return paths.filter((path) => !leftOut.has(path.toLowerCase()));
 };
 
-// The source folder is new, so a file it already holds is not replaced.
-const holdsAlready: MoveToTrash = (path) => Promise.reject(new Error(`'${path}' is there already`));
+type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 'folderValue'> & FolderRestoreAdapter;
 
-// ADR-0022: the repository leaves out what a package yields, so the files the manifest names are written where the build reads them.
-async function yieldedWrittenOrWhy(adapter: Pick<LinkAdapter, 'writeFilesIn'>, sourceFolder: string, yielded: MadeRepository['yielded']): Promise<string | undefined> {
-  try {
-    if (yielded.length > 0) await adapter.writeFilesIn(sourceFolder, yielded, holdsAlready);
-    return undefined;
-  } catch (err) {
-    return `the files its packages yield could not be written to its source folder: ${errorMessage(err)}`;
-  }
+// The source folder is new, and the installation file a mod was made from is on this machine.
+const replacesNothing: MoveToTrash = (path) => Promise.reject(new Error(`'${path}' is in the source folder already`));
+const downloadsNothing: RestoreDeps['nexus'] = { download: () => Promise.resolve({ found: false, reason: 'decompile and commit downloads nothing' }) };
+
+// ADR-0022: the repository leaves out what a package yields, so the manifest it holds writes those files where the build reads them.
+async function sourceFolderRestoredOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
+  const why = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder);
+  return why === undefined ? undefined : `its source folder could not be restored from its manifest: ${why}`;
 }
-
-type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 'folderValue' | 'writeFilesIn'>;
 
 // The mod is a source mod once its folder's manifest names its repository. It records the folder as it is, as its build
 // would, so a first build that makes the same folder changes nothing.
-async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository, yielded }: MadeRepository): Promise<string | undefined> {
-  const sourceFilesWhy = await yieldedWrittenOrWhy(adapter, repository.sourceFolder, yielded);
-  if (sourceFilesWhy !== undefined) return sourceFilesWhy;
+async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, made: MadeRepository): Promise<string | undefined> {
+  const { repository } = made;
+  const notRestored = await sourceFolderRestoredOrWhy(adapter, mod, made);
+  if (notRestored !== undefined) return notRestored;
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
   try {

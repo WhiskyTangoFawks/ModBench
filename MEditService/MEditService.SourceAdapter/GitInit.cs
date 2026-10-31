@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 
@@ -24,6 +25,7 @@ internal static class GitInit
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
 
+        var placed = manifest is null ? null : manifest with { Content = AssetManifest.Placed(manifest.Content) };
         WriteJournal journal = new(sourceFolder);
         var git = new SourceRepositoryGit(sourceFolder);
         try
@@ -34,9 +36,9 @@ internal static class GitInit
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest)));
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(placed)));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
-            if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
+            if (placed is not null) journal.Write(Path.Combine(sourceFolder, placed.Name), placed.Content);
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             if (repair is var (repaired, commit))
@@ -104,8 +106,8 @@ internal static class GitInit
             git.Run("config", "user.email", "modbench@localhost");
     }
 
-    // Root-anchored: a bare "plugin-source/" would also un-ignore a same-named folder nested anywhere else.
-    // An un-ignore here outranks the user's global excludes, so no asset is left out of the commit.
+    // Root-anchored, so no same-named folder deeper is un-ignored. An un-ignore outranks the user's global
+    // excludes. The manifest's files come last, ignored: a package yields them (ADR-0022).
     private static string GitignoreContent(RootFile? manifest) =>
         "*\n" +
         "!/.gitignore\n" +
@@ -114,5 +116,7 @@ internal static class GitInit
         $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
         $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +
         $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n" +
-        (manifest is null ? "" : $"!/{manifest.Name}\n");
+        (manifest is null ? "" : $"!/{manifest.Name}\n" + string.Concat(AssetManifest.PathsOf(manifest.Content).Select(path => $"/{Escaped(path)}\n")));
+
+    private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }

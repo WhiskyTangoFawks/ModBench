@@ -10,7 +10,6 @@ export interface HashedModFile {
 
 /** A place of the game: the game files a mod's files may be, and the Steam app and depots it records as installed. */
 export interface GamePlaceHeld {
-  readonly root: string;
   readonly files: readonly (Omit<GameFileTaken, 'pathInFolder'> & { readonly pathInFolder?: string })[];
   readonly steamApp?: number;
   readonly depots: readonly Depot[];
@@ -22,7 +21,7 @@ export interface GameHeld {
 }
 
 // Where a package holds a file's bytes: the installation file by its name, or the game folder, the path in it, and the hash.
-export interface Source {
+interface Source {
   readonly installationFile?: string;
   readonly packagePath: string;
   readonly hash: string;

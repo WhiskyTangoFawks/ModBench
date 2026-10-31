@@ -12,7 +12,7 @@ const download = (name: string, entries: Record<string, string>, over: Partial<I
 const mod = (files: Record<string, string>): HashedModFile[] => Object.entries(files).map(([path, hash]) => ({ path, hash }));
 
 const place = (files: Record<string, string>, over: Partial<GamePlaceHeld> = {}, pathsInFolder: Record<string, string> = {}): GamePlaceHeld =>
-  ({ root: '/game', files: Object.entries(files).map(([path, hash]) => ({ path, hash, pathInFolder: pathsInFolder[path] ?? path })), depots: [], ...over });
+  ({ files: Object.entries(files).map(([path, hash]) => ({ path, hash, pathInFolder: pathsInFolder[path] ?? path })), depots: [], ...over });
 
 const gameOf = (...places: [GamePlaceHeld, ...GamePlaceHeld[]]): GameHeld => ({ places });
 

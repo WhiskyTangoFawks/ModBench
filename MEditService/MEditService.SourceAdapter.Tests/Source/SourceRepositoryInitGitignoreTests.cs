@@ -74,4 +74,25 @@ public sealed class SourceRepositoryInitGitignoreTests
             [".gitignore", "Mod.manifest.json", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
             CommittedPaths(sourceFolder));
     }
+
+    [Fact]
+    public void AManifestsPaths_AreWhereTheSourceFolderHoldsEachFileAsAnAsset_SoTheBuildReadsWhatRestoreWrites()
+    {
+        using var sourceFolder = new ScratchDirectory("medit-init-manifest-");
+        const string Manifest =
+            "{\n\"version\":1,\n\"exclude\":[\n\"textures\"\n],\n\"files\":{\n\"textures/b.dds\":\"BBBBBBBBBBB=\"\n}\n}\n";
+
+        TestAdapters.Source().Init(
+            sourceFolder, SourceInits.BuildFile, [Plugin],
+            [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))], null,
+            new RootFile("Mod.manifest.json", System.Text.Encoding.UTF8.GetBytes(Manifest)));
+
+        Assert.Equal(
+            "{\n\"version\":1,\n\"exclude\":[\n\"assets/textures\"\n],\n\"files\":{\n\"assets/textures/b.dds\":\"BBBBBBBBBBB=\"\n}\n}\n",
+            File.ReadAllText(Path.Combine(sourceFolder, "Mod.manifest.json")));
+        Directory.CreateDirectory(Path.Combine(sourceFolder, "assets", "textures"));
+        File.WriteAllText(Path.Combine(sourceFolder, "assets", "textures", "b.dds"), "a package yields it");
+        Assert.True(Ignored(sourceFolder, "assets/textures/b.dds"));
+        Assert.False(Ignored(sourceFolder, "assets/meshes/a.nif"));
+    }
 }
