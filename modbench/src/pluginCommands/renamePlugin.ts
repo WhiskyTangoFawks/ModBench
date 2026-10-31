@@ -8,8 +8,6 @@ import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
 import { answerOf } from '../wire/readFailed';
-import { manifestIn, writeManifestIn, type ManifestFile } from '../manifestAdapter/manifestAdapter';
-import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 
 export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions'>;
 
@@ -45,18 +43,6 @@ async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddr
   return refusal === undefined ? undefined : { applied: false, sourceRenamed: false, refusal };
 }
 
-// The manifest names the plugin at the folder's root; left naming the old name it reads as a plugin not restored, and
-// plugin sync gives it a line again beside the renamed one.
-const followed = (file: ManifestFile, from: string, to: string): ManifestFile =>
-  (pluginKey(file.path) !== pluginKey(from) ? file : { ...file, path: to, entry: file.entry.kind === 'held' ? { kind: 'heldAt', path: file.path } : file.entry });
-
-async function renameInManifest(adapter: InstanceAdapter, origin: string, from: string, to: string): Promise<void> {
-  const folder = origin === OVERWRITE_ORIGIN ? undefined : await adapter.modFolderPath(origin);
-  const read = folder === undefined ? undefined : await manifestIn(folder);
-  if (folder === undefined || read === undefined || 'refused' in read) return;
-  await writeManifestIn(folder, { ...read.manifest, files: read.manifest.files.map((file) => followed(file, from, to)) });
-}
-
 async function renamePlugin(
   access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string,
 ): Promise<PluginRenameResult> {
@@ -71,7 +57,6 @@ async function renamePlugin(
   if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
   try {
     await access.adapter.renamePlugin(fileOriginOf(plugin.origin), plugin.name, newName);
-    await renameInManifest(access.adapter, plugin.origin, plugin.name, newName);
     return { applied: true };
   } catch (err) {
     return { applied: false, sourceRenamed: true, refusal: errorMessage(err) };
