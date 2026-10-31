@@ -94,7 +94,7 @@ A source mod's folder is its build's output ([ADR-0007](../adr/0007-plugin-edits
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
 2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
-4. Build to make the folder hold what ADR-0007 names and nothing else: it overwrites a file I changed and sends any other file to the trash, after one confirmation naming them. Until then the mod shows as differing from its manifest. Cites: ADR-0007; modlist-repository.md, Status; Confirm what destroys
+4. Build to make the folder hold what ADR-0007 names and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0007; commands.md, Confirm what destroys
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
 
 ## Order and view state
@@ -214,7 +214,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder.
 2. A new mod to appear at the winning end of the mod order, disabled, as a mod new on disk is.
-3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. One confirmation, only when the upgrade would lose what the mod's folder holds and the new file does not, naming it. A source mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0022; Confirm what destroys; commands.md, Refuse, do not repair
+3. An upgrade to replace the mod's files with the new file's, keeping its folder name and its manifest, and sending each file it replaces or removes to the trash. A source mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0022; commands.md, Confirm what destroys; commands.md, Refuse, do not repair
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery.
 6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2

@@ -62,8 +62,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. Each folder to become what its manifest says, a source mod's by its build, with each file restore removes sent to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022
-2. One confirmation, only when the restore destroys a change no manifest holds, naming the mods or saying every mod. A restore after a fresh clone asks nothing. Cites: Confirm what destroys
+1. Each folder to become what its manifest says, a source mod's by its build, sending each file restore replaces or removes to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022; commands.md, Confirm what destroys
+2. Restore to ask nothing, since the trash takes back each file it replaces or removes. Cites: commands.md, Confirm what destroys
 3. A source mod left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
 4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the pinned file. A clone then restores with no file fetched by hand. Cites: Minimal by default
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
