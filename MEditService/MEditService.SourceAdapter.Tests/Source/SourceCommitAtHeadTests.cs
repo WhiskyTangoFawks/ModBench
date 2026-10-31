@@ -61,16 +61,26 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.Equal(value, Git(SourceFolder, "config", "--local", "--get", key).Trim());
     }
 
-    [Theory]
-    [InlineData("second", "main")]
-    [InlineData("first", "HEAD")]
-    public void AClone_LandsOnTheBranchItFollows_OnlyWhenThatBranchIsAtThePin(string pinned, string landsOn)
+    [Fact]
+    public void AClone_LandsOnTheBranchItFollows_WhenThatBranchIsAtThePin()
     {
         _submodule.Follow("main");
 
-        var head = CommitAtHead(_commits[pinned]).Value();
+        var head = CommitAtHead(_commits["second"]).Value();
 
-        Assert.Equal((new SubmoduleHead(_commits[pinned]), landsOn), (head, Branch()));
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
+    }
+
+    [Fact]
+    public void AClone_StaysDetached_AndNamesTheBranchItFollows_WhenThatBranchIsAtAnotherCommit()
+    {
+        _submodule.Follow("main");
+
+        var head = CommitAtHead(_commits["first"]).Value();
+
+        Assert.Equal(
+            (new SubmoduleHead(_commits["first"], $"its branch 'main' is at {_commits["second"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
+            (head, Branch()));
     }
 
     [Fact]
@@ -97,7 +107,7 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         var head = CommitAtHead(_commits["first"]).Value();
 
         Assert.Equal(
-            (new SubmoduleHead(_commits["first"], "its remote's default branch 'main' is not at the pin, so it is left detached at the pin"), "HEAD"),
+            (new SubmoduleHead(_commits["first"], $"its branch 'main' is at {_commits["second"]}, not at the pin, so it is left detached at the pin"), "HEAD"),
             (head, Branch()));
     }
 
