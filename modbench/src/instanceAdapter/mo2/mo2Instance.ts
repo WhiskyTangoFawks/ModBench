@@ -14,6 +14,7 @@ import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
 import { filesBelow } from './mo2Files';
+import { folderValueOver, modValueOver } from '../modValue';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2Repository } from './mo2Repository';
@@ -72,7 +73,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader, fileProblems);
   const source = readingSource(context, publisherFile);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
-  return {
+  const adapter: ManagerAdapter = {
     names: source.names,
     reading: () => readInstance(source),
     activeProfile: async () => (await source.settings()).profile,
@@ -88,6 +89,9 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     keepPackageEntries: (hash, entries) => hashes.keepPackageEntries(hash, entries),
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
+    folderValue: (folder) => folderValueOver(adapter, folder),
+    modValue: (mod, folder, asked) => modValueOver(adapter, mod, folder, asked),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
+  return adapter;
 }

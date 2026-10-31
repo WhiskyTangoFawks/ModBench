@@ -2,31 +2,37 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EntryRef, ModFolder } from '../../instanceAdapter/instanceAdapter';
-import type { FolderReads, Manifest } from '../../manifestAdapter/manifestAdapter';
+import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
+import { modValueOver } from '../../instanceAdapter/modValue';
+import type { Manifest } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { ModStatuses, type StatusSource } from '../modStatuses';
 
 let root: string;
 let logged: string[];
 let asked: string[];
+let hashed: string[];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-statuses-'));
   logged = [];
   asked = [];
+  hashed = [];
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const reads: FolderReads = {
+const reads: Parameters<typeof modValueOver>[0] = {
   filesIn: async (folder) => (await readdir(folder).catch(() => [])).filter((name) => !name.endsWith('.manifest.json')),
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'unhashed' }),
+  originFileHash: (path) => {
+    hashed.push(path);
+    return Promise.resolve({ kind: 'unreadable', reason: 'unhashed' });
+  },
   packageEntries: () => Promise.resolve(undefined),
   downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gameFolder: () => Promise.resolve({ kind: 'found' }),
+  gameFolder: () => Promise.resolve({ kind: 'found', root: '/game', dataFolder: '/game/Data' }),
   modMetadata: (mod) => {
     asked.push(mod);
     return Promise.resolve({ kind: 'read', answer: {} });
@@ -47,7 +53,9 @@ const folder = (kind: EntryRef['kind'], name: string, path: string, modName = na
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
   ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), ...over });
 
-const statusesLogging = (): ModStatuses => new ModStatuses(reads, (line) => { logged.push(line); });
+const instance: Pick<InstanceAdapter, 'modValue'> = { modValue: (mod, folder, wanted) => modValueOver(reads, mod, folder, wanted) };
+
+const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); });
 
 describe('Mod status, derived from each instance value (mod-status trace)', () => {
   it('derives each listed mod\'s and separator\'s status by its folder\'s mod name, and none for an entry with no folder', async () => {
@@ -64,6 +72,16 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
 
     expect([...derived.keys()]).toEqual(['ModA', 'Tools_separator']);
     expect([derived.get('ModA')?.namedByNoLine, derived.get('Tools_separator')?.noManifest]).toEqual([['mine.txt'], true]);
+  });
+
+  it('hashes no file of a mod whose folder holds no manifest', async () => {
+    const mod = await folderOf('ModA', { 'mine.txt': '' });
+    const statuses = statusesLogging();
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    await statuses.current();
+
+    expect(hashed).toEqual([]);
   });
 
   it('derives no status while the instance holds no repository', async () => {

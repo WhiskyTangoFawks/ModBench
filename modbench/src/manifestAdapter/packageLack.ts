@@ -1,4 +1,4 @@
-type Read<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
+import type { Read } from '../repositoriesLib/statusValues';
 
 /** Why this machine does not hold the installation file a manifest pins by `name` and `hash`, given the downloaded file of
  *  that name as it reads; undefined when it holds it. */
