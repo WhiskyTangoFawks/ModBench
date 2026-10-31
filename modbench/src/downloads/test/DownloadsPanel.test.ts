@@ -105,7 +105,7 @@ describe('opening a downloaded file or its metadata', () => {
 
   it.each([
     ['open', 'modbench.downloadedFile.open', openExternal, 'no handler for this file type', 'Open File for "foo.7z" failed.'],
-    ['open metadata', 'modbench.downloadedFile.openMeta', showTextDocument, 'file changed on disk', 'Open Metadata for "foo.7z" failed.'],
+    ['open metadata', 'modbench.downloadedFile.openMeta', showTextDocument, 'file changed on disk', 'Open Meta File for "foo.7z" failed.'],
   ])('%s: on failure, reports an error naming the action and row', async (_case, command, opener, reason, message) => {
     opener.mockRejectedValueOnce(new Error(reason));
     const report = recordingReporter();
