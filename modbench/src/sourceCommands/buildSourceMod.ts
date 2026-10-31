@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { folderAgainst, lineAtFolderPath, unmarked, writeManifestIn, type BuildFile, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { folderAgainst, lineAtFolderPath, manifestIn, unmarked, writeManifestIn, type BuildFile, type ManifestFile, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -122,17 +122,23 @@ const outputAgainst = (repository: ManifestPackage, output: Output, folder: Fold
   return folderAgainst({ packages: [repository], exclude: [], archives: [], files: lines }, folder, new Map());
 };
 
-// mods.md, Build, story 3: each file the build vouches for by its bytes, and each a step makes by its path alone. A file
-// mEdit left as it was has no line.
-function linesOf(output: Output, onDisk: ReadonlyMap<string, string>, folder: FolderValue): ManifestFile[] {
-  return [...output.vouched, ...output.stepped].flatMap((path): ManifestFile[] => {
+// mods.md, Build, stories 3 and 8: each file the build vouches for by its bytes, and each a step makes by its path alone.
+// A file mEdit left as it was keeps the line the last manifest recorded while the folder holds those bytes; with none it has no line.
+function linesOf(output: Output, onDisk: ReadonlyMap<string, string>, folder: FolderValue, previous: readonly ManifestFile[]): ManifestFile[] {
+  const kept = output.leftAsItWas.flatMap((path): ManifestFile[] => {
+    const line = previous.find((recorded) => recorded.path === path);
+    const at = onDisk.get(path);
+    const read = at === undefined ? undefined : folder.files.get(at);
+    return line?.hash !== undefined && read?.kind === 'read' && read.answer.hash === line.hash ? [line] : [];
+  });
+  return [...kept, ...[...output.vouched, ...output.stepped].flatMap((path): ManifestFile[] => {
     const at = onDisk.get(path);
     if (at === undefined) return [];
     if (output.stepped.has(path)) return [{ path, entry: { kind: 'held' } }];
     const read = folder.files.get(at);
     if (read?.kind !== 'read') throw new Error(`'${path}' could not be read${read === undefined ? '' : `: ${read.reason}`}`);
     return [{ path, entry: { kind: 'held' }, hash: read.answer.hash }];
-  });
+  })];
 }
 
 // mods.md, A source mod, story 4, and Build, story 3: every other file goes to the trash, then the manifest names the
@@ -143,13 +149,14 @@ async function recorded(
   const repository: ManifestPackage = { kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule };
   try {
     const folder = await adapter.folderValue(mod.folder);
+    const previous = await manifestIn(mod.folder);
     const against = outputAgainst(repository, output, folder);
     const trashed = against.namedByNoLine;
     const why = await whyNotTrashed(adapter, trash, mod.folder, trashed);
     if (why !== undefined) return { failure: `The build stopped as ${why}, so its manifest was not written.` };
     const onDisk = new Map(against.lines.flatMap(({ line, onDisk: at }) => (at === undefined ? [] : [[line.path, at] as const])));
     await writeManifestIn(mod.folder, {
-      packages: [repository], exclude: [], archives: [], files: linesOf(output, onDisk, folder),
+      packages: [repository], exclude: [], archives: [], files: linesOf(output, onDisk, folder, previous !== undefined && 'manifest' in previous ? previous.manifest.files : []),
       ...mod.version === undefined ? {} : { version: mod.version },
     });
     const undeclared = trashed.filter((path) => (beforeSteps !== undefined && !beforeSteps.has(path)) || output.stepped.has(unmarked(path, adapter.exclusionMark)));
