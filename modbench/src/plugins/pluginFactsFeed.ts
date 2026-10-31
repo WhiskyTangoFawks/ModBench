@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { PluginFacts, type PluginProblem } from './pluginFacts';
+import { PluginFacts, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
@@ -19,6 +19,8 @@ export interface PluginFactsFeedDeps {
   publishChangedOutside: (warnings: readonly PluginProblem[]) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
+  /** The Plugin source unreadable status's other surface, the Problems panel. */
+  publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -91,6 +93,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.reconciled(plugins, failures);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
+    this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
     this.changed.fire();
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
@@ -108,6 +111,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (generation !== this.generation || refresh !== this.refreshes) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.refreshed(plugins);
+    this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     this.changed.fire();
   }
 

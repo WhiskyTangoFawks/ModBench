@@ -5,7 +5,6 @@ import type { Instance } from '../instanceLoader/instance';
 import type { EditingDeps } from '../instanceCommands/editing';
 import { RecordBrowser } from './RecordBrowser';
 import { createStatusBar } from './statusBar';
-import { noticeExternalChanges } from './externalChangeNotice';
 import { recordWriteOver } from '../drivingLib/recordWrite';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { editingView } from './editingView';
@@ -14,7 +13,7 @@ import type { ReconcileNarrator } from './reconcileNarrator';
 export { PLUGINS_KEY_ARGS };
 
 type PluginsClient = PluginsViewDeps['client'] & ConstructorParameters<typeof RecordBrowser>[0]
-  & Parameters<typeof createStatusBar>[0] & Parameters<typeof noticeExternalChanges>[1] & EditingDeps['client'];
+  & Parameters<typeof createStatusBar>[0] & EditingDeps['client'];
 
 export interface PluginsDeps {
   client: PluginsClient;
@@ -51,7 +50,6 @@ export interface Plugins extends vscode.Disposable {
 export function createPlugins(deps: PluginsDeps): Plugins {
   const { client, channel, reporterFor } = deps;
   const statusBar = createStatusBar(client, reporterFor);
-  const externalChanges = noticeExternalChanges(reporterFor('externalChange'), client);
   const recordBrowser = new RecordBrowser(client);
   const recordWrite = recordWriteOver(PLUGINS_KEY_ARGS.view, deps.facts, client);
   return {
@@ -73,6 +71,6 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         },
       };
     },
-    dispose: () => { externalChanges(); statusBar.dispose(); },
+    dispose: () => { statusBar.dispose(); },
   };
 }
