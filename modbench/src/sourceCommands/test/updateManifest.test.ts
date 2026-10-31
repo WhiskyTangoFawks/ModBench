@@ -169,7 +169,7 @@ describe('update manifest', () => {
 
     it.each([
       ['a second installation file', 'Other.7z'],
-      ['the installation file the mod manager names', 'ModA-1.0.7z'],
+      ['the first installation file, among the downloaded files', 'ModA-1.0.7z'],
     ])('whose manifest names %s that is missing from this machine, leaving the manifest as it was', async (_, missing) => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
       const held: Manifest = {
@@ -312,6 +312,18 @@ describe('update manifest', () => {
         { mod: 'ModA', note: 'the game folder was not found, so its manifest cannot name the game folder as its package' },
       ]);
     });
+  });
+
+  it('updates a mod whose manifest names the installation file the mod manager names, though the downloaded files lack it', async () => {
+    const { update, manifestHeld } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: { installations: new Map([['ModA', read(INSTALLED)]]), downloadedFilesHashed: { files: [], notes: [] } },
+    });
+    await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], files: holding({ 'a.nif': HA }) });
+
+    const result = await update(['ModA']);
+
+    expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).packages.map((pkg) => ('name' in pkg ? pkg.name : pkg.kind))]).toEqual([[], ['ModA'], ['ModA-1.0.7z']]);
   });
 
   it('notes a mod whose installation file comes from a game without a Nexus domain', async () => {
