@@ -5,7 +5,7 @@ import type {
   FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
-import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
+import { modNameTakenRefusal, newNameRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { MoveToTrash } from '../ports/trash';
@@ -71,7 +71,8 @@ export async function installMod(
   deps: { adapter: InstanceAdapter; listMod: (name: string) => Promise<CommandResult> },
   installed: ModPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer,
 ): Promise<CommandResult<{ cancelled?: true; fomod?: FomodLanded; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
-  if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
+  const nameRefusal = target.kind === 'new' ? newNameRefusal(target.name) : undefined;
+  if (nameRefusal !== undefined) return { applied: false, refusal: nameRefusal };
   if (target.kind === 'upgrade') {
     try {
       const { adapter } = deps;

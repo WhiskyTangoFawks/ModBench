@@ -679,8 +679,30 @@ describe('the names a separator or mod may take', () => {
   it('refuses a mod name that holds a path separator', async () => {
     const { commands } = over([]);
 
-    expect(await commands.renameModNameRefusal('a/b', 'Mod B')).toBe('A mod name cannot contain / or \\');
-    expect(await commands.renameModNameRefusal('a\\b', 'Mod B')).toBe('A mod name cannot contain / or \\');
+    expect(await commands.renameModNameRefusal('a/b', 'Mod B')).toBe('A name cannot be . or .. or contain / or \\');
+    expect(await commands.renameModNameRefusal('a\\b', 'Mod B')).toBe('A name cannot be . or .. or contain / or \\');
+  });
+});
+
+describe('a name that is not a folder name', () => {
+  it.each<[string, (c: ModCommands, name: string) => Promise<unknown>]>([
+    ['add separator', (c, name) => c.insertSeparator(name, { kind: 'mod', name: 'ENBoost' })],
+    ['rename separator', (c, name) => c.renameSeparator(UNASSIGNED, name)],
+    ['rename mod', (c, name) => c.renameMod('Harder VATS', name)],
+    ['create empty mod', (c, name) => c.createEmptyMod(name)],
+  ])('is refused by %s, writing nothing', async (_case, run) => {
+    for (const name of ['a/b', 'a\\b', '.', '..']) {
+      const { fake, commands } = over();
+
+      expect(await run(commands, name)).toEqual({ applied: false, refusal: 'A name cannot be . or .. or contain / or \\' });
+      expect(verbs(fake.calls)).toEqual([]);
+    }
+  });
+
+  it('is refused in the prompt for a new mod', async () => {
+    const { commands } = over();
+
+    expect(await commands.newModNameRefusal('a/b')).toBe('A name cannot be . or .. or contain / or \\');
   });
 });
 
