@@ -82,7 +82,7 @@ export function sourceModManifest(
 const repositoryPackage = (mod: SourceModToBuild): ManifestPackage => ({ kind: 'sourceRepository', name: basename(mod.sourceFolder), isSubmodule: mod.isSubmodule });
 
 // mods.md, Build, story 1: each file the build file takes from a package, written where the folder holds it unless it holds
-// those bytes, before mEdit packs it or compiles beside it. Answers each one's line, and whether it wrote any.
+// those bytes, before mEdit packs it or compiles beside it.
 async function takenWritten(adapter: Adapter, mod: SourceModToBuild): Promise<{ lines: ManifestFile[]; wrote: boolean }> {
   const { buildFile, packages, folder, exclude } = mod;
   const lines: ManifestFile[] = [];
