@@ -10,7 +10,7 @@ import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteD
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashFileIn' | 'exclusionMark' | 'pathInFolder' | 'carriesExclusionMark'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashFileIn' | 'exclusionMark' | 'pathInFolder' | 'ownPath'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -106,6 +106,6 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
 
     exclusionMark: EXCLUDED_SUFFIX,
     pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUDED_SUFFIX),
-    carriesExclusionMark: (path) => ownPathOf(path, EXCLUDED_SUFFIX).excluded.length > 0,
+    ownPath: (pathInFolder) => ownPathOf(pathInFolder, EXCLUDED_SUFFIX).path,
   };
 }

@@ -12,7 +12,7 @@ import { ba2VersionsOf } from '../tables/gamePaths';
 import { toolsWithoutTask, type PackagesRead } from './packagesRead';
 import type { StepTasks } from './steps';
 
-type Adapter = Pick<InstanceAdapter, 'pathInFolder' | 'writeFilesIn' | 'filesIn' | 'originFileHash' | 'folderValue' | 'trashFileIn' | 'trashingReplaced'>;
+type Adapter = Pick<InstanceAdapter, 'pathInFolder' | 'ownPath' | 'writeFilesIn' | 'filesIn' | 'originFileHash' | 'folderValue' | 'trashFileIn' | 'trashingReplaced'>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
@@ -144,35 +144,36 @@ function outputOf(mod: SourceModToBuild, made: readonly MadeFile[], taken: reado
 }
 
 // Each file of the folder by the path it holds it at, matched in any case where the file system ignores it.
-function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly path: string; readonly hash?: string; readonly unreadable?: string } | undefined {
+function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly hash?: string; readonly unreadable?: string } | undefined {
   const byFolded = new Map([...folder.files].map(([pathInFolder, file]) => [pathInFolder.toLowerCase(), file]));
   return (pathInFolder) => {
     const held = folder.files.get(pathInFolder) ?? (folder.ignoresCase ? byFolded.get(pathInFolder.toLowerCase()) : undefined);
     if (held === undefined) return undefined;
     const { read } = held;
-    return read.kind === 'read' ? { path: held.path, hash: read.answer.hash } : { path: held.path, unreadable: read.reason };
+    return read.kind === 'read' ? { hash: read.answer.hash } : { unreadable: read.reason };
   };
 }
 
-// mods.md, Build, stories 3 and 8: a file mEdit left as it was keeps its last recorded hash while the folder holds those
-// bytes, and a file a step makes is named without its bytes.
-function filesOf(output: Output, folder: FolderValue, previous: ReadonlyMap<string, string | null>): Map<string, string | null> {
+// mods.md, Build, stories 3 and 8: each file by the path the build gives it, in any case the folder holds. A file mEdit
+// left as it was keeps its recorded hash while the folder holds those bytes.
+function filesOf(
+  ownPath: Adapter['ownPath'], output: Output, folder: FolderValue, previous: ReadonlyMap<string, string | null>,
+): Map<string, string | null> {
   const at = heldAt(folder);
   const files = new Map<string, string | null>();
   for (const pathInFolder of output.leftAsItWas.filter((path) => !output.stepped.has(path))) {
-    const held = at(pathInFolder);
-    const recorded = held === undefined ? undefined : previous.get(held.path);
-    if (held !== undefined && recorded !== undefined && recorded !== null && held.hash === recorded) files.set(held.path, recorded);
+    const path = ownPath(pathInFolder);
+    const recorded = previous.get(path);
+    if (recorded !== undefined && recorded !== null && at(pathInFolder)?.hash === recorded) files.set(path, recorded);
   }
-  for (const pathInFolder of output.stepped) {
-    const held = at(pathInFolder);
-    if (held !== undefined) files.set(held.path, null);
+  for (const path of output.stepped) {
+    if (at(path) !== undefined) files.set(path, null);
   }
   for (const pathInFolder of output.vouched) {
     const held = at(pathInFolder);
     if (held === undefined) continue;
     if (held.hash === undefined) throw new Error(`'${pathInFolder}' could not be read: ${held.unreadable ?? ''}`);
-    files.set(held.path, held.hash);
+    files.set(ownPath(pathInFolder), held.hash);
   }
   return files;
 }
@@ -188,7 +189,7 @@ const notInOutput = (output: Output, folder: FolderValue): string[] => {
 async function stoppedAs({ adapter }: BuildDeps, mod: SourceModToBuild, output: Output, failure: string): Promise<string> {
   try {
     const folder = await adapter.folderValue(mod.folder);
-    await writtenRecorded(mod, filesOf({ ...output, stepped: new Set(), leftAsItWas: [] }, folder, new Map()));
+    await writtenRecorded(mod, filesOf(adapter.ownPath, { ...output, stepped: new Set(), leftAsItWas: [] }, folder, new Map()));
     return failure;
   } catch (err) {
     return `${failure} Its manifest could not record what it wrote: ${errorMessage(err)}`;
@@ -207,7 +208,7 @@ async function recorded(
     const trashed = notInOutput(output, folder);
     const why = await whyNotTrashed(adapter, trash, mod.folder, trashed);
     if (why !== undefined) return { failure: await stoppedAs(deps, mod, output, `The build stopped as ${why}.`) };
-    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(output, folder, previous)));
+    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(adapter.ownPath, output, folder, previous)));
     const stepped = new Set(mod.buildFile.files.filter(({ entry }) => entry.kind === 'madeByStep').map(({ path }) => path.toLowerCase()));
     const undeclared = trashed.filter((path) => (beforeSteps !== undefined && !beforeSteps.has(path)) || stepped.has((folder.files.get(path)?.path ?? path).toLowerCase()));
     return { ...trashed.length === 0 ? {} : { trashed }, ...undeclared.length === 0 ? {} : { undeclared } };
