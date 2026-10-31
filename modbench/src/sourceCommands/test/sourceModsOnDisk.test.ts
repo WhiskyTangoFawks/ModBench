@@ -413,7 +413,6 @@ function readManifestOf(text: string): Manifest {
   return read.manifest;
 }
 
-// mEdit holds each asset of the mod folder at this path in the source folder.
 function placedAmongAssets(manifestText: string): string {
   const read = readManifest(manifestText);
   assert('manifest' in read);
@@ -437,10 +436,9 @@ describe('a mod installed from an installation file, then decompiled and committ
       await put(`source/Mod/${BUILD_FILE}`, mod.repository.buildFile);
       const placed = placedAmongAssets(mod.repository.manifest ?? '');
       await put(`source/Mod/${mod.repository.manifestFile ?? ''}`, placed);
-      await put('source/Mod/.gitignore', ['*', '!/.gitignore', `!/${BUILD_FILE}`, `!/${mod.repository.manifestFile ?? ''}`, '!/assets/', '!/assets/**', ...[...pathsIn(readManifestOf(placed))].map((path) => `/${path}`)].join('\n'));
       const sourceFolder = join(root, 'source', 'Mod');
       execFileSync('git', ['init', '-q', sourceFolder]);
-      execFileSync('git', ['-C', sourceFolder, 'add', '-A']);
+      execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.repository.manifestFile ?? '']);
       execFileSync('git', ['-C', sourceFolder, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'Init Mod']);
       return { landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] };
     });
@@ -480,7 +478,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect([sent?.repository.manifestFile, sent?.repository.assets, sent?.repository.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind)])
       .toEqual(['Mod.manifest.json', [], '{"version":1}\n', ASSETS, ['installationFile']]);
     expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
-      .toEqual(['.gitignore', 'Mod.manifest.json', 'assets/b.nif', 'assets/textures/c.dds', 'build.json']);
+      .toEqual(['Mod.manifest.json', 'assets/b.nif', 'assets/textures/c.dds', 'build.json']);
   });
 
   it('restores the files its source folder\'s manifest names to the path that manifest gives them, which is where the build reads an asset', async () => {

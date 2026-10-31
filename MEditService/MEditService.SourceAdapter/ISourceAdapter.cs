@@ -57,8 +57,8 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
-    /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree,
-    /// the assets and <paramref name="buildFile"/> at its root, then any <paramref name="repair"/>. The <paramref name="manifest"/> is committed with them.</summary>
+    /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree, the
+    /// assets, <paramref name="buildFile"/> and <paramref name="manifest"/>, then any <paramref name="repair"/>.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null);
