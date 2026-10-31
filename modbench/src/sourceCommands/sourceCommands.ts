@@ -29,8 +29,8 @@ interface SourceCommandsDeps {
   trash: MoveToTrash;
 }
 
-/** In each source mod's folder, each file build would lose: one that differs from its manifest, which build overwrites or
- *  sends to the trash, and does not hold what build puts there. A mod whose files could not be read is refused. */
+/** In each source mod's folder, each file build would lose: one that differs from its manifest and does not hold what
+ *  build puts there. A mod whose files could not be read is refused. */
 export interface WhatBuildDestroys {
   readonly mods: readonly string[];
   readonly destroys: readonly { readonly mod: string; readonly files: readonly string[] }[];

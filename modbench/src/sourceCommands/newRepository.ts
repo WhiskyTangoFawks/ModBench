@@ -101,8 +101,8 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
 
 type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'modMetadata' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash'>;
 
-// The mod is a source mod once its folder's manifest names its repository, with the mod's version, and each file of the
-// folder with its bytes, so a first build that makes them again destroys nothing (commands.md, Confirm what destroys).
+// The mod is a source mod once its folder's manifest names its repository, with the mod's version, and each file with its
+// bytes, so a first build that makes them again destroys nothing (commands.md, Confirm what destroys).
 async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
   const [folder, metadata] = await Promise.all([adapter.modFolderPath(mod), adapter.modMetadata(mod)]);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
