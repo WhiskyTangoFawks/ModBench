@@ -7,6 +7,7 @@
   },
   "references": [
     { "path": "../client" },
+    { "path": "../deployment" },
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
     { "path": "../manifestAdapter" },
