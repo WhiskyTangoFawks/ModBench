@@ -294,6 +294,21 @@ describe('restore from manifest', () => {
       expect(cancelled).toBe(true);
     });
 
+    it('is taken in place from the downloaded file with its size and hash under another name, and fetched from nowhere', async () => {
+      const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
+      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
+      const { restore, fake } = await over({
+        files: { ModA: { 'a.nif': 'stale' } }, manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        nexus, answers: { downloadedFiles: new Map([['Renamed-copy.7z', read(renamed)]]) },
+      });
+
+      const outcome = await restore(['ModA']);
+
+      expect(writes(fake.calls)[0]).toEqual({ verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'entry', downloadedFile: '/downloads/Renamed-copy.7z', entry: 'a.nif' } }] });
+      expect(outcome.refused).toEqual([]);
+      expect(sent).toEqual([]);
+    });
+
     it('asks Nexus nothing for an installation file the downloads folder holds', async () => {
       const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
       const { restore } = await over({ manifests, nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'the bytes' })]]) } });

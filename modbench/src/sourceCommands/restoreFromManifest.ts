@@ -25,7 +25,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'textHash' | 'modMetadata'
   | 'unwritableMetadata' | 'writeModMetadata' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'packageEntries' | 'keepPackageEntries' | 'writeFilesIn' | 'trashFileIn' | 'submodule'
-  | 'unclonedSubmodules' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
+  | 'unclonedSubmodules' | 'downloadedFileHolding' | 'nexusFileAt' | 'putDownloadedFile' | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
 export interface RestoreDeps {
   readonly client: Pick<MEditClient, 'cloneSubmodules' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -175,7 +175,7 @@ type Answer = { readonly landed: ModRestored } | { readonly refusal: string };
 // modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is downloaded first.
 async function packagesFor(pass: Pass, manifest: Manifest): Promise<PackagesRead | { readonly refusal: string }> {
   const { adapter, nexus } = pass.deps;
-  const named = manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [{ name: pkg.name, hash: pkg.hash, ...(pkg.page === undefined ? {} : { page: pkg.page }) }] : []));
+  const named = manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [{ name: pkg.name, size: pkg.size, hash: pkg.hash, ...(pkg.page === undefined ? {} : { page: pkg.page }) }] : []));
   const found = await namedDownloadedFiles({ adapter, nexus }, [{ installationFiles: named }], {
     onDownload: (file) => { pass.options.onProgress?.({ phase: 'Downloading', file }); }, signal: pass.options.signal,
   });

@@ -658,6 +658,9 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded file with the size and hash of `pinned`, under any name; undefined when the folder holds none. Only files of
+   *  that size are hashed. */
+  downloadedFileHolding(pinned: HashedFile): Promise<FileRead<InstallationFile | undefined>>;
   /** Every downloaded file, with its entries, and why any could not be read. It hashes those the hash index lacks one at
    *  a time, keeping each hash; `onHashing` hears how many are left, and `signal` stops it before the next. */
   downloadedFilesHashed(options?: {

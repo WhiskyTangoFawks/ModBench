@@ -1,6 +1,7 @@
 // What MO2 records of a mod's installation: the downloaded file meta.ini names, and meta.ini itself.
 
 import { entryNamed } from './codecs/modlistText';
+import { stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute } from 'node:path';
 import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
@@ -117,7 +118,7 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash, downloadedFilesHashed }: Pick<HashIndex, 'downloadedFileHash' | 'downloadedFilesHashed'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFileHolding' | 'downloadedFilesHashed' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -169,6 +170,17 @@ export function mo2Installation(
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
+
+    downloadedFileHolding: ({ size, hash }) => readOrReason(async () => {
+      const downloadsDir = await currentDownloadsDir(context);
+      for (const name of await downloadedFileNames(downloadsDir, ignoreSkippedLink) ?? []) {
+        const path = downloadedFilePath(downloadsDir, name);
+        if ((await stat(path)).size !== size) continue;
+        const hashed = await downloadedFileHash(path);
+        if (hashed.kind === 'read' && hashed.answer.hash === hash) return { path, ...hashed.answer };
+      }
+      return undefined;
+    }),
 
     downloadedFilesHashed: async (options) => {
       const listed = await readOrReason(async () => {

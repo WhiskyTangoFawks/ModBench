@@ -2045,6 +2045,30 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
+    describe('a downloaded file by its bytes', () => {
+      const reader = fakeInstallationFileReader(['textures/a.dds']);
+      const holding = (list = reader.list) => managerOver(root, { installationFileReader: { ...reader, list } });
+
+      it('answers the file with that size and hash, whatever its name', async () => {
+        await actualRename(join(root, 'downloads', DOWNLOADED_FILE), join(root, 'downloads', 'Renamed-copy.7z'));
+
+        expect(await holding().downloadedFileHolding({ size: 28, hash: 'yMPjZVarjmw=' })).toEqual({
+          kind: 'read', answer: { path: join(root, 'downloads', 'Renamed-copy.7z'), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
+        });
+      });
+
+      it('answers none for a file of that size with other bytes', async () => {
+        expect(await holding().downloadedFileHolding({ size: 28, hash: 'AAAAAAAAAAA=' })).toEqual({ kind: 'read', answer: undefined });
+      });
+
+      it('hashes no file of another size', async () => {
+        const list = vi.fn(reader.list);
+
+        expect(await holding(list).downloadedFileHolding({ size: 1, hash: 'yMPjZVarjmw=' })).toEqual({ kind: 'read', answer: undefined });
+        expect(list).not.toHaveBeenCalled();
+      });
+    });
+
     describe('every downloaded file', () => {
       const hashing = () => managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) });
 

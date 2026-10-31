@@ -25,8 +25,23 @@ internal static class Submodules
         if (!git.Exists) throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
         var head = git.HeadCommit();
         var detachedAtThePin = head == submodule.Pin && git.Run("branch", "--show-current").Length == 0;
-        return new SubmoduleHead(head, detachedAtThePin && submodule.Branch is { } branch ? OnTheBranch(git, branch, submodule.Pin, cloned) : null);
+        return new SubmoduleHead(head, detachedAtThePin ? Landed(git, submodule, cloned) : null);
     }
+
+    // The branch the submodule follows first, then the remote's default; the note is the first branch's, when none holds the pin.
+    private static string? Landed(SourceRepositoryGit git, Submodule submodule, bool cloned)
+    {
+        string? note = null;
+        foreach (var branch in new[] { submodule.Branch, RemoteDefaultBranch(git) }.OfType<string>().Distinct())
+        {
+            note ??= OnTheBranch(git, branch, submodule.Pin, cloned);
+            if (git.Run("branch", "--show-current").Length > 0) return null;
+        }
+        return note;
+    }
+
+    private static string? RemoteDefaultBranch(SourceRepositoryGit git) =>
+        git.TryRun(out var head, "symbolic-ref", "--short", $"refs/remotes/{Origin}/HEAD") ? head.Trim()[(Origin.Length + 1)..] : null;
 
     // A clone of the instance repository leaves an empty folder where each submodule goes.
     private static bool HoldsNothing(string folder) => !Directory.Exists(folder) || !Directory.EnumerateFileSystemEntries(folder).Any();

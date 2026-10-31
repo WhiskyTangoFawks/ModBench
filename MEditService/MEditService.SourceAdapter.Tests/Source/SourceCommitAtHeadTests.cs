@@ -74,6 +74,24 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
+    public void AClone_OfASubmoduleThatFollowsNoBranch_LandsOnTheRemotesDefaultBranch_WhenThatIsAtThePin()
+    {
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
+    }
+
+    [Fact]
+    public void AClone_OfASubmoduleThatFollowsAMissingBranch_LandsOnTheRemotesDefaultBranch_WhenThatIsAtThePin()
+    {
+        _submodule.Follow("gone");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
+    }
+
+    [Fact]
     public void AClone_IntoAGitDirectoryADeinitKept_LeavesTheBranchItHolds_AndSaysItIsLeftDetachedAtThePin()
     {
         _submodule.Follow("main");

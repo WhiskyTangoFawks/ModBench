@@ -4,13 +4,11 @@ import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
 
 type Downloading = {
-  readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'nexusFileAt' | 'putDownloadedFile'>;
+  readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'nexusFileAt' | 'putDownloadedFile'>;
   readonly nexus: Pick<Nexus, 'download'>;
 };
 
-type Deps = Downloading | { readonly adapter: Pick<InstanceAdapter, 'downloadedFile'>; readonly nexus?: undefined };
-
-type ManifestInstallationFile = Pick<Extract<ManifestPackage, { kind: 'installationFile' }>, 'name' | 'hash' | 'page'>;
+type ManifestInstallationFile = Pick<Extract<ManifestPackage, { kind: 'installationFile' }>, 'name' | 'size' | 'hash' | 'page'>;
 
 interface Found {
   readonly read: FileRead<InstallationFile | undefined>;
@@ -38,7 +36,7 @@ async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, pa
 
 /** The installation files the mods `notFound` lack, by name in the downloads folder, each one they lack downloaded first. */
 export async function namedDownloadedFiles(
-  deps: Deps, notFound: readonly { readonly installationFiles: readonly ManifestInstallationFile[] }[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
+  deps: Downloading, notFound: readonly { readonly installationFiles: readonly ManifestInstallationFile[] }[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
 ): Promise<{
   handed: (name: string | undefined) => InstallationFile | undefined;
   unreadable: (name: string | undefined) => string | undefined;
@@ -53,8 +51,9 @@ export async function namedDownloadedFiles(
       found.set(name, { read });
       continue;
     }
-    if (deps.nexus === undefined) {
-      found.set(name, { read });
+    const held = await deps.adapter.downloadedFileHolding(file);
+    if (held.kind === 'unreadable' || held.answer !== undefined) {
+      found.set(name, { read: held });
       continue;
     }
     onDownload?.(name);
