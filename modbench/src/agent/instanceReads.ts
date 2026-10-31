@@ -1,5 +1,6 @@
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
+import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import type { PluginsTxtWhere } from '../deployment/pluginsTxtPlace';
 
 /** The deployment the Toolbox shows: its folder, and where deploy writes plugins.txt for a game and that folder. */
@@ -32,8 +33,19 @@ export const INSTANCE_READS: readonly Read[] = [
   },
   {
     name: 'list_mods',
-    description: 'The mods and separators in mod order, winning first, each with whether it is enabled.',
-    of: ({ mods }) => mods.map(({ kind, name, enabled }) => ({ kind, name, enabled })),
+    description: 'The Overwrite row, which wins over every mod, with its file count, then the mods and separators in mod order, winning first, each with whether it is enabled. '
+      + 'A mod also has what its row shows: version, whether an update is available, its Nexus ID, the file it was installed from, and the source folder it is built from if it is a source mod. '
+      + 'Its status against its manifest is list_mod_statuses.',
+    of: ({ mods, overwriteFiles, listedSourceMods, paths }) => [
+      { kind: 'runtimeOutput', name: OVERWRITE_LABEL, fileCount: overwriteFiles.length },
+      ...mods.map((entry) => (entry.kind === 'separator'
+        ? { kind: entry.kind, name: entry.name, enabled: entry.enabled }
+        : {
+          kind: entry.kind, name: entry.name, enabled: entry.enabled, version: entry.version, updateAvailable: entry.updateAvailable,
+          nexusId: entry.nexusId, installationFileName: entry.installationFileName,
+          sourceFolder: listedSourceMods.has(entry.name) ? paths.sourceDirs.get(entry.name) : undefined,
+        })),
+    ],
   },
   {
     name: 'list_downloads',

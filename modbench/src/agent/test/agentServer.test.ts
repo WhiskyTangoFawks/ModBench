@@ -200,8 +200,24 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(await read(client, 'list_mods')).toEqual([
+      { kind: 'runtimeOutput', name: 'Overwrite', fileCount: 0 },
       { kind: 'separator', name: 'Textures', enabled: true },
       { kind: 'mod', name: 'Big Rocks', enabled: false },
+    ]);
+  });
+
+  it('reads each mod\'s metadata as its row shows it, and the Overwrite row with its file count', async () => {
+    const value = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'Big Rocks', enabled: true, version: '1.2', updateAvailable: true, nexusId: '12', installationFileName: 'rocks.7z' }],
+      listedSourceMods: new Set(['Big Rocks']),
+      paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map([['Big Rocks', '/i/source/Big Rocks']]) },
+      overwriteFiles: [fileIn('/i/runtime', 'a.txt'), fileIn('/i/runtime', 'b.txt')],
+    });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await read(client, 'list_mods')).toEqual([
+      { kind: 'runtimeOutput', name: 'Overwrite', fileCount: 2 },
+      { kind: 'mod', name: 'Big Rocks', enabled: true, version: '1.2', updateAvailable: true, nexusId: '12', installationFileName: 'rocks.7z', sourceFolder: '/i/source/Big Rocks' },
     ]);
   });
 
