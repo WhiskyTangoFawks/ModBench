@@ -81,7 +81,7 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
 const folderOf = (mod: string): string => join(modsDir, mod);
 
 const writes = (calls: readonly AdapterCall[]): AdapterCall[] =>
-  calls.filter(({ verb }) => ['writeFilesIn', 'trashFileIn', 'writeModMetadata'].includes(verb));
+  calls.filter(({ verb }) => ['writeFilesIn', 'trashFileIn', 'writeInstalledFrom'].includes(verb));
 
 describe('restore from manifest', () => {
   it('writes each file whose bytes differ or that is gone from the entry of its bytes, wherever its package holds it, and sends each file it does not name to the trash', async () => {
@@ -97,8 +97,30 @@ describe('restore from manifest', () => {
     expect(writes(fake.calls)).toEqual([
       { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'b.nif', from: entry('b.nif') }, { path: 'c.nif', from: entry('Data/c.nif') }] },
       { verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'mine.txt' },
+      { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] },
     ]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['b.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], refused: [] });
+  });
+
+  it('names every installation file of a mod to the metadata, in the order the manifest reads them', async () => {
+    const second = { ...MOD_7Z, name: 'ModA-patch.7z' };
+    const { restore, fake } = await over({
+      files: { ModA: { 'a.nif': HA } }, manifests: { ModA: fromTheZip({ 'a.nif': HA }, { packages: [MOD_7Z, second] }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)], ['ModA-patch.7z', read({ ...DOWNLOADED, path: '/downloads/ModA-patch.7z' })]]) },
+    });
+
+    await restore(['ModA']);
+
+    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA-patch.7z', 'ModA.7z'] }]);
+  });
+
+  it('refuses a mod whose metadata could not be written, as not finished', async () => {
+    const { restore } = await over({
+      files: { ModA: { 'a.nif': HA } }, manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), refusals: refusing('writeInstalledFrom', 'EROFS') },
+    });
+
+    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not finished: EROFS. Restoring it again finishes it.' }]);
   });
 
   it('writes a file its manifest excludes under the mod manager\'s mark, moving the file the folder holds included', async () => {
@@ -112,6 +134,7 @@ describe('restore from manifest', () => {
     expect(writes(fake.calls)).toEqual([
       { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'b.nif.mohidden', from: { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'b.nif' } }] },
       { verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'b.nif' },
+      { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] },
     ]);
   });
 
