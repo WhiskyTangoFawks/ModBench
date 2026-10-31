@@ -21,15 +21,10 @@ import { present } from '../../ports/present';
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
 const LEVEL = [{ kind: 'member', name: 'Level' }];
-const ELEMENT = [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }];
 
 const editableCell = (holdsValue: boolean) => ({
   webviewSection: 'cell editableCell', copyText: '7', ...IDENTITY, path: LEVEL, holdsValue,
 });
-const element = {
-  webviewSection: 'cell arrayElement editableCell', copyText: '4', ...IDENTITY, path: ELEMENT, holdsValue: true,
-  canMoveUp: false, canMoveDown: false,
-};
 
 function registered(cell: FocusedCellContext | undefined) {
   const told: ExtensionToWebview[] = [];
@@ -63,31 +58,16 @@ describe('the record grid\'s key entry points', () => {
     ]);
   });
 
-  it('Ctrl+X copies the focused cell\'s value and then clears it', async () => {
+  it('Ctrl+X fires cut on the focused cell', async () => {
     const { run } = registered(editableCell(true));
     await run('modbench.recordGrid.cutHere');
-    expect(executeCommand.mock.calls).toEqual([
-      ['modbench.copyValue', { view: 'modbench.recordGrid' }],
-      ['modbench.record.editField', IDENTITY, { op: 'set', path: LEVEL, value: null }],
-    ]);
-  });
-
-  it('Ctrl+X on an element copies it and then removes it, as Delete does', async () => {
-    const { run } = registered(element);
-    await run('modbench.recordGrid.cutHere');
-    expect(executeCommand.mock.calls).toEqual([
-      ['modbench.copyValue', { view: 'modbench.recordGrid' }],
-      ['modbench.record.removeElement', element],
-    ]);
+    expect(executeCommand.mock.calls).toEqual([['modbench.record.cut']]);
   });
 
   it.each([
     ['Delete', 'a field the plugin does not hold', 'clearHere', editableCell(false)],
     ['Delete', 'a cell that cannot be edited', 'clearHere', { webviewSection: 'cell', copyText: '7' }],
-    ['Ctrl+X', 'a field the plugin does not hold', 'cutHere', editableCell(false)],
-    ['Ctrl+X', 'a cell that cannot be edited', 'cutHere', { webviewSection: 'cell', copyText: '7' }],
-    ['Ctrl+X', 'no focused cell', 'cutHere', undefined],
-  ])('%s on %s copies nothing and changes nothing', async (_key, _what, command, cell) => {
+  ])('%s on %s changes nothing', async (_key, _what, command, cell) => {
     const { run } = registered(cell);
     await run(`modbench.recordGrid.${command}`);
     expect(executeCommand).not.toHaveBeenCalled();

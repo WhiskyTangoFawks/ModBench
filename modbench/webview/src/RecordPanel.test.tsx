@@ -538,12 +538,12 @@ describe('RecordPanel — a Partial Form column', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it.each([
-    ['(Partial Form)', partialFormCompiledPluginsResponse],
-    ['(Partial Form)', pluginsResponse],
-  ])('dims the header of a Partial Form copy under its status %s, with no control on it', async (status, plugins) => {
+    [partialFormCompiledPluginsResponse],
+    [pluginsResponse],
+  ])('dims the header of a Partial Form copy under its (Partial Form) status, with no control on it', async (plugins) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(partialFormCompareResult, { plugins });
-    await waitFor(() => expect(screen.getByText(status)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('(Partial Form)')).toBeInTheDocument());
 
     const th = required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });

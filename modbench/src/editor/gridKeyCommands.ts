@@ -20,13 +20,8 @@ function clearing(cell: FocusedCellContext | undefined): Firing | undefined {
   return ['modbench.record.editField', { formKey, plugin, origin }, { op: 'set', path, value: null }];
 }
 
-// editor.md, The focused cell, story 6: Delete removes an element, and clears any other field.
-function deletion(cell: FocusedCellContext | undefined): Firing | undefined {
-  return hasSection(cell, 'arrayElement') ? ['modbench.record.removeElement', cell] : clearing(cell);
-}
-
-/** The grid's keys VS Code cannot hand the focused cell's Arguments. Clear and cut fire their catalog
- *  commands with them; F2 and paste reach the focused cell, which writes through edit field. */
+/** The grid's keys VS Code cannot hand the focused cell's Arguments. Clear fires its catalog
+ *  command with them, and cut finds the focused cell itself; F2 and paste reach the focused cell, which writes through edit field. */
 export function registerGridKeyCommands(deps: GridKeyCommandDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand(`${GRID_VIEW}.editHere`, () => {
@@ -40,10 +35,7 @@ export function registerGridKeyCommands(deps: GridKeyCommandDeps): vscode.Dispos
       if (clear) await vscode.commands.executeCommand(...clear);
     }),
     vscode.commands.registerCommand(`${GRID_VIEW}.cutHere`, async () => {
-      const deleted = deletion(deps.focusedCell());
-      if (!deleted) return;
-      await vscode.commands.executeCommand('modbench.copyValue', { view: GRID_VIEW });
-      await vscode.commands.executeCommand(...deleted);
+      await vscode.commands.executeCommand('modbench.record.cut');
     }),
   ];
 }

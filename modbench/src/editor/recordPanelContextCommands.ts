@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
+import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type EditableCellContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
@@ -99,6 +99,19 @@ function writeGated(deps: FieldCommitDeps, address: EditAddress, envelope: Recor
   return deps.editGateOf(address)(address, formKey => deps.edit({ formKey, plugin: address.plugin }, envelope));
 }
 
+// editor.md, The focused cell, story 5: cut copies the cell's value, then removes an element or
+// sets any other field to nothing, as one edit.
+async function cut(deps: RecordPanelContextCommandDeps, cell: unknown): Promise<void> {
+  if (!hasSection(cell, 'editableCell') || !isEditCell(cell)) return;
+  if (cell.copyText) await vscode.env.clipboard.writeText(cell.copyText);
+  const { path } = cell;
+  await writeGated(deps, editAddressOf(cell), hasSection(cell, 'arrayElement') ? { op: 'remove', path } : { op: 'set', path, value: null });
+}
+
+function isEditCell(value: unknown): value is PluginCopyAddress & { path: EditableCellContext['path']; copyText?: string } {
+  return isPluginCopyAddress(value) && Reflect.get(value, 'holdsValue') === true && Array.isArray(Reflect.get(value, 'path'));
+}
+
 const CONTEXT_COMMANDS: ContextCommand[] = [
   {
     command: 'modbench.record.openReference',
@@ -111,6 +124,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
     run: async (deps, ctx) => { if (isStringValueContext(ctx)) await deps.extendedFields.open(ctx); },
   },
   { command: 'modbench.record.editField', run: editField },
+  { command: 'modbench.record.cut', run: cut },
   editCommand('modbench.record.addElement', isArrayParentContext, (ctx, value) => ({ op: 'add', path: ctx.path, value })),
   editCommand('modbench.record.removeElement', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
   editCommand('modbench.record.moveElementUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
