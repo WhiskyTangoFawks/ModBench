@@ -64,7 +64,6 @@ internal sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
     IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
-    IReadOnlyList<PluginWithUnreadableSource>? PluginWithUnreadableSources = null,
     RecordFilterClearedNotification? RecordFilterCleared = null,
     ModlistProgress? ModlistProgress = null,
     DecompileAndCommitPhase? DecompileAndCommitPhase = null)
@@ -77,7 +76,6 @@ internal sealed record NotificationEvent(
         DecompileAndCommitProgressNotification n => new("decompile-and-commit-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, DecompileAndCommitPhase: n.Phase),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
-        PluginSourceUnreadableNotification n => new("plugin-source-unreadable", "", n.Origin, [], 0, PluginWithUnreadableSources: n.Plugins),
         RecordFilterClearedNotification n => new("record-filter-cleared", "", "", [], 0, RecordFilterCleared: n),
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.GetType().Name, null),
     };
