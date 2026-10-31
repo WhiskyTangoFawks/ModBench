@@ -83,7 +83,7 @@ describe('installMod', () => {
 
     expect(result).toEqual({ applied: true });
     expect(calls.map((call) => call.verb)).toEqual(['install', 'writeInstalledFrom', 'changeModOrder']);
-    expect(calls[1]).toMatchObject({ changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: MOD } }] });
+    expect(calls[2]).toMatchObject({ changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: MOD } }] });
   });
 
   it('lands the mod carrying why its line could not be written', async () => {

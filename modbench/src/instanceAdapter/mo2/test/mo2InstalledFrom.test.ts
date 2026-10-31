@@ -70,7 +70,7 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     await write('First.7z');
     const trashed: string[] = [];
 
-    await adapterOver(root).writeInstalledFrom(modFolder(), ['First.7z'], async (path) => { trashed.push(path); });
+    await adapterOver(root).writeInstalledFrom(modFolder(), ['First.7z'], (path) => { trashed.push(path); return Promise.resolve(); });
 
     expect(trashed).toEqual([]);
   });
