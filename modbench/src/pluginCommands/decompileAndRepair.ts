@@ -2,7 +2,7 @@
 // no repository is handed the one decompile and commit would make.
 
 import { isRefused, type MEditClient, type NewRepository, type PluginAddress, type PluginToRepair } from '../client';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { InstanceAdapter, PackageFile } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -11,6 +11,7 @@ export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair'>;
 
 interface MadeRepository {
   readonly repository: NewRepository;
+  readonly yielded: readonly { readonly path: string; readonly from: PackageFile }[];
 }
 
 /** The repository decompile and commit makes for a mod, and each committed mod's folder linked to the one made for it:

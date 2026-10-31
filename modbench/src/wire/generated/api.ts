@@ -1385,6 +1385,8 @@ export interface components {
             sourceFolder: string;
             assets?: string[] | null;
             buildFile: string;
+            manifestFile?: string | null;
+            manifest?: string | null;
         };
         NotificationEvent: {
             kind: string;

@@ -47,8 +47,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null) =>
-        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, repair));
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null) =>
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, repair, manifest));
 
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) =>
         SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder));

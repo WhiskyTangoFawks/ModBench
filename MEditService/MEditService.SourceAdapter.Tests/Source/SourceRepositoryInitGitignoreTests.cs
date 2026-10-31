@@ -60,4 +60,18 @@ public sealed class SourceRepositoryInitGitignoreTests
 
         Assert.True(Ignored(sourceFolder, "My-plugin-source/notes.txt"));
     }
+
+    [Fact]
+    public void AnInitWithAManifest_CommitsItAtTheRoot_AndLeavesAFileTheManifestNamesIgnored()
+    {
+        using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
+        File.WriteAllText(Path.Combine(sourceFolder, "assets.nif"), "a file a package yields");
+
+        TestAdapters.Source().Init(
+            sourceFolder, SourceInits.BuildFile, [Plugin], [], null, new RootFile("Mod.manifest.json", "{}"u8.ToArray()));
+
+        Assert.Equal(
+            [".gitignore", "Mod.manifest.json", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
+            CommittedPaths(sourceFolder));
+    }
 }

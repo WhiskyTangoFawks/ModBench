@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Commands;
 using MEditService.Commands.Build;
 using MEditService.ModFolderAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -142,8 +143,8 @@ internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommi
 internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
-/// assets by their forward-slash paths in its folder, and its build file's text.</summary>
-internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile)
+/// assets by their forward-slash paths in its folder, its build file's text, and its manifest's name and text.</summary>
+internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null)
 {
     internal const string NotWhole =
         "A new repository needs its source folder, forward-slash paths in the mod folder for its assets, and its build file.";
@@ -152,5 +153,7 @@ internal sealed record NewRepositoryRequest(string SourceFolder, IReadOnlyList<s
         !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null;
 
     internal NewRepository ToNewRepository() =>
-        new(SourceFolder, Assets ?? [], new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(BuildFile));
+        new(SourceFolder, Assets ?? [], Utf8(BuildFile), ManifestFile is { } name && Manifest is { } text ? new RootFile(name, Utf8(text)) : null);
+
+    private static byte[] Utf8(string text) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text);
 }
