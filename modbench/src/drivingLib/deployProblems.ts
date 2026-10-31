@@ -3,7 +3,6 @@ interface Placed {
   readonly winner: string;
 }
 
-/** The parts of a landed deploy these problems read. */
 interface Deployed {
   readonly leftOut: readonly Placed[];
   readonly lost: readonly Placed[];

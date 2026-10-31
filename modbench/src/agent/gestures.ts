@@ -305,7 +305,6 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
 
 type GestureOutcome = GestureResult<unknown>;
 
-/** What deploy answers: the deploy task reads it whole. */
 type DeployOutcome = ({ applied: true } & Deployed) | { applied: false; refusal: string };
 
 const isDeployed = (answer: GestureOutcome | DeployOutcome): answer is { applied: true } & Deployed => answer.applied && 'pluginsTxt' in answer;
