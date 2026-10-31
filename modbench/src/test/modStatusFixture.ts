@@ -1,13 +1,16 @@
 import { mkdir } from 'node:fs/promises';
-import type { ManifestFile, ModStatus } from '../manifestAdapter/manifestAdapter';
+import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../manifestAdapter/manifestAdapter';
 
 /** A mod whose folder matches its manifest, but for what `over` says. */
 export const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], metadataDiffers: false, noHost: false, packagesLacking: [], ...over });
+  ({ mod, noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
-/** Writes into `folder` the manifest named for it, holding `files` and no package. */
-export async function manifestedIn(folder: string, files: readonly ManifestFile[] = []): Promise<void> {
+/** A hash a manifest records, of bytes no test writes. */
+export const RECORDED_HASH = 'AAAAAAAAAAA=';
+
+/** Writes into `folder` the manifest named for it, naming each of `paths` and no package. */
+export async function manifestedIn(folder: string, paths: readonly string[] = []): Promise<void> {
   await mkdir(folder, { recursive: true });
-  await writeManifestIn(folder, { packages: [], exclude: [], archives: [], files });
+  await writeManifestIn(folder, { packages: [], exclude: [], files: new Map(paths.map((path) => [path, RECORDED_HASH])) });
 }

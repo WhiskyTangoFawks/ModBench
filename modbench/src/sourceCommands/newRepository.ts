@@ -5,17 +5,17 @@ import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  manifestIn, manifestText, packageOf, readBuildFile, sourceModsOf, writeManifestIn, type BuildFile, type Manifest, type ManifestFile, type ManifestPackage,
+  buildFileText, manifestIn, ownFilesOf, pinText, sourceModsOf, writeManifestIn, type BuildFile, type BuildFileLine, type BuildFilePackage, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
-import { buildManifest, sourceModManifest, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, nexusFileOf, type GameHeld, type HashedModFile, type Recorded } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'modMetadata'>;
+  'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>;
 
 /** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
@@ -38,17 +38,16 @@ async function hashed(adapter: Pick<Adapter, 'originFileHash'>, folder: string, 
   return files;
 }
 
+// A manifest of the format before version 1 names nothing decompile and commit keeps.
 async function heldManifest(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
   try {
     const read = await manifestIn(folder);
-    return read === undefined ? undefined : 'refused' in read ? { refusal: `its manifest cannot be read: ${read.refused}` } : read.manifest;
+    if (read === undefined || 'olderFormat' in read) return undefined;
+    return 'refused' in read ? { refusal: `its manifest cannot be read: ${read.refused}` } : read.manifest;
   } catch (err) {
     return { refusal: `its manifest could not be read: ${errorMessage(err)}` };
   }
 }
-
-const isTaken = (manifest: Manifest, line: ManifestFile): boolean =>
-  (line.entry.kind === 'held' || line.entry.kind === 'heldAt') && packageOf(manifest, line) !== undefined;
 
 interface ModRead {
   readonly sourceFolder: string;
@@ -77,6 +76,28 @@ async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise
   return { sourceFolder, folder, installationFile: installation.answer, game: gameHeld(game.folder, taken.gameFiles), held };
 }
 
+// The build file takes each file a package gives from where the package holds it: an installation file by its name, the
+// game folder by the game's release, pinned by the hash of the files it gives.
+async function buildFileOf(adapter: Adapter, { manifest, sources }: Recorded, installationFiles: readonly InstallationFile[]): Promise<BuildFile> {
+  const gameRelease = await adapter.gameRelease();
+  const fromTheGame = [...sources].flatMap(([path, { installationFile, hash }]) => (installationFile === undefined ? [{ path, hash }] : []));
+  const packages: BuildFilePackage[] = manifest.packages.flatMap((pkg): BuildFilePackage[] => {
+    if (pkg.kind === 'installationFile') {
+      const page = installationFiles.find((file) => basename(file.path) === pkg.name)?.page;
+      return [{ kind: 'installationFile', name: pkg.name, size: pkg.size, hash: pkg.hash, ...page === undefined ? {} : { page } }];
+    }
+    return [];
+  });
+  if (fromTheGame.length > 0) {
+    const depots = Object.entries(manifest.packages.find((pkg) => pkg.kind === 'gameFolder')?.host?.steam.depots ?? {}).map(([id, version]) => ({ id, version }));
+    packages.push({ kind: 'gameFolder', name: gameRelease, hash: await adapter.textHash(pinText(fromTheGame)), depots });
+  }
+  const files = [...sources].map(([path, { installationFile, packagePath }]): BuildFileLine => ({
+    path, entry: path.toLowerCase() === packagePath.toLowerCase() ? { kind: 'held' } : { kind: 'heldAt', path: packagePath }, package: installationFile ?? gameRelease,
+  }));
+  return { packages, archives: [], steps: [], tools: [], files };
+}
+
 /** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
  *  which takes from the mod's packages each file they give, and its assets. */
 export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
@@ -86,13 +107,13 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
-  const { manifest: recorded } = await buildManifest(
-    { downloadedFiles: [], ...installationFile === undefined ? {} : { installationFile }, ...read.game === undefined ? {} : { game: read.game } },
-    all.filter(({ path }) => !compiled.has(path)), undefined, held, (text) => adapter.textHash(text));
-  const kept = recorded.files.filter((line) => isTaken(recorded, line));
-  const notAssets = new Set([...kept.map(({ path }) => path), ...compiled]);
-  const buildFile: BuildFile = { packages: recorded.packages, exclude: [], archives: recorded.archives, steps: [], tools: [], files: kept };
-  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
+  const own = installationFile === undefined ? undefined : downloadedFileOf(installationFile, nexusFileOf(adapter));
+  const recorded = buildManifest(
+    { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
+    all.filter(({ path }) => !compiled.has(path)), [], held);
+  const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
+  const buildFile = await buildFileOf(adapter, recorded, installationFile === undefined ? [] : [installationFile]);
+  return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText(buildFile) } };
 }
 
 const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: readonly string[]): string[] => {
@@ -100,30 +121,19 @@ const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: 
   return paths.filter((path) => !leftOut.has(path.toLowerCase()));
 };
 
-type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'modMetadata' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash'>;
-
-// The folder as it is, each file its build file takes from that file's package and every other from the repository.
-async function folderLines(adapter: LinkAdapter, folder: string, buildFile: BuildFile): Promise<ManifestFile[] | { readonly refusal: string }> {
-  const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
-  if ('refusal' in all) return all;
-  return all.map(({ path, hash }): ManifestFile => {
-    const taken = buildFile.files.find((line) => line.path === path);
-    return taken === undefined ? { path, entry: { kind: 'held' }, hash } : { ...taken, package: packageOf(buildFile, taken)?.name, hash };
-  });
-}
+type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 'folderValue'>;
 
 // The mod is a source mod once its folder's manifest names its repository. It records the folder as it is, as its build
 // would, so a first build that makes the same folder changes nothing.
 async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository }: MadeRepository): Promise<string | undefined> {
-  const [folder, metadata] = await Promise.all([adapter.modFolderPath(mod), adapter.modMetadata(mod)]);
+  const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return 'its name gives it no folder for a manifest that names its repository';
-  const read = readBuildFile(repository.buildFile);
-  if ('refused' in read) return read.refused;
   try {
-    const named: ManifestPackage = { kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false };
-    const files = await folderLines(adapter, folder, read.buildFile);
-    if ('refusal' in files) return files.refusal;
-    await writeManifestIn(folder, sourceModManifest(read.buildFile, named, metadata.kind === 'read' ? metadata.answer : {}, files));
+    const value = await adapter.folderValue(folder);
+    const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
+    const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) });
+    if ('why' in files) return files.why;
+    await writeManifestIn(folder, { packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: value.exclude, files });
     return undefined;
   } catch (err) {
     return `its manifest could not name its repository: ${errorMessage(err)}`;

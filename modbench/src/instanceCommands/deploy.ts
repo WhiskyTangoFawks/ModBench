@@ -67,6 +67,21 @@ async function purge({ deployment, adapter }: { deployment: Deployment; adapter:
   }
 }
 
+/** Each file by its path below the deployment folder and by where it is. */
+export type UnmanagedResult = CommandResult<{ folder: string; unmanaged: readonly { path: string; file: string }[] }>;
+
+async function unmanaged({ deployment, adapter }: { deployment: Deployment; adapter: Adapter }, setting: DeploymentFolderSetting): Promise<UnmanagedResult> {
+  const folder = deploymentFolderOf(setting);
+  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  try {
+    const reportable = await reportableIn(adapter, folder);
+    const { unmanaged: paths } = reportable({ unmanaged: await deployment.unmanaged(folder) });
+    return { applied: true, folder, unmanaged: paths.map((path) => ({ path, file: join(folder, path) })) };
+  } catch (err) {
+    return refuse(err);
+  }
+}
+
 /** `left` names each file no mod file can land at the path of, which stays in the deployment folder. */
 export type MoveToOverwriteResult = CommandResult<{ wrote: boolean; left: readonly string[] }>;
 
@@ -80,7 +95,8 @@ async function moveToOverwrite(
     if (game !== undefined) {
       return { applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder ${game}: moving the game's own files out of it would break the game.` };
     }
-    const paths = named ?? await deployment.unmanaged(folder);
+    const current = await deployment.unmanaged(folder);
+    const paths = named === undefined ? current : named.filter((path) => current.includes(path));
     const moves = paths.flatMap((path) => {
       const relativePath = overwritePathOf(path);
       return relativePath === undefined ? [] : [{ from: join(folder, path), relativePath }];
@@ -101,6 +117,7 @@ export function deployCommands(
   return {
     deploy: (load: LoadOrderToDeploy | undefined) => deploy({ deployment, adapter }, deploymentFolder, load),
     purge: () => purge({ deployment, adapter }, deploymentFolder),
+    unmanaged: () => unmanaged({ deployment, adapter }, deploymentFolder),
     moveToOverwrite: (paths?: readonly string[]) => moveToOverwrite({ adapter, deployment }, deploymentFolder, paths),
   };
 }

@@ -175,7 +175,7 @@ async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> 
     const folder = await adapter.modFolderPath(name);
     if (folder === undefined) return [];
     const manifest = await manifestAt(folder);
-    return [statusFrom({ name, folder }, manifest, await adapter.modValue(name, folder, packagesAskedAt(manifest)))];
+    return [statusFrom({ name, folder }, manifest, await adapter.modValue(folder, packagesAskedAt(manifest)))];
   }));
   const statusOf = new Map(statuses.flat().map((status) => [status.mod, status]));
   return {

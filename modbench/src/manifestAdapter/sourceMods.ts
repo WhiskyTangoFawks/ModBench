@@ -3,7 +3,7 @@
 
 import { errorMessage } from '../ports/errorMessage';
 import { manifestIn } from './manifestFiles';
-import { repositoryOf } from './packageOf';
+import { repositoryOf } from './manifestPackages';
 
 /** A folder of the mod manager's mods: a mod's or a separator's, by the name the mod manager knows it by. */
 export interface ModFolderAt {

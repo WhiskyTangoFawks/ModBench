@@ -136,7 +136,7 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     await writeFile(join(profile, 'plugins.txt'), '*Unrestored.esp\r\n*Base.esp\r\n');
     await writeFile(join(profile, 'loadorder.txt'), 'Unrestored.esp\r\nBase.esp\r\n');
     await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
-    await manifestedIn(join(root, 'mods', 'Unrestored'), [{ path: 'Unrestored.esp', entry: { kind: 'held' } }]);
+    await manifestedIn(join(root, 'mods', 'Unrestored'), ['Unrestored.esp']);
     const pluginFiles = () => Promise.all(['plugins.txt', 'loadorder.txt'].map((file) => readFile(join(profile, file), 'utf8')));
     const committed = await pluginFiles();
     const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });

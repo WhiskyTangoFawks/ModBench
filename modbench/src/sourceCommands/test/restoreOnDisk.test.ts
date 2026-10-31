@@ -85,29 +85,15 @@ describe('restore from manifest over an instance on disk', () => {
     expect(inTrash).toEqual({ 'Mod/a.nif': 'my edit', 'Mod/mine.txt': 'mine' });
   });
 
-  it('sends my copy of the mod\'s metadata to the trash when it writes the metadata its manifest says (modlist-repository.md, Restore from manifest, story 1)', async () => {
-    const { update, restore, inTrash } = await aModFromADownloadedFileAndTheGameFolder();
-    await update();
-    await put('mods/Mod/meta.ini', '[General]\r\ninstallationFile=Other.7z\r\n');
-
-    const outcome = await restore();
-
-    expect(outcome.refused).toEqual([]);
-    expect(await readFile(join(root, 'mods/Mod/meta.ini'), 'utf8')).toContain('installationFile=Mod.7z');
-    expect(inTrash).toEqual({ 'Mod/meta.ini': '[General]\r\ninstallationFile=Other.7z\r\n' });
-  });
-
-  it('puts a package held under another name in the downloads folder under the pinned name, with its metadata, so the mod\'s installation file is there', async () => {
+  it('puts a package held under another name in the downloads folder under the pinned name, with its metadata', async () => {
     const { update, restore } = await aModFromADownloadedFileAndTheGameFolder();
     await update();
     await rename(join(root, 'downloads/Mod.7z'), join(root, 'downloads/Renamed-copy.7z'));
     await put('downloads/Renamed-copy.7z.meta', '[General]\r\nmodID=7\r\n');
-    await put('mods/Mod/meta.ini', '[General]\r\n');
 
     const outcome = await restore();
 
     expect(outcome.refused).toEqual([]);
-    expect(await readFile(join(root, 'mods/Mod/meta.ini'), 'utf8')).toContain('installationFile=Mod.7z');
     expect(await textsBelow(join(root, 'downloads'))).toEqual({
       'Mod.7z': 'the downloaded file', 'Mod.7z.meta': '[General]\r\nmodID=7\r\n', 'Renamed-copy.7z': 'the downloaded file', 'Renamed-copy.7z.meta': '[General]\r\nmodID=7\r\n',
     });

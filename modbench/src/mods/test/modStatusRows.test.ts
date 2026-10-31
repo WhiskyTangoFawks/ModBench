@@ -49,11 +49,10 @@ describe('a mod row says its status against its manifest after its version (mods
     ['a file whose bytes differ', status('ModA', { differing: ['a.nif'] }), true, '1.0 · differs'],
     ['a file no line names', status('ModA', { namedByNoLine: ['mine.txt'] }), true, '1.0 · differs'],
     ['a file a line names that is gone', status('ModA', { gone: ['b.nif'] }), true, '1.0 · differs'],
-    ['metadata that differs from its manifest', status('ModA', { metadataDiffers: true }), true, '1.0 · differs'],
     ['files its package does not hold', status('ModA', { notInPackage: ['a.esp', 'b.esp'] }), true, '1.0'],
     ['files its package holds with other bytes', status('ModA', { otherBytes: ['a.esp'] }), true, '1.0'],
     ['a difference and a file its package does not hold', status('ModA', { differing: ['a.nif'], notInPackage: ['a.esp'] }), true, '1.0 · differs'],
-    ['a package with no host', status('ModA', { noHost: true }), true, '1.0'],
+    ['a package with no host', status('ModA', { noHost: ['the game folder'] }), true, '1.0'],
     ['no manifest while the instance holds no repository', status('ModA', { noManifest: true }), false, '1.0'],
   ])('%s', async (_case, held, holdsRepository, description) => {
     const { provider } = providerOver(held ? [held] : [], holdsRepository);

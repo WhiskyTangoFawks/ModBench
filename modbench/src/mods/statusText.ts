@@ -5,7 +5,7 @@ import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
 // modlist-repository.md, Status, story 1.
-const differs = ({ differing, namedByNoLine, gone, metadataDiffers }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0 || metadataDiffers;
+const differs = ({ differing, namedByNoLine, gone }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0;
 
 /** What a mod or separator row's description says of its status (mods.md, A row). */
 export function statusDescription(status: ModStatus): string | undefined {

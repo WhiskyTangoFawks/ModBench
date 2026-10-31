@@ -16,7 +16,7 @@ function settingHolding(held: { workspaceValue?: string; globalValue?: string } 
 
 const PURGED: Purged = { wrote: true, restored: '/local/plugins.txt', leftRenamed: ['/local/plugins.txt.modbench_renamed'], unmanaged: [], unfinished: [] };
 
-function deploymentAnswering(answer: () => Promise<Deployed>) {
+function deploymentAnswering(answer: () => Promise<Deployed>, unmanaged: readonly string[] = ['Data/current.ini']) {
   const purgedFrom: string[] = [];
   const deployedTo: [string, FileTheGameGets[], PluginOrder][] = [];
   const deployment: Deployment = {
@@ -28,7 +28,7 @@ function deploymentAnswering(answer: () => Promise<Deployed>) {
       purgedFrom.push(folder);
       return Promise.resolve(PURGED);
     },
-    unmanaged: () => Promise.resolve(['Data/current.ini']),
+    unmanaged: () => Promise.resolve([...unmanaged]),
   };
   return { deployment, deployedTo, purgedFrom };
 }
@@ -120,9 +120,10 @@ describe('a game folder that cannot be read', () => {
 });
 
 describe('move to Overwrite', () => {
-  function moving(folder = '/deployed', gameRoot = '/games/Fallout4') {
+  const HELD = ['Data/MCM/settings.ini', 'game.exe', 'Data/.hidden', 'Data/Root/x.ini', 'Data/a.esp'];
+  function moving(folder = '/deployed', gameRoot = '/games/Fallout4', held: readonly string[] = HELD) {
     const fake = fakeInstanceAdapter(readingFixture({ gameFolder: { kind: 'found', root: gameRoot, dataFolder: `${gameRoot}/Data` } }), {});
-    const commands = deployCommands({ adapter: fake.adapter, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) });
+    const commands = deployCommands({ adapter: fake.adapter, deployment: deploymentAnswering(landed, held).deployment, deploymentFolder: settingHolding({ workspaceValue: folder }) });
     return { adapter: fake, commands };
   }
 
@@ -137,7 +138,7 @@ describe('move to Overwrite', () => {
   });
 
   it('moves the files deploy does not manage now when none are named', async () => {
-    const { adapter, commands } = moving();
+    const { adapter, commands } = moving('/deployed', '/games/Fallout4', ['Data/current.ini']);
 
     const result = await commands.moveToOverwrite();
 
@@ -150,6 +151,14 @@ describe('move to Overwrite', () => {
     const result = await commands.moveToOverwrite(['Data/.hidden', 'Data/Root/x.ini', 'Data/a.esp']);
 
     expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: ['Data/.hidden', 'Data/Root/x.ini'] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/a.esp'), relativePath: 'a.esp' }] }]]);
+  });
+
+  it('moves nothing of a named file that is gone from the deployment folder, and the rest', async () => {
+    const { adapter, commands } = moving('/deployed', '/games/Fallout4', ['Data/b.esp']);
+
+    const result = await commands.moveToOverwrite(['Data/a.esp', 'Data/b.esp']);
+
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/b.esp'), relativePath: 'b.esp' }] }]]);
   });
 
   it('is refused with the reason Overwrite gives', async () => {
@@ -183,6 +192,32 @@ describe('move to Overwrite', () => {
     const commands = deployCommands({ adapter: NO_MOVES, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding(undefined) });
 
     expect(await commands.moveToOverwrite(['Data/a.esp'])).toEqual({ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` });
+  });
+});
+
+describe('the files the deployment folder holds that deploy does not manage', () => {
+  it('are the deployment\'s, each with where it is', async () => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).unmanaged();
+
+    expect(result).toEqual({ applied: true, folder: '/deployed', unmanaged: [{ path: 'Data/current.ini', file: join('/deployed', 'Data/current.ini') }] });
+  });
+
+  it('are none when the deployment folder overlaps the game folder, whose files are the game\'s own', async () => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/games/Fallout4' }) }).unmanaged();
+
+    expect(result).toEqual({ applied: true, folder: '/games/Fallout4', unmanaged: [] });
+  });
+
+  it('are refused, naming the setting, while the setting holds no value', async () => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding(undefined) }).unmanaged();
+
+    expect(result).toEqual({ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` });
   });
 });
 

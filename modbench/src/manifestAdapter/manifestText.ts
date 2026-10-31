@@ -1,4 +1,6 @@
-import type { Manifest, ManifestFile, ManifestPackage, ManifestStep, ManifestTool } from './manifest';
+// spec/formats/manifest.md, Canonical text.
+
+import { MANIFEST_VERSION, type Manifest, type ManifestPackage } from './manifest';
 
 const upperUnit = (unit: string): string => {
   const upper = unit.toUpperCase();
@@ -6,74 +8,44 @@ const upperUnit = (unit: string): string => {
 };
 const upperUnits = (text: string): string => Array.from(text, upperUnit).join('');
 export const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-/** The order a manifest lists paths in, and a pin hashes them in. */
+/** The order a manifest lists paths and installation files in. */
 export const ordinalIgnoreCaseThenOrdinal = (a: string, b: string): number =>
   ordinal(upperUnits(a), upperUnits(b)) || ordinal(a, b);
 
-const objectText = (members: readonly (readonly [string, string])[]): string =>
-  `{${members.map(([key, value]) => `${JSON.stringify(key)}:${value}`).join(',')}}`;
+const KINDS: readonly ManifestPackage['kind'][] = ['installationFile', 'gameFolder', 'repository'];
 
-const packageLine = (pkg: ManifestPackage, version: string | undefined): string => {
-  const members: [string, string][] = [];
-  if (pkg.kind === 'installationFile') {
-    members.push(['installationFile', JSON.stringify(pkg.name)], ['size', JSON.stringify(pkg.size)], ['hash', JSON.stringify(pkg.hash)]);
-    if (pkg.page !== undefined) members.push(['page', JSON.stringify(pkg.page)]);
-  } else if (pkg.kind === 'gameFolder') {
-    members.push(['gameFolder', JSON.stringify(pkg.name)], ['hash', JSON.stringify(pkg.hash)]);
-    if (pkg.depots.length > 0) {
-      members.push(['depots', objectText([...pkg.depots].sort((a, b) => ordinal(a.id, b.id)).map((depot) => [depot.id, JSON.stringify(depot.version)]))]);
+const nameOf = (pkg: ManifestPackage): string => ('name' in pkg ? pkg.name : '');
+
+// Each object's members in the schema's order, so JSON.stringify keeps it.
+const packageObject = (pkg: ManifestPackage): object => {
+  switch (pkg.kind) {
+    case 'installationFile': {
+      const { name, size, hash, host } = pkg;
+      const nexus = host === undefined ? undefined : { nexus: { game: host.nexus.game, mod: host.nexus.mod, file: host.nexus.file } };
+      return { kind: pkg.kind, name, size, hash, ...nexus === undefined ? {} : { host: nexus } };
     }
-  } else {
-    members.push([pkg.isSubmodule ? 'submodule' : 'repository', JSON.stringify(pkg.name)]);
+    case 'gameFolder': {
+      const steam = pkg.host?.steam;
+      return steam === undefined
+        ? { kind: pkg.kind }
+        : { kind: pkg.kind, host: { steam: { app: steam.app, ...steam.depots === undefined ? {} : { depots: steam.depots } } } };
+    }
+    case 'repository':
+      return { kind: pkg.kind, name: pkg.name };
   }
-  if (version !== undefined) members.push(['version', JSON.stringify(version)]);
-  return objectText(members);
 };
 
-const fileLine = (file: ManifestFile, first: string | undefined): object => {
-  const members: Record<string, unknown> = { path: file.path };
-  if (file.package !== undefined && file.package !== first) members.package = file.package;
-  switch (file.entry.kind) {
-    case 'heldAt':
-      members.packagePath = file.entry.path;
-      break;
-    case 'notHeld':
-      members.inPackage = false;
-      break;
-    case 'otherBytes':
-      members.otherBytes = true;
-      break;
-    case 'madeByStep':
-      members.madeByStep = true;
-      break;
-    case 'held':
-      break;
-  }
-  if (file.hash !== undefined) members.hash = file.hash;
-  return members;
-};
+const block = (key: string, open: string, close: string, lines: readonly string[]): string[] =>
+  (lines.length === 0 ? [] : [`${JSON.stringify(key)}:${open}\n${lines.join(',\n')}\n${close}`]);
 
-const lineEach = (key: string, items: readonly (object | string)[]): string[] =>
-  items.length === 0 ? [] : [`"${key}": [\n${items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(',\n')}\n]`];
-
-export function manifestText(manifest: Manifest & { readonly steps?: readonly ManifestStep[]; readonly tools?: readonly ManifestTool[] }): string {
-  const first = manifest.packages[0]?.name;
-  const files = [...manifest.files].sort((a, b) => ordinalIgnoreCaseThenOrdinal(a.path, b.path));
+export function manifestText({ packages, exclude, files }: Manifest): string {
+  const ordered = [...packages].sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || ordinalIgnoreCaseThenOrdinal(nameOf(a), nameOf(b)));
+  const paths = [...files.keys()].sort(ordinalIgnoreCaseThenOrdinal);
   const members = [
-    ...(manifest.installationFile === undefined ? [] : [`"installationFile": ${JSON.stringify(manifest.installationFile)}`]),
-    ...lineEach('packages', manifest.packages.map((pkg, index) => packageLine(pkg, index === 0 ? manifest.version : undefined))),
-    ...(manifest.exclude.length === 0 ? [] : [`"exclude": ${JSON.stringify([...manifest.exclude].sort(ordinalIgnoreCaseThenOrdinal))}`]),
-    ...(manifest.archives.length === 0
-      ? []
-      : [`"archives": {\n${manifest.archives.map((archive) => `${JSON.stringify(archive.path)}: ${JSON.stringify(archive.files)}`).join(',\n')}\n}`]),
-    ...lineEach('steps', (manifest.steps ?? []).map((step) => (step.args.length === 0 ? { task: step.task } : { task: step.task, args: step.args }))),
-    ...lineEach('tools', manifest.tools ?? []),
-    ...(files.length === 0 ? ['"files": []'] : lineEach('files', files.map((file) => fileLine(file, first)))),
+    `"version":${MANIFEST_VERSION}`,
+    ...block('packages', '[', ']', ordered.map((pkg) => JSON.stringify(packageObject(pkg)))),
+    ...block('exclude', '[', ']', [...exclude].sort(ordinalIgnoreCaseThenOrdinal).map((path) => JSON.stringify(path))),
+    ...block('files', '{', '}', paths.map((path) => `${JSON.stringify(path)}:${JSON.stringify(files.get(path) ?? null)}`)),
   ];
   return `{\n${members.join(',\n')}\n}\n`;
 }
-
-/** The text a game folder package's pin is the hash of (ADR-0022): each file the mod takes by its path and hash, in the
- *  order a manifest lists paths. */
-export const pinText = (files: readonly { readonly path: string; readonly hash: string }[]): string =>
-  [...files].sort((a, b) => ordinalIgnoreCaseThenOrdinal(a.path, b.path)).map(({ path, hash }) => `${path}\n${hash}\n`).join('');

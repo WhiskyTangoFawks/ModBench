@@ -18,10 +18,9 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     ...onFiles(status.differing, 'Differs from its manifest.'),
     ...onFiles(status.namedByNoLine, 'No line of the mod\'s manifest names this file.'),
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),
-    ...onManifest(status.notInPackage.map((path) => `Its package does not hold '${path}'.`)),
-    ...onManifest(status.otherBytes.map((path) => `Its package holds '${path}' with other bytes.`)),
-    ...onManifest(status.metadataDiffers ? ['The mod\'s metadata differs from this manifest.'] : []),
-    ...onManifest(status.noHost ? ['Its package has no host.'] : []),
-    ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it pins: ${lacking}.`)),
+    ...onManifest(status.notInPackage.map((path) => `No package it names holds the bytes of '${path}'.`)),
+    ...onManifest(status.otherBytes.map((path) => `No package it names holds the bytes of '${path}'; one holds a file of its name.`)),
+    ...onManifest(status.noHost.map((pkg) => `${pkg.charAt(0).toUpperCase()}${pkg.slice(1)} has no host.`)),
+    ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it names: ${lacking}.`)),
   ];
 }

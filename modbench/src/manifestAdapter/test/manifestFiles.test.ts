@@ -4,10 +4,11 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { buildFileIn, manifestIn, writeManifestIn, type Manifest } from '../manifestAdapter';
+import { buildFileIn, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
+import { buildFileText } from '../buildFileText';
 import { manifestText } from '../manifestText';
 
-const manifest: Manifest = { packages: [], exclude: [], archives: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
+const manifest: Manifest = { packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
 
 let root: string;
 let folder: string;
@@ -71,7 +72,7 @@ describe('writeManifestIn', () => {
   });
 
   it('writes no byte order mark, and keeps a non-ASCII name readable', async () => {
-    await writeManifestIn(folder, { ...manifest, files: [{ path: 'meshes/café.nif', entry: { kind: 'notHeld' } }] });
+    await writeManifestIn(folder, { ...manifest, files: new Map([['meshes/café.nif', 'AAAAAAAAAAA=']]) });
 
     const bytes = await readFile(join(folder, 'Mod.manifest.json'));
     expect([bytes[0], bytes.toString('utf8')]).toEqual([0x7b, expect.stringContaining('café') as unknown]);
@@ -107,24 +108,24 @@ describe('writeManifestIn', () => {
 });
 
 describe('buildFileIn', () => {
-  const buildFile = manifest;
+  const buildFile: BuildFile = { packages: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
 
   it('reads the build file at the root of the repository, in any case', async () => {
-    await writeFile(join(folder, BUILD_FILE.toUpperCase()), manifestText(buildFile));
+    await writeFile(join(folder, BUILD_FILE.toUpperCase()), buildFileText(buildFile));
 
-    expect(await buildFileIn(folder)).toEqual({ buildFile: { ...buildFile, steps: [], tools: [] } });
+    expect(await buildFileIn(folder)).toEqual({ buildFile });
   });
 
   it('is none when the repository holds none, whatever manifest it holds', async () => {
-    await writeFile(join(folder, 'Mod.manifest.json'), manifestText(buildFile));
+    await writeFile(join(folder, 'Mod.manifest.json'), buildFileText(buildFile));
 
     expect(await buildFileIn(folder)).toBeUndefined();
   });
 
   it('refuses a repository that holds two build files, naming both', async () => {
     if (process.platform === 'win32') execFileSync('fsutil.exe', ['file', 'setCaseSensitiveInfo', folder, 'enable']);
-    await writeFile(join(folder, BUILD_FILE.toUpperCase()), manifestText(buildFile));
-    await writeFile(join(folder, BUILD_FILE), manifestText(buildFile));
+    await writeFile(join(folder, BUILD_FILE.toUpperCase()), buildFileText(buildFile));
+    await writeFile(join(folder, BUILD_FILE), buildFileText(buildFile));
 
     expect(await buildFileIn(folder)).toEqual({ refused: `its repository holds two build files, '${BUILD_FILE.toUpperCase()}' and '${BUILD_FILE}'` });
   });

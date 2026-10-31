@@ -9,7 +9,6 @@ namespace MEditService.Http.Tests.Api;
 public sealed class AnExternalChangeNoticeApiTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
-    private const string SecondPlugin = "WatchedToo.esp";
     private const string Origin = "WatchedMod";
     private const string Npc = "WatchedNpc";
 
@@ -49,28 +48,5 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         {
             FileModes.Set(binary, "644");
         }
-    }
-
-    [Fact]
-    public async Task ASourceModsPluginWithUnreadableSource_IsNamedAtLoad()
-    {
-        var fx = Owned(OneMod());
-        var second = Path.Combine(OtherTool.ModFolderOf(fx, Origin), SecondPlugin);
-        LoadOrderEntry[] plugins =
-            [.. fx.Plugins, new LoadOrderEntry(SecondPlugin, second, Origin, fx.Plugins.Count, Enabled: true, Winning: true)];
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-        OtherTool.WritesThePlugin(second, mod => mod.Npcs.AddNew("SecondNpc").HeightMax = 0.5f);
-        (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-        await Client.PluginReportsCompiledPlugin(Plugin);
-        Restart();
-        using var stream = await Client.NotificationStream();
-
-        (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-
-        var nonCompiledPlugin = Assert.Single(await stream.EventsUntil("plugin-source-unreadable"));
-        Assert.Equal(Origin, nonCompiledPlugin.GetProperty("origin").GetString());
-        var unreadable = Assert.Single(nonCompiledPlugin.GetProperty("pluginWithUnreadableSources").EnumerateArray());
-        Assert.Equal(SecondPlugin, unreadable.GetProperty("name").GetString());
     }
 }
