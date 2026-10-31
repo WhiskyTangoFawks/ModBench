@@ -108,6 +108,17 @@ describe('an edit of a record', () => {
     expect(afterwards).toHaveBeenCalledTimes(times);
   });
 
+  it('reports a failure after the edit landed as a failed copy, not a failed edit', async () => {
+    const { deps, reporter } = makeDeps({
+      applied: true, newFormKey: '000900:A.esp', moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }],
+    });
+
+    const newFormKey = await applyRecordEdit(deps, address, height, () => Promise.reject(new Error('clipboard busy')));
+
+    expect(newFormKey).toBe('000900:A.esp');
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy Height.', detail: 'clipboard busy' }]);
+  });
+
   it('reports an edit VS Code did not apply as one that may have partly landed, and refreshes Source Control', async () => {
     const { deps, reporter, refreshSourceControlFor } = makeDeps({
       applied: true, newFormKey: '000900:A.esp', moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],

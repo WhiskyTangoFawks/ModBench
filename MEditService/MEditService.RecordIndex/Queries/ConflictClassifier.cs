@@ -78,7 +78,7 @@ internal sealed class ConflictClassifier(ILogger logger)
     private DiffContext ContextOf(
         IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
         Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds, bool indexed,
-        IReadOnlySet<string> shadowed, CellStatesOf? cellStates, int? comparedCount = null) =>
+        HashSet<string> shadowed, CellStatesOf? cellStates, int? comparedCount = null) =>
         new(
             MasterColumn: columns[0],
             RecordWinnerColumn: columns[winner],
@@ -116,7 +116,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlySet<string> PartialFormColumns,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, TemplatedBy>> Templated,
         IReadOnlyDictionary<string, string> MissingStringsFiles,
-        IReadOnlySet<string> ShadowedColumns,
+        HashSet<string> ShadowedColumns,
         CellStatesOf? StatesOf,
         string FormKey,
         ILogger Logger,
@@ -157,7 +157,9 @@ internal sealed class ConflictClassifier(ILogger logger)
         bool ignoredInConflicts = false,
         bool partialFormTakesPart = false)
     {
-        var winnerColumn = ConflictRules.WinnerOf(values, ctx.ComparedOrder, ctx.PartialFormColumns) ?? ctx.RecordWinnerColumn;
+        // A shadowed column shows its value and takes no part in the comparison.
+        var taking = values.ToDictionary(v => v.Key, v => ctx.ShadowedColumns.Contains(v.Key) ? null : v.Value);
+        var winnerColumn = ConflictRules.WinnerOf(taking, ctx.ComparedOrder, ctx.PartialFormColumns) ?? ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
         var templatedColumns = ctx.TemplatedAt(path);
         var noWinner = !ctx.Compares && templatedColumns.Contains(winnerColumn);
@@ -165,8 +167,8 @@ internal sealed class ConflictClassifier(ILogger logger)
         var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
         var templatedWithin = ctx.TemplatedWithin(path);
         var compared = templatedWithin.Count == 0
-            ? values
-            : values.ToDictionary(v => v.Key, v => WithoutMembers(v.Value, templatedWithin));
+            ? taking
+            : taking.ToDictionary(v => v.Key, v => WithoutMembers(v.Value, templatedWithin));
         var cellStates = ctx.StatesOf is { } statesOf && !ignoredInConflicts && !noWinner
             ? statesOf(compared, templatedColumns, same)
             : new Dictionary<string, ConflictThis>();
@@ -222,16 +224,17 @@ internal sealed class ConflictClassifier(ILogger logger)
         var diffs = new List<FieldDiff>();
         foreach (var member in records.SelectMany(r => r.Fields).Select(f => f.Metadata).DistinctBy(m => m.Name))
         {
-            // A Partial Form override's own fields are left out (ADR-0018), so they fall through to
+            // A Partial Form override's own fields take no part (ADR-0018), so they fall through to
             // the previous override that takes part; its header and EditorID take part.
             var header = member.IsRecordHeaderMember;
             var ownField = !header && !member.IsEditorId;
-            var values = records.Select((r, i) => (Column: columns[i], Value: ctx.ShadowedColumns.Contains(columns[i]) && ownField ? null : MemberValue(r, member.Name)))
+            var values = records.Select((r, i) => (Column: columns[i], Value: MemberValue(r, member.Name)))
                 .ToDictionary(t => t.Column, t => t.Value);
+            var memberCtx = ownField ? ctx : ctx with { ShadowedColumns = new HashSet<string>() };
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
-            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
+            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
         }
         return diffs;
     }

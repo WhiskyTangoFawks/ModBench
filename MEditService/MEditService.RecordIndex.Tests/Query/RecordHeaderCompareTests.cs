@@ -27,7 +27,7 @@ public sealed class RecordHeaderCompareTests
         var flags = diffs["MajorRecordFlagsRaw"];
         Assert.Equal(PartialFormBit, Assert.IsType<JsonElement>(flags.Values["B.esp"]).GetInt32());
         Assert.Equal(ConflictThis.Override, flags.CellStates["B.esp"]);
-        Assert.Null(diffs["LodWaterHeight"].Values["B.esp"]);
+        Assert.DoesNotContain("B.esp", diffs["LodWaterHeight"].CellStates.Keys);
     }
 
     [Fact]

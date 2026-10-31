@@ -27,7 +27,7 @@ internal static class ModHeaderSchema
         var headerGetterType = modHeaderProp.PropertyType;
         var pathPrefix = $"{modHeaderProp.Name}.";
         var columns = new List<ColumnSpec>();
-        foreach (var (typeName, member, headerLabel, readOnlyReason, isRecordFormKey, isVersionControlInfo1) in game.Annotations.PluginHeaderMembers)
+        foreach (var (typeName, member, inRecordHeader, readOnlyReason, isRecordFormKey, isVersionControlInfo1) in game.Annotations.PluginHeaderMembers)
         {
             if (headerGetterType.Name != typeName || headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance) is not { } prop)
             {
@@ -42,8 +42,7 @@ internal static class ModHeaderSchema
             {
                 Field = field with
                 {
-                    DisplayLabel = headerLabel ?? field.DisplayLabel,
-                    IsRecordHeaderMember = headerLabel != null,
+                    IsRecordHeaderMember = inRecordHeader,
                     IsRecordFormKey = isRecordFormKey,
                     IsVersionControlInfo1 = isVersionControlInfo1,
                 },

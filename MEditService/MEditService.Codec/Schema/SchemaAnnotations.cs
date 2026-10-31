@@ -16,21 +16,20 @@ public enum KnownDefectEffect
     MemberReadOnly,
 }
 
-/// <summary>One member of the plugin header the editor presents: its xEdit label where it is a
-/// record header member, why a write reaching it is refused, and whether it reads as the header's
-/// FormKey.</summary>
+/// <summary>One member of the plugin header the editor presents: whether it is a record header
+/// member, why a write reaching it is refused, and whether it reads as the header's FormKey.</summary>
 public sealed record PluginHeaderMember(
-    string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false,
+    string TypeName, string MemberName, bool InRecordHeader = false, string? ReadOnlyReason = null, bool IsRecordFormKey = false,
     bool IsVersionControlInfo1 = false);
 
 /// <summary>A member that says where a record sits in its container, on every record whose getter has
 /// the interface TypeName names, and why a write to it is refused.</summary>
 public sealed record ContainmentMember(string TypeName, string MemberName, string Reason);
 
-/// <summary>One member of the record header: its xEdit label, and whether the game ignores it, so the
-/// compare shows it and takes it into no conflict (xEdit's cpIgnore).</summary>
+/// <summary>One member of the record header, and whether the game ignores it, so the compare shows
+/// it and takes it into no conflict (xEdit's cpIgnore).</summary>
 public sealed record RecordHeaderMember(
-    string TypeName, string MemberName, string Label, bool IgnoredInConflicts = false, bool IsVersionControlInfo1 = false);
+    string TypeName, string MemberName, bool IgnoredInConflicts = false, bool IsVersionControlInfo1 = false);
 
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
@@ -140,25 +139,25 @@ public sealed record SchemaAnnotations(
         ("ConditionData", "SecondUnusedStringParameter"),
     ];
 
-    // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
-    // xEdit's order; each game's base adds the rest.
+    // The header members Mutagen.Bethesda.Core declares on every game's major records, in Mutagen's
+    // order; each game's base adds the rest.
     public static readonly IReadOnlyList<RecordHeaderMember> RecordHeaderMembersInEveryGame =
     [
-        new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
-        new("IFormKeyGetter", "FormKey", "FormID"),
-        new("IMajorRecordGetter", "VersionControl", "Version Control Info 1", IgnoredInConflicts: true, IsVersionControlInfo1: true),
-        new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
+        new("IMajorRecordGetter", "MajorRecordFlagsRaw"),
+        new("IFormKeyGetter", "FormKey"),
+        new("IMajorRecordGetter", "VersionControl", IgnoredInConflicts: true, IsVersionControlInfo1: true),
+        new("IMajorRecordGetter", "FormVersion", IgnoredInConflicts: true),
     ];
 
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
     // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
     public static PluginHeaderMember[] PluginHeaderMembersOf(string modHeaderGetter) =>
     [
-        new(modHeaderGetter, "Flags", "Record Flags"),
-        new(modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly, IsRecordFormKey: true),
-        new(modHeaderGetter, "Version", "Version Control Info 1", IsVersionControlInfo1: true),
-        new(modHeaderGetter, "FormVersion", "Form Version"),
-        new(modHeaderGetter, "Version2", "Version Control Info 2"),
+        new(modHeaderGetter, "Flags", InRecordHeader: true),
+        new(modHeaderGetter, "FormID", InRecordHeader: true, ReadOnlyReason: PluginHeader.FormIdReadOnly, IsRecordFormKey: true),
+        new(modHeaderGetter, "Version", InRecordHeader: true, IsVersionControlInfo1: true),
+        new(modHeaderGetter, "FormVersion", InRecordHeader: true),
+        new(modHeaderGetter, "Version2", InRecordHeader: true),
         new(modHeaderGetter, "Author"),
         // ADR-0008.
         new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
