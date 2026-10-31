@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """PreToolUse[Bash|Monitor]: a build or test runs in the build slot, a gate or wait command
-carries an explicit timeout, and a subagent waits in the foreground.
+carries an explicit timeout, a subagent waits in the foreground, and tsc checks a named project.
 
 The Bash tool's 120 s default silently backgrounds a longer run, so a gate invoked
 without a timeout can report nothing while still running. A subagent's turn ending is
@@ -21,6 +21,9 @@ DOTNET_RUN = r"\bdotnet\s+run\b"
 HEREDOC = re.compile(r"(?<!<)<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?^\s*\2\s*$", re.DOTALL | re.MULTILINE)
 RUN = r"(?:(?:^|[;&|(\n])\s*|(?<![\w.])(?:ba)?sh\s+(?:-\S+\s+)*)"
 GATE = BUILD + "|" + RUN + r"\S*run-gates\.sh\b(?!.*--detach)|\bdetached\.sh\s+wait\b"
+# The pre-commit hook runs the docs gate on a commit to main that holds spec/ or docs/.
+COMMIT = r"\bgit\s+(?:-C\s+\S+\s+)?commit\b"
+SPEC_OR_DOCS = r"(?:^|[\s/])(?:spec|docs)/"
 
 
 def block(message):
@@ -31,6 +34,14 @@ def block(message):
 def outside_the_slot(segment):
     build = re.search(BUILD, segment)
     return build and "slot-run.sh" not in segment[:build.start()]
+
+
+def checks_no_project(segment):
+    tsc = re.search(r"(?<![\w.-])tsc\b(.*)", segment)
+    if not tsc or re.search(r"(?:^|\s)(?:-b|--build)\b", tsc.group(1)):
+        return False
+    project = re.search(r"(?:^|\s)(?:-p|--project)\s+(\S+)", tsc.group(1))
+    return project is None or project.group(1) in (".", "./", "tsconfig.json", "./tsconfig.json")
 
 
 def builds_or_holds_the_slot(segment):
@@ -68,10 +79,16 @@ if any(outside_the_slot(segment) for segment in segments):
         f"<command...>`, as in `cd MEditService && bash {SLOT_RUN} dotnet test --filter X`. It "
         "waits for the slot, so give it the Bash timeout 600000."
     )
+if any(checks_no_project(segment) for segment in segments):
+    block(
+        "modbench/tsconfig.json is a solution file (`\"files\": []`), so tsc without -b checks "
+        "nothing and exits 0. Typecheck with `npx tsc -b`, or one box with `npx tsc -b src/<box>`."
+    )
 if tool != "Bash" or tool_input.get("run_in_background"):
     sys.exit(0)
 timeout = tool_input.get("timeout") or 0
-if re.search(GATE, bare) and timeout < 600000:
+runs_a_gate = re.search(GATE, bare) or (re.search(COMMIT, bare) and re.search(SPEC_OR_DOCS, bare))
+if runs_a_gate and timeout < 600000:
     block(
         "this command runs or waits on a gate and needs the Bash timeout "
         "parameter set to 600000 — the 120 s default silently backgrounds longer runs, "
