@@ -83,6 +83,17 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
+    public void ADocumentHoldingTextBeyondAscii_RenamedWithItsTextKept_ChangesNoRecord()
+    {
+        var held = Path.Combine("plugin-source", PluginName, "Npcs", $"Held - 000900_{PluginName}.json");
+        var repository = SourceMod(new TreeFile(held, Encoding.UTF8.GetBytes($"{{\"FormKey\":\"000900:{PluginName}\",\"Name\":\"Café — Sniper\"}}")));
+        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv",
+            held.Replace('\\', '/'), held.Replace("Held", "Renamed", StringComparison.Ordinal).Replace('\\', '/'));
+
+        Assert.Empty(ChangesIn(repository));
+    }
+
+    [Fact]
     public void ADocumentRenamedAndEdited_IsModifiedNotDeletedAndAdded()
     {
         var repository = SourceMod();

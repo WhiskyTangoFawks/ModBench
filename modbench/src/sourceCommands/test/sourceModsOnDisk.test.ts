@@ -228,15 +228,15 @@ describe('build over an instance on disk', () => {
   });
 
   it('keeps a file the build makes in another case only where the folder\'s file system finds it by that name, and sends the copy the folder held to the trash', async () => {
-    const { build, recorded, trashed } = await aSourceModTakingFromAnInstallationFile();
+    const { build, recorded, inTrash } = await aSourceModTakingFromAnInstallationFile();
     await put('mods/Mod/Textures/C.dds', 'an earlier build');
     await put('probe', 'x');
     const ignoresCase = await readFile(join(root, 'PROBE')).then(() => true, () => false);
 
     await build();
 
-    expect([trashed, (await recorded())?.files.map(({ path }) => path)])
-      .toEqual([['Textures/C.dds'], ['b.nif', 'Mod.esp', 'textures/c.dds']]);
+    expect([Object.values(inTrash), (await recorded())?.files.map(({ path }) => path)])
+      .toEqual([['an earlier build'], ['b.nif', 'Mod.esp', 'textures/c.dds']]);
     expect(await readdir(join(root, 'mods', 'Mod'))).toContain(ignoresCase ? 'Textures' : 'textures');
   });
 
