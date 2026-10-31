@@ -1,5 +1,5 @@
 import type {
-  GameDepot, Manifest, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
+  BuildFile, BuildFileRead, GameDepot, ManifestArchive, ManifestFile, ManifestPackage, ManifestRead, ManifestStep, ManifestTool, PackageEntry,
 } from './manifest';
 
 type Json = Record<string, unknown>;
@@ -158,11 +158,11 @@ const archivesOf = (value: unknown): ManifestArchive[] => {
   return archives;
 };
 
+const MANIFEST_KEYS = ['packages', 'archives', 'files', 'exclude'];
+
 const BUILD_FILE_KEYS = ['packages', 'archives', 'steps', 'tools', 'files'];
 
-const MANIFEST_KEYS = [...BUILD_FILE_KEYS, 'exclude'];
-
-const manifestOf = (text: string, keys: readonly string[]): Manifest => {
+const buildFileOf = (text: string, keys: readonly string[]): BuildFile => {
   const root = objectOf(JSON.parse(text), '');
   known(root, undefined, keys);
   const files = arrayOf(required(root, 'files', ''), 'its files').map((line, index) => fileOf(index, line));
@@ -172,7 +172,7 @@ const manifestOf = (text: string, keys: readonly string[]): Manifest => {
   const unnamed = files.findIndex((file) => file.package !== undefined && packages.every((pkg) => pkg.name !== file.package));
   if (unnamed >= 0) throw fileProblem(unnamed, (file) => `it names a package the ${file} does not name`);
   const madeByStep = files.findIndex((file) => file.entry.kind === 'madeByStep');
-  if (steps.length === 0 && madeByStep >= 0) throw fileProblem(madeByStep, (file) => `it says a step makes the file, and the ${file} holds no step`);
+  if (keys.includes('steps') && steps.length === 0 && madeByStep >= 0) throw fileProblem(madeByStep, (file) => `it says a step makes the file, and the ${file} holds no step`);
   const exclude = Object.hasOwn(root, 'exclude') ? stringsOf(root.exclude, 'its exclude') : [];
   inTheFolder('exclude', exclude);
   return {
@@ -214,9 +214,9 @@ const lineOf = (problem: SyntaxError, text: string): string => {
   return offending < 0 ? '' : ` at line ${text.slice(0, offending).split('\n').length}`;
 };
 
-const read = (text: string, file: string, keys: readonly string[]): ManifestRead => {
+const read = (text: string, file: string, keys: readonly string[]): { readonly read: BuildFile } | { readonly refused: string } => {
   try {
-    return { manifest: manifestOf(text, keys) };
+    return { read: buildFileOf(text, keys) };
   } catch (problem) {
     if (problem instanceof Unreadable) return { refused: problem.says(file) };
     if (problem instanceof SyntaxError) return { refused: `its ${file} cannot be read${lineOf(problem, text)}` };
@@ -225,8 +225,16 @@ const read = (text: string, file: string, keys: readonly string[]): ManifestRead
 };
 
 /** `text` read as a manifest. */
-export const readManifest = (text: string): ManifestRead => read(text, 'manifest', MANIFEST_KEYS);
+export const readManifest = (text: string): ManifestRead => {
+  const parsed = read(text, 'manifest', MANIFEST_KEYS);
+  if ('refused' in parsed) return parsed;
+  const { packages, version, exclude, archives, files } = parsed.read;
+  return { manifest: { packages, ...version === undefined ? {} : { version }, exclude, archives, files } };
+};
 
 /** `text` read as a build file, which shares a manifest's form but holds no exclusion: those are the modlist's (mods.md, A
  *  source mod, story 2). */
-export const readBuildFile = (text: string): ManifestRead => read(text, 'build file', BUILD_FILE_KEYS);
+export const readBuildFile = (text: string): BuildFileRead => {
+  const parsed = read(text, 'build file', BUILD_FILE_KEYS);
+  return 'refused' in parsed ? parsed : { buildFile: parsed.read };
+};

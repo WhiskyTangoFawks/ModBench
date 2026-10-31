@@ -7,10 +7,10 @@ import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import { manifestIn, manifestText, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, manifestText, type BuildFile, type Manifest, type ManifestStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { readManifest } from '../../manifestAdapter/manifestRead';
+import { readBuildFile } from '../../manifestAdapter/manifestRead';
 import type { DecompileAndCommitMod } from '../../client';
 import type { BuildMod } from '../../client/MEditClient';
 
@@ -68,7 +68,7 @@ describe('sourceCommands build', () => {
 
   it('keeps each exclusion the manifest records whose file the folder does not hold (mods.md, A source mod, story 2)', async () => {
     const recording: Manifest = {
-      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], exclude: [], archives: [], steps: [], tools: [],
+      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], exclude: [], archives: [],
       files: [{ path: `docs${EXCLUSION_MARK}/readme.txt`, entry: { kind: 'held' } }],
     };
     await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), manifestText(recording));
@@ -269,10 +269,10 @@ describe('sourceCommands decompileAndCommit', () => {
     client.setCommandHandler('decompileAndCommit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [], refused: [] }); });
     return { client, handed };
   };
-  const buildFileHanded = (mod: DecompileAndCommitMod | undefined): Manifest => {
-    const read = readManifest(mod?.repository.buildFile ?? '');
+  const buildFileHanded = (mod: DecompileAndCommitMod | undefined): BuildFile => {
+    const read = readBuildFile(mod?.repository.buildFile ?? '');
     if ('refused' in read) throw new Error(read.refused);
-    return read.manifest;
+    return read.buildFile;
   };
 
   it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and its build file taking from its packages each file they give', async () => {
@@ -302,7 +302,7 @@ describe('sourceCommands decompileAndCommit', () => {
 
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
     expect(await manifestIn(folder)).toEqual({ manifest: {
-      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], version: '1.2.3', exclude: [], archives: [], steps: [], tools: [], files: [],
+      packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }], version: '1.2.3', exclude: [], archives: [], files: [],
     } });
   });
 

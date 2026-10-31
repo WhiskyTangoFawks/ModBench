@@ -9,5 +9,5 @@ export const status = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
 /** Writes into `folder` the manifest named for it, holding `files` and no package. */
 export async function manifestedIn(folder: string, files: readonly ManifestFile[] = []): Promise<void> {
   await mkdir(folder, { recursive: true });
-  await writeManifestIn(folder, { packages: [], exclude: [], archives: [], steps: [], tools: [], files });
+  await writeManifestIn(folder, { packages: [], exclude: [], archives: [], files });
 }

@@ -34,7 +34,7 @@ const reads: Parameters<typeof modValueOver>[0] = {
   },
 };
 
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [] };
+const EMPTY: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 
 async function folderOf(name: string, files: Record<string, string> = {}): Promise<string> {
   const folder = join(root, 'mods', name);

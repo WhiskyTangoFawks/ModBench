@@ -7,7 +7,7 @@ import { BUILD_FILE } from '../../wire/sourceMod';
 import { buildFileIn, manifestIn, writeManifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
-const manifest: Manifest = { packages: [], exclude: [], archives: [], steps: [], tools: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
+const manifest: Manifest = { packages: [], exclude: [], archives: [], files: [{ path: 'a.nif', entry: { kind: 'notHeld' } }] };
 
 let root: string;
 let folder: string;
@@ -112,7 +112,7 @@ describe('buildFileIn', () => {
   it('reads the build file at the root of the repository, in any case', async () => {
     await writeFile(join(folder, BUILD_FILE.toUpperCase()), manifestText(buildFile));
 
-    expect(await buildFileIn(folder)).toEqual({ manifest: buildFile });
+    expect(await buildFileIn(folder)).toEqual({ buildFile: { ...buildFile, steps: [], tools: [] } });
   });
 
   it('is none when the repository holds none, whatever manifest it holds', async () => {

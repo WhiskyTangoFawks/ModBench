@@ -10,7 +10,7 @@ let root: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'sourceMods-')); });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-const naming = (pkg: ManifestPackage): Manifest => ({ packages: [pkg], exclude: [], archives: [], steps: [], tools: [], files: [] });
+const naming = (pkg: ManifestPackage): Manifest => ({ packages: [pkg], exclude: [], archives: [], files: [] });
 
 const repository = (name: string): ManifestPackage => ({ kind: 'sourceRepository', name, isSubmodule: true });
 

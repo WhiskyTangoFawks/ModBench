@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  manifestIn, manifestText, packageOf, sourceModsOf, writeManifestIn, type Manifest, type ManifestFile,
+  manifestIn, manifestText, packageOf, sourceModsOf, writeManifestIn, type BuildFile, type Manifest, type ManifestFile,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
@@ -47,8 +47,8 @@ async function heldManifest(folder: string): Promise<Manifest | undefined | { re
   }
 }
 
-const isTakenOrStepped = (manifest: Manifest, line: ManifestFile): boolean =>
-  line.entry.kind === 'madeByStep' || ((line.entry.kind === 'held' || line.entry.kind === 'heldAt') && packageOf(manifest, line) !== undefined);
+const isTaken = (manifest: Manifest, line: ManifestFile): boolean =>
+  (line.entry.kind === 'held' || line.entry.kind === 'heldAt') && packageOf(manifest, line) !== undefined;
 
 interface ModRead {
   readonly sourceFolder: string;
@@ -90,9 +90,9 @@ export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameT
   const { manifest: recorded } = await buildManifest(
     { downloadedFiles: [], ...installationFile === undefined ? {} : { installationFile }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), undefined, held, (text) => adapter.textHash(text));
-  const kept = recorded.files.filter((line) => isTakenOrStepped(recorded, line));
+  const kept = recorded.files.filter((line) => isTaken(recorded, line));
   const notAssets = new Set([...kept.map(({ path }) => path), ...compiled]);
-  const buildFile: Manifest = { packages: recorded.packages, exclude: [], archives: recorded.archives, steps: recorded.steps, tools: recorded.tools, files: kept };
+  const buildFile: BuildFile = { packages: recorded.packages, exclude: [], archives: recorded.archives, steps: [], tools: [], files: kept };
   return { repository: { sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: manifestText(buildFile) } };
 }
 
@@ -104,7 +104,7 @@ async function folderLinkedOrWhy(adapter: Pick<Adapter, 'modFolderPath' | 'modMe
   try {
     await writeManifestIn(folder, {
       packages: [{ kind: 'sourceRepository', name: basename(repository.sourceFolder), isSubmodule: false }],
-      exclude: [], archives: [], steps: [], tools: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
+      exclude: [], archives: [], files: [], ...metadata.kind === 'read' && metadata.answer.version !== undefined ? { version: metadata.answer.version } : {},
     });
     return undefined;
   } catch (err) {
