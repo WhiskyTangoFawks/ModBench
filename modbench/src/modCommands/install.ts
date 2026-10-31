@@ -9,7 +9,7 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
-import { sourceModsOf, statusOf } from '../manifestAdapter/manifestAdapter';
+import { manifestAt, packagesAsked, sourceModsOf, statusFrom } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../wire/sourceMod';
 
 /** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
@@ -80,7 +80,8 @@ export async function upgradeLoss({ adapter }: { adapter: InstanceAdapter }, tar
   const mod = target.name;
   const folder = (await adapter.modOrder()).modFolders?.find((held) => sameEntry(adapter, held, { kind: 'mod', name: mod }));
   if (folder === undefined) return undefined;
-  const status = await statusOf({ name: mod, folder: folder.path }, adapter);
+  const manifest = await manifestAt(folder.path);
+  const status = statusFrom({ name: mod, folder: folder.path }, manifest, await adapter.modValue(mod, folder.path, packagesAsked(manifest)));
   if (status.unreadable !== undefined) return statusUnread(mod, status.unreadable);
   const loss = lossOf(status);
   return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}.`;

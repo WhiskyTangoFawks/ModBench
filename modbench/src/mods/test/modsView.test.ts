@@ -60,7 +60,8 @@ import { file, folder, mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { ModStatuses } from '../../modStatus/modStatuses';
-import type { FolderReads } from '../../manifestAdapter/manifestAdapter';
+import { modValueOver } from '../../instanceAdapter/modValue';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
@@ -75,14 +76,16 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingTasks } from '../../test/recordingTasks';
 
 
-const foldersHoldingNothing = (metadata: Awaited<ReturnType<FolderReads['modMetadata']>> = { kind: 'read', answer: {} }): FolderReads => ({
+const foldersHoldingNothing = (metadata: Awaited<ReturnType<InstanceAdapter['modMetadata']>> = { kind: 'read', answer: {} }): Pick<InstanceAdapter, 'modValue'> => ({
+  modValue: (mod, folder, asked) => modValueOver({
   filesIn: () => Promise.resolve([]),
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   packageEntries: () => Promise.resolve(undefined),
   downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gameFolder: () => Promise.resolve({ kind: 'found' }),
+  gameFolder: () => Promise.resolve({ kind: 'found', root: '/game', dataFolder: '/game/Data' }),
   modMetadata: () => Promise.resolve(metadata),
+  }, mod, folder, asked),
 });
 
 const treeViews = new FakeTreeViews();

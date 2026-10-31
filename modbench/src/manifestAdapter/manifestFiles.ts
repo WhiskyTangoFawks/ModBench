@@ -1,6 +1,7 @@
 import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import { BUILD_FILE } from '../wire/sourceMod';
 import type { Manifest, ManifestRead } from './manifest';
@@ -71,4 +72,29 @@ export async function buildFileIn(sourceFolder: string): Promise<ManifestRead | 
   const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
   if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
   return one === undefined ? undefined : readBuildFile(await textAt(join(sourceFolder, one)));
+}
+
+/** What a folder holds of its manifest: the read, none when it holds none, and the path as the folder spells it. */
+export interface ManifestAt {
+  readonly read: ManifestRead | undefined;
+  readonly file: string;
+}
+
+/** The manifest `folder` holds; a file that could not be read is a refusal that says so. */
+export async function manifestAt(folder: string): Promise<ManifestAt> {
+  try {
+    return { read: await manifestIn(folder), file: await manifestFileIn(folder) };
+  } catch (err) {
+    return { read: { refused: `a file could not be read: ${errorMessage(err)}` }, file: manifestNameOf(folder) };
+  }
+}
+
+/** What the Instance adapter is asked to read for a status of `at`: the package entries by the key that names each
+ *  package, and the downloaded files by name. */
+export function packagesAsked({ read }: ManifestAt): { readonly entries: readonly string[]; readonly installationFiles: readonly string[] } {
+  const packages = read !== undefined && 'manifest' in read ? read.manifest.packages : [];
+  return {
+    entries: packages.map((pkg) => (pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash)),
+    installationFiles: packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
+  };
 }

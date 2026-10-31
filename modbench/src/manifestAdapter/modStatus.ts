@@ -1,11 +1,9 @@
 // modlist-repository.md, Status: a mod's folder and metadata against its manifest, the rule the Mod status box and mod
 // commands' upgrade check both read.
 
-import { join } from 'node:path';
-import { errorMessage } from '../ports/errorMessage';
-import type { Manifest, ManifestFile } from './manifest';
 import { isManifestPath } from '../repositoriesLib/manifestPath';
-import { manifestFileIn, manifestIn } from './manifestFiles';
+import type { Manifest, ManifestFile } from './manifest';
+import type { ManifestAt } from './manifestFiles';
 import { installationFileLack } from './packageLack';
 import { packageOf } from './packageOf';
 
@@ -16,16 +14,26 @@ interface HeldMetadata {
   readonly installationFile?: { readonly name: string; readonly page?: string };
 }
 
-/** What a status reads of a mod besides its manifest, as the Instance adapter answers it. */
-export interface FolderReads {
-  filesIn(folder: string): Promise<readonly string[]>;
-  fileStamp(path: string): Promise<Read<unknown>>;
-  originFileHash(path: string): Promise<Read<{ readonly hash: string }>>;
-  packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
-  modMetadata(mod: string): Promise<Read<HeldMetadata>>;
-  downloadedFile(name: string): Promise<Read<{ readonly hash: string } | undefined>>;
-  gameFolder(): Promise<{ readonly kind: 'found' | 'notFound' }>;
+/** A folder's files by path, each with its hash, and whether its file system finds a file by a name in another case. */
+export interface FolderValue {
+  readonly files: ReadonlyMap<string, Read<{ readonly hash: string }>>;
+  readonly ignoresCase: boolean;
 }
+
+/** Each package's entries, each path's hash, by the hash that names the package, or the repository's name. */
+export type PackageEntries = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
+/** What the status rule reads of a mod besides its manifest, as the Instance adapter hands it. */
+export type StatusValues = { readonly metadata: Read<HeldMetadata> } & (
+  | {
+    readonly kind: 'read';
+    readonly folder: FolderValue;
+    readonly packageEntries: PackageEntries;
+    readonly downloadedFiles: ReadonlyMap<string, Read<{ readonly hash: string } | undefined>>;
+    readonly gameFolder: { readonly kind: 'found' | 'notFound' };
+  }
+  | { readonly kind: 'unreadable'; readonly reason: string }
+);
 
 /** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
@@ -81,39 +89,31 @@ export interface FolderAgainst {
   readonly namedByNoLine: readonly string[];
 }
 
-/** The folder's files against `manifest`'s lines. A file is hashed only where a package entry fixes its bytes, and a line
- *  whose package entry `reads` lacks does not hold its bytes. */
-export async function folderAgainst(manifest: Manifest, folder: string, reads: Pick<FolderReads, 'filesIn' | 'fileStamp' | 'originFileHash' | 'packageEntries'>): Promise<FolderAgainst> {
-  const onDisk = new Set((await reads.filesIn(folder)).filter((path) => !isManifestPath(path)));
-  // A line names a file in another case only where the file system finds that file by the line's name.
-  const found = async (path: string): Promise<boolean> => onDisk.has(path) || (await reads.fileStamp(join(folder, path))).kind === 'read';
+/** The folder's files against `manifest`'s lines. A line whose package entry `entries` lacks does not hold its bytes. */
+export function folderAgainst(manifest: Manifest, folder: FolderValue, entries: PackageEntries): FolderAgainst {
+  const onDisk = new Set([...folder.files.keys()].filter((path) => !isManifestPath(path)));
+  const found = (path: string): boolean => onDisk.has(path) || (folder.ignoresCase && [...onDisk].some((held) => folded(held) === folded(path)));
   const spelledOnDisk = (path: string): string => (onDisk.has(path) ? path : [...onDisk].find((held) => folded(held) === folded(path)) ?? path);
-  const holds = async (path: string, fixes: NonNullable<ReturnType<typeof fixedBy>>): Promise<boolean> => {
-    const fixed = (await reads.packageEntries(fixes.package))?.get(fixes.path);
-    if (fixed === undefined) return false;
-    const hashed = await reads.originFileHash(join(folder, path));
-    return hashed.kind === 'read' && hashed.answer.hash === fixed;
+  const holds = (path: string, fixes: NonNullable<ReturnType<typeof fixedBy>>): boolean => {
+    const fixed = entries.get(fixes.package)?.get(fixes.path);
+    const hashed = folder.files.get(path);
+    return fixed !== undefined && hashed?.kind === 'read' && hashed.answer.hash === fixed;
   };
 
   const packed = new Set(manifest.archives.flatMap(({ files }) => files).map(folded));
   const lines: LineAgainstFolder[] = [];
   for (const line of manifest.files.filter(({ path }) => !packed.has(folded(path)))) {
     const fixes = fixedBy(manifest, line);
-    if (!(await found(line.path))) {
+    if (!found(line.path)) {
       lines.push({ line });
       continue;
     }
     const onDiskAs = spelledOnDisk(line.path);
-    lines.push(fixes === undefined ? { line, onDisk: onDiskAs } : { line, onDisk: onDiskAs, holdsItsBytes: await holds(onDiskAs, fixes) });
+    lines.push(fixes === undefined ? { line, onDisk: onDiskAs } : { line, onDisk: onDiskAs, holdsItsBytes: holds(onDiskAs, fixes) });
   }
 
   const named = new Set(manifest.files.map(({ path }) => path));
-  const namedByNoLine: string[] = [];
-  for (const path of onDisk) {
-    if (named.has(path)) continue;
-    const namesIt = await Promise.all([...named].filter((line) => folded(line) === folded(path) && !onDisk.has(line)).map(found));
-    if (!namesIt.includes(true)) namedByNoLine.push(path);
-  }
+  const namedByNoLine = [...onDisk].filter((path) => !named.has(path) && ![...named].some((line) => folded(line) === folded(path) && !onDisk.has(line) && found(line)));
   return { lines, namedByNoLine: ordered(namedByNoLine) };
 }
 
@@ -142,12 +142,12 @@ function metadataDiffers(held: HeldMetadata, manifest: Manifest): boolean {
   return (first === undefined ? undefined : held.version) !== manifest.version || !sameInstallationFile(held.installationFile, says);
 }
 
-async function packagesLacking(manifest: Manifest, reads: Pick<FolderReads, 'downloadedFile' | 'gameFolder'>): Promise<string[]> {
+function packagesLacking(manifest: Manifest, values: Extract<StatusValues, { kind: 'read' }>): string[] {
   const lacking: string[] = [];
   for (const pkg of manifest.packages) {
-    if (pkg.kind === 'gameFolder' && (await reads.gameFolder()).kind === 'notFound') lacking.push('the game folder was not found');
+    if (pkg.kind === 'gameFolder' && values.gameFolder.kind === 'notFound') lacking.push('the game folder was not found');
     if (pkg.kind !== 'installationFile') continue;
-    const lack = installationFileLack(pkg, await reads.downloadedFile(pkg.name));
+    const lack = installationFileLack(pkg, values.downloadedFiles.get(pkg.name) ?? { kind: 'read', answer: undefined });
     if (lack !== undefined) lacking.push(lack);
   }
   return lacking;
@@ -172,37 +172,18 @@ export function metadataOverwritten(held: HeldMetadata, says: HeldMetadata): boo
   return version || file;
 }
 
-/** The mod's folder and metadata against its manifest (modlist-repository.md, Status). A file is hashed only where a
- *  package entry fixes its bytes, and a line whose package entry the hash index lacks differs. */
-export async function statusOf(mod: ModAt, reads: FolderReads): Promise<ModStatus> {
-  try {
-    const metadata = await reads.modMetadata(mod.name);
-    if (metadata.kind === 'unreadable') return nothing(mod.name, { unreadable: `its metadata could not be read: ${metadata.reason}` });
-    const read = await manifestIn(mod.folder);
-    if (read === undefined) return nothing(mod.name, { noManifest: true });
-    if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
-    const { manifest } = read;
-    const [first] = manifest.packages;
-    return {
-      ...nothing(mod.name, { manifestFile: await manifestFileIn(mod.folder) }), ...listsOf(manifest, await folderAgainst(manifest, mod.folder, reads)),
-      metadataDiffers: metadataDiffers(metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
-      packagesLacking: await packagesLacking(manifest, reads),
-    };
-  } catch (err) {
-    return nothing(mod.name, { unreadable: `a file could not be read: ${errorMessage(err)}` });
-  }
-}
-
-interface ModReads extends FolderReads {
-  modFolderPath(mod: string): Promise<string | undefined>;
-}
-
-/** Each mod's status as the adapters read it now, for a command, which never reads the Mod status box (ADR-0015). A mod
- *  its name gives no folder has none. */
-export async function statusesNow(reads: ModReads, mods: readonly string[]): Promise<ModStatus[]> {
-  const statuses = await Promise.all(mods.map(async (name) => {
-    const folder = await reads.modFolderPath(name);
-    return folder === undefined ? [] : [await statusOf({ name, folder }, reads)];
-  }));
-  return statuses.flat();
+/** The mod's folder and metadata against its manifest (modlist-repository.md, Status). A line whose package entry the
+ *  values lack differs. */
+export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {
+  if (values.metadata.kind === 'unreadable') return nothing(mod.name, { unreadable: `its metadata could not be read: ${values.metadata.reason}` });
+  if (read === undefined) return nothing(mod.name, { noManifest: true });
+  if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
+  if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
+  const { manifest } = read;
+  const [first] = manifest.packages;
+  return {
+    ...nothing(mod.name, { manifestFile: file }), ...listsOf(manifest, folderAgainst(manifest, values.folder, values.packageEntries)),
+    metadataDiffers: metadataDiffers(values.metadata.answer, manifest), noHost: first?.kind === 'sourceRepository' && !first.isSubmodule,
+    packagesLacking: packagesLacking(manifest, values),
+  };
 }

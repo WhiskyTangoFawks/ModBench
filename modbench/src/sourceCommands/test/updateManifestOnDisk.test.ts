@@ -9,7 +9,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { updateManifest } from '../updateManifest';
-import { statusesNow } from '../../manifestAdapter/manifestAdapter';
+import { statusNow } from '../../test/statusNow';
 
 let root: string;
 
@@ -56,7 +56,7 @@ describe('update manifest over an instance on disk', () => {
     const { adapter, update } = await instanceTakingFromTheGame();
     await update();
 
-    const [status] = await statusesNow(adapter, ['Mod']);
+    const status = await statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 
     expect([status?.differing, status?.namedByNoLine, status?.gone]).toEqual([[], [], []]);
   });
@@ -66,7 +66,7 @@ describe('update manifest over an instance on disk', () => {
     await update();
     const next = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
 
-    const [status] = await statusesNow(next, ['Mod']);
+    const status = await statusNow(next, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
 
     expect(status?.differing).toEqual([]);
   });

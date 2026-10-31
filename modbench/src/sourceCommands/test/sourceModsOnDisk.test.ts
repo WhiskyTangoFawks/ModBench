@@ -15,7 +15,8 @@ import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
 import { manifestText } from '../../manifestAdapter/manifestText';
 import { readManifest } from '../../manifestAdapter/manifestRead';
-import { manifestIn, sourceModsOf, statusOf, type Manifest } from '../../manifestAdapter/manifestAdapter';
+import { statusNow } from '../../test/statusNow';
+import { manifestIn, sourceModsOf, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
 
@@ -65,7 +66,7 @@ async function aSourceModTakingFromAnInstallationFile(buildFile: Partial<Manifes
   const tasks = recordingTasks(['Optimise']);
   const stepping = { ...tasks, whyStepsFailed: async (...ran: Parameters<typeof tasks.whyStepsFailed>) => { await step(); return tasks.whyStepsFailed(...ran); } };
   const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: stepping });
-  const status = async () => statusOf({ name: 'Mod', folder: join(root, 'mods', 'Mod') }, adapter);
+  const status = async () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
   const recorded = async (): Promise<Manifest | undefined> => {
     const read = await manifestIn(join(root, 'mods', 'Mod'));
     return read === undefined || 'refused' in read ? undefined : read.manifest;
@@ -142,7 +143,7 @@ describe('build over an instance on disk, of a source mod renamed outside Modben
     await build();
     const renamed = join(root, 'mods', 'Renamed');
     await rename(join(root, 'mods', 'Mod'), renamed);
-    const before = { status: await statusOf({ name: 'Renamed', folder: renamed }, adapter), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
+    const before = { status: await statusNow(adapter, { name: 'Renamed', folder: renamed }), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
 
     const outcome = await commands.build(['Renamed']);
 

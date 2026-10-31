@@ -419,6 +419,30 @@ export interface FileStamp {
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** A folder's files by forward-slash path, each with its hash, and whether its file system finds a file by a name in another case. */
+export interface FolderValue {
+  readonly files: ReadonlyMap<string, FileRead<HashedFile>>;
+  readonly ignoresCase: boolean;
+}
+
+/** What a status asks the instance for beyond a folder: the package entries by the key that names each package, and the downloaded files by name. */
+export interface PackagesAsked {
+  readonly entries: readonly string[];
+  readonly installationFiles: readonly string[];
+}
+
+/** What a mod's status reads of the instance besides its manifest; `unreadable` is why a read of the rest rejected. */
+export type ModValue = { readonly metadata: FileRead<ModMetadata> } & (
+  | {
+    readonly kind: 'read';
+    readonly folder: FolderValue;
+    readonly packageEntries: ReadonlyMap<string, ReadonlyMap<string, string>>;
+    readonly downloadedFiles: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
+    readonly gameFolder: GameFolder;
+  }
+  | { readonly kind: 'unreadable'; readonly reason: string }
+);
+
 export interface HashedFile {
   readonly size: number;
   readonly hash: string;
@@ -728,6 +752,10 @@ export interface InstanceAdapter {
   /** Each file below `folder`, a mod's or any folder a manifest builds, by forward-slash path, listed as a mod's files
    *  are; none when the folder is not there. */
   filesIn(folder: string): Promise<readonly string[]>;
+  /** `folder`'s files, each with its hash kept in the hash index. */
+  folderValue(folder: string): Promise<FolderValue>;
+  /** What the status of `mod`, whose files `folder` holds, reads of the instance, for the packages `asked`. */
+  modValue(mod: string, folder: string, asked: PackagesAsked): Promise<ModValue>;
   /** Each entry's hash, by its path, of the downloaded file whose hash is `hash`; undefined when the index holds none. */
   packageEntries(hash: string): Promise<ReadonlyMap<string, string> | undefined>;
   /** Keeps `entries`, each package path's hash, under the hash of a game folder package a manifest pins, so
