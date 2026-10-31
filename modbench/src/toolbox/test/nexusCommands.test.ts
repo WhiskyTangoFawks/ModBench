@@ -59,6 +59,7 @@ import { LOGGED_IN_KEY } from '../../test/manifest';
 import { nexusLogin } from '../../instanceCommands/nexusLogin';
 import { acceptingGoodKey, GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import { present } from '../../ports/present';
 
 function registered(secretsFail?: 'get' | 'delete') {
@@ -70,7 +71,7 @@ function registered(secretsFail?: 'get' | 'delete') {
   return { ...over, reporter };
 }
 
-const run = (id: string) => present(handlers.get(id), `the registered handler for "${id}"`)();
+const run = (id: string, ...args: unknown[]) => (present(handlers.get(id), `the registered handler for "${id}"`) as (...given: unknown[]) => Promise<unknown>)(...args);
 
 function openPrompt() {
   const done = run('modbench.instance.logIn');
@@ -173,6 +174,23 @@ describe('Log out', () => {
     await run('modbench.instance.logOut');
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to log out of Nexus.', detail: 'keyring locked' }]);
+  });
+});
+
+describe('Log out, called by an agent', () => {
+  it('forgets the key and answers it landed', async () => {
+    const { nexus, reporter } = registered();
+    await nexus.keep(GOOD_KEY);
+
+    expect([await run('modbench.instance.logOut', new AgentCall([], {})), await nexus.loggedIn(), reporter.reports]).toEqual([
+      { applied: true, outcome: { landed: [], refused: [] } }, false, [],
+    ]);
+  });
+
+  it('answers the reason when the key cannot be forgotten, and reports nothing', async () => {
+    const { reporter } = registered('delete');
+
+    expect([await run('modbench.instance.logOut', new AgentCall([], {})), reporter.reports]).toEqual([{ applied: false, refusal: 'keyring locked' }, []]);
   });
 });
 

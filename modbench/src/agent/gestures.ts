@@ -5,6 +5,8 @@ import type { InstanceValue } from '../instanceLoader/instance';
 import type { Argument } from '../wire/argument';
 import { downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
+import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
+import type { Deployed } from '../deployment/deployment';
 import { Refusal } from '../drivingLib/refusal';
 import { formKeysNamed } from './recordNames';
 import { parseOrRefuse } from './refusal';
@@ -160,7 +162,20 @@ const INSTALL = gestureInput(
   ),
 );
 
-const GIT_INIT = gestureInput('', z.object({}), () => new AgentCall([], {}));
+const NO_INPUT = gestureInput('', z.object({}), () => new AgentCall([], {}));
+
+const SWITCH_PROFILE = gestureInput(
+  'argument: the one profile, { name } as list_profiles names it',
+  z.object({ argument: z.array(z.object({ name: z.string() })) }),
+  (_value, { argument }) => new AgentCall(argument.map(({ name }) => ({ kind: 'profile', name })), {}),
+);
+
+const MOVE_TO_OVERWRITE = gestureInput(
+  'argument?: the files the deployment folder holds that deploy does not manage, each { path } below the deployment folder, or none for every one',
+  z.object({ argument: z.array(z.object({ path: z.string() })).optional() }),
+  (_value, { argument }) => new AgentCall((argument ?? []).map(({ path }) => ({ kind: 'deployedFile', path })), {}),
+);
+
 
 const EVERY_MOD_BY_DEFAULT_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
 const EVERY_MOD_BY_DEFAULT = z.object({ argument: z.array(ENTRY_NAME).optional() });
@@ -276,13 +291,29 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],
   ['modbench.record.open', OPEN_RECORD],
-  ['modbench.modlist.gitInit', GIT_INIT],
+  ['modbench.modlist.gitInit', NO_INPUT],
+  ['modbench.profile.switch', SWITCH_PROFILE],
+  ['modbench.instance.refresh', NO_INPUT],
+  ['modbench.instance.deploy', NO_INPUT],
+  ['modbench.instance.purge', NO_INPUT],
+  ['modbench.instance.moveToOverwrite', MOVE_TO_OVERWRITE],
+  ['modbench.instance.logOut', NO_INPUT],
   ['modbench.mod.updateManifest', MODS_OR_EVERY_MOD],
   ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],
   ['modbench.mod.restoreFromManifest', MODS_OR_EVERY_MOD],
 ]);
 
 type GestureOutcome = GestureResult<unknown>;
+
+/** What deploy answers: the deploy task reads it whole. */
+type DeployOutcome = ({ applied: true } & Deployed) | { applied: false; refusal: string };
+
+const isDeployed = (answer: GestureOutcome | DeployOutcome): answer is { applied: true } & Deployed => answer.applied && 'pluginsTxt' in answer;
+
+function deployAnswered(answer: { applied: true } & Deployed): GestureOutcome {
+  const partial = [...deployFailures(answer), ...deployWarnings(answer)].map((problem) => ({ ...problem, severity: 'warning' as const }));
+  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
+}
 
 const partialsIn = ({ partial = [] }: Extract<GestureOutcome, { applied: true }>): string[] =>
   partial.map(({ message, detail }) => `${message} ${detail}`);
@@ -312,7 +343,8 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   description: `Runs ${command}. ${gesture.takes}`.trim(),
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
-    const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, await gesture.callOf(value, given, mEdit));
+    const answer = await vscode.commands.executeCommand<GestureOutcome | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
+    const outcome = isDeployed(answer) ? deployAnswered(answer) : answer;
     const refusal = refusalIn(outcome);
     if (refusal !== undefined) throw new Refusal(refusal, answerOf(outcome));
     if (outcome.applied) partialsIn(outcome).forEach(warn);
