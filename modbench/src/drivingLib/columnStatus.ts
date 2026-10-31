@@ -25,7 +25,7 @@ export interface Standing {
   readonly notActive: boolean;
 }
 
-export const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
+const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
 
 /** editor.md, A column's header, the Status table: the first row that applies. No plugin facts read as a plugin that is
  *  not compiled, so the copy reads as one nothing edits. */

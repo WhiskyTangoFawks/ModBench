@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { columnStatuses, copyStatus, NO_STANDING, type Standing } from '../columnStatus';
+import { columnStatuses, copyStatus, type Standing } from '../columnStatus';
+
+const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
 
 const WHY = { reason: 'plugin-source holds no folder for MyMod.esp.', decompileRepairs: true };
 const TWINS = { reason: 'plugin-source holds FIXTURE.ESP and fixture.esp, which differ only in case.', decompileRepairs: false };
