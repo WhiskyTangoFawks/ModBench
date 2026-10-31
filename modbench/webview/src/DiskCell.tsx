@@ -1,6 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
-import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
 import type { CellContext } from './recordUtils';
 
 // `tabIndex` plus the effect below make the focused cell a really focused DOM element, not just
@@ -10,6 +9,8 @@ const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
 
 const inside = (target: EventTarget, selector: string): boolean =>
   target instanceof Element && target.closest(selector) !== null;
+
+const carriesText = (transfer: DataTransfer): boolean => transfer.types.includes('text/plain');
 
 // Every gesture that opens the cell's editor lands on its `data-open-trigger`, so a cell with
 // nothing editable is inert. The click sent there is an open, not a first click that only focuses.
@@ -21,7 +22,7 @@ export function openEditor(cell: HTMLElement): void {
 }
 
 export function DiskCell({
-  style, title, colSpan, isFocused, onFocusCell, onDoubleClick, onActivate, context, drag, landing, children,
+  style, title, colSpan, isFocused, onFocusCell, onDoubleClick, onActivate, context, dragText, onDropText, children,
 }: Readonly<{
   style: React.CSSProperties;
   title?: string;
@@ -32,9 +33,9 @@ export function DiskCell({
   onActivate?: () => void;
   context: CellContext;
   // What dragging this cell carries; absent when there is nothing to drag.
-  drag?: CellDrag;
-  // What dropping a drag here does; absent when the drop cannot land.
-  landing?: (dragged: CellDrag) => (() => void) | undefined;
+  dragText?: string;
+  // What dropping text here does; absent where nothing can be dropped.
+  onDropText?: (text: string) => void;
   children: React.ReactNode;
 }>) {
   const ref = useRef<HTMLTableCellElement>(null);
@@ -52,26 +53,21 @@ export function DiskCell({
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
       data-vscode-context={JSON.stringify(context)}
       data-focused-cell={isFocused || undefined}
-      draggable={drag !== undefined}
+      draggable={dragText !== undefined}
       onDragStart={e => {
-        if (!drag || inside(e.target, '[data-editor]')) { e.preventDefault(); return; }
-        beginDrag(drag);
+        if (dragText === undefined || inside(e.target, '[data-editor]')) { e.preventDefault(); return; }
         e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('text/plain', context.copyText ?? '');
+        e.dataTransfer.setData('text/plain', dragText);
       }}
-      onDragEnd={endDrag}
       onDragOver={e => {
-        const current = currentDrag();
-        if (!current || !landing?.(current)) return;
+        if (!onDropText || !carriesText(e.dataTransfer)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={e => {
-        const current = currentDrag();
-        const land = current && landing?.(current);
-        if (!land) return;
+        if (!onDropText || !carriesText(e.dataTransfer)) return;
         e.preventDefault();
-        land();
+        onDropText(e.dataTransfer.getData('text/plain'));
       }}
       onClickCapture={e => {
         if (!opening && !isFocused && !e.ctrlKey && !e.metaKey && inside(e.target, '[data-open-trigger]')) {

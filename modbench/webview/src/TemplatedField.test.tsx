@@ -160,7 +160,7 @@ describe('RecordPanel — a templated field', () => {
     expect(contextOf(cellAt('Level', 2)).webviewSection).toEqual(expect.stringMatching(/\beditableCell\b/));
   });
 
-  it('is dragged as its template, so a drop of it writes the template', async () => {
+  it('is dragged as what it copies: its template', async () => {
     const dataTransfer = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' });
     renderPanel(compareResultFixture({
       overrides: [MOD, SECOND].map(plugin => compareOverride({
@@ -170,9 +170,9 @@ describe('RecordPanel — a templated field', () => {
       diffs: [diffNode({ fieldName: 'Level', values: { [MOD]: 7, [SECOND]: 7 }, winnerColumn: SECOND })],
     }), BOTH_EDITABLE);
     await screen.findByText('Level');
-    fireEvent.dragStart(cellAt('Level', 1), { dataTransfer: dataTransfer() });
-    fireEvent.drop(cellAt('Level', 2), { dataTransfer: dataTransfer() });
-    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: TEMPLATE });
+    const started = dataTransfer();
+    fireEvent.dragStart(cellAt('Level', 1), { dataTransfer: started });
+    expect(started.setData).toHaveBeenCalledWith('text/plain', `EncRaider01 [${TEMPLATE}]`);
   });
 
   it('offers no add, remove or move on an element of a templated array, as it does on any other array', async () => {

@@ -12,11 +12,9 @@ import {
 } from './gridStyles';
 import { defaultOf, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
-import type { FieldRow, TemplateReading } from './recordRows';
+import type { FieldRow, TemplateReading, ValueCell } from './recordRows';
 import type { FocusedCell } from './gridNavigation';
 import { LABEL_COLUMN } from './labelColumn';
-import type { ArrayParentContext } from '../../src/wire/messages';
-import type { CellDrag } from './cellDrag';
 
 // The only check error a translated text carries is its missing strings file, named by the error.
 const NO_STRINGS_FILE = '<Error: No strings file>';
@@ -118,12 +116,12 @@ interface DiffRowProps {
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onEdit: (plugin: ColumnKey, path: PathHop[], value: unknown) => void;
-  onAddElement: (context: ArrayParentContext, value: unknown) => void;
+  onPaste: (plugin: ColumnKey, cell: ValueCell, text: string) => void;
   stringsLanguage: string;
 }
 
 export function DiffRow({
-  row, columns, columnStyle, collapsedColumns, isExpanded, onToggle, focusedCell, onFocusCell, onEdit, onAddElement, stringsLanguage,
+  row, columns, columnStyle, collapsedColumns, isExpanded, onToggle, focusedCell, onFocusCell, onEdit, onPaste, stringsLanguage,
 }: Readonly<DiffRowProps>) {
   const { diff, meta, key: rowKey, isLastElement, keyMembers } = row;
   // The children the diff node itself carries — the row and the panel can never disagree about
@@ -174,27 +172,15 @@ export function DiffRow({
         if (collapsedColumns.has(key) || !cell) {
           return <td key={key} style={cellStyle} />;
         }
-        const { meta: cellMeta, holds, value: own, shown, editPath, dropAddsTo, template, templatedFlags } = cell;
+        const { meta: cellMeta, holds, value: own, shown, editPath, template, templatedFlags } = cell;
         // The wire carries one per column at every depth, so this row's error is its own node's.
         const checkError = diff.checkErrors?.[key];
         const isFocused = isCellFocused(focusedCell, rowKey, key);
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason, template?.tooltip]
           .filter(Boolean).join('\n') || undefined;
         const edit = editPath && ((value: unknown) => onEdit(key, editPath, value));
-        const dragValue = template ? template.formKey : diff.values[key];
-        const drag: CellDrag | undefined = dragValue != null
-          ? { row: rowKey, arrayRow: row.elementOf, value: dragValue }
-          : undefined;
-        const landing = (dragged: CellDrag): (() => void) | undefined => {
-          if (dragged.row === rowKey) {
-            return edit && JSON.stringify(dragged.value) !== JSON.stringify(own)
-              ? () => edit(dragged.value)
-              : undefined;
-          }
-          return dropAddsTo && dragged.arrayRow === rowKey
-            ? () => onAddElement(dropAddsTo, dragged.value)
-            : undefined;
-        };
+        const dragText = template || diff.values[key] != null ? cell.context.copyText ?? '' : undefined;
+        const onDropText = editPath && ((text: string) => onPaste(key, cell, text));
         const resolution = diff.resolutions?.[key];
         if (hasChildren) {
           const collapsed = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, stringsLanguage, isLastElement?.(key), keyMembers);
@@ -207,8 +193,8 @@ export function DiffRow({
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               context={cell.context}
-              drag={drag}
-              landing={landing}
+              dragText={dragText}
+              onDropText={onDropText}
             >
               {reading && (holds || template) && (
                 <span style={{ opacity: reading.isPlaceholder ? 0.5 : undefined, display: 'inline-flex', alignItems: 'center' }}>
@@ -220,8 +206,8 @@ export function DiffRow({
         }
         return (
           <DiskCell
-            drag={drag}
-            landing={landing}
+            dragText={dragText}
+            onDropText={onDropText}
             context={cell.context}
             key={key}
             style={cellStyle}
