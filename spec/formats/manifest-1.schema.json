@@ -58,7 +58,7 @@
     "path": {
       "description": "A path relative to the folder, with `/` between its segments.",
       "type": "string",
-      "pattern": "^(?!/)(?!.*/$)(?!.*//)(?!(?:.*/)?\\.{1,2}(?:/|$))[^\\\\]+$"
+      "pattern": "^(?!/)(?!.*/$)(?!.*//)(?!(?:.*/)?\\.{1,2}(?:/|$))[^\\\\:]+$"
     },
     "hash": {
       "description": "The xxHash64 of the bytes: its eight bytes, little-endian, in base64.",
