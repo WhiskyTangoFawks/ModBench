@@ -55,16 +55,16 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   const statusBar = createStatusBar(client, reporterFor);
   const recordBrowser = new RecordBrowser(client);
   const recordWrite = recordWriteOver(PLUGINS_KEY_ARGS.view, deps.facts, client);
-  let mEditMessages: () => string[] = () => [];
+  let viewMessages: () => string[] = () => [];
   return {
-    mEditStanding: { messages: () => [statusBar.standing(), ...mEditMessages()] },
+    mEditStanding: { messages: () => [statusBar.standing(), ...viewMessages()] },
     onInstance: (instanceDeps) => {
       const view = createPluginsView({
         ...instanceDeps, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
         ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
         log: (level, msg) => channel[level](msg),
       });
-      mEditMessages = view.mEditMessages;
+      viewMessages = view.messages;
       const editingInPluginsView = editingView({
         narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
         reporterFor,

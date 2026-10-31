@@ -78,7 +78,8 @@ export interface PluginsView extends vscode.Disposable {
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
   narrator: ReconcileNarrator;
-  mEditMessages: () => string[];
+  /** What the view shows of mEdit's state, for the agent: its message line, and the record index another window holds. */
+  messages: () => string[];
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
@@ -117,7 +118,9 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
-  const nameFilter = registerPluginsNameFilter(view, tree, joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure));
+  const sync = joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure);
+  const viewMessage = () => messageLine(tree.viewMessage(), sync.message());
+  const nameFilter = registerPluginsNameFilter(view, tree, viewMessage, sync);
   const lens = new FilterCodeLensProvider();
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
@@ -157,7 +160,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, sourceUnreadableDiagnostics, loadDiagnostics,
   );
   return {
-    view, nameFilter, mEditMessages: () => tree.mEditMessages(),
+    view, nameFilter,
+    messages: () => [viewMessage(), tree.facts.rows.heldElsewhereMessage()].filter((message) => message !== undefined),
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,
@@ -211,13 +215,13 @@ function pluginsViewProgress(
 // filter's axis over which records appear under an expanded row.
 function registerPluginsNameFilter(
   view: { description?: string; message?: string }, provider: PluginsTreeProvider,
-  pluginSync: SyncMessage,
+  viewMessage: () => string | undefined, pluginSync: SyncMessage,
 ): NameFilter {
   return registerNameFilter({
     view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
-    viewMessage: () => messageLine(provider.viewMessage(), pluginSync.message()),
+    viewMessage,
     standingMessage: () => provider.standingMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
     onViewMessageChanged: (listener) => pluginSync.onMessageChanged(listener),

@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import type { MEditStanding } from '../drivingLib/mEditState';
-import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
+import type { InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -34,7 +34,7 @@ export interface AgentServerOptions {
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
-  mEditStanding?: MEditStanding;
+  mEditStanding: MEditStanding;
   reporter: Reporter;
   log: Log;
 }
@@ -102,7 +102,7 @@ Ask Modbench what the files cannot answer.`;
 
 function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deployment, mEditStanding, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
-  const standing = () => [...instanceMessages(instance), ...(mEditStanding?.messages() ?? [])].filter((message) => message !== undefined);
+  const standing = () => [...mEditStanding.messages()];
   for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses)));

@@ -985,6 +985,15 @@ describe('the Plugins view\'s message line and name filter', () => {
       return { ...result, sync };
     }
 
+    it('gives the agent the line it shows, read by the same function', async () => {
+      const { sync, plugins } = await refusedView('armor.sql');
+
+      await sync.refuse(SYNC_REASON);
+      await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
+
+      expect(plugins.messages()).toEqual([`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`]);
+    });
+
     it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
       const { sync } = await refusedView('armor.sql');
 
