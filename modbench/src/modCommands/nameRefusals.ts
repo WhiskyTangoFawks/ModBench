@@ -1,7 +1,9 @@
-import { folderNameRefusal } from '../coreLib/folderName';
-import type { EntryRef, TakenNames } from '../instanceAdapter/instanceAdapter';
+import { NOT_A_FOLDER_NAME } from '../coreLib/folderName';
+import { isBareName, type EntryRef, type TakenNames } from '../instanceAdapter/instanceAdapter';
 
 export const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
+
+const folderNameRefusal = (name: string): string | undefined => (isBareName(name) ? undefined : NOT_A_FOLDER_NAME);
 
 /** Why a name cannot be given to a new mod, whatever its folders hold. */
 export const newNameRefusal = (name: string): string | undefined => (name.trim() === '' ? EMPTY_MOD_NAME : folderNameRefusal(name));
