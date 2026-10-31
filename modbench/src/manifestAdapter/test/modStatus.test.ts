@@ -230,9 +230,10 @@ describe('a mod\'s status against its manifest', () => {
   it('is unreadable, saying why, when its folder cannot be read for its manifest', async () => {
     await write('not-a-folder', 'x', root);
 
-    const manifest = await manifestAt(join(root, 'not-a-folder'));
+    const { read } = await manifestAt(join(root, 'not-a-folder'));
+    if (read === undefined || !('refused' in read)) throw new Error('expected a refusal');
 
-    expect(manifest.read).toMatchObject({ refused: expect.stringMatching(/^a file could not be read: ENOTDIR/) as string });
+    expect(read.refused).toMatch(/^a file could not be read: ENOTDIR/);
   });
 
   describe('its metadata against its manifest\'s, where updating the manifest would write another', () => {
