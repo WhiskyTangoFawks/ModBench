@@ -17,7 +17,6 @@ public sealed class SourceRepositoryInitTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-    private static readonly PluginAddress A = new("A.esp", TestMod.Name);
 
     [Fact]
     public void EveryPristineFile_IsCommittedToMainWithItsExactBytes()
@@ -43,27 +42,12 @@ public sealed class SourceRepositoryInitTests : IDisposable
     }
 
     [Fact]
-    public void ARepair_IsTheSecondCommit_HoldingOnlyThatPluginsRepairedTree()
+    public void AnInitGivenABody_IsOneCommit_TheBodyAfterItsSubject()
     {
-        var repaired = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"repaired\":1}"u8.ToArray())], "Repair A.esp");
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], "Repair A.esp"));
 
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp"), OneRecordOf("B.esp")], [], (A, repaired)));
-
-        Assert.Equal([$"Init {TestMod.Name}", "Repair A.esp"], SubjectsOnMain());
-        Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
-        Assert.Equal("{\"repaired\":1}", Git("show", "main:plugin-source/A.esp/npc_/A.esp/000001.json"));
-        Assert.Equal(string.Empty, Git("status", "--porcelain"));
-    }
-
-    [Fact]
-    public void AnInitWhoseRepairCommitFails_LeavesNoRepositoryAndNoFile()
-    {
-        TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [new("npc_", "{}"u8.ToArray()), new("npc_/A.esp/000002.json", "{}"u8.ToArray())];
-
-        Assert.NotNull(TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], (A, new TreeCommit(secondFileNeedsADirectoryTheFirstOccupies, "Repair A.esp"))));
-
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_sourceFolder));
+        Assert.Equal([$"Init {TestMod.Name}"], SubjectsOnMain());
+        Assert.Equal("Repair A.esp", Git("log", "-1", "--format=%b", "refs/heads/main").Trim());
     }
 
     [Fact]

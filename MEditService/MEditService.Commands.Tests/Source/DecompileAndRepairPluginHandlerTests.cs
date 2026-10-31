@@ -36,23 +36,29 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-    [Fact]
-    public async Task DecompileAndRepair_InASourceMod_CommitsTheMalformedRecordsFlagged_ThenTheRepairs_AndParksThePluginsBytes()
+    public static TheoryData<MalformationFixture> Repairable() =>
+    [
+        MalformationFixtures.ShortRegion,
+        MalformationFixtures.All.Single(f => f.Malformation == "EntryPointMissingEpf3"),
+        MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction"),
+    ];
+
+    [Theory]
+    [MemberData(nameof(Repairable))]
+    public async Task DecompileAndRepair_InASourceMod_CommitsTheRepairedSourceAsOneCommitNamingEachRepair_ThatCompiles(MalformationFixture fixture)
     {
-        var fixture = Lossless;
         var plugin = AddToSourceMod(fixture.Malformed);
         var before = Head(_sourceMod);
 
         var result = await Repair(ToRepair(plugin));
 
         Assert.Equal([plugin], result.Applied);
-        Assert.Equal(before, Git(_sourceMod, "rev-parse", "HEAD~2").Trim());
-        Assert.Equal([$"Repair {Malformed}", $"Decompile {Malformed}, its malformed records flagged"], Subjects(_sourceMod, 2));
-        Assert.True(TreeHolds(_sourceMod, "HEAD~1", fixture.Diagnosis), "the flagged commit holds no diagnosis");
-        Assert.Contains(fixture.Change ?? "", Git(_sourceMod, "log", "-1", "--format=%B"), StringComparison.Ordinal);
-        Assert.False(TreeHolds(_sourceMod, "HEAD", "\"Diagnoses\""), "the repair commit still holds a flagged record");
+        Assert.Equal(before, Git(_sourceMod, "rev-parse", "HEAD~1").Trim());
+        Assert.Equal([$"Repair {Malformed}"], Subjects(_sourceMod, 1));
+        Assert.Contains(fixture.Change.Require(), Git(_sourceMod, "log", "-1", "--format=%B"), StringComparison.Ordinal);
         Assert.Empty(Git(_sourceMod, "status", "--porcelain"));
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
+        await AssertCompilesAsync(plugin);
     }
 
     [Fact]
@@ -66,16 +72,16 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var result = await Repair(new PluginToRepair(plugin, MadeIn(_newMod, "textures/a.dds")));
 
         Assert.Equal([plugin], result.Applied);
-        Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_newMod, 3));
-        var init = Git(_newMod, "show", "--name-only", "--format=", "HEAD~1");
+        Assert.Equal([$"Init {NewModName}"], Subjects(_newMod, 2));
+        Assert.Contains($"Repair {Malformed}\n\n", Git(_newMod, "log", "-1", "--format=%b"), StringComparison.Ordinal);
+        Assert.Contains(Lossless.Change.Require(), Git(_newMod, "log", "-1", "--format=%b"), StringComparison.Ordinal);
+        var init = Git(_newMod, "show", "--name-only", "--format=", "HEAD");
         Assert.Contains("assets/textures/a.dds", init, StringComparison.Ordinal);
         Assert.Contains("plugin-source/Clean.esp/", init, StringComparison.Ordinal);
-        Assert.True(TreeHolds(_newMod, "HEAD~1", "\"Diagnoses\""), "the init commit holds no flagged record");
-        Assert.Equal(
-            [$"plugin-source/{Malformed}"],
-            Git(_newMod, "show", "--name-only", "--format=", "HEAD").Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select(path => string.Join('/', path.Split('/').Take(2))).Distinct());
+        Assert.Contains($"plugin-source/{Malformed}/", init, StringComparison.Ordinal);
         Assert.Empty(Git(_newMod, "status", "--porcelain"));
+        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
+        await AssertCompilesAsync(plugin);
     }
 
     [Fact]
@@ -89,9 +95,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
         Assert.Empty(result.Refused);
         Assert.Equal([first, second], result.Applied);
-        Assert.Equal(
-            ["Repair Second Malformed.esp", "Decompile Second Malformed.esp, its malformed records flagged", $"Repair {Malformed}", $"Init {NewModName}"],
-            Subjects(_newMod, 5));
+        Assert.Equal(["Repair Second Malformed.esp", $"Init {NewModName}"], Subjects(_newMod, 3));
     }
 
     [Fact]
@@ -224,8 +228,8 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         mod.WriteToBinary(Path.Combine(modFolder, name));
     }
 
-    private static bool TreeHolds(string mod, string revision, string text) =>
-        GitProbe.TryRun(Path.Combine(mod, ".git"), mod, out _, "grep", "-q", "-F", text, revision, "--", "plugin-source");
+    private async Task AssertCompilesAsync(PluginAddress plugin) =>
+        Assert.Empty((await TestEditService.CompileHandler(_holder).CompileAsync([plugin])).Value().Refused);
 
     private static string Head(string mod) => Git(mod, "rev-parse", "HEAD").Trim();
 
@@ -234,7 +238,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private static string Git(string mod, params string[] args) => GitProbe.Run(Path.Combine(mod, ".git"), mod, args);
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginChangedAfterItsDiagnoses_RepairsWhatTheFileNowHolds_AndNamesThatInItsCommits()
+    public async Task DecompileAndRepair_OfAPluginChangedAfterItsDiagnoses_RepairsWhatTheFileNowHolds_AndNamesThatInItsCommit()
     {
         var plugin = AddToSourceMod(Lossless.Malformed);
         var adapter = new ChangingAfterItsDiagnoses(TestAdapters.Mutagen(), Path.Combine(_sourceMod, Malformed), Lossy.Malformed.Bytes.ToArray());
@@ -242,21 +246,21 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var result = await Repair([ToRepair(plugin)], adapter: adapter);
 
         Assert.Equal([plugin], result.Applied);
-        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
+        var messages = Git(_sourceMod, "log", "-1", "--format=%B");
         Assert.Contains(Lossy.Change.Require(), messages, StringComparison.Ordinal);
         Assert.Contains(Lossy.Diagnosis, messages, StringComparison.Ordinal);
         Assert.DoesNotContain(Lossless.Change.Require(), messages, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth_AndNamesBothInItsCommits()
+    public async Task DecompileAndRepair_OfAPluginWithTwoMalformedRecords_RepairsBoth_AndNamesBothInItsCommit()
     {
         var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
 
         var result = await Repair([ToRepair(plugin)]);
 
         Assert.Equal([plugin], result.Applied);
-        var messages = Git(_sourceMod, "log", "-2", "--format=%B");
+        var messages = Git(_sourceMod, "log", "-1", "--format=%B");
         Assert.Contains("HarborRegion", messages, StringComparison.Ordinal);
         Assert.Contains("HarborRace", messages, StringComparison.Ordinal);
     }

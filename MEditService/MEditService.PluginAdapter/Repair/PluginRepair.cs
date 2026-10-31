@@ -51,10 +51,6 @@ internal static class PluginRepair
         return null;
     }
 
-    /// <summary>Each malformed record, as the plugin holds it, with its diagnoses.</summary>
-    internal static List<Malformations.Found[]> Diagnosed(byte[] plugin, GameRelease release) =>
-        Malformations.In(plugin, release).GroupBy(f => f.Record.Location).Select(record => record.ToArray()).ToList();
-
     private static Answer<Dictionary<int, PlannedRecord>, PluginFailure> Planned(byte[] plugin, GameRelease release)
     {
         var repairing = Malformations.In(plugin, release).ToList();
@@ -66,8 +62,7 @@ internal static class PluginRepair
             .ToDictionary(record => record.Key, record => new PlannedRecord(record.First().Record, RewriteOf([.. record]).Result()));
     }
 
-    /// <summary>The record <paramref name="record"/>'s diagnoses name, with each of their repairs made.</summary>
-    internal static RecordRewrite RewriteOf(IReadOnlyList<Malformations.Found> record)
+    private static RecordRewrite RewriteOf(IReadOnlyList<Malformations.Found> record)
     {
         var rewrite = new RecordRewrite(record[0].Subrecords);
         foreach (var edit in record.SelectMany(found => found.Repair ?? [])) edit.ApplyTo(rewrite);

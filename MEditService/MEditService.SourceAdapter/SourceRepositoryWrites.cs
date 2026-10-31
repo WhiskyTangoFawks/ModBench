@@ -199,9 +199,8 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
-    /// <summary>Decompile and repair's two commits of the plugin's source, both or neither, each of the plugin's source
-    /// alone: what else is staged stays staged.</summary>
-    internal void CommitRepair(string pluginFileName, TreeCommit flagged, TreeCommit repaired, string binarySha256)
+    /// <summary>Decompile and repair's commit of the plugin's source alone: what else is staged stays staged.</summary>
+    internal void CommitRepair(string pluginFileName, TreeCommit repaired, string binarySha256)
     {
         if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
             throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
@@ -217,13 +216,10 @@ internal sealed class SourceRepositoryWrites(
                 {
                     git.Run("reset", "-q", "--soft", head);
                     git.Run("reset", "-q", head, "--", source);
-                }, description: $"the commits of {pluginFileName}'s repair");
-                foreach (var commit in new[] { flagged, repaired })
-                {
-                    ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, commit.Tree));
-                    git.Run("add", "-A", "--", source);
-                    git.Run("commit", "-q", "-m", commit.Message, "--", source);
-                }
+                }, description: $"the commit of {pluginFileName}'s repair");
+                ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, repaired.Tree));
+                git.Run("add", "-A", "--", source);
+                git.Run("commit", "-q", "-m", repaired.Message, "--", source);
                 git.ParkDecompiled(pluginFileName, binarySha256);
             });
         }

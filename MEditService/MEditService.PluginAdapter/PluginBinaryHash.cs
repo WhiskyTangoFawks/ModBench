@@ -36,6 +36,8 @@ internal static class PluginBinaryHash
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
+    internal static string TrailerFormOf(ReadOnlySpan<byte> bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
     /// <summary>The hash and diagnoses from one read of the file.</summary>
     internal static Answer<FileClaim, PluginFailure> ClaimOfFile(string path, GameRelease gameRelease)
     {

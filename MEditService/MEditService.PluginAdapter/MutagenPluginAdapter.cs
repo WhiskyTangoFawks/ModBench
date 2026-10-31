@@ -127,31 +127,6 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
-    public async Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
-        RegisteredPlugin plugin, RepairedPlugin written, PluginSource repaired, LoadOrderSnapshot loadOrder,
-        CancellationToken cancel = default)
-    {
-        try
-        {
-            var diagnosed = PluginRepair.Diagnosed(written.Original, loadOrder.GameRelease);
-            var masters = PluginBinaryWalk.MastersOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder);
-            var flagged = diagnosed.Select(record => new FlaggedTrees.FlaggedRecord(
-                masters.GetFormKey(record[0].Record.FormID, reference: false).ToString(),
-                [.. record.Select(found => found.Diagnosis.Describe())],
-                record[0].Subrecords,
-                PluginRepair.RewriteOf(record)));
-            return repaired with
-            {
-                Files = await FlaggedTrees.FlaggedAsync(plugin.Name, repaired, [.. flagged], loadOrder, cancel),
-                BinarySha256 = Convert.ToHexString(SHA256.HashData(written.Original)),
-            };
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return new PluginFailure.Inaccessible(ex);
-        }
-    }
-
     public Answer<RepairedPlugin, PluginFailure> VerifyRepaired(RepairedPlugin written, GameRelease gameRelease)
     {
         try

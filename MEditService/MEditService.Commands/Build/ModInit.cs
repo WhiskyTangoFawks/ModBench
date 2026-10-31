@@ -8,16 +8,16 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A plugin whose source an init commits as it is given, not as decompile reads it, and the commit after the init
-/// that repairs it.</summary>
-internal sealed record RepairedInInit(RegisteredPlugin Plugin, PluginSource Flagged, TreeCommit Repaired);
+/// <summary>A plugin whose source an init commits as it is given, not as decompile reads it, and what the init's commit says
+/// of its repair.</summary>
+internal sealed record RepairedInInit(RegisteredPlugin Plugin, PluginSource Repaired, string Message);
 
 /// <summary>Decompile and commit's init of a mod's repository, which decompile and repair makes too: each plugin through
 /// the round-trip gate, the assets and its build file (ADR-0016), in one commit, or nothing.</summary>
 internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderRepository modFolders, PluginDecompiler decompiler)
 {
     /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's
-    /// plugins but <paramref name="leftOut"/>, and <paramref name="repair"/>'s two commits when given.
+    /// plugins but <paramref name="leftOut"/>, its commit naming <paramref name="repair"/> when given.
     /// Answers the plugins whose source it holds.</summary>
     internal async Task<ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>> InitAsync(
         LoadOrderSnapshot loadOrder, ModToDecompileAndCommit toCommit, IReadOnlySet<PluginAddress> leftOut,
@@ -52,7 +52,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
             cancel.ThrowIfCancellationRequested();
             if (repair is { } repaired && PluginAddress.Comparer.Equals(repaired.Plugin.Key, plugin.Key))
             {
-                verified.Add((plugin, repaired.Flagged));
+                verified.Add((plugin, repaired.Repaired));
                 continue;
             }
             setPhase(DecompileAndCommitPhase.Parsing);
@@ -110,6 +110,6 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
 
         return source.Init(sourceFolder, buildFile,
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Key, v.Source.BinarySha256)))], assets,
-            repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
+            repair?.Message);
     }
 }
