@@ -30,7 +30,7 @@ export const required = (file: string, line: Json, key: string, where: string): 
   return line[key];
 };
 
-const PATH = /^(?!\/)(?!.*\/$)(?!.*\/\/)(?!(?:.*\/)?\.{1,2}(?:\/|$))[^\\]+$/;
+const PATH = /^(?!\/)(?!.*\/$)(?!.*\/\/)(?!(?:.*\/)?\.{1,2}(?:\/|$))[^\\:]+$/;
 
 /** Whether `path` is a path relative to a folder, as the formats' schemas state it. */
 export const isPathInTheFolder = (path: string): boolean => PATH.test(path);

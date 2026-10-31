@@ -526,7 +526,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
     pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUSION_MARK),
-    carriesExclusionMark: (path) => ownPathOf(path, EXCLUSION_MARK).excluded.length > 0,
+    ownPath: (pathInFolder) => ownPathOf(pathInFolder, EXCLUSION_MARK).path,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
     renamePlugin: (origin, from, to) =>
       write({ verb: 'renamePlugin', origin, from, to }, () => {

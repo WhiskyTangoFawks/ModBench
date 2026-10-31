@@ -24,7 +24,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
-  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'carriesExclusionMark' | 'folderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
+  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
 
@@ -329,7 +329,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   if (held === undefined) return { refusal: skipped('it has no manifest') };
   if ('refusal' in held) return held;
   // formats/manifest.md: a mark in a path would write the file excluded, which the manifest does not say.
-  const marked = [...held.manifest.files.keys(), ...held.manifest.exclude].find((path) => pass.deps.adapter.carriesExclusionMark(path));
+  const marked = [...held.manifest.files.keys(), ...held.manifest.exclude].find((path) => pass.deps.adapter.ownPath(path) !== path);
   if (marked !== undefined) return { refusal: skipped(`its manifest names '${marked}', which carries the mod manager's mark for an excluded file`) };
   const repository = repositoryOf(held.manifest);
   if (repository === undefined) return restoreFromPackages(pass, mod, folder, held.manifest);
