@@ -10,7 +10,8 @@ export interface FieldCommitDeps {
   // An edit's gate is that of the panels showing the record it is addressed to.
   editGateOf: (address: EditAddress) => EditGate;
   // Resolves the new FormKey an edit of the FormID gives.
-  edit: (address: EditAddress, envelope: RecordEditEnvelope) => Promise<string | undefined>;
+  // `applied` runs once mEdit has applied the edit, and never for a refused one.
+  edit: (address: EditAddress, envelope: RecordEditEnvelope, applied?: () => PromiseLike<void>) => Promise<string | undefined>;
 }
 
 interface RecordPanelContextCommandDeps extends FieldCommitDeps {
@@ -95,17 +96,19 @@ export function commitField(deps: FieldCommitDeps, field: FieldAddress, value: s
   return writeGated(deps, field, { op: 'set', path: field.path, value });
 }
 
-function writeGated(deps: FieldCommitDeps, address: EditAddress, envelope: RecordEditEnvelope): Promise<void> {
-  return deps.editGateOf(address)(address, formKey => deps.edit({ formKey, plugin: address.plugin }, envelope));
+function writeGated(
+  deps: FieldCommitDeps, address: EditAddress, envelope: RecordEditEnvelope, applied?: () => PromiseLike<void>,
+): Promise<void> {
+  return deps.editGateOf(address)(address, formKey => deps.edit({ formKey, plugin: address.plugin }, envelope, applied));
 }
 
-// editor.md, The focused cell, story 5: cut copies the cell's value, then removes an element or
-// sets any other field to nothing, as one edit.
+// editor.md, The focused cell, story 5: cut removes an element or sets any other field to nothing,
+// as one edit, and copies the cell's value once that edit is applied.
 async function cut(deps: RecordPanelContextCommandDeps, cell: unknown): Promise<void> {
   if (!hasSection(cell, 'editableCell') || !isEditCell(cell)) return;
-  if (cell.copyText) await vscode.env.clipboard.writeText(cell.copyText);
-  const { path } = cell;
-  await writeGated(deps, editAddressOf(cell), hasSection(cell, 'arrayElement') ? { op: 'remove', path } : { op: 'set', path, value: null });
+  const { path, copyText } = cell;
+  const envelope: RecordEditEnvelope = hasSection(cell, 'arrayElement') ? { op: 'remove', path } : { op: 'set', path, value: null };
+  await writeGated(deps, editAddressOf(cell), envelope, copyText ? () => vscode.env.clipboard.writeText(copyText) : undefined);
 }
 
 function isEditCell(value: unknown): value is PluginCopyAddress & { path: EditableCellContext['path']; copyText?: string } {

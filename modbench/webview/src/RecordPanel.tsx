@@ -231,11 +231,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     focusCell(context, entered);
   });
 
+  // An array's row takes a pasted element as an added one and a pasted array in place of its own
+  // (editor-fields.md, Arrays, story 6).
+  const pasteInto = useCallback((plugin: ColumnKey, cell: ValueCell, text: string) => {
+    const { editPath, meta, addsTo } = cell;
+    if (!editPath) return;
+    const whole = pastedValue(text, meta);
+    if (addsTo && meta.elementType && !Array.isArray(whole)) addElement(addsTo, pastedValue(text, meta.elementType));
+    else handleCellCommit(plugin, editPath, whole);
+  }, [handleCellCommit]);
   const pasteIntoFocused = useCallback((text: string) => {
-    const plugin = focusedCell?.plugin;
-    if (!plugin || !focused || !('editPath' in focused) || !focused.editPath) return;
-    handleCellCommit(plugin, focused.editPath, pastedValue(text, focused.meta));
-  }, [focusedCell, focused, handleCellCommit]);
+    if (focusedCell?.plugin && focused && 'editPath' in focused) pasteInto(focusedCell.plugin, focused, text);
+  }, [focusedCell, focused, pasteInto]);
   useEffect(() => {
     return listen((msg) => {
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) void refresh(msg.formKey);
@@ -365,7 +372,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         return (
           <DiffRow
             {...shared} row={row} isExpanded={!collapsedRows.has(row.key)} onToggle={onToggle}
-            onEdit={handleCellCommit} onAddElement={addElement} stringsLanguage={stringsLanguage}
+            onEdit={handleCellCommit} onPaste={pasteInto} stringsLanguage={stringsLanguage}
           />
         );
     }
