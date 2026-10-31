@@ -26,12 +26,9 @@ function downloadedFileStatusIcon(status: DownloadedFileStatus): vscode.ThemeIco
   }
 }
 
-// `v%1` is the reference tool's own version display convention. The icon always carries status, so
-// the description repeats it only for a state other than the Downloaded default.
+// `v%1` is the reference tool's own version display convention.
 function downloadedFileDescription(row: DownloadedFileRow): string {
-  const version = row.version ? `v${row.version}` : undefined;
-  const status = row.status === 'Downloaded' ? undefined : row.status;
-  return [version, status].filter((s): s is string => !!s).join(' ');
+  return [row.version && `v${row.version}`, row.status].filter(Boolean).join(' ');
 }
 
 // A manually-dropped downloaded file with no metadata file still gets a valid, minimal tooltip.
