@@ -23,6 +23,18 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
   return { files, exclude: [...exclude], ignoresCase: cased !== undefined && (await reads.fileStamp(join(folder, otherCase(cased)))).kind === 'read' };
 }
 
+const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
+
+/** A source folder's files that git does not hold, by their own paths: a source folder's manifest names those and no
+ *  others (modlist-repository.md, The manifest, story 5). `heldByGit` lists the files git holds in `folder`. */
+export async function sourceFolderValueOver(
+  reads: FolderReads, heldByGit: (folder: string) => Promise<readonly string[]>, folder: string,
+): Promise<FolderValue> {
+  const held = new Set(await heldByGit(folder));
+  const filesIn = async (at: string): Promise<readonly string[]> => (await reads.filesIn(at)).filter((path) => !isGitsOwn(path) && !held.has(path));
+  return folderValueOver({ ...reads, filesIn }, folder);
+}
+
 type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule'>;
 
 // None when the game folder is not found.

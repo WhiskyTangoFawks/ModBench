@@ -11,7 +11,7 @@ import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
-import { folderValueOver, modValueOver } from '../instanceAdapter/modValue';
+import { folderValueOver, modValueOver, sourceFolderValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -113,6 +113,8 @@ export interface InstanceAnswers {
   stamps?: ReadonlyMap<string, FileStamp>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
   folderFiles?: ReadonlyMap<string, readonly string[]>;
+  /** The files git holds in a source folder, by the folder. */
+  heldByGit?: ReadonlyMap<string, readonly string[]>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -411,6 +413,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
     folderValue: (folder) => folderValueOver(adapter, folder),
+    sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,
     changeModOrder: (profile, decide: DecideModOrder) => {

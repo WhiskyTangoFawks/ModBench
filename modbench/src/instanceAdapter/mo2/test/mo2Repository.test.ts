@@ -8,7 +8,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { managerOver } from '../../../test/mo2/adapterOver';
+import { adapterOver, managerOver } from '../../../test/mo2/adapterOver';
 import type { GamePlace } from '../../instanceAdapter';
 import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
@@ -1235,4 +1235,23 @@ it('answers the game files the files below any folder of the instance may be, no
   const taken = await adapter.gameFilesTakenBy(gamePlace(), join(root, 'Stock Game'));
 
   expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'Data/a.nif', hash: 'Mr+EvxoNp0I=', pathInFolder: 'Data/a.nif' }], notes: [] } });
+});
+
+describe('a source folder\'s value', () => {
+  it('lists the files git does not hold, a tracked file with an uncommitted edit and git\'s own not among them', async () => {
+    root = await mkdtemp(join(tmpdir(), 'modbench-mo2-sourcefolder-'));
+    const folder = join(root, 'source', 'Mod A');
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, 'plugin.json'), 'one');
+    await writeFile(join(folder, '.gitignore'), 'tool.dll\n');
+    execFileSync('git', ['init', '--quiet'], { cwd: folder });
+    execFileSync('git', ['add', '--', 'plugin.json', '.gitignore'], { cwd: folder });
+    await writeFile(join(folder, 'plugin.json'), 'two');
+    await writeFile(join(folder, 'tool.dll'), 'dll');
+    await writeFile(join(folder, 'extra.nif'), 'nif');
+
+    const { files } = await adapterOver(root).sourceFolderValue(folder);
+
+    expect([...files.keys()].sort()).toEqual(['extra.nif', 'tool.dll']);
+  });
 });
