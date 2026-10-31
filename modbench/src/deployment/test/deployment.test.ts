@@ -149,7 +149,9 @@ describe('a deploy after another', () => {
   });
 
   it('links again a file whose link was deleted since', async () => {
-    const files = [await modFile('Mod', 'a.esp'), await modFile('Mod', 'Root/b.dll')];
+    const data = await modFile('Mod', 'a.esp');
+    const root = await modFile('Mod', 'Root/b.dll');
+    const files = [data, root];
     await deploy(files);
     await rm(join(folder, 'Data', 'a.esp'));
     await rm(join(folder, 'b.dll'));
@@ -157,7 +159,7 @@ describe('a deploy after another', () => {
     const deployed = await deploy(files);
 
     expect([deployed.wrote, await inode(join(folder, 'Data', 'a.esp')), await inode(join(folder, 'b.dll'))])
-      .toEqual([true, await inode(files[0]!.winner), await inode(files[1]!.winner)]);
+      .toEqual([true, await inode(data.winner), await inode(root.winner)]);
   });
 
   it('links again a file whose folder was deleted since', async () => {

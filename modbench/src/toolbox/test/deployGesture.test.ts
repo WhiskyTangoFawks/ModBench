@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handlers, registerCommand, executeCommand } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, collections } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
   return {
     handlers,
@@ -9,13 +9,19 @@ const { handlers, registerCommand, executeCommand } = vi.hoisted(() => {
       return { dispose: vi.fn() };
     }),
     executeCommand: vi.fn(),
+    collections: [] as { clear(): void; [Symbol.iterator](): IterableIterator<[{ fsPath: string }, readonly { message: string }[]]> }[],
   };
 });
 
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   const { taskModule } = await import('../../test/taskDouble');
-  return { ...taskModule(), commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress } };
+  const { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri } = await import('../../test/vscodeMock');
+  return {
+    ...taskModule(), Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse },
+    commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress },
+    languages: { createDiagnosticCollection: () => { const collection = new FakeDiagnosticCollection(); collections.push(collection); return collection; } },
+  };
 });
 
 import { progressSteps } from '../../test/recordedProgress';
@@ -30,25 +36,32 @@ const value = instanceValueFixture();
 const UNCHANGED = { kind: 'unchanged', renamed: [] } as const;
 const NOTHING_DEPLOYED = { applied: true, wrote: false, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED } as const;
 
+const inDeployed = (path: string) => ({ path, file: `/deployed/${path}` });
+
 const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
 
 const NOT_PURGED: PurgeResult = { applied: true, wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
-function deployAnswering(result: DeployResult, { sequence = 1, moved = NOT_MOVED, purged = NOT_PURGED }: { sequence?: number; moved?: MoveToOverwriteResult; purged?: PurgeResult } = {}) {
+function deployAnswering(
+  result: DeployResult,
+  { sequence = 1, moved = NOT_MOVED, purged = NOT_PURGED, unmanagedNow = [] }: { sequence?: number; moved?: MoveToOverwriteResult; purged?: PurgeResult; unmanagedNow?: readonly string[] } = {},
+) {
   const reporter = recordingReporter();
   const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
   const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
+  const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, unmanaged: unmanagedNow.map(inDeployed) }));
   registerDeployCommands({
-    commands: { deploy, purge, moveToOverwrite },
+    commands: { deploy, purge, moveToOverwrite, unmanaged },
     instance: { landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
     reporter,
   });
-  return { reporter, deploy, purge, moveToOverwrite, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
+  return { reporter, deploy, purge, moveToOverwrite, unmanaged, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
 }
 
 beforeEach(() => {
   handlers.clear();
+  collections.length = 0;
   executeCommand.mockClear();
   progressSteps.length = 0;
 });
@@ -158,18 +171,56 @@ describe('Deploy', () => {
     }]);
   });
 
-  it('warns of each file in the deployment folder it does not manage, and offers to move them to Overwrite', async () => {
-    const { reporter, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: ['Data/MCM/settings.ini', 'game.exe'], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
+  it('raises no notification for the files it does not manage, which the Problems panel holds', async () => {
+    const { reporter, run } = deployAnswering({ ...NOTHING_DEPLOYED, unmanaged: ['game.exe'] }, { unmanagedNow: ['game.exe'] });
 
     await run();
-    const [report] = reporter.reports;
-    report?.action?.run();
 
-    expect([reporter.shownFailures, reporter.reports.length, report?.severity, report?.message, report?.detail, report?.action?.title, executeCommand.mock.calls]).toEqual([
-      [{ severity: 'warning', message: 'The deployment folder holds files deploy does not manage:', detail: 'Data/MCM/settings.ini, game.exe' }],
-      1, 'warning', 'The deployment folder holds 2 files deploy does not manage, each named in the Output.', undefined, 'Move to Overwrite',
-      [['modbench.instance.moveToOverwrite', ['Data/MCM/settings.ini', 'game.exe']]],
+    expect([reporter.reports, reporter.shownFailures]).toEqual([[], []]);
+  });
+});
+
+describe('the problems on the files the deployment folder holds that deploy does not manage', () => {
+  const held = () => [...present(collections[0], 'the collection')].map(([uri, [problem]]) => [uri.fsPath, problem?.message]);
+
+  it('are one on each file after a deploy, naming the file it left out at a path', async () => {
+    const { run } = deployAnswering(
+      { ...NOTHING_DEPLOYED, leftOut: [{ path: 'Data/a.esp', winner: '/m/A/a.esp' }], unmanaged: ['Data/a.esp', 'game.exe'] },
+      { unmanagedNow: ['Data/a.esp', 'game.exe'] },
+    );
+
+    await run();
+
+    expect(held()).toEqual([
+      ['/deployed/Data/a.esp', 'Deploy does not manage this file, and left out /m/A/a.esp, which the game would get at its path.'],
+      ['/deployed/game.exe', 'Deploy does not manage this file.'],
     ]);
+  });
+
+  it('are kept for an agent\'s deploy as for the user\'s', async () => {
+    const { run } = deployAnswering({ ...NOTHING_DEPLOYED, unmanaged: ['game.exe'] }, { unmanagedNow: ['game.exe'] });
+
+    await run(new AgentCall([], {}));
+
+    expect(held()).toEqual([['/deployed/game.exe', 'Deploy does not manage this file.']]);
+  });
+
+  it('are read again after a move to Overwrite, so a file it moved has none', async () => {
+    const { run, runMove, unmanaged } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['a.ini', 'b.ini'] });
+    await run();
+    unmanaged.mockResolvedValueOnce({ applied: true, unmanaged: [inDeployed('b.ini')] });
+
+    await runMove(['a.ini']);
+
+    expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]);
+  });
+
+  it('are read again after a purge', async () => {
+    const { runPurge } = deployAnswering(NOTHING_DEPLOYED, { unmanagedNow: ['game.exe'] });
+
+    await runPurge();
+
+    expect(held()).toEqual([['/deployed/game.exe', 'Deploy does not manage this file.']]);
   });
 });
 

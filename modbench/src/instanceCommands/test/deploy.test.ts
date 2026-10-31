@@ -186,6 +186,32 @@ describe('move to Overwrite', () => {
   });
 });
 
+describe('the files the deployment folder holds that deploy does not manage', () => {
+  it('are the deployment\'s, each with where it is', async () => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).unmanaged();
+
+    expect(result).toEqual({ applied: true, unmanaged: [{ path: 'Data/current.ini', file: join('/deployed', 'Data/current.ini') }] });
+  });
+
+  it('are none when the deployment folder overlaps the game folder, whose files are the game\'s own', async () => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/games/Fallout4' }) }).unmanaged();
+
+    expect(result).toEqual({ applied: true, unmanaged: [] });
+  });
+
+  it('are refused, naming the setting, while the setting holds no value', async () => {
+    const { deployment } = deploymentAnswering(landed);
+
+    const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding(undefined) }).unmanaged();
+
+    expect(result).toEqual({ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` });
+  });
+});
+
 describe('purge', () => {
   it('purges the workspace\'s deployment folder, and answers what it put back and left', async () => {
     const { deployment, purgedFrom } = deploymentAnswering(landed);
