@@ -107,6 +107,9 @@ describe('a manifest the adapter refuses', () => {
   it.each([
     ['<<<<<<< HEAD\n', 'line 1'],
     ['{\n"version":1,\n<<<<<<< HEAD\n}\n', 'line 3'],
+    ['{\n"version":1,\n"exclude": [\n"a"\n"b"\n]\n}\n', 'line 5'],
+    ['line 5 {', 'line 1'],
+    ['{"version":1', 'line 1'],
     ['[]', 'its manifest cannot be read'],
     ['{"version":1,"extra":1}', "its manifest holds 'extra', which Modbench does not read"],
     [`{"version":1,"files":{"a.esp":"${H1}x"}}`, "its manifest cannot be read at its file 'a.esp'"],
