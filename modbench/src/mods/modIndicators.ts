@@ -1,23 +1,11 @@
 // mods.md, Indicators: a badge and a colour on a mod's row for each status that holds.
 
 import * as vscode from 'vscode';
-import type { InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
-import { fileOrderConflictOf, modOrigin, outranksACopy, winsPath } from '../instanceLoader/fileConflictIndex';
+import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
+import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from '../drivingLib/modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';
-
-/** Each indicator in the order mods.md's table lists them, with its name there.
- *  @public Read by packageJson.test, which holds package.json to it. */
-export const MOD_INDICATORS = [
-  { id: 'overwritesLooseFiles', name: 'Overwrites loose files', badge: '\u2295', colour: 'modbench.modOverwritesLooseFiles' },
-  { id: 'overwrittenLooseFiles', name: 'Overwritten loose files', badge: '\u2296', colour: 'modbench.modOverwrittenLooseFiles' },
-  { id: 'redundant', name: 'Redundant', badge: '\u2297', colour: 'modbench.modRedundant' },
-  { id: 'containsExcludedFiles', name: 'Contains excluded files', badge: '\u2298', colour: 'modbench.modContainsExcludedFiles' },
-  { id: 'updateAvailable', name: 'Update available', badge: '\u2191', colour: 'modbench.modUpdateAvailable' },
-] as const;
-
-type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 /** The table's Publisher tag row: each publisher tag is an indicator of its own, with the badge its publisher declares,
  *  under one pair of settings and one colour.
@@ -25,24 +13,6 @@ type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 export const PUBLISHER_TAG_INDICATOR = { id: 'publisherTag', colour: 'modbench.modPublisherTag' } as const;
 
 type IndicatorId = ModIndicator | typeof PUBLISHER_TAG_INDICATOR.id;
-
-type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'files' | 'filesByMod'>;
-
-function indicatorsOf(value: IndicatorsValue, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
-  const own = modOrigin(name);
-  const entries = files.filter((file) => !file.excluded).map((file) => value.files.get(file.relativePath));
-  const gets = entries.some((entry) => winsPath(entry, own));
-  const loses = entries.some((entry) => fileOrderConflictOf(entry, own) === 'loses');
-  const redundant = loses && !gets;
-  const holds: Record<ModIndicator, boolean> = {
-    overwritesLooseFiles: entries.some((entry) => outranksACopy(entry, own)),
-    overwrittenLooseFiles: loses && !redundant,
-    redundant,
-    containsExcludedFiles: files.some((file) => file.excluded),
-    updateAvailable: updateAvailable === true,
-  };
-  return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
-}
 
 function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly ModIndicator[]> {
   const carriers = new Map<string, readonly ModIndicator[]>();

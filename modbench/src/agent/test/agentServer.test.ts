@@ -497,7 +497,7 @@ describe('the agent server, reading file order conflicts', () => {
   it('reads, for each mod, the files it wins over which mods and the files it loses to which winner', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
-    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] })).toEqual([
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] })).toMatchObject([
       { mod: 'A', enabled: true, wins: [{ file: 'textures/rock.dds', over: ['B'] }], loses: [] },
       { mod: 'B', enabled: true, wins: [{ file: 'meshes/x.nif', over: ['C'] }], loses: [{ file: 'Textures/Rock.DDS', winner: 'A' }] },
       { mod: 'C', enabled: true, wins: [], loses: [{ file: 'F.esp', winner: 'Overwrite' }, { file: 'MESHES/x.nif', winner: 'B' }] },
@@ -507,7 +507,7 @@ describe('the agent server, reading file order conflicts', () => {
   it('says a disabled mod is disabled, so its empty answer is never read as no conflicts', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
-    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'D' }] })).toEqual([{ mod: 'D', enabled: false, wins: [], loses: [] }]);
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'D' }] })).toMatchObject([{ mod: 'D', enabled: false, wins: [], loses: [] }]);
   });
 
   it('reads every mod, and no separator, when it is given no mods', async () => {
@@ -519,9 +519,45 @@ describe('the agent server, reading file order conflicts', () => {
   it('names a mod apart from a separator of the same name by which of the two it is', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
-    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toEqual([{ mod: 'Textures', enabled: true, wins: [], loses: [] }]);
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toMatchObject([{ mod: 'Textures', enabled: true, wins: [], loses: [] }]);
     const separator = await call(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'separator' }] });
     expect(separator).toEqual({ isError: true, text: '"Textures" is a separator; it has no files.' });
+  });
+
+  it('reads every file of a mod: whether it is excluded, whether the game gets it, and the publisher tags that cover it', async () => {
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'B' }, { name: 'D' }] })).toMatchObject([
+      { files: [{ file: 'Textures/Rock.DDS', excluded: false, gotten: false, publisherTags: [] }] },
+      {
+        files: [
+          { file: 'Docs/a.txt', excluded: false, gotten: false, publisherTags: [] },
+          { file: 'docs/A.TXT', excluded: false, gotten: false, publisherTags: [] },
+          { file: 'textures/rock.dds', excluded: false, gotten: false, publisherTags: [] },
+        ],
+      },
+    ]);
+  });
+
+  it('reads a file the game gets, an excluded file and a publisher tag as the Mods view shows them, with the mod\'s indicators', async () => {
+    const value = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'E', enabled: true, updateAvailable: true }],
+      filesByMod: new Map([['E', [fileIn('/e', 'only.txt'), fileIn('/e', 'skip.txt.mohidden')]]]),
+      files: asLookup(providing('only.txt', modOrigin('E'))),
+      publisherConfiguration: {
+        kind: 'read', listed: () => [], pathProblems: [],
+        covering: (path: string) => (path === '/e/only.txt' ? [{ name: 'Patched', badge: 'P', marksPaths: true }, { name: 'Mod only', badge: 'M', marksPaths: false }] : []),
+      },
+    });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'E' }] })).toMatchObject([{
+      indicators: ['containsExcludedFiles', 'updateAvailable'],
+      files: [
+        { file: 'only.txt', excluded: false, gotten: true, publisherTags: ['Patched'] },
+        { file: 'skip.txt.mohidden', excluded: true, gotten: false, publisherTags: [] },
+      ],
+    }]);
   });
 
   it('refuses a name that means a mod and a separator, listing each as the agent can name it, and picks neither', async () => {

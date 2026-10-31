@@ -2,9 +2,10 @@
 // in the Explorer.
 
 import * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
-import { fileOrderConflictOf, modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
+import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
+import { isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -13,12 +14,6 @@ import type { WorkspaceSettings } from './workspaceSettings';
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
 type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders'>;
-
-const isNotDeployed = (enabled: boolean, entry: OriginFolder): boolean => !enabled || entry.excluded;
-
-function isFileNotGotten(value: FilesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): boolean {
-  return isNotDeployed(enabled, file) || fileOrderConflictOf(value.files.get(file.relativePath), origin) === 'loses';
-}
 
 // A folder never loses: the game merges folders.
 function inactiveFiles(value: FilesValue): ReadonlySet<string> {
