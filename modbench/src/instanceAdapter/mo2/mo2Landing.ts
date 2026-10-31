@@ -3,9 +3,9 @@
 
 import { dirname } from 'node:path';
 import { effectiveModId } from './codecs/nexusFileName';
-import { type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
+import { changeOwnedKeysInText, type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
-import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, sameBytes, withLock, write, writeTrashing } from '../files';
+import { copyTree, ensureDir, get, ignoreSkippedLink, listDir, makeDir, makeTempDir, remove, rename, sameBytes, withLock, write, writeTrashing } from '../files';
 import type { MoveToTrash } from '../../ports/trash';
 import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
 import { isManifestPath } from '../../repositoriesLib/manifestPath';
@@ -18,12 +18,12 @@ import { releaseRoot } from '../gameFolder/releaseRoot';
 import { fomodLanding, type FomodEngine } from '../fomodInstaller/fomodInstaller';
 import { conditionFacts } from '../fomodInstaller/conditionFacts';
 
-type Land = (root: string, keys: OwnedMetaKeys) => Promise<void>;
+type Land = (root: string, gameName: string) => Promise<void>;
 
-// A key the upgrade does not supply keeps the carried meta's own value.
-function keysOver(keys: OwnedMetaKeys, carried: MetaIni): OwnedMetaKeys {
+// A key the packages do not supply keeps the carried meta's own value.
+function keysOver(keys: MetaIni, carried: MetaIni, gameName: string): OwnedMetaKeys {
   return {
-    gameName: keys.gameName,
+    gameName: carried.gameName ?? gameName,
     nexusId: keys.nexusId ?? carried.nexusId,
     version: keys.version ?? carried.version,
     installationFileName: keys.installationFileName ?? carried.installationFileName,
@@ -48,7 +48,7 @@ async function settleInto(folder: string, root: string, metaText: string): Promi
   await write(modMetaFileIn(folder), metaText);
 }
 
-const landNewMod = (context: Mo2Context, mod: string): Land => async (root, keys) => {
+const landNewMod = (context: Mo2Context, mod: string): Land => async (root, gameName) => {
   const folder = newModFolder(context, mod);
   await refuseFolderTaken(context, { kind: 'mod', name: mod }, folder);
   await ensureDir(modsDir(context.instanceRoot));
@@ -59,7 +59,7 @@ const landNewMod = (context: Mo2Context, mod: string): Land => async (root, keys
     throw err;
   }
   try {
-    await settleInto(folder, root, writeMetaIni(keys));
+    await settleInto(folder, root, writeMetaIni({ gameName }));
   } catch (err) {
     await remove(folder);
     throw err;
@@ -92,7 +92,7 @@ async function trashEveryOther(folder: string, at: string, left: ReadonlySet<str
 }
 
 // A file the release holds with the same bytes is left as it was, so it costs no copy in the trash.
-const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => async (root, keys) => {
+const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => async (root, gameName) => {
   try {
     const carried = await get(modMetaFileIn(folder), '');
     const release = (await filesUnder(root)).filter((path) => !isTheMods(path));
@@ -106,7 +106,7 @@ const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => a
       await ensureDir(dirname(fileInFolder(folder, path)));
       await moveEntry(fileInFolder(root, path), fileInFolder(folder, path));
     }
-    const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried)));
+    const metaText = changeOwnedKeysInText(carried, { gameName });
     if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
   } catch (err) {
     throw new Error(`Upgrading "${mod}" failed partway and was not rolled back: ${errorMessage(err)}`, { cause: err });
@@ -134,7 +134,7 @@ function claimedModsOf(instanceRoot: string): Set<string> {
 
 export function mo2Landing(
   context: Mo2Context, installationFileReader: InstallationFileReader, source: ReadingSource, fomodEngine: FomodEngine,
-): Pick<InstanceAdapter, 'install'> {
+): Pick<InstanceAdapter, 'install' | 'writeInstalledFrom'> {
   const fill = (installed: InstallPackage, path: string): Promise<void> =>
     (installed.kind === 'archive' ? installationFileReader.extract(installed.path, path) : copyTree(installed.path, path));
 
@@ -157,7 +157,23 @@ export function mo2Landing(
   };
 
   return {
-    install: async (installed, target, keys, trash, answer) => {
+    writeInstalledFrom: async (folder, packages, trash) => {
+      const [installationFileName] = packages;
+      if (installationFileName === undefined) return;
+      const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const downloaded = listed.kind === 'listed' ? listed.files ?? [] : [];
+      const metas = packages.map((name) => downloaded.find((file) => file.name === name)?.meta);
+      const [first] = metas;
+      const installedFileKeys = metas.flatMap((meta) => meta?.installedKey ?? []);
+      const keys = metaIniOf({
+        nexusId: effectiveModId(first?.modID, installationFileName), version: first?.version, installationFileName,
+        nexusFileStatus: first?.fileCategory, installedFileKeys: installedFileKeys.length === 0 ? undefined : installedFileKeys,
+      });
+      const carried = await get(modMetaFileIn(folder), '');
+      const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), (await source.settings()).gameName));
+      if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
+    },
+    install: async (installed, target, trash, answer) => {
       const { gameName } = await source.settings();
       const claimed = await claim(target);
       if (claimed === undefined) return { landed: false };
@@ -175,7 +191,7 @@ export function mo2Landing(
             const land = claimed.holding === undefined
               ? landNewMod(context, target.name)
               : landUpgrade(target.name, claimed.holding.path, trash);
-            await land(landing.root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
+            await land(landing.root, gameName);
             return landing.fomod === undefined ? { landed: true as const } : { landed: true as const, fomod: landing.fomod };
           });
           await remove(staging);

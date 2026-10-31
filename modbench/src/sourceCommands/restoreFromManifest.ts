@@ -24,7 +24,7 @@ type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
-  | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens'>;
+  | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom'>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
@@ -334,6 +334,18 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   };
 }
 
+// modlist-repository.md, The manifest, story 3: the mod's metadata is written from its packages as install writes it.
+async function metadataRefusal(pass: Pass, folder: string, manifest: Manifest): Promise<{ readonly refusal: string } | undefined> {
+  const names = manifest.packages.filter(isInstallationFile).map(({ name }) => name);
+  if (names.length === 0) return undefined;
+  try {
+    await pass.deps.adapter.writeInstalledFrom(folder, names, pass.deps.trash);
+    return undefined;
+  } catch (err) {
+    return { refusal: notFinished(errorMessage(err)) };
+  }
+}
+
 async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   const folder = await pass.folders.of(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
@@ -344,7 +356,10 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   const marked = [...held.manifest.files.keys(), ...held.manifest.exclude].find((path) => pass.deps.adapter.ownPath(path) !== path);
   if (marked !== undefined) return { refusal: skipped(`its manifest names '${marked}', which carries the mod manager's mark for an excluded file`) };
   const repository = repositoryOf(held.manifest);
-  if (repository === undefined) return restoreFromPackages(pass, mod, folder, held.manifest, (at) => pass.deps.adapter.folderValue(at));
+  if (repository === undefined) {
+    const restored = await restoreFromPackages(pass, mod, folder, held.manifest, (at) => pass.deps.adapter.folderValue(at));
+    return 'refusal' in restored ? restored : (await metadataRefusal(pass, folder, held.manifest)) ?? restored;
+  }
   const sourceFolder = pass.sourceMods.folderOf(mod);
   const pinned = await pass.deps.adapter.submodule(repository.name);
   if (sourceFolder !== undefined) return rebuilt(pass, mod, folder, sourceFolder, held.manifest, 'lacks' in pinned ? undefined : pinned);
