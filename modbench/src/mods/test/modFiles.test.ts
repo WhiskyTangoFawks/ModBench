@@ -23,8 +23,9 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 import { mod } from './indexedValue';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
-const providerAt = (instance: FakeInstance) => new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+const providerAt = (instance: FakeInstance) => new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 
 const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, markedExcluded: false, includedPath: relativePath });
 

@@ -99,7 +99,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const { instance, commands, log, modSync, reporterFor, ask, trash, statuses } = deps;
   const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // modlist-repository.md, Status, story 1
   const open = new OpenRows(instance);
-  const provider = new ModListProvider({ instance, statuses, open });
+  const provider = new ModListProvider({ instance, statuses, open, reporter: reporterFor('modlist.drop') });
   const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {
     treeDataProvider: provider,
     canSelectMany: true,

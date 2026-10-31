@@ -19,6 +19,7 @@ import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { MOD_INDICATORS } from '../../drivingLib/modFileStates';
 import { indicatorSetting, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
@@ -89,7 +90,7 @@ const allOn = Object.fromEntries(MOD_INDICATORS
   .flatMap(({ id }) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));
 
 async function rowUriOf(instance: FakeInstance, name: string): Promise<vscode.Uri> {
-  const rows = new ModListProvider({ statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
+  const rows = new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
   const row = (await rows.getChildren()).find((node) => node instanceof ModNode && node.mod.name === name);
   return present(row?.resourceUri, `${name}'s row URI`);
 }
@@ -267,7 +268,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 describe('a separator row (mods.md, A row, Separator)', () => {
   it('has the URI its indicators are drawn on, and no icon from the file icon theme', async () => {
     const groupedInstance = new FakeInstance(await groupedMiddleOfThree());
-    const row = (await new ModListProvider({ statuses: NO_MOD_STATUSES, instance: groupedInstance, open: new OpenRows(groupedInstance) }).getChildren())
+    const row = (await new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance: groupedInstance, open: new OpenRows(groupedInstance) }).getChildren())
       .find((node) => node instanceof SeparatorNode && node.separator.name === 'Section');
 
     expect(row?.resourceUri?.toString()).toBe(separatorRowUri('Section').toString());
