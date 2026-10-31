@@ -7,11 +7,33 @@ import type { NamedGameFolder } from './gameFolderFacts';
 
 type Adapter = Pick<InstanceAdapter, 'gameFiles' | 'textHash'>;
 
+/** What this machine holds of the installation file a manifest pins. */
+export interface PinHeld {
+  /** The downloaded file of the pinned name, else one under another name with the pinned size and hash. */
+  readonly read: FileRead<InstallationFile | undefined>;
+  /** The file under another name that holds the pinned bytes, when no file has the pinned name. */
+  readonly underAnotherName?: InstallationFile;
+  /** The file under another name that holds the pinned bytes, when the file of the pinned name holds other bytes. */
+  readonly elsewhere?: InstallationFile;
+  /** Why a downloaded file could not be checked for the pinned bytes. */
+  readonly notes: readonly string[];
+}
+
+export async function downloadedFileHoldingPin(
+  adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding'>, pinned: { readonly name: string; readonly size: number; readonly hash: string },
+): Promise<PinHeld> {
+  const named = await adapter.downloadedFile(pinned.name);
+  if (named.kind === 'unreadable' || named.answer?.hash === pinned.hash) return { read: named, notes: [] };
+  const { file, notes } = await adapter.downloadedFileHolding(pinned);
+  if (named.answer === undefined) return { read: { kind: 'read', answer: file }, ...(file === undefined ? {} : { underAnotherName: file }), notes };
+  return { read: named, ...(file === undefined ? {} : { elsewhere: file }), notes };
+}
+
 /** The downloaded file of each name `manifest` names, as the downloads folder holds it now. */
-export async function downloadedNow(adapter: Pick<InstanceAdapter, 'downloadedFile'>, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
+export async function downloadedNow(adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding'>, manifest: Manifest): Promise<PackagesHeld['downloaded']> {
   const read = new Map<string, FileRead<InstallationFile | undefined>>();
   for (const pkg of manifest.packages) {
-    if (pkg.kind === 'installationFile') read.set(pkg.name, await adapter.downloadedFile(pkg.name));
+    if (pkg.kind === 'installationFile') read.set(pkg.name, (await downloadedFileHoldingPin(adapter, pkg)).read);
   }
   return (name) => read.get(name) ?? { kind: 'read', answer: undefined };
 }

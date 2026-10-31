@@ -19,7 +19,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFileHolding' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'sourceHost' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
