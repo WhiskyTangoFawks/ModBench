@@ -7,7 +7,7 @@ import {
   type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type PublisherTagChange, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
-import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
+import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, newNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { installMod } from './install';
@@ -177,7 +177,6 @@ const keyOf = (adapter: InstanceAdapter): EntryKey => (entry) => adapter.entryKe
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
-const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 
 // Why `requested` cannot name a separator, or `undefined` when it can: a separator of that name is
 // listed or has a folder, compared without case. `own`, the separator being renamed, is no clash.
@@ -185,11 +184,9 @@ async function separatorNameRefusal(adapter: InstanceAdapter, requested: string,
   return entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'separator', requested, SEPARATOR_NAME_CLASH, own);
 }
 
-// Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
-// another mod of that name is listed or has a folder, compared without case.
+// Why `requested` cannot rename mod `own`, or `undefined` when it can: another mod of that name is listed or has a folder, compared without case.
 async function renameModNameRefusal(adapter: InstanceAdapter, requested: string, own: string): Promise<string | undefined> {
-  return /[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR
-    : entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'mod', requested, MOD_NAME_CLASH, own);
+  return entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'mod', requested, MOD_NAME_CLASH, own);
 }
 
 async function newModNameRefusalInInstance(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
@@ -372,7 +369,8 @@ const listMod = (adapter: InstanceAdapter, name: string): Promise<CommandResult>
 // A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
 // folder already holds is refused.
 async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<CreateEmptyModResult> {
-  if (name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
+  const nameRefusal = newNameRefusal(name);
+  if (nameRefusal !== undefined) return { applied: false, refusal: nameRefusal };
   try {
     await adapter.createModFolder(name);
   } catch (err) {
