@@ -41,6 +41,7 @@ interface PluginsOnInstance extends vscode.Disposable {
   say: PluginsView['progress']['say'];
   editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut'>;
   nextRefill: ReconcileNarrator['nextRefill'];
+  pluginsShown: PluginsView['pluginsShown'];
 }
 
 export interface Plugins extends vscode.Disposable {
@@ -70,7 +71,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         reporterFor,
       });
       return {
-        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, say: view.progress.say, editingInPluginsView,
+        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, say: view.progress.say, editingInPluginsView, pluginsShown: view.pluginsShown,
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
           view.dispose();
