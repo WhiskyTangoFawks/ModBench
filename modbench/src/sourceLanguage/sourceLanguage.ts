@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
@@ -25,7 +26,7 @@ const pluginSource: vscode.DocumentSelector = { language: 'json' };
 const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', pattern: PLUGIN_SOURCE_GLOB };
 
 const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
-  new vscode.Diagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
+  modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
 
 // Located at its document's start until VS Code resolves it, when it is opened.
 class RecordSymbolInformation extends vscode.SymbolInformation {
@@ -34,7 +35,11 @@ class RecordSymbolInformation extends vscode.SymbolInformation {
   }
 }
 
-function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
+interface SourceLanguage extends vscode.Disposable {
+  messages(): string[];
+}
+
+function sourceProblems(deps: SourceLanguageDeps): SourceLanguage {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
   const publish = (problems: ProblemsByFile) => {
     collection.clear();
@@ -48,7 +53,8 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
     status.text = text;
   };
   const unsubscribe = feedSourceProblems({ ...deps, readText: readHeldText, publish, languageStatus });
-  return new vscode.Disposable(() => { unsubscribe(); collection.dispose(); status?.dispose(); });
+  const disposable = new vscode.Disposable(() => { unsubscribe(); collection.dispose(); status?.dispose(); });
+  return { dispose: () => { disposable.dispose(); }, messages: () => status === undefined ? [] : [status.text] };
 }
 
 /** A record's FormKey in its document, where Referenced By anchors its list. */
@@ -59,7 +65,7 @@ export function formKeyLocation(client: RecordDocumentClient) {
   };
 }
 
-export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposable {
+export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const { client } = deps;
   const hover = vscode.languages.registerHoverProvider(pluginSource, {
     async provideHover(document, position) {
@@ -113,5 +119,10 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
     },
   };
   const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
-  return vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, sourceProblems(deps));
+  const problems = sourceProblems(deps);
+  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, problems);
+  return {
+    dispose: () => { disposable.dispose(); },
+    messages: () => problems.messages(),
+  };
 }

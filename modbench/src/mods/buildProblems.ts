@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import { diagnosticsByPath } from './diagnosticsByPath';
 import type { CompileDiagnostic, PluginAddress } from '../client';
 import type { SourceFiles } from '../instanceLoader/loadOrderSnapshot';
@@ -36,7 +37,7 @@ export class BuildProblems {
     }
 
     const byPath = diagnosticsByPath(diagnostics.map((d) => [
-      files.file(d.sourceRelativePath), new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning),
+      files.file(d.sourceRelativePath), modbenchDiagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning),
     ]));
     const uris = [...byPath].map(([fsPath, list]) => {
       const uri = vscode.Uri.file(fsPath);

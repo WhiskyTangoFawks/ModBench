@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { PluginAddress } from '../client';
 import type { PluginPlace, PluginProblem } from './pluginFacts';
 
@@ -20,7 +21,7 @@ export function publishPluginProblems<T extends PluginProblem>(
     const fsPath = pluginFile(plugin);
     if (fsPath === undefined) continue;
     const list = byUri.get(fsPath) ?? [];
-    const diagnostic = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), r.text, severity);
+    const diagnostic = modbenchDiagnostic(new vscode.Range(0, 0, 0, 0), r.text, severity);
     if (codeOf !== undefined) diagnostic.code = codeOf(plugin, r);
     list.push(diagnostic);
     byUri.set(fsPath, list);
