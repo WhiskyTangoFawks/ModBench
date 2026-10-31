@@ -20,10 +20,14 @@ export const INSTANCE_READS: readonly Read[] = [
   },
   {
     name: 'list_downloads',
-    description: 'The downloaded files by file name, each with its status and whether it is excluded.',
+    description: 'The downloaded files by file name, each as its row shows it: display name, status, whether it is excluded and has metadata, size, modified time (ms), mod ID, file ID, version, mod name, game and author, and its upgrade targets (installed mods it can upgrade, best match first, each with its tier).',
     of: ({ downloadedFiles }) => {
       if (downloadedFiles.kind === 'unresolved') throw new Refusal(downloadedFiles.reason);
-      return downloadedFiles.rows.map(({ name, status, excluded }) => ({ name, status, excluded }));
+      return downloadedFiles.rows.map((row) => ({
+        name: row.name, displayName: row.displayName, status: row.status, excluded: row.excluded, hasMeta: row.hasMeta,
+        size: row.size, mtimeMs: row.mtimeMs, modID: row.modID, fileID: row.fileID, version: row.version,
+        modName: row.modName, gameName: row.gameName, author: row.author, upgrades: row.upgrades,
+      }));
     },
   },
 ];
