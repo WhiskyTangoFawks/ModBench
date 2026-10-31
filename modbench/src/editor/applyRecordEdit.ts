@@ -35,11 +35,11 @@ function spellField(path: PathHop[]): string {
  *  nothing and is a notification (editor.md, Reporting, story 1). Resolves the new FormKey an edit
  *  of the FormID gives. */
 export async function applyRecordEdit(
-  deps: RecordWriteDeps, address: EditAddress, envelope: RecordEditEnvelope,
+  deps: RecordWriteDeps, address: EditAddress, envelope: RecordEditEnvelope, applied?: () => PromiseLike<void>,
 ): Promise<string | undefined> {
   const field = spellField(envelope.path);
   try {
-    return await deps.oneAtATime(() => editDocuments(deps, address, envelope, field));
+    return await deps.oneAtATime(() => editDocuments(deps, address, envelope, field, applied));
   } catch (err) {
     deps.reporter.report('error', `Could not edit ${field}.`, errorMessage(err));
     return undefined;
@@ -47,7 +47,7 @@ export async function applyRecordEdit(
 }
 
 async function editDocuments(
-  deps: RecordWriteDeps, address: EditAddress, envelope: RecordEditEnvelope, field: string,
+  deps: RecordWriteDeps, address: EditAddress, envelope: RecordEditEnvelope, field: string, applied?: () => PromiseLike<void>,
 ): Promise<string | undefined> {
   const carrying = await deps.documentOf(address);
   if ('refused' in carrying) throw new Error(carrying.refused);
@@ -56,7 +56,10 @@ async function editDocuments(
     deps.reporter.report('warning', `${field}: ${outcome.message}`);
     return undefined;
   }
-  if (isNoChange(outcome)) return outcome.newFormKey;
+  if (isNoChange(outcome)) {
+    await afterApplied(deps, field, applied);
+    return outcome.newFormKey;
+  }
 
   const applying = {
     applyWorkspaceChanges: (items: readonly WorkspaceChanges[]) => applyWorkspaceChanges(items, {
@@ -66,9 +69,21 @@ async function editDocuments(
     refreshSourceControlFor: deps.refreshSourceControlFor,
   };
   const failure = await applyAnswered(applying, [outcome], [address.plugin]);
-  if (failure === undefined) return outcome.newFormKey;
+  if (failure === undefined) {
+    await afterApplied(deps, field, applied);
+    return outcome.newFormKey;
+  }
   deps.reporter.report('error', `Could not edit ${field}.`, failure);
   return undefined;
+}
+
+// The edit landed, so a failure here is the copy's (ADR-0019; editor.md, Reporting, story 2).
+async function afterApplied(deps: RecordWriteDeps, field: string, applied?: () => PromiseLike<void>): Promise<void> {
+  try {
+    await applied?.();
+  } catch (err) {
+    deps.reporter.report('error', `Could not copy ${field}.`, errorMessage(err));
+  }
 }
 
 const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>

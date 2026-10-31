@@ -4,12 +4,13 @@ import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { ensureDir, exists, factsOf, realPathIfThere, remove, removeIfEmpty, rename, undoAll, withLock, type Undo } from '../files';
+import { ownPathOf, pathInFolderOf } from '../excludedPaths';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashFileIn' | 'exclusionMark'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'moveIntoOverwrite' | 'trashFileIn' | 'exclusionMark' | 'pathInFolder' | 'carriesExclusionMark'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -104,5 +105,7 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
     },
 
     exclusionMark: EXCLUDED_SUFFIX,
+    pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUDED_SUFFIX),
+    carriesExclusionMark: (path) => ownPathOf(path, EXCLUDED_SUFFIX).excluded.length > 0,
   };
 }

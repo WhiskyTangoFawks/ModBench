@@ -30,7 +30,7 @@ export interface ValueCell extends GridCell {
   value: unknown;
   shown: unknown;
   editPath?: PathHop[];
-  dropAddsTo?: ArrayParentContext;
+  addsTo?: ArrayParentContext;
   // What a cell the game fills from a template reads, its tooltip, and the template it copies and drags as (editor-fields.md, Templated fields).
   template?: TemplateReading;
   // Per flag of a Flags row, what the flag reads when the game fills it from a template.
@@ -87,9 +87,13 @@ type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'de
   // Whether a column holds the object this row is a member of.
   present: (column: ColumnKey) => boolean;
   editable: ReadonlySet<ColumnKey>;
+  // The columns whose copy the game ignores in this row.
+  ignored: ReadonlySet<ColumnKey>;
   // Per column, the variant a member whose type varies by its owner's leaf takes there.
   cellMetas?: Partial<Record<string, FieldMetadata>>;
 };
+
+const NO_COLUMNS: ReadonlySet<ColumnKey> = new Set();
 
 const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
@@ -150,7 +154,7 @@ function fieldRow(
   diff: FieldDiff, meta: FieldMetadata, at: RowPlacement, columns: readonly Column[], recordLabel: RowsInput['recordLabel'],
   stringsLanguage: string,
 ): FieldRow {
-  const { present, editable, cellMetas, ...place } = at;
+  const { present, editable, ignored, cellMetas, ...place } = at;
   const name = meta.displayLabel ?? diff.fieldName;
   const last = at.path.at(-1);
   const elementOf = isArrayElementHop(last) ? at.parent : null;
@@ -159,7 +163,7 @@ function fieldRow(
   const cells = new Map(columns.map(({ key, override: o }): [ColumnKey, ValueCell] => {
     const cellMeta = cellMetas?.[key] ?? meta;
     const value = diff.values[key];
-    const holds = structural || (present(key) && columnHasNode(cellMeta, value));
+    const holds = structural || (present(key) && columnHasNode(cellMeta, value) && (value != null || !ignored.has(key)));
     const held = holds ? value ?? defaultOf(cellMeta) : undefined;
     const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];
@@ -169,7 +173,7 @@ function fieldRow(
     const goesTo = goToTarget(templatedBy, shown, cellMeta, resolution);
     const hops = wirePath(at.rootField, at.path, key);
     const editPath = hops && editable.has(key) && cellMeta.readOnlyReason == null ? hops : undefined;
-    const dropAddsTo = editPath && !template && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
+    const addsTo = editPath && !template && offersArrayAdd(meta) ? arrayParentContext(o.formKey, o.plugin, o.origin, editPath) : undefined;
     const element = editPath && !template && isArrayElementHop(last)
       ? arrayElementContext(
         o.formKey, o.plugin, o.origin, editPath, arrayLength(getAtPath(rootFieldOf(o, at.rootField)?.value, editPath.slice(1, -1))),
@@ -177,7 +181,7 @@ function fieldRow(
       : undefined;
     const context = cellContext(
       template?.copyText ?? copiedText(shown, cellMeta, resolution),
-      dropAddsTo,
+      addsTo,
       element,
       editPath && editableCellContext(o.formKey, o.plugin, o.origin, editPath, value != null),
       hops && meta.type === 'string'
@@ -188,7 +192,7 @@ function fieldRow(
     const templatedFlags = holds && readsAsFlags(cellMeta)
       ? templatedFlagsOf(o, at.rootField, at.path, flagNames(held, cellMeta), editable.has(key))
       : undefined;
-    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, dropAddsTo, template, templatedFlags }];
+    return [key, { context, meta: cellMeta, holds, value: held, shown, editPath, addsTo, template, templatedFlags }];
   }));
   return {
     kind: 'field', diff, meta, ...place, expandable: (diff.children?.length ?? 0) > 0 || readsAsFlags(meta),
@@ -275,18 +279,18 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
       }]
       : rowsOf(diff, meta, {
         path: [], rootField: diff.fieldName, key: `${RECORD_HEADER_ROW}.${diff.fieldName}`, parent: RECORD_HEADER_ROW,
-        present: () => true, editable: editableColumns, depth: 1,
+        present: () => true, editable: editableColumns, ignored: NO_COLUMNS, depth: 1,
       });
   });
-  // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
-  // since the record's own fields are not there to be members of.
+  // A Partial Form column's own fields show what the copy holds, and nothing where it holds none.
   const fieldRows = result.diffs.filter(d => !isHeaderMember(d)).flatMap(diff => {
     const meta = metaByName[diff.fieldName];
     const isEditorId = meta?.isEditorId === true;
     return rowsOf(diff, meta, {
       path: [], rootField: diff.fieldName, key: diff.fieldName, parent: null,
-      present: column => isEditorId || !partialFormColumns.has(column),
-      editable: isEditorId ? editableColumns : ownFieldEditableColumns, depth: 0,
+      present: () => true,
+      editable: isEditorId ? editableColumns : ownFieldEditableColumns,
+      ignored: isEditorId ? NO_COLUMNS : partialFormColumns, depth: 0,
     });
   });
   return [recordHeader, ...headerRows, ...fieldRows];

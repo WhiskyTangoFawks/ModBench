@@ -37,7 +37,3 @@ export function deployWarnings(result: Deployed): DeployProblem[] {
   }
   return problems;
 }
-
-export function unmanagedWarning({ unmanaged }: Pick<Deployed, 'unmanaged'>): DeployProblem | undefined {
-  return unmanaged.length === 0 ? undefined : { message: 'The deployment folder holds files deploy does not manage:', detail: unmanaged.join(', ') };
-}

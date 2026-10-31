@@ -5,11 +5,11 @@ import { errorMessage } from '../ports/errorMessage';
 import { downloadedFileHoldingPin } from './packagesRead';
 
 type Downloading = {
-  readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'nexusFileAt' | 'putDownloadedFile'>;
+  readonly adapter: Pick<InstanceAdapter, 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'>;
   readonly nexus: Pick<Nexus, 'download'>;
 };
 
-type ManifestInstallationFile = Pick<Extract<ManifestPackage, { kind: 'installationFile' }>, 'name' | 'size' | 'hash' | 'page'>;
+type ManifestInstallationFile = Extract<ManifestPackage, { kind: 'installationFile' }>;
 
 interface Found {
   readonly read: FileRead<InstallationFile | undefined>;
@@ -19,10 +19,9 @@ interface Found {
 const notDownloaded = (reason: string): string => `it could not be downloaded from Nexus: ${reason.replace(/\.$/, '')}`;
 
 // modlist-repository.md, Restore from manifest, story 4: Nexus's file, put only when it is the one the manifest names.
-async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, page }: ManifestInstallationFile): Promise<string | undefined> {
-  const at = page === undefined ? undefined : adapter.nexusFileAt(page);
-  if (at?.fileId === undefined) return 'its manifest names no file on Nexus to download it from';
-  const fetched = await nexus.download({ game: at.game, modID: at.modId, fileID: at.fileId });
+async function downloadedOrWhy({ adapter, nexus }: Downloading, { name, hash, host }: ManifestInstallationFile): Promise<string | undefined> {
+  if (host === undefined) return 'its manifest names no file on Nexus to download it from';
+  const fetched = await nexus.download({ game: host.nexus.game, modID: String(host.nexus.mod), fileID: String(host.nexus.file) });
   if (!fetched.found) return notDownloaded(fetched.reason);
   try {
     const { put } = await adapter.putDownloadedFile(name, fetched.bytes, { hash, info: fetched.info });

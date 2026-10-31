@@ -217,8 +217,8 @@ export function mo2Repository(
 
     gameFiles,
 
-    async gameFilesTakenBy(place, folder) {
-      const { files, notes } = await filesBelow(folder);
+    async gameFilesTakenBy(place, folder, paths) {
+      const { files, notes } = paths === undefined ? await filesBelow(folder) : { files: paths.map((relativePath) => ({ relativePath })), notes: [] };
       const inGameFolder = await isModFolder(instanceRoot, folder) ? deployedPath : (path: string) => path;
       const asked = files.flatMap(({ relativePath }) => {
         const path = inGameFolder(relativePath);

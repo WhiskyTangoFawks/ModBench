@@ -95,6 +95,30 @@ describe('an edit of a record', () => {
     expect(refreshSourceControlFor).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['an edit applied', { applied: true, moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }] }, 1],
+    ['an edit that changes nothing', { applied: true, moves: [], deletions: [], documents: [] }, 1],
+    ['an edit mEdit refuses', { applied: false, refusal: 'ReadOnly', message: 'Read-only.' }, 0],
+  ] as [string, Awaited<ReturnType<InMemoryMEditClient['getEditChanges']>>, number][])('runs what follows only for %s', async (_what, answer, times) => {
+    const { deps } = makeDeps(answer);
+    const afterwards = vi.fn(() => Promise.resolve());
+
+    await applyRecordEdit(deps, address, height, afterwards);
+
+    expect(afterwards).toHaveBeenCalledTimes(times);
+  });
+
+  it('reports a failure after the edit landed as a failed copy, not a failed edit', async () => {
+    const { deps, reporter } = makeDeps({
+      applied: true, newFormKey: '000900:A.esp', moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }],
+    });
+
+    const newFormKey = await applyRecordEdit(deps, address, height, () => Promise.reject(new Error('clipboard busy')));
+
+    expect(newFormKey).toBe('000900:A.esp');
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy Height.', detail: 'clipboard busy' }]);
+  });
+
   it('reports an edit VS Code did not apply as one that may have partly landed, and refreshes Source Control', async () => {
     const { deps, reporter, refreshSourceControlFor } = makeDeps({
       applied: true, newFormKey: '000900:A.esp', moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],

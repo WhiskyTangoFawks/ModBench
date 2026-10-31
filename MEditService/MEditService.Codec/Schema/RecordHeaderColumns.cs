@@ -17,7 +17,7 @@ internal static class RecordHeaderColumns
         Type getterType, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, GameReflection game, ILogger logger)
     {
         var columns = new List<ColumnSpec>();
-        foreach (var (typeName, member, label, ignoredInConflicts, isVersionControlInfo1) in game.Annotations.RecordHeaderMembers)
+        foreach (var (typeName, member, ignoredInConflicts, isVersionControlInfo1) in game.Annotations.RecordHeaderMembers)
         {
             if (!declarations.TryGetValue(member, out var declared)
                 || !declared.Any(p => ReflectedTypes.DeclaringTypeOf(p).Name == typeName)) continue;
@@ -28,7 +28,6 @@ internal static class RecordHeaderColumns
             {
                 Field = column.Field with
                 {
-                    DisplayLabel = label,
                     IsRecordHeaderMember = true,
                     IsRecordFormKey = ReflectedTypes.IsFormKey(prop.PropertyType),
                     IgnoredInConflicts = ignoredInConflicts,

@@ -3,7 +3,7 @@ import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, uriPar
 
 vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse } }));
 
-import { decompileAndRepairLink, publishPluginProblems } from '../loadDiagnostics';
+import { decompileAndRepairLink, decompileLink, publishPluginProblems } from '../loadDiagnostics';
 import type { PluginAddress, PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
 
@@ -72,6 +72,16 @@ describe('publishPluginProblems', () => {
 
   it.each([['the game folder', undefined], ['Overwrite', 'inOverwrite']] as const)('offers no link on a plugin in %s, since no mod can hold its source', (_label, place) => {
     expect(decompileAndRepairLink({ name: 'A.esp', origin: 'Data/' }, place)).toBeUndefined();
+  });
+
+  it('links a plugin source unreadable entry to decompile of that plugin, only where decompile repairs it', () => {
+    const plugin = { name: 'A.esp', origin: 'M' };
+
+    expect(decompileLink(plugin, true)).toEqual({
+      value: 'decompile',
+      target: uriParse(`command:modbench.plugin.decompile?${encodeURIComponent(JSON.stringify([plugin]))}`),
+    });
+    expect(decompileLink(plugin, false)).toBeUndefined();
   });
 
   it('groups several diagnoses on one plugin under one file entry', () => {

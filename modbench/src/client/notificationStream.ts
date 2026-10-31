@@ -20,7 +20,7 @@ class NotificationListenerRegistry {
 
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'external-change': new Set(),
-    'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
+    'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
@@ -56,11 +56,6 @@ class NotificationListenerRegistry {
         break;
       case 'external-change':
         this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
-        break;
-      case 'plugin-source-unreadable':
-        this.deliver('plugin-source-unreadable', {
-          plugins: (event.pluginWithUnreadableSources ?? []).map(({ name, source }) => ({ name, origin, ...source })),
-        });
         break;
       case 'record-filter-cleared':
         if (event.recordFilterCleared) this.deliver('record-filter-cleared', event.recordFilterCleared);
@@ -137,7 +132,6 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     modlistProgress?: NotificationEvent['modlistProgress'];
     decompileAndCommitPhase?: NotificationEvent['decompileAndCommitPhase'];
     changedPlugins?: NotificationEvent['changedPlugins'];
-    pluginWithUnreadableSources?: NotificationEvent['pluginWithUnreadableSources'];
     recordFilterCleared?: NotificationEvent['recordFilterCleared'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
@@ -148,7 +142,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
     loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, decompileAndCommitPhase: w.decompileAndCommitPhase, changedPlugins: w.changedPlugins,
-    pluginWithUnreadableSources: w.pluginWithUnreadableSources, recordFilterCleared: w.recordFilterCleared,
+    recordFilterCleared: w.recordFilterCleared,
   };
 }
 

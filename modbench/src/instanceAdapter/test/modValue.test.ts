@@ -7,16 +7,23 @@ const reads = (held: readonly string[], findsOtherCase = false) => ({
   filesIn: () => Promise.resolve(held),
   originFileHash: (path: string) => Promise.resolve({ kind: 'read' as const, answer: { size: 1, hash: `h:${path.replaceAll('\\', '/')}` } }),
   fileStamp: (path: string) => Promise.resolve(findsOtherCase ? { kind: 'read' as const, answer: stamp } : { kind: 'unreadable' as const, reason: `ENOENT ${path}` }),
+  exclusionMark: '.mohidden',
 });
 
 describe('a folder as a value', () => {
-  it('holds every file it lists with its hash', async () => {
-    const { files } = await folderValueOver(reads(['a.esp', 'meshes/b.nif']), '/mods/Mod');
+  it('holds every file it lists with its own path, whether the mark excludes it, and its hash', async () => {
+    const { files } = await folderValueOver(reads(['a.esp', 'meshes.mohidden/b.nif']), '/mods/Mod');
 
     expect([...files]).toEqual([
-      ['a.esp', { kind: 'read', answer: { size: 1, hash: 'h:/mods/Mod/a.esp' } }],
-      ['meshes/b.nif', { kind: 'read', answer: { size: 1, hash: 'h:/mods/Mod/meshes/b.nif' } }],
+      ['a.esp', { path: 'a.esp', excluded: false, read: { kind: 'read', answer: { size: 1, hash: 'h:/mods/Mod/a.esp' } } }],
+      ['meshes.mohidden/b.nif', { path: 'meshes/b.nif', excluded: true, read: { kind: 'read', answer: { size: 1, hash: 'h:/mods/Mod/meshes.mohidden/b.nif' } } }],
     ]);
+  });
+
+  it('excludes each path the mark excludes, a folder by its own path, once', async () => {
+    const { exclude } = await folderValueOver(reads(['a.esp.mohidden', 'docs.mohidden/a.txt', 'docs.mohidden/b.txt', 'c.esp']), '/mods/Mod');
+
+    expect(exclude).toEqual(['a.esp', 'docs']);
   });
 
   it.each([[true], [false]])('says its file system ignores case when it finds a file by a name in another case: %s', async (finds) => {
@@ -33,38 +40,50 @@ describe('a folder as a value', () => {
 });
 
 describe('a mod as a value', () => {
+  const PLACE = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
   const modReads = {
     ...reads(['a.esp']),
-    modMetadata: () => Promise.resolve({ kind: 'read' as const, answer: {} }),
-    packageEntries: (hash: string) => Promise.resolve(hash === 'H1' ? new Map([['a.esp', 'x']]) : undefined),
     downloadedFile: () => Promise.resolve({ kind: 'read' as const, answer: undefined }),
-    gameFolder: () => Promise.resolve({ kind: 'notFound' as const, looked: [], setting: '' }),
+    gamePlaces: () => Promise.resolve([]),
+    gameFilesTakenBy: () => Promise.resolve({ kind: 'read' as const, answer: { gameFiles: [], notes: [] } }),
+    submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : { lacks: 'no submodule' }),
   };
 
-  it('holds the entries of the packages asked that the index holds', async () => {
-    const value = await modValueOver(modReads, 'Mod', '/mods/Mod', { entries: ['H1', 'H2'], installationFiles: ['Mod.zip'] });
+  it('holds each downloaded file asked for', async () => {
+    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: ['Mod.zip'] });
 
     if (value.kind !== 'read') throw new Error('expected the values to read');
-    expect([[...value.packageEntries.keys()], [...value.downloadedFiles.keys()]]).toEqual([['H1'], ['Mod.zip']]);
+    expect([...value.downloadedFiles.keys()]).toEqual(['Mod.zip']);
+  });
+
+  it('reads no game file when the game folder is not found', async () => {
+    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] });
+
+    expect(value).toMatchObject({ kind: 'read', gameFiles: undefined });
+  });
+
+  it.each([['Hosted', true], ['Local', false]])('says whether the repository %s is a submodule', async (repository, hosted) => {
+    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository });
+
+    expect(value).toMatchObject({ kind: 'read', repositoryHosted: hosted });
   });
 
   it('reads and hashes no file of a folder when no manifest is asked for', async () => {
     const hashed: string[] = [];
-    const value = await modValueOver({ ...modReads, originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } }, 'Mod', '/mods/Mod', undefined);
+    const value = await modValueOver({ ...modReads, originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } }, '/mods/Mod', undefined);
 
-    expect([value.kind, hashed]).toEqual(['metadataOnly', []]);
+    expect([value.kind, hashed]).toEqual(['notAsked', []]);
   });
 
-  it('reads and hashes no file of a folder whose metadata cannot be read', async () => {
-    const hashed: string[] = [];
-    const reading = { ...modReads, modMetadata: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }), originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } };
+  it('is unreadable, saying why, when the game files cannot be read', async () => {
+    const reading = { ...modReads, gamePlaces: () => Promise.resolve([PLACE]), gameFilesTakenBy: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
 
-    expect([(await modValueOver(reading, 'Mod', '/mods/Mod', { entries: [], installationFiles: [] })).kind, hashed]).toEqual(['metadataOnly', []]);
+    expect(await modValueOver(reading, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] })).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });
 
-  it('is unreadable, saying why, when a read rejects, and keeps its metadata', async () => {
-    const value = await modValueOver({ ...modReads, filesIn: () => Promise.reject(new Error('EACCES')) }, 'Mod', '/mods/Mod', { entries: [], installationFiles: [] });
+  it('is unreadable, saying why, when a read rejects', async () => {
+    const value = await modValueOver({ ...modReads, filesIn: () => Promise.reject(new Error('EACCES')) }, '/mods/Mod', { installationFiles: [] });
 
-    expect(value).toEqual({ metadata: { kind: 'read', answer: {} }, kind: 'unreadable', reason: 'EACCES' });
+    expect(value).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });
 });

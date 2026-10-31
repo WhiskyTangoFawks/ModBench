@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { manifestText, sourceModsOf, type Manifest, type ManifestPackage } from '../manifestAdapter';
+import { sourceModsOf, type Manifest, type ManifestPackage } from '../manifestAdapter';
+import { manifestText } from '../manifestText';
 import type { ModFolderAt } from '../sourceMods';
 
 let root: string;
@@ -10,9 +11,9 @@ let root: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'sourceMods-')); });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-const naming = (pkg: ManifestPackage): Manifest => ({ packages: [pkg], exclude: [], archives: [], files: [] });
+const naming = (pkg: ManifestPackage): Manifest => ({ packages: [pkg], exclude: [], files: new Map() });
 
-const repository = (name: string): ManifestPackage => ({ kind: 'sourceRepository', name, isSubmodule: true });
+const repository = (name: string): ManifestPackage => ({ kind: 'repository', name });
 
 async function modFolder(name: string, manifest?: Manifest): Promise<ModFolderAt> {
   const folder = join(root, 'mods', name);
@@ -34,17 +35,8 @@ describe('sourceModsOf', () => {
     expect([[...linked.folders], linked.folderOf('renamed mod'), linked.notes]).toEqual([[['Renamed Mod', source('Mod')]], source('Mod'), []]);
   });
 
-  it('links a mod to its repository though its manifest names another package first', async () => {
-    const installedFrom: ManifestPackage = { kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'H' };
-    const mods = [await modFolder('Mod', { ...naming(installedFrom), packages: [installedFrom, repository('Mod')] })];
-
-    const linked = await sourceModsOf(mods, new Map([['Mod', source('Mod')]]), key);
-
-    expect(linked.folderOf('Mod')).toBe(source('Mod'));
-  });
-
   it('links no mod whose manifest names another package', async () => {
-    const mods = [await modFolder('Mod', naming({ kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'H' }))];
+    const mods = [await modFolder('Mod', naming({ kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'AAAAAAAAAAA=' }))];
 
     const linked = await sourceModsOf(mods, new Map(), key);
 
@@ -74,7 +66,7 @@ describe('sourceModsOf', () => {
   });
 
   it('leaves a repository no manifest names unlinked when the folder of its name holds another mod\'s manifest, and says so', async () => {
-    const mods = [await modFolder('Mod', naming({ kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'H' }))];
+    const mods = [await modFolder('Mod', naming({ kind: 'installationFile', name: 'Mod.7z', size: 1, hash: 'AAAAAAAAAAA=' }))];
 
     const linked = await sourceModsOf(mods, new Map([['Mod', source('Mod')]]), key);
 

@@ -30,7 +30,7 @@ export const WEBVIEW_TO_EXTENSION = {
   // Routed through the extension host because a refused edit becomes a native notification
   // (editor.md, Reporting, story 1).
   EDIT_FIELD: 'editField',
-  // A drop on an array, an entry point to the add its right-click menu fires, with the dropped value.
+  // A paste on an array's row, an entry point to the add its right-click menu fires, with the pasted value.
   ADD_ELEMENT: 'addElement',
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.

@@ -248,6 +248,17 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual([]);
   });
 
+  it('from a plugin source unreadable entry\'s link in the Problems panel, decompiles the plugin it names, not the selection', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
+    const { handler } = registered(client, 'Decompile');
+
+    await handler(SECOND);
+
+    expect(decompileCalls(client)).toEqual([[[SECOND], false]]);
+  });
+
   it('reports a refusal of the whole selection once, and lands nothing', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);

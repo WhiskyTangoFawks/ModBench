@@ -47,15 +47,17 @@ function feedOver({ shownPlugins = () => [A], publishDiagnoses }: FeedOptions = 
   const client = clientFindingNoDefects();
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
+  const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
   const feed = new PluginFactsFeed({
     client, shownPlugins,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,
     publishChangedOutside: changedOutside.push,
     publishFailedToRead: () => undefined,
+    publishSourceUnreadable: sourceUnreadable.push,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
-  return { feed, client, diagnoses, changedOutside, changes };
+  return { feed, client, diagnoses, changedOutside, sourceUnreadable, changes };
 }
 
 async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
@@ -249,6 +251,18 @@ describe('PluginFactsFeed', () => {
       expect(thrown).toEqual(new Error('the Problems panel broke'));
       expect(feed.rows.readFailureMessage()).toBeUndefined();
     });
+  });
+
+  it.each([
+    ['a reconcile', (feed: PluginFactsFeed) => feed.reconciled([])],
+    ['a facts re-read', (feed: PluginFactsFeed) => feed.refresh()],
+  ])('publishes a plugin whose plugin source is unreadable to the Problems panel on %s', async (_what, read) => {
+    const { feed, client, sourceUnreadable } = feedOver();
+    client.setQueryAnswer('getPlugins', [held({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })]);
+
+    await read(feed);
+
+    expect(sourceUnreadable.items.map((entries) => entries.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
   });
 
   it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {

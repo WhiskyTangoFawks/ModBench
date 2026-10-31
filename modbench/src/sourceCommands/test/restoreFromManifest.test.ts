@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
-import { textHash } from '../../instanceAdapter/fileContents/contentDigest';
-import { pinText, writeManifestIn, type Manifest, type ManifestFile, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
+import { writeManifestIn, type BuildFileLine, type Manifest, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
@@ -15,22 +14,27 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
 import { restoreFromManifest, type RestoreStatus } from '../restoreFromManifest';
 
-const EMPTY: Manifest = { packages: [], exclude: [], archives: [], files: [] };
-const MOD_7Z: ManifestPackage = { kind: 'installationFile', name: 'ModA.7z', size: 10, hash: 'H' };
+const HA = 'AAAAAAAAAAA=';
+const HB = 'BBBBBBBBBBA=';
+const HC = 'CCCCCCCCCCA=';
+const EDITED = 'EEEEEEEEEEA=';
+const PACK = 'PPPPPPPPPPA=';
+const EMPTY: Manifest = { packages: [], exclude: [], files: new Map() };
+const MOD_7Z = { kind: 'installationFile', name: 'ModA.7z', size: 10, hash: PACK } as const;
 const DOWNLOADED: InstallationFile = {
-  path: '/downloads/ModA.7z', size: 10, hash: 'H', entries: [{ path: 'a.nif', hash: 'HA' }, { path: 'b.nif', hash: 'HB' }, { path: 'Data/c.nif', hash: 'HC' }],
+  path: '/downloads/ModA.7z', size: 10, hash: PACK, entries: [{ path: 'a.nif', hash: HA }, { path: 'b.nif', hash: HB }, { path: 'Data/c.nif', hash: HC }],
 };
+const REPOSITORY: ManifestPackage = { kind: 'repository', name: 'ModA' };
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const GAME_PLACE: GamePlace = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
 const STEAM_PLACE: GamePlace = { root: '/steam', holdsDataFiles: true, depots: [], depotProblems: [] };
 const NOT_FINISHED = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
 
-const held = (path: string, inPackage?: string, pkg?: string): ManifestFile =>
-  ({ path, entry: inPackage === undefined ? { kind: 'held' } : { kind: 'heldAt', path: inPackage }, ...(pkg === undefined ? {} : { package: pkg }) });
-const fromTheZip = (...files: ManifestFile[]): Manifest => ({ ...EMPTY, packages: [MOD_7Z], installationFile: MOD_7Z.name, files });
+const holding = (files: Record<string, string | null>): Manifest['files'] => new Map(Object.entries(files));
+const fromTheZip = (files: Record<string, string>, over: Partial<Manifest> = {}): Manifest => ({ ...EMPTY, packages: [MOD_7Z], files: holding(files), ...over });
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
-const gameFiles = (...files: [string, string][]) => new Map(files.map(([path, hash]) => [path.toLowerCase(), { path, hash }]));
-const pinOf = (...taken: { path: string; hash: string }[]): Promise<string> => textHash(pinText(taken));
+const takenFromTheGame = (...files: [string, string, string][]): InstanceAnswers['gameFilesTaken'] =>
+  new Map([['ModA', read({ gameFiles: files.map(([path, hash, pathInFolder]) => ({ path, hash, pathInFolder })), notes: [] })]]);
 
 let root: string;
 let modsDir: string;
@@ -75,13 +79,13 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
 const folderOf = (mod: string): string => join(modsDir, mod);
 
 const writes = (calls: readonly AdapterCall[]): AdapterCall[] =>
-  calls.filter(({ verb }) => ['writeFilesIn', 'trashFileIn', 'writeModMetadata', 'keepPackageEntries'].includes(verb));
+  calls.filter(({ verb }) => ['writeFilesIn', 'trashFileIn', 'writeModMetadata'].includes(verb));
 
 describe('restore from manifest', () => {
-  it('writes each file whose bytes differ or that is gone from its package, sends each file no line names to the trash, then writes the metadata its manifest holds', async () => {
+  it('writes each file whose bytes differ or that is gone from the entry of its bytes, wherever its package holds it, and sends each file it does not name to the trash', async () => {
     const { restore, fake } = await over({
-      files: { ModA: { 'a.nif': 'HA', 'b.nif': 'edited', 'mine.txt': 'M' } },
-      manifests: { ModA: { ...fromTheZip(held('a.nif'), held('b.nif'), held('c.nif', 'Data/c.nif')), version: '1.0' } },
+      files: { ModA: { 'a.nif': HA, 'b.nif': EDITED, 'mine.txt': 'M' } },
+      manifests: { ModA: fromTheZip({ 'a.nif': HA, 'b.nif': HB, 'c.nif': HC }) },
       answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) },
     });
 
@@ -91,14 +95,27 @@ describe('restore from manifest', () => {
     expect(writes(fake.calls)).toEqual([
       { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'b.nif', from: entry('b.nif') }, { path: 'c.nif', from: entry('Data/c.nif') }] },
       { verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'mine.txt' },
-      { verb: 'writeModMetadata', mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'ModA.7z' } } },
     ]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['b.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], refused: [] });
   });
 
+  it('writes a file its manifest excludes under the mod manager\'s mark, moving the file the folder holds included', async () => {
+    const { restore, fake } = await over({
+      files: { ModA: { 'b.nif': HB } }, manifests: { ModA: fromTheZip({ 'b.nif': HB }, { exclude: ['b.nif'] }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) },
+    });
+
+    await restore(['ModA']);
+
+    expect(writes(fake.calls)).toEqual([
+      { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'b.nif.mohidden', from: { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'b.nif' } }] },
+      { verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'b.nif' },
+    ]);
+  });
+
   it('writes no file of a folder whose bytes are all its manifest\'s', async () => {
     const { restore, fake } = await over({
-      files: { ModA: { 'a.nif': 'HA' } }, manifests: { ModA: fromTheZip(held('a.nif')) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) },
+      files: { ModA: { 'a.nif': HA } }, manifests: { ModA: fromTheZip({ 'a.nif': HA }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) },
     });
 
     const outcome = await restore(['ModA']);
@@ -107,89 +124,75 @@ describe('restore from manifest', () => {
   });
 
   describe('from the game folder', () => {
-    async function takingFromTheGame(answers: InstanceAnswers) {
-      const pin = await pinOf({ path: 'a.nif', hash: '#a' });
-      const manifest: Manifest = { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: pin, depots: [] }], files: [held('a.nif', 'Data/a.nif')] };
-      return { pin, ...await over({ manifests: { ModA: manifest }, answers }) };
-    }
+    const takingFromTheGame = (answers: InstanceAnswers) =>
+      over({ manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder' }], files: holding({ 'a.nif': HA }) } }, answers });
 
-    it('writes a game file with the bytes its pin fixes, and keeps the package\'s entries for a status to read', async () => {
-      const { pin, restore, fake } = await takingFromTheGame({ places: [{ ...GAME_PLACE, gameFiles: gameFiles(['Data/A.nif', '#a']) }] });
+    it('writes the game file the folder\'s file may be, with the bytes its manifest records', async () => {
+      const { restore, fake } = await takingFromTheGame({ places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/A.nif', HA, 'a.nif']) }] });
 
       await restore(['ModA']);
 
-      expect(writes(fake.calls).slice(0, 2)).toEqual([
+      expect(writes(fake.calls)).toEqual([
         { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'gameFile', root: '/game', path: 'Data/A.nif' } }] },
-        { verb: 'keepPackageEntries', hash: pin, entries: new Map([['Data/a.nif', '#a']]) },
       ]);
     });
 
     it('takes it from another place of the game when the game folder holds it with other bytes', async () => {
       const { restore, fake } = await takingFromTheGame({
-        places: [{ ...GAME_PLACE, gameFiles: gameFiles(['Data/a.nif', '#other']) }, { ...STEAM_PLACE, gameFiles: gameFiles(['Data/a.nif', '#a']) }],
+        places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/a.nif', EDITED, 'a.nif']) }, { ...STEAM_PLACE, gameFilesTaken: takenFromTheGame(['Data/a.nif', HA, 'a.nif']) }],
       });
 
       await restore(['ModA']);
 
       expect(writes(fake.calls)[0]).toMatchObject({ files: [{ from: { root: '/steam' } }] });
     });
-
-    it('lands, naming in a note why the hash index could not keep the package\'s entries', async () => {
-      const { restore } = await takingFromTheGame({ places: [{ ...GAME_PLACE, gameFiles: gameFiles(['Data/a.nif', '#a']) }], packageEntriesNotWritten: 'ENOSPC' });
-
-      expect((await restore(['ModA'])).landed).toEqual([{
-        mod: 'ModA', written: ['a.nif'], namedByNoLine: [], notes: ['the files it takes from the game folder could not be recorded, so its status reads them as differing: ENOSPC'],
-      }]);
-    });
   });
 
   it.each<[string, Setup, string]>([
     ['its installation file is missing, and its manifest names no file on Nexus',
-      { manifests: { ModA: fromTheZip(held('a.nif')) } },
+      { manifests: { ModA: fromTheZip({ 'a.nif': HA }) } },
       "was skipped: installation file 'ModA.7z' is missing. Its manifest names no file on Nexus to download it from."],
     ['its installation file has other bytes',
-      { manifests: { ModA: fromTheZip(held('a.nif')) }, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'X' })]]) } },
+      { manifests: { ModA: fromTheZip({ 'a.nif': HA }) }, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: EDITED })]]) } },
       "was skipped: installation file 'ModA.7z' has other bytes."],
     ['its installation file cannot be read',
-      { manifests: { ModA: fromTheZip(held('a.nif')) }, answers: { downloadedFiles: new Map([['ModA.7z', { kind: 'unreadable', reason: 'EACCES' }]]) } },
+      { manifests: { ModA: fromTheZip({ 'a.nif': HA }) }, answers: { downloadedFiles: new Map([['ModA.7z', { kind: 'unreadable', reason: 'EACCES' }]]) } },
       "was skipped: installation file 'ModA.7z' could not be read: EACCES."],
-    ['its installation file holds no entry a line names',
-      { manifests: { ModA: fromTheZip(held('z.nif')) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
-      "was skipped: installation file 'ModA.7z' holds no 'z.nif'."],
-    ['no package holds a file',
-      { manifests: { ModA: { ...EMPTY, files: [{ path: 'mine.txt', entry: { kind: 'notHeld' } }] } } },
-      "was skipped: its package does not hold 'mine.txt'."],
-    ['a package holds a file with other bytes',
-      { manifests: { ModA: { ...fromTheZip(), files: [{ path: 'a.nif', entry: { kind: 'otherBytes' } }] } }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
-      "was skipped: its package holds 'a.nif' with other bytes."],
-    ['a line names no package',
-      { manifests: { ModA: { ...EMPTY, files: [held('a.nif')] } } },
-      "was skipped: 'a.nif' names no installation file."],
-    ['no game folder holds a game file, naming the depots that hold it',
-      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [{ id: '377162', version: '2222' }] }], files: [held('a.nif', 'Data/a.nif')] } } },
-      "was skipped: game file 'Data/a.nif' is missing; the game folder 'Fallout4' is depot 377162 at version 2222."],
+    ['no package it names holds the bytes of a file',
+      { manifests: { ModA: fromTheZip({ 'z.nif': EDITED }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
+      "was skipped: no package it names holds the bytes of 'z.nif'."],
+    ['it names no package',
+      { manifests: { ModA: { ...EMPTY, files: holding({ 'mine.txt': HA }) } } },
+      "was skipped: no package it names holds the bytes of 'mine.txt'."],
+    ['no place of the game holds a game file with its bytes, naming the depots that hold it',
+      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 377162: '2222' } } } }], files: holding({ 'a.nif': HA }) } } },
+      "was skipped: no package it names holds the bytes of 'a.nif'; the game folder is depot 377162 at version 2222."],
     ['the game folder was not found',
-      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }], files: [held('a.nif', 'Data/a.nif')] } }, gameFolder: GAME_FOLDER_NOT_FOUND },
-      "was skipped: game file 'Data/a.nif' could not be read: the game folder was not found."],
-    ['the game files it takes have other bytes than its pin fixes',
-      {
-        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder', name: 'Fallout4', hash: 'pin', depots: [] }], files: [held('a.nif', 'Data/a.nif')] } },
-        answers: { gameFiles: gameFiles(['Data/a.nif', '#a']) },
-      },
-      "was skipped: the files it takes from the game folder 'Fallout4' have other bytes."],
-    ['its repository is not in the source folder and has no host',
-      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }] } } },
-      "was skipped: the source folder holds no repository 'ModA', and its package has no host."],
+      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder' }], files: holding({ 'a.nif': HA }) } }, gameFolder: GAME_FOLDER_NOT_FOUND },
+      'was skipped: the game folder was not found.'],
+    ['its repository is not in the source folder and is no submodule',
+      { manifests: { ModA: { ...EMPTY, packages: [REPOSITORY] } } },
+      "was skipped: the source folder holds no repository 'ModA', and no answer fixed for ModA."],
     ['its submodule is not cloned',
-      { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }] } } },
+      { manifests: { ModA: { ...EMPTY, packages: [REPOSITORY] } }, answers: { pins: new Map([['ModA', { folder: '/source/ModA', pin: 'abc' }]]) } },
       "was skipped: its submodule 'ModA' is not cloned."],
-    ['it has no manifest', { files: { ModA: { 'a.nif': 'HA' } } }, 'was skipped: it has no manifest.'],
+    ['it has no manifest', { files: { ModA: { 'a.nif': HA } } }, 'was skipped: it has no manifest.'],
+    ['a path its manifest names carries the mod manager\'s mark for an excluded file',
+      { files: { ModA: {} }, manifests: { ModA: fromTheZip({ 'a.nif.mohidden': HA }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
+      "was skipped: its manifest names 'a.nif.mohidden', which carries the mod manager's mark for an excluded file."],
   ])('skips a mod, writing nothing, when %s', async (_case, setup, reason) => {
     const { restore, fake } = await over(setup);
 
     const outcome = await restore(['ModA']);
 
     expect([outcome, writes(fake.calls)]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason }] }, []]);
+  });
+
+  it('skips a mod whose manifest is of the format before version 1, naming both versions', async () => {
+    const { restore } = await over({ files: { ModA: {} } });
+    await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{\n"files": []\n}\n');
+
+    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was skipped: its manifest is in a format before version 1, and Modbench reads only version 1.' }]);
   });
 
   it('skips a mod whose manifest cannot be read, naming where', async () => {
@@ -202,32 +205,19 @@ describe('restore from manifest', () => {
   it.each<[string, InstanceAnswers['refusals'], string]>([
     ['a file could not be written', refusing('writeFilesIn', 'EROFS'), 'was not finished: EROFS. Restoring it again finishes it.'],
     ['the trash refused a file', refusing('trashFileIn', 'EBUSY'), "was not finished: 'mine.txt' could not be moved to the trash: EBUSY. Restoring it again finishes it."],
-    ['its metadata could not be written', refusing('writeModMetadata', 'locked'), 'was not finished: its metadata could not be written: locked. Restoring it again finishes it.'],
   ])('names a mod not finished when %s', async (_case, refusals, reason) => {
     const { restore } = await over({
-      files: { ModA: { 'b.nif': 'edited', 'mine.txt': 'M' } }, manifests: { ModA: fromTheZip(held('b.nif')) },
+      files: { ModA: { 'b.nif': EDITED, 'mine.txt': 'M' } }, manifests: { ModA: fromTheZip({ 'b.nif': HB }) },
       answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), refusals },
     });
 
     expect(await restore(['ModA'])).toEqual({ landed: [], refused: [{ item: 'ModA', reason }] });
   });
 
-  it.each<[string, InstanceAnswers, string]>([
-    ['its metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'locked']]) }, 'was skipped: its metadata could not be read: locked.'],
-    ['its metadata cannot hold what its manifest says', { unwritableMetadata: new Map([['ModA', 'its metadata names another game']]) }, 'was skipped: its metadata names another game.'],
-  ])('skips a mod when %s, before it writes a file', async (_case, answers, reason) => {
-    const { restore, fake } = await over({
-      files: { ModA: { 'b.nif': 'edited' } }, manifests: { ModA: fromTheZip(held('b.nif')) },
-      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), ...answers },
-    });
-
-    expect([await restore(['ModA']), writes(fake.calls)]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason }] }, []]);
-  });
-
   it('restores a folder outside the mod folders by its name, and writes no metadata', async () => {
     const stock = join(root, 'Stock Game');
     await mkdir(stock);
-    await writeManifestIn(stock, { ...EMPTY, version: '1' });
+    await writeManifestIn(stock, EMPTY);
     const { deps, fake } = await over();
 
     const outcome = await restoreFromManifest(deps, [], {}, false, [{ name: 'Stock Game/', folder: stock }]);
@@ -241,7 +231,7 @@ describe('restore from manifest', () => {
 
     const outcome = await restore(['ModA', 'ModB'], { onProgress: (status) => { if (status.phase === 'Restoring') cancel.abort(); }, signal: cancel.signal });
 
-    expect([outcome.landed.map(({ mod }) => mod), outcome.refused, writes(fake.calls)]).toEqual([['ModA'], [{ item: 'ModB', reason: NOT_FINISHED }], [{ verb: 'writeModMetadata', mod: 'ModA', metadata: {} }]]);
+    expect([outcome.landed.map(({ mod }) => mod), outcome.refused, writes(fake.calls)]).toEqual([['ModA'], [{ item: 'ModB', reason: NOT_FINISHED }], []]);
   });
 
   it('reports each mod it restores, from the losing end of mod order', async () => {
@@ -258,7 +248,7 @@ describe('restore from manifest', () => {
 
     const outcome = await restore(['ModA']);
 
-    expect(fake.calls.map(({ verb }) => verb)).toEqual(['writePathTokens', 'writeModMetadata', 'refuseUnpublishedPins']);
+    expect(fake.calls.map(({ verb }) => verb)).toEqual(['writePathTokens', 'refuseUnpublishedPins']);
     expect(outcome.pathTokensNotWritten).toBe('ModOrganizer.ini still holds a path token');
   });
 
@@ -269,10 +259,10 @@ describe('restore from manifest', () => {
   });
 
   describe('an installation file the downloads folder lacks', () => {
-    const manifests = { ModA: { ...EMPTY, packages: [{ ...MOD_7Z, hash: 'the bytes', page: FILE_78.page }] } };
+    const manifests = { ModA: { ...EMPTY, packages: [{ ...MOD_7Z, host: { nexus: { game: 'fallout4', mod: 7, file: 78 } } }] } };
 
     it('is downloaded from the page on Nexus its manifest names, put with what Nexus knows of it, and the mod restored from it', async () => {
-      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { nexus } = await nexusServing(servingFile78(PACK));
       const { restore, fake } = await over({ manifests, nexus });
       const heard: RestoreStatus[] = [];
 
@@ -284,9 +274,9 @@ describe('restore from manifest', () => {
     });
 
     it.each([
-      ['Nexus does not send it, as while logged out', 'the bytes', false, {}, ' It could not be downloaded from Nexus: You are not logged in to Nexus.'],
-      ['Nexus sends another file than its manifest names', 'other bytes', true, {}, ' It could not be downloaded from Nexus: the file Nexus sent is not the one its manifest names.'],
-      ['the Instance adapter cannot put it', 'the bytes', true, { refusals: refusing('putDownloadedFile', 'ENOSPC') }, ' It could not be downloaded from Nexus: ENOSPC.'],
+      ['Nexus does not send it, as while logged out', PACK, false, {}, ' It could not be downloaded from Nexus: You are not logged in to Nexus.'],
+      ['Nexus sends another file than its manifest names', EDITED, true, {}, ' It could not be downloaded from Nexus: the file Nexus sent is not the one its manifest names.'],
+      ['the Instance adapter cannot put it', PACK, true, { refusals: refusing('putDownloadedFile', 'ENOSPC') }, ' It could not be downloaded from Nexus: ENOSPC.'],
     ])('skips the mod when %s, naming why', async (_case, bytes, loggedIn, answers, why) => {
       const { nexus } = await nexusServing(servingFile78(bytes), loggedIn);
       const { restore } = await over({ manifests, nexus, answers });
@@ -297,7 +287,7 @@ describe('restore from manifest', () => {
     it('lets the server\'s connection go when the Instance adapter refuses the file before it reads it', async () => {
       let cancelled = false;
       const body = new ReadableStream<Uint8Array>({ cancel: () => { cancelled = true; } });
-      const { nexus } = await nexusServing({ ...servingFile78('the bytes'), [FILE_78.server]: new Response(body) });
+      const { nexus } = await nexusServing({ ...servingFile78(PACK), [FILE_78.server]: new Response(body) });
       const { restore } = await over({ manifests, nexus, answers: { refusals: refusing('putDownloadedFile', 'ENOSPC') } });
 
       await restore(['ModA']);
@@ -306,10 +296,10 @@ describe('restore from manifest', () => {
     });
 
     it('is copied to the pinned name from the downloaded file with its size and hash under another name, fetching nothing', async () => {
-      const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
-      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
+      const { nexus, sent } = await nexusServing(servingFile78(PACK));
+      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: PACK };
       const { restore, fake } = await over({
-        files: { ModA: { 'a.nif': 'stale' } }, manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        files: { ModA: { 'a.nif': EDITED } }, manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
         nexus, answers: { downloadedFiles: new Map([['Renamed-copy.7z', read(renamed)]]) },
       });
 
@@ -321,10 +311,10 @@ describe('restore from manifest', () => {
     });
 
     it('refuses a file of the pinned name with other bytes, naming the file that holds the pinned bytes, and overwrites nothing', async () => {
-      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { nexus } = await nexusServing(servingFile78(PACK));
       const { restore, fake } = await over({
-        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
-        nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'mine' })], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' })]]) },
+        manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
+        nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: EDITED })], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: PACK })]]) },
       });
 
       const outcome = await restore(['ModA']);
@@ -334,20 +324,20 @@ describe('restore from manifest', () => {
     });
 
     it('refuses a file of the pinned name that cannot be read, naming the file that holds the pinned bytes', async () => {
-      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { nexus } = await nexusServing(servingFile78(PACK));
       const { restore } = await over({
-        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
-        nexus, answers: { downloadedFiles: new Map([['ModA.7z', { kind: 'unreadable', reason: 'Is not archive' }], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' })]]) },
+        manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
+        nexus, answers: { downloadedFiles: new Map([['ModA.7z', { kind: 'unreadable', reason: 'Is not archive' }], ['Renamed-copy.7z', read({ ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: PACK })]]) },
       });
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: installation file 'ModA.7z' could not be read: Is not archive. /downloads/Renamed-copy.7z holds the pinned bytes of 'ModA.7z'." }]);
     });
 
     it('refuses the mod, naming why, when the copy to the pinned name fails', async () => {
-      const { nexus } = await nexusServing(servingFile78('the bytes'));
-      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: 'the bytes' };
+      const { nexus } = await nexusServing(servingFile78(PACK));
+      const renamed = { ...DOWNLOADED, path: '/downloads/Renamed-copy.7z', hash: PACK };
       const { restore } = await over({
-        manifests: { ModA: { ...fromTheZip(held('a.nif')), packages: [{ ...MOD_7Z, hash: 'the bytes' }] } },
+        manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
         nexus, answers: { downloadedFiles: new Map([['Renamed-copy.7z', read(renamed)]]), refusals: refusing('copyDownloadedFile', 'ENOSPC') },
       });
 
@@ -355,8 +345,8 @@ describe('restore from manifest', () => {
     });
 
     it('asks Nexus nothing for an installation file the downloads folder holds', async () => {
-      const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
-      const { restore } = await over({ manifests, nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: 'the bytes' })]]) } });
+      const { nexus, sent } = await nexusServing(servingFile78(PACK));
+      const { restore } = await over({ manifests, nexus, answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, hash: PACK })]]) } });
 
       await restore(['ModA']);
 
@@ -365,7 +355,7 @@ describe('restore from manifest', () => {
 
     it('downloads nothing for the next mod once a cancel aborts its signal', async () => {
       const cancel = new AbortController();
-      const { nexus, sent } = await nexusServing({ ...servingFile78('the bytes'), [FILE_78.record]: new Response('', { status: 404 }) });
+      const { nexus, sent } = await nexusServing({ ...servingFile78(PACK), [FILE_78.record]: new Response('', { status: 404 }) });
       const { restore } = await over({ manifests: { ...manifests, ModB: manifests.ModA }, nexus });
 
       const outcome = await restore(['ModA', 'ModB'], { onProgress: (status) => { if (status.phase === 'Downloading') cancel.abort(); }, signal: cancel.signal });
@@ -379,18 +369,19 @@ describe('restore from manifest', () => {
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
     const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [{ path: 'a.esp', vouchedFor: true }] };
 
-    async function sourceMod(answers: InstanceAnswers = {}, recorded: { isSubmodule?: boolean; files?: ManifestFile[] } = {}) {
+    const B_NIF: BuildFileLine = { path: 'b.nif', entry: { kind: 'held' } };
+
+    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = []) {
       await mkdir(source(), { recursive: true });
-      await writeBuildFile(source(), buildFileOf({ packages: [MOD_7Z], files: [held('b.nif')] }));
-      const { isSubmodule = true, files = [held('a.esp'), held('b.nif')] } = recorded;
+      await writeBuildFile(source(), buildFileOf({ packages: [MOD_7Z], files: [B_NIF] }));
       const setup = await over({
-        files: { ModA: { 'a.esp': 'old', 'b.nif': 'HB', 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
-        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule }], files } },
+        files: { ModA: { 'a.esp': EDITED, 'b.nif': HB, 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
+        manifests: { ModA: { packages: [REPOSITORY], exclude, files: holding({ 'a.esp': HA, 'b.nif': HB }) } },
         answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), ...answers },
       });
       setup.client.setCommandResult('cloneSubmodules', { applied: [{ folder: source(), leftDetached: "its branch 'main' is at def" }], refused: [] });
       setup.client.setCommandHandler('build', () => {
-        setup.hashes.set(join(folderOf('ModA'), 'a.esp'), { size: 1, hash: 'compiled' });
+        setup.hashes.set(join(folderOf('ModA'), 'a.esp'), { size: 1, hash: HC });
         return Promise.resolve({ landed: [BUILT], refused: [] });
       });
       return setup;
@@ -405,26 +396,12 @@ describe('restore from manifest', () => {
         ['cloneSubmodules', [pinned()]],
         ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], taken: ['b.nif'], archives: [] }]],
       ]);
-      expect(writes(fake.calls)).toMatchObject([
-        { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
-      ]);
+      expect(writes(fake.calls)).toMatchObject([{ verb: 'trashFileIn' }]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
     });
 
-    it('gives the mod manager back the installation file its manifest names, which its build records again (modlist-repository.md, The manifest, story 3)', async () => {
-      const { restore, fake, client } = await sourceMod();
-      await writeManifestIn(folderOf('ModA'), {
-        ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: true }, MOD_7Z], installationFile: MOD_7Z.name, files: [held('a.esp'), held('b.nif', undefined, MOD_7Z.name)],
-      });
-
-      await restore(['ModA']);
-
-      expect([client.calls.map(({ method }) => method), writes(fake.calls).filter(({ verb }) => verb === 'writeModMetadata')])
-        .toEqual([['cloneSubmodules', 'build'], [{ verb: 'writeModMetadata', mod: 'ModA', metadata: { installationFile: { name: 'ModA.7z' } } }]]);
-    });
-
-    it('is built from a repository with no host that the source folder holds, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
-      const { restore, client } = await sourceMod({}, { isSubmodule: false });
+    it('is built from a repository the source folder holds that is no submodule, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
+      const { restore, client } = await sourceMod({ pins: new Map() });
 
       const outcome = await restore(['ModA']);
 
@@ -432,8 +409,7 @@ describe('restore from manifest', () => {
     });
 
     it('is built with the exclusions its manifest records, whatever its folder holds', async () => {
-      const MARK = fakeInstanceAdapter().adapter.exclusionMark;
-      const { restore, client } = await sourceMod({}, { files: [held(`a.esp${MARK}`), held('b.nif')] });
+      const { restore, client } = await sourceMod({}, ['a.esp']);
 
       await restore(['ModA']);
 
@@ -455,12 +431,6 @@ describe('restore from manifest', () => {
       client.setCommandResult('cloneSubmodules', { applied: [], refused: [{ item: source(), refusal: 'NotCloned', message: 'its remote holds no commit abc' }] });
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was skipped: its submodule could not be cloned or read: its remote holds no commit abc.' }]);
-    });
-
-    it('is skipped, naming what the instance repository lacks, when it pins no commit for its submodule', async () => {
-      const { restore } = await sourceMod({ pins: new Map([['ModA', { lacks: 'the instance repository pins no commit at source/ModA' }]]) });
-
-      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: its submodule 'ModA' is missing. The instance repository pins no commit at source/ModA." }]);
     });
 
     it('is not finished when its build left a plugin as it was', async () => {
@@ -489,7 +459,7 @@ describe('restore from manifest', () => {
       await mkdir(source, { recursive: true });
       await writeBuildFile(source);
       const setup = await over({
-        manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }] }, ModB: EMPTY, ModC: EMPTY },
+        manifests: { ModA: { ...EMPTY, packages: [REPOSITORY] }, ModB: EMPTY, ModC: EMPTY },
         sourceFolders: { ModA: source }, reading: { mods: [...MODS], ...pluginFilesHeld(C_ESP) },
       });
       setup.client.setCommandResult('build', { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [] }], refused: [] });

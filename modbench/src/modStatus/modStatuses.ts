@@ -94,7 +94,7 @@ export class ModStatuses {
 
   private async statusOf(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
-    return statusFrom(mod, manifest, await this.reads.modValue(mod.name, mod.folder, packagesAskedAt(manifest)));
+    return statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest)));
   }
 
   private hold(derived: ReadonlyMap<string, ModStatus>): void {

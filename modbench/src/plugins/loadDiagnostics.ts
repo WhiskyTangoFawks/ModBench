@@ -5,12 +5,12 @@ import type { PluginPlace, PluginProblem } from './pluginFacts';
 /** Targets the plugin binary itself, which is where a malformed plugin's diagnoses, a change
  *  outside Modbench and a failed read's diagnosis all live, and one call answers for the whole
  *  load order. */
-export function publishPluginProblems(
+export function publishPluginProblems<T extends PluginProblem>(
   collection: vscode.DiagnosticCollection,
   pluginFile: (plugin: PluginAddress) => string | undefined,
-  entries: readonly PluginProblem[],
+  entries: readonly T[],
   severity: vscode.DiagnosticSeverity,
-  codeOf?: (plugin: PluginAddress) => vscode.Diagnostic['code'],
+  codeOf?: (plugin: PluginAddress, entry: T) => vscode.Diagnostic['code'],
 ): void {
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
@@ -21,7 +21,7 @@ export function publishPluginProblems(
     if (fsPath === undefined) continue;
     const list = byUri.get(fsPath) ?? [];
     const diagnostic = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), r.text, severity);
-    if (codeOf !== undefined) diagnostic.code = codeOf(plugin);
+    if (codeOf !== undefined) diagnostic.code = codeOf(plugin, r);
     list.push(diagnostic);
     byUri.set(fsPath, list);
   }
@@ -35,5 +35,15 @@ export const decompileAndRepairLink = (plugin: PluginAddress, place: PluginPlace
     ? {
       value: 'decompile and repair',
       target: vscode.Uri.parse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([plugin]))}`),
+    }
+    : undefined;
+
+/** plugin-source.md, Decompile: a Plugin source unreadable entry's link in the Problems panel, which fires the gesture on its
+ *  plugin. Offered only where decompile writes the plugin source. */
+export const decompileLink = (plugin: PluginAddress, decompileRepairs: boolean): vscode.Diagnostic['code'] =>
+  decompileRepairs
+    ? {
+      value: 'decompile',
+      target: vscode.Uri.parse(`command:modbench.plugin.decompile?${encodeURIComponent(JSON.stringify([plugin]))}`),
     }
     : undefined;
