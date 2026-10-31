@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -23,9 +22,6 @@ internal sealed class FakeModFolders : IModFolderRepository
         return this;
     }
 
-    public IReadOnlyDictionary<string, string> Hashes(string modFolder) =>
-        _files.Where(file => file.Key.Folder == modFolder).ToDictionary(file => file.Key.Path, file => Encoding.ASCII.GetString(file.Value));
-
     public Stream OpenFile(string modFolder, string path)
     {
         if (Unreadable.Contains((modFolder, path))) throw new IOException($"{path} is held by another process");
@@ -39,19 +35,16 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string ExcludedName(string name, string exclusionMark) => name + exclusionMark;
 
-    public string PathIn(string modFolder, string file) => file[(modFolder.Length + 1)..];
 
     public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
 
-    public bool WriteFile(string folder, string path, Action<Stream> write)
+    public void WriteFile(string folder, string path, Action<Stream> write)
     {
         using var content = new MemoryStream();
         write(content);
         var bytes = content.ToArray();
         Written[(folder, path)] = bytes;
-        var replaced = _files.TryGetValue((folder, path), out var there) && !there.SequenceEqual(bytes);
         WithBytes(folder, path, bytes);
-        return replaced;
     }
 
     public void DeleteFile(string folder, string path) => _files.Remove((folder, path));

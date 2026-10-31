@@ -1355,7 +1355,6 @@ export interface components {
             compiled: components["schemas"]["CompiledPlugin"][];
             refused: components["schemas"]["CompileRefused"][];
             archivesRefused: components["schemas"]["ArchiveRefused"][];
-            overwritten: string[];
             failure?: string | null;
             uncommitted: boolean;
             unpushed: boolean;

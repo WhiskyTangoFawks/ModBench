@@ -49,6 +49,7 @@ const fileLine = (file: ManifestFile, first: string | undefined): object => {
     case 'held':
       break;
   }
+  if (file.hash !== undefined) members.hash = file.hash;
   return members;
 };
 

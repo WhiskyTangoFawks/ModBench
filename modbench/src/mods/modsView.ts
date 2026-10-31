@@ -186,7 +186,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
 }
 
 function registerSourceGestures(
-  { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider,
+  { instance, reporterFor, sourceGestures, ask }: ModsViewDeps, provider: ModListProvider,
 ): vscode.Disposable[] {
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
@@ -199,7 +199,7 @@ function registerSourceGestures(
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({
-      commands, instance, reporter: reporterFor('mod.build'), problems,
+      commands, instance, reporter: reporterFor('mod.build'), problems, ask,
       sourceFiles: (origin) => sourceFiles(instance.value, origin),
       modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),

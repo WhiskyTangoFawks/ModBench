@@ -14,7 +14,8 @@ function atFolderPath(path: string, exclude: readonly string[], mark: string): s
   return path;
 }
 
-const unmarked = (path: string, mark: string): string =>
+/** `path` with the mark off each segment the mark excludes. */
+export const unmarked = (path: string, mark: string): string =>
   path.split('/').map((segment) => (segment.endsWith(mark) ? segment.slice(0, -mark.length) : segment)).join('/');
 
 const entryAt = (path: string, packagePath: string): PackageEntry =>
@@ -31,7 +32,7 @@ export function lineAtFolderPath(manifest: Manifest, line: ManifestFile, mark: s
   if (pkg === undefined) return line;
   const inPackage = entry.kind === 'heldAt' ? entry.path : line.path;
   const moved = pkg.kind === 'sourceRepository' ? { kind: 'held' as const } : entryAt(at, inPackage);
-  return { path: at, entry: moved, ...(line.package === undefined ? {} : { package: line.package }) };
+  return { ...line, path: at, entry: moved };
 }
 
 // Each path above and at `path` that a segment under the mark excludes, by its path without the mark.

@@ -39,17 +39,23 @@ const ordered = (paths: readonly string[]): string[] => [...paths].sort((a, b) =
 
 const folded = (path: string): string => path.toLowerCase();
 
-// The hash, or the repository whose build wrote it, that fixes a line's bytes, and its path in that package.
-function fixedBy(manifest: Manifest, file: ManifestFile): { readonly package: string; readonly path: string } | undefined {
+type Fixed = { readonly hash: string } | { readonly package: string; readonly path: string };
+
+// The bytes a line records, or the package entry that fixes them. A source mod's line that records none is a file a step
+// makes, which nothing fixes (mods.md, Build, story 3).
+function fixedBy(manifest: Manifest, file: ManifestFile): Fixed | undefined {
+  if (file.hash !== undefined) return { hash: file.hash };
   const { entry } = file;
   if (entry.kind !== 'held' && entry.kind !== 'heldAt') return undefined;
   const pkg = packageOf(manifest, file);
-  if (pkg === undefined) return undefined;
-  return { package: pkg.kind === 'sourceRepository' ? pkg.name : pkg.hash, path: entry.kind === 'heldAt' ? entry.path : file.path };
+  if (pkg === undefined || pkg.kind === 'sourceRepository') return undefined;
+  return { package: pkg.hash, path: entry.kind === 'heldAt' ? entry.path : file.path };
 }
 
-// A line of a manifest against its folder: the file it names, by its path on disk, none when the folder holds none, and
-// whether that file holds the bytes a package entry fixes, none when no package fixes them.
+const isBuilt = (manifest: Manifest, file: ManifestFile): boolean => packageOf(manifest, file)?.kind === 'sourceRepository';
+
+// A line against its folder: its file's path on disk, none when the folder lacks it, and whether that file holds the
+// bytes its line or a package entry fixes, none when nothing fixes them.
 interface LineAgainstFolder {
   readonly line: ManifestFile;
   readonly onDisk?: string;
@@ -67,8 +73,8 @@ export function folderAgainst(manifest: Manifest, folder: FolderValue, entries: 
   const onDisk = new Set([...folder.files.keys()].filter((path) => !isManifestPath(path)));
   const found = (path: string): boolean => onDisk.has(path) || (folder.ignoresCase && [...onDisk].some((held) => folded(held) === folded(path)));
   const spelledOnDisk = (path: string): string => (onDisk.has(path) ? path : [...onDisk].find((held) => folded(held) === folded(path)) ?? path);
-  const holds = (path: string, fixes: NonNullable<ReturnType<typeof fixedBy>>): boolean => {
-    const fixed = entries.get(fixes.package)?.get(fixes.path);
+  const holds = (path: string, fixes: Fixed): boolean => {
+    const fixed = 'hash' in fixes ? fixes.hash : entries.get(fixes.package)?.get(fixes.path);
     const hashed = folder.files.get(path);
     return fixed !== undefined && hashed?.kind === 'read' && hashed.answer.hash === fixed;
   };
@@ -99,7 +105,7 @@ function listsOf(manifest: Manifest, { lines, namedByNoLine }: FolderAgainst): F
     differing: paths(({ holdsItsBytes }) => holdsItsBytes === false, ({ onDisk, line }) => onDisk ?? line.path),
     namedByNoLine,
     gone: paths(({ onDisk }) => onDisk === undefined),
-    notInPackage: paths(({ line }) => line.entry.kind !== 'otherBytes' && line.entry.kind !== 'madeByStep' && fixedBy(manifest, line) === undefined),
+    notInPackage: paths(({ line }) => line.entry.kind !== 'otherBytes' && line.entry.kind !== 'madeByStep' && !isBuilt(manifest, line) && fixedBy(manifest, line) === undefined),
     otherBytes: paths(({ line }) => line.entry.kind === 'otherBytes'),
   };
 }

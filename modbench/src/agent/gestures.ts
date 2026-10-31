@@ -172,9 +172,10 @@ const MODS_OR_EVERY_MOD = gestureInput(
 );
 
 const BUILD = gestureInput(
-  'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder',
-  EVERY_MOD_BY_DEFAULT,
-  (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {}),
+  'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder; '
+    + 'options: { force?: true to build a mod whose folder holds a file that differs from its manifest, which build overwrites or sends to the trash, otherwise refused for that mod, listing the files }',
+  EVERY_MOD_BY_DEFAULT.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(modArguments(value, argument ?? []), { force: options?.force }),
 );
 
 const RESTORE_FROM_MANIFEST = gestureInput(

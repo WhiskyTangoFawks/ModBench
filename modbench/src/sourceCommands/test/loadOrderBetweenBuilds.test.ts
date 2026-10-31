@@ -13,7 +13,7 @@ import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 let root: string;
 let SOURCES: Record<string, string>;
 const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
-const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [] });
+const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [] });
 const builtOf = (mod: string) => ({ ...landedOf(mod), made: [] });
 const NOT_YET = { state: 'NotYet' } as const;
 const AS_ON_DISK = { state: 'AsOnDisk' } as const;
@@ -23,7 +23,7 @@ const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
   const client = new InMemoryMEditClient();
   client.setCommandHandler('build', (sent: readonly BuildMod[]) => Promise.resolve({ landed: sent.map(({ name }) => builtOf(name)), refused: [] }));
   const adapter = fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA', 'ModB'), sourceRepositories: repositoriesOf(SOURCES), ...mods })).adapter;
-  const built = (mods: readonly string[] = ['ModA', 'ModB']) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(mods);
+  const built = (mods: readonly string[] = ['ModA', 'ModB']) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(mods);
   return { client, built };
 };
 const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.filter((call) => call.method === 'build').map((call) => JSON.stringify(call.args[0]).match(/"name":"(\w+)"/)?.[1]);

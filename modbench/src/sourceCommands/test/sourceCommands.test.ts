@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,8 +44,8 @@ const EXCLUSION_MARK = fakeInstanceAdapter().adapter.exclusionMark;
 const savedAll = () => Promise.resolve([]);
 const BA2 = { ba2: { version: 1, compressed: true } };
 
-const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [] });
-const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], overwritten: [] });
+const builtOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [], made: [] });
+const landedOf = (mod: string) => ({ mod, compiled: [], refused: [], archivesRefused: [] });
 const buildingEach = (client: InMemoryMEditClient): void => {
   client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] }));
 };
@@ -56,7 +56,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    await sourceCommands({ client, adapter: fakeAdapter({ folderFiles: new Map([[folderOf('ModA'), [`b.dds${EXCLUSION_MARK}`, 'c.dds']]]) }), saveUnsaved: savedAll, tasks: recordingTasks() })
+    await sourceCommands({ client, adapter: fakeAdapter({ folderFiles: new Map([[folderOf('ModA'), [`b.dds${EXCLUSION_MARK}`, 'c.dds']]]) }), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
       .build(['ModA', 'ModB']);
 
     const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: BA2, textures: BA2 } };
@@ -75,7 +75,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+    await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect(client.calls).toMatchObject([{ args: [[{ name: 'ModA', exclude: ['docs'] }], expect.anything()] }]);
   });
@@ -84,7 +84,7 @@ describe('sourceCommands build', () => {
     await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{');
     const client = new InMemoryMEditClient();
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect([client.calls, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: 'was not built: its manifest cannot be read at line 1.' }] }]);
   });
@@ -100,7 +100,7 @@ describe('sourceCommands build', () => {
       return Promise.resolve(folder.endsWith('Old ModB') ? [`${folder}/plugin-source/B.esp/Cell.json`] : []);
     };
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA', 'ModB']);
 
     expect(saved).toEqual([SOURCES.ModA, SOURCES.ModB]);
     expect(predicates).toEqual([isPluginSourcePath, isPluginSourcePath]);
@@ -112,7 +112,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE'), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE'), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: EXCLUSION_MARK, archives: null }]);
   });
@@ -125,7 +125,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(answers), saveUnsaved: savedAll, tasks: recordingTasks() }).build(mods);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(answers), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(mods);
 
     expect(client.calls).toMatchObject([{ args: [[{ name: sent }], expect.anything()] }]);
     expect(outcome).toEqual({ landed: [landedOf(sent)], refused: [{ item, reason }] });
@@ -135,7 +135,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     const adapter = fakeAdapter({ hosts: new Map([[SOURCES.ModA, { kind: 'unreadable', reason: 'git remote failed' }]]) });
 
-    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect([client.calls, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: 'its remote could not be read: git remote failed' }] }]);
   });
@@ -153,7 +153,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }));
 
-    const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect([client.calls, fake.calls, outcome]).toEqual([[], [], { landed: [], refused: [{ item: 'ModA', reason: reason.replace('<ModA>', SOURCES.ModA), ...flags }] }]);
   });
@@ -167,7 +167,7 @@ describe('sourceCommands build, in mod order', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA', 'ModB']);
 
     expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModB' }], [{ name: 'ModA' }]]);
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
@@ -177,7 +177,7 @@ describe('sourceCommands build, in mod order', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build([], true);
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build([], true);
 
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }] });
   });
@@ -187,7 +187,7 @@ describe('sourceCommands build, in mod order', () => {
     client.setCommandHandler('build', (mods: readonly BuildMod[]) =>
       Promise.resolve(mods[0]?.name === 'ModB' ? { landed: [builtOf('ModB')], refused: [] } : { refused: true as const, message: 'mEdit stopped' }));
 
-    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA', 'ModB']);
 
     expect(outcome).toEqual({ landed: [landedOf('ModB')], refused: [{ item: 'ModA', reason: 'was not built: mEdit stopped' }] });
   });
@@ -210,7 +210,7 @@ describe('sourceCommands build, in mod order', () => {
       },
     };
 
-    await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: logging }).build(['ModA', 'ModB']);
+    await sourceCommands({ client, adapter: winningFirst(), saveUnsaved: savedAll, tasks: logging, trash: vi.fn() }).build(['ModA', 'ModB']);
 
     expect(log).toEqual(['build ModB', 'steps in ModB before its manifest', 'build ModA']);
     expect(tasks.runs).toEqual([{ steps, folder: folderOf('ModB') }]);
@@ -222,23 +222,11 @@ describe('sourceCommands build, in mod order', () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect(outcome).toEqual({
       landed: [{ ...landedOf('ModA'), failure: expect.stringMatching(/^The build could not write its manifest: /) as unknown }], refused: [],
     });
-  });
-
-  it('notes a mod whose built files could not be recorded in the hash index, though its manifest is written', async () => {
-    const client = new InMemoryMEditClient();
-    buildingEach(client);
-
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ packageEntriesNotWritten: 'ENOSPC' }), saveUnsaved: savedAll, tasks: recordingTasks() }).build(['ModA']);
-
-    expect(outcome).toEqual({
-      landed: [{ ...landedOf('ModA'), notes: ['the files it built could not be recorded, so its status reads them as differing: ENOSPC'] }], refused: [],
-    });
-    expect(await recorded('ModA')).toBeDefined();
   });
 
   it('names a mod whose step failed, and writes no manifest', async () => {
@@ -247,12 +235,36 @@ describe('sourceCommands build, in mod order', () => {
     buildingEach(client);
     const tasks = recordingTasks(['Optimise'], { [folderOf('ModA')]: 'step \'Optimise\' exited with code 2' });
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks }).build(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks, trash: vi.fn() }).build(['ModA']);
 
     expect(outcome).toEqual({
       landed: [{ ...landedOf('ModA'), failure: 'The build stopped as its step \'Optimise\' exited with code 2, so its manifest was not written.' }], refused: [],
     });
     expect(await readdir(folderOf('ModA'))).toEqual([]);
+  });
+
+  it('names a mod a file of which it vouches for could not be hashed, and writes no manifest', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), made: [{ path: 'a.esp', vouchedFor: true }] }], refused: [] }));
+    const adapter = fakeAdapter({ folderFiles: new Map([[folderOf('ModA'), ['a.esp']]]) });
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect(outcome).toEqual({
+      landed: [{ ...landedOf('ModA'), failure: `The build could not write its manifest: 'a.esp' could not be read: no answer fixed for ${join(folderOf('ModA'), 'a.esp')}` }], refused: [],
+    });
+    expect(await readdir(folderOf('ModA'))).toEqual([]);
+  });
+});
+
+describe('sourceCommands whatBuildDestroys', () => {
+  it('refuses a mod whose folder could not be read, naming why', async () => {
+    const unreadable = { ...fakeAdapter(), folderValue: () => Promise.reject(new Error('EACCES')) };
+
+    const listing = await sourceCommands({ client: new InMemoryMEditClient(), adapter: unreadable, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
+      .whatBuildDestroys(['ModA']);
+
+    expect(listing).toEqual({ mods: ['ModA'], destroys: [], refused: [{ item: 'ModA', reason: 'was not built: a file could not be read: EACCES.' }] });
   });
 });
 
@@ -283,7 +295,7 @@ describe('sourceCommands decompileAndCommit', () => {
       installations: new Map([['ModA', { kind: 'read', answer: pack }]]), metadata: new Map([['ModA', { version: '1.2.3' }]]),
     });
 
-    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
 
     const [mod] = handed;
     expect(mod).toMatchObject({ name: 'ModA', repository: { sourceFolder: '/source/ModA', assets: ['scripts/b.pex'] } });
@@ -298,7 +310,7 @@ describe('sourceCommands decompileAndCommit', () => {
     client.setCommandHandler('decompileAndCommit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
     const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') }), { metadata: new Map([['ModA', { version: '1.2.3' }]]) }).adapter;
 
-    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
 
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
     expect(await manifestIn(folder)).toEqual({ manifest: {
@@ -310,7 +322,7 @@ describe('sourceCommands decompileAndCommit', () => {
     const client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndCommit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
 
-    const outcome = await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+    const outcome = await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
 
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [{ item: 'ModA', reason: expect.stringMatching(/^was committed, but its manifest could not name its repository: /) as unknown }] });
   });
@@ -320,7 +332,7 @@ describe('sourceCommands decompileAndCommit', () => {
     const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
     const adapter = modsAt({ ...hashed({ 'textures/a.dds': 'edited' }), installations: new Map([['ModA', { kind: 'read', answer: pack }]]) });
 
-    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA']);
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
 
     expect(handed[0]?.repository.assets).toEqual(['textures/a.dds']);
   });
@@ -333,7 +345,7 @@ describe('sourceCommands decompileAndCommit', () => {
       places: [{ root: '/game', holdsDataFiles: true, depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) }],
     });
 
-    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC']);
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModC']);
 
     const [mod] = handed;
     expect(mod?.repository.assets).toEqual(['scripts/b.pex']);
@@ -347,7 +359,7 @@ describe('sourceCommands decompileAndCommit', () => {
     const { client, handed } = committing();
     const adapter = modsAt({ places: [{ root: '/game', holdsDataFiles: true, depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', taken]]) }] });
 
-    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModC', 'ModF']);
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModC', 'ModF']);
 
     expect(handed).toMatchObject([{ name: 'ModF' }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModC', reason }] });
@@ -359,7 +371,7 @@ describe('sourceCommands decompileAndCommit', () => {
   ])('refuses a mod %s, naming why, and commits the rest', async (_case, answers, reason) => {
     const { client, handed } = committing();
 
-    const outcome = await sourceCommands({ client, adapter: modsAt(answers), saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter: modsAt(answers), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA', 'ModB']);
 
     expect(handed).toMatchObject([{ name: 'ModB' }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason }] });
@@ -368,7 +380,7 @@ describe('sourceCommands decompileAndCommit', () => {
   it('refuses a mod whose name gives it no source folder, naming why', async () => {
     const client = new InMemoryMEditClient();
 
-    const outcome = await sourceCommands({ client, adapter: modsAt({ unsourcedMods: new Set(['Mods/ModA']) }), saveUnsaved: savedAll, tasks: recordingTasks() }).decompileAndCommit(['Mods/ModA']);
+    const outcome = await sourceCommands({ client, adapter: modsAt({ unsourcedMods: new Set(['Mods/ModA']) }), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['Mods/ModA']);
 
     expect(client.calls).toEqual([]);
     expect(outcome).toEqual({ landed: [], refused: [{ item: 'Mods/ModA', reason: 'its name gives it no source folder' }] });
@@ -378,7 +390,7 @@ describe('sourceCommands decompileAndCommit', () => {
     const { client } = committing();
     const heard: unknown[] = [];
 
-    await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, tasks: recordingTasks() })
+    await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
       .decompileAndCommit(['ModA', 'ModB'], { onProgress: (status) => { heard.push(status); } });
 
     expect(heard).toEqual([

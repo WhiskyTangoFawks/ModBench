@@ -258,7 +258,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: {
         applied: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }],
-          archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }],
           failure: 'The build stopped before compiling.', made: [{ path: 'a.nif', vouchedFor: true }],
         }],
         refused: [{ item: 'ModC', refusal: 'ArchiveFileNotAnAsset', message: "'ModC.ba2' takes 'a.dds', which is not an asset of its source." }],
@@ -266,7 +266,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       reads: {
         landed: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
-          archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }], overwritten: ['a.nif'],
+          archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }],
           failure: 'The build stopped before compiling.', made: [{ path: 'a.nif', vouchedFor: true }],
         }],
         refused: [{ item: 'ModC', reason: "'ModC.ba2' takes 'a.dds', which is not an asset of its source." }],

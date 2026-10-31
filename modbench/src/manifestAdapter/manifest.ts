@@ -15,10 +15,12 @@ export type PackageEntry =
   | { readonly kind: 'otherBytes' }
   | { readonly kind: 'madeByStep' };
 
+/** `hash`: the bytes a source mod's build vouches for, recorded in the line itself. */
 export interface ManifestFile {
   readonly path: string;
   readonly entry: PackageEntry;
   readonly package?: string;
+  readonly hash?: string;
 }
 
 export interface ManifestStep {

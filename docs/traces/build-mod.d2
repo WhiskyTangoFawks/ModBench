@@ -66,12 +66,12 @@ withsteps: "a mod whose build file holds steps" {
   tasks -> sourcecommands: "its exit code" {class: outside}
 }
 
-sourcecommands -> instanceadapter: "get: the files the build made, hashed, as its repository's entries" {class: compile}
+sourcecommands -> instanceadapter: "get: the files the build made, hashed" {class: compile}
 instance -> instanceadapter: "each mod's files" {class: compile}
 instanceadapter -> sourcecommands: "the files, hashed" {class: compile}
 sourcecommands -> instanceadapter: "trash: each file the folder holds that the build did not make" {class: compile}
 instanceadapter -> instance: "the trash" {class: compile}
-sourcecommands -> manifestadapter: "each mod's manifest: its repository, its exclusions and the files the build made" {class: compile}
+sourcecommands -> manifestadapter: "each mod's manifest: its repository and each file the build made, with its hash" {class: compile}
 manifestadapter -> instance: "the manifest, in the mod's folder" {class: compile}
 sourcecommands -> driving: "the outcome" {class: compile}
 instance -> instanceadapter: watch {class: signal}

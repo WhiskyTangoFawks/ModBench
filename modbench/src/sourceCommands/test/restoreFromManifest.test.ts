@@ -317,7 +317,7 @@ describe('restore from manifest', () => {
   describe('a source mod with a remote', () => {
     const source = (): string => join(root, 'source', 'ModA');
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
-    const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [{ path: 'a.esp', vouchedFor: true }] };
+    const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [{ path: 'a.esp', vouchedFor: true }] };
 
     async function sourceMod(answers: InstanceAnswers = {}, recorded: { isSubmodule?: boolean; files?: ManifestFile[] } = {}) {
       await mkdir(source(), { recursive: true });
@@ -346,7 +346,7 @@ describe('restore from manifest', () => {
         ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], taken: ['b.nif'], archives: [] }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([
-        { verb: 'keepPackageEntries', hash: 'ModA', entries: new Map([['a.esp', 'compiled'], ['b.nif', 'HB']]) }, { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
+        { verb: 'trashFileIn' }, { verb: 'writeModMetadata' },
       ]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
     });
@@ -420,7 +420,7 @@ describe('restore from manifest', () => {
         manifests: { ModA: { ...EMPTY, packages: [{ kind: 'sourceRepository', name: 'ModA', isSubmodule: false }] }, ModB: EMPTY, ModC: EMPTY },
         sourceFolders: { ModA: source }, reading: { mods: [...MODS], ...pluginFilesHeld(C_ESP) },
       });
-      setup.client.setCommandResult('build', { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [], made: [] }], refused: [] });
+      setup.client.setCommandResult('build', { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [] }], refused: [] });
       return setup;
     }
 

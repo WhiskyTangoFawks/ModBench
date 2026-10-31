@@ -51,10 +51,10 @@ public sealed class ArchivePackerTests : IDisposable
     private (byte[]? Archive, PackRefusal? Refusal) Pack(IArchiveVariant variant, params string[] files)
     {
         var modFolder = Path.Combine(_scratch, Mod);
-        var answer = new ArchivePacker(new ModFolderRepository())
+        var refusal = new ArchivePacker(new ModFolderRepository())
             .Pack(modFolder, Archive, [.. files.Select(file => new ArchiveFile(file, _assets[file]))], variant);
         var written = Path.Combine(modFolder, Archive);
-        return (File.Exists(written) ? File.ReadAllBytes(written) : null, answer.Holds(out _, out var refusal) ? null : refusal);
+        return (File.Exists(written) ? File.ReadAllBytes(written) : null, refusal);
     }
 
     private byte[] Packed(IArchiveVariant variant, params string[] files)

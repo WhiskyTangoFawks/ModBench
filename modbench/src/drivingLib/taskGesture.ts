@@ -25,6 +25,7 @@ export interface TaskGesture<Outcome> {
   readonly reporter: Reporter;
   /** The Argument the task's definition supplies. */
   readonly argument: (definition: vscode.TaskDefinition) => readonly Argument[];
+  readonly options?: object;
   readonly settle: (outcome: Outcome) => TaskVerdict;
 }
 
@@ -57,7 +58,7 @@ function terminalOf<Outcome>(gesture: TaskGesture<Outcome>, definition: vscode.T
     open: () => {
       void (async () => {
         try {
-          const outcome = await vscode.commands.executeCommand<Outcome>(gesture.command, new AgentCall(gesture.argument(definition), {}));
+          const outcome = await vscode.commands.executeCommand<Outcome>(gesture.command, new AgentCall(gesture.argument(definition), gesture.options ?? {}));
           finish(gesture.settle(outcome));
         } catch (e) {
           finish({ passed: false, lines: [], problems: [{ severity: 'error', message: errorMessage(e) }] });

@@ -129,8 +129,9 @@ const flagOf = (index: number, line: Json, key: string, written: boolean): boole
 const fileOf = (index: number, line: unknown): ManifestFile => {
   const where = `its file ${index + 1}`;
   const members = objectOf(line, where);
-  known(members, `file ${index + 1}`, ['path', 'package', 'packagePath', 'inPackage', 'otherBytes', 'madeByStep']);
+  known(members, `file ${index + 1}`, ['path', 'package', 'packagePath', 'inPackage', 'otherBytes', 'madeByStep', 'hash']);
   const path = textOf(required(members, 'path', where), where);
+  const hash = Object.hasOwn(members, 'hash') ? textOf(members.hash, where) : undefined;
   const flags: { set: boolean; says: string; entry: PackageEntry }[] = [
     { set: flagOf(index, members, 'inPackage', false), says: 'its package does not hold the file', entry: { kind: 'notHeld' } },
     { set: flagOf(index, members, 'otherBytes', true), says: 'its package holds it with other bytes', entry: { kind: 'otherBytes' } },
@@ -139,7 +140,8 @@ const fileOf = (index: number, line: unknown): ManifestFile => {
   const says = flags.filter((flag) => flag.set);
   const movedTo = Object.hasOwn(members, 'packagePath') ? textOf(members.packagePath, where) : undefined;
   const named = Object.hasOwn(members, 'package') ? textOf(members.package, where) : undefined;
-  const withPackage = (entry: PackageEntry): ManifestFile => (named === undefined ? { path, entry } : { path, entry, package: named });
+  const withPackage = (entry: PackageEntry): ManifestFile =>
+    ({ path, entry, ...(named === undefined ? {} : { package: named }), ...(hash === undefined ? {} : { hash }) });
   const [only, other] = says;
   if (only && other) throw fileProblem(index, `it says both that ${only.says} and that ${other.says}`);
   if (only && movedTo !== undefined) {

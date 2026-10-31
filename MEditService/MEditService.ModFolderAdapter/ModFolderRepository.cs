@@ -4,9 +4,6 @@ namespace MEditService.ModFolderAdapter;
 
 public sealed class ModFolderRepository : IModFolderRepository
 {
-    public IReadOnlyDictionary<string, string> Hashes(string modFolder) =>
-        FilePaths(modFolder).ToDictionary(path => path, path => HashOf(modFolder, path), StringComparer.Ordinal);
-
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 
     public IReadOnlyList<string> FilePaths(string modFolder) =>
@@ -18,9 +15,9 @@ public sealed class ModFolderRepository : IModFolderRepository
 
     public string ExcludedName(string name, string exclusionMark) => name + exclusionMark;
 
-    public string PathIn(string modFolder, string file) => Path.GetRelativePath(modFolder, file).Replace('\\', '/');
+    private static string PathIn(string modFolder, string file) => Path.GetRelativePath(modFolder, file).Replace('\\', '/');
 
-    public bool WriteFile(string folder, string path, Action<Stream> write)
+    public void WriteFile(string folder, string path, Action<Stream> write)
     {
         var target = Path.Combine(folder, path);
         Directory.CreateDirectory(folder);
@@ -30,11 +27,9 @@ public sealed class ModFolderRepository : IModFolderRepository
         {
             using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 write(content);
-            var there = File.Exists(target);
-            if (there && SameBytes(partial, target)) return false;
+            if (File.Exists(target) && SameBytes(partial, target)) return;
             Directory.CreateDirectory(Path.GetDirectoryName(target) ?? folder);
             File.Move(partial, target, overwrite: true);
-            return there;
         }
         finally
         {
@@ -57,11 +52,5 @@ public sealed class ModFolderRepository : IModFolderRepository
             if (!left[..read].SequenceEqual(right[..read])) return false;
         }
         return true;
-    }
-
-    private static string HashOf(string modFolder, string path)
-    {
-        using var content = new FileStream(Path.Combine(modFolder, path), FileMode.Open, FileAccess.Read, FileShare.Read);
-        return FileHash.Of(content);
     }
 }

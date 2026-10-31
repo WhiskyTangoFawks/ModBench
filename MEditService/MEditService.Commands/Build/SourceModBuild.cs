@@ -3,7 +3,6 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Build;
@@ -65,11 +64,11 @@ internal sealed class SourceModBuild
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
-                [], [], [], [.. written.Overwritten.Order(StringComparer.Ordinal)],
+                [], [], [],
                 $"The build stopped before compiling, as a file could not be read or written: {e.Message}"));
         }
 
-        var (landed, refused) = await CompileAsync(loadOrder, mod, plugins, written);
+        var (landed, refused) = await CompileAsync(plugins);
         var archivesRefused = Pack(mod, archives, instance.Archives, written);
 
         Dictionary<string, bool> made = new(StringComparer.OrdinalIgnoreCase);
@@ -77,7 +76,7 @@ internal sealed class SourceModBuild
         foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made[path] = vouched;
         foreach (var archive in mod.Archives.Select(archive => archive.Path)) made[written.PathOf(archive)] = archivesRefused.All(refusal => refusal.Item != archive);
         return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
-            landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], null, source.Uncommitted, source.Unpushed)
+            landed, refused, archivesRefused, null, source.Uncommitted, source.Unpushed)
         {
             Made = [.. made.Select(file => new MadeFile(file.Key, file.Value)).OrderBy(file => file.Path, StringComparer.Ordinal)],
         });
@@ -114,27 +113,11 @@ internal sealed class SourceModBuild
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
-        LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins, FolderWrite written)
+        IReadOnlyList<RegisteredPlugin> plugins)
     {
         var twins = plugins.GroupBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase).Where(named => named.Count() > 1).ToList();
         List<RegisteredPlugin> compilable = [.. plugins.Except(twins.SelectMany(named => named))];
-        var changedOutside = compilable
-            .Where(plugin => ChangedOutside(plugin, loadOrder.GameRelease))
-            .ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
-        var before = changedOutside.Count == 0 ? new Dictionary<string, string>() : _modFolders.Hashes(mod.Folder);
         var compiled = await _compile.CompileAsync(compilable);
-        var landedChangedOutside = compiled.Landed.Select(landed => changedOutside.GetValueOrDefault(landed.Item)).OfType<RegisteredPlugin>().ToList();
-        if (landedChangedOutside.Count > 0)
-        {
-            var after = _modFolders.Hashes(mod.Folder);
-            foreach (var plugin in landedChangedOutside)
-            {
-                written.Overwritten.Add(_modFolders.PathIn(mod.Folder, plugin.Path));
-                written.Overwritten.AddRange(_plugins.WrittenByCompile(plugin, [.. before.Keys], loadOrder.GameRelease)
-                    .Where(path => path != _modFolders.PathIn(mod.Folder, plugin.Path) && before[path] != after.GetValueOrDefault(path)));
-            }
-        }
-
         return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. compiled.Refused]);
     }
 
@@ -144,12 +127,6 @@ internal sealed class SourceModBuild
         return twins.Select(plugin => new ItemRefused<PluginAddress, CompileRefusal>(plugin.Key, CompileRefusal.TwinPluginSources,
             $"{plugin.Name} cannot be compiled: the plugin sources {named} differ only in case, and one mod folder cannot hold them on Windows."));
     }
-
-    private bool ChangedOutside(RegisteredPlugin plugin, GameRelease release) =>
-        _plugins.Exists(plugin.Path)
-        && plugin.Provider is PluginProvider.FromMod provider
-        && (_source.Open(provider, release) is not { } repository
-            || !ExternalChangeCheck.MatchesLastWrite(repository, plugin.Key, _plugins.HashOf(plugin.Path)));
 
     // mods.md, Build, story 2: a packed file is not loose in the output, so a taken file an archive packs leaves the folder.
     private List<ItemRefused<string, ArchiveRefusal>> Pack(
@@ -169,12 +146,11 @@ internal sealed class SourceModBuild
 
             var variant = files.All(file => file.Path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) ? variants.Textures : variants.General;
             var at = written.PathOf(archive.Path);
-            if (!packer.Pack(mod.Folder, at, [.. files.Select(file => new ArchiveFile(file.Path, file.Open))], variant).Holds(out var replaced, out var refusal))
+            if (packer.Pack(mod.Folder, at, [.. files.Select(file => new ArchiveFile(file.Path, file.Open))], variant) is { } refusal)
             {
                 refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
                 continue;
             }
-            if (replaced) written.Overwritten.Add(at);
             try
             {
                 foreach (var file in files.Select(file => written.PathOf(file.Path)).Where(taken.Contains)) _modFolders.DeleteFile(mod.Folder, file);

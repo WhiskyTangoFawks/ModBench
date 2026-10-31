@@ -2,9 +2,12 @@ import {
   isRefused, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { buildFileIn, exclusionsOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods } from '../manifestAdapter/manifestAdapter';
+import {
+  buildFileIn, exclusionsOf, folderAgainst, lineAtFolderPath, manifestIn, sourceModsOf, type BuildFile, type Manifest, type SourceMods,
+} from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand, namedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
@@ -18,10 +21,19 @@ interface SourceCommandsDeps {
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'installationFile' | 'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'sourceHost' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
-    | 'originFileHash' | 'writeFilesIn' | 'keepPackageEntries'>;
+    | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
+  trash: MoveToTrash;
+}
+
+/** In each source mod's folder, each file that differs from its manifest, which build overwrites or sends to the trash.
+ *  A mod whose files could not be read is refused. */
+export interface WhatBuildDestroys {
+  readonly mods: readonly string[];
+  readonly destroys: readonly { readonly mod: string; readonly files: readonly string[] }[];
+  readonly refused: readonly ItemRefusal<string>[];
 }
 
 /** A mod's progress through decompile and commit, reading its files here before mEdit's phases. */
@@ -61,6 +73,22 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
   }
 }
 
+const NO_LINE: Manifest = { packages: [], exclude: [], archives: [], files: [] };
+
+// mods.md, A source mod, story 4: each file whose bytes differ from its line at the path the build writes it, and each
+// file no line names. A manifest that cannot be read refuses the build, which writes nothing.
+async function differingIn(adapter: Adapter, folder: string): Promise<string[]> {
+  const read = await manifestIn(folder);
+  if (read !== undefined && 'refused' in read) return [];
+  const manifest = read?.manifest ?? NO_LINE;
+  const held = await adapter.folderValue(folder);
+  const exclude = exclusionsOf(manifest, [...held.files.keys()], adapter.exclusionMark);
+  const lines = manifest.files.map((line) => lineAtFolderPath({ ...manifest, exclude }, line, adapter.exclusionMark));
+  const against = folderAgainst({ ...manifest, files: lines }, held, new Map());
+  const differing = against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : []));
+  return [...differing, ...against.namedByNoLine].sort();
+}
+
 // mods.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
 async function sourceModOf(
   { adapter, saveUnsaved }: Pick<SourceCommandsDeps, 'adapter' | 'saveUnsaved'>, mod: string, sourceMods: SourceMods,
@@ -86,13 +114,35 @@ async function sourceModOf(
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: SourceCommandsDeps) {
+  const sourceModsNow = async (): Promise<SourceMods> =>
+    sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const toBuild = (sourceMods: SourceMods, asked: readonly string[], everySource: boolean): readonly string[] =>
+    (everySource ? [...sourceMods.folders.keys()] : asked);
   return {
+    whatBuildDestroys: async (asked: readonly string[], everySource = false): Promise<WhatBuildDestroys> => {
+      const sourceMods = await sourceModsNow();
+      const mods = toBuild(sourceMods, asked, everySource);
+      const destroys: { mod: string; files: string[] }[] = [];
+      const refused: ItemRefusal<string>[] = [];
+      for (const mod of mods) {
+        const folder = sourceMods.folderOf(mod) === undefined ? undefined : await adapter.modFolderPath(mod);
+        if (folder === undefined) continue;
+        try {
+          const files = await differingIn(adapter, folder);
+          if (files.length > 0) destroys.push({ mod, files });
+        } catch (err) {
+          refused.push({ item: mod, reason: `was not built: a file could not be read: ${errorMessage(err)}.` });
+        }
+      }
+      return { mods, destroys, refused };
+    },
+
     /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder, metadata or package the
      *  Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest. */
     build: async (asked: readonly string[], everySource = false): Promise<SourceBuildOutcome | WriteRefused> => {
-      const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-      const mods = everySource ? [...sourceMods.folders.keys()] : asked;
+      const sourceMods = await sourceModsNow();
+      const mods = toBuild(sourceMods, asked, everySource);
       const pass: BuildPass = {
         facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()) }, tasks: new Set(await tasks.labels()),
       };
@@ -111,7 +161,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
           refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${waited}'s ${why}` })));
           break;
         }
-        const outcome = await buildSourceMod({ client, adapter, tasks }, decided, pass);
+        const outcome = await buildSourceMod({ client, adapter, tasks, trash }, decided, pass);
         if (isRefused(outcome)) {
           if (landed.length === 0 && refused.length === 0) return outcome;
           refused.push(...ordered.slice(at).map((item) => ({ item, reason: `was not built: ${outcome.message}` })));
@@ -131,7 +181,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks }: SourceCo
     ): Promise<DecompileAndCommitOutcome | WriteRefused> => {
       const made = new Map<string, MadeRepository>();
       const refused: ItemRefusal<string>[] = [];
-      const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+      const sourceMods = await sourceModsNow();
       const game = await gameToHand(adapter, sourceMods);
       for (const [at, mod] of mods.entries()) {
         options.onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });

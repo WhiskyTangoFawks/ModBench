@@ -1,12 +1,10 @@
-using MEditService.RepositoriesLib;
-
 namespace MEditService.ModFolderAdapter;
 
 public sealed class ArchivePacker(IModFolderRepository repository)
 {
     /// <summary>Writes the archive at <paramref name="archivePath"/> under <paramref name="folder"/> from
-    /// <paramref name="files"/>: true when it replaced an archive that held other bytes.</summary>
-    public Answer<bool, PackRefusal> Pack(string folder, string archivePath, IReadOnlyList<ArchiveFile> files, IArchiveVariant variant)
+    /// <paramref name="files"/>; the refusal when it was not written.</summary>
+    public PackRefusal? Pack(string folder, string archivePath, IReadOnlyList<ArchiveFile> files, IArchiveVariant variant)
     {
         try
         {
@@ -14,11 +12,12 @@ public sealed class ArchivePacker(IModFolderRepository repository)
                 return new PackRefusal(ArchiveRefusal.VariantNotWritten, $"{variant} is not written.");
 
             List<PackedFile> packed = [.. files.Select(file => new PackedFile(file.Path, file.Path.ToLowerInvariant().Replace('/', '\\'), file.Open))];
-            return repository.WriteFile(folder, archivePath, output =>
+            repository.WriteFile(folder, archivePath, output =>
             {
                 if (variant is Ba2Variant ba2) Ba2Writer.Write(output, ba2, packed);
                 else BsaWriter.Write(output, (BsaVariant)variant, packed);
             });
+            return null;
         }
         catch (InvalidDataException e)
         {

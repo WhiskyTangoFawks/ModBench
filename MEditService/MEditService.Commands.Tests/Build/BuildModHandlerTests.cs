@@ -33,7 +33,7 @@ public sealed class BuildModHandlerTests : IDisposable
     private string SourceFolder => Path.Combine(_root, "source", SourceFolderName);
 
     [Fact]
-    public async Task Build_LeavesAFileItDidNotMake_AndNamesEachFileItReplacedThatHeldOtherBytes()
+    public async Task Build_LeavesAFileItDidNotMake_AndReplacesAFileThatHeldOtherBytes()
     {
         WriteSource(("textures/a.dds", "a"), ("meshes/c.nif", "c"));
         WriteInFolder("textures/a.dds", "changed in the folder");
@@ -43,7 +43,7 @@ public sealed class BuildModHandlerTests : IDisposable
         var built = await Landed();
 
         Assert.Equal([("meshes/c.nif", "c"), ("notes.txt", "mine"), ("textures/a.dds", "a")], FilesIn(ModFolder));
-        Assert.Equal(["textures/a.dds"], built.Overwritten);
+        Assert.Null(built.Failure);
     }
 
     [Fact]
@@ -147,7 +147,6 @@ public sealed class BuildModHandlerTests : IDisposable
             FileModes.Set(held, "600");
         }
 
-        Assert.Equal(["a.txt"], built.Overwritten);
         Assert.StartsWith("The build stopped before compiling, as a file could not be read or written: ", built.Failure, StringComparison.Ordinal);
         Assert.Contains("z.txt", built.Failure, StringComparison.Ordinal);
         Assert.Empty(built.Made);
@@ -181,20 +180,6 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(("Mod - Main.ba2", ArchiveRefusal.VariantNotWritten), (refused.Item, refused.Refusal));
         Assert.Equal([("readme.txt", "loose")], FilesIn(ModFolder));
         Assert.Contains(new MadeFile("Mod - Main.ba2", VouchedFor: false), built.Made);
-    }
-
-    [Fact]
-    public async Task APluginChangedOutsideModbench_IsNamedOverwritten_WithEachOfItsStringsFilesThatDiffered()
-    {
-        await InitializedWithALocalizedPlugin();
-        var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Order(StringComparer.Ordinal).ToList();
-        File.AppendAllText(Path.Combine(ModFolder, "Fixture.esp"), "changed outside Modbench");
-        File.WriteAllText(stringsFiles[0], "changed outside Modbench");
-
-        var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder)], NoArchives)).Value().Applied);
-
-        Assert.Equal(["Fixture.esp", $"Strings/{Path.GetFileName(stringsFiles[0])}"], built.Overwritten);
     }
 
     [Fact]
