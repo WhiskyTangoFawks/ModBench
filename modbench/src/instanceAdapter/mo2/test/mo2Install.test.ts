@@ -479,6 +479,18 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       expect(await filesIn(folder(UPGRADED))).toEqual(['.git/HEAD', '.gitignore', 'meta.ini', 'plugin-source/released.json']);
     });
 
+    it('sends the mod\'s metadata to the trash when the upgrade corrects its game name, and leaves it when it does not', async () => {
+      const upgrade = () => holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
+      const carried = await meta(UPGRADED);
+
+      await upgrade();
+      const replaced = { ...inTrash };
+      inTrash = {};
+      await upgrade();
+
+      expect([replaced['meta.ini'], carried.includes('gameName=Fallout4'), inTrash['meta.ini']]).toEqual([carried, true, undefined]);
+    });
+
     it('keeps the meta the mod had, and never takes a meta the release ships', async () => {
       await holding(['meta.ini']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
 

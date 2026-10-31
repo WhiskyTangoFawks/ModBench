@@ -8,6 +8,7 @@ import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
 vi.mock('vscode', () => fakeVscodeModule());
 
 const MOD = 'Unofficial Fallout 4 Patch';
+const CARRIED = '[General]\ngameName=Fallout 4\nversion=1.0\ncategory="-1,"\n';
 
 describe('writing a mod\'s metadata from its packages through the MO2 Instance adapter', () => {
   let root: string;
@@ -18,11 +19,16 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     await writeFile(join(root, 'downloads', name), 'bytes');
     if (hostMeta !== undefined) await writeFile(join(root, 'downloads', `${name}.meta`), hostMeta);
   };
-  const write = (...packages: string[]): Promise<void> => adapterOver(root).writeInstalledFrom(modFolder(), packages, (path) => rm(path));
+  let inTrash: string[];
+  const write = (...packages: string[]): Promise<void> => adapterOver(root).writeInstalledFrom(modFolder(), packages, async (path) => {
+    inTrash.push(await readFile(path, 'utf8'));
+    await rm(path);
+  });
 
   beforeEach(async () => {
     root = cloneCorpusFixture();
-    await writeFile(join(modFolder(), 'meta.ini'), '[General]\ngameName=Fallout 4\nversion=1.0\ncategory="-1,"\n');
+    inTrash = [];
+    await writeFile(join(modFolder(), 'meta.ini'), CARRIED);
   });
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
@@ -65,13 +71,41 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     expect(text).not.toContain('installedFiles');
   });
 
-  it('writes nothing, and trashes nothing, when the metadata is already what the packages say', async () => {
+  it('takes the mod ID from the name of the package when its metadata holds none', async () => {
+    await write('Release-1234-1-0.7z');
+
+    expect(await meta()).toContain('modid=1234');
+  });
+
+  it('writes no mod ID for a downloaded file whose metadata and name hold none', async () => {
+    await download('Bare.7z', '[General]\n');
+
+    await write('Bare.7z');
+
+    expect(await meta()).not.toContain('modid');
+  });
+
+  it.each([
+    ['keeps the status the mod carried when the package knows none', '[General]\n', 'nexusFileStatus=3'],
+    ['replaces it when the package knows one', '[General]\nfileCategory=5\n', 'nexusFileStatus=5'],
+  ])('%s, and writes the key once', async (_, hostMeta, expected) => {
+    await writeFile(join(modFolder(), 'meta.ini'), `${CARRIED}nexusFileStatus=3\n`);
+    await download('Next.7z', hostMeta);
+
+    await write('Next.7z');
+
+    const text = await meta();
+    expect(text).toContain(expected);
+    expect(text.match(/nexusFileStatus=/g)).toHaveLength(1);
+  });
+
+  it('sends the metadata it replaces to the trash, and sends nothing when it changes nothing', async () => {
     await download('First.7z', '[General]\nmodID=111\nfileID=222\n');
+
     await write('First.7z');
-    const trashed: string[] = [];
+    const afterFirst = [...inTrash];
+    await write('First.7z');
 
-    await adapterOver(root).writeInstalledFrom(modFolder(), ['First.7z'], (path) => { trashed.push(path); return Promise.resolve(); });
-
-    expect(trashed).toEqual([]);
+    expect([afterFirst, inTrash]).toEqual([[CARRIED], [CARRIED]]);
   });
 });

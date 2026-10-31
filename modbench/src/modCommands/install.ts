@@ -59,6 +59,22 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
+// A new mod whose metadata could not be written is sent to the trash with its folder, so a failed install leaves none behind; an
+// upgrade stays, as it does when it fails part way.
+async function metadataWritten(adapter: InstanceAdapter, folder: string, packages: readonly string[], target: InstallTarget, trash: MoveToTrash): Promise<void> {
+  try {
+    await adapter.writeInstalledFrom(folder, packages, trash);
+  } catch (err) {
+    if (target.kind === 'upgrade') throw err;
+    try {
+      await trash(folder);
+    } catch (trashing) {
+      throw new Error(`${errorMessage(err)} Removing the new folder failed too: ${errorMessage(trashing)}`, { cause: err });
+    }
+    throw err;
+  }
+}
+
 /** `modbench.mod.install`, then a new mod's line, then its downloaded file marked installed. A refusal after the landing
  *  says why that step failed, and the install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
@@ -85,7 +101,7 @@ export async function installMod(
     if (outcome.landed) {
       const packages = packagesOf(installed, file);
       const folder = packages.length === 0 ? undefined : await deps.adapter.modFolderPath(target.name);
-      if (folder !== undefined) await deps.adapter.writeInstalledFrom(folder, packages, trash);
+      if (folder !== undefined) await metadataWritten(deps.adapter, folder, packages, target, trash);
     }
   } catch (err) {
     return refuse(err);

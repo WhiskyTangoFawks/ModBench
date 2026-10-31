@@ -29,10 +29,10 @@ afterEach(async () => {
 
 function install(
   installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {},
-  files: readonly DownloadedFile[] = [FRESHLY], folders: readonly string[] = [UPGRADED.name],
+  files: readonly DownloadedFile[] = [FRESHLY], folders: readonly string[] = [UPGRADED.name], trash = NO_TRASH,
 ) {
   const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(mods, ...folders), downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files } }), answers);
-  const outcome = modCommands(fake.adapter).installMod(installed, target, NO_TRASH);
+  const outcome = modCommands(fake.adapter).installMod(installed, target, trash);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
@@ -90,6 +90,13 @@ describe('installMod', () => {
     const { result } = await install(INSTALLATION_FILE, NEW_MOD, { refusals: refusing('changeModOrder', 'modlist.txt is locked') });
 
     expect(result).toEqual({ applied: true, lineRefusal: 'modlist.txt is locked' });
+  });
+
+  it.each([['a new mod', NEW_MOD, 1], ['an upgrade', UPGRADED, 0]] as const)('refuses %s whose metadata could not be written, and leaves a new mod no folder', async (_, target, trashed) => {
+    const gone: string[] = [];
+    const { result } = await install(INSTALLATION_FILE, target, { refusals: refusing('writeInstalledFrom', 'EROFS') }, [FRESHLY], [UPGRADED.name], (path) => { gone.push(path); return Promise.resolve(); });
+
+    expect([result, gone.length]).toEqual([{ applied: false, refusal: 'EROFS' }, trashed]);
   });
 
   it('refuses with why the adapter failed', async () => {

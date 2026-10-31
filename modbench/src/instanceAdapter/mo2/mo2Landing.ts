@@ -108,7 +108,7 @@ const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => a
     }
     const metaText = changeOwnedKeysInText(carried, { gameName });
     if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
-      } catch (err) {
+  } catch (err) {
     throw new Error(`Upgrading "${mod}" failed partway and was not rolled back: ${errorMessage(err)}`, { cause: err });
   }
 };
