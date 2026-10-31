@@ -631,10 +631,11 @@ describe('the agent server, reading a record through mEdit', () => {
     { plugin: 'B.esp', origin: 'Big Rocks', isWinner: true },
   ]);
 
-  const PLUGINS = ['A.esp', 'B.esp'].map((name) => ({
+  const pluginListed = (name: string, extra: { isImmutable?: boolean; isCompiledPlugin?: boolean } = {}) => ({
     name, origin: 'Big Rocks', path: `/m/${name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false,
-    inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false,
-  }));
+    inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, ...extra,
+  });
+  const PLUGINS = [pluginListed('A.esp'), pluginListed('B.esp')];
   const ENABLED = {
     ...VALUE,
     mods: [{ kind: 'mod' as const, name: 'Big Rocks', enabled: true }],
@@ -673,7 +674,7 @@ describe('the agent server, reading a record through mEdit', () => {
   it('answers the status the record panel\'s column header shows, from the plugin mEdit lists and where the instance stands on it', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getPlugins', [{ ...PLUGINS[0], isCompiledPlugin: false }, { ...PLUGINS[1], isImmutable: true }]);
+    mEdit.setQueryAnswer('getPlugins', [pluginListed('A.esp', { isCompiledPlugin: false }), pluginListed('B.esp', { isImmutable: true })]);
     mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
@@ -709,7 +710,7 @@ describe('the agent server, reading a record through mEdit', () => {
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
-    expect(answered).toEqual([expect.not.objectContaining({ status: expect.anything() }), expect.anything()]);
+    expect(answered).toEqual([expect.not.objectContaining({ status: expect.anything() as unknown }), expect.anything() as unknown]);
   });
 
   it('answers each active plugin\'s copy and marks the winner when it names no plugin', async () => {
