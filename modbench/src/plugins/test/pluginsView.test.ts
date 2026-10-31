@@ -157,7 +157,7 @@ function pluginsView(
     channel: silentChannel,
     log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
-    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
+    statusBar: { ready: vi.fn(), showMEditState: vi.fn(), standing: () => "", dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
   });
