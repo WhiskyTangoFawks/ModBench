@@ -78,30 +78,20 @@ describe('a mod row says its status against its manifest after its version (mods
   });
 });
 
-describe('a separator row says no manifest or differs as a mod does, looked up by the name the mod manager gives its folder (mods.md, A row, Separator)', () => {
-  const separatorProvider = (held: ModStatus | undefined, holdsRepository = true) => providerOver(held ? [held] : [], holdsRepository, {
+describe('a separator row has no description, since a separator has no manifest (mods.md, A row, Separator)', () => {
+  const separatorProvider = (held: ModStatus) => providerOver([held], true, {
     mods: [{ kind: 'separator', name: 'weapons', enabled: true }, mod('ModA')],
     modFolders: [{ kind: 'separator', name: 'Weapons', path: '/instance/mods/Weapons_separator', modName: 'Weapons_separator' }],
     modNames: new Map([['separator:weapons', 'Weapons_separator']]),
   });
 
   it.each([
-    ['no manifest', status('Weapons_separator', { noManifest: true }), true, 'no manifest'],
-    ['a file that differs', status('Weapons_separator', { namedByNoLine: ['mine.txt'] }), true, 'differs'],
-    ['a manifest', status('Weapons_separator'), true, undefined],
-    ['no status yet', undefined, true, undefined],
-    ['no manifest while the instance holds no repository', status('Weapons_separator', { noManifest: true }), false, undefined],
-  ])('%s', async (_case, held, holdsRepository, description) => {
-    const { provider } = separatorProvider(held, holdsRepository);
+    ['no manifest', status('Weapons_separator', { noManifest: true })],
+    ['a file that differs', status('Weapons_separator', { namedByNoLine: ['mine.txt'] })],
+  ])('says nothing and does not count in the view\'s badge, whatever status is held for %s', async (_case, held) => {
+    const { provider } = separatorProvider(held);
 
-    expect((await row(provider, 'weapons')).description).toBe(description);
-  });
-
-  it.each([
-    ['when it differs', status('Weapons_separator', { namedByNoLine: ['mine.txt'] })],
-    ['when it has no manifest', status('Weapons_separator', { noManifest: true })],
-  ])('counts in the view\'s badge %s', (_case, held) => {
-    expect(separatorProvider(held).provider.badge()).toEqual({ value: 1, tooltip: 'Mods that differ from their manifests or have none: 1' });
+    expect([(await row(provider, 'weapons')).description, provider.badge()]).toEqual([undefined, undefined]);
   });
 });
 

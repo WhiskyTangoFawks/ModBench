@@ -21,8 +21,8 @@ export function registerCheckForUpdatesGestures(given: CheckForUpdatesDeps): vsc
   const deps = { ...given, toolboxView: MODS_KEY_ARGS.view };
   return [
     vscode.commands.registerCommand('modbench.mod.checkForUpdates', (clicked?: unknown, selected?: readonly unknown[]) =>
-      (isAgentCall(clicked) ? checkForAgent(deps, clicked) : checkForView(deps, modsToRun(deps, clicked, selected, 'modsOnly')))),
-    vscode.commands.registerCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps, 'modsOnly'))),
+      (isAgentCall(clicked) ? checkForAgent(deps, clicked) : checkForView(deps, modsToRun(deps, clicked, selected)))),
+    vscode.commands.registerCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps))),
   ];
 }
 
@@ -46,6 +46,6 @@ async function checkForView(
 async function checkForAgent(
   { commands, instance }: CheckForUpdatesDeps, { argument }: AgentCall,
 ): Promise<GestureResult<UpdateChecked>> {
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value, 'modsOnly')));
+  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value)));
   return result.applied ? { applied: true, outcome: result.outcome } : { applied: false, refusal: result.refusal };
 }
