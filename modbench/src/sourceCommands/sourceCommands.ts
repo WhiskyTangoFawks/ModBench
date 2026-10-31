@@ -8,7 +8,7 @@ import {
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
+import { archiveVariants, buildSourceMod, takenHeld, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand, namedGameFolder } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
 import { foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
@@ -75,17 +75,14 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
 
 const NO_LINE: Manifest = { packages: [], exclude: [], archives: [], files: [] };
 
-// mods.md, A source mod, story 4, and commands.md, Confirm what destroys: each file that differs from its manifest, but a
-// taken file holding its package's bytes, which build writes before an archive packs it.
+// mods.md, A source mod, story 4: each file that differs from its manifest, but one build writes again.
 async function lostIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
   const read = await manifestIn(mod.folder);
   const manifest = read !== undefined && 'manifest' in read ? read.manifest : NO_LINE;
   const held = await adapter.folderValue(mod.folder);
-  const atFolderPaths = (lines: Manifest): Manifest =>
-    ({ ...lines, files: lines.files.map((line) => lineAtFolderPath({ ...lines, exclude: mod.exclude }, line, adapter.exclusionMark)) });
-  const against = folderAgainst(atFolderPaths(manifest), held, new Map());
-  const taken = folderAgainst(atFolderPaths({ ...mod.buildFile, archives: [] }), held, mod.packages.entries);
-  const writtenAgain = new Set(taken.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === true && onDisk !== undefined ? [onDisk] : [])));
+  const lines = manifest.files.map((line) => lineAtFolderPath({ ...manifest, exclude: mod.exclude }, line, adapter.exclusionMark));
+  const against = folderAgainst({ ...manifest, files: lines }, held, new Map());
+  const writtenAgain = takenHeld(mod, held, adapter.exclusionMark);
   const differing = against.lines.flatMap(({ onDisk, holdsItsBytes }) => (holdsItsBytes === false && onDisk !== undefined ? [onDisk] : []));
   return [...differing, ...against.namedByNoLine].filter((path) => !writtenAgain.has(path)).sort();
 }

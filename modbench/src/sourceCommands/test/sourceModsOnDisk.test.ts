@@ -1,6 +1,6 @@
 import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -18,6 +18,8 @@ import { readBuildFile } from '../../manifestAdapter/manifestRead';
 import { statusNow } from '../../test/statusNow';
 import { manifestIn, sourceModsOf, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
+import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
+import { whatRestoreDestroys } from '../restoreFromManifest';
 import { sourceCommands } from '../sourceCommands';
 
 let root: string;
@@ -147,6 +149,19 @@ describe('build over an instance on disk', () => {
     expect(await build()).toMatchObject({ landed: [{ mod: 'Mod', undeclared: ['made.dds.mohidden'] }] });
   });
 
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root writes every folder) stops before its manifest when a folder its trash emptied cannot be removed, naming the folder', async () => {
+    const { build, recorded } = await aSourceModTakingFromAnInstallationFile();
+    await build();
+    const before = await recorded();
+    await put('mods/Mod/locked/sub/mine.txt', 'mine');
+    await chmod(join(root, 'mods', 'Mod', 'locked'), 0o555);
+
+    const outcome = await build().finally(() => chmod(join(root, 'mods', 'Mod', 'locked'), 0o755));
+
+    expect(outcome).toMatchObject({ landed: [{ mod: 'Mod', failure: expect.stringMatching(/^The build stopped as trashing 'locked\/sub\/mine.txt' left the folder 'locked\/sub' empty, and it could not be removed: EACCES.*, so its manifest was not written\.$/) as unknown }] });
+    expect(await recorded()).toEqual(before);
+  });
+
   it('stops before its manifest when a file cannot be sent to the trash, naming it, and leaves the manifest as it was', async () => {
     const { build, recorded, refuseTrash } = await aSourceModTakingFromAnInstallationFile();
     await build();
@@ -260,20 +275,32 @@ describe('what build would destroy, over an instance on disk (mods.md, A source 
     expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['textures/c.dds.mohidden'] }], refused: [] });
   });
 
-  it('names no file a build mEdit refused wrote with the bytes its package gives, though an archive packs it, and names a file of mine beside it (mods.md, Build, story 10)', async () => {
-    const { build, client, commands } = await aSourceModTakingFromAnInstallationFile({ files: [{ path: 'b.nif', entry: { kind: 'held' } }] });
-    await build();
+  async function aTakenFileARefusedBuildWrote() {
+    const built = await aSourceModTakingFromAnInstallationFile({ files: [{ path: 'b.nif', entry: { kind: 'held' } }] });
+    await built.build();
     const held = readBuildFile(await readFile(join(root, 'source', 'Mod', BUILD_FILE), 'utf8'));
     assert('buildFile' in held);
     await put(`source/Mod/${BUILD_FILE}`, manifestText({
       ...held.buildFile, archives: [{ path: 'Mod - Main.ba2', files: ['textures/c.dds'] }],
       files: [...held.buildFile.files, { path: 'textures/c.dds', entry: { kind: 'held' } }],
     }));
-    client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'Mod', reason: 'was not built: refused.' }] }));
-    await build();
+    built.client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'Mod', reason: 'was not built: refused.' }] }));
+    await built.build();
     await put('mods/Mod/docs/mine.txt', 'mine');
+    return built;
+  }
+
+  it('names no file a build mEdit refused wrote with the bytes its package gives, though an archive packs it, and names a file of mine beside it (mods.md, Build, story 10)', async () => {
+    const { commands } = await aTakenFileARefusedBuildWrote();
 
     expect(await commands.whatBuildDestroys(['Mod'])).toEqual({ mods: ['Mod'], destroys: [{ mod: 'Mod', files: ['docs/mine.txt'] }], refused: [] });
+  });
+
+  it('names in restore\'s confirmation no file a build mEdit refused wrote with the bytes its package gives, and a file of mine beside it', async () => {
+    const { client, adapter } = await aTakenFileARefusedBuildWrote();
+    const deps = { client, adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash: (path: string) => rm(path), tasks: recordingTasks() };
+
+    expect(await whatRestoreDestroys(deps, ['Mod'], [])).toEqual({ destroys: [{ mod: 'Mod', differing: [], namedByNoLine: ['docs/mine.txt'], metadataDiffers: false }], refused: [] });
   });
 
   it('names no file of a mod build refuses before it writes, which loses nothing', async () => {
