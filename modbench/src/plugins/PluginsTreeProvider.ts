@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { Reporter } from '../ports/reporter';
 import type { PluginDiagnosisReport, PluginAddress } from '../client';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
@@ -57,6 +58,8 @@ interface PluginsTreeProviderOptions {
   publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
   /** Each mod's folder against its manifest, as mEdit last answered it. */
   modStatuses: LastModStatuses;
+  /** Says why a drop cannot land. */
+  reporter: Reporter;
 }
 
 
@@ -102,6 +105,7 @@ export class PluginsTreeProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instance: PluginsInstance;
+  private readonly reporter: Reporter;
   private readonly records: RecordBrowserFacet;
   private readonly modStatuses: LastModStatuses;
   private instanceValue: InstanceValue;
@@ -121,6 +125,8 @@ export class PluginsTreeProvider
 
   constructor(options: PluginsTreeProviderOptions) {
     this.instance = options.instance;
+    this.reporter = options.reporter;
+    this.reporter = options.reporter;
     this.records = options.records;
     this.facts = new PluginFactsFeed({
       client: options.client,
@@ -479,8 +485,12 @@ export class PluginsTreeProvider
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDropPayload(payload.value)) return;
     const { plugins } = payload.value;
-    const drop = this.dropFor(target, plugins.map((p) => p.name));
-    if (drop === undefined) return;
+    const placed = this.dropFor(target, plugins.map((p) => p.name));
+    if ('refusal' in placed) {
+      this.reporter.report('error', 'Could not move plugins.', placed.refusal);
+      return;
+    }
+    const { drop } = placed;
     const inView = this.rowsInViewOrder();
     const rows = plugins.flatMap((plugin) => inView.filter((row): row is PluginNode =>
       row instanceof PluginNode && samePluginAddress(plugin, addressOfRow(row))));
@@ -494,23 +504,26 @@ export class PluginsTreeProvider
     const lineRows = this.rowsInViewOrder().filter((row): row is PluginNode => row instanceof PluginNode);
     const targets = [...lineRows.map((row) => [row.plugin.name, row] as const), [BOTTOM_OF_THE_VIEW, undefined] as const];
     return targets.flatMap(([label, target]) => {
-      const drop = this.dropFor(target, names);
-      return drop === undefined ? [] : [{ label, drop }];
+      const placed = this.dropFor(target, names);
+      return 'drop' in placed ? [{ label, drop: placed.drop }] : [];
     });
   }
 
   // plugins.md, Drag and drop, story 2: a drop lands as shown in either direction, and the locked
   // rows load before every line. A row this controller never produced is not "past the last row".
-  private dropFor(target: PluginsTreeNode | undefined, names: readonly string[]): PluginsDrop | undefined {
-    if (names.length === 0) return undefined;
-    if (target !== undefined && !OWN_ROW_KINDS.has((target as { kind?: string }).kind ?? '')) return undefined;
-    const losingAtTop = this.direction === 'losingAtTop';
-    if (target instanceof ImplicitMasterNode) return LOSING_END;
-    if (target instanceof PluginNode) {
-      if (names.some((name) => pluginNameKey(name) === pluginNameKey(target.plugin.name))) return undefined;
-      return { kind: losingAtTop ? 'before' : 'after', name: target.plugin.name };
+  private dropFor(target: PluginsTreeNode | undefined, names: readonly string[]): { drop: PluginsDrop } | { refusal: string } {
+    if (target !== undefined && !OWN_ROW_KINDS.has((target as { kind?: string }).kind ?? '')) {
+      return { refusal: 'A plugin goes above a plugin row or at the bottom of the view, not on a record or a group.' };
     }
-    return losingAtTop ? WINNING_END : LOSING_END;
+    const losingAtTop = this.direction === 'losingAtTop';
+    if (target instanceof ImplicitMasterNode) return { drop: LOSING_END };
+    if (target instanceof PluginNode) {
+      if (names.some((name) => pluginNameKey(name) === pluginNameKey(target.plugin.name))) {
+        return { refusal: `${target.plugin.name} is being dragged, so nothing goes above it.` };
+      }
+      return { drop: { kind: losingAtTop ? 'before' : 'after', name: target.plugin.name } };
+    }
+    return { drop: losingAtTop ? WINNING_END : LOSING_END };
   }
 }
 
