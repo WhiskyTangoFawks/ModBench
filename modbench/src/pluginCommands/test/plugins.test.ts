@@ -239,12 +239,34 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     expect(handedChanges(fake)).toEqual([{ kind: 'drop', plugin: 'Gone.esp' }]);
   });
 
-  it('appends a line for a plugin a manifest names with none, and none for a file named below the folder\'s root', async () => {
+  it('adds no line for a plugin a manifest names with none, nor for a file named below the folder\'s root', async () => {
     const { result } = await sync({
       order: ['Base.esp'], provided: ['Base.esp'], repository: { manifests: { Unrestored: naming('Unrestored.esp', 'optional/Nested.esp') } },
     });
 
-    expect(result).toEqual({ applied: true, wrote: true, added: ['Unrestored.esp'], dropped: [] });
+    expect(result).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
+  });
+
+  it('lands a rename and its rename back with one line per plugin, the manifest naming the original throughout', async () => {
+    await manifestedIn(join(mods, 'Provider'), naming('MBDevLight.esl'));
+    const fake = fakeInstanceAdapter(readingFixture({
+      pluginOrder: lines('MBDevLight.esl'), dataFolderPlugins: inData(),
+      mods: [{ kind: 'mod', name: 'Provider', enabled: true }], modFolders: modFoldersIn(mods, 'Provider'),
+      modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'MBDevLight.esl')], folders: [], notes: [] }]]),
+    }), { repositoryOnDisk: true });
+    const provider = { kind: 'mod', name: 'Provider' } as const;
+
+    await fake.adapter.renamePlugin(provider, 'MBDevLight.esl', 'temp.esp');
+    await pluginSyncOver(fake.adapter)();
+    await fake.adapter.renamePlugin(provider, 'temp.esp', 'MBDevLight.esl');
+    await pluginSyncOver(fake.adapter)();
+
+    let order: readonly string[] = [];
+    await fake.adapter.changePluginOrder(PROFILE, (entries) => {
+      order = entries.map((entry) => entry.name);
+      return [];
+    });
+    expect(order).toEqual(['MBDevLight.esl']);
   });
 
   it('drops the line of a plugin no manifest names and nothing provides', async () => {
