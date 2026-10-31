@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
-import { PATH } from '../jsonRead';
+import { objectOf, PATH, textOf } from '../jsonRead';
+
+const SCHEMA = 'manifest schema';
 
 it('reads a path in the folder by the pattern the manifest schema states', () => {
-  const schema = JSON.parse(readFileSync(resolve(__dirname, '../../../../spec/formats/manifest-1.schema.json'), 'utf8')) as { $defs: { path: { pattern: string } } };
+  const schema = objectOf(SCHEMA, JSON.parse(readFileSync(resolve(__dirname, '../../../../spec/formats/manifest-1.schema.json'), 'utf8')), 'its root');
+  const pattern = textOf(SCHEMA, objectOf(SCHEMA, objectOf(SCHEMA, schema.$defs, '$defs').path, 'path').pattern, 'pattern');
 
-  expect(PATH.source).toBe(new RegExp(schema.$defs.path.pattern).source);
+  expect(PATH.source).toBe(new RegExp(pattern).source);
 });
