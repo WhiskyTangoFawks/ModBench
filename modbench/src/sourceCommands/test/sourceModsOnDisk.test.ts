@@ -20,7 +20,6 @@ import { readManifest } from '../../manifestAdapter/manifestRead';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
 import { updateManifest } from '../updateManifest';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { sourceFolderRestoredFrom } from '../restoreFromManifest';
 
 let root: string;
@@ -490,7 +489,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     ];
     const before = await manifests();
 
-    const outcome = await updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false);
+    const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false);
 
     expect([await manifests(), outcome.refused]).toEqual([before, []]);
   });

@@ -7,7 +7,6 @@ import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import type { HostGit } from '../../ports/repository';
 import { hostGitFailingToActivate, hostGitRecordingInits } from './hostGitDouble';
 import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
 
 const STOCK_GAME: OtherManifest = { name: 'Stock Game/', folder: '/instance/Stock Game' };
 
@@ -16,7 +15,7 @@ function commandsOver(answers: InstanceAnswers = {}, hostGit?: HostGit<string>) 
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
     client: new InMemoryMEditClient(), adapter: adapter.adapter, nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: '/instance',
-    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks: recordingTasks(), pathProblems: fileProblemsFake(),
+    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks: recordingTasks(),
   });
   return { commands, adapter, repositories };
 }

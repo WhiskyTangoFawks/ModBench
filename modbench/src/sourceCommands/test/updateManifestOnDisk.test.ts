@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileProblemsFake } from '../../test/fileProblemsFake';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -32,7 +31,7 @@ async function instanceTakingFromTheGame() {
   await put('Game/Data/b.nif', 'b');
   const gameRoot = join(root, 'Game');
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') } });
-  return { adapter, update: () => updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false) };
+  return { adapter, update: () => updateManifest({ adapter }, ['Mod'], {}, [], false) };
 }
 
 describe('update manifest over an instance on disk', () => {
@@ -83,7 +82,7 @@ describe('update manifest over an instance on disk, of a mod whose metadata name
     await put('mods/Mod/meta.ini', '[General]\r\nversion=1.2\r\n');
     await put('mods/Mod/a.nif', 'bytes of a.nif');
     const adapter = adapterOver(root, { installationFileReader: fakeInstallationFileReader(['a.nif']) });
-    await updateManifest({ adapter, pathProblems: fileProblemsFake(), instanceRoot: root }, ['Mod'], {}, [], false);
+    await updateManifest({ adapter }, ['Mod'], {}, [], false);
     const read = await manifestIn(join(root, 'mods', 'Mod'));
     if (read === undefined || 'refused' in read) throw new Error('no manifest');
     return { adapter, manifest: read.manifest };

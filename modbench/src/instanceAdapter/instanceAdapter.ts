@@ -366,9 +366,6 @@ export interface OtherManifest { readonly name: string; readonly folder: string 
 /** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
 export interface UnsearchedFolder { readonly name: string; readonly reason: string }
 
-// A path a file holds on a line (1-based), the file by its path in the instance repository.
-interface PathInFile { readonly file: string; readonly line: number; readonly path: string }
-
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -720,8 +717,6 @@ export interface InstanceAdapter {
   /** Makes git hold each folder's path by a path token, and the working tree this machine's paths. Answers why a path
    *  token stays in the working tree. Writes nothing without a repository. A failed first write is undone. */
   writePathTokens(): Promise<string | undefined>;
-  /** Each path no path token names in a file the instance repository holds or would commit. */
-  pathsOutsideFolders(): Promise<readonly PathInFile[]>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, kept in the hash index (ADR-0013). Two files with one

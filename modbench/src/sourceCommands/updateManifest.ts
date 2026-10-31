@@ -1,7 +1,6 @@
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
 import { manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
-import type { FileProblems } from '../ports/fileProblems';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { foldersOf, namesOf, type Folders } from './folders';
@@ -10,12 +9,10 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedF
 
 type Adapter = Pick<InstanceAdapter,
   'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines' | 'pathsOutsideFolders'>;
+  | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
-  readonly pathProblems: FileProblems;
-  readonly instanceRoot: string;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -188,19 +185,6 @@ async function submodulesWritten(
   }
 }
 
-async function pathsShown({ adapter, pathProblems, instanceRoot }: UpdateManifestDeps): Promise<readonly string[]> {
-  try {
-    const found = await adapter.pathsOutsideFolders();
-    pathProblems.clearAll();
-    for (const file of new Set(found.map((path) => path.file))) {
-      pathProblems.set(join(instanceRoot, file), found.filter((path) => path.file === file).map(({ line, path }) => ({ line, message: `holds a path no path token names: ${path}` })));
-    }
-    return [];
-  } catch (err) {
-    return [`the paths the instance repository's files hold could not be read: ${errorMessage(err)}`];
-  }
-}
-
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
 /** Each mod's manifest from the mod as it is; a source mod's build records its own. A mod the adapter cannot answer is refused, naming why. `everyMod`:
@@ -231,7 +215,7 @@ export async function updateManifest(
     const submodules = passedOver.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, passedOver, sourceMods.folders);
     return {
       ...cancelled, landed: [], refused, notes: [...notes, ...submodules.notes],
-      repositoryNotes: [...submodules.repositoryNotes, ...await pathsShown(deps)],
+      repositoryNotes: submodules.repositoryNotes,
     };
   };
   if (signal?.aborted || read.length === 0) return nothingUpdated();
@@ -255,7 +239,7 @@ export async function updateManifest(
     ...cancelledIf(signal), landed, refused, notes: [...notes, ...submodules.notes],
     repositoryNotes: [
       ...downloaded.notes, ...depotProblemsOf(game, read), ...submodules.repositoryNotes,
-      ...await otherManifestLinesWritten(adapter), ...await pathsShown(deps),
+      ...await otherManifestLinesWritten(adapter),
     ],
   };
 }
