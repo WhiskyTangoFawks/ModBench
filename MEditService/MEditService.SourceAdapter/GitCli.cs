@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using Serilog;
 
 namespace MEditService.SourceAdapter;
@@ -77,6 +78,9 @@ internal static class GitCli
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Git writes UTF-8; unset, Windows decodes with the console's code page.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             WorkingDirectory = workingDirectory,
         };
         foreach (var arg in args) psi.ArgumentList.Add(arg);

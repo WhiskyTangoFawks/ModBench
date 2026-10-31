@@ -222,7 +222,7 @@ const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
 
 function folderBeside(folders: ModFolders | undefined, name: string): string {
   const held = folders?.all[0]?.path ?? '/instance/mods/';
-  return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
+  return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')) + 1)}${name}`;
 }
 
 const reachesOut = (relativePath: string): boolean => relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));

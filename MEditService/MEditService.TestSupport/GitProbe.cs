@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace MEditService.TestSupport;
 
@@ -25,6 +26,9 @@ public static class GitProbe
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Git writes UTF-8; unset, Windows decodes with the console's code page.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             WorkingDirectory = workTree,
         };
         foreach (var arg in args) psi.ArgumentList.Add(arg);

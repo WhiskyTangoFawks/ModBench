@@ -5,7 +5,7 @@ const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
 
 const reads = (held: readonly string[], findsOtherCase = false) => ({
   filesIn: () => Promise.resolve(held),
-  originFileHash: (path: string) => Promise.resolve({ kind: 'read' as const, answer: { size: 1, hash: `h:${path}` } }),
+  originFileHash: (path: string) => Promise.resolve({ kind: 'read' as const, answer: { size: 1, hash: `h:${path.replaceAll('\\', '/')}` } }),
   fileStamp: (path: string) => Promise.resolve(findsOtherCase ? { kind: 'read' as const, answer: stamp } : { kind: 'unreadable' as const, reason: `ENOENT ${path}` }),
 });
 
