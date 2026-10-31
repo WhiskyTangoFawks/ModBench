@@ -35,12 +35,14 @@ interface Setup {
   readonly sourceFolders?: Record<string, string>;
   readonly gameFolder?: typeof FOUND | typeof GAME_FOLDER_NOT_FOUND;
   readonly adapterOver?: Partial<InstanceAdapter>;
+  readonly sourceFiles?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
-async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolders = {}, gameFolder = FOUND, adapterOver = {} }: Setup = {}) {
+async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolders = {}, gameFolder = FOUND, adapterOver = {}, sourceFiles = {} }: Setup = {}) {
   for (const mod of Object.keys(files)) await mkdir(join(modsDir, mod), { recursive: true });
-  const folderFiles = new Map(Object.entries(files).map(([mod, held]) => [join(modsDir, mod), Object.keys(held)]));
-  const hashes = new Map(Object.entries(files).flatMap(([mod, held]) => Object.entries(held).map(([path, hash]) => [join(modsDir, mod, path), { size: 1, hash }] as const)));
+  const folders = [...Object.entries(files).map(([mod, held]) => [join(modsDir, mod), held] as const), ...Object.entries(sourceFiles)];
+  const folderFiles = new Map(folders.map(([folder, held]) => [folder, Object.keys(held)]));
+  const hashes = new Map(folders.flatMap(([folder, held]) => Object.entries(held).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
     readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
     { folderFiles, hashes, ...answers });
@@ -267,17 +269,30 @@ describe('update manifest', () => {
   describe('a source mod', () => {
     const SOURCE = () => join(root, 'source', 'ModB');
 
-    const among = async (files: Record<string, string> = {}, answers: InstanceAnswers = {}) => {
+    const among = async (files: Record<string, string> = {}, answers: InstanceAnswers = {}, sourceFiles: Record<string, string> = {}) => {
       await mkdir(SOURCE(), { recursive: true });
-      return over({ files: { ModA: {}, ModB: files }, sourceFolders: { ModB: SOURCE() }, answers });
+      return over({ files: { ModA: {}, ModB: files }, sourceFolders: { ModB: SOURCE() }, answers, sourceFiles: { [SOURCE()]: sourceFiles } });
     };
 
-    it('is passed over, neither written, landed nor refused, while the mods beside it are updated', async () => {
-      const { update, manifestOf } = await among({ 'extra.nif': HX });
+    it('has its mod folder left to its build, and its source folder recorded in a manifest of its own, naming no file git holds', async () => {
+      const { update, manifestOf } = await among(
+        { 'extra.nif': HX }, { heldByGit: new Map([[SOURCE(), ['plugin.json']]]) }, { 'tool.dll': HA, 'plugin.json': HX, '.git': HB, '.git/HEAD': HB });
 
       const result = await update(['ModA', 'ModB']);
 
-      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB')]).toEqual([['ModA'], [], undefined]);
+      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await heldIn(SOURCE())]).toEqual([
+        ['ModA', 'ModB'], [], undefined, { ...EMPTY, files: holding({ 'tool.dll': HA }) },
+      ]);
+    });
+
+    it('is refused, with no mod landed, when its source folder holds two manifests', async () => {
+      const { update } = await among();
+      await writeFile(join(SOURCE(), 'one.manifest.json'), '{}');
+      await writeFile(join(SOURCE(), 'two.manifest.json'), '{}');
+
+      const result = await update(['ModB']);
+
+      expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModB']]);
     });
 
     it('still has its submodule entry written when it is all the selection holds', async () => {
@@ -285,7 +300,7 @@ describe('update manifest', () => {
 
       const result = await update(['ModB']);
 
-      expect([fake.calls[0], result.landed, result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, [], []]);
+      expect([fake.calls[0], result.landed.map(({ mod }) => mod), result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, ['ModB'], []]);
     });
 
     it('still has its submodule entry written, as a mod acted on', async () => {

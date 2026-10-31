@@ -8,7 +8,7 @@ Because a git repo can't hold gigabytes of files, Modbench is setup to commit a 
 
 - Before you commit the modlist, run Update Manifests, so the manifests say what your mod folders hold. This is how you track new modlist changes in git.
 - After a checkout, a pull or a merge of the modlist, run Restore from Manifests…, so your mod folders hold what the manifests say.
-- After a source mod's source changes, run Build Mod, so its mod folder holds what its source makes, and its manifest records it. Update Manifests leaves a source mod to its build.
+- After a source mod's source changes, run Build Mod, so its mod folder holds what its source makes, and its manifest records it. Update Manifests records a source mod's source folder, and Build Mod records its mod folder.
 
 With no mod selected, Update Manifests and Restore from Manifests… act on every mod. Both are in the overflow menu of the Source Control view's title bar.
 
