@@ -36,10 +36,8 @@ function dragRefusal(target: ModNode | SeparatorNode, rows: DraggedRows['rows'])
   return holder && `${nameOf(target)} is inside ${nameOf(holder)}, which is being dragged.`;
 }
 
-/** The move a drop makes, or why what is dragged cannot go: on Overwrite, on a file or a folder,
- *  on a row being dragged, inside a separator being dragged, or a separator on a mod. `undefined`
- *  is the drop below the last row. Mods land at the winning end of a separator, as move lands
- *  them; anything else lands directly above its target, as shown. */
+/** The move a drop makes, or why it cannot. Mods land at a separator's winning end, as move
+ *  lands them; the rest land directly above the target, as shown. No target is below the last row. */
 export function dropMove(dragged: DraggedRows, target: ModlistNode | undefined, direction: SortDirection): Move | Refusal {
   const argument = pluralArgument({ focused: dragged.focused, selection: dragged.rows }, 'mod', 'separator');
   const kind = argument[0]?.kind;
