@@ -19,6 +19,7 @@ export function pluginCommandsWith(
       moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
       getCreatablePluginExtensions: client.getCreatablePluginExtensions?.bind(client) ?? unanswered,
       decompileAndRepair: client.decompileAndRepair?.bind(client) ?? unanswered,
+      sourcePaths: client.sourcePaths?.bind(client) ?? unanswered,
     },
   });
 }

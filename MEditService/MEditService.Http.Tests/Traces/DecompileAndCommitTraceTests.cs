@@ -78,6 +78,9 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "repository": {"buildFile": "{}"}}]}""" },
         { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s"}}]}""" },
         { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
+        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
+        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
+        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]
@@ -89,6 +92,42 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         var response = await Client.PostJson("/decompile-and-commit", body);
 
         Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
+    }
+
+    [Theory]
+    [InlineData("\"manifest\": \"{}\"", "ManifestFile is missing")]
+    [InlineData("\"manifestFile\": \"M.manifest.json\"", "Manifest is missing")]
+    [InlineData("\"manifestFile\": \"a/M.manifest.json\", \"manifest\": \"{}\"", "bare file name")]
+    public async Task ARequestWithHalfAManifest_IsRefused_NamingWhatIsWrong(string manifestMembers, string named)
+    {
+        await Loaded();
+
+        var response = await Client.PostJson(
+            "/decompile-and-commit",
+            $$$"""{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheSourcePathOfAnAsset_IsWhereInitCommitsIt()
+    {
+        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
+        await Loaded();
+        var sourceFolder = Client.SourceFolderSentFor(Origin);
+
+        var answered = await (await Client.PostJson("/source-paths", """{"paths": ["textures/added.dds"]}""")).Content.ReadFromJsonAsync<JsonElement>();
+        (await Client.PostAsJsonAsync("/decompile-and-commit", new
+        {
+            mods = new[] { new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "{}" } } },
+        })).EnsureSuccessStatusCode();
+
+        var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(["assets/textures/added.dds"], answered.GetProperty("paths").EnumerateArray().Select(path => path.GetString()));
+        Assert.Contains("assets/textures/added.dds", committed);
     }
 
     [Fact]

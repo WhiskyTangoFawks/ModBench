@@ -460,6 +460,20 @@ describe('PluginFacts — the record index failure message (plugins.md, States, 
   });
 });
 
+describe('PluginFacts — another window holds the record index (ADR-0010)', () => {
+  it.each([
+    ['nothing holds', scenes(), undefined],
+    ['another window holds it', (facts: PluginFacts) => facts.refused(heldElsewhere), 'another window holds this instance'],
+    ['the snapshot failed, which is not the other window', (facts: PluginFacts) => facts.refused(failedIndex), undefined],
+    ['a tick after', scenes((facts) => facts.refused(heldElsewhere), heldAOnly), undefined],
+  ] as const)('%s', (_label, scene, message) => {
+    const facts = new PluginFacts();
+    scene(facts);
+
+    expect(facts.heldElsewhereMessage()).toBe(message);
+  });
+});
+
 describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6)', () => {
   const failing = held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message: 'Unexpected end at 12.' }, { sourceRelativePath: 'A.esp/Cell.json', message: 'Duplicate FormKey.' }] });
 

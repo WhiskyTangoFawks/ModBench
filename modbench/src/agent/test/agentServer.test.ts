@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string }[]][];
+type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
 const fired = vi.hoisted((): { calls: unknown[][]; outcome: unknown; failure: Error | undefined } => ({ calls: [], outcome: undefined, failure: undefined }));
 vi.mock('vscode', () => ({
@@ -68,18 +68,19 @@ const NO_TOOLBOX = {
   game: { name: 'Fallout 4', folder: GAME_FOLDER_NOT_FOUND, versions: { kind: 'unresolved' } },
   gameFolderLinks: 0, holdsRepository: false, deployment: { folder: null },
 };
+const NO_STANDING = { messages: () => [] };
 const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
 const statuses = { current: () => { statusRead.asked += 1; return Promise.resolve(new Map(statusRead.answer.map((held) => [held.mod, held]))); } };
 
-async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
+async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment,
+    port, instance, mEdit, terminalEnvironment, reporter, statuses, deployment, standing,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -87,8 +88,8 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT) {
-  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment);
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
+  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment, deployment, standing);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
@@ -123,7 +124,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_references', 'list_source_problems', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
   });
 
   it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
@@ -360,18 +361,24 @@ describe('the agent server, given an instance value', () => {
     }]);
   });
 
-  it('reads the problems on plugin source files only, as the Problems panel holds them', async () => {
+  it('reads every problem Modbench shows, with its code, and none another extension shows', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
-    const problem = (severity: number, line: number, message: string) => ({ severity, range: { start: { line } }, message });
+    const problem = (severity: number, line: number, message: string, source?: string, code?: unknown) =>
+      ({ severity, range: { start: { line } }, message, source, code });
     diagnosticsHeld.held = [
-      [{ scheme: 'file', fsPath: '/i/source/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference'), problem(1, 9, 'odd value')]],
-      [{ scheme: 'file', fsPath: '/i/mods/Rocks/readme.json' }, [problem(0, 0, 'not source')]],
-      [{ scheme: 'untitled', fsPath: '/i/source/Rocks/plugin-source/Other.esp.json' }, [problem(0, 0, 'not a file')]],
+      [{ scheme: 'file', fsPath: '/i/Rocks.esp' }, [
+        problem(1, 0, 'malformed', 'Modbench', { value: 'decompile and repair', target: {} }),
+        problem(1, 0, 'not ours', 'ESLint'),
+        problem(1, 0, 'no source'),
+      ]],
+      [{ scheme: 'file', fsPath: '/i/source/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference', 'Modbench'), problem(2, 9, 'odd value', 'Modbench', 7)]],
+      [{ scheme: 'untitled', fsPath: '/i/Other.esp' }, [problem(0, 0, 'not a file', 'Modbench')]],
     ];
 
-    expect(await read(client, 'list_source_problems')).toEqual([
+    expect(await read(client, 'list_problems')).toEqual([
+      { file: '/i/Rocks.esp', severity: 'Warning', line: 1, message: 'malformed', code: 'decompile and repair' },
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
-      { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Warning', line: 10, message: 'odd value' },
+      { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Information', line: 10, message: 'odd value', code: 7 },
     ]);
   });
 
@@ -392,6 +399,26 @@ describe('the agent server, given an instance value', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('answers beside the words the status bar and the Plugins view say of mEdit, as they stand at each call', async () => {
+    let said = ['mEdit is Running'];
+    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => said });
+    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+
+    expect((await blocks()).slice(1)).toEqual(['mEdit is Running']);
+
+    said = ['mEdit is Ready (2 plugins)', 'Indexing failed: the record index threw'];
+    expect((await blocks()).slice(1)).toEqual(said);
+  });
+
+  it('says a line two views show once', async () => {
+    const line = 'MO2 is running, and overwrites your changes when it launches a program or exits.';
+    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => [line, 'mEdit is Running', line] });
+
+    const blocks = CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+
+    expect(blocks.slice(1)).toEqual([line, 'mEdit is Running']);
+  });
+
   it.each([
     ['before the instance has been read', undefined, 'The instance has not been read yet.'],
     ['whose first read failed with the failure, as the view\'s error row does', 'Modbench does not support Oblivion', 'Failed to load: Modbench does not support Oblivion'],
@@ -401,18 +428,6 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(instance);
 
     expect(await call(client, 'list_profiles')).toEqual({ isError: true, text });
-  });
-
-  it('answers beside the last good read with the message every view shows, and with none once a read lands', async () => {
-    const instance = new FakeInstance(VALUE);
-    const { client } = await clientOf(instance);
-    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
-
-    instance.readFailure = 'plugins.txt is half written';
-    expect((await blocks()).slice(1)).toEqual(['Showing the last good read: plugins.txt is half written']);
-
-    instance.publish(VALUE);
-    expect(await blocks()).toHaveLength(1);
   });
 });
 

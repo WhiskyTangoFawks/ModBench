@@ -4,7 +4,8 @@ import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
+import type { StandingMessages } from '../drivingLib/mEditState';
+import type { InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -24,7 +25,7 @@ import { LIST_REFERENCES, READ_RECORD } from './readRecord';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
-import { SOURCE_PROBLEMS } from './sourceProblems';
+import { PROBLEMS } from './problems';
 
 export interface AgentServerOptions {
   port: number;
@@ -33,6 +34,7 @@ export interface AgentServerOptions {
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
+  standing: StandingMessages;
   reporter: Reporter;
   log: Log;
 }
@@ -98,9 +100,9 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deployment, log }: OpenOptions): McpServer {
+function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deployment, standing: standingMessages, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
-  const standing = () => instanceMessages(instance).filter((message) => message !== undefined);
+  const standing = () => [...new Set(standingMessages.messages())];
   for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses)));
@@ -113,7 +115,7 @@ function mcpServerOf({ instance, mEdit, terminalEnvironment, statuses, deploymen
   register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, standing, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
+  register(server, log, standing, { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
   return server;
 }
 

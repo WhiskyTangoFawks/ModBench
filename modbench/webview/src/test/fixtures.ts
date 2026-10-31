@@ -1,11 +1,10 @@
 import { pluginCanBeEdited } from '../../../src/wire/pluginEditable';
 import { vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, isString, type EnumChoice, type ColumnStatus, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type WebviewToExtension } from '../../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection, isString, type EnumChoice, type ColumnStatus, type ExtensionToWebview, type FocusedCellContext, type ModRepository, type UnreadableSource, type WebviewToExtension } from '../../../src/wire/messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { ColumnKey, CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey, copyColumnKey } from '../../../src/wire/columnKey';
-import { type UnreadableSource } from '../../../src/wire/unreadableSource';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
 // module that reached it would throw in every test file that does not mock it.

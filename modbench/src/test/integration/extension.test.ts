@@ -620,6 +620,13 @@ describe('a gesture the agent runs', () => {
     rmSync(modDir, { recursive: true, force: true });
   });
 
+  it('answers every read beside the words the status bar says of mEdit', async () => {
+    const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
+
+    const standing = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
+    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), `no line says what mEdit is: ${JSON.stringify(standing)}`);
+  });
+
   it('writes as the user\'s does, and answers once the agent\'s next read sees the change', async () => {
     const answer = await callTool('mod_enable', { argument: [{ name: 'Agent Mod' }] });
 
@@ -677,6 +684,19 @@ describe('a gesture the agent runs', () => {
       rmSync(release, { recursive: true, force: true });
       rmSync(installed, { recursive: true, force: true });
     }
+  });
+
+  it('answers beside the line the Mods view shows when it has no mods, which no other view says', async () => {
+    rmSync(modDir, { recursive: true, force: true });
+    writeFileSync(modlistPath, '');
+
+    const standing = await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
+      const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
+      const lines = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
+      return lines.some((line) => line.startsWith('No mods or separators.')) && lines;
+    });
+
+    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
   });
 });
 

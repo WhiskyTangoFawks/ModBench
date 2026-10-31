@@ -7,7 +7,7 @@ import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
-export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair'>;
+export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair' | 'sourcePaths'>;
 
 interface MadeRepository {
   readonly repository: NewRepository;
@@ -16,7 +16,7 @@ interface MadeRepository {
 /** The repository decompile and commit makes for a mod, and each committed mod's folder linked to the one made for it:
  *  why not, by the mod. */
 export interface NewRepositories {
-  readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
+  readonly of: (mod: string, client: Pick<MEditClient, 'sourcePaths'>) => Promise<MadeRepository | { readonly refusal: string }>;
   readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 }
 
@@ -28,7 +28,7 @@ interface DecompileAndRepairAccess {
 
 // plugin-source.md, Decompile and repair, story 4: a mod with no repository gets one, as decompile and commit makes it.
 async function toRepair(
-  { adapter, newRepositories }: DecompileAndRepairAccess, plugins: readonly PluginAddress[],
+  { adapter, client, newRepositories }: DecompileAndRepairAccess, plugins: readonly PluginAddress[],
 ): Promise<{ readonly plugins: PluginToRepair[]; readonly refused: ItemRefusal<PluginAddress>[]; readonly made: ReadonlyMap<string, MadeRepository> }> {
   const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const made = new Map<string, MadeRepository | { readonly refusal: string }>();
@@ -39,7 +39,7 @@ async function toRepair(
       toSend.push({ plugin });
       continue;
     }
-    const repository = made.get(plugin.origin) ?? await newRepositories.of(plugin.origin);
+    const repository = made.get(plugin.origin) ?? await newRepositories.of(plugin.origin, client);
     made.set(plugin.origin, repository);
     if ('refusal' in repository) refused.push({ item: plugin, reason: `${plugin.origin} has no repository, and one cannot be made: ${repository.refusal}` });
     else toSend.push({ plugin, newRepository: repository.repository });

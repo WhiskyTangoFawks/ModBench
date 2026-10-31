@@ -371,6 +371,20 @@ describe('the Mods view says when the list is empty', () => {
     await modSync.run();
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
   });
+
+  it('gives the agent the line it shows, sync\'s refusal included', async () => {
+    const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
+    const { modSync } = modSyncAnswering(() => Promise.resolve({ applied: false as const, refusal: '/instance/mods does not exist' }));
+    const mods = createModsView({ ...otherDeps(), instance, log: () => undefined, modSync });
+    const { view } = mods;
+    instance.publish(listing([]));
+    await waitForMessage(view, (m) => m === NO_MODS, 'the empty-list message');
+
+    await modSync.run();
+    await waitForMessage(view, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
+
+    expect(mods.messages()).toEqual([view.message]);
+  });
 });
 
 describe('the Mods view finds a file the filter matches, however deep', () => {

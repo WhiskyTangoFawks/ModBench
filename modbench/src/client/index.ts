@@ -1,6 +1,6 @@
 export type {
   MEditClient, LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
-  NotificationPayloads, BackendStatus, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
+  NotificationPayloads, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, PluginProblems, PluginAddress, RecordAt,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   PluginToRepair, DecompileAndCommitMod, DecompileAndCommitOutcome, NewRepository, BuildFacts, BuildOutcome, MadeFile, DecompileAndCommitProgress, PluginMetadata, PluginDiagnosisReport, RecordSummary,

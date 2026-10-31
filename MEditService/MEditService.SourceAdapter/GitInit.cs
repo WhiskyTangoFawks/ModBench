@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 
@@ -10,13 +11,17 @@ public sealed record DecompiledPlugin(PluginAddress Address, string? BinarySha25
 /// <summary>A file of the mod no installation file yields, by its forward-slash path in the mod folder.</summary>
 public sealed record Asset(string Path, Func<Stream> Open);
 
+/// <summary>A file at the root of a new repository, by its name there.</summary>
+public sealed record RootFile(string Name, byte[] Content);
+
 /// <summary>Makes a mod's repository: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>. An init that
 /// fails writes nothing, and it never deletes a repository it did not make (ADR-0003).</summary>
 internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair)
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
+        IReadOnlyList<string>? ignored = null)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
@@ -31,8 +36,9 @@ internal static class GitInit
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent));
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, ignored ?? [])));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
+            if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             if (repair is var (repaired, commit))
@@ -100,14 +106,18 @@ internal static class GitInit
             git.Run("config", "user.email", "modbench@localhost");
     }
 
-    // Root-anchored: a bare "plugin-source/" would also un-ignore a same-named folder nested anywhere else.
-    // An un-ignore here outranks the user's global excludes, so no asset is left out of the commit.
-    private static readonly string GitignoreContent =
+    // Root-anchored, so no same-named folder deeper is un-ignored. An un-ignore outranks the user's global
+    // excludes. The ignored paths come last: a package yields them (ADR-0022).
+    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<string> ignored) =>
         "*\n" +
         "!/.gitignore\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
         $"!/{SourceRepositoryLayout.RootFolderName}/\n" +
         $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
         $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +
-        $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n";
+        $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n" +
+        (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +
+        string.Concat(ignored.Select(path => $"/{Escaped(path)}\n"));
+
+    private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }

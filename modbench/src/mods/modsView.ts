@@ -13,7 +13,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
-import { messageLine } from '../drivingLib/messageLine';
+import { linesOf, messageLine } from '../drivingLib/messageLine';
 import { joinSyncMessages, type SyncMessage } from '../drivingLib/syncFailureReport';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
@@ -88,6 +88,8 @@ interface ModsView extends vscode.Disposable {
   copyValue: CopyValueAdapter;
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
+  /** The lines the view's message line shows, for the agent. */
+  messages(): string[];
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -104,6 +106,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     showCollapseAll: true,
     dragAndDropController: provider,
   });
+  const viewMessage = () => messageLine(provider.viewMessage(), modSync.message(), statusMessage());
   const nameFilter = registerNameFilter({
     view,
     object: 'modbench.mod',
@@ -112,7 +115,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     hasRows: async () => (await provider.getChildren()).some((n) => !(n instanceof OverwriteNode) || n.lists()),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
-    viewMessage: () => messageLine(provider.viewMessage(), modSync.message(), statusMessage()),
+    viewMessage,
     standingMessage: () => provider.standingMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
     onViewMessageChanged: (listener) => joinSyncMessages(modSync, statuses).onMessageChanged(listener),
@@ -181,6 +184,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
+    messages: () => linesOf(viewMessage()),
     dispose: () => { disposable.dispose(); },
   };
 }

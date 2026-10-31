@@ -1,5 +1,5 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
-import type { UnreadableSource } from '../wire/unreadableSource';
+import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
@@ -260,6 +260,11 @@ export class PluginFacts {
   /** The failed index (plugins.md, States 6). */
   indexFailureMessage(): string | undefined {
     return this.indexFailure === undefined ? undefined : `Indexing failed: ${this.indexFailure}`;
+  }
+
+  /** Another window holds the record index (ADR-0010), which every row expands into. */
+  heldElsewhereMessage(): string | undefined {
+    return this.expansionOverride?.scope === 'everyRow' ? this.expansionOverride.message : undefined;
   }
 
   /** A record filter matching nothing (common.md, States 5). */

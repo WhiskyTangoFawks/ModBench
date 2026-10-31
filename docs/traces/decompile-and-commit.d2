@@ -37,7 +37,15 @@ manifestadapter -> sourcecommands: "each mod's manifest, when it has one" {class
 sourcecommands -> instanceadapter: "get: each mod's folder, its files and package, hashed" {class: track}
 instance -> instanceadapter: "each mod's files · downloaded files" {class: track}
 instanceadapter -> sourcecommands: "each mod's folder · its files and package, hashed" {class: track}
-sourcecommands -> client: "init: each mod's folder · its assets · its manifest, as bytes" {class: track}
+sourcecommands -> client: "source paths: each file a package yields" {class: track}
+client -> http: envelope {class: track}
+http -> sourceadapter: "source paths" {class: track}
+sourceadapter -> http: "where the source folder holds each file" {class: track}
+http -> client: "each path in the source folder" {class: track}
+client -> sourcecommands: "each path in the source folder" {class: track}
+sourcecommands -> manifestadapter: "the source folder's manifest, as text, at those paths" {class: track}
+manifestadapter -> sourcecommands: "the manifest, as bytes" {class: track}
+sourcecommands -> client: "init: each mod's folder · its assets · its manifest, as bytes · the paths a package yields" {class: track}
 client -> http: envelope {class: track}
 http -> engine: envelope {class: track}
 engine -> commands: "decompile-plugin, every plugin of the mod" {class: track}
