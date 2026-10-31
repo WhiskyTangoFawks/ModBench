@@ -130,6 +130,26 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.False(Directory.Exists(ModFolder));
     }
 
+    [Fact]
+    public async Task ABuildRefusedAfterTheTakenFilesAreWritten_LeavesTheCompiledPluginAndItsStringsAsTheyWere_ReadingAsNoChangeOutsideModbench()
+    {
+        await InitializedWithALocalizedPlugin();
+        WriteInFolder("textures/taken.dds", "from the pack");
+        var before = Directory.GetFiles(ModFolder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+            .Select(file => (file, Convert.ToHexString(File.ReadAllBytes(file)))).ToList();
+
+        var result = (await TestEditService.BuildModHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder)
+        {
+            Archives = [new ArchiveToPack("Mod - Main.ba2", ["not-an-asset.nif"])],
+            Taken = ["textures/taken.dds"],
+        }], NoArchives)).Value();
+
+        Assert.Equal([BuildRefusal.ArchiveFileNotAnAsset], result.Refused.Select(refused => refused.Refusal));
+        Assert.Equal(before, Directory.GetFiles(ModFolder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+            .Select(file => (file, Convert.ToHexString(File.ReadAllBytes(file)))).ToList());
+        Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
+    }
+
     [PosixFact]
     public async Task AFileThatCannotBeReadAfterTheFirstWrite_LandsTheBuildWithThatFailure_NamingWhatItOverwroteSoFar()
     {
