@@ -6,7 +6,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
@@ -142,7 +142,9 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
   }
   if ('unreadable' in hashed) return refusal(hashed.unreadable);
 
-  const installationFile = mod.installationFile === undefined ? undefined : downloadedFileOf(mod.installationFile, nexusFileOf(adapter));
+  const own = mod.installationFile;
+  const installationFile = own === undefined ? undefined
+    : downloadedFileOf(pagedFrom(own, downloadedFiles.find(({ package: pkg }) => pkg.name === basename(own.path))?.file), nexusFileOf(adapter));
   const recorded = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
     hashed.files, hashed.exclude, held);

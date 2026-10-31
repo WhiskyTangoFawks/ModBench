@@ -11,10 +11,10 @@ import { errorMessage } from '../ports/errorMessage';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFileOf, nexusFileOf, type GameHeld, type HashedModFile, type Recorded } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile, type Recorded } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceFolder' | 'installationFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
+  'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>;
 
 /** The repository a mod's decompile and commit makes. */
@@ -98,12 +98,18 @@ async function buildFileOf(adapter: Adapter, { manifest, sources }: Recorded, in
   return { packages, archives: [], steps: [], tools: [], files };
 }
 
+async function downloadedRow(adapter: Pick<Adapter, 'downloadedFile'>, file: InstallationFile): Promise<InstallationFile | undefined> {
+  const row = await adapter.downloadedFile(basename(file.path));
+  return row.kind === 'read' ? row.answer : undefined;
+}
+
 /** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
  *  which takes from the mod's packages each file they give, and its assets. */
 export async function newRepositoryOf(adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
-  const { sourceFolder, folder, installationFile, held } = read;
+  const { sourceFolder, folder, held } = read;
+  const installationFile = read.installationFile === undefined ? undefined : pagedFrom(read.installationFile, await downloadedRow(adapter, read.installationFile));
   const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());

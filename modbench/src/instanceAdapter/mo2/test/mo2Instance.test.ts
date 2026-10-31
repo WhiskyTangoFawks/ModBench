@@ -2005,14 +2005,12 @@ describe('the MO2 Instance adapter', () => {
         });
       });
 
-      it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
+      it('answers unreadable, saying this machine does not hold the downloaded file and no system error, when it is gone', async () => {
         await rm(join(root, 'downloads', DOWNLOADED_FILE));
 
         const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
-        const { reason } = expectKind(answer, 'unreadable');
-        expect(reason).toContain('ENOENT');
-        expect(reason).toContain(DOWNLOADED_FILE);
+        expect(expectKind(answer, 'unreadable').reason).toBe(`this machine does not hold ${DOWNLOADED_FILE}, the file it is installed from`);
       });
 
       it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
@@ -2027,11 +2025,11 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('a downloaded file by its name', () => {
-      it('answers the file of that name in the downloads folder, with its size and hash and each entry\'s', async () => {
+      it('answers the file of that name in the downloads folder, with its page, size and hash and each entry\'s', async () => {
         const answer = await managerOver(root, { installationFileReader: fakeInstallationFileReader(['textures/a.dds']) }).downloadedFile(DOWNLOADED_FILE);
 
         expect(answer).toEqual({
-          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
+          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
         });
       });
 
