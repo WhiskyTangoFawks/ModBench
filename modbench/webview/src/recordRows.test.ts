@@ -134,7 +134,7 @@ describe('a Partial Form column\'s own fields', () => {
     ]),
     [MASTER, MOD], [MOD],
   ));
-  const [id, struct] = rows;
+  const [, struct] = rows;
 
   it('show their values, read-only', () => {
     const cell = struct?.cells.get(MOD);
