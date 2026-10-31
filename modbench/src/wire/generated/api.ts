@@ -1489,8 +1489,6 @@ export interface components {
             masters: string[];
             isImmutable: boolean;
             origin: string;
-            missingMasters?: string[] | null;
-            lateMasters?: string[] | null;
             inLoadOrder: boolean;
             hasMatchingRecords: boolean;
             isCompiledPlugin: boolean;

@@ -1,7 +1,7 @@
 import type { LoadOrderProgress, PluginAddress, PluginLoadFailure } from '../client';
 
 /** A tick is never the last word: the narrator hands Ready to the views after the final tick —
- *  otherwise read-only state and master issues would vanish from a fully reconciled tree. */
+ *  otherwise read-only state and sorting statuses would vanish from a fully reconciled tree. */
 export function makeReconcileProgressHandler(deps: {
   applyLoadOrder: (indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]) => void;
 }): (status: LoadOrderProgress) => void {

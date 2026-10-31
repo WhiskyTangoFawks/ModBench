@@ -18,6 +18,8 @@ export function pluginsTreeOver(
     publishChangedOutside: () => undefined,
     publishFailedToRead: () => undefined,
     publishSourceUnreadable: () => undefined,
+    publishSortingErrors: () => undefined,
+    publishSortingWarnings: () => undefined,
     modStatuses: NO_MOD_STATUSES,
     ...overrides,
   });

@@ -55,6 +55,10 @@ interface PluginsTreeProviderOptions {
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The Plugin source unreadable status's other surface, the Problems panel, pointing at decompile. */
   publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
+  /** The Sorting errors status's other surface, the Problems panel. */
+  publishSortingErrors: (errors: readonly PluginProblem[]) => void;
+  /** The Sorting warnings status's other surface, the Problems panel. */
+  publishSortingWarnings: (warnings: readonly PluginProblem[]) => void;
   /** Each mod's folder against its manifest, as mEdit last answered it. */
   modStatuses: LastModStatuses;
 }
@@ -125,10 +129,13 @@ export class PluginsTreeProvider
     this.facts = new PluginFactsFeed({
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
+      activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
       publishFailedToRead: options.publishFailedToRead,
       publishSourceUnreadable: options.publishSourceUnreadable,
+      publishSortingErrors: options.publishSortingErrors,
+      publishSortingWarnings: options.publishSortingWarnings,
     });
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);

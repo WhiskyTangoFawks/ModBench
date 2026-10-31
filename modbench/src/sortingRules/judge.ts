@@ -2,6 +2,8 @@ interface PluginFacts {
   origin: string;
   masters: readonly string[];
   blueprint: boolean;
+  /** The master flag, which a plugin of the `.esm` extension also has. */
+  master: boolean;
 }
 
 /** `undefined` while mEdit cannot say, and a rule that needs the answer is not judged. */
@@ -13,9 +15,9 @@ interface PluginRef {
 }
 
 export interface BrokenRule {
-  rule: 'master' | 'blueprint';
-  level: 'error';
-  plugins: [PluginRef, PluginRef];
+  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag';
+  level: 'error' | 'warning';
+  plugins: PluginRef[];
   reason: string;
 }
 
@@ -33,8 +35,14 @@ function brokenMasters(order: readonly string[], factsOf: PluginFactsOf): Broken
     return facts.masters.flatMap((masterName): BrokenRule[] => {
       const masterAt = at.get(fold(masterName));
       const master = masterAt === undefined ? undefined : order[masterAt];
-      const masterFacts = master === undefined ? undefined : factsOf(master);
-      if (master === undefined || masterAt === undefined || masterFacts === undefined) return [];
+      if (master === undefined || masterAt === undefined) {
+        return [{
+          rule: 'missingMaster', level: 'error', plugins: [refOf(plugin, facts)],
+          reason: `"${masterName}" is a master of "${plugin}", and is missing or not active.`,
+        }];
+      }
+      const masterFacts = factsOf(master);
+      if (masterFacts === undefined) return [];
       if (masterFacts.blueprint !== facts.blueprint || masterAt < index) return [];
       return [{
         rule: 'master', level: 'error', plugins: [refOf(master, masterFacts), refOf(plugin, facts)],
@@ -59,7 +67,22 @@ function brokenBlueprints(order: readonly string[], factsOf: PluginFactsOf): Bro
   });
 }
 
+function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
+  return order.flatMap((flagged, index): BrokenRule[] => {
+    const facts = factsOf(flagged);
+    if (facts?.master !== true) return [];
+    return order.slice(0, index).flatMap((other): BrokenRule[] => {
+      const otherFacts = factsOf(other);
+      if (otherFacts?.master !== false) return [];
+      return [{
+        rule: 'masterFlag', level: 'warning', plugins: [refOf(flagged, facts), refOf(other, otherFacts)],
+        reason: `"${flagged}" has the master flag, so the game loads it before "${other}", which has not.`,
+      }];
+    });
+  });
+}
+
 /** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first. */
 export function judge(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
-  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf)];
+  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf), ...brokenMasterFlags(order, factsOf)];
 }

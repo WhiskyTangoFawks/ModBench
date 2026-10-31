@@ -1404,8 +1404,8 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
   });
 });
 
-describe('PluginsTreeProvider — master-issue decoration', () => {
-  const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { missingMasters: issues })]);
+describe('PluginsTreeProvider — sorting-error decoration', () => {
+  const withIssues = (h: Harness, masters: string[]) => reconcile(h, [held('A.esp', { masters })]);
 
   it('never touches collapsibleState, and the leading line stays the checkbox alone', async () => {
     const h = makeTree([A_ROW()]);
@@ -1420,7 +1420,7 @@ describe('PluginsTreeProvider — master-issue decoration', () => {
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);
-    expect((await rowItem(h)).tooltip).toContain('Missing master');
+    expect((await rowItem(h)).tooltip).toContain('is missing or not active');
 
     await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
 
@@ -1461,15 +1461,15 @@ describe('PluginsTreeProvider fact refresh', () => {
 describe('PluginsTreeProvider — a name under two origins joins to the row own origin, replies listing the row\'s own plugin first so a name-only join would answer with the other', () => {
   const SHARED_ROW = () => plugin({ name: 'Shared.esp', line: 0, origin: 'ModA' });
 
-  it('badges the row from its own plugin master issues, not the other plugin', async () => {
+  it('badges the row from its own plugin sorting errors, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', missingMasters: ['AMaster.esm'] }),
-      held('Shared.esp', { origin: 'ModB', missingMasters: ['BMaster.esm'] }),
+      held('Shared.esp', { origin: 'ModA', masters: ['AMaster.esm'] }),
+      held('Shared.esp', { origin: 'ModB', masters: ['BMaster.esm'] }),
     ]);
 
     const tooltip = tooltipAsString((await rowItem(h)).tooltip);
-    expect(tooltip).toContain('Missing masters: AMaster.esm');
+    expect(tooltip).toContain('"AMaster.esm" is a master of "Shared.esp"');
     expect(tooltip).not.toContain('BMaster.esm');
   });
 });
