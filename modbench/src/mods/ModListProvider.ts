@@ -73,14 +73,12 @@ export class SeparatorNode extends vscode.TreeItem {
     public readonly separator: Separator,
     public readonly mods: Mod[],
     public readonly shown: ChildrenShown = 'all',
-    status?: ModStatus,
   ) {
     super(separator.name, expanderOver(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
     this.resourceUri = separatorRowUri(separator.name);
     this.iconPath = blankIcon();
     this.contextValue = 'separator';
-    this.description = status && statusDescription(status);
   }
 }
 
@@ -249,7 +247,7 @@ export class ModListProvider
   /** The modlist's badge: how many mods differ from their manifests or have none (modlist-repository.md, Status, story 4). */
   badge(): { value: number; tooltip: string } | undefined {
     const count = this.instanceValue.mods.filter((entry) => {
-      const status = this.statusOf(entry);
+      const status = entry.kind === 'mod' ? this.statusOf(entry) : undefined;
       return status !== undefined && countsInBadge(status);
     }).length;
     return count === 0 ? undefined : { value: count, tooltip: `Mods that differ from their manifests or have none: ${count}` };
@@ -401,7 +399,7 @@ export class ModListProvider
   }
 
   private separatorNode(separator: Separator, mods: Mod[], shown?: ChildrenShown): SeparatorNode {
-    return new SeparatorNode(separator, mods, shown, this.statusOf(separator));
+    return new SeparatorNode(separator, mods, shown);
   }
 
   private overwriteNode(): OverwriteNode {

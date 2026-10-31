@@ -361,13 +361,12 @@ describe('the agent server, given an instance value', () => {
     });
     beforeEach(() => { statusRead.asked = 0; });
 
-    it('answers each status Mod status derived, by the kind and name of its mod or separator', async () => {
+    it('answers each status Mod status derived, by the name of its mod, and none for a separator', async () => {
       statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], notInPackage: ['b.nif'], otherBytes: ['c.nif'] }), status('Textures_separator', { noManifest: true })];
       const { client } = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], noHost: [], packagesLacking: [], packages: [] },
-        { kind: 'separator', name: 'Textures', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], packages: [] },
+        { name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], noHost: [], packagesLacking: [], packages: [] },
       ]);
     });
 
