@@ -13,6 +13,7 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { TerminalEnvironment } from '../scriptEnvironment';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
 import type { InstanceValue } from '../../instanceLoader/instance';
@@ -63,6 +64,10 @@ afterEach(async () => {
 });
 
 const NO_ENVIRONMENT = { forEach: () => undefined };
+const NO_TOOLBOX = {
+  game: { name: 'Fallout 4', folder: GAME_FOLDER_NOT_FOUND, versions: { kind: 'unresolved' } },
+  gameFolderLinks: 0, holdsRepository: false, deployment: { folder: null },
+};
 const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
@@ -150,7 +155,7 @@ describe('the agent server, given an instance value', () => {
   it('reads the profiles and the active one', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
-    expect(await read(client, 'list_profiles')).toMatchObject({ active: 'Survival', profiles: ['Default', 'Survival'] });
+    expect(await read(client, 'list_profiles')).toEqual({ ...NO_TOOLBOX, active: 'Survival', profiles: ['Default', 'Survival'] });
   });
 
   it('reads the Toolbox: the game and where it was looked for, its versions, the links, the repository, the deployment folder and where plugins.txt goes', async () => {
@@ -166,12 +171,21 @@ describe('the agent server, given an instance value', () => {
       pluginsTxtPlace: (game, folder) => { asked.push(`${game}@${folder}`); return Promise.resolve({ folder: '/prefix/plugins' }); },
     });
 
-    expect(await read(client, 'list_profiles')).toMatchObject({
+    expect(await read(client, 'list_profiles')).toEqual({
+      active: 'Default', profiles: ['Default'],
       game: { name: 'Fallout 4', folder: { kind: 'notFound', looked, setting: 'modbench.gameFolder' }, versions: { kind: 'unresolved' } },
       gameFolderLinks: 3, holdsRepository: true,
       deployment: { folder: '/deploy', pluginsTxt: { folder: '/prefix/plugins' } },
     });
     expect(asked).toEqual(['Fallout 4@/deploy']);
+  });
+
+  it('reads a found game folder with its root and the versions of the game and its script extender', async () => {
+    const gameFolder = { kind: 'found' as const, root: '/g', dataFolder: '/g/Data' };
+    const programVersions = { kind: 'found' as const, game: { kind: 'read' as const, program: 'Fallout4.exe', version: '1.10' }, extender: { kind: 'notFound' as const, program: 'f4se_loader.exe' } };
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ gameFolder, programVersions })));
+
+    expect(await read(client, 'list_profiles')).toMatchObject({ game: { folder: gameFolder, versions: programVersions } });
   });
 
   it('reads no deployment folder as none, and asks nothing of where plugins.txt goes', async () => {
@@ -350,7 +364,7 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(instance);
     instance.publish(instanceValueFixture({ activeProfile: 'Default', profiles: ['Default'] }));
 
-    expect(await read(client, 'list_profiles')).toMatchObject({ active: 'Default', profiles: ['Default'] });
+    expect(await read(client, 'list_profiles')).toEqual({ ...NO_TOOLBOX, active: 'Default', profiles: ['Default'] });
   });
 
   it('refuses a read whose downloads folder is unresolved with the reason, in the Output and in no notification', async () => {

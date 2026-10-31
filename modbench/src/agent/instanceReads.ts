@@ -11,7 +11,7 @@ export interface DeploymentRead {
 export interface Read {
   readonly name: string;
   readonly description: string;
-  readonly of: (value: InstanceValue, deployment: DeploymentRead | undefined) => unknown;
+  readonly of: (value: InstanceValue, deployment: DeploymentRead) => unknown;
 }
 
 async function deploymentOf(deployment: DeploymentRead, gameName: string) {
@@ -27,7 +27,7 @@ export const INSTANCE_READS: readonly Read[] = [
       active: activeProfile, profiles,
       game: { name: gameName, folder: gameFolder, versions: programVersions },
       gameFolderLinks, holdsRepository,
-      ...(deployment && { deployment: await deploymentOf(deployment, gameName) }),
+      deployment: await deploymentOf(deployment, gameName),
     }),
   },
   {
