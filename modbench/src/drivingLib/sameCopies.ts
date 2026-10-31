@@ -1,11 +1,15 @@
 import type { FileOrigin } from '../instanceLoader/instance';
-import type { FileRead, FileStamp, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+
+type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
+interface FileStamp { readonly size: bigint; readonly modifiedNs: bigint }
 
 /** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */
 export type Copy = { readonly origin: FileOrigin } & (
   | { readonly kind: 'read'; readonly sameAs: number; readonly size: bigint; readonly modifiedNs: bigint }
   | { readonly kind: 'unreadable'; readonly reason: string });
+
+export const modifiedMs = (copy: { readonly modifiedNs: bigint }): number => Number(copy.modifiedNs / 1_000_000n);
 
 export interface FileCopies {
   readonly relativePath: string;
@@ -41,7 +45,10 @@ function numbered(copies: readonly Stamped[]): Copy[] {
   });
 }
 
-export type CopyReads = Pick<InstanceAdapter, 'fileStamp' | 'originFileHash'>;
+export interface CopyReads {
+  fileStamp(path: string): Promise<FileRead<FileStamp>>;
+  originFileHash(path: string): Promise<FileRead<{ readonly hash: string }>>;
+}
 
 async function contentsOf(adapter: CopyReads, path: string, stamp: FileRead<FileStamp>, sizes: readonly bigint[]): Promise<Contents> {
   if (stamp.kind === 'unreadable') return stamp;

@@ -416,7 +416,6 @@ describe('renameMod', () => {
     expect(outcome).toEqual({ applied: true, lineRefusals: [] });
     expect(fake.calls).toEqual([
       { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
-      { verb: 'keepOutOfPublisher' },
       orderWrite([line], 'Default'),
       orderWrite([line], 'Secondary'),
     ]);
@@ -430,7 +429,7 @@ describe('renameMod', () => {
     const outcome = await rename(commands);
 
     expect(outcome).toEqual({ applied: true, lineRefusals: [{ profile: 'Secondary', refusal: 'disk full' }] });
-    expect(verbs(fake.calls)).toEqual(['renameModFolder', 'keepOutOfPublisher', 'changeModOrder', 'changeModOrder']);
+    expect(verbs(fake.calls)).toEqual(['renameModFolder', 'changeModOrder', 'changeModOrder']);
   });
 
   it('writes nothing for the name it already has, saying nothing changed', async () => {
@@ -741,7 +740,6 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     expect(fake.calls).toEqual([
       { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
       follow({ from: '/instance/mods/Harder VATS', to: '/instance/mods/Harder VATS 2' }),
-      { verb: 'keepOutOfPublisher' },
       expect.objectContaining({ verb: 'changeModOrder' }),
     ]);
   });
@@ -769,14 +767,6 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
 
     expect(outcome).toEqual({ applied: true, lineRefusals: [], tagRefusal: 'compiler_settings.json is not JSON' });
-  });
-
-  it('rename lands with its own failure when the tags followed and Modbench\'s files could not be kept out', async () => {
-    const { commands } = publisherOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json is not JSON') });
-
-    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
-
-    expect(outcome).toEqual({ applied: true, lineRefusals: [], keepOutRefusal: 'compiler_settings.json is not JSON' });
   });
 
   it('uninstall removes them for every mod it trashed, in one write after the trash', async () => {

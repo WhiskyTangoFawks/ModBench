@@ -28,7 +28,7 @@ describe('modlistRepositoryCommands git init', () => {
     const result = await commands.gitInit();
 
     expect([result.applied, adapter.calls, repositories]).toEqual([
-      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'keepOutOfPublisher' }, { verb: 'writePathTokens' }], ['uri:/instance'],
+      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }], ['uri:/instance'],
     ]);
   });
 
@@ -38,12 +38,12 @@ describe('modlistRepositoryCommands git init', () => {
     expect(await commands.gitInit()).toEqual({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
   });
 
-  it('takes back the repository, the ignore list and the publisher\'s ignore list entries it made when the path tokens could not be written, naming why', async () => {
+  it('takes back the repository, and the ignore list it made when the path tokens could not be written, naming why', async () => {
     const { commands, adapter } = commandsOver({ refusals: refusing('writePathTokens', 'could not lock config file .git/config') });
 
     expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: 'could not lock config file .git/config' },
-      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens', 'takeBackKeepOutOfPublisher', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
     ]);
   });
 
@@ -54,7 +54,7 @@ describe('modlistRepositoryCommands git init', () => {
       const result = await commands.gitInit();
 
       expect([result, repositories, adapter.calls]).toEqual([
-        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'keepOutOfPublisher' }, { verb: 'writePathTokens' }],
+        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }],
       ]);
     });
 
@@ -65,7 +65,7 @@ describe('modlistRepositoryCommands git init', () => {
 
       expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
         { applied: true, pushRefusalNotWritten: '/instance/.git/hooks/pre-push already exists' },
-        ['writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens'],
+        ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens'],
       ]);
     });
 
@@ -73,18 +73,9 @@ describe('modlistRepositoryCommands git init', () => {
       const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
 
       expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens', 'takeBackKeepOutOfPublisher', 'takeBackPushRefusal', 'takeBackIgnoreList'],
+        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'takeBackIgnoreList'],
       ]);
     });
-  });
-
-  it('takes back everything before the publisher\'s ignore list when it could not be written', async () => {
-    const { commands, repositories, adapter } = commandsOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json cannot be written') });
-
-    expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-      { applied: false, refusal: 'compiler_settings.json cannot be written' }, ['uri:/instance'],
-      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
-    ]);
   });
 
   it('refuses before it writes anything when the publisher\'s configuration cannot be read, naming why', async () => {

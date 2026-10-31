@@ -37,7 +37,7 @@ import { registerManifestGestures, type ManifestGestureDeps } from './manifestGe
 import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
 import type { CheckForUpdates } from '../modCommands/checkForUpdates';
 import { registerConflictTable } from './conflictTableEditor';
-import { sameCopies, type CopyReads } from './sameCopies';
+import { sameCopies, type CopyReads } from '../drivingLib/sameCopies';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,

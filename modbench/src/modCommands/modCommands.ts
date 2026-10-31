@@ -382,10 +382,10 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
 }
 
 /** `lineRefusals` names each profile whose line could not be renamed: it loses the mod's place until
- *  `mod sync`. `tagRefusal`: the publisher tags could not follow. `keepOutRefusal`: Modbench's files
- *  could not be kept out of the publisher. */
+ *  `mod sync`. `tagRefusal`: the publisher tags could not follow, or Modbench's files could not be
+ *  kept out of the publisher. */
 export type RenameModResult =
-  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string; keepOutRefusal?: string }
+  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string }
   | { applied: false; refusal: string };
 
 async function refusalOf(attempt: () => Promise<unknown>): Promise<string | undefined> {
@@ -402,8 +402,7 @@ async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string
     const target = await adapter.modFolderPath(to);
     if (from !== undefined && target !== undefined) await adapter.followModFolders([{ from, to: target }]);
   });
-  const keepOutRefusal = await refusalOf(() => adapter.keepOutOfPublisher());
-  return { ...(tagRefusal !== undefined && { tagRefusal }), ...(keepOutRefusal !== undefined && { keepOutRefusal }) };
+  return tagRefusal === undefined ? {} : { tagRefusal };
 }
 
 // The folder, then the line in each profile, the active one first. A profile that does not list the mod is left as it was.

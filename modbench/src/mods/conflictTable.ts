@@ -1,11 +1,11 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
 import type { FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
-import type { Copy, FileCopies } from './sameCopies';
+import { modifiedMs, type Copy, type FileCopies } from '../drivingLib/sameCopies';
 import { inFileOrderConflict, modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
-import { fileStates, worstCell, worstRow } from './conflictStates';
+import { fileStates, worstCell, worstRow } from '../drivingLib/conflictStates';
 
 type ReadCopy = Extract<Copy, { kind: 'read' }>;
 
@@ -39,8 +39,6 @@ function contentLetters(copies: readonly Copy[]): ReadonlyMap<number, string> {
 
 const twoDigits = (n: number): string => String(n).padStart(2, '0');
 const localDay = (date: Date): string => `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
-
-const modifiedMs = (copy: ReadCopy): number => Number(copy.modifiedNs / 1_000_000n);
 
 function valueOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: ReadonlyMap<number, string>): string {
   if (cellValue === 'contents') return letters.get(copy.sameAs) ?? '';
