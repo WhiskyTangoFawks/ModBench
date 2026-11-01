@@ -49,14 +49,15 @@ describe('a script step, run as a task Modbench makes', () => {
     const source = mkdtempSync(path.join(os.tmpdir(), 'modbench-script-source-'));
     const folder = mkdtempSync(path.join(os.tmpdir(), 'modbench-script-mod-'));
     folders.push(source, folder);
-    writeFileSync(path.join(source, 'fix.js'), "const args = process.argv.slice(2); require('fs').writeFileSync('ran.json', JSON.stringify({ args, port: process.env.MEDIT_PORT, pythonPath: process.env.PYTHONPATH })); process.exit(Number(args.at(-1)));");
+    writeFileSync(path.join(source, 'fix.js'), "const { delimiter, join } = require('path'); const args = process.argv.slice(2); const [scripts = ''] = (process.env.PYTHONPATH ?? '').split(delimiter); require('fs').writeFileSync('ran.json', JSON.stringify({ args, port: process.env.MEDIT_PORT, meditOnPythonPath: require('fs').existsSync(join(scripts, 'medit.py')) })); process.exit(Number(args.at(-1)));");
     const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScripts: source });
 
     const why = await tasks.whyScriptFailed({ kind: 'script', script: 'fix.js', args: ['A.esp', '5'] }, { sourceFolder: source, folder });
 
-    const ran = JSON.parse(readFileSync(path.join(folder, 'ran.json'), 'utf8')) as { args: string[]; port: string; pythonPath: string };
-    assert.deepStrictEqual([why, ran.args, ran.port, path.basename(ran.pythonPath.split(path.delimiter)[0] ?? ''), existsSync(path.join(ran.pythonPath.split(path.delimiter)[0] ?? '', 'medit.py'))],
-      ["step 'fix.js' exited with code 5", ['A.esp', '5'], TEST_PORT, 'scripts', true]);
+    assert.deepStrictEqual(
+      [why, JSON.parse(readFileSync(path.join(folder, 'ran.json'), 'utf8'))],
+      ["step 'fix.js' exited with code 5", { args: ['A.esp', '5'], port: TEST_PORT, meditOnPythonPath: true }],
+    );
   });
 });
 
