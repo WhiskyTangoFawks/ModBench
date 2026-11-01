@@ -1,8 +1,16 @@
 import type { InstanceValue } from './instance';
 
-/** Whether the game finds a file at `relativePath` in its Data folder: a winning file of mod order, or a plugin the
- *  instance holds, which includes the game folder's own. As LOOT sees the Data folder. */
-export function fileIsPresent({ files, plugins }: Pick<InstanceValue, 'files' | 'plugins'>, relativePath: string): boolean {
+type PresenceFacts = Pick<InstanceValue, 'files' | 'plugins' | 'pluginsLoadedWithNoLine' | 'dataFolderPlugins'>;
+
+/** Whether the game finds a file at `relativePath` in its Data folder, as LOOT sees it: a winning file of mod order,
+ *  a plugin the instance resolved to a file, one the game loads with no line, or what the game folder's Data folder
+ *  lists at its root. A line that no file provides is not a file. */
+export function fileIsPresent(facts: PresenceFacts, relativePath: string): boolean {
   const folded = relativePath.toLowerCase();
-  return files.get(relativePath.replace(/\\/g, '/')) !== undefined || plugins.some((plugin) => plugin.name.toLowerCase() === folded);
+  const named = (name: string): boolean => name.toLowerCase() === folded;
+  const { files, plugins, pluginsLoadedWithNoLine = [], dataFolderPlugins } = facts;
+  return files.get(relativePath.replace(/\\/g, '/')) !== undefined
+    || plugins.some((plugin) => plugin.path !== undefined && named(plugin.name))
+    || pluginsLoadedWithNoLine.some((plugin) => named(plugin.name))
+    || (dataFolderPlugins.kind === 'listed' && [...dataFolderPlugins.names].some(named));
 }
