@@ -41,7 +41,7 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue'>, private readonly log: (line: string) => void) {}
+  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -94,7 +94,9 @@ export class ModStatuses {
 
   private async statusOf(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
-    return statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest)));
+    const [values, installed] = await Promise.all([this.reads.modValue(mod.folder, packagesAskedAt(manifest)), this.reads.installationFile(mod.name)]);
+    const status = statusFrom(mod, manifest, values);
+    return installed.kind === 'unreadable' ? { ...status, installationFileProblem: installed.reason } : status;
   }
 
   private hold(derived: ReadonlyMap<string, ModStatus>): void {

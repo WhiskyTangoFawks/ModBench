@@ -18,6 +18,13 @@ describe('a mod\'s unfinished states, each on the file it concerns (modlist-repo
   });
 
   it.each([
+    ['with a manifest', held({ installationFileProblem: 'this machine does not hold A.7z, the file it is installed from' })],
+    ['with none', status('Mod', { noManifest: true, installationFileProblem: 'this machine does not hold A.7z, the file it is installed from' })],
+  ])('puts an installation file the mod manager names that is missing or unreadable on the folder, %s', (_manifest, mod) => {
+    expect(statusProblems(mod, folder)).toContainEqual({ file: folder, message: 'this machine does not hold A.7z, the file it is installed from' });
+  });
+
+  it.each([
     ['a file that differs', { differing: ['a.nif'] }, 'a.nif', 'Differs from its manifest.'],
     ['a file no line names', { namedByNoLine: ['mine.txt'] }, 'mine.txt', 'No line of the mod\'s manifest names this file.'],
   ])('puts %s on that file', (_state, over, path, message) => {

@@ -81,7 +81,8 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingTasks } from '../../test/recordingTasks';
 
 
-const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue'> => ({
+const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue' | 'installationFile'> => ({
+  installationFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
   modValue: (folder, asked) => modValueOver({
   filesIn: listing,
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),

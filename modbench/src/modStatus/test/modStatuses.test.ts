@@ -18,6 +18,7 @@ beforeEach(async () => {
   logged = [];
   asked = [];
   hashed = [];
+  installationFiles = new Map();
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -53,7 +54,10 @@ const folder = (kind: EntryRef['kind'], name: string, path: string, modName = na
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
   ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), ...over });
 
-const instance: Pick<InstanceAdapter, 'modValue'> = {
+let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
+
+const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile'> = {
+  installationFile: (mod) => Promise.resolve(installationFiles.get(mod) ?? { kind: 'read', answer: undefined }),
   modValue: (folder, wanted) => {
     asked.push(basename(folder));
     return modValueOver(reads, folder, wanted);
@@ -87,6 +91,32 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
 
     expect((await statuses.current()).get('ModA')?.packages).toEqual([file('A.7z'), { kind: 'gameFolder' }]);
+  });
+
+  it('says why the installation file the mod manager names is missing or unreadable, with or without a manifest (Status, story 7)', async () => {
+    const [withManifest, without] = [await folderOf('ModA'), await folderOf('ModB')];
+    await writeManifestIn(withManifest, EMPTY);
+    installationFiles = new Map([
+      ['ModA', { kind: 'unreadable', reason: 'this machine does not hold A.7z, the file it is installed from' }],
+      ['ModB', { kind: 'unreadable', reason: 'Modbench cannot tell what B.rar installs: 7z crashed' }],
+    ]);
+    const statuses = statusesLogging();
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', withManifest), folder('mod', 'ModB', without)]));
+    const derived = await statuses.current();
+
+    expect([derived.get('ModA')?.installationFileProblem, derived.get('ModB')?.installationFileProblem]).toEqual([
+      'this machine does not hold A.7z, the file it is installed from', 'Modbench cannot tell what B.rar installs: 7z crashed',
+    ]);
+  });
+
+  it('says nothing of an installation file the mod manager names that reads, or names none', async () => {
+    const mod = await folderOf('ModA');
+    const statuses = statusesLogging();
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+
+    expect((await statuses.current()).get('ModA')?.installationFileProblem).toBeUndefined();
   });
 
   it('hashes no file of a mod whose folder holds no manifest', async () => {

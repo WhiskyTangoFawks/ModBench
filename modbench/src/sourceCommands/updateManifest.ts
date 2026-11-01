@@ -65,19 +65,19 @@ async function readMod(
     return { read: { name: mod, folder, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
   }
   const installed = await adapter.installationFile(mod);
-  if (installed.kind === 'unreadable') return { refusal: installed.reason };
-  const taken = await gameFilesOf(adapter, { mod, folder }, game, installed.answer !== undefined);
+  const installationFile = installed.kind === 'read' ? installed.answer : undefined;
+  const taken = await gameFilesOf(adapter, { mod, folder }, game, installationFile !== undefined);
   if ('refusal' in taken) return taken;
   return {
     read: {
       name: mod, folder, ...withGame(game, taken.gameFiles),
-      ...installed.answer === undefined ? {} : { installationFile: installed.answer },
+      ...installationFile === undefined ? {} : { installationFile },
     },
     notes: [
       ...taken.notes,
-      ...installed.answer?.unpagedGame === undefined
+      ...installationFile?.unpagedGame === undefined
         ? []
-        : [`its installation file comes from '${installed.answer.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no host`],
+        : [`its installation file comes from '${installationFile.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no host`],
     ],
   };
 }
