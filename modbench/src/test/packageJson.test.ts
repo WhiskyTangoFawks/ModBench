@@ -693,7 +693,6 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const CREATE_RECORD_ENTRY: [string, string] = ['modbench.record.create', '3_create'];
   const INIT_SOURCE_MOD_ENTRY: [string, string] = ['modbench.mod.initSourceMod', '4_sourceControl'];
   const DECOMPILE_ENTRY: [string, string] = ['modbench.plugin.decompile', '4_sourceControl'];
-  const BUILD_ENTRY: [string, string] = ['modbench.mod.build', '4_sourceControl'];
   const COPY_RECORD_ENTRY: [string, string] = ['modbench.record.copy', '5_copy'];
   const DELETE_RECORD_ENTRY: [string, string] = ['modbench.record.delete', '6_destroy'];
   const recordKinds = ['record', 'worldspace', 'cell', 'placed'];
@@ -701,10 +700,10 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
     ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_ENTRY, BUILD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled inOverwrite nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
@@ -1176,7 +1175,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.createEmpty', '3_create'],
       ['modbench.mod.install', '3_create'],
       ['modbench.mod.initSourceMod', '4_sourceControl'],
-      ['modbench.mod.build', '4_sourceControl'],
       [UPDATE_MANIFEST, '4_sourceControl'],
       [RESTORE_FROM_MANIFEST, '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
@@ -1212,7 +1210,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const CREATE_EMPTY_ENTRY: [string, string] = ['modbench.mod.createEmpty', '3_create'];
   const INSTALL_ENTRY: [string, string] = ['modbench.mod.install', '3_create'];
   const INIT_SOURCE_MOD_ENTRY: [string, string] = ['modbench.mod.initSourceMod', '4_sourceControl'];
-  const BUILD_ENTRY: [string, string] = ['modbench.mod.build', '4_sourceControl'];
   const COPY_VALUE_ENTRY: [string, string] = ['modbench.copyValue', '5_copy'];
   const UNINSTALL_ROW_ENTRY: [string, string] = ['modbench.mod.uninstall', '6_destroy'];
   const ENABLE_ENTRY: [string, string] = ['modbench.mod.enable', '2_change'];
@@ -1225,8 +1222,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod disabled sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, BUILD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod disabled sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, [])), [MOVE_ENTRY, ADD_SEPARATOR_ENTRY, ['modbench.separator.rename', '3_create'], COPY_VALUE_ENTRY, ['modbench.separator.delete', '6_destroy']]],
@@ -1362,7 +1359,7 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, 'modbench.source.build', ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1449,5 +1446,22 @@ describe('package.json Referenced By menus', () => {
 describe('package.json contributes the strings language as a setting (editor-fields.md, By type)', () => {
   it('a string defaulting to English', () => {
     expect(pkg.contributes.configuration.properties['modbench.stringsLanguage']).toMatchObject({ type: 'string', default: 'English' });
+  });
+});
+
+describe('package.json build\'s entry points (source.md, Menus and keys)', () => {
+  const ON_A_SOURCE_RESOURCE = 'resource in modbench.source.buildTargets';
+  const entriesOf = (menu: string, command = 'modbench.source.build') =>
+    present(Reflect.get(pkg.contributes.menus, menu), `contributes.menus['${menu}']`).filter((e: MenuEntry) => e.command === command);
+
+  it.each(['explorer/context', 'editor/title/run'])('offers the build entry point in %s on a source mod\'s folder and build file alone', (menu) => {
+    const entries = entriesOf(menu);
+
+    expect(entries).toHaveLength(1);
+    expect(requires(present(entries[0], menu).when, ON_A_SOURCE_RESOURCE)).toBe(true);
+  });
+
+  it('offers build on no Mods or Plugins row', () => {
+    expect(entriesOf('view/item/context', 'modbench.mod.build').filter((e: MenuEntry) => /modbench\.(modList|pluginListTree)/.test(e.when))).toEqual([]);
   });
 });
