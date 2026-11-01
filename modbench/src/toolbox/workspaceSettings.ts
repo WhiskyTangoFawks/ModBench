@@ -22,8 +22,3 @@ export const deploymentFolderSetting: DeploymentRowSetting = {
   nameOf: (path) => vscode.Uri.file(path).path.split('/').findLast((part) => part !== '') ?? '',
   changed: (listener) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${DEPLOYMENT_FOLDER_SETTING_KEY}`, listener),
 };
-
-export const attachToBackendPort = (): number | null | undefined => meditConfig().get<number | null>('attachToBackendPort');
-
-export const scriptEnvironmentFileOf = (instanceRoot: string) => (): string | undefined =>
-  vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile');

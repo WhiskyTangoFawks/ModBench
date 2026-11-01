@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, stopMEditClient, type MEditClient } from './client';
+import { attachPortOf, createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -28,7 +28,7 @@ import type { PluginsShown } from './drivingLib/pluginsShown';
 import { deploymentFolderOf } from './instanceCommands/deploy';
 import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
-import { attachToBackendPort, deploymentFolderSetting, gameFolderSetting, scriptEnvironmentFileOf } from './toolbox/workspaceSettings';
+import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
 import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
@@ -70,6 +70,7 @@ import { deployedPath, hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
+import { scriptEnvironmentFileOf } from './agent/pythonEnvFile';
 import { reachMEditFromEnvFile } from './agent/scriptEnvironmentFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { modSyncOn, registerModSyncCommand } from './mods/modSync';
@@ -281,7 +282,7 @@ function start(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort: attachToBackendPort() }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
