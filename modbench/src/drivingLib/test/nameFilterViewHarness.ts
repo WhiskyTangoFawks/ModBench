@@ -78,6 +78,8 @@ export class FakeTreeView {
   selection: readonly unknown[] = [];
   visible = true;
   revealRefusal: Error | undefined;
+  revealHeldUntil: Promise<void> | undefined;
+  readonly revealsHeld: unknown[] = [];
   readonly reveals: { label: unknown; options: unknown }[] = [];
   private readonly listeners = {
     selection: [] as Listener<{ selection: readonly unknown[] }>[],
@@ -96,9 +98,11 @@ export class FakeTreeView {
   dispose = (): void => undefined;
 
   reveal(element: { label: unknown }, options: unknown): Promise<void> {
-    if (this.revealRefusal) return Promise.reject(this.revealRefusal);
-    this.reveals.push({ label: element.label, options });
-    return Promise.resolve();
+    if (this.revealHeldUntil) this.revealsHeld.push(element.label);
+    return (this.revealHeldUntil ?? Promise.resolve()).then(() => {
+      if (this.revealRefusal) throw this.revealRefusal;
+      this.reveals.push({ label: element.label, options });
+    });
   }
 
   selectRows(rows: readonly unknown[]): void {

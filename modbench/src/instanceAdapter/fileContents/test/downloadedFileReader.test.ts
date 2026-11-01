@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { downloadedFileReader } from '../downloadedFileReader';
 
 describe('downloadedFileReader, spawning the binary itself', () => {
-  const FAKE_7Z = process.platform === 'win32' ? '7z.exe' : '7z';
+  const exe = (name: string): string => (process.platform === 'win32' ? `${name}.exe` : name);
+  const FAKE_7Z = exe('7z');
   let bin: string;
   let originalPath: string | undefined;
   let originalNodeOptions: string | undefined;
@@ -14,7 +15,7 @@ describe('downloadedFileReader, spawning the binary itself', () => {
   beforeAll(async () => {
     bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
     await copyFile(process.execPath, join(bin, FAKE_7Z));
-    await writeFile(join(bin, 'exit-as-asked.cjs'), 'require("fs").writeFileSync(process.env.FAKE_7Z_ARGV_FILE, JSON.stringify([require("path").basename(process.argv[1]), ...process.argv.slice(2)])); process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.stderr.write(process.env.FAKE_7Z_STDERR ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
+    await writeFile(join(bin, 'exit-as-asked.cjs'), 'require("fs").writeFileSync(process.env.FAKE_7Z_ARGV_FILE, JSON.stringify([require("path").basename(process.argv[1]), ...process.argv.slice(2)])); process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.stderr.write(process.env.FAKE_7Z_STDERR ?? ""); if (process.env.FAKE_7Z_BIN_FILE) require("fs").writeFileSync(process.env.FAKE_7Z_BIN_FILE, require("path").basename(process.execPath)); if (process.env.FAKE_7Z_SIGNAL) process.kill(process.pid, process.env.FAKE_7Z_SIGNAL); else process.exit(Number(process.env.FAKE_7Z_EXIT));');
   });
   afterAll(() => rm(bin, { recursive: true, force: true }));
   beforeEach(async () => {
@@ -31,6 +32,8 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     delete process.env.FAKE_7Z_STDOUT;
     delete process.env.FAKE_7Z_STDERR;
     delete process.env.FAKE_7Z_ARGV_FILE;
+    delete process.env.FAKE_7Z_SIGNAL;
+    delete process.env.FAKE_7Z_BIN_FILE;
   });
 
   const argvAsked = async (): Promise<unknown> => JSON.parse(await readFile(argvFile(), 'utf8'));
@@ -39,6 +42,11 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     process.env.FAKE_7Z_ARGV_FILE = argvFile();
     process.env.FAKE_7Z_EXIT = String(code);
     process.env.NODE_OPTIONS = `--require=${JSON.stringify(join(bin, 'exit-as-asked.cjs'))}`;
+  };
+
+  const fakeNodeAs7zPreloadedToDieBy = (signal: NodeJS.Signals) => {
+    fakeNodeAs7zPreloadedToExit(0);
+    process.env.FAKE_7Z_SIGNAL = signal;
   };
 
   it('extracts into the destination, overwriting, by asking 7z for exactly that', async () => {
@@ -55,11 +63,17 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     await expect(downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
   });
 
+  it.skipIf(process.platform === 'win32')('(Windows has no signals) names the signal that killed the binary', async () => {
+    fakeNodeAs7zPreloadedToDieBy('SIGSEGV');
+
+    await expect(downloadedFileReader.extract('/tmp/mod.rar', '/tmp/stage')).rejects.toThrow('Failed to extract /tmp/mod.rar: 7z was killed by signal SIGSEGV');
+  });
+
   it('names every candidate, and the archives install extracts, when no binary is on the path', async () => {
     process.env.PATH = '';
 
     await expect(downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(
-      'No 7z binary found (tried 7z, 7za, 7zz). Install p7zip-full to extract .zip/.7z/.rar archives.');
+      'No 7z binary found (tried 7zz, 7z, 7za). Install 7-Zip to extract .zip/.7z/.rar archives.');
   });
 
   it('lists the file entries, leaving out directories', async () => {
@@ -93,8 +107,23 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(message);
   });
 
+  it('asks 7zz, the 7-Zip that reads RAR with no codec plugin, before 7z', async () => {
+    const also7zz = join(bin, exe('7zz'));
+    await copyFile(process.execPath, also7zz);
+    fakeNodeAs7zPreloadedToExit(0);
+    process.env.FAKE_7Z_BIN_FILE = join(bin, 'bin.txt');
+
+    try {
+      await downloadedFileReader.extract('/tmp/mod.rar', '/tmp/stage');
+
+      expect(await readFile(process.env.FAKE_7Z_BIN_FILE, 'utf8')).toBe(exe('7zz'));
+    } finally {
+      await rm(also7zz, { force: true });
+    }
+  });
+
   it('falls through to the next binary name when one is absent', async () => {
-    const only7za = join(bin, process.platform === 'win32' ? '7za.exe' : '7za');
+    const only7za = join(bin, exe('7za'));
     await rename(join(bin, FAKE_7Z), only7za);
     fakeNodeAs7zPreloadedToExit(0);
 

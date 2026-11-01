@@ -139,7 +139,11 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }
   };
   showKeyContext();
-  const expand = () => void expandFilteredRows(view, provider, log);
+  let walks = 0;
+  const expand = () => {
+    const walk = ++walks;
+    void expandFilteredRows(view, provider, log, () => walk !== walks);
+  };
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
     ...owned,
@@ -221,20 +225,24 @@ function registerSourceGestures(
   ];
 }
 
-// VS Code keeps the expansion it remembers for a known row identity over the provider's state, so
-// only a reveal opens a row the filter shows for its matches. A reveal also opens a hidden view.
-async function expandFilteredRows(
-  view: vscode.TreeView<ModlistNode>, provider: ModListProvider, log: (line: string) => void, parent?: ModlistNode,
+// VS Code keeps a known row's expansion, so only a reveal opens a filtered row, and it opens a
+// hidden view. VS Code cannot resolve a row of a changed tree, so a newer walk supersedes this one.
+function expandFilteredRows(
+  view: vscode.TreeView<ModlistNode>, provider: ModListProvider, log: (line: string) => void, superseded: () => boolean,
 ): Promise<void> {
-  if (!view.visible) return;
-  for (const row of await provider.getChildren(parent)) {
-    if (row.collapsibleState !== vscode.TreeItemCollapsibleState.Expanded) continue;
-    try {
-      await view.reveal(row, { select: false, focus: false, expand: true });
-    } catch (e) {
-      log(`Could not expand "${typeof row.label === 'string' ? row.label : row.id}" for the filter: ${errorMessage(e)}`);
-      continue;
+  const walk = async (parent?: ModlistNode): Promise<void> => {
+    for (const row of await provider.getChildren(parent)) {
+      if (superseded()) return;
+      if (row.collapsibleState !== vscode.TreeItemCollapsibleState.Expanded) continue;
+      try {
+        await view.reveal(row, { select: false, focus: false, expand: true });
+      } catch (e) {
+        if (superseded()) return;
+        log(`Could not expand "${typeof row.label === 'string' ? row.label : row.id}" for the filter: ${errorMessage(e)}`);
+        continue;
+      }
+      await walk(row);
     }
-    await expandFilteredRows(view, provider, log, row);
-  }
+  };
+  return view.visible ? walk() : Promise.resolve();
 }

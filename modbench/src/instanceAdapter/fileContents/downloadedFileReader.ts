@@ -4,7 +4,8 @@ import { INSTALLATION_FILE_EXTENSIONS } from './installationFileNames';
 import { errorMessage } from '../../ports/errorMessage';
 import type { InstallationFileReader } from './installationFileReader';
 
-const CANDIDATES = ['7z', '7za', '7zz'] as const;
+// 7zz, 7-Zip's own build, reads RAR itself; a distribution's 7z may load a RAR plugin that crashes.
+const CANDIDATES = ['7zz', '7z', '7za'] as const;
 
 function spawnCollecting(bin: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -14,9 +15,10 @@ function spawnCollecting(bin: string, args: string[]): Promise<string> {
     child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
     child.on('error', reject);
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       const why = Buffer.concat(err).toString('utf8').trim();
       if (code === 0) resolve(Buffer.concat(out).toString('utf8'));
+      else if (signal !== null) reject(new Error(`${bin} was killed by signal ${signal}`));
       else reject(new Error(why === '' ? `${bin} exited with code ${code}` : why));
     });
   });
@@ -34,7 +36,7 @@ async function stdoutOfSevenZip(installationFilePath: string, verb: string, args
   const extensions = INSTALLATION_FILE_EXTENSIONS.map((ext) => `.${ext}`).join('/');
   throw new Error(
     `No 7z binary found (tried ${CANDIDATES.join(', ')}). ` +
-      `Install p7zip-full to extract ${extensions} archives.`,
+      `Install 7-Zip to extract ${extensions} archives.`,
   );
 }
 
