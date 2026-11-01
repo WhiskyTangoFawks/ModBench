@@ -2,12 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 
 type ConfigListener = (change: { affectsConfiguration(section: string): boolean }) => void;
 let inspected: { workspaceValue?: string } | undefined;
+const read: { section: string; scope?: unknown; key: string }[] = [];
 let configListener: ConfigListener | undefined;
 
 vi.mock('vscode', () => ({
   Uri: { file: (path: string) => ({ path }) },
   workspace: {
-    getConfiguration: () => ({ inspect: () => inspected }),
+    getConfiguration: (section: string, scope?: unknown) => ({
+      inspect: () => inspected,
+      get: (key: string) => { read.push({ section, scope, key }); return `${section}.${key}`; },
+    }),
     onDidChangeConfiguration: (listener: ConfigListener) => {
       configListener = listener;
       return { dispose: () => { configListener = undefined; } };
@@ -15,7 +19,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { deploymentFolderSetting, gameFolderSetting } from '../workspaceSettings';
+import { attachToBackendPort, deploymentFolderSetting, gameFolderSetting, scriptEnvironmentFileOf } from '../workspaceSettings';
 
 const changeTo = (key: string): void => configListener?.({ affectsConfiguration: (section) => section === key });
 
@@ -39,5 +43,15 @@ describe('the deployment folder setting', () => {
 
   it('names a folder by its last part, whatever follows it', () => {
     expect(deploymentFolderSetting.nameOf('/games/deploy/')).toBe('deploy');
+  });
+});
+
+describe('the settings another extension or the developer owns', () => {
+  it('the backend port to attach to is modbench.attachToBackendPort', () => {
+    expect([attachToBackendPort(), read.at(-1)]).toEqual(['modbench.attachToBackendPort', { section: 'modbench', scope: undefined, key: 'attachToBackendPort' }]);
+  });
+
+  it('the Python extension\'s envFile is read in the scope of the instance folder', () => {
+    expect([scriptEnvironmentFileOf('/inst')(), read.at(-1)]).toEqual(['python.envFile', { section: 'python', scope: { path: '/inst' }, key: 'envFile' }]);
   });
 });

@@ -213,7 +213,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
 
     expect([read?.unreadable, ...whileUnreadable, statuses.message(), statuses.of('ModA')?.noManifest, logged]).toEqual([
       'its manifest cannot be read at line 1', true, 'Showing the last good read: the status of "ModA" could not be read: its manifest cannot be read at line 1.',
-      undefined, false, ['The status of "ModA" could not be read: its manifest cannot be read at line 1'],
+      undefined, false, ['[modList] The status of "ModA" could not be read: its manifest cannot be read at line 1'],
     ]);
   });
 });

@@ -115,10 +115,9 @@ describe('the composition root is one project referencing every box', () => {
     expect(relative(MODBENCH, parsed(ROOT_PROJECT).options.outDir ?? '')).toBe(join('out', 'projects', 'root'));
   });
 
-  it('compiles the activation file, its wiring and no box file', () => {
+  it('compiles the activation file and no box file', () => {
     const files = fileNames(ROOT_PROJECT);
     expect(files).toContain(join('src', 'extension.ts'));
-    expect(files).toContain(join('src', 'syncWiring.ts'));
     expect(files.filter(isTest)).toEqual([]);
     expect(files.filter((f) => BOXES.some((box) => f.startsWith(join('src', box) + '/')))).toEqual([]);
   });

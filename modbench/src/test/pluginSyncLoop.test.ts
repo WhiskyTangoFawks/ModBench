@@ -13,7 +13,7 @@ vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleS
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
-import { pluginSyncOn } from '../syncWiring';
+import { pluginSyncOn } from '../plugins/pluginSync';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { pluginSyncOver, type PluginSyncRun } from '../pluginCommands/plugins';

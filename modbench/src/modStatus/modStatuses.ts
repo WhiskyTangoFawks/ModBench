@@ -113,7 +113,7 @@ export class ModStatuses {
         this.shown.set(status.mod, status);
         continue;
       }
-      if (this.unreadable.get(status.mod) !== status.unreadable) this.log(`The status of "${status.mod}" could not be read: ${status.unreadable}`);
+      if (this.unreadable.get(status.mod) !== status.unreadable) this.log(`[modList] The status of "${status.mod}" could not be read: ${status.unreadable}`);
       this.unreadable.set(status.mod, status.unreadable);
     }
     for (const listener of [...this.changed, ...this.messageChanged]) listener();
