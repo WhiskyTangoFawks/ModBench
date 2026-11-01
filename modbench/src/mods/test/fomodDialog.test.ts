@@ -13,7 +13,7 @@ const { createWebviewPanel, panels } = vi.hoisted(() => {
   const made: FakePanel[] = [];
   return {
     panels: made,
-    createWebviewPanel: vi.fn((_type: string, title: string): FakePanel => {
+    createWebviewPanel: vi.fn((_type: string, title: string, _column?: unknown, _options?: { enableFindWidget?: boolean }): FakePanel => {
       let disposeListener = (): void => undefined;
       let messageListener: (message: unknown) => void = () => undefined;
       const panel: FakePanel = {
