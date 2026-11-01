@@ -124,18 +124,19 @@ internal sealed class SourceModBuild
             if (read.Source is not { } source) return Refused(BuildRefusal.NotDecompiled, read.Message);
             decompiled.Add((plugin, source));
         }
-        if (step.OnlyChecks) return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null));
 
         var repository = _source.OverFolder(provider, loadOrder.GameRelease);
+        List<string> replaced = [];
         foreach (var (plugin, source) in decompiled)
         {
-            if (repository.ReplaceSourceFrom(plugin.Key, source.Files, source.BinarySha256) is { } failure)
+            if (!repository.ReplaceSourceMovingAside(plugin.Key, source.Files, source.BinarySha256).Holds(out var aside, out var failure))
             {
                 return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(
-                    $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}"));
+                    $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}") with { Replaced = replaced });
             }
+            replaced.AddRange(aside);
         }
-        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null));
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null) { Replaced = replaced });
     }
 
     private static IReadOnlyList<MadeFile> MadeOf(IEnumerable<(string Path, bool Vouched)> files)

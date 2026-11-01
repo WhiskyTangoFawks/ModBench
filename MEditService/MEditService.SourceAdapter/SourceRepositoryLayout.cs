@@ -79,6 +79,10 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
                     "Remove the extra ones by hand.").Failure,
             });
 
+    /// <summary>Each folder of the mod's plugin source spelled as <paramref name="pluginFileName"/> without case.</summary>
+    internal static IReadOnlyList<string> TreesNamedIn(string sourceFolder, string pluginFileName) =>
+        NamedIn(Path.Combine(sourceFolder, RootFolderName), pluginFileName);
+
     private static List<string> NamedIn(string sources, string pluginFileName)
     {
         try

@@ -276,29 +276,44 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ADecompileThatOnlyChecks_DecompilesThroughTheGate_AndWritesNothing()
+    public async Task ADecompile_AnswersWhereItMovedThePluginSourceItReplaced_KeepingItsName()
     {
         await InitializedWithALocalizedPlugin();
         var replacement = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
         replacement.Doors.AddNew("ReplacingDoor");
         replacement.WriteToBinary(Path.Combine(SourceFolder, Plugin));
-        var before = SourceFilesOf(Plugin).Select(File.ReadAllText).ToList();
+        var before = SourceFilesOf(Plugin).Select(file => (Path.GetRelativePath(Path.Combine(SourceFolder, "plugin-source", Plugin), file), File.ReadAllText(file))).ToList();
 
-        var checkedOnly = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin], OnlyChecks: true)));
+        var decompiled = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])));
 
-        Assert.Equal((null, []), (checkedOnly.Failure, checkedOnly.Made));
-        Assert.Equal(before, SourceFilesOf(Plugin).Select(File.ReadAllText));
+        var aside = Path.Combine(SourceFolder, Assert.Single(decompiled.Replaced));
+        Assert.Equal(Plugin, Path.GetFileName(aside));
+        Assert.Equal(before, Directory.GetFiles(aside, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(file => (Path.GetRelativePath(aside, file), File.ReadAllText(file))));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ADecompileOfAPluginTheSourceFolderDoesNotHold_RefusesTheMod_LeavingItsPluginSource(bool onlyChecks)
+    [Fact]
+    public async Task ADecompileRefusingItsSecondPlugin_WritesNoPluginSource()
+    {
+        await InitializedWithALocalizedPlugin();
+        var replacement = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        replacement.Doors.AddNew("ReplacingDoor");
+        replacement.WriteToBinary(Path.Combine(SourceFolder, Plugin));
+        var before = SourceFilesOf(Plugin);
+
+        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin, "Missing.esp"])))).Refused);
+
+        Assert.Equal(BuildRefusal.NotDecompiled, refused.Refusal);
+        Assert.Equal(before, SourceFilesOf(Plugin));
+        Assert.Equal(["plugin-source"], Directory.GetDirectories(SourceFolder).Select(Path.GetFileName).Where(name => name != ".git"));
+    }
+
+    [Fact]
+    public async Task ADecompileOfAPluginTheSourceFolderDoesNotHold_RefusesTheMod_LeavingItsPluginSource()
     {
         await InitializedWithALocalizedPlugin();
         var before = SourceFilesOf(Plugin);
 
-        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin], onlyChecks)))).Refused);
+        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])))).Refused);
 
         Assert.Equal((BuildRefusal.NotDecompiled, $"'{SourceFolder}' holds no '{Plugin}' to decompile."), (refused.Refusal, refused.Message));
         Assert.Equal(before, SourceFilesOf(Plugin));

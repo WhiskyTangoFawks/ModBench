@@ -8,12 +8,12 @@ namespace MEditService.Commands;
 public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<BuildRefused> Refused)
     : ISelectionAnswer<BuildRefused>;
 
-/// <summary>A mod whose step ran: what it compiled and refused, what stopped it, each file it made, from which the extension
-/// records its manifest (ADR-0016), and each loose file it packed, which the extension trashes.</summary>
+/// <summary>A mod whose step ran: what it compiled and refused, what stopped it, each file it made, which its manifest
+/// records (ADR-0016), and what it took out of the way for the extension to trash.</summary>
 public sealed record ModBuilt(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
     IReadOnlyList<ArchiveRefused> ArchivesRefused, string? Failure, bool Uncommitted, bool Unpushed,
-    IReadOnlyList<MadeFile> Made, IReadOnlyList<string> Packed);
+    IReadOnlyList<MadeFile> Made, IReadOnlyList<string> Packed, IReadOnlyList<string> Replaced);
 
 /// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>
 public sealed record ArchiveRefused(string Item, ArchiveRefusal Refusal, string Message) : IItemRefused<ArchiveRefusal>

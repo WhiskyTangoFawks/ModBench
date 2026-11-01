@@ -249,42 +249,42 @@ describe('sourceCommands build, in mod order', () => {
   });
 
   describe('a decompile step (mods.md, Build, story 17)', () => {
-    const DECOMPILE: BuildStep = { kind: 'decompile', paths: ['A.esp', 'B.esp'] };
-    const holdingPluginSource = (paths: readonly string[]) => fakeInstanceAdapter(readingFixture({
-      modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES),
-    }), { folderFiles: new Map([[join(SOURCES.ModA, 'plugin-source'), paths]]) });
-    const decompiling = async (paths: readonly string[], checkAnswer: Awaited<ReturnType<InMemoryMEditClient['build']>> = { landed: [builtOf('ModA')], refused: [] }) => {
-      await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [DECOMPILE] }));
+    const ASIDE = ['.medit_tmp_1_x/A.esp', '.medit_tmp_1_x/a.ESP'];
+    const decompiling = async (answer: Awaited<ReturnType<InMemoryMEditClient['build']>>) => {
+      await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'decompile', paths: ['A.esp', 'B.esp'] }] }));
       const client = new InMemoryMEditClient();
-      const fake = holdingPluginSource(paths);
+      const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
       const log: unknown[] = [];
-      const adapter = { ...fake.adapter, trashFileIn: (...args: Parameters<typeof fake.adapter.trashFileIn>) => { log.push({ trashed: args[1] }); return fake.adapter.trashFileIn(...args); } };
+      const adapter = { ...fake.adapter, trashFileIn: (...[folder, path, trash]: Parameters<typeof fake.adapter.trashFileIn>) => {
+        log.push({ trashed: path, in: folder });
+        return fake.adapter.trashFileIn(folder, path, trash);
+      } };
       client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
         log.push({ step: mods[0]?.step });
-        return Promise.resolve(mods[0]?.step?.checkDecompile === undefined ? { landed: [builtOf('ModA')], refused: [] } : checkAnswer);
+        return Promise.resolve(answer);
       });
       const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
       return { outcome, log };
     };
 
-    it('has mEdit check it, then sends each plugin source folder it replaces to the trash, in any case, then has mEdit decompile', async () => {
-      const { log } = await decompiling(['A.esp/npc_/1.json', 'a.ESP/npc_/2.json', 'C.esp/npc_/3.json']);
+    it('has mEdit decompile once, then sends each plugin source folder mEdit moved aside to the trash under its own name', async () => {
+      const { log } = await decompiling({ landed: [{ ...builtOf('ModA'), replaced: ASIDE }], refused: [] });
 
       expect(log).toEqual([
-        { step: { checkDecompile: ['A.esp', 'B.esp'] } }, { trashed: 'plugin-source/A.esp' }, { trashed: 'plugin-source/a.ESP' }, { step: { decompile: ['A.esp', 'B.esp'] } },
+        { step: { decompile: ['A.esp', 'B.esp'] } }, ...ASIDE.map((path) => ({ trashed: path, in: SOURCES.ModA })),
       ]);
     });
 
-    it('sends nothing to the trash and refuses the mod when mEdit refuses its check (commands.md, An item that cannot proceed writes nothing)', async () => {
-      const { outcome, log } = await decompiling(['A.esp/npc_/1.json'], { landed: [], refused: [{ item: 'ModA', reason: 'A.esp does not round-trip.' }] });
+    it('sends what mEdit moved aside to the trash though the decompile then stopped', async () => {
+      const { log, outcome } = await decompiling({ landed: [{ ...builtOf('ModA'), replaced: ASIDE, failure: 'The build stopped at its decompile.' }], refused: [] });
 
-      expect([outcome, log]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason: 'was not built: A.esp does not round-trip.' }] }, [{ step: { checkDecompile: ['A.esp', 'B.esp'] } }]]);
+      expect([log.slice(1), outcome]).toEqual([ASIDE.map((path) => ({ trashed: path, in: SOURCES.ModA })), { landed: [{ ...landedOf('ModA'), failure: 'The build stopped at its decompile.' }], refused: [] }]);
     });
 
-    it('has mEdit decompile at once when the source folder holds no plugin source it replaces', async () => {
-      const { log } = await decompiling(['C.esp/npc_/3.json']);
+    it('sends nothing to the trash and refuses the mod when mEdit refuses it (commands.md, An item that cannot proceed writes nothing)', async () => {
+      const { outcome, log } = await decompiling({ landed: [], refused: [{ item: 'ModA', reason: 'A.esp does not round-trip.' }] });
 
-      expect(log).toEqual([{ step: { decompile: ['A.esp', 'B.esp'] } }]);
+      expect([outcome, log]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason: 'was not built: A.esp does not round-trip.' }] }, [{ step: { decompile: ['A.esp', 'B.esp'] } }]]);
     });
   });
 

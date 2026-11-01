@@ -17,9 +17,8 @@ public abstract record BuildStep
     {
     }
 
-    /// <summary>Each plugin at the root of the source folder decompiled into its plugin source, by its name; a decompile that
-    /// only checks writes nothing.</summary>
-    public sealed record Decompile(IReadOnlyList<string> Plugins, bool OnlyChecks = false) : BuildStep;
+    /// <summary>Each plugin at the root of the source folder decompiled into its plugin source, by its name.</summary>
+    public sealed record Decompile(IReadOnlyList<string> Plugins) : BuildStep;
 
     /// <summary>Each plugin compiled from its plugin source into the mod's folder, by its name.</summary>
     public sealed record Compile(IReadOnlyList<string> Plugins) : BuildStep;
@@ -58,6 +57,8 @@ internal sealed record ModBuildOutcome(
     public IReadOnlyList<MadeFile> Made { get; init; } = [];
 
     public IReadOnlyList<string> Packed { get; init; } = [];
+
+    public IReadOnlyList<string> Replaced { get; init; } = [];
 
     internal static ModBuildOutcome Stopped(string failure) => new([], [], [], failure);
 }

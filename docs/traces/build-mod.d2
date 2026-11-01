@@ -47,19 +47,20 @@ sourcecommands."refused when a tool has no task"
 sourcecommands -> driving: "confirm: each file I changed, and each file the build does not make" {class: compile}
 driving -> sourcecommands: "yes" {class: compile}
 builtin: "each built-in step, a decompile, compile, copy or pack, in build-file order" {
-  sourcecommands -> client: "build: the mod's folder · its step, a decompile first as a check when plugin source is there to replace" {class: compile}
+  sourcecommands -> client: "build: the mod's folder · its step" {class: compile}
   client -> http: envelope {class: compile}
   http -> engine: envelope {class: compile}
   source -> sourceadapter: "the source folder's files · plugin source" {class: compile}
   sourceadapter -> engine: "the files a copy names · the plugin source" {class: compile}
   engine -> commands: "compile-plugin, per plugin a compile names" {class: compile}
-  engine -> sourceadapter: "the plugin source a decompile makes" {class: compile}
+  engine -> sourceadapter: "the plugin source a decompile makes, once every plugin of it decompiled" {class: compile}
+  sourceadapter -> engine: "each plugin source folder it moved aside" {class: compile}
   engine -> modfolderadapter: "the files a copy writes · the archives a pack makes" {class: compile}
   modfolderadapter -> modfolder: "the folder" {class: compile}
-  engine -> http: "the files it made · the loose files it packed" {class: compile}
-  http -> client: "the files it made · the loose files it packed" {class: compile}
-  client -> sourcecommands: "the files it made · the loose files it packed" {class: compile}
-  sourcecommands -> instanceadapter: "trash: the plugin source a decompile replaces, once its check lands · the loose files a pack packed" {class: compile}
+  engine -> http: "the files it made · what it moved aside or packed" {class: compile}
+  http -> client: "the files it made · what it moved aside or packed" {class: compile}
+  client -> sourcecommands: "the files it made · what it moved aside or packed" {class: compile}
+  sourcecommands -> instanceadapter: "trash: the plugin source moved aside · the loose files packed" {class: compile}
 }
 
 task: "each task step, in build-file order among the built-in steps" {

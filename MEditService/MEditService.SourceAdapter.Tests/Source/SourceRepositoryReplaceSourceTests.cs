@@ -29,6 +29,41 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
+    public void ASourceReplacedMovingItsTreeAside_IsTheNewFiles_AndAnswersWhereTheTreeNowIs_UnderItsOwnName()
+    {
+        var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Value();
+
+        Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
+        var moved = Assert.Single(aside);
+        Assert.Equal(Plugin, moved.Split('/')[^1]);
+        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(_modFolder, moved, "npc_", "A.esp", "000001.json")));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
+    }
+
+    [PosixFact]
+    public void ASourceReplacedMovingItsTreeAside_MovesEachTreeNamedForThePluginInAnyCaseAside()
+    {
+        Directory.CreateDirectory(Path.Combine(_modFolder, "plugin-source", "a.ESP"));
+        System.IO.File.WriteAllText(Path.Combine(_modFolder, "plugin-source", "a.ESP", "twin.json"), "{}");
+
+        var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value();
+
+        Assert.Equal([Plugin, "a.ESP"], aside.Select(path => path.Split('/')[^1]));
+        Assert.Equal([Plugin], Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source")).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void ASourceReplacedMovingItsTreeAside_ThatFails_PutsTheTreeBack()
+    {
+        TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
+
+        Assert.IsType<SourceFailure.Inaccessible>(Repository.ReplaceSourceMovingAside(Address, secondFileNeedsADirectoryTheFirstOccupies, Sha).Stopped());
+
+        Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
+        Assert.Equal(["plugin-source"], Directory.GetDirectories(_modFolder).Select(Path.GetFileName).Where(name => name != ".git"));
+    }
+
+    [Fact]
     public void AReplacedSource_IsTheDoorsTree_SoItsRootDocumentLandsAsTheHeader()
     {
         Repository.ReplaceSourceFrom(Address, [new TreeFile("RecordData.json", "{}"u8.ToArray())], Sha).Wrote();

@@ -501,6 +501,7 @@ class HttpMEditClient implements MEditClient {
           mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused), archivesRefused: itemRefusals(m.archivesRefused),
           made: m.made,
           ...(m.packed.length > 0 ? { packed: m.packed } : {}),
+          ...(m.replaced.length > 0 ? { replaced: m.replaced } : {}),
           ...(m.failure ? { failure: m.failure } : {}),
           ...(m.uncommitted ? { uncommitted: true as const } : {}),
           ...(m.unpushed ? { unpushed: true as const } : {}),
