@@ -2,9 +2,7 @@ import type { InstanceValue } from './instance';
 
 type PresenceFacts = Pick<InstanceValue, 'files' | 'plugins' | 'pluginsLoadedWithNoLine' | 'dataFolderPlugins'>;
 
-/** Whether the game finds a file at `relativePath` in its Data folder, as LOOT sees it: a winning file of mod order,
- *  a plugin the instance resolved to a file, one the game loads with no line, or what the game folder's Data folder
- *  lists at its root. A line that no file provides is not a file. */
+/** Whether the game finds the file in its Data folder, as LOOT sees it. A plugins.txt line that no file provides is not a file. */
 export function fileIsPresent(facts: PresenceFacts, relativePath: string): boolean {
   const folded = relativePath.toLowerCase();
   const named = (name: string): boolean => name.toLowerCase() === folded;
