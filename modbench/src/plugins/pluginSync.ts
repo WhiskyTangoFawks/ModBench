@@ -1,7 +1,7 @@
-import type * as vscode from 'vscode';
-import { createPluginSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
-import type { Instance } from './instanceLoader/instance';
-import type { PluginSyncRun } from './pluginCommands/plugins';
+import * as vscode from 'vscode';
+import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
+import type { Instance } from '../instanceLoader/instance';
+import type { PluginSyncRun } from '../pluginCommands/plugins';
 
 export interface PluginSyncOn {
   dispose(): void;
@@ -23,7 +23,8 @@ export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps)
 }
 
 export function registerPluginSyncCommand(
-  pluginSync: Pick<Sync, 'run'>, register: (command: string, handler: () => unknown) => vscode.Disposable,
+  pluginSync: Pick<Sync, 'run'>,
+  register: (command: string, handler: () => unknown) => vscode.Disposable = (command, handler) => vscode.commands.registerCommand(command, handler),
 ): vscode.Disposable {
   return register('modbench.plugin.sync', () => pluginSync.run());
 }

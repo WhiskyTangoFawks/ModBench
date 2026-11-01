@@ -11,6 +11,8 @@ import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { editingView } from './editingView';
 import { createPluginsView, type PluginsView, type PluginsViewDeps } from './pluginsView';
 import type { ReconcileNarrator } from './reconcileNarrator';
+import type { PluginSyncRun } from '../pluginCommands/plugins';
+import { pluginSyncOn, registerPluginSyncCommand } from './pluginSync';
 export { PLUGINS_KEY_ARGS };
 
 type PluginsClient = PluginsViewDeps['client'] & ConstructorParameters<typeof RecordBrowser>[0]
@@ -27,9 +29,9 @@ export interface PluginsDeps {
   sourceEditing: PluginsViewDeps['sourceEditing'];
 }
 
-type PluginsInstanceDeps = Pick<PluginsViewDeps,
-  'instance' | 'commands' | 'pluginSync' | 'modStatuses'
->;
+type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'modStatuses'> & {
+  syncPlugins: PluginSyncRun;
+};
 
 interface PluginsOnInstance extends vscode.Disposable {
   followed: PluginsView['followed'];
@@ -59,9 +61,11 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   let viewMessages: () => string[] = () => [];
   return {
     mEditStanding: { messages: () => [statusBar.standing(), ...viewMessages()] },
-    onInstance: (instanceDeps) => {
+    onInstance: ({ syncPlugins, ...instanceDeps }) => {
+      const syncing = pluginSyncOn({ instance: instanceDeps.instance, syncPlugins, channel });
+      const syncCommand = registerPluginSyncCommand(syncing.pluginSync);
       const view = createPluginsView({
-        ...instanceDeps, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
+        ...instanceDeps, pluginSync: syncing.pluginSync, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
         ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
         log: (level, msg) => channel[level](msg),
       });
@@ -74,6 +78,8 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, say: view.progress.say, editingInPluginsView, pluginsShown: view.pluginsShown,
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
+          syncCommand.dispose();
+          syncing.dispose();
           view.dispose();
         },
       };

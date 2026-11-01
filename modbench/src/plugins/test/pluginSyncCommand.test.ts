@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { present } from '../ports/present';
-import { registerPluginSyncCommand } from '../syncWiring';
+vi.mock('vscode', () => ({ commands: { registerCommand: vi.fn() } }));
+
+import { present } from '../../ports/present';
+import { registerPluginSyncCommand } from '../pluginSync';
 
 describe('the plugin sync command', () => {
   it('is modbench.plugin.sync, and runs the plugin sync', async () => {

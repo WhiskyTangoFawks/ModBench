@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { createMEditClient, stopMEditClient, type MEditClient } from './client';
+import { attachPortOf, createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -28,7 +28,6 @@ import type { PluginsShown } from './drivingLib/pluginsShown';
 import { deploymentFolderOf } from './instanceCommands/deploy';
 import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
-import { attachPort } from './workspaceConfig';
 import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
 import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
@@ -71,9 +70,9 @@ import { deployedPath, hardlinkDeployment } from './deployment/deployment';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
+import { scriptEnvironmentFileOf } from './agent/pythonEnvFile';
 import { reachMEditFromEnvFile } from './agent/scriptEnvironmentFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
-import { pluginSyncOn, registerPluginSyncCommand } from './syncWiring';
 import { modSyncOn, registerModSyncCommand } from './mods/modSync';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -158,7 +157,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: () => vscode.workspace.getConfiguration('python', vscode.Uri.file(instanceRoot)).get<string>('envFile'), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri), deployedPath,
+        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri), deployedPath,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
@@ -172,20 +171,18 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
   own(markFirstReadLanded(instance));
-  own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
+  own(reportSubscriberThrows(instance, reporterFor));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
-  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
+  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
     await modStatuses.current();
   }));
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
-  const { pluginSync } = own(pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter), channel: outputChannel }));
-  own(registerPluginSyncCommand(pluginSync, (command, handler) => vscode.commands.registerCommand(command, handler)));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), pluginSync, modStatuses,
+    instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
   }));
   const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
@@ -285,7 +282,7 @@ function start(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort: attachPort() }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();

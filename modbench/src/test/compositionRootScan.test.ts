@@ -8,8 +8,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 
 const ACTIVATION = 'extension.ts';
-const WIRING = ['syncWiring.ts'];
-const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'hostGit.ts', 'problemsHost.ts', 'tasks.ts', 'trash.ts', 'workspaceConfig.ts'];
+const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'hostGit.ts', 'problemsHost.ts', 'tasks.ts', 'trash.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
@@ -61,8 +60,8 @@ function activateReturnType(source: ts.SourceFile): string | undefined {
 }
 
 describe('the composition root builds each box, registers it with VS Code and decides nothing', () => {
-  it('holds the activation file, its wiring and the ports it implements, and no other file', () => {
-    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
+  it('holds the activation file and the ports it implements, and no other file', () => {
+    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
   it.each(rootFiles().map((path) => basename(path)))('the lint config applies the deciding selectors to %s', async (file) => {
@@ -89,6 +88,12 @@ describe('the composition root builds each box, registers it with VS Code and de
   it.each(rootFiles().map((path) => basename(path)))('%s reaches Plugins only through its index', (file) => {
     const text = readFileSync(join(SRC, file), 'utf8');
     expect(importSpecifiers(text, file).filter((specifier) => specifier.startsWith('./plugins/'))).toEqual([]);
+  });
+
+  it('subscribes the mod sync to the instance before the plugin sync (Plugins subscribes its sync in onInstance)', () => {
+    const text = readFileSync(join(SRC, ACTIVATION), 'utf8');
+    expect(text.indexOf('modSyncOn(')).toBeGreaterThan(-1);
+    expect(text.indexOf('modSyncOn(')).toBeLessThan(text.indexOf('.onInstance('));
   });
 
   it('exports nothing from the activation file but what VS Code takes', () => {

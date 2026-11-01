@@ -26,7 +26,7 @@ vi.mock('vscode', async () => {
 });
 
 import { Instance } from '../instanceLoader/instance';
-import { pluginSyncOn } from '../syncWiring';
+import { pluginSyncOn } from '../plugins/pluginSync';
 import { pluginSyncOver } from '../pluginCommands/plugins';
 import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
 import { PluginNode } from '../plugins/pluginRows';
