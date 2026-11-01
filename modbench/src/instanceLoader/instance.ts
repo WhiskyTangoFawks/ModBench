@@ -124,7 +124,8 @@ export interface InstanceValue {
   readonly sortingRuleFiles: SortingRuleFiles;
 }
 
-export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
+/** A subscriber that returns a promise holds `refresh` until it settles. */
+export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void | Promise<void>;
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
@@ -424,46 +425,46 @@ export class Instance implements Subscription {
     this.timer = setTimeout(() => void this.run(), SETTLE_MS);
   }
 
+  // A refresh settles with its value's subscribers; the queue does not wait for them.
   private run(): Promise<void> {
     const task = this.queue.then(() => this.recompute());
     this.queue = task;
-    return task;
+    return task.then(({ settled }) => settled);
   }
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(): Promise<void> {
+  private async recompute(): Promise<{ settled: Promise<void> }> {
     let next: InstanceValue;
     const epoch = this.quietEpoch;
     try {
       next = await this.read();
     } catch (err) {
-      if (epoch !== this.quietEpoch || this.quiets > 0) return;
+      if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
-      this.notify(this.failureListeners, 'read-failure', (listener) => listener());
-      return;
+      return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()) };
     }
-    if (epoch !== this.quietEpoch || this.quiets > 0) return;
+    if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
     this.current = next;
     this.failure = undefined;
     this.seq++;
-    this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq));
+    return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq)) };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
   // would run — the dead chain tail every write queue's tail-catch documents.
-  private notify<T extends object>(listeners: readonly T[], during: ListenerOutcome['during'], call: (listener: T) => void): void {
-    for (const listener of [...listeners]) {
+  private async notify<T extends object>(listeners: readonly T[], during: ListenerOutcome['during'], call: (listener: T) => void | Promise<void>): Promise<void> {
+    await Promise.all([...listeners].map(async (listener) => {
       let threw: string | undefined;
       try {
-        call(listener);
+        await call(listener);
       } catch (err) {
         threw = errorMessage(err);
       }
       for (const onOutcome of [...this.outcomeListeners]) onOutcome({ listener, during, threw });
-    }
+    }));
   }
 
   private async read(): Promise<InstanceValue> {

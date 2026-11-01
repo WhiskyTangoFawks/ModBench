@@ -176,7 +176,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
-  own(instance.subscribe((value) => { modStatuses.derive(value); }));
+  own(instance.subscribe(async (value) => {
+    modStatuses.derive(value);
+    await modStatuses.current();
+  }));
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const { pluginSync } = own(pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter), channel: outputChannel }));
