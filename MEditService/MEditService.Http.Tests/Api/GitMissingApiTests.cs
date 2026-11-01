@@ -106,7 +106,7 @@ public sealed class GitMissingApiTests : HostedTests
         using var fx = await SourceMod("trace-build-without-git");
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
 
-        var response = await WithGitMissing(() => Client.Build([(Origin, modFolder)]));
+        var response = await WithGitMissing(() => Client.Build([(Origin, modFolder)], new { copy = new[] { "a.nif" } }));
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());

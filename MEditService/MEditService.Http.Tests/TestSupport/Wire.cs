@@ -88,7 +88,7 @@ internal static class Wire
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
     internal static Task<HttpResponseMessage> Build(
-        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, object? variants = null, object[]? archives = null) =>
+        this HttpClient client, IEnumerable<(string Name, string Folder)> mods, object step, object? variants = null) =>
         client.PostAsJsonAsync("/build", new
         {
             mods = mods.Select(mod => new
@@ -96,7 +96,7 @@ internal static class Wire
                 name = mod.Name,
                 sourceFolder = client.SourceFolderSentFor(mod.Name),
                 folder = mod.Folder,
-                archives,
+                step,
             }),
             exclusionMark = ".mohidden",
             archives = variants,

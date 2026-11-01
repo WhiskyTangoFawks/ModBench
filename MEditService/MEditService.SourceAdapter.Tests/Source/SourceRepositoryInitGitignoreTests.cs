@@ -20,25 +20,26 @@ public sealed class SourceRepositoryInitGitignoreTests
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))]);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("meshes/a.nif"), Asset("readme.txt")]);
 
         Assert.Equal(
-            [".gitignore", "assets/meshes/a.nif", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
+            [".gitignore", "build.json", "meshes/a.nif", "plugin-source/Test.esp/npc_/Test.esp/000001.json", "readme.txt"],
             CommittedPaths(sourceFolder));
     }
 
     [Fact]
-    public void AFileLaterPutBesideTheSource_IsIgnored_AndOneLaterPutAmongTheAssetsIsTracked()
+    public void AFileLaterPutBesideTheAssets_IsIgnored_AndOneLaterPutInTheFolderOfAnAssetIsTracked()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("textures/a.dds")]);
         File.WriteAllText(Path.Combine(sourceFolder, "Test.esp"), "a stray build output");
-        Directory.CreateDirectory(Path.Combine(sourceFolder, "assets", "textures"));
-        File.WriteAllText(Path.Combine(sourceFolder, "assets", "textures", "new.dds"), "a new asset");
+        File.WriteAllText(Path.Combine(sourceFolder, "textures", "new.dds"), "a new asset");
 
         Assert.True(Ignored(sourceFolder, "Test.esp"));
-        Assert.False(Ignored(sourceFolder, "assets/textures/new.dds"));
+        Assert.False(Ignored(sourceFolder, "textures/new.dds"));
     }
+
+    private static Asset Asset(string path) => new(path, () => new MemoryStream("asset"u8.ToArray()));
 
     [Fact]
     public void TheBuildFile_IsTracked_AndOneOutsideTheRootIsNot()
@@ -76,16 +77,16 @@ public sealed class SourceRepositoryInitGitignoreTests
     }
 
     [Fact]
-    public void AnIgnoredPathUnderTheAssets_IsIgnored_WhileTheOtherAssetsStayTracked()
+    public void AnIgnoredPathInTheFolderOfAnAsset_IsIgnored_WhileTheAssetStaysTracked()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
         TestAdapters.Source().Init(
-            sourceFolder, SourceInits.BuildFile, [Plugin], [new Asset("meshes/a.nif", () => new MemoryStream("nif"u8.ToArray()))], null,
-            new RootFile("Mod.manifest.json", "{}"u8.ToArray()), ["assets/textures/b [1].dds"]);
+            sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("textures/a.dds")], null,
+            new RootFile("Mod.manifest.json", "{}"u8.ToArray()), ["textures/b [1].dds"]);
 
-        Assert.True(Ignored(sourceFolder, "assets/textures/b [1].dds"));
-        Assert.False(Ignored(sourceFolder, "assets/meshes/a.nif"));
+        Assert.True(Ignored(sourceFolder, "textures/b [1].dds"));
+        Assert.False(Ignored(sourceFolder, "textures/a.dds"));
     }
 
     [Fact]

@@ -419,7 +419,7 @@ describe('restore from manifest', () => {
 
       expect(client.calls.map(({ method, args }) => [method, args[0]])).toEqual([
         ['cloneSubmodules', [pinned()]],
-        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], archives: [] }]],
+        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], step: { compile: ['A.esp'] } }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([{ verb: 'trashFileIn' }]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });

@@ -14,13 +14,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 {
     private readonly Dictionary<string, FakeMod> _mods = new(StringComparer.Ordinal);
     private readonly HashSet<string> _foreignRepositories = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, SourceToBuild> _builds = new(StringComparer.Ordinal);
-
-    internal FakeSourceAdapter Building(string sourceFolder, SourceToBuild source)
-    {
-        _builds[sourceFolder] = source;
-        return this;
-    }
 
     internal FakeSourceAdapter HoldingAnotherRepository(string modFolder)
     {
@@ -72,8 +65,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public string ContentStamp(string text) => throw Unreached();
 
-    public string AssetPathOf(string pathInModFolder) => throw Unreached();
-
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null)
@@ -84,7 +75,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return null;
     }
 
-    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _builds[sourceFolder];
+    public string FileIn(string sourceFolder, string path) => throw Unreached();
+
+    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied) => throw Unreached();
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => throw Unreached();
 

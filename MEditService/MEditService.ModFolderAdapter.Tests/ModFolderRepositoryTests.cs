@@ -15,6 +15,33 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void Dispose() => _scratch.Dispose();
 
     [Fact]
+    public void DeleteFile_RemovesTheFile_AndAFileAlreadyGoneIsDone()
+    {
+        Write("a.nif", "a");
+
+        _repository.DeleteFile(_root, "a.nif");
+        _repository.DeleteFile(_root, "a.nif");
+
+        Assert.Empty(Directory.GetFiles(_root));
+    }
+
+    [Fact]
+    public void DeleteFile_RemovesEachFolderItEmpties_AndKeepsTheModFolderAndAFolderThatHoldsMore()
+    {
+        Write("interface/menus/a.swf", "a");
+        Write("textures/a.dds", "a");
+        Write("textures/sub/b.dds", "b");
+
+        _repository.DeleteFile(_root, "interface/menus/a.swf");
+        _repository.DeleteFile(_root, "textures/sub/b.dds");
+        string[] left = [.. Directory.GetFileSystemEntries(_root, "*", SearchOption.AllDirectories).Select(path => Path.GetRelativePath(_root, path).Replace('\\', '/')).Order()];
+        _repository.DeleteFile(_root, "textures/a.dds");
+
+        Assert.Equal(["textures", "textures/a.dds"], left);
+        Assert.Empty(Directory.GetFileSystemEntries(_root));
+    }
+
+    [Fact]
     public void ExcludedName_IsTheNameWithTheExclusionMarkAfterIt() =>
         Assert.Equal("a.esp.excluded", _repository.ExcludedName("a.esp", ".excluded"));
 

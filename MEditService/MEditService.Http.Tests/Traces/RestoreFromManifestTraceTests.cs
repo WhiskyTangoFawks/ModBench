@@ -36,6 +36,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
                 new
                 {
                     name = Origin, sourceFolder = submodule.Folder, folder = Path.GetDirectoryName(_instance.Plugins.Single().Path).Require(),
+                    step = new { compile = new[] { _instance.Plugins.Single().Name } },
                 },
             },
             exclusionMark = ".mohidden",

@@ -49,7 +49,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     public async Task Init_CommitsTheAssetsAndTheBuildFileItIsHanded()
     {
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);
-        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "installed.dds"), "hello");
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "meshes", "installed.nif"), "hello");
         OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
@@ -67,7 +67,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => !path.StartsWith("plugin-source/", StringComparison.Ordinal));
-        Assert.Equal([".gitignore", "assets/textures/added.dds", "build.json"], committed);
+        Assert.Equal([".gitignore", "build.json", "textures/added.dds"], committed);
         Assert.Equal("the build file", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "HEAD:build.json"));
     }
 
@@ -108,26 +108,6 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task TheSourcePathOfAnAsset_IsWhereInitCommitsIt()
-    {
-        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
-        OtherTool.WritesTheFile(Path.Combine(modFolder, "textures", "added.dds"), "added after install");
-        await Loaded();
-        var sourceFolder = Client.SourceFolderSentFor(Origin);
-
-        var answered = await (await Client.PostJson("/source-paths", """{"paths": ["textures/added.dds"]}""")).Content.ReadFromJsonAsync<JsonElement>();
-        (await Client.PostAsJsonAsync("/decompile-and-commit", new
-        {
-            mods = new[] { new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "{}" } } },
-        })).EnsureSuccessStatusCode();
-
-        var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(["assets/textures/added.dds"], answered.GetProperty("paths").EnumerateArray().Select(path => path.GetString()));
-        Assert.Contains("assets/textures/added.dds", committed);
     }
 
     [Fact]

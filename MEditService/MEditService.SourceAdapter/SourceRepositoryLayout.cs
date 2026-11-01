@@ -30,12 +30,6 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>The build file's name at the repository's root.</summary>
     internal const string BuildFileName = "build.json";
 
-    /// <summary>A folder of its own, so no asset's path can be the plugin source's or a file init writes.</summary>
-    internal const string AssetsFolderName = "assets";
-
-    /// <summary>Where the source folder holds the mod folder's file at <paramref name="pathInModFolder"/>, as an asset.</summary>
-    internal static string AssetPathOf(string pathInModFolder) => $"{AssetsFolderName}/{pathInModFolder}";
-
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
@@ -55,25 +49,21 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     internal static string RootIn(string sourceFolder, string pluginFileName) =>
         Path.Combine(sourceFolder, RootFor(pluginFileName));
 
-    /// <summary>The plugins whose source the folder holds, by the name of each one's tree.</summary>
-    internal static IReadOnlyList<string> PluginsIn(string sourceFolder)
-    {
-        var sources = Path.Combine(sourceFolder, RootFolderName);
-        return Directory.Exists(sources)
-            ? [.. Directory.EnumerateDirectories(sources).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)]
-            : [];
-    }
 
-    /// <summary>Every file under the assets folder, by its forward-slash path in the mod folder.</summary>
-    internal static IReadOnlyList<Asset> AssetsIn(string sourceFolder)
+    /// <summary>Each of <paramref name="paths"/> that is a file, and every file under each that is a folder, by its forward-slash
+    /// path in the source folder, which is its path in the mod folder.</summary>
+    internal static IReadOnlyList<Asset> FilesAt(string sourceFolder, IReadOnlyList<string> paths)
     {
-        var assets = Path.Combine(sourceFolder, AssetsFolderName);
-        return Directory.Exists(assets)
-            ? [.. Directory.EnumerateFiles(assets, "*", SearchOption.AllDirectories)
-                .Order(StringComparer.Ordinal)
-                .Select(file => new Asset(Path.GetRelativePath(assets, file).Replace('\\', '/'), () => File.OpenRead(file)))
-                .Where(asset => !TempName.HoldsTemp(asset.Path))]
-            : [];
+        Asset AssetOf(string file) => new(Path.GetRelativePath(sourceFolder, file).Replace('\\', '/'), () => File.OpenRead(file));
+        List<Asset> files = [];
+        foreach (var path in paths)
+        {
+            var at = Path.Combine(sourceFolder, path);
+            if (File.Exists(at)) files.Add(AssetOf(at));
+            else if (Directory.Exists(at)) files.AddRange(Directory.EnumerateFiles(at, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(AssetOf));
+            else throw SourceStopException.Unreadable($"'{sourceFolder}' holds no '{path}' to copy.");
+        }
+        return [.. files.Where(file => !TempName.HoldsTemp(file.Path)).DistinctBy(file => file.Path, StringComparer.Ordinal)];
     }
 
     /// <summary>The folder of the mod's plugin source holding <paramref name="pluginFileName"/>'s tree: the one spelled

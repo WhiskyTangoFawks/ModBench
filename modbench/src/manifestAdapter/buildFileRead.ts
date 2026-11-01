@@ -1,46 +1,78 @@
 // spec/formats/build-file-1.schema.json, read from any text the schema accepts.
 
-import { BUILD_FILE_VERSION, type BuildFile, type BuildFileRead, type ManifestArchive, type ManifestStep } from './buildFile';
-import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, required, stringsOf, textOf, unreadable, Unreadable, type Json } from './jsonRead';
+import { BUILD_FILE_VERSION, type BuildFile, type BuildFileRead, type BuildStep, type ManifestArchive, type TaskStep } from './buildFile';
+import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, stringsOf, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
 const FILE = 'build file';
 
+const KINDS = ['decompile', 'compile', 'copy', 'pack', 'task'] as const;
+
 const known = (members: Json, part: string | undefined, keys: readonly string[]): void => { knownIn(FILE, members, part, keys); };
 
-const inTheFolder = (key: string, paths: readonly string[]): void => {
+const inTheFolder = (step: string, paths: readonly string[]): void => {
   const outside = paths.find((path) => !isPathInTheFolder(path));
-  if (outside !== undefined) throw new Unreadable(`its ${FILE}'s '${key}' names '${outside}', which is not a path in the folder`);
+  if (outside !== undefined) throw new Unreadable(`its ${FILE}'s ${step} names '${outside}', which is not a path in the folder`);
 };
 
-const stepOf = (index: number, line: unknown): ManifestStep => {
-  const where = `its step ${index + 1}`;
-  const members = objectOf(FILE, line, where);
-  known(members, `step ${index + 1}`, ['task', 'args', 'page']);
-  const task = textOf(FILE, required(FILE, members, 'task', where), where);
+const pathsOf = (where: string, step: string, value: unknown): string[] => {
+  const paths = stringsOf(FILE, value, where);
+  if (paths.length === 0) throw unreadable(FILE, where, 'it names no path');
+  const twice = paths.find((path, at) => paths.indexOf(path) !== at);
+  if (twice !== undefined) throw unreadable(FILE, where, `it names '${twice}' twice`);
+  inTheFolder(step, paths);
+  return paths;
+};
+
+const taskOf = (where: string, step: string, members: Json): TaskStep => {
+  known(members, step, ['task', 'args', 'page']);
+  const task = textOf(FILE, members.task, where);
   if (task.trim() === '') throw unreadable(FILE, where, 'it names no task');
   const args = Object.hasOwn(members, 'args') ? stringsOf(FILE, members.args, where) : [];
-  if (!Object.hasOwn(members, 'page')) return { task, args };
+  if (!Object.hasOwn(members, 'page')) return { kind: 'task', task, args };
   const page = textOf(FILE, members.page, where);
   if (!URL.canParse(page)) throw unreadable(FILE, where, 'its page is not a URI');
-  return { task, args, page };
+  return { kind: 'task', task, args, page };
 };
 
-const archivesOf = (value: unknown): ManifestArchive[] => {
-  const archives = Object.entries(objectOf(FILE, value, 'its archives')).map(([path, files]) => ({ path, files: stringsOf(FILE, files, 'its archives') }));
-  inTheFolder('archives', [...archives.map((archive) => archive.path), ...archives.flatMap((archive) => archive.files)]);
+// formats/build-file.md: no two archives of one pack step pack one path.
+const archivesOf = (where: string, step: string, value: unknown): ManifestArchive[] => {
+  const archives = Object.entries(objectOf(FILE, value, where)).map(([path, files]) => ({ path, files: stringsOf(FILE, files, where) }));
+  if (archives.length === 0) throw unreadable(FILE, where, 'it names no archive');
+  const empty = archives.find(({ files }) => files.length === 0);
+  if (empty !== undefined) throw unreadable(FILE, where, `it names no file for '${empty.path}'`);
+  inTheFolder(step, [...archives.map((archive) => archive.path), ...archives.flatMap((archive) => archive.files)]);
   const packedBy = new Map<string, { readonly archive: string; readonly file: string }>();
   for (const { path: archive, files } of archives) {
     for (const file of files) {
       const other = packedBy.get(file.toLowerCase());
       if (other?.archive === archive) {
         const same = other.file === file ? `twice in '${archive}'` : `as '${other.file}' and '${file}' in '${archive}', which differ only by case`;
-        throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' ${same}`);
+        throw new Unreadable(`its ${FILE}'s ${step} names '${file}' ${same}`);
       }
-      if (other !== undefined) throw new Unreadable(`its ${FILE}'s 'archives' names '${file}' in both '${other.archive}' and '${archive}'`);
+      if (other !== undefined) throw new Unreadable(`its ${FILE}'s ${step} names '${file}' in both '${other.archive}' and '${archive}'`);
       packedBy.set(file.toLowerCase(), { archive, file });
     }
   }
   return archives;
+};
+
+const stepOf = (index: number, line: unknown): BuildStep => {
+  const [where, step] = [`its step ${index + 1}`, `step ${index + 1}`];
+  const members = objectOf(FILE, line, where);
+  const kinds = KINDS.filter((kind) => Object.hasOwn(members, kind));
+  const [kind, other] = kinds;
+  if (kind === undefined) {
+    known(members, step, []);
+    throw unreadable(FILE, where, 'it names no step');
+  }
+  if (other !== undefined) throw unreadable(FILE, where, `it names both '${kind}' and '${other}'`);
+  if (kind === 'task') return taskOf(where, step, members);
+  known(members, step, [kind]);
+  if (kind === 'pack') return { kind, archives: archivesOf(where, step, members.pack) };
+  const paths = pathsOf(where, step, members[kind]);
+  const inAFolder = kind === 'compile' ? paths.find((path) => path.includes('/')) : undefined;
+  if (inAFolder !== undefined) throw unreadable(FILE, where, `it compiles '${inAFolder}', which is not at the root of the mod's folder`);
+  return { kind, paths };
 };
 
 const buildFileOf = (value: unknown): BuildFile => {
@@ -51,11 +83,8 @@ const buildFileOf = (value: unknown): BuildFile => {
   if (root.version !== BUILD_FILE_VERSION) {
     throw new Unreadable(`its ${FILE} is version ${JSON.stringify(root.version)}, and Modbench reads only version ${BUILD_FILE_VERSION}`);
   }
-  known(root, undefined, ['version', 'steps', 'archives']);
-  return {
-    steps: Object.hasOwn(root, 'steps') ? arrayOf(FILE, root.steps, 'its steps').map((line, index) => stepOf(index, line)) : [],
-    archives: Object.hasOwn(root, 'archives') ? archivesOf(root.archives) : [],
-  };
+  known(root, undefined, ['version', 'steps']);
+  return { steps: Object.hasOwn(root, 'steps') ? arrayOf(FILE, root.steps, 'its steps').map((line, index) => stepOf(index, line)) : [] };
 };
 
 /** `text` read as a build file of version 1, which holds no exclusion: those are the modlist's (mods.md, A source mod, story 2). */

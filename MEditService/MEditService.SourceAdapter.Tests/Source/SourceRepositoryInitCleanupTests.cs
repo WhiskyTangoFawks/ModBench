@@ -45,8 +45,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     [Fact]
     public void AnInit_TakesBackAnAssetItReplaced_WhenALaterAssetFails()
     {
-        var existing = Path.Combine(_modFolder, "assets", "a.txt");
-        Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
+        var existing = Path.Combine(_modFolder, "a.txt");
         File.WriteAllText(existing, "theirs");
 
         TestAdapters.Source().Init(_modFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("A.esp")],

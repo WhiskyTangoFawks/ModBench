@@ -48,7 +48,7 @@ public sealed class BuildModTraceTests : HostedTests
         File.AppendAllText(Path.Combine(_builtFolder, Plugin), "changed outside Modbench");
         using var stream = await Client.NotificationStream();
 
-        var answer = await Answer(await Client.Build([(Origin, _builtFolder)]));
+        var answer = await Answer(await Client.Build([(Origin, _builtFolder)], new { compile = new[] { Plugin, SecondPlugin } }));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
@@ -69,47 +69,52 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task BuildingAModWhoseArchiveTakesNoAssetOfItsSource_RefusesItByName_AndBuildsTheRest()
+    public async Task BuildingAModWhoseArchiveTakesAFileItsFolderDoesNotHold_RefusesItByName_AndBuildsTheRest()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
         (await Client.DecompileAndCommit(NonCompiledPluginOrigin)).EnsureSuccessStatusCode();
         var otherFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
 
         var answer = await Answer(await Client.Build(
-            [(NonCompiledPluginOrigin, otherFolder), (Origin, _builtFolder)], archives: [new { path = "Main.ba2", files = new[] { "meshes/a.nif" } }]));
+            [(NonCompiledPluginOrigin, otherFolder), (Origin, _builtFolder)], new { pack = new[] { new { path = "Main.ba2", files = new[] { "meshes/a.nif" } } } }));
 
         Assert.Empty(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(
-            [("ArchiveFileNotAnAsset", NonCompiledPluginOrigin), ("ArchiveFileNotAnAsset", Origin)],
+            [("ArchiveFileNotInFolder", NonCompiledPluginOrigin), ("ArchiveFileNotInFolder", Origin)],
             answer.GetProperty("refused").EnumerateArray().Select(m => (m.GetProperty("refusal").GetString(), m.GetProperty("item").GetString())));
     }
 
     [Fact]
-    public async Task BuildingAModWithAnArchiveToPack_PacksItAsTheRequestsVariantSays()
+    public async Task BuildingAModWithAnArchiveToPack_PacksItsLooseFileAsTheRequestsVariantSays()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
-        var source = Client.SourceFolderSentFor(Origin);
-        Directory.CreateDirectory(Path.Combine(source, "assets", "meshes"));
-        File.WriteAllText(Path.Combine(source, "assets", "meshes", "a.nif"), "mesh");
+        Directory.CreateDirectory(Path.Combine(_builtFolder, "meshes"));
+        File.WriteAllText(Path.Combine(_builtFolder, "meshes", "a.nif"), "mesh");
         var ba2 = new { ba2 = new { version = 1, compressed = true } };
 
         var answer = await Answer(await Client.Build(
-            [(Origin, _builtFolder)], new { general = ba2, textures = ba2 }, [new { path = "Main.ba2", files = new[] { "meshes/a.nif" } }]));
+            [(Origin, _builtFolder)], new { pack = new[] { new { path = "Main.ba2", files = new[] { "meshes/a.nif" } } } }, new { general = ba2, textures = ba2 }));
 
         Assert.Empty(Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("archivesRefused").EnumerateArray());
         Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
         Assert.False(File.Exists(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
+    private const string Copy = "\"step\": {\"copy\": [\"a.nif\"]}";
+
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
-        { "no folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\"}], \"exclusionMark\": \".mohidden\"}" },
-        { "no exclusion mark", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}]}" },
-        { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"archives\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}], \"exclusionMark\": \".mohidden\"}" },
+        { "no folder", $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", {Copy}}}], \"exclusionMark\": \".mohidden\"}}" },
+        { "no exclusion mark", $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", {Copy}}}]}}" },
+        { "no step", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\"}" },
+        { "a step of two kinds", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"copy\": [\"a.nif\"], \"compile\": [\"a.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
+        { "a step naming no path", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"copy\": []}}], \"exclusionMark\": \".mohidden\"}" },
+        { "a compile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"compile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
+        { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"pack\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}}], \"exclusionMark\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",
-            "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\", " +
+            $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", {Copy}}}], \"exclusionMark\": \".mohidden\", " +
             "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },

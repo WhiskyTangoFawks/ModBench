@@ -57,17 +57,18 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
-    /// <summary>Where the source folder holds the mod folder's file at <paramref name="pathInModFolder"/>, as an asset.</summary>
-    string AssetPathOf(string pathInModFolder);
-
     /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree, the
     /// assets, build file, manifest and any repair, with the <paramref name="ignored"/> paths ignored.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null);
 
-    /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
-    Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);
+    /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
+    string FileIn(string sourceFolder, string path);
+
+    /// <summary>What a build step copies of <paramref name="copied"/>, each a file or a folder in <paramref name="sourceFolder"/>,
+    /// as its working tree says now.</summary>
+    Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied);
 
     /// <summary>The commit at HEAD of <paramref name="submodule"/>. git first checks out an empty folder at the pin, on its
     /// branch when that branch is at the pin; a failed or cancelled clone leaves the folder empty.</summary>

@@ -32,11 +32,11 @@ internal static class GitInit
         {
             WriteEachPlugin(sourceFolder, plugins, journal);
             foreach (var asset in assets)
-                journal.Copy(Path.Combine(sourceFolder, SourceRepositoryLayout.AssetsFolderName, asset.Path), asset.Open);
+                journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, ignored ?? [])));
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored ?? [])));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             git.Run("add", "-A");
@@ -108,16 +108,18 @@ internal static class GitInit
 
     // Root-anchored, so no same-named folder deeper is un-ignored. An un-ignore outranks the user's global
     // excludes. The ignored paths come last: a package yields them (ADR-0022).
-    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<string> ignored) =>
+    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<Asset> assets, IReadOnlyList<string> ignored) =>
         "*\n" +
         "!/.gitignore\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
-        $"!/{SourceRepositoryLayout.RootFolderName}/\n" +
-        $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
-        $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +
-        $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n" +
+        Unignored($"{SourceRepositoryLayout.RootFolderName}/") +
         (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +
+        string.Concat(assets.Select(asset => RootEntryOf(asset.Path)).Distinct(StringComparer.Ordinal).Select(Unignored)) +
         string.Concat(ignored.Select(path => $"/{Escaped(path)}\n"));
+
+    private static string RootEntryOf(string path) => path.Split('/') is [var file] ? Escaped(file) : $"{Escaped(path.Split('/')[0])}/";
+
+    private static string Unignored(string entry) => entry.EndsWith('/') ? $"!/{entry}\n!/{entry}**\n" : $"!/{entry}\n";
 
     private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }

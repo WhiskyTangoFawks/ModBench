@@ -66,7 +66,7 @@ describe('stepTasks', () => {
   ])('runs %s, in the folder the manifest builds', async (_case, task, args, rebuilt) => {
     const { tasksHost, executed } = hostEndingEachRunAsSaid([task]);
 
-    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'Optimise', args }], '/mods/Mod')).toBeUndefined();
+    expect(await stepTasks(tasksHost).whyStepFailed({ kind: 'task', task: 'Optimise', args }, '/mods/Mod')).toBeUndefined();
 
     expect(executed).toEqual([{ label: 'Optimise', rebuilt }]);
   });
@@ -77,12 +77,10 @@ describe('stepTasks', () => {
     ['cannot start', [userTask('A'), userTask('B')], { A: { refused: 'no shell' } }, "step 'A' did not run: its task 'A' could not run: no shell"],
     ['has only a workspace task', [{ label: 'A', user: false, kind: 'process' }, userTask('B')], {}, "step 'A' did not run: this machine has no user task 'A'"],
     ['takes no arguments', [userTask('A', 'custom'), userTask('B')], {}, "step 'A' did not run: its task 'A' is no shell or process task, so it takes no arguments"],
-  ])('stops at a step whose task %s, naming why, and runs no step after it', async (_case, tasks, endOf, why) => {
-    const { tasksHost, executed } = hostEndingEachRunAsSaid(tasks, endOf);
+  ])('names why a step whose task %s failed', async (_case, tasks, endOf, why) => {
+    const { tasksHost } = hostEndingEachRunAsSaid(tasks, endOf);
 
-    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'A', args: [] }, { task: 'B', args: [] }], '/mods/Mod')).toBe(why);
-
-    expect(executed.map(({ label }) => label)).not.toContain('B');
+    expect(await stepTasks(tasksHost).whyStepFailed({ kind: 'task', task: 'A', args: [] }, '/mods/Mod')).toBe(why);
   });
 
   it.each<[string, string[]]>([
@@ -92,7 +90,7 @@ describe('stepTasks', () => {
   ])('refuses a step with arguments on a command line, %s included, running nothing, as no quoting can be known for it', async (_case, args) => {
     const { tasksHost, executed } = hostEndingEachRunAsSaid([userTask('A', 'shellLine')]);
 
-    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'A', args }], '/mods/Mod'))
+    expect(await stepTasks(tasksHost).whyStepFailed({ kind: 'task', task: 'A', args }, '/mods/Mod'))
       .toBe('step \'A\' did not run: its task \'A\' is one command line, which takes no arguments: give the task an "args" list, which VS Code quotes');
 
     expect(executed).toEqual([]);
@@ -101,6 +99,6 @@ describe('stepTasks', () => {
   it('reads an exit code that arrives before the host answers which run it started', async () => {
     const { tasksHost } = hostEndingEachRunAsSaid([userTask('A')], { A: { exitCode: 4, before: true } });
 
-    expect(await stepTasks(tasksHost).whyStepsFailed([{ task: 'A', args: [] }], '/mods/Mod')).toBe("step 'A' exited with code 4");
+    expect(await stepTasks(tasksHost).whyStepFailed({ kind: 'task', task: 'A', args: [] }, '/mods/Mod')).toBe("step 'A' exited with code 4");
   });
 });

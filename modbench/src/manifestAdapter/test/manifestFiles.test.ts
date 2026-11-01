@@ -4,8 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { buildFileIn, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
-import { buildFileText } from '../../test/buildFiles';
+import { buildFileIn, buildFileText, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
 const manifest: Manifest = { packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
@@ -108,7 +107,7 @@ describe('writeManifestIn', () => {
 });
 
 describe('buildFileIn', () => {
-  const buildFile: BuildFile = { archives: [{ path: 'a.ba2', files: ['a.nif'] }], steps: [{ task: 'Zip', args: [], page: 'https://example.com/zip' }] };
+  const buildFile: BuildFile = { steps: [{ kind: 'pack', archives: [{ path: 'a.ba2', files: ['a.nif'] }] }, { kind: 'task', task: 'Zip', args: [], page: 'https://example.com/zip' }] };
 
   it('reads the build file at the root of the repository, in any case', async () => {
     await writeFile(join(folder, BUILD_FILE.toUpperCase()), buildFileText(buildFile));

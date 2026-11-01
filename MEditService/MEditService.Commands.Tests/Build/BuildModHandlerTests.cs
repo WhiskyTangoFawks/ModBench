@@ -15,6 +15,7 @@ namespace MEditService.Commands.Tests.Build;
 public sealed class BuildModHandlerTests : IDisposable
 {
     private const string ModName = "Mod";
+    private const string Plugin = "Fixture.esp";
     private const string ExclusionMark = ".excluded";
     private const string MetaIni = "meta.ini";
     private const string Remote = "https://example.com/mod.git";
@@ -33,43 +34,67 @@ public sealed class BuildModHandlerTests : IDisposable
     private string SourceFolder => Path.Combine(_root, "source", SourceFolderName);
 
     [Fact]
-    public async Task Build_LeavesAFileItDidNotMake_AndReplacesAFileThatHeldOtherBytes()
+    public async Task ACopy_WritesEachFileOfAFolderAndAFileItNames_ReplacingOneThatHeldOtherBytes_AndLeavesTheRest()
     {
-        WriteSource(("textures/a.dds", "a"), ("meshes/c.nif", "c"));
+        WriteSource(("textures/a.dds", "a"), ("textures/deep/b.dds", "b"), ("meshes/c.nif", "c"), ("meshes/d.nif", "d"));
         WriteInFolder("textures/a.dds", "changed in the folder");
-        WriteInFolder("meshes/c.nif", "c");
         WriteInFolder("notes.txt", "mine");
 
-        var built = await Landed();
+        var built = await Landed(Copy("textures", "meshes/c.nif"));
 
-        Assert.Equal([("meshes/c.nif", "c"), ("notes.txt", "mine"), ("textures/a.dds", "a")], FilesIn(ModFolder));
+        Assert.Equal([("meshes/c.nif", "c"), ("notes.txt", "mine"), ("textures/a.dds", "a"), ("textures/deep/b.dds", "b")], FilesIn(ModFolder));
         Assert.Null(built.Failure);
     }
 
     [Fact]
-    public async Task ABuild_AnswersEachFileItMade_ByItsPathInTheFolder_AndWritesNoManifest()
+    public async Task ACopy_AnswersEachFileItMade_ByItsPathInTheFolder_AndWritesNoManifest()
     {
         WriteSource(("meshes/c.nif", "c"), ("textures/a.dds", "a"));
         WriteInFolder(MetaIni, "[General]");
         var sourceBefore = Directory.GetFiles(SourceFolder, "*", SearchOption.AllDirectories);
 
-        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder) { Exclude = ["textures/a.dds"] });
+        var built = await Landed(Copy("meshes", "textures") with { Exclude = ["textures/a.dds"] });
 
         Assert.Equal([new MadeFile("meshes/c.nif", VouchedFor: true), new MadeFile("textures/a.dds.excluded", VouchedFor: true)], built.Made);
         Assert.Equal(sourceBefore, Directory.GetFiles(SourceFolder, "*", SearchOption.AllDirectories));
         Assert.Empty(Directory.GetFiles(ModFolder, "*.manifest.json"));
     }
 
+    [Fact]
+    public async Task ACopyOfAPathTheSourceFolderDoesNotHold_RefusesTheMod_WritingNothing()
+    {
+        WriteSource(("meshes/c.nif", "c"));
+
+        var refused = Assert.Single((await Build(Copy("meshes", "textures"))).Refused);
+
+        Assert.Equal(
+            (BuildRefusal.SourceUnreadable, $"was not built: '{SourceFolder}' holds no 'textures' to copy."), (refused.Refusal, refused.Message));
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
+    public async Task ACopy_CompilesNoPlugin()
+    {
+        await InitializedWithALocalizedPlugin();
+        WriteSource(("meshes/c.nif", "c"));
+        File.Delete(Path.Combine(ModFolder, Plugin));
+
+        var built = await Landed(Copy("meshes"));
+
+        Assert.Empty(built.Compiled);
+        Assert.False(File.Exists(Path.Combine(ModFolder, Plugin)));
+    }
+
     [Theory]
-    [InlineData("assets/meshes/c.nif", "changed", true)]
-    [InlineData("assets/meshes/c.nif", "c", false)]
+    [InlineData("meshes/c.nif", "changed", true)]
+    [InlineData("meshes/c.nif", "c", false)]
     public async Task ABuildFromASharedSource_SaysWhenItsSourceHoldsChangesNoCommitHolds(string written, string text, bool uncommitted)
     {
         WriteSource(("meshes/c.nif", "c"));
         Shared();
         Write(SourceFolder, written, Encoding.UTF8.GetBytes(text));
 
-        Assert.Equal(uncommitted, (await Landed()).Uncommitted);
+        Assert.Equal(uncommitted, (await Landed(Copy("meshes"))).Uncommitted);
     }
 
     [Theory]
@@ -81,17 +106,15 @@ public sealed class BuildModHandlerTests : IDisposable
         Shared();
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "update-ref", holding, "HEAD");
 
-        Assert.Equal(unpushed, (await Landed()).Unpushed);
+        Assert.Equal(unpushed, (await Landed(Copy("meshes"))).Unpushed);
     }
 
-    [PosixFact]
-    public async Task TwoPluginSourcesWhoseNamesDifferInCaseAlone_AreEachRefusedByName_AndTheRestOfTheModBuilds()
+    [Fact]
+    public async Task ACompileOfTwoPluginsWhoseNamesDifferInCaseAlone_RefusesEachByName()
     {
         WriteSource(("meshes/c.nif", "c"));
-        Directory.CreateDirectory(Path.Combine(SourceFolder, "plugin-source", "Fixture.esp"));
-        Directory.CreateDirectory(Path.Combine(SourceFolder, "plugin-source", "fixture.esp"));
 
-        var built = await Landed();
+        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Compile(["Fixture.esp", "fixture.esp"])));
 
         Assert.Equal(
             [
@@ -101,104 +124,109 @@ public sealed class BuildModHandlerTests : IDisposable
                     "fixture.esp cannot be compiled: the plugin sources 'Fixture.esp' and 'fixture.esp' differ only in case, and one mod folder cannot hold them on Windows."),
             ],
             built.Refused.Select(refused => (refused.Item.Name, refused.Refusal, refused.Message)));
-        Assert.Equal([("meshes/c.nif", "c")], FilesIn(ModFolder));
+        Assert.False(Directory.Exists(ModFolder));
     }
 
     [Fact]
-    public async Task Build_WritesAnExcludedFile_AndEachFileOfAnExcludedFolder_UnderTheExclusionMarkHanded()
+    public async Task ACompileOfAPluginWithNoPluginSource_RefusesIt_NamingIt_AndCompilesTheRest()
+    {
+        await InitializedWithALocalizedPlugin();
+
+        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Compile([Plugin, "Other.esp"])));
+
+        Assert.Equal(["Other.esp"], built.Refused.Select(refused => refused.Item.Name));
+        Assert.Equal([Plugin], built.Compiled.Select(plugin => plugin.Name));
+    }
+
+    [Fact]
+    public async Task ACopy_WritesAnExcludedFile_AndEachFileOfAnExcludedFolder_UnderTheExclusionMarkHanded()
     {
         WriteSource(("textures/a.dds", "a"), ("textures/b.dds", "b"), ("meshes/deep/c.nif", "c"));
 
-        await Landed(new ModToBuild(ModName, SourceFolder, ModFolder) { Exclude = ["Textures/A.dds", "meshes"] });
+        await Landed(Copy("textures", "meshes") with { Exclude = ["Textures/A.dds", "meshes"] });
 
         Assert.Equal([("meshes.excluded/deep/c.nif", "c"), ("textures/a.dds.excluded", "a"), ("textures/b.dds", "b")], FilesIn(ModFolder));
     }
 
     [Fact]
-    public async Task AnArchiveTakingAFileThatIsNotAnAsset_RefusesTheMod_WritingNothing()
+    public async Task APackTakingAFileItsFolderDoesNotHold_RefusesTheMod_WritingNothing()
     {
-        WriteSource(("meshes/c.nif", "c"));
+        WriteInFolder("meshes/c.nif", "c");
 
-        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder)
-        {
-            Archives = [new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif", "a.txt"])],
-        })).Refused);
+        var refused = Assert.Single((await Build(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif", "a.txt"])), Packing)).Refused);
 
         Assert.Equal(
-            (BuildRefusal.ArchiveFileNotAnAsset, "was not built: 'Mod - Main.ba2' takes 'a.txt', which is not an asset of its source."),
+            (BuildRefusal.ArchiveFileNotInFolder, "was not built: 'Mod - Main.ba2' takes 'a.txt', which its folder does not hold."),
             (refused.Refusal, refused.Message));
-        Assert.False(Directory.Exists(ModFolder));
+        Assert.Equal([("meshes/c.nif", "c")], FilesIn(ModFolder));
     }
 
     [Fact]
-    public async Task ARefusedBuild_WritesNothing_LeavingAFolderThatHoldsACompiledPluginAndItsStringsReadingAsNoChangeOutsideModbench()
+    public async Task ARefusedPack_WritesNothing_LeavingAFolderThatHoldsACompiledPluginAndItsStringsReadingAsNoChangeOutsideModbench()
     {
         await InitializedWithALocalizedPlugin();
         WriteInFolder("textures/taken.dds", "from the pack");
         var before = Directory.GetFiles(ModFolder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
             .Select(file => (file, Convert.ToHexString(File.ReadAllBytes(file)))).ToList();
 
-        var result = (await TestEditService.BuildModHandler(_holder).BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder)
-        {
-            Archives = [new ArchiveToPack("Mod - Main.ba2", ["not-an-asset.nif"])],
-        }], NoArchives)).Value();
+        var result = (await TestEditService.BuildModHandler(_holder).BuildAsync(
+            [Pack(new ArchiveToPack("Mod - Main.ba2", ["not-in-the-folder.nif"]))], NoArchives)).Value();
 
-        Assert.Equal([BuildRefusal.ArchiveFileNotAnAsset], result.Refused.Select(refused => refused.Refusal));
+        Assert.Equal([BuildRefusal.ArchiveFileNotInFolder], result.Refused.Select(refused => refused.Refusal));
         Assert.Equal(before, Directory.GetFiles(ModFolder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
             .Select(file => (file, Convert.ToHexString(File.ReadAllBytes(file)))).ToList());
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
     }
 
     [PosixFact]
-    public async Task AFileThatCannotBeReadAfterTheFirstWrite_LandsTheBuildWithThatFailure_NamingWhatItOverwroteSoFar()
+    public async Task AFileThatCannotBeReadAfterTheFirstWrite_LandsTheCopyWithThatFailure()
     {
         WriteSource(("a.txt", "a"), ("z.txt", "z"));
         WriteInFolder("a.txt", "changed in the folder");
-        var held = Path.Combine(SourceFolder, "assets", "z.txt");
+        var held = Path.Combine(SourceFolder, "z.txt");
         FileModes.Set(held, "000");
         ModBuilt built;
         try
         {
-            built = await Landed();
+            built = await Landed(Copy("a.txt", "z.txt"));
         }
         finally
         {
             FileModes.Set(held, "600");
         }
 
-        Assert.StartsWith("The build stopped before compiling, as a file could not be read or written: ", built.Failure, StringComparison.Ordinal);
+        Assert.StartsWith("The build stopped at its copy, as a file could not be read or written: ", built.Failure, StringComparison.Ordinal);
         Assert.Contains("z.txt", built.Failure, StringComparison.Ordinal);
         Assert.Empty(built.Made);
     }
 
     [Fact]
-    public async Task Build_PacksEachArchiveFromItsAssets_TexturesAsTheTexturesVariant_LeavingNoneOfThemLoose()
+    public async Task APack_PacksEachArchiveFromTheLooseFilesInItsFolder_TexturesAsTheTexturesVariant_TakingThemOutOfTheFolder()
     {
-        WriteSource(("meshes/c.nif", "c"), ("readme.txt", "loose"));
-        WriteAsset("textures/a.dds", Dds.Dxt1(8, 8, 1).File);
+        WriteInFolder("meshes/c.nif", "c");
+        WriteInFolder("readme.txt", "loose");
+        Write(ModFolder, "textures/a.dds", Dds.Dxt1(8, 8, 1).File);
 
-        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder)
-        {
-            Archives = [new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"]), new ArchiveToPack("Mod - Textures.ba2", ["textures/a.dds"])],
-        }, Packing);
+        var built = await Landed(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"]), new ArchiveToPack("Mod - Textures.ba2", ["textures/a.dds"])), Packing);
 
         Assert.Empty(built.ArchivesRefused);
         Assert.Equal(["Mod - Main.ba2", "Mod - Textures.ba2", "readme.txt"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Equal([new MadeFile("Mod - Main.ba2", VouchedFor: true), new MadeFile("Mod - Textures.ba2", VouchedFor: true)], built.Made);
         Assert.Equal("GNRL", Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(ModFolder, "Mod - Main.ba2")), 8, 4));
         Assert.Equal("DX10", Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(ModFolder, "Mod - Textures.ba2")), 8, 4));
     }
 
     [Fact]
-    public async Task AGameWhoseTableNamesNoArchiveVariant_RefusesEachArchive_AndBuildsTheRest()
+    public async Task AGameWhoseTableNamesNoArchiveVariant_RefusesEachArchive_LeavingItsLooseFiles()
     {
-        WriteSource(("meshes/c.nif", "c"), ("readme.txt", "loose"));
+        WriteInFolder("meshes/c.nif", "c");
 
-        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder) { Archives = [new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"])] });
+        var built = await Landed(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"])));
 
         var refused = Assert.Single(built.ArchivesRefused);
         Assert.Equal(("Mod - Main.ba2", ArchiveRefusal.VariantNotWritten), (refused.Item, refused.Refusal));
-        Assert.Equal([("readme.txt", "loose")], FilesIn(ModFolder));
-        Assert.Contains(new MadeFile("Mod - Main.ba2", VouchedFor: false), built.Made);
+        Assert.Equal([("meshes/c.nif", "c")], FilesIn(ModFolder));
+        Assert.Equal([new MadeFile("Mod - Main.ba2", VouchedFor: false)], built.Made);
     }
 
     [Fact]
@@ -206,58 +234,78 @@ public sealed class BuildModHandlerTests : IDisposable
     {
         await InitializedWithALocalizedPlugin();
 
-        var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder)], NoArchives)).Value().Applied);
+        var built = await Landed(Compile());
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
         Assert.Equal(
-            [.. new[] { "Fixture.esp" }.Concat(stringsFiles).Order(StringComparer.Ordinal).Select(path => new MadeFile(path, VouchedFor: true))],
+            [.. new[] { Plugin }.Concat(stringsFiles).Order(StringComparer.Ordinal).Select(path => new MadeFile(path, VouchedFor: true))],
             built.Made);
     }
 
     [Fact]
-    public async Task AFreshClone_WithNoPluginFile_BuildsEachPluginFromItsSource()
+    public async Task AFreshClone_WithNoPluginFile_CompilesEachPluginFromItsSource()
     {
         await InitializedWithALocalizedPlugin();
         Directory.Delete(ModFolder, recursive: true);
         WriteInFolder(MetaIni, "[General]");
-        _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "Data"), _root, GameRelease.Fallout4, []));
 
-        var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder)], NoArchives)).Value().Applied);
+        var built = await Landed(Compile());
 
-        Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Name));
-        Assert.True(File.Exists(Path.Combine(ModFolder, "Fixture.esp")));
+        Assert.Equal([Plugin], built.Compiled.Select(plugin => plugin.Name));
+        Assert.True(File.Exists(Path.Combine(ModFolder, Plugin)));
     }
 
     [Fact]
-    public async Task AnArchive_PacksAnAsset_LeavingNoLooseCopy()
+    public async Task ADecompile_ReplacesThePluginSourceOfAPluginInTheSourceFolder_WhichTheCompileAfterBuilds()
     {
-        WriteSource(("meshes/c.nif", "c"), ("meshes/d.nif", "d"));
+        await InitializedWithALocalizedPlugin();
+        var replacement = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        replacement.Doors.AddNew("ReplacingDoor");
+        replacement.WriteToBinary(Path.Combine(Directory.CreateDirectory(Path.Combine(SourceFolder, "originals")).FullName, Plugin));
+        var before = SourceFilesOf(Plugin);
 
-        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder)
-        {
-            Archives = [new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif", "meshes/d.nif"])],
-        }, Packing);
+        var decompiled = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([$"originals/{Plugin}"])));
+        await Landed(Compile());
 
-        Assert.Empty(built.ArchivesRefused);
-        Assert.Equal(["Mod - Main.ba2"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Equal((null, []), (decompiled.Failure, decompiled.Made));
+        Assert.NotEqual(before, SourceFilesOf(Plugin));
+        using var compiled = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(Plugin), Path.Combine(ModFolder, Plugin)), Fallout4Release.Fallout4);
+        Assert.Equal(["ReplacingDoor"], compiled.Doors.Select(door => door.EditorID));
     }
+
+    [Fact]
+    public async Task ADecompileOfAPluginTheSourceFolderDoesNotHold_RefusesTheMod_LeavingItsPluginSource()
+    {
+        await InitializedWithALocalizedPlugin();
+        var before = SourceFilesOf(Plugin);
+
+        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])))).Refused);
+
+        Assert.Equal((BuildRefusal.NotDecompiled, $"was not built: '{SourceFolder}' holds no '{Plugin}' to decompile."), (refused.Refusal, refused.Message));
+        Assert.Equal(before, SourceFilesOf(Plugin));
+    }
+
+    private string[] SourceFilesOf(string plugin) =>
+        [.. Directory.GetFiles(Path.Combine(SourceFolder, "plugin-source", plugin), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
 
     private async Task InitializedWithALocalizedPlugin()
     {
-        var plugin = Path.Combine(Directory.CreateDirectory(ModFolder).FullName, "Fixture.esp");
-        var written = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var plugin = Path.Combine(Directory.CreateDirectory(ModFolder).FullName, Plugin);
+        var written = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
         written.Doors.AddNew("FixtureDoor").Name = new TranslatedString(Language.English, "The Big Door");
         written.UsingLocalization = true;
         written.WriteToBinary(plugin);
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
         _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName, _root, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
+            [new LoadOrderEntry(Plugin, plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
         Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, new NewRepository(SourceFolder, [], SourceInits.BuildFile))])).Value().Applied);
     }
 
-    private async Task<ModBuilt> Landed() => await Landed(new ModToBuild(ModName, SourceFolder, ModFolder));
+    private ModToBuild Copy(params string[] paths) => new(ModName, SourceFolder, ModFolder, new BuildStep.Copy(paths));
+
+    private ModToBuild Compile() => new(ModName, SourceFolder, ModFolder, new BuildStep.Compile([Plugin]));
+
+    private ModToBuild Pack(params ArchiveToPack[] archives) => new(ModName, SourceFolder, ModFolder, new BuildStep.Pack(archives));
 
     private async Task<ModBuilt> Landed(ModToBuild mod, InstanceToBuild? instance = null)
     {
@@ -268,17 +316,17 @@ public sealed class BuildModHandlerTests : IDisposable
 
     private async Task<BuildResult> Build(ModToBuild mod, InstanceToBuild? instance = null)
     {
-        _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
+        if (_holder.Held is null) _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
         return (await TestEditService.BuildModHandler(_holder).BuildAsync([mod], instance ?? NoArchives)).Value();
     }
 
     private static readonly InstanceToBuild Packing = new(ExclusionMark, new ArchiveVariants(
         new Ba2Variant(1, Ba2Contents.General, Compressed: false), new Ba2Variant(1, Ba2Contents.Textures, Compressed: false)));
 
-    private void WriteSource(params (string Path, string Text)[] assets)
+    private void WriteSource(params (string Path, string Text)[] files)
     {
         Directory.CreateDirectory(SourceFolder);
-        foreach (var (path, text) in assets) WriteAsset(path, Encoding.UTF8.GetBytes(text));
+        foreach (var (path, text) in files) Write(SourceFolder, path, Encoding.UTF8.GetBytes(text));
     }
 
     private string Shared()
@@ -289,8 +337,6 @@ public sealed class BuildModHandlerTests : IDisposable
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "commit", "-q", "-m", "Source");
         return GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "rev-parse", "HEAD").Trim();
     }
-
-    private void WriteAsset(string path, byte[] bytes) => Write(Path.Combine(SourceFolder, "assets"), path, bytes);
 
     private void WriteInFolder(string path, string text) => Write(ModFolder, path, Encoding.UTF8.GetBytes(text));
 

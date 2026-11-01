@@ -45,15 +45,15 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
-    public string AssetPathOf(string pathInModFolder) => SourceRepositoryLayout.AssetPathOf(pathInModFolder);
-
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null) =>
         SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, repair, manifest, ignored));
 
-    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) =>
-        SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder));
+    public string FileIn(string sourceFolder, string path) => Path.Combine(sourceFolder, path);
+
+    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied) =>
+        SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder, copied));
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) =>
         SourceFailure.Answer(() => Submodules.CommitAtHead(submodule, cancel));

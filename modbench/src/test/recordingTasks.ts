@@ -1,19 +1,19 @@
-import type { ManifestStep } from '../manifestAdapter/manifestAdapter';
+import type { TaskStep } from '../manifestAdapter/manifestAdapter';
 import type { StepTasks } from '../sourceCommands/steps';
 
-interface StepsRun { readonly steps: readonly ManifestStep[]; readonly folder: string }
+interface StepRun { readonly step: TaskStep; readonly folder: string }
 
-/** A machine whose user tasks are those labelled: each folder's steps are recorded, and fail as `failures` says by
- *  folder, or exit with code 0. */
+/** A machine whose user tasks are those labelled: each step run is recorded, and fails as `failures` says by folder, or
+ *  exits with code 0. */
 export function recordingTasks(
   labels: readonly string[] = [], failures: Readonly<Record<string, string>> = {},
-): StepTasks & { readonly runs: StepsRun[] } {
-  const runs: StepsRun[] = [];
+): StepTasks & { readonly runs: StepRun[] } {
+  const runs: StepRun[] = [];
   return {
     runs,
     labels: () => Promise.resolve(labels),
-    whyStepsFailed: (steps, folder) => {
-      runs.push({ steps, folder });
+    whyStepFailed: (step, folder) => {
+      runs.push({ step, folder });
       return Promise.resolve(failures[folder]);
     },
   };

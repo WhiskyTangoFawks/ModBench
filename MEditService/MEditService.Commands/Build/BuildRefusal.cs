@@ -14,9 +14,12 @@ public enum BuildRefusal
     /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
     NoLoadOrder,
 
-    /// <summary>The source folder cannot be read, or holds assets one mod folder cannot hold.</summary>
+    /// <summary>The source folder cannot be read, lacks a path a copy names, or holds files one mod folder cannot hold.</summary>
     SourceUnreadable,
 
-    /// <summary>An archive takes a file that is not an asset of the source.</summary>
-    ArchiveFileNotAnAsset,
+    /// <summary>An archive takes a loose file its mod's folder does not hold.</summary>
+    ArchiveFileNotInFolder,
+
+    /// <summary>A plugin a decompile names is not in the source folder, or does not decompile.</summary>
+    NotDecompiled,
 }

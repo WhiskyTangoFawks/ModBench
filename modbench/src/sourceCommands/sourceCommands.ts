@@ -16,7 +16,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'sourcePaths' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
@@ -143,7 +143,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       const notes = downloaded.notes.length > 0 ? { notes: downloaded.notes } : {};
       for (const [at, mod] of mods.entries()) {
         options.onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
-        const decided = await newRepositoryOf(client, adapter, mod, game, downloaded.files);
+        const decided = await newRepositoryOf(adapter, mod, game, downloaded.files);
         if ('refusal' in decided) refused.push({ item: mod, reason: decided.refusal });
         else made.set(mod, decided);
       }

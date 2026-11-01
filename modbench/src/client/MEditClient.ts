@@ -159,15 +159,11 @@ export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitMod
 /** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
 export type NewRepository = components['schemas']['NewRepositoryRequest'];
 
-/** A mod to build, as the extension hands it (ADR-0016): the paths it excludes, the archives to pack, and each file the
- *  extension wrote into its folder from a package. */
+/** A mod to build, as the extension hands it (ADR-0016): the paths it excludes, and the built-in step of its build file to run. */
 export type BuildMod = components['schemas']['BuildModRequest'];
 
 /** The instance's facts every mod's build needs: the mod manager's exclusion mark, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
-
-/** A file a build made, by its path in the mod folder, and whether the source vouches for it. */
-export type MadeFile = components['schemas']['MadeFile'];
 
 // The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
 type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed'> & {
@@ -197,9 +193,6 @@ export type Submodule = components['schemas']['SubmoduleRequest'];
 /** Each submodule cloned, by the folder git checked it out in, with why its branch was left elsewhere, and each not cloned,
  *  by that folder, with why. */
 export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
-
-/** Where the source folder holds each file of a mod folder, in the order asked. */
-export type SourcePaths = components['schemas']['SourcePathsResult'];
 
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
@@ -261,8 +254,6 @@ export interface MEditClient {
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
   // ADR-0022: each submodule cloned at its pin, or named with why it was not.
   cloneSubmodules(submodules: readonly Submodule[]): Promise<SubmodulesCloned | WriteRefused>;
-  // The Source adapter's layout: where the source folder holds each file of a mod folder, which a manifest there names.
-  sourcePaths(paths: readonly string[]): Promise<SourcePaths | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

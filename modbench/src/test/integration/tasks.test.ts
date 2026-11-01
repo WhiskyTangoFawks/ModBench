@@ -32,7 +32,7 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
     const ran = await Promise.all(RUNS.map(async ({ label, args }) => {
       const folder = mkdtempSync(path.join(os.tmpdir(), 'modbench-step-'));
       folders.push(folder);
-      const why = await tasks.whyStepsFailed([{ task: label, args }], folder);
+      const why = await tasks.whyStepFailed({ kind: 'task', task: label, args }, folder);
       return [why, readFileSync(path.join(folder, 'ran.txt'), 'utf8')];
     }));
 
