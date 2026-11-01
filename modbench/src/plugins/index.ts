@@ -62,10 +62,10 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   return {
     mEditStanding: { messages: () => [statusBar.standing(), ...viewMessages()] },
     onInstance: ({ syncPlugins, ...instanceDeps }) => {
-      const { pluginSync, dispose: stopSyncing } = pluginSyncOn({ instance: instanceDeps.instance, syncPlugins, channel });
-      const syncCommand = registerPluginSyncCommand(pluginSync);
+      const syncing = pluginSyncOn({ instance: instanceDeps.instance, syncPlugins, channel });
+      const syncCommand = registerPluginSyncCommand(syncing.pluginSync);
       const view = createPluginsView({
-        ...instanceDeps, pluginSync, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
+        ...instanceDeps, pluginSync: syncing.pluginSync, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
         ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
         log: (level, msg) => channel[level](msg),
       });
@@ -79,7 +79,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
           syncCommand.dispose();
-          stopSyncing();
+          syncing.dispose();
           view.dispose();
         },
       };
