@@ -85,19 +85,19 @@ export function modsAndSourceModsOfAgent(argument: readonly Argument[], value: I
   };
 }
 
-const sourceModOfRow = (row: unknown, value: InstanceValue): string | undefined =>
+const sourceModOfFolderRow = (row: unknown, value: InstanceValue): string | undefined =>
   (isSourceFolder(row) ? sourceModOfFolder(Reflect.get(carriedArgument(row) ?? {}, 'path'), value) : undefined);
 
 function toRun(
-  deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined, isTaken: (row: unknown) => boolean, takesSourceMods: boolean,
+  deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined, sourceModOf: (row: unknown, value: InstanceValue) => string | undefined,
 ): ModsToRun {
   const { value } = deps.instance;
-  const rows = rowsOf(deps, clicked, selected, isTaken);
+  const rows = rowsOf(deps, clicked, selected, (row) => isModOrSeparator(row) || sourceModOf(row, value) !== undefined);
   if (rows.length === 0) return { mods: everyMod(value), sourceMods: [], refused: [], everyMod: true, view: deps.toolboxView };
   const refused: ItemRefusal<string>[] = [];
   const sourceMods: string[] = [];
   const mods = rows.flatMap((row) => {
-    const sourceMod = takesSourceMods ? sourceModOfRow(row, value) : undefined;
+    const sourceMod = sourceModOf(row, value);
     if (sourceMod !== undefined) { sourceMods.push(sourceMod); return []; }
     const held = modsOf(row, value);
     if (held === undefined) refused.push({ item: rowNameOf(row), reason: NEITHER });
@@ -107,8 +107,8 @@ function toRun(
 }
 
 export const modsToRun = (deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun =>
-  toRun(deps, clicked, selected, isModOrSeparator, false);
+  toRun(deps, clicked, selected, () => undefined);
 
 /** Update manifest also takes a source folder, which stands for its source mod. */
 export const modsAndSourceModsToRun = (deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun =>
-  toRun(deps, clicked, selected, (row) => isModOrSeparator(row) || isSourceFolder(row), true);
+  toRun(deps, clicked, selected, sourceModOfFolderRow);

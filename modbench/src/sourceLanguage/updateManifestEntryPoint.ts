@@ -10,8 +10,6 @@ interface UpdateManifestEntryPointDeps {
   reporter: Pick<Reporter, 'report'>;
 }
 
-const parentOf = (path: string): string => path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')));
-
 /** The Explorer menu of a manifest in a source mod's source folder (source.md, Menus and keys): an internal entry point
  *  that fires `update manifest` with the source folders those manifests lie in. */
 export function registerUpdateManifestEntryPoint({ instance, reporter }: UpdateManifestEntryPointDeps): vscode.Disposable {
@@ -24,7 +22,7 @@ export function registerUpdateManifestEntryPoint({ instance, reporter }: UpdateM
     const folders = new Map([...instance.value.paths.sourceDirs.values()].map((folder) => [vscode.Uri.file(folder).toString(), folder]));
     const held = new Set<string>();
     for (const resource of (selected ?? [clicked]).filter(isUri)) {
-      const folder = folders.get(vscode.Uri.file(parentOf(resource.fsPath)).toString());
+      const folder = folders.get(vscode.Uri.joinPath(resource, '..').toString());
       if (folder === undefined) reporter.report('error', `Could not update the manifest "${resource.fsPath}".`, 'It is not in a source mod\'s source folder.');
       else held.add(folder);
     }

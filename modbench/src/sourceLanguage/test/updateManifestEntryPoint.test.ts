@@ -15,11 +15,12 @@ vi.mock('vscode', async () => ({
   },
   Uri: await (async () => {
     const { Uri: base } = await import('../../test/vscodeMock');
-    return { ...base, file: (path: string) => {
+    const file = (path: string) => {
       const uri = base.file(path);
       const written = uri.toString().replace(/^file:\/\/([A-Z]):/, (_match: string, drive: string) => `file://${drive.toLowerCase()}:`);
       return Object.assign(uri, { toString: () => written });
-    } };
+    };
+    return { ...base, file, joinPath: (from: Parameters<typeof base.joinPath>[0], ...segments: string[]) => file(base.joinPath(from, ...segments).fsPath) };
   })(),
   Disposable: class { constructor(readonly dispose: () => void) {} },
 }));

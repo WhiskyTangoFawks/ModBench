@@ -2,6 +2,7 @@
 // `vi.mock('vscode')` factory lists only the names it needs, so production code reaching for an
 // API a test did not ask for still throws.
 
+import { posix } from 'node:path';
 import type * as vscode from 'vscode';
 
 // Only the two constructor-assigned fields are declared. Declaring the optional TreeItem
@@ -82,7 +83,7 @@ export class FakeUri {
 export const Uri = {
   file: (fsPath: string): FakeUri => new FakeUri('file', fsPath.replaceAll('\\', '/'), '', fsPath),
   from: ({ scheme, path, query }: { scheme: string; path: string; query?: string }): FakeUri => new FakeUri(scheme, path, query),
-  joinPath: (base: FakeUri, ...segments: string[]): FakeUri => Uri.file([base.fsPath, ...segments].join('/')),
+  joinPath: (base: FakeUri, ...segments: string[]): FakeUri => Uri.file(posix.normalize([base.fsPath, ...segments].join('/'))),
 };
 
 class ParsedUri {
