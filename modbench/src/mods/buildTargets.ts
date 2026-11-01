@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { BUILD_FILE } from '../wire/sourceMod';
 
-export const BUILD_TARGETS_KEY = 'modbench.source.buildTargets';
+const BUILD_TARGETS_KEY = 'modbench.source.buildTargets';
 
 /** The Explorer resources that build a source mod, each keyed by its URI string: its source folder and its build file. */
 export function buildTargetsOf(sourceDirs: ReadonlyMap<string, string>): ReadonlyMap<string, string> {
