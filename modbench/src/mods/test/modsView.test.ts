@@ -323,10 +323,12 @@ describe('the Mods view names its own tags and palette context keys', () => {
 });
 
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
+  let instance: FakeInstance;
   const mountFiltered = (
     term: string, log: (line: string) => void = () => undefined, prepare: (view: FakeTreeView) => void = () => undefined,
   ) => {
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), channel: { warn: log }, ...noSync() }).nameFilter.open();
+    instance = new FakeInstance(listing(LISTED_MODS));
+    createModsView({ ...otherDeps(), instance, channel: { warn: log }, ...noSync() }).nameFilter.open();
     prepare(treeViews.view());
     currentBox().type(term);
   };
@@ -346,6 +348,22 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
     await windowForARevealThatMustNotCome();
 
     expect(treeViews.view().reveals).toEqual([]);
+  });
+
+  it('writes a reveal VS Code refuses once, by the walk of the tree as it is, when the tree changed under the first', async () => {
+    const lines: string[] = [];
+    let release = (): void => undefined;
+    mountFiltered('source', (line) => lines.push(line), (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
+    await vi.waitFor(() => expect(treeViews.view().revealsHeld).toEqual(['Unassigned (Modlist Development)']));
+    instance.publish(instance.value);
+    await vi.waitFor(() => expect(treeViews.view().revealsHeld).toHaveLength(2));
+    treeViews.view().revealRefusal = new Error('Cannot resolve tree item');
+    release();
+    await vi.waitFor(() => expect(lines).not.toEqual([]));
+
+    expect(lines).toEqual([
+      '[modList] Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
+    ]);
   });
 
   it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
@@ -428,7 +446,8 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   const revealed = () => treeViews.view().reveals.map((r) => r.label);
   const open = { select: false, focus: false, expand: true };
 
-  const mountFiltered = (term: string, overwrite = false) => {
+  let instance: FakeInstance;
+  const mountFiltered = (term: string, overwrite = false, prepare: (view: FakeTreeView) => void = () => undefined) => {
     const value = instanceValueFixture({
       mods: [mod('Armour'), separator('Gear'), mod('Boots'), separator('Other')],
       filesByMod: new Map([['Armour', [file('Armour', 'textures/armour/b.dds')]], ['Boots', [file('Boots', 'gear.esp')]]]),
@@ -436,9 +455,10 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFiles: overwrite ? [file('overwrite', 'F4SE/a.log')] : [],
       overwriteFolders: overwrite ? [folder('overwrite', 'F4SE')] : [],
     });
-    const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ ...otherDeps(), instance: new FakeInstance(value), ...noSync() });
+    instance = new FakeInstance(value);
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, ...noSync() });
     modListFilter.open();
+    prepare(treeViews.view());
     currentBox().type(term);
     return modListView;
   };
@@ -448,6 +468,17 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
     await vi.waitFor(() => expect(revealed()).toContain('armour'));
 
     expect(treeViews.view().reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
+  });
+
+  it('ends a walk the tree changed under after the reveal in hand, so only the walk of the tree as it is goes deeper', async () => {
+    let release = (): void => undefined;
+    mountFiltered('b.dds', false, (view) => { view.revealHeldUntil = new Promise((resolve) => { release = resolve; }); });
+    await vi.waitFor(() => expect(treeViews.view().revealsHeld).toEqual(['Gear']));
+    instance.publish(instance.value);
+    release();
+    await vi.waitFor(() => expect(revealed()).toContain('armour'));
+
+    expect(revealed()).toEqual(['Gear', 'Gear', 'Armour', 'textures', 'armour']);
   });
 
   it('does not reveal a row shown for its own name, nor the rows under it, while it reveals one shown for a match', async () => {
