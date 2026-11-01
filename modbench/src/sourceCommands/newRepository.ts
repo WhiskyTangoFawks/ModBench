@@ -13,7 +13,7 @@ import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
@@ -86,9 +86,19 @@ async function downloadedRow(adapter: Pick<Adapter, 'downloadedFile'>, file: Ins
   return row.kind === 'read' ? row.answer : undefined;
 }
 
+/** Every downloaded file as a package, and why any could not be read whole; asked once for a selection of mods. */
+export async function downloadedPackagesOf(
+  adapter: Pick<Adapter, 'downloadedFilesHashed' | 'nexusFileAt'>,
+): Promise<{ readonly files: readonly DownloadedFile[]; readonly notes: readonly string[] }> {
+  const { files, notes } = await adapter.downloadedFilesHashed();
+  return { files: downloadedFilesOf(files, nexusFileOf(adapter)), notes };
+}
+
 /** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
  *  which takes from the mod's packages each file they give, and its assets. */
-export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
+export async function newRepositoryOf(
+  client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand, downloadedFiles: readonly DownloadedFile[],
+): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, held } = read;
@@ -96,9 +106,6 @@ export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapte
   const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
-  const downloaded = await adapter.downloadedFilesHashed();
-  if (downloaded.notes.length > 0) return { refusal: downloaded.notes.join('; ') };
-  const downloadedFiles = downloadedFilesOf(downloaded.files, nexusFileOf(adapter));
   const own = installationFile === undefined ? undefined : downloadedFileOf(installationFile, nexusFileOf(adapter));
   const recorded = buildManifest(
     { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
@@ -167,7 +174,7 @@ export const newRepositoriesOver = (adapter: Adapter): {
 } => ({
   of: async (mod, client) => {
     const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods));
+    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods), (await downloadedPackagesOf(adapter)).files);
   },
   notLinked: (made, committed) => foldersNotLinked(adapter, made, committed),
 });
