@@ -23,7 +23,7 @@ import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfD
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
-  | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
+  | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
   | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
@@ -153,10 +153,6 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       if (folder === undefined) return false;
       await trash(folder.path);
       return true;
-    },
-
-    async trashSourceFolder(sourceFolder, trash) {
-      await trash(sourceFolder);
     },
 
     async markDownloadedFile(name, mark) {

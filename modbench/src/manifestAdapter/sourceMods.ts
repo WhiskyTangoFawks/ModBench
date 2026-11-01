@@ -69,14 +69,3 @@ export async function sourceModsOf(
     notes,
   };
 }
-
-/** The source folder uninstalling `mod`, among the mods `uninstalled`, sends to the trash: its own, unless a mod left
- *  behind builds from it too. Mods are matched by `keyOf`. */
-export function sourceFolderTrashed(
-  folders: ReadonlyMap<string, string>, mod: string, uninstalled: readonly string[], keyOf: (mod: string) => string,
-): string | undefined {
-  const leaving = new Set(uninstalled.map(keyOf));
-  const own = [...folders].find(([built]) => keyOf(built) === keyOf(mod))?.[1];
-  const shared = [...folders].some(([built, folder]) => folder === own && !leaving.has(keyOf(built)));
-  return shared ? undefined : own;
-}

@@ -16,7 +16,6 @@ import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import type { EntryRef, ModCommands, MovePlace, OrderEnd, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
-import { sourceFolderTrashed } from '../manifestAdapter/manifestAdapter';
 import {
   endAtTop, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
 } from './movePick';
@@ -153,17 +152,12 @@ export function registerModMoveCommand(
 
 const UNINSTALL_LOSS = 'its place in mod order and its publisher tags';
 
-const keepsItsSource = ({ paths: { sourceDirs }, entryKey }: InstanceValue, mods: readonly string[]) => (mod: string): boolean =>
-  sourceDirs.has(mod) && sourceFolderTrashed(sourceDirs, mod, mods, (name) => entryKey({ kind: 'mod', name })) === undefined;
-
 // mods.md, Uninstall.
-async function confirmUninstall(names: readonly string[], sourceMods: readonly string[], ask: AskQuestion): Promise<boolean> {
+async function confirmUninstall(names: readonly string[], ask: AskQuestion): Promise<boolean> {
   const [only] = names;
-  const quoted = (list: readonly string[]) => list.map((n) => `"${n}"`).join(', ');
   const question = names.length === 1 && only !== undefined
-    ? `Uninstall "${only}"? Its folder${sourceMods.length > 0 ? ' and its source' : ''} will be moved to the system trash. It loses ${UNINSTALL_LOSS}.`
-    : `Uninstall ${quoted(names)}? Their folders will be moved to the system trash${
-      sourceMods.length > 0 ? `, and the source of ${quoted(sourceMods)} with them` : ''}. Each loses ${UNINSTALL_LOSS}.`;
+    ? `Uninstall "${only}"? Its folder will be moved to the system trash. It loses ${UNINSTALL_LOSS}.`
+    : `Uninstall ${names.map((n) => `"${n}"`).join(', ')}? Their folders will be moved to the system trash. Each loses ${UNINSTALL_LOSS}.`;
   return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
 }
 
@@ -191,9 +185,6 @@ type Uninstalled = Extract<Awaited<ReturnType<ModCommands['uninstallMods']>>, { 
 
 function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFailure[] {
   const partial: PartialFailure[] = [];
-  if (item.sourceRefusal !== undefined) {
-    partial.push({ message: `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, detail: item.sourceRefusal, severity: 'warning' });
-  }
   if (item.tagRefusal !== undefined) {
     partial.push({ message: `"${item.name}" was uninstalled, but its publisher tags could not be removed.`, detail: item.tagRefusal, severity: 'warning' });
   }
@@ -252,16 +243,13 @@ export function registerModContextCommands(
 
   const uninstallRefusals = (mods: readonly string[]) => refusedWithoutForce(
     mods, 'uninstall',
-    (name) => `it would move its folder${instance.value.sourceMods.has(name) && !keepsItsSource(instance.value, mods)(name) ? ' and its source' : ''} to the system trash, and lose ${UNINSTALL_LOSS}`);
+    () => `it would move its folder to the system trash, and lose ${UNINSTALL_LOSS}`);
 
   const uninstall: AgentGesture<ModlistNode, UninstallRequest, GestureResult<Uninstalled>, { force?: boolean }> = {
     fromView: async (entry) => {
-      const rows = pluralArgument(entry, 'mod');
-      const mods = rows.map((n) => n.mod.name);
+      const mods = pluralArgument(entry, 'mod').map((n) => n.mod.name);
       if (mods.length === 0) return undefined;
-      const keeps = keepsItsSource(instance.value, mods);
-      const sourceMods = rows.filter((n) => n.facts?.sourceMod === true && !keeps(n.mod.name)).map((n) => n.mod.name);
-      return (await confirmUninstall(mods, sourceMods, ask)) ? { mods, force: true } : undefined;
+      return (await confirmUninstall(mods, ask)) ? { mods, force: true } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ mods: argument.map(modNameOf), force: options.force === true }),
     run: async ({ mods, force }) => force ? uninstallForced(mods) : uninstallRefusals(mods),

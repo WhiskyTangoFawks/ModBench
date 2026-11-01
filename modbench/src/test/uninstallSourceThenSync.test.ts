@@ -40,14 +40,14 @@ async function instanceWithSourceMod(): Promise<{ root: string; source: string; 
 }
 
 describe('an uninstall whose line write fails', () => {
-  it('trashes the repository its manifest names, and leaves a line that mod sync then drops', async () => {
+  it('keeps the repository its manifest names, and leaves a line that mod sync then drops', async () => {
     const { root, source, adapter } = await instanceWithSourceMod();
     const lineWriteFails: InstanceAdapter = { ...adapter, changeModOrder: () => Promise.reject(new Error('disk full')) };
     const trash = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
 
     const outcome = await modCommands(lineWriteFails).uninstallMods([MOD], trash);
     expect(outcome).toMatchObject({ applied: true, outcome: { landed: [{ name: MOD, lineRefusal: 'disk full' }] } });
-    await expect(stat(source)).rejects.toThrow('ENOENT');
+    await expect(stat(source)).resolves.toBeDefined();
     expect((await readModlistEntries(root)).some((entry) => entry.name === MOD)).toBe(true);
     const synced = await modSyncOver(adapter)();
 
