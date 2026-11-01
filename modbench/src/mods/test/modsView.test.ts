@@ -310,9 +310,11 @@ describe('the Mods view names its own tags and palette context keys', () => {
     const focusedView = createFocusedView();
     createModsView({ ...otherDeps(), focusedView, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     let selected: () => void = () => undefined;
-    focusedView.follow('modbench.downloads', {
-      selection: [{ nexusModId: '1' }], onDidChangeSelection: (listener: () => void) => { selected = listener; return { dispose: () => undefined }; },
-    } as never);
+    const downloads: Parameters<typeof focusedView.follow>[1] = {
+      selection: [{ nexusModId: '1' }],
+      onDidChangeSelection: (listener) => { selected = () => { listener({ selection: [] }); }; return { dispose: () => undefined }; },
+    };
+    focusedView.follow('modbench.downloads', downloads);
 
     selected();
 
