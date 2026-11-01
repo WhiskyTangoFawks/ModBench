@@ -13,10 +13,10 @@ import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
-import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
+  'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
   & FolderRestoreAdapter;
 
@@ -96,9 +96,12 @@ export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapte
   const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
+  const downloaded = await adapter.downloadedFilesHashed();
+  if (downloaded.notes.length > 0) return { refusal: downloaded.notes.join('; ') };
+  const downloadedFiles = downloadedFilesOf(downloaded.files, nexusFileOf(adapter));
   const own = installationFile === undefined ? undefined : downloadedFileOf(installationFile, nexusFileOf(adapter));
   const recorded = buildManifest(
-    { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
+    { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
   const yielded = [...recorded.manifest.files].filter(([path]) => recorded.sources.has(path));
