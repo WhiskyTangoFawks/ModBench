@@ -80,6 +80,7 @@ type MockPlugin = PluginMetadata;
 function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'inLoadOrder'>): MockPlugin {
   return {
     isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false,
+    hasMatchingRecords: true,
     isCompiledPlugin: false,
     hasParseFailure: false,
     pluginSourceUnreadable: null,
