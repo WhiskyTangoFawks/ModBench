@@ -47,6 +47,16 @@ describe('a mod\'s manifest from its files', () => {
     ]);
   });
 
+  it.each([
+    ['file ID 0', { game: 'fallout4', mod: 4, file: 0 }],
+    ['mod ID 0', { game: 'fallout4', mod: 0, file: 2 }],
+    ['an ID that is no whole number', { game: 'fallout4', mod: 1, file: Number.NaN }],
+  ])('names an installation file whose Nexus file has %s with no host', (_, nexus) => {
+    expect(downloadedFileOf(download('M.7z', {}, { page: 'any' }), () => nexus).package).toEqual(
+      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
+    );
+  });
+
   it('names the installation file though it gives no file, as the mod was installed from it', () => {
     expect(namesOf(built({ 'a.nif': 'HA' }, { installationFile: download('M.7z', {}) }).manifest)).toEqual(['M.7z']);
   });
