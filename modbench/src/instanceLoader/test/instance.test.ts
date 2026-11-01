@@ -485,7 +485,7 @@ describe('Instance — a value that survives a bad read', () => {
     const failures: (string | undefined)[] = [];
     const landed: number[] = [];
     instance.onReadFailure(() => failures.push(instance.readFailure));
-    instance.subscribe((_value, sequence) => landed.push(sequence));
+    instance.subscribe((_value, sequence) => { landed.push(sequence); });
 
     await instance.refresh();
 
@@ -522,13 +522,56 @@ describe('Instance — a value that survives a bad read', () => {
     instance.subscribe(() => {
       throw new Error('subscriber exploded');
     });
-    instance.subscribe((_value, sequence) => seen.push(sequence));
+    instance.subscribe((_value, sequence) => { seen.push(sequence); });
 
     await instance.refresh();
     await instance.refresh();
 
     expect(seen).toEqual([1, 2]);
     expect(thrown).toEqual(['subscriber exploded', undefined, 'subscriber exploded', undefined]);
+  });
+
+  it('settles a refresh once the subscribers it handed the value to have settled', async () => {
+    const { instance } = loader();
+    let finish!: () => void;
+    const finished: string[] = [];
+    instance.subscribe(() => new Promise<void>((resolve) => { finish = resolve; }));
+    instance.subscribe(() => { finished.push('another subscriber'); });
+
+    const refreshed = instance.refresh().then(() => finished.push('refresh'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(finished).toEqual(['another subscriber']);
+    finish();
+    await refreshed;
+
+    expect(finished).toEqual(['another subscriber', 'refresh']);
+  });
+
+  it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {
+    const { instance } = loader();
+    const heard: number[] = [];
+    instance.subscribe((_value, sequence) => {
+      heard.push(sequence);
+      return sequence === 1 ? new Promise<void>(() => undefined) : undefined;
+    });
+
+    void instance.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await instance.refresh();
+
+    expect(heard).toEqual([1, 2]);
+  });
+
+  it('tells of a subscriber whose promise rejects, and keeps recomputing', async () => {
+    const { instance } = loader();
+    const thrown: (string | undefined)[] = [];
+    instance.onListenerOutcome(({ threw }) => thrown.push(threw));
+    instance.subscribe(() => Promise.reject(new Error('derivation exploded')));
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(thrown).toEqual(['derivation exploded', 'derivation exploded']);
   });
 
   it('tells of a read-failure listener that throws, as one that follows a failed read', async () => {

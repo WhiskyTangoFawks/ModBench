@@ -50,7 +50,7 @@ describe('a build\'s diagnostics in the Problems panel', () => {
     problems.publish({ name: 'A.esp', origin: 'ModA' }, sourceFiles(both, 'ModA'), diagnosticAt('A.esp/Old.json'));
     problems.publish({ name: 'B.esp', origin: 'ModB' }, sourceFiles(both, 'ModB'), diagnosticAt('B.esp/Other.json'));
 
-    heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])), 2);
+    void heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])), 2);
 
     expect(publishedPaths(diagnostics)).toEqual([normalize('/instance/source/ModB/B.esp/Other.json')]);
   });

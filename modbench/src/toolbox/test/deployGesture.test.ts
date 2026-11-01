@@ -234,7 +234,7 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
     unmanaged.mockResolvedValueOnce({ applied: true, folder: '/deployed', unmanaged: [inDeployed('b.ini')] });
 
-    present(subscribers[0], 'the instance subscriber')(value, 2);
+    void present(subscribers[0], 'the instance subscriber')(value, 2);
 
     await vi.waitFor(() => { expect(held()).toEqual([['/deployed/b.ini', 'Deploy does not manage this file.']]); });
   });
