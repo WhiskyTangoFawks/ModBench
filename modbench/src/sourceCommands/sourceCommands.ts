@@ -65,7 +65,7 @@ async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly 
   }
 }
 
-// mods.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
+// source.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
 async function sourceModOf(
   { adapter, saveUnsaved }: Pick<SourceCommandsDeps, 'adapter' | 'saveUnsaved'>, mod: string, sourceMods: SourceMods,
 ): Promise<SourceModToBuild | ItemRefusal<string>> {
@@ -109,7 +109,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       for (const [at, mod] of ordered.entries()) {
         const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
-        // mods.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
+        // source.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
         const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
         if (previous !== undefined && why !== undefined) {
           const waited = previous;

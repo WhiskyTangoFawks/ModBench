@@ -32,7 +32,7 @@ describe('manifestIn', () => {
     expect(await manifestIn(folder)).toEqual({ refused: "its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'" });
   });
 
-  it('reads the one manifest a folder renamed outside Modbench holds, under the name it had (mods.md, Build, story 4)', async () => {
+  it('reads the one manifest a folder renamed outside Modbench holds, under the name it had (source.md, Build, story 4)', async () => {
     await writeFile(join(folder, 'Old Name.manifest.json'), manifestText(manifest));
 
     expect(await manifestIn(folder)).toEqual({ manifest });

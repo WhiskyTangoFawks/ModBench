@@ -135,7 +135,7 @@ describe('build over an instance on disk', () => {
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
-  it('records by its path alone a file a task changes, though a step before it made the file with its bytes (mods.md, Build, story 3)', async () => {
+  it('records by its path alone a file a task changes, though a step before it made the file with its bytes (source.md, Build, story 3)', async () => {
     const { build, status, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/Mod.esp', 'cleaned'); });
 
     await build();
@@ -155,7 +155,7 @@ describe('build over an instance on disk', () => {
     expect(outcome).toMatchObject({ landed: [{ mod: 'Mod', failure: expect.stringMatching(/^The build stopped as trashing 'locked\/sub\/mine.txt' left the folder 'locked\/sub' empty, and it could not be removed: EACCES.*\.$/) as unknown }] });
   });
 
-  it('stops when a file it removes cannot be sent to the trash, naming it, and records what mEdit wrote, keeping the lines it held (mods.md, Build, story 10)', async () => {
+  it('stops when a file it removes cannot be sent to the trash, naming it, and records what mEdit wrote, keeping the lines it held (source.md, Build, story 10)', async () => {
     const { build, client, status, recorded, refuseTrash } = await aSourceMod();
     await build();
     const before = await recorded();
@@ -173,7 +173,7 @@ describe('build over an instance on disk', () => {
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: ['mine.txt'], gone: [] });
   });
 
-  it('stops when a step fails, and records what mEdit wrote, keeping the line of the file a step made before (mods.md, Build, story 10)', async () => {
+  it('stops when a step fails, and records what mEdit wrote, keeping the line of the file a step made before (source.md, Build, story 10)', async () => {
     let fails = false;
     const { build, client, status, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/made.dds', 'made'); return fails ? "step 'Optimise' exited with code 2" : undefined; });
     await build();
@@ -190,7 +190,7 @@ describe('build over an instance on disk', () => {
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
-  it('records each file mEdit says it wrote when it answers a failure (mods.md, Build, story 10)', async () => {
+  it('records each file mEdit says it wrote when it answers a failure (source.md, Build, story 10)', async () => {
     const { build, client, status } = await aSourceMod();
     await build();
     const failure = 'The build stopped before compiling, as a file could not be read or written: EIO';
@@ -227,7 +227,7 @@ describe('build over an instance on disk', () => {
     expect(await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8')).toBe(first);
   });
 
-  it('makes the folder exactly its output: sends to the trash the copy of a file of its source that holds other bytes, and every file it did not make, but the mod manager\'s (mods.md, A source mod, story 4)', async () => {
+  it('makes the folder exactly its output: sends to the trash the copy of a file of its source that holds other bytes, and every file it did not make, but the mod manager\'s (source.md, Build, story 20)', async () => {
     const { build, status, inTrash } = await aSourceMod();
     await put('mods/Mod/b.nif', 'my edit');
     await put('mods/Mod/mine.txt', 'mine');
@@ -241,7 +241,7 @@ describe('build over an instance on disk', () => {
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [] });
   });
 
-  describe('over a file of mine mEdit or a step replaces or removes (mods.md, A source mod, story 4)', () => {
+  describe('over a file of mine mEdit or a step replaces or removes (source.md, Build, story 20)', () => {
     const builtAgain = async () => {
       await put('mods/Mod/Mod.esp', 'built again');
       return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...MADE] }], refused: [] };
@@ -291,7 +291,7 @@ describe('build over an instance on disk', () => {
   });
 });
 
-describe('what build sends to the trash, over an instance on disk (mods.md, A source mod, story 4)', () => {
+describe('what build sends to the trash, over an instance on disk (source.md, Build, story 20)', () => {
   it('sends no copy of a file its last build made, though I excluded one since, nor of a step\'s file whatever its bytes', async () => {
     const { build, client, commands, trashed } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
     await build();
@@ -350,7 +350,7 @@ describe('what build sends to the trash, over an instance on disk (mods.md, A so
 });
 
 describe('build over an instance on disk, of a source mod renamed outside Modbench', () => {
-  it('reads the manifest it holds under the name it had, builds where it is, and names the manifest for the folder (mods.md, Build, story 4)', async () => {
+  it('reads the manifest it holds under the name it had, builds where it is, and names the manifest for the folder (source.md, Build, story 4)', async () => {
     const { build, sent, commands, adapter } = await aSourceMod();
     await build();
     const renamed = join(root, 'mods', 'Renamed');
@@ -367,7 +367,7 @@ describe('build over an instance on disk, of a source mod renamed outside Modben
 });
 
 describe('build over an instance on disk, of a file mEdit left as it was, which its source does not vouch for', () => {
-  it('keeps it, records no line for it, and reads it as differing from its manifest (mods.md, Build, story 8)', async () => {
+  it('keeps it, records no line for it, and reads it as differing from its manifest (source.md, Build, story 8)', async () => {
     const { build, status, recorded, trashed } = await aSourceMod({}, [...MADE, { path: 'Mod - Main.ba2', vouchedFor: false }]);
 
     await build();
@@ -378,7 +378,7 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
 });
 
 describe('build over an instance on disk, of a file mEdit left as it was, which its last build recorded', () => {
-  it('keeps the line its manifest recorded while the folder holds those bytes, so the next build asks about nothing (mods.md, Build, story 8)', async () => {
+  it('keeps the line its manifest recorded while the folder holds those bytes, so the next build asks about nothing (source.md, Build, story 8)', async () => {
     const made: MadeFile[] = [...MADE, { path: 'Mod - Main.ba2', vouchedFor: true }];
     const { build, status, recorded } = await aSourceMod({}, made);
     await build();
@@ -504,7 +504,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect([await manifests(), outcome.refused]).toEqual([before, []]);
   });
 
-  it('changes nothing and trashes nothing at a first build that makes the folder it already holds (mods.md, Build, story 3)', async () => {
+  it('changes nothing and trashes nothing at a first build that makes the folder it already holds (source.md, Build, story 3)', async () => {
     const { commands, trashed, manifestText } = await anInstalledModDecompiled();
     const decompiled = await manifestText();
 

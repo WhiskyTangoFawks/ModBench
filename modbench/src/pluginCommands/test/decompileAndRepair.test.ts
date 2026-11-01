@@ -48,7 +48,7 @@ describe('decompileAndRepair', () => {
     expect(sent()).toEqual([[[{ plugin: MALFORMED, newRepository: MADE.repository }], true]]);
   });
 
-  it('makes a repaired mod with no repository a source mod: its folder\'s manifest names the one made (plugin-source.md, Decompile and repair, story 4)', async () => {
+  it('makes a repaired mod with no repository a source mod: its folder\'s manifest names the one made (source.md, Decompile and repair, story 4)', async () => {
     await repairIn({}, true);
 
     expect(linked).toEqual(['Harbor']);

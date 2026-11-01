@@ -47,7 +47,7 @@ function references(rows: ReferenceResult[], copies: Record<string, CopyOnDisk>,
 const listed = (found: Awaited<ReturnType<ReturnType<typeof references>['referencesAt']>>) =>
   found.map(({ uri, document, start, end }) => ({ uri: `${uri.scheme}:${uri.path}`, text: document.getText().slice(start, end), start }));
 
-describe('Find All References on a FormKey (plugin-source.md, In the text editor, story 2)', () => {
+describe('Find All References on a FormKey (source.md, In the text editor, story 2)', () => {
   it('lists one entry for each plugin\'s copy of a referrer, however many of its fields hold the reference', async () => {
     const compiledPlugin = `{ "FormKey": "${STAND}", "Model": "${GUN}", "Keywords": ["${GUN}"] }`;
     const rendered = `{\n  "FormKey": "${STAND}",\n  "Model": "${GUN}"\n}`;

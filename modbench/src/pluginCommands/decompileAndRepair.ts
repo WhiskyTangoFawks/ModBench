@@ -1,4 +1,4 @@
-// Decompile and repair (plugin-source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod with
+// Decompile and repair (source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod with
 // no repository is handed the one init source mod would make.
 
 import { isRefused, type MEditClient, type NewRepository, type PluginAddress, type PluginToRepair } from '../client';
@@ -27,7 +27,7 @@ interface DecompileAndRepairAccess {
   readonly newRepositories: NewRepositories;
 }
 
-// plugin-source.md, Decompile and repair, story 4: a mod with no repository gets one, as init source mod makes it.
+// source.md, Decompile and repair, story 4: a mod with no repository gets one, as init source mod makes it.
 async function toRepair(
   { adapter, newRepositories }: Omit<DecompileAndRepairAccess, 'client'>, plugins: readonly PluginAddress[],
 ): Promise<{ readonly plugins: PluginToRepair[]; readonly refused: ItemRefusal<PluginAddress>[]; readonly made: ReadonlyMap<string, MadeRepository> }> {
@@ -48,7 +48,7 @@ async function toRepair(
   return { plugins: toSend, refused, made: new Map([...made].flatMap(([mod, repository]) => ('refusal' in repository ? [] : [[mod, repository] as const]))) };
 }
 
-// plugin-source.md, Decompile and repair, story 4: the mod is a source mod once its folder's manifest names its repository.
+// source.md, Decompile and repair, story 4: the mod is a source mod once its folder's manifest names its repository.
 async function foldersLinked(
   newRepositories: NewRepositories, made: ReadonlyMap<string, MadeRepository>, landed: readonly PluginAddress[],
 ): Promise<ItemRefusal<PluginAddress>[]> {

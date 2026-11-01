@@ -53,7 +53,7 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
 const listed = (found: Awaited<ReturnType<ReturnType<typeof symbols>['symbolsFor']>>) =>
   found.map(({ name, plugin: { name: pluginName }, uri }) => ({ name, plugin: pluginName, uri: `${uri.scheme}:${uri.path}` }));
 
-describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story 4)', () => {
+describe('Go to Symbol in Workspace (source.md, In the text editor, story 4)', () => {
   it('lists each compiled plugin\'s copy of a record it finds, named by its EditorID and FormKey, at the copy\'s document', async () => {
     const { symbolsFor } = symbols(
       [plugin(modA), plugin(modB)],

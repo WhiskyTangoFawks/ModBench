@@ -46,7 +46,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
   return registerAgentGesture('modbench.mod.build', paletteSelection, gesture, isClickedRow);
 }
 
-// mods.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
+// source.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
 async function pickSourceMods(sourceModNames: Iterable<string>): Promise<string[] | undefined> {
   const items = [...sourceModNames].sort().map((label) => ({ label }));
   const picked = await vscode.window.showQuickPick(items, { canPickMany: true, placeHolder: 'Build which mods?' });
@@ -85,12 +85,12 @@ function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
 
-// mods.md, Build, story 13: a tool this machine has no task for is added as a user task.
+// source.md, Build, story 13: a tool this machine has no task for is added as a user task.
 const OPEN_USER_TASKS: ReportAction = {
   title: 'Open User Tasks', run: () => { void vscode.commands.executeCommand('workbench.action.tasks.openUserTasks'); },
 };
 
-// mods.md, Build, story 6, and common.md, Reporting: one notification when it lands, naming each
+// source.md, Build, story 6, and common.md, Reporting: one notification when it lands, naming each
 // refused mod and plugin and why, and pointing at the Problems panel when it left diagnostics.
 function reportBuilt(reporter: Reporter, outcome: BuildOutcome, action: ReportAction | undefined): void {
   const compiled = outcome.landed.flatMap((built) => built.compiled);

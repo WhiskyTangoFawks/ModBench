@@ -1,5 +1,5 @@
 // A mod's folder is linked to its repository by the repository package its manifest names, so a source mod renamed or
-// cloned builds where it is (mods.md, Build, story 4).
+// cloned builds where it is (source.md, Build, story 4).
 
 import { errorMessage } from '../ports/errorMessage';
 import { manifestIn } from './manifestFiles';
@@ -37,7 +37,7 @@ async function linkIn(folder: string): Promise<Link> {
 }
 
 /** Each mod whose manifest names a repository the source folder holds, and each repository no manifest names under its
- *  own name, which its first build gives its folder (mods.md, Build, story 7). `repositories`: each by its name. */
+ *  own name, which its first build gives its folder (source.md, Build, story 7). `repositories`: each by its name. */
 export async function sourceModsOf(
   folders: readonly ModFolderAt[] | undefined, repositories: ReadonlyMap<string, string>, keyOf: (mod: string) => string,
 ): Promise<SourceMods> {

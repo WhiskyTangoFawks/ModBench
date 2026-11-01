@@ -42,7 +42,7 @@ export function publishRuleFileDiagnostics(collection: vscode.DiagnosticCollecti
   for (const [path, list] of byPath) collection.set(vscode.Uri.file(path), list);
 }
 
-/** plugin-source.md, Decompile and repair, story 1: a Malformed entry's link in the Problems panel, which fires the
+/** source.md, Decompile and repair, story 1: a Malformed entry's link in the Problems panel, which fires the
  *  gesture on its plugin. Only a mod can hold a plugin's source, as on the row's menu. */
 export const decompileAndRepairLink = (plugin: PluginAddress, place: PluginPlace | undefined): vscode.Diagnostic['code'] =>
   place === 'inSourceMod' || place === 'inNonSourceMod'
@@ -52,7 +52,7 @@ export const decompileAndRepairLink = (plugin: PluginAddress, place: PluginPlace
     }
     : undefined;
 
-/** plugin-source.md, Decompile: a Plugin source unreadable entry's link in the Problems panel, which fires the gesture on its
+/** source.md, Decompile: a Plugin source unreadable entry's link in the Problems panel, which fires the gesture on its
  *  plugin. Offered only where decompile writes the plugin source. */
 export const decompileLink = (plugin: PluginAddress, decompileRepairs: boolean): vscode.Diagnostic['code'] =>
   decompileRepairs

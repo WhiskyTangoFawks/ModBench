@@ -16,7 +16,7 @@ const askingFor = (answer: CompareResult | null) => {
   return client;
 };
 
-describe('hoverAt (plugin-source.md, In the text editor, story 3)', () => {
+describe('hoverAt (source.md, In the text editor, story 3)', () => {
   const reporter = recordingReporter();
 
   it('shows EditorID [FormKey], the record type and the winning plugin', async () => {

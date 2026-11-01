@@ -71,7 +71,7 @@ internal sealed class SourceModBuild
         return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(CompiledFiles(loadOrder, mod, plugins, landed)) };
     }
 
-    // mods.md, Build, story 2: the extension takes the loose files an archive packs out of the folder, so the game reads one copy.
+    // source.md, Build, story 2: the extension takes the loose files an archive packs out of the folder, so the game reads one copy.
     private ItemAnswer<BuildRefusal, ModBuildOutcome> Packed(
         ModToBuild mod, IReadOnlyList<ArchiveToPack> archives, ArchiveVariants? variants, FolderWrite written)
     {
@@ -158,7 +158,7 @@ internal sealed class SourceModBuild
     }
 
     // A plugin's file is in the mod's folder whether or not the load order holds it yet, as a fresh clone's does not
-    // (mods.md, Build, story 7). Its source folder is the one this build reads.
+    // (source.md, Build, story 7). Its source folder is the one this build reads.
     private List<RegisteredPlugin> Placed(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> names)
     {
         var provider = new PluginProvider.FromMod(mod.Name, mod.Folder, mod.SourceFolder);

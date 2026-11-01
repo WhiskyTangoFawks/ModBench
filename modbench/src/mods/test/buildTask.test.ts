@@ -38,7 +38,7 @@ describe('the build task', () => {
 
   const WARNING = 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.';
 
-  it('passes when the build only warned, and writes the warning to the terminal and the Output (mods.md, Build, story 15)', async () => {
+  it('passes when the build only warned, and writes the warning to the terminal and the Output (source.md, Build, story 15)', async () => {
     const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ uncommitted: true })], refused: [] }));
 
     expect([written, closedWith, reporter.shownFailures]).toEqual([
@@ -47,7 +47,7 @@ describe('the build task', () => {
     ]);
   });
 
-  it('warns of a mod built at a commit its remote does not hold (mods.md, Build, story 15)', async () => {
+  it('warns of a mod built at a commit its remote does not hold (source.md, Build, story 15)', async () => {
     const { reporter } = await build(DEFINITION, applied({ landed: [landed({ unpushed: true })], refused: [] }));
 
     expect(reporter.shownFailures).toEqual([{

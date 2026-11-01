@@ -28,7 +28,7 @@ internal sealed class PluginCompileService(
             : PluginCompileOutcome.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
 
     /// <summary>The plugin compiled to its path, which the load order need not hold yet, as a fresh clone's build's does
-    /// not (mods.md, Build, story 7).</summary>
+    /// not (source.md, Build, story 7).</summary>
     public async Task<PluginCompileOutcome> CompileAsync(RegisteredPlugin registered)
     {
         var plugin = registered.Key;

@@ -411,7 +411,7 @@ describe('Restore from manifest', () => {
       "a push of a pin its source mod's remote lacks is not refused: /i/.git/hooks/pre-push already exists"],
     ['a path token stays in the working tree', { pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' },
       "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token"],
-    ['a mod was built from a source holding changes no commit holds (mods.md, Build, story 15)', { landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], uncommitted: true })] },
+    ['a mod was built from a source holding changes no commit holds (source.md, Build, story 15)', { landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], uncommitted: true })] },
       'ModA: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes'],
   ])('warns in its one line when %s, naming why in the Output', async (_case, answer, detail) => {
     restoreFromManifest.mockResolvedValueOnce({ landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...answer });

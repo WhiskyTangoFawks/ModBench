@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The decompile and repair gesture's handler (plugin-source.md, Decompile and repair): a malformed plugin into
+/// <summary>The decompile and repair gesture's handler (source.md, Decompile and repair): a malformed plugin into
 /// its mod's plugin source as two commits, the plugin as it was with each malformed record a placeholder, then repaired.</summary>
 public sealed class DecompileAndRepairPluginHandler
 {

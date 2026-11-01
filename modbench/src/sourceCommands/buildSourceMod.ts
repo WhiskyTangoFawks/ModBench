@@ -1,4 +1,4 @@
-// mods.md, Build: the build file's steps run in order, mEdit running each built-in one, and the extension records in the mod's
+// source.md, Build: the build file's steps run in order, mEdit running each built-in one, and the extension records in the mod's
 // manifest what the build made (ADR-0016, ADR-0027).
 
 import { basename, join } from 'node:path';
@@ -70,7 +70,7 @@ function sourceModManifest(mod: SourceModToBuild, files: ReadonlyMap<string, str
   return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, files };
 }
 
-// mods.md, A source mod, story 4: each file whose bytes its manifest does not record, which no build can make again.
+// source.md, Build, story 20: each file whose bytes its manifest does not record, which no build can make again.
 async function unrecordedIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
   const files = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
   const against = folderAgainst({ files, exclude: mod.exclude }, await adapter.folderValue(mod.folder));
@@ -185,7 +185,7 @@ async function builtByMEdit(deps: BuildDeps, mod: SourceModToBuild, pass: BuildP
   return answer.landed[0] ?? { why: 'mEdit answered nothing for it' };
 }
 
-// mods.md, Build, story 17, and A source mod, story 4: what a step moved aside, the plugin source a decompile replaced and
+// source.md, Build, stories 17 and 20: what a step moved aside, the plugin source a decompile replaced and
 // the loose files a pack packed, goes to the trash.
 async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { replaced, packed }: StepBuilt): Promise<string | undefined> {
   return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packed ?? []);
@@ -203,7 +203,7 @@ function whyStoppedAfter({ failure, refused, archivesRefused }: StepBuilt, at: n
   return `The build stopped after its step ${at + 1}, which refused ${refusedHere === 1 ? 'a file' : `${refusedHere} files`}.`;
 }
 
-// mods.md, Build, stories 1 and 18: each step runs in order, and a failed step stops the mod's build. A first step that
+// source.md, Build, stories 1 and 18: each step runs in order, and a failed step stops the mod's build. A first step that
 // fails refuses the mod.
 async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built | Ran> {
   const made = new Map<string, Made>();
@@ -231,7 +231,7 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
   return ran();
 }
 
-// mods.md, Build, story 10: a build that stops records each file it wrote, and keeps every other line its manifest held.
+// source.md, Build, story 10: a build that stops records each file it wrote, and keeps every other line its manifest held.
 async function stoppedAs({ adapter }: BuildDeps, mod: SourceModToBuild, made: ReadonlyMap<string, Made>, failure: string): Promise<string> {
   try {
     const folder = await adapter.folderValue(mod.folder);
@@ -276,7 +276,7 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
   } catch (err) {
     return refusedAs(mod.name, `its folder could not be read: ${errorMessage(err)}`);
   }
-  // mods.md, A source mod, story 4: what no manifest records goes to the trash before anything is written.
+  // source.md, Build, story 20: what no manifest records goes to the trash before anything is written.
   const ran = await deps.adapter.trashingReplaced(mod.folder, unrecorded, deps.trash, () => builtByItsSteps(deps, mod, pass));
   if ('notTrashed' in ran) return refusedAs(mod.name, ran.notTrashed);
   const { answer } = ran;

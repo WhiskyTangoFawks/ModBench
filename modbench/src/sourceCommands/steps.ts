@@ -2,7 +2,7 @@ import type { TaskStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { HostTasks } from '../ports/tasks';
 
-/** A build file's task steps, each run as the VS Code user task its label names (mods.md, Build, story 13). */
+/** A build file's task steps, each run as the VS Code user task its label names (source.md, Build, story 13). */
 export interface StepTasks {
   /** The label of each user task this machine has. */
   readonly labels: () => Promise<readonly string[]>;

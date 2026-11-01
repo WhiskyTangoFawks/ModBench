@@ -29,7 +29,7 @@ const completingAtBar = (client: Parameters<typeof completionsAt>[0]['client'], 
 
 const documentOf = (members: string) => `{ "FormKey": "${OWNER}", ${members} }`;
 
-describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => {
+describe('completionsAt (source.md, In the text editor, story 5)', () => {
   it('offers records by EditorID, inserting the FormKey', async () => {
     const found = await completingAtBar(asking([reference('Armor')]), documentOf('"Armor": "Gu|"'));
 

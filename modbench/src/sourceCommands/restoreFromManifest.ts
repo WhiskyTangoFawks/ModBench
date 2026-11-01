@@ -439,7 +439,7 @@ export async function restoreFromManifest(
       break;
     }
     options.onProgress?.({ phase: 'Restoring', mod, modsDone: at, modsTotal: mods.length });
-    // mods.md, Build, story 11: a source mod's script reads the plugins of the mods restored before it in the load order.
+    // source.md, Build, story 11: a source mod's script reads the plugins of the mods restored before it in the load order.
     if (sourceMods.folderOf(mod) !== undefined) {
       for (const [waited, why] of await whyNotIndexed(deps, pending.splice(0), options.signal)) notIndexed.set(waited, why);
     }
