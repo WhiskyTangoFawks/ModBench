@@ -8,8 +8,8 @@ import { BUILD_FILE } from '../wire/sourceMod';
 import type { BuildFileRead } from './buildFile';
 import { readBuildFile } from './buildFileRead';
 import type { Manifest, ManifestRead } from './manifest';
-import { readManifest } from './manifestRead';
 import { manifestText, ordinal } from './manifestText';
+import { readManifest } from './manifestRead';
 import { packagesAsked } from './manifestPackages';
 
 async function fileNamesIn(folder: string): Promise<string[]> {
@@ -61,8 +61,8 @@ function refuseUnlessReadable(text: string): void {
   if ('refused' in read) throw new Error(read.refused);
 }
 
+/** Writes `manifest` as the manifest named for `folder`, in the spelling it holds it in, and removes one named otherwise;
  *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests, is not there, or the schema refuses the text. */
- *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests or is not there, or the schema refuses the text. */
 export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
   const [one, other] = await manifestsIn(folder);
   if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
