@@ -195,7 +195,7 @@ const MODS_OR_EVERY_MOD = gestureInput(
 const SOURCE_FOLDER = z.object({ kind: z.literal('folder'), path: z.string() });
 
 const UPDATE_MANIFEST = gestureInput(
-  `${EVERY_MOD_BY_DEFAULT_TAKES}; or a source folder, { kind: 'folder', path: its path in the instance }`,
+  `${EVERY_MOD_BY_DEFAULT_TAKES}; or a source folder, { kind: 'folder', path: the sourceFolder list_mods gives its mod }`,
   z.object({ argument: z.array(z.union([ENTRY_NAME, SOURCE_FOLDER])).optional() }),
   (value, { argument = [] }) => new AgentCall([
     ...entryArguments(value, argument.filter((one): one is z.infer<typeof ENTRY_NAME> => !('path' in one))),

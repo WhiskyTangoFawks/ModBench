@@ -1272,7 +1272,7 @@
         },
         {
           "command": "modbench.source.updateManifest",
-          "when": "resourceFilename =~ /\\.manifest\\.json$/ && resourceDirname in modbench.source.sourceFolders",
+          "when": "resourceFilename =~ /\\.manifest\\.json$/ && resourceDirname in modbench.source.sourceFolders && modbench.modlist.hasRepository",
           "group": "modbench@2"
         }
       ],

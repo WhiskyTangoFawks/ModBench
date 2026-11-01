@@ -48,8 +48,8 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const deps = { adapter: { ...fake.adapter, ...adapterOver } };
   return {
     fake,
-    update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false, sourceFolders: readonly string[] = []) =>
-      updateManifest(deps, mods, options, others, everyMod, sourceFolders),
+    update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false, sourceMods: readonly string[] = []) =>
+      updateManifest(deps, mods, options, others, everyMod, sourceMods),
     manifestOf: (mod: string) => manifestIn(join(modsDir, mod)),
     manifestHeld: async (mod: string): Promise<Manifest> => {
       const read = await manifestIn(join(modsDir, mod));

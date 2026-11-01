@@ -30,8 +30,8 @@ const folderRow = { argument: { kind: 'folder', path: '/instance/mods/ModA/meshe
 const focused = (id: string | undefined, selection: readonly unknown[] = []) => ({
   toolboxView: TOOLBOX, instance: { value }, focusedView: { id: () => id, selection: () => selection },
 });
-const everyModUnder = (view: string, mods: readonly string[]): ModsToRun => ({ mods, sourceFolders: [], refused: [], everyMod: true, view });
-const named = (mods: readonly string[], refused: ModsToRun['refused'] = []): ModsToRun => ({ mods, sourceFolders: [], refused, everyMod: false, view: MODS_VIEW });
+const everyModUnder = (view: string, mods: readonly string[]): ModsToRun => ({ mods, sourceMods: [], refused: [], everyMod: true, view });
+const named = (mods: readonly string[], refused: ModsToRun['refused'] = []): ModsToRun => ({ mods, sourceMods: [], refused, everyMod: false, view: MODS_VIEW });
 
 describe('the mods a Mods gesture runs over (modlist-repository.md, Every mod)', () => {
   it.each<[string, ReturnType<typeof focused>, unknown, readonly unknown[] | undefined, ModsToRun]>([

@@ -138,20 +138,15 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect(sentMods(updateManifest)).toEqual([['ModA', 'ModB']]);
   });
 
-  it('records the source folder an Explorer row names, with no mod, from the Explorer menu', async () => {
+  it.each([
+    ['from the Explorer menu, with no mod', [sourceFolderRow], [], ['ModA']],
+    ['beside the mods of a selection', [sourceFolderRow, modRow('ModB')], ['ModB'], ['ModA']],
+  ])('records the source folder a row names, %s', async (_where, selection, mods, sourceMods) => {
     const { run } = register({ instance: { value: sourceModValue, ...instanceThatReads } });
 
-    await run(UPDATE, sourceFolderRow, [sourceFolderRow]);
+    await run(UPDATE, sourceFolderRow, selection);
 
-    expect(updateManifest.mock.calls.map(([mods, , , everyMod, sourceFolders]) => [mods, everyMod, sourceFolders])).toEqual([[[], false, ['ModA']]]);
-  });
-
-  it('records the source folders beside the mods of a selection', async () => {
-    const { run } = register({ instance: { value: sourceModValue, ...instanceThatReads } });
-
-    await run(UPDATE, sourceFolderRow, [sourceFolderRow, modRow('ModB')]);
-
-    expect(updateManifest.mock.calls.map(([mods, , , , sourceFolders]) => [mods, sourceFolders])).toEqual([[['ModB'], ['ModA']]]);
+    expect(updateManifest.mock.calls.map(([sent, , , everyMod, sentSourceMods]) => [sent, everyMod, sentSourceMods])).toEqual([[mods, false, sourceMods]]);
   });
 
   it('refuses a selected row that is neither a mod nor a separator, naming it, and acts on the rest', async () => {
@@ -505,12 +500,13 @@ describe('An agent call', () => {
     expect(notification.cancellable).toEqual([]);
   });
 
-  it('update manifest records the source folder it is given by its path', async () => {
+  it('update manifest records a source folder it is given by its path, and refuses one that is none beside it, by name', async () => {
     const { run } = register({ instance: { value: sourceModValue, ...instanceThatReads } });
 
-    await run(UPDATE, new AgentCall([{ kind: 'folder', path: '/instance/source/ModA' }], {}));
+    const answer = await run(UPDATE, new AgentCall([{ kind: 'folder', path: '/instance/source/ModA' }, { kind: 'folder', path: '/elsewhere' }], {}));
 
-    expect(updateManifest.mock.calls.map(([mods, , , everyMod, sourceFolders]) => [mods, everyMod, sourceFolders])).toEqual([[[], false, ['ModA']]]);
+    expect(updateManifest.mock.calls.map(([mods, , , everyMod, sourceMods]) => [mods, everyMod, sourceMods])).toEqual([[[], false, ['ModA']]]);
+    expect(answer).toMatchObject({ outcome: { refused: [{ item: '/elsewhere', reason: 'it is not a source mod\'s source folder' }] } });
   });
 
   it('update manifest answers what landed and what was refused, each file its package does not hold and each note as a part that failed, and reports nothing', async () => {

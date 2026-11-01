@@ -187,11 +187,11 @@ async function submodulesWritten(
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
-/** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceFolders`, or every one when
+/** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceModsToRecord`, or every one when
  *  `everyMod`. A source mod's own folder is its build's. */
 export async function updateManifest(
   deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
-  sourceFolders: readonly string[] = [],
+  sourceModsToRecord: readonly string[],
 ): Promise<UpdateManifestResult> {
   const { adapter } = deps;
   const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
@@ -213,7 +213,7 @@ export async function updateManifest(
     if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) passedOver.push(mod);
     else await record(mod, () => readMod(adapter, mod, folders, game));
   }
-  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceFolders)) {
+  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {
     if (signal?.aborted) break;
     const folder = sourceMods.folderOf(mod);
     if (folder === undefined) refused.push({ item: mod, reason: 'no source folder builds it' });

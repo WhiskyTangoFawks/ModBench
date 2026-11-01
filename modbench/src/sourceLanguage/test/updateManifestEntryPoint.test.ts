@@ -13,7 +13,14 @@ vi.mock('vscode', async () => ({
       return { dispose: () => undefined };
     },
   },
-  Uri: (await import('../../test/vscodeMock')).Uri,
+  Uri: await (async () => {
+    const { Uri: base } = await import('../../test/vscodeMock');
+    // The real Uri.toString writes a drive letter in lower case.
+    return { ...base, file: (path: string) => {
+      const uri = base.file(path);
+      return Object.assign(uri, { toString: () => Object.getPrototypeOf(uri).toString.call(uri).replace(/^file:\/\/\/?([A-Z]):/, (_, drive: string) => `file://${drive.toLowerCase()}:`) });
+    } };
+  })(),
   Disposable: class { constructor(readonly dispose: () => void) {} },
 }));
 
@@ -27,10 +34,10 @@ beforeEach(() => { vi.clearAllMocks(); handlers.clear(); });
 
 const SOURCE_DIRS = new Map([['ModA', '/instance/source/ModA'], ['ModB', '/instance/source/ModB']]);
 
-function registered() {
+function registered(sourceDirs = SOURCE_DIRS) {
   const reporter = recordingReporter();
   const value = instanceValueFixture({
-    paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: SOURCE_DIRS },
+    paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs },
   });
   registerUpdateManifestEntryPoint({ instance: { value, subscribe: () => ({ dispose: () => undefined }) }, reporter });
   return { entry: present(handlers.get('modbench.source.updateManifest'), 'the entry point'), reporter };
@@ -55,6 +62,14 @@ describe('the update manifest entry point (source.md, Menus and keys)', () => {
 
     expect(executeCommand).toHaveBeenLastCalledWith(
       'modbench.mod.updateManifest', folder('/instance/source/ModA'), [folder('/instance/source/ModA'), folder('/instance/source/ModB')]);
+  });
+
+  it('finds the source folder of a manifest whose drive letter differs in case', async () => {
+    const { entry } = registered(new Map([['ModA', 'C:/instance/source/ModA']]));
+
+    await entry(Uri.file('c:/instance/source/ModA/ModA.manifest.json'));
+
+    expect(executeCommand).toHaveBeenLastCalledWith('modbench.mod.updateManifest', folder('C:/instance/source/ModA'), [folder('C:/instance/source/ModA')]);
   });
 
   it('refuses a manifest outside every source folder, by name, and records nothing', async () => {

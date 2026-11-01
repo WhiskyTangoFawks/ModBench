@@ -3,7 +3,7 @@ import { AgentCall, type GestureResult, type PartialFailure } from '../drivingLi
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
-import { everyModHere, modsAndSourceFoldersOfAgent, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
+import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 import type { Reporter } from '../ports/reporter';
 import type { ModlistRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/modlistRepositoryCommands';
 import type { ModNote, UpdateManifestResult, UpdateManifestStatus } from '../sourceCommands/updateManifest';
@@ -25,7 +25,7 @@ const isAgentCall = (value: unknown): value is ModlistCall => value instanceof A
 export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
-      (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsToRun(deps, clicked, selected, true)))),
+      (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsAndSourceModsToRun(deps, clicked, selected)))),
     vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
     vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
@@ -57,12 +57,12 @@ function withProgressAndCancel<T>(
   }));
 }
 
-async function updateManifest(deps: ManifestGestureDeps, { mods, sourceFolders, refused, view, everyMod }: ModsToRun): Promise<void> {
+async function updateManifest(deps: ManifestGestureDeps, { mods, sourceMods, refused, view, everyMod }: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   await runWritingGesture(view, instance, async () => {
     const found = await othersOf(deps, everyMod);
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status)); }, signal }, found.others, everyMod, sourceFolders));
+      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status)); }, signal }, found.others, everyMod, sourceMods));
     reportUpdated(reporter, { ...outcome, refused: [...outcome.refused, ...refused, ...found.refused] });
   });
 }
@@ -71,13 +71,13 @@ async function updateManifestForAgent(
   deps: ManifestGestureDeps, { argument }: ModlistCall,
 ): Promise<AgentOutcome<UpdateManifestResult['landed'][number]>> {
   const { commands, instance } = deps;
-  const { mods, sourceFolders } = modsAndSourceFoldersOfAgent(argument, instance.value);
+  const { mods, sourceMods, refused } = modsAndSourceModsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceFolders));
+  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceMods));
   const { notHeld, otherBytes } = gapsOf(result.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
-    outcome: { landed: result.landed, refused: [...result.refused, ...found.refused] },
+    outcome: { landed: result.landed, refused: [...result.refused, ...refused, ...found.refused] },
     partial: warned('Update manifest:', [...notHeld, ...otherBytes, ...notesOf(result.notes), ...result.repositoryNotes]),
   };
 }
