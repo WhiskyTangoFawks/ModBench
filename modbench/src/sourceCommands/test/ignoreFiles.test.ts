@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { ignoreFiles, type FileToIgnore } from '../ignoreFiles';
 
 const HA = 'AAAAAAAAAAA=';
@@ -20,13 +20,14 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 
 const fileOf = (mod: string, relativePath: string): FileToIgnore => ({ origin: { kind: 'mod', name: mod }, relativePath });
 
-function over(held: Partial<Manifest> | undefined, files: Record<string, string>) {
+function over(held: Partial<Manifest> | undefined, files: Record<string, string>, sourceFolders: Record<string, string> = {}) {
   const folder = join(root, 'mods', 'ModA');
-  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') }), {
+  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(sourceFolders) }), {
     folderFiles: new Map([[folder, Object.keys(files)]]),
     hashes: new Map(Object.entries(files).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)),
   });
   return {
+    fake,
     run: async (files_: readonly FileToIgnore[], ignore: boolean) => {
       if (held !== undefined) await writeManifestIn(folder, { ...EMPTY, ...held });
       return ignoreFiles({ adapter: fake.adapter }, files_, ignore);
@@ -43,13 +44,13 @@ function over(held: Partial<Manifest> | undefined, files: Record<string, string>
 }
 
 describe('ignore file', () => {
-  it('names the file in its manifest, drops its line and the exclusion of it, and records the rest', async () => {
+  it('names the file in its manifest and drops its line and the exclusion of it, recording nothing else', async () => {
     const { run, manifest } = over({ exclude: [MEM], files: new Map([[MEM, HB], ['a.nif', HA]]) }, { [MEM]: HB, 'a.nif': HA, 'b.nif': HB });
 
     const outcome = await run([fileOf('ModA', MEM)], true);
 
     expect(outcome).toEqual({ landed: [fileOf('ModA', MEM)], refused: [] });
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA], ['b.nif', HB]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA]]) });
   });
 
   it('creates the manifest of a mod that has none', async () => {
@@ -57,7 +58,7 @@ describe('ignore file', () => {
 
     await run([fileOf('ModA', MEM)], true);
 
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM] });
   });
 
   it('refuses a file of Overwrite, naming why, and writes nothing', async () => {
@@ -71,13 +72,24 @@ describe('ignore file', () => {
 });
 
 describe('unignore file', () => {
-  it('removes the file from the ignore and records it', async () => {
-    const { run, manifest } = over({ ignore: [MEM, 'logs'] }, { [MEM]: HB });
+  it('removes the file from the ignore and records its line alone, not another changed file of the mod', async () => {
+    const { run, manifest } = over({ ignore: [MEM, 'logs'], files: new Map([['a.nif', HA]]) }, { [MEM]: HB, 'a.nif': HB, 'new.nif': HA });
 
     const outcome = await run([fileOf('ModA', MEM)], false);
 
     expect(outcome.landed).toEqual([fileOf('ModA', MEM)]);
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], files: new Map([[MEM, HB]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], files: new Map([['a.nif', HA], [MEM, HB]]) });
+  });
+
+  it('removes the file from the ignore of a source mod\'s folder and records nothing, since its build records the folder', async () => {
+    const built: Partial<Manifest> = { packages: [{ kind: 'repository', name: 'ModA' }], ignore: [MEM] };
+    const { run, manifest, fake: { calls } } = over(built, { [MEM]: HB }, { ModA: join(root, 'source', 'ModA') });
+
+    const outcome = await run([fileOf('ModA', MEM)], false);
+
+    expect(outcome.landed).toEqual([fileOf('ModA', MEM)]);
+    expect(await manifest()).toEqual({ ...EMPTY, packages: built.packages });
+    expect(calls.filter(({ verb }) => verb === 'writeSubmodules')).toEqual([]);
   });
 
   it('refuses a file under an ignored folder, naming the folder', async () => {

@@ -1,5 +1,5 @@
 import type { InstanceAdapter, FileOrigin } from '../instanceAdapter/instanceAdapter';
-import { exclusionsOfFiles, isUnderAny, manifestIn, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, isUnderAny, manifestIn, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { updateManifest, type UpdateManifestDeps } from './updateManifest';
@@ -59,8 +59,8 @@ async function manifestChanged(
   }
 }
 
-/** Ignores each file in its mod's manifest, or puts it back, then records the manifest of each mod it changed, as update
- *  manifest does. A mod's files land or are refused together. */
+/** Ignores each file in its mod's manifest, or puts it back and records that file's own line, nothing else of the mod. A
+ *  source mod's own folder is recorded by its build. A mod's files land or are refused together. */
 export async function ignoreFiles(
   deps: IgnoreFilesDeps & UpdateManifestDeps, files: readonly FileToIgnore[], ignore: boolean,
 ): Promise<SelectionOutcome<FileToIgnore>> {
@@ -72,15 +72,18 @@ export async function ignoreFiles(
     if (file.origin.kind !== 'mod') { refused.push({ item: file, reason: 'Overwrite is not a mod.' }); continue; }
     byMod.set(file.origin.name, [...byMod.get(file.origin.name) ?? [], file]);
   }
-  const written: string[] = [];
+  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const written = new Map<string, string[]>();
   for (const [mod, ofMod] of byMod) {
-    const refusal = await manifestChanged(adapter, mod, ignore, ofMod.map(({ relativePath }) => adapter.ownPath(relativePath)));
-    if (refusal === undefined) written.push(mod);
+    const paths = ofMod.map(({ relativePath }) => adapter.ownPath(relativePath));
+    const refusal = await manifestChanged(adapter, mod, ignore, paths);
+    if (refusal === undefined) written.set(mod, paths);
     else refused.push(...ofMod.map((item) => ({ item, reason: refusal.refusal })));
   }
-  const recorded = written.length === 0 ? undefined : await updateManifest(deps, written, {}, [], false, []);
+  const toRecord = ignore ? [] : [...written].filter(([mod]) => sourceMods.folderOf(mod) === undefined);
+  const recorded = toRecord.length === 0 ? undefined : await updateManifest(deps, toRecord.map(([mod]) => mod), { only: new Map(toRecord) }, [], false, []);
   const notRecorded = new Map(recorded?.refused.map(({ item, reason }) => [item, reason]));
-  for (const mod of written) {
+  for (const mod of written.keys()) {
     const reason = notRecorded.get(mod);
     for (const item of byMod.get(mod) ?? []) {
       if (reason === undefined) landed.push(item);
