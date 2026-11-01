@@ -245,11 +245,15 @@ describe('RecordPanel — a templated flag in a Flags row', () => {
       diffs: [diffNode({ fieldName: 'Configuration', values: { [MOD]: { Flags: ['Essential', 'Respawn'] } }, winnerColumn: MOD, children: [flags] })],
     });
   };
+  const openFlags = async () => {
+    const row = required((await screen.findByText('Flags')).closest('tr'), 'the Flags row');
+    fireEvent.click(within(row).getByRole('button', { expanded: false }));
+  };
   const bit = { 'Configuration.Flags.Essential': { flag: 'BaseData', template: TEMPLATE, resolution: RESOLVED } };
 
   it('reads from its template in place of its check box, and leaves the other flags their check boxes', async () => {
     renderPanel(flagsPanel(bit));
-    await screen.findByText('from EncRaider01');
+    await openFlags();
     const row = required(screen.getByText('Flags').closest('tr'), 'the Flags row');
     expect(within(row).getAllByRole('checkbox').map(box => box.parentElement?.textContent)).toEqual(['Female', 'Respawn']);
     expect(row).toHaveTextContent('Essential from EncRaider01');
@@ -257,6 +261,7 @@ describe('RecordPanel — a templated flag in a Flags row', () => {
 
   it('is dimmed, and names the flag, the template and its own value in its tooltip', async () => {
     renderPanel(flagsPanel(bit));
+    await openFlags();
     const flag = required((await screen.findByText('from EncRaider01')).closest('[title]'), 'the templated flag');
     expect(flag).toHaveStyle({ opacity: DIMMED_OPACITY });
     expect(flag).toHaveAttribute('title', expect.stringContaining('Templated by BaseData from EncRaider01'));
@@ -266,7 +271,7 @@ describe('RecordPanel — a templated flag in a Flags row', () => {
 
   it('is left as it is by a toggle of another flag', async () => {
     renderPanel(flagsPanel(bit));
-    await screen.findByText('from EncRaider01');
+    await openFlags();
     fireEvent.click(required(screen.getAllByRole('checkbox')[0], 'the Female check box'));
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({
       op: 'set', path: [member('Configuration'), member('Flags')], value: ['Essential', 'Respawn', 'Female'],
@@ -275,9 +280,7 @@ describe('RecordPanel — a templated flag in a Flags row', () => {
 
   it('reads the templated flag from its template in the collapsed summary too', async () => {
     renderPanel(flagsPanel(bit));
-    await screen.findByText('from EncRaider01');
-    fireEvent.doubleClick(screen.getByText('Flags'));
-    const row = required(screen.getByText('Flags').closest('tr'), 'the Flags row');
+    const row = required((await screen.findByText('Flags')).closest('tr'), 'the Flags row');
     expect(row).toHaveTextContent('Respawn, Essential from EncRaider01');
   });
 });

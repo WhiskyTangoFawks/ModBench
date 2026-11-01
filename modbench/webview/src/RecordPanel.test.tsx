@@ -575,22 +575,23 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a flags row opens expanded with its checkboxes; collapsing shows the summary and expanding restores them', async () => {
+  it('a flags row opens collapsed to the names set; expanding shows its checkboxes and collapsing restores the summary (editor.md, Rows, story 3)', async () => {
     renderPanel(flagsCompareResult, { plugins: partialFormCompiledPluginsResponse });
-    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
     const flagsRow = () => required(screen.getByText('Flags').closest('tr'), "the Flags row");
-
-    fireEvent.click(within(flagsRow()).getByRole('button', { expanded: true }));
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.getAllByText('A, B')).toHaveLength(2);
 
     fireEvent.click(within(flagsRow()).getByRole('button', { expanded: false }));
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+
+    fireEvent.click(within(flagsRow()).getByRole('button', { expanded: true }));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('toggling a flag posts set of the member with the names now set', async () => {
     renderPanel(flagsCompareResult, { plugins: partialFormCompiledPluginsResponse });
-    await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+    fireEvent.click(within(required(screen.getByText('Flags').closest('tr'), 'the Flags row')).getByRole('button', { expanded: false }));
     vi.mocked(vscode.postMessage).mockClear();
 
     const modCell = required(screen.getByText('Flags').closest('tr')?.lastElementChild, 'the compiled plugin column\u2019s cell');

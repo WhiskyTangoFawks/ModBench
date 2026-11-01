@@ -153,7 +153,6 @@ export function registerModMoveCommand(
 
 const UNINSTALL_LOSS = 'its place in mod order and its publisher tags';
 
-// mods.md, Uninstall: a repository another mod's manifest still names stays.
 const keepsItsSource = ({ paths: { sourceDirs }, entryKey }: InstanceValue, mods: readonly string[]) => (mod: string): boolean =>
   sourceDirs.has(mod) && sourceFolderTrashed(sourceDirs, mod, mods, (name) => entryKey({ kind: 'mod', name })) === undefined;
 
