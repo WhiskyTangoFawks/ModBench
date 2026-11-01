@@ -16,6 +16,8 @@ As a user, I want:
 6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a Modbench script. I set up nothing to teach it. Cites: Minimal by default
 7. A gesture that would ask me first to refuse my agent's request instead, for each item it would destroy. The refusal lists what the item would lose and names force, and my agent requests it again with force once I approve that in my agent's own way (story 4), as git refuses a checkout over my changes until it is forced. Cites: commands.md, Confirm what destroys; Existing tools
 8. My agent to read every state a view shows me, as data, so what I can see it can check. Cites: story 6; Minimal by default
+9. My agent to understand each reply clearly, so it works effectively.
+10. Each reply to my agent to be concise, so it is token efficient. Cites: Minimal by default; Never silently wrong
 
 ## Names
 
