@@ -71,6 +71,20 @@
         {
           "type": "object",
           "properties": {
+            "unpack": {
+              "description": "Each archive to unpack, by its path in the source folder, with each file it unpacks into the mod's folder, by its path in the archive and in the mod's folder.",
+              "type": "object",
+              "propertyNames": { "$ref": "manifest-1.schema.json#/$defs/path" },
+              "additionalProperties": { "$ref": "#/$defs/paths" },
+              "minProperties": 1
+            }
+          },
+          "required": ["unpack"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
             "task": {
               "description": "The label of the VS Code user task that runs the step, in the mod's folder.",
               "type": "string",

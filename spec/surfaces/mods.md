@@ -197,7 +197,7 @@ As a user, I want:
 13. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The repository, story 3
 14. Build as a task, so my chain builds before it deploys or publishes. Cites: commands.md, A task is an entry point for a chain
 15. A build from uncommitted or unpushed changes to land, with a warning that a clone does not rebuild it. Cites: Respect the user; Never silently wrong
-16. A step to be a built-in step that decompiles, compiles, copies or packs, a task, or a Modbench script, a default one or one from the source folder, so what goes in the mod is only what my build file says. Cites: Respect the user; scripts.md, Default scripts
+16. A step to be a built-in step, a task, or a Modbench script, a default one or one from the source folder, so what goes in the mod is only what my build file says. Cites: Respect the user; scripts.md, Default scripts
 17. A decompile step to replace plugin source without asking, sending what it replaces to the trash. Cites: commands.md, Confirm what destroys
 18. A failed step to stop its mod's build, so no step runs on what it left. Cites: Never silently wrong
 19. A script step to run its script with my window's Python, in a terminal, as a task Modbench makes and I never pick from Run Task. Cites: scripts.md, Running a Modbench script, stories 1–3
