@@ -3,7 +3,7 @@
 
 import { dirname } from 'node:path';
 import { effectiveModId } from './codecs/nexusFileName';
-import { changeOwnedKeysInText, type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
+import { type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
 import { copyTree, ensureDir, get, ignoreSkippedLink, listDir, makeDir, makeTempDir, remove, rename, sameBytes, withLock, write, writeTrashing } from '../files';
 import type { MoveToTrash } from '../../ports/trash';
@@ -92,9 +92,8 @@ async function trashEveryOther(folder: string, at: string, left: ReadonlySet<str
 }
 
 // A file the release holds with the same bytes is left as it was, so it costs no copy in the trash.
-const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => async (root, gameName) => {
+const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => async (root) => {
   try {
-    const carried = await get(modMetaFileIn(folder), '');
     const release = (await filesUnder(root)).filter((path) => !isTheMods(path));
     const held = new Set(await filesUnder(folder));
     const left = new Set<string>();
@@ -106,8 +105,6 @@ const landUpgrade = (mod: string, folder: string, trash: MoveToTrash): Land => a
       await ensureDir(dirname(fileInFolder(folder, path)));
       await moveEntry(fileInFolder(root, path), fileInFolder(folder, path));
     }
-    const metaText = changeOwnedKeysInText(carried, { gameName });
-    if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
   } catch (err) {
     throw new Error(`Upgrading "${mod}" failed partway and was not rolled back: ${errorMessage(err)}`, { cause: err });
   }
