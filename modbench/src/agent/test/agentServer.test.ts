@@ -368,8 +368,15 @@ describe('the agent server, given an instance value', () => {
       const { client } = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], noHost: [], packagesLacking: [], packages: [] },
+        { mods: ['Big Rocks'], differing: ['a.nif'], notInPackage: ['b.nif'], otherBytes: ['c.nif'] },
       ]);
+    });
+
+    it('groups the mods of one status, leaving out each empty member', async () => {
+      statusRead.answer = [status('Big Rocks', { noManifest: true }), status('InAnotherProfile', { noManifest: true })];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'], noManifest: true }]);
     });
 
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
