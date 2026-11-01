@@ -7,6 +7,7 @@ Git holds the description of a folder as its manifest file. Git should not repub
 - Restore and build are imperative, although build may include declarative steps.
 - A folder with no manifest is left alone, because it can be a mod the user has not recorded yet.
 - A manifest names any number of packages, because one folder can take files from several downloaded files.
+- A manifest records a change to how the game loads a mod's files, never to their content. A change to content makes the mod the maintainer's, and a source mod holds it ([ADR-0027](0027-a-build-file-builds-a-source-mods-folder-from-its-source-folder.md)).
 - Each of a source mod's two folders has a manifest: its source folder's in its repository, and its mod folder's in the modlist repository.
 - A source mod's repository is pinned as a git submodule, because git already pins one repository inside another ([principles](../principles.md): Existing tools).
 

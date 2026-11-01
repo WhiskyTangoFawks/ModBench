@@ -21,8 +21,19 @@
       "items": { "$ref": "#/$defs/path" },
       "uniqueItems": true
     },
+    "flags": {
+      "description": "Each plugin whose header flags the manifest sets apart from its package's copy, by its path, with each flag it sets or clears.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/path" },
+      "additionalProperties": {
+        "description": "Each header flag that changes how the game loads the plugin, by its name among Mutagen's for the game, set when true and cleared when false.",
+        "type": "object",
+        "additionalProperties": { "type": "boolean" },
+        "minProperties": 1
+      }
+    },
     "files": {
-      "description": "Each file the manifest names, by its path, with the hash of its bytes. Null marks a file that a build step makes.",
+      "description": "Each file the manifest names, by its path, with the hash of its bytes before the flags the manifest sets. Null marks a file that a build step makes.",
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/path" },
       "additionalProperties": {
@@ -43,7 +54,8 @@
   },
   "then": {
     "properties": {
-      "packages": { "type": "array", "maxItems": 1 }
+      "packages": { "type": "array", "maxItems": 1 },
+      "flags": false
     }
   },
   "else": {

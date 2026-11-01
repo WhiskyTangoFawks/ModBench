@@ -26,6 +26,8 @@ A mod's installation files are the downloaded files the mod was installed from. 
 5. A manifest to name each of its folder's own files that git does not hold, and each of its packages, even a file no package holds or a package with no host. Each such file and package is a problem (Status, story 2), so nothing a clone cannot rebuild drops out of the manifest. Cites: Never silently wrong
 6. A manifest I open to show each value's meaning on hover, and to mark a hand edit its schema refuses as I type, as VS Code does for any JSON file with a schema. Cites: Existing tools; formats/manifest.md
 7. Each package to name its version when one is known, so an upgrade reads in a git diff as the versions it moves between.
+8. A plugin's flags I change to need no source mod. Cites: ADR-0022
+9. A plugin I rename to need no source mod. Cites: ADR-0022
 
 ## Status
 
@@ -38,6 +40,7 @@ As a user, I want:
 5. A file a clone cannot rebuild to say why: a package holds a file of its name with other bytes, or no package holds its bytes. Cites: Never silently wrong
 6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and, when the mod holds a plugin, points at decompile and commit. Cites: mods.md, What install does, story 3; Respect the user
 7. An installation file the mod manager names that is missing or unreadable as a Warning in the Problems panel, naming the file and which of the two. Modbench never repairs the name. Cites: common, Reporting; Never silently wrong; Respect the user
+8. A file whose manifest changes how the game loads it not to read as differing when that change is its only difference. Cites: ADR-0022
 
 ## Git init
 
@@ -64,6 +67,7 @@ As a user, I want:
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
 5. A mod refused, and its manifest left as it was, when a package its manifest names is missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong
 6. Each file of a mod to come from whichever downloaded file holds its bytes, so an installation file the mod manager names that is missing or unreadable never refuses the mod. Cites: Status, story 7
+7. Update manifest to record each change to how the game loads a file that it finds in the folder. Cites: ADR-0022; Existing tools
 
 ## Restore from manifest
 
@@ -99,7 +103,7 @@ By [common.md](common.md#reporting). As a user, I want:
 
 What I expect to need and choose not to build yet, each with why.
 
-1. Deltas: a file whose bytes differ from its installation file's copy recorded as a binary diff from that copy, so the modlist rebuilds a mod I changed. ADR-0022 ships a change as a patch instead. The one job only a delta does is an official master cleaned with xEdit, rebuilt from the game's own file.
+1. An official master cleaned with xEdit as a source mod whose build step runs the cleaning on the game's own file, so git holds the process, not a delta. It waits on item 6.
 2. Fetching an installation file from a host other than Nexus, or a game's files from its store, such as a Steam depot. Restore from manifest names what it lacks, and I fetch it.
 3. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
 4. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
@@ -107,3 +111,4 @@ What I expect to need and choose not to build yet, each with why.
 6. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
 7. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
 8. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
+9. Packing loose files into an archive loaded by a dummy plugin, as a change the manifest records. A texture's bytes in an archive need not equal its loose file's, so it waits for how Modbench compares an archive's content.
