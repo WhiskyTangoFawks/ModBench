@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class DecompileAndCommitModHandlerTests : IDisposable
+public sealed class InitSourceModHandlerTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -19,7 +19,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly PluginProvider.FromMod _mod;
 
-    public DecompileAndCommitModHandlerTests()
+    public InitSourceModHandlerTests()
     {
         _mod = new PluginProvider.FromMod(
             Origin,
@@ -46,10 +46,10 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     public async Task Init_OverTheHeldLoadOrder_PutsThePluginsSourceInItsSourceFolder_AndWritesNothingInItsModFolder()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.DecompileAndCommitModHandler(_holder);
+        var handler = TestEditService.InitSourceModHandler(_holder);
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
-        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin))).Value();
+        var result = (await handler.InitSourceModAsync(ToInitSourceMod.In(Snapshot, Origin))).Value();
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
@@ -60,9 +60,9 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.DecompileAndCommitModHandler(_holder);
+        var handler = TestEditService.InitSourceModHandler(_holder);
 
-        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin, Origin.ToUpperInvariant()))).Value();
+        var result = (await handler.InitSourceModAsync(ToInitSourceMod.In(Snapshot, Origin, Origin.ToUpperInvariant()))).Value();
 
         Assert.Equal([Origin], result.Applied.Select(mod => mod.Mod));
         Assert.Empty(result.Refused);
@@ -75,7 +75,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         File.WriteAllText(Path.Combine(settings, "Settings.ini"), "[General]");
         var sourceFolder = Path.Combine(_instanceRoot, "source", "Settings");
 
-        var result = await InitWith(new ModToDecompileAndCommit("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile)));
+        var result = await InitWith(new ModToInitSourceMod("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile)));
 
         Assert.Empty(Assert.Single(result.Applied).Plugins);
         Assert.Equal("[General]", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "main:Settings.ini"));
@@ -84,7 +84,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     [Fact]
     public async Task Init_AskedNotToCommit_WritesTheSourceFolderAndCommitsNothing()
     {
-        var result = await InitWith(new ModToDecompileAndCommit(Origin, _mod.Folder, new NewRepository(SourceFolder, [], SourceInits.BuildFile), Commit: false));
+        var result = await InitWith(new ModToInitSourceMod(Origin, _mod.Folder, new NewRepository(SourceFolder, [], SourceInits.BuildFile), Commit: false));
 
         Assert.Single(result.Applied);
         Assert.True(File.Exists(Path.Combine(SourceFolder, "build.json")));
@@ -116,7 +116,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         {
             var refused = Assert.Single((await InitWith(["textures/held.dds"], "{}")).Refused);
 
-            Assert.Equal(DecompileAndCommitRefusal.CommitFailed, refused.Refusal);
+            Assert.Equal(InitSourceModRefusal.CommitFailed, refused.Refusal);
             Assert.Contains("held.dds", refused.Message, StringComparison.Ordinal);
             Assert.False(Directory.Exists(Path.Combine(SourceFolder, ".git")));
         }
@@ -126,13 +126,13 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         }
     }
 
-    private Task<DecompileAndCommitResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
-        InitWith(new ModToDecompileAndCommit(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile))));
+    private Task<InitSourceModResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
+        InitWith(new ModToInitSourceMod(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile))));
 
-    private async Task<DecompileAndCommitResult> InitWith(ModToDecompileAndCommit mod)
+    private async Task<InitSourceModResult> InitWith(ModToInitSourceMod mod)
     {
         _holder.Apply(Snapshot);
-        return (await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([mod])).Value();
+        return (await TestEditService.InitSourceModHandler(_holder).InitSourceModAsync([mod])).Value();
     }
 
     private void WriteInModFolder(string path, string text)

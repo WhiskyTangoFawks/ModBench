@@ -11,10 +11,10 @@ const fails = (name: string, code: string, line?: number) => ({ name, code, erro
 
 new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } }).run('no-reread-after-write', noRereadAfterWrite, {
   valid: [
-    { name: 'a write run through runWritingGesture', code: 'async function f(commands, instance) { await commands.decompileAndCommit(x); await runWritingGesture(view, instance, noop); }\n' },
+    { name: 'a write run through runWritingGesture', code: 'async function f(commands, instance) { await commands.initSourceMod(x); await runWritingGesture(view, instance, noop); }\n' },
     {
       name: 'an anonymous export default function, which no name can call',
-      code: lines('export default function (tree) { tree.invalidate(); }', 'async function f(client) { await client.decompileAndCommit(x); }'),
+      code: lines('export default function (tree) { tree.invalidate(); }', 'async function f(client) { await client.initSourceMod(x); }'),
     },
     { name: 'a re-read in an inline function passed to a call that is not a write', code: 'function build(view, tree) { view.onDidChangeSelection(() => tree.refresh()); onPluginCheckboxChanged(e, root); }\n' },
     {
@@ -50,7 +50,7 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
       name: 'a helper that neither writes nor re-reads',
       code: lines(
         'function say(reporter) { reporter.landed("Initialized."); }',
-        'async function f(client, reporter) { await client.decompileAndCommit(x); say(reporter); }',
+        'async function f(client, reporter) { await client.initSourceMod(x); say(reporter); }',
       ),
     },
     {
@@ -66,7 +66,7 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
         '}',
       ),
     },
-    { name: 'a write that re-reads nothing', code: 'async function f(client, reporter) { await client.decompileAndCommit(x); reporter.landed("Copied."); }\n' },
+    { name: 'a write that re-reads nothing', code: 'async function f(client, reporter) { await client.initSourceMod(x); reporter.landed("Copied."); }\n' },
   ],
   invalid: [
     fails('an invalidate after a plugins.txt write', 'async function f(tree) { await setPluginsParticipation(root, entries); tree.invalidate(); }\n'),
@@ -74,7 +74,7 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
     ...[...VIEW_REREADS].map((reread) => fails(`${reread} beside a write`, `async function f(client, view) { await client.applyWorkspaceChanges(x); view.${reread}(); }\n`)),
     fails(
       'an instance refresh beside the write inside runWritingGesture',
-      'function f(commands, instance) { return runWritingGesture(view, instance, async () => { await commands.decompileAndCommit(x); instance.refresh(); }); }\n',
+      'function f(commands, instance) { return runWritingGesture(view, instance, async () => { await commands.initSourceMod(x); instance.refresh(); }); }\n',
     ),
     fails('a tree-data event fired straight after a drop\'s write', 'async function handleDrop(names, drop) { await this.source.reorderPlugins(names, drop); this._onDidChangeTreeData.fire(undefined); }\n'),
     fails('a re-read the write path was handed as a bare function', 'async function f(invalidate) { const r = await setPluginsParticipation(x); if (!r.applied) invalidate(); }\n'),
@@ -90,10 +90,10 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
     ),
     fails('the call of a module-level helper that re-reads, made after a write', lines(
       'function refreshAfterWrite(deps) { deps.refreshTree(); deps.refreshMatchingPlugins(); }',
-      'async function dispatchDecompileAndCommit(deps, mods) { await deps.commands.decompileAndCommit(mods); refreshAfterWrite(deps); }',
+      'async function dispatchInitSourceMod(deps, mods) { await deps.commands.initSourceMod(mods); refreshAfterWrite(deps); }',
     ), 2),
     fails('the call of a helper declared after the function that calls it', lines(
-      'async function dispatchDecompileAndCommit(deps, mods) { await deps.commands.decompileAndCommit(mods); refreshAfterWrite(deps); }',
+      'async function dispatchInitSourceMod(deps, mods) { await deps.commands.initSourceMod(mods); refreshAfterWrite(deps); }',
       'function refreshAfterWrite(deps) { deps.refreshTree(); }',
     )),
     fails('the call of an arrow helper that re-reads, made after a write', lines(
@@ -115,7 +115,7 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
     fails('a re-read chained on a write with .then, as part of the caller', 'async function f(client, tree) { await client.applyWorkspaceChanges(x).then(() => tree.refresh()); }\n'),
     fails(
       'a re-read chained on a write with .finally, past a .then, as part of the caller',
-      'function f(client, tree) { return client.decompileAndCommit(x).then(report).finally(() => tree.invalidate()); }\n',
+      'function f(client, tree) { return client.initSourceMod(x).then(report).finally(() => tree.invalidate()); }\n',
     ),
     fails('a re-read in an inline function passed to a write, as part of the caller', 'async function f(tree) { await setPluginsParticipation(x, () => tree.refresh()); }\n'),
     fails('a re-read chained on a same-file helper that writes', lines(
@@ -124,7 +124,7 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
     )),
     fails(
       'a nested function judged apart from the function around it',
-      'async function outer(c, t) { await c.decompileAndCommit(x); async function inner() { await c.decompileAndCommit(y); t.refresh(); } }\n',
+      'async function outer(c, t) { await c.initSourceMod(x); async function inner() { await c.initSourceMod(y); t.refresh(); } }\n',
     ),
   ],
 });

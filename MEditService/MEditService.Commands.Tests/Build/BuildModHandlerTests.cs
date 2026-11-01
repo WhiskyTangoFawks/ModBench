@@ -347,7 +347,7 @@ public sealed class BuildModHandlerTests : IDisposable
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
         _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName, _root, GameRelease.Fallout4,
             [new LoadOrderEntry(Plugin, plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
-        Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, ModFolder, new NewRepository(SourceFolder, [], SourceInits.BuildFile))])).Value().Applied);
+        Assert.Single((await TestEditService.InitSourceModHandler(_holder).InitSourceModAsync([new ModToInitSourceMod(ModName, ModFolder, new NewRepository(SourceFolder, [], SourceInits.BuildFile))])).Value().Applied);
     }
 
     private ModToBuild Copy(params string[] paths) => new(ModName, SourceFolder, ModFolder, new BuildStep.Copy(paths));

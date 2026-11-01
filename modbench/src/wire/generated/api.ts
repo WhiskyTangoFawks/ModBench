@@ -134,7 +134,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/decompile-and-commit": {
+    "/init-source-mod": {
         parameters: {
             query?: never;
             header?: never;
@@ -143,8 +143,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
-        post: operations["DecompileAndCommitMod"];
+        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, in one commit. A mod lands or is refused whole. Progress is the init-source-mod-progress notification. */
+        post: operations["ModToInitSourceMod"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1146,28 +1146,6 @@ export interface components {
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
         };
-        DecompileAndCommitModRequest: {
-            name: string;
-            modFolder: string;
-            repository: components["schemas"]["NewRepositoryRequest"];
-            commit: boolean;
-        };
-        /** @enum {string} */
-        DecompileAndCommitPhase: "Parsing" | "Serializing" | "Committing";
-        /** @enum {string} */
-        DecompileAndCommitRefusal: "None" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
-        DecompileAndCommitRefused: {
-            item: string;
-            refusal: components["schemas"]["DecompileAndCommitRefusal"];
-            message: string;
-        };
-        DecompileAndCommitRequest: {
-            mods: components["schemas"]["DecompileAndCommitModRequest"][];
-        };
-        DecompileAndCommitResult: {
-            applied: components["schemas"]["DecompiledAndCommittedMod"][];
-            refused: components["schemas"]["DecompileAndCommitRefused"][];
-        };
         /** @enum {string} */
         DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "NoRepair" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "WriteFailed" | "RepairFailed";
         DecompileAndRepairRefused: {
@@ -1303,6 +1281,22 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
+        /** @enum {string} */
+        InitSourceModPhase: "Parsing" | "Serializing" | "Committing";
+        /** @enum {string} */
+        InitSourceModRefusal: "None" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        InitSourceModRefused: {
+            item: string;
+            refusal: components["schemas"]["InitSourceModRefusal"];
+            message: string;
+        };
+        InitSourceModRequest: {
+            mods: components["schemas"]["ModToInitSourceModRequest"][];
+        };
+        InitSourceModResult: {
+            applied: components["schemas"]["DecompiledAndCommittedMod"][];
+            refused: components["schemas"]["InitSourceModRefused"][];
+        };
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -1369,6 +1363,12 @@ export interface components {
             packed: string[];
             replaced: string[];
         };
+        ModToInitSourceModRequest: {
+            name: string;
+            modFolder: string;
+            repository: components["schemas"]["NewRepositoryRequest"];
+            commit: boolean;
+        };
         ModlistProgress: {
             mod?: string | null;
             /** Format: int32 */
@@ -1410,7 +1410,7 @@ export interface components {
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
-            decompileAndCommitPhase?: components["schemas"]["DecompileAndCommitPhase"] | null;
+            initSourceModPhase?: components["schemas"]["InitSourceModPhase"] | null;
         };
         PathHop: {
             kind: string;
@@ -2089,7 +2089,7 @@ export interface operations {
             };
         };
     };
-    DecompileAndCommitMod: {
+    ModToInitSourceMod: {
         parameters: {
             query?: never;
             header?: never;
@@ -2098,7 +2098,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DecompileAndCommitRequest"];
+                "application/json": components["schemas"]["InitSourceModRequest"];
             };
         };
         responses: {
@@ -2108,7 +2108,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DecompileAndCommitResult"];
+                    "application/json": components["schemas"]["InitSourceModResult"];
                 };
             };
             /** @description Bad Request */

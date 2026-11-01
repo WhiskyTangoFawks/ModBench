@@ -34,7 +34,7 @@ public sealed class BuildModTraceTests : HostedTests
         File.Move(second.Path, movedTo, overwrite: true);
         (await Client.PutLoadOrder(_instance, _instance.Plugins.Select(p => p == second ? p with { Path = movedTo } : p)))
             .EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class BuildModTraceTests : HostedTests
     public async Task BuildingAModWhoseArchiveTakesAFileItsFolderDoesNotHold_RefusesItByName_AndBuildsTheRest()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
-        (await Client.DecompileAndCommit(NonCompiledPluginOrigin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(NonCompiledPluginOrigin)).EnsureSuccessStatusCode();
         var otherFolder = Path.GetDirectoryName(_instance.Plugins.Single(p => p.Name == NonCompiledPlugin).Path).Require();
 
         var answer = await Answer(await Client.Build(

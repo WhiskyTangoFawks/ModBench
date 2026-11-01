@@ -15,14 +15,14 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class DecompileAndCommitShapeTests : IDisposable
+public sealed class InitSourceModShapeTests : IDisposable
 {
     private const string ModName = "TwoPluginMod";
     private readonly ScratchDirectory _root = new("medit-init-shape-");
     private readonly string _modFolder;
     private readonly string _dataFolder;
 
-    public DecompileAndCommitShapeTests()
+    public InitSourceModShapeTests()
     {
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
         _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
@@ -79,7 +79,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(
-            (ModName, DecompileAndCommitRefusal.AlreadyInitialized, $"'{_modFolder}' {reason}"),
+            (ModName, InitSourceModRefusal.AlreadyInitialized, $"'{_modFolder}' {reason}"),
             (refused.Item, refused.Refusal, refused.Message));
     }
 
@@ -103,7 +103,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
 
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, DecompileAndCommitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, InitSourceModRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.Equal(named, named.Where(name => refused.Message.Contains(name, StringComparison.Ordinal)));
         Assert.DoesNotContain(notNamed, name => refused.Message.Contains(name, StringComparison.Ordinal));
         Assert.False(source.IsSourceMod(_modFolder));
@@ -120,7 +120,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         var result = await Init(new RoundTripFailsForEvery("First.esp"), source);
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, DecompileAndCommitRefusal.PluginsRefused), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, InitSourceModRefusal.PluginsRefused), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
         Assert.False(source.IsSourceMod(_modFolder));
@@ -166,10 +166,10 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
 
-    private Task<DecompileAndCommitResult> Init() => Init(TestAdapters.Mutagen());
+    private Task<InitSourceModResult> Init() => Init(TestAdapters.Mutagen());
 
-    private async Task<DecompileAndCommitResult> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
-        (await DecompileAndCommitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source)).Value();
+    private async Task<InitSourceModResult> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
+        (await InitSourceModEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source)).Value();
 
     private LoadOrderSnapshot LoadOrder()
     {

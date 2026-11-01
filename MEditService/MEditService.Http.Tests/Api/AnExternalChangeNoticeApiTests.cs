@@ -21,7 +21,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     {
         var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;

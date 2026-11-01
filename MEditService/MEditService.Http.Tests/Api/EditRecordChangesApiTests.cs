@@ -20,7 +20,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         if (compiledPlugin)
         {
-            (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+            (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
             await Client.NextSnapshot(fx);
             await Client.PluginReportsCompiledPlugin(Plugin);
         }

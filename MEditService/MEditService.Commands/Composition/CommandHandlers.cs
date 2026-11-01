@@ -104,13 +104,13 @@ public static class CommandHandlers
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CopyRecordChangesHandler>>()));
 
-        services.AddSingleton(sp => new DecompileAndCommitModHandler(
+        services.AddSingleton(sp => new InitSourceModHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
-            sp.GetRequiredService<ILogger<DecompileAndCommitModHandler>>()));
+            sp.GetRequiredService<ILogger<InitSourceModHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),

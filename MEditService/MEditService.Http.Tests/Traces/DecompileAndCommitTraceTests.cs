@@ -26,7 +26,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var response = await Client.DecompileAndCommit(Origin);
+        var response = await Client.InitSourceMod(Origin);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -37,7 +37,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(
-            "decompile-and-commit-progress", e => e.TryGetProperty("decompileAndCommitPhase", out var phase) && phase.GetString() == "Committing");
+            "init-source-mod-progress", e => e.TryGetProperty("initSourceModPhase", out var phase) && phase.GetString() == "Committing");
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Origin);
 
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
@@ -54,7 +54,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
-        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
+        var response = await Client.PostAsJsonAsync("/init-source-mod", new
         {
             mods = new[]
             {
@@ -90,7 +90,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostJson("/decompile-and-commit", body);
+        var response = await Client.PostJson("/init-source-mod", body);
 
         Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
@@ -104,7 +104,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
 
         var response = await Client.PostJson(
-            "/decompile-and-commit",
+            "/init-source-mod",
             $$$"""{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -117,7 +117,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
 
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsCompiledPlugin(Plugin);

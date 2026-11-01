@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type DecompileAndCommitOutcome, type PluginAddress } from '../client';
+import { isRefused, type InitSourceModOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
@@ -15,7 +15,7 @@ export interface InitSourceModDeps {
   /** The Plugins view's message line, which the phase line goes on. */
   progress: { say: (message: string | undefined) => void };
   instance: Pick<Instance, 'refresh'>;
-  commands: Pick<SourceCommands, 'decompileAndCommit'>;
+  commands: Pick<SourceCommands, 'initSourceMod'>;
   reporter: Reporter;
   onCommitted: () => Promise<void>;
   modOfOrigin: (origin: string) => string | undefined;
@@ -23,7 +23,7 @@ export interface InitSourceModDeps {
   pluginsView: string;
 }
 
-type InitiatedSourceMod = GestureResult<DecompileAndCommitOutcome['landed'][number], string>;
+type InitiatedSourceMod = GestureResult<InitSourceModOutcome['landed'][number], string>;
 
 interface InitOptions { readonly commit: boolean }
 
@@ -61,7 +61,7 @@ async function initSourceMods(
   return runWritingGesture(invokedFrom, instance, async (): Promise<InitiatedSourceMod> => {
     try {
       progress.say(initSourceModProgressMessage(firstMod, undefined));
-      const result = await commands.decompileAndCommit(mods, {
+      const result = await commands.initSourceMod(mods, {
         commit,
         onProgress: (status) => { progress.say(initSourceModProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
@@ -88,15 +88,15 @@ function reportInitiated(
   }
 }
 
-interface DecompileAndCommitReport {
-  refused: DecompileAndCommitOutcome['refused'];
+interface InitSourceModReport {
+  refused: InitSourceModOutcome['refused'];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
 }
 
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
 // refused plugin.
-function reportRefused(reporter: Reporter, modCount: number, report: DecompileAndCommitReport): void {
+function reportRefused(reporter: Reporter, modCount: number, report: InitSourceModReport): void {
   const counts = [
     ...(report.refused.length > 0 ? [`${report.refused.length} of ${modCount} mods`] : []),
     ...(report.refusedPlugins.length > 0

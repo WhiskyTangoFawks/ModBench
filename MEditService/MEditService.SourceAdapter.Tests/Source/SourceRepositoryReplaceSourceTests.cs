@@ -211,10 +211,11 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void AReplaceOnABranchWithNoCommitYetWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheLastWrittenAsTheyWere()
+    public void AReplaceWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheLastWrittenAsTheyWere()
     {
         var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address).Value();
-        Git("checkout", "-q", "--orphan", "unborn");
+        var refs = Directory.CreateDirectory(Path.Combine(_modFolder, ".git", "refs", "medit", "last-compile")).FullName;
+        System.IO.File.WriteAllText(Path.Combine(refs, "A.esp.lock"), string.Empty);
 
         Assert.IsType<SourceFailure.GitFailed>(Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Failed());
 

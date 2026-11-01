@@ -286,7 +286,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), {
       totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false,
     }],
-    ['decompile-and-commit-progress', rowsChanged([], { kind: 'decompile-and-commit-progress', modlistProgress, decompileAndCommitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
+    ['init-source-mod-progress', rowsChanged([], { kind: 'init-source-mod-progress', modlistProgress, initSourceModPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
     ['record-filter-cleared', rowsChanged([], { kind: 'record-filter-cleared', recordFilterCleared: { source: 'a.sql', reason: 'boom' } }), { source: 'a.sql', reason: 'boom' }],
     ['rows-changed', rowsChanged(['000001:Test.esp']), { plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000001:Test.esp'] }],
@@ -297,7 +297,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     const heard: unknown[] = [];
     const hear = (kind: NotificationKind) => (payload: unknown) => { heard.push([kind, payload]); };
     subscriber.onNotification('load-order-status', hear('load-order-status'));
-    subscriber.onNotification('decompile-and-commit-progress', hear('decompile-and-commit-progress'));
+    subscriber.onNotification('init-source-mod-progress', hear('init-source-mod-progress'));
     subscriber.onNotification('external-change', hear('external-change'));
     subscriber.onNotification('record-filter-cleared', hear('record-filter-cleared'));
     subscriber.onNotification('rows-changed', hear('rows-changed'));
@@ -324,7 +324,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     expect(heard).toEqual([{ origin: 'ModA', changedPlugins: [] }]);
   });
 
-  it.each(['load-order-status', 'decompile-and-commit-progress'] as const)('skips a %s frame missing its payload', (kind) => {
+  it.each(['load-order-status', 'init-source-mod-progress'] as const)('skips a %s frame missing its payload', (kind) => {
     const subscriber = unopened();
     const heard: unknown[] = [];
     subscriber.onNotification(kind, (p) => heard.push(p));

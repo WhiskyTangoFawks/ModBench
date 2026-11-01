@@ -1,5 +1,5 @@
 import {
-  isRefused, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
+  isRefused, type ModToInitSourceMod, type InitSourceModOutcome, type InitSourceModProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
@@ -16,7 +16,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'initSourceMod' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
@@ -28,10 +28,10 @@ interface SourceCommandsDeps {
 }
 
 /** A mod's progress through init source mod, reading its files here before mEdit's phases. */
-export type DecompileProgress = Omit<DecompileAndCommitProgress, 'phase'> & { phase?: DecompileAndCommitProgress['phase'] | 'ReadingFiles' };
+export type DecompileProgress = Omit<InitSourceModProgress, 'phase'> & { phase?: InitSourceModProgress['phase'] | 'ReadingFiles' };
 
 /** What init source mod answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
-export type DecompileAndCommitted = DecompileAndCommitOutcome & { readonly notes?: readonly string[] };
+export type InitiatedSourceMod = InitSourceModOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
@@ -132,9 +132,9 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
 
     /** A mod whose name gives it no source folder, or whose files, installation file or metadata cannot be read, is refused
      *  here, naming why, and mEdit decompiles and commits the rest. */
-    decompileAndCommit: async (
+    initSourceMod: async (
       mods: readonly string[], { commit = true, onProgress }: { commit?: boolean; onProgress?: (status: DecompileProgress) => void } = {},
-    ): Promise<DecompileAndCommitted | WriteRefused> => {
+    ): Promise<InitiatedSourceMod | WriteRefused> => {
       const made = new Map<string, MadeRepository>();
       const refused: ItemRefusal<string>[] = [];
       const sourceMods = await sourceModsNow();
@@ -148,8 +148,8 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
         else made.set(mod, decided);
       }
       if (made.size === 0) return { landed: [], refused, ...notes };
-      const sent: DecompileAndCommitMod[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit }));
-      const outcome = await client.decompileAndCommit(sent, onProgress === undefined ? {} : { onProgress });
+      const sent: ModToInitSourceMod[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit }));
+      const outcome = await client.initSourceMod(sent, onProgress === undefined ? {} : { onProgress });
       if (isRefused(outcome)) return outcome;
       const notLinked = [...await foldersNotLinked(adapter, made, outcome.landed.map(({ mod }) => mod))].map(([item, why]) => ({ item, reason: `was committed, but ${why}.` }));
       return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked], ...notes };

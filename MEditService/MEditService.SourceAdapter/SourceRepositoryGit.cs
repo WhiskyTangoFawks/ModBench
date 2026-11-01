@@ -22,7 +22,8 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal const string InitMarkSection = "medit";
     internal const string InitMarkKey = "init";
-    internal const string UncommittedKey = "uncommitted";
+    internal const string InitPending = "pending";
+    internal const string InitDone = "done";
 
     /// <summary>A <c>.git</c> with no <c>main</c> and no init mark: someone else's, which init never
     /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
@@ -42,11 +43,11 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), sourceFolder) : dotGit;
     }
 
-    // Set when init was asked to commit nothing, so a crashed init's half-made repository is not mistaken for it.
+    // The mark says "pending" until init finishes, so a crashed init's half-made repository is not mistaken for a made one.
     private static bool HoldsUncommittedInit(string gitDir)
     {
         var config = Path.Combine(gitDir, "config");
-        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim().StartsWith($"{UncommittedKey} =", StringComparison.Ordinal));
+        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim().Replace(" ", "") == $"{InitMarkKey}={InitDone}");
     }
 
     private static bool IsMarkedByInit(string gitDir)
@@ -86,13 +87,14 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _sourceFolder, out stdout, args);
 
-    internal string HeadCommit() => Run("rev-parse", "HEAD").Trim();
+    /// <summary>The commit at HEAD, or null before the first commit of an init that committed nothing.</summary>
+    internal string? HeadCommit() => TryRun(out var head, "rev-parse", "--verify", "--quiet", "HEAD") ? head.Trim() : null;
 
     internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all").Length > 0;
 
     /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit at HEAD.</summary>
     internal bool RemoteHoldsHead(string remote) =>
-        Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+        HeadCommit() is null || Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.
@@ -155,9 +157,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         // write that did not happen. The ref keeps naming the old and the new binary (ADR-0003).
         try
         {
-            var parked = LastCompileRef(pluginFileName);
-            var parent = Run("rev-parse", $"{parked}^").Trim();
-            ParkTrailers("Compile", pluginFileName, parent, [$"{BinaryTrailer}: {binarySha256}"]);
+            ParkTrailers("Compile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
             return true;
         }
         catch (SourceStopException)
@@ -198,10 +198,11 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
     // subject names the gesture that made the record. Only the trailers are read, so the commit holds
     // git's empty tree.
-    private void ParkTrailers(string gesture, string pluginFileName, string parent, IEnumerable<string> trailers)
+    private void ParkTrailers(string gesture, string pluginFileName, string? parent, IEnumerable<string> trailers)
     {
         var message = string.Join('\n', [$"{gesture}: {pluginFileName}", "", .. trailers]);
-        Park(pluginFileName, Run("commit-tree", EmptyTree, "-p", parent, "-m", message).Trim());
+        string[] parentArgs = parent is null ? [] : ["-p", parent];
+        Park(pluginFileName, Run(["commit-tree", EmptyTree, .. parentArgs, "-m", message]).Trim());
     }
 
     // The one place the last-compile ref moves.

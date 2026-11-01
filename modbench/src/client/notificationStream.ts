@@ -19,7 +19,7 @@ class NotificationListenerRegistry {
   constructor(protected readonly log: Log, private readonly throws: ListenerThrows) {}
 
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
-    'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'external-change': new Set(),
+    'load-order-status': new Set(), 'init-source-mod-progress': new Set(), 'external-change': new Set(),
     'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
   };
 
@@ -51,8 +51,8 @@ class NotificationListenerRegistry {
       case 'load-order-status':
         if (event.loadOrderStatus) this.deliver('load-order-status', toLoadOrderStatus(event.loadOrderStatus));
         break;
-      case 'decompile-and-commit-progress':
-        if (event.modlistProgress) this.deliver(kind, { ...event.modlistProgress, phase: event.decompileAndCommitPhase });
+      case 'init-source-mod-progress':
+        if (event.modlistProgress) this.deliver(kind, { ...event.modlistProgress, phase: event.initSourceModPhase });
         break;
       case 'external-change':
         this.deliver('external-change', { origin, changedPlugins: event.changedPlugins ?? [] });
@@ -130,7 +130,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     kind?: unknown; plugin?: unknown; origin?: unknown; keys?: unknown; sequence?: unknown;
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     modlistProgress?: NotificationEvent['modlistProgress'];
-    decompileAndCommitPhase?: NotificationEvent['decompileAndCommitPhase'];
+    initSourceModPhase?: NotificationEvent['initSourceModPhase'];
     changedPlugins?: NotificationEvent['changedPlugins'];
     recordFilterCleared?: NotificationEvent['recordFilterCleared'];
   };
@@ -141,7 +141,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   if (typeof w.sequence !== 'number') throw new Error('Expected a notification event to carry a numeric sequence.');
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
-    loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, decompileAndCommitPhase: w.decompileAndCommitPhase, changedPlugins: w.changedPlugins,
+    loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, initSourceModPhase: w.initSourceModPhase, changedPlugins: w.changedPlugins,
     recordFilterCleared: w.recordFilterCleared,
   };
 }

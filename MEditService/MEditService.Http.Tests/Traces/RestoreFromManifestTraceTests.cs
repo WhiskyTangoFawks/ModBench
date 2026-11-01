@@ -22,7 +22,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     public async Task RestoringASourceModWhoseSubmoduleIsAbsent_ClonesItAtThePin_ThenBuildsItFromThatCommit()
     {
         (await Client.PutLoadOrder(_instance, _instance.Plugins)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         using var submodule = new PinnedSubmodule(_instance.Root, Origin);
         AnotherTool.CopyDirectory(Client.SourceFolderSentFor(Origin), submodule.Remote);
         var pin = PinnedSubmodule.Git(submodule.Remote, "rev-parse", "HEAD").Trim();

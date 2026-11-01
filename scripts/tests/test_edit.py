@@ -11,7 +11,7 @@ from tests.fixture_medit import (
     RECIPE_FILE,
     Fixture,
     changed,
-    decompile_and_commit_mod,
+    init_source_mod,
     file_stamps,
     fixture_medit,
     holding_unsaved,
@@ -28,7 +28,7 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.fixture = cls.enterClassContext(fixture_medit())
-        decompile_and_commit_mod(cls.fixture, CONDITIONS.origin)
+        init_source_mod(cls.fixture, CONDITIONS.origin)
         cls.source = source_folder(cls.fixture.instance, CONDITIONS.origin)
         [cls.recipe_file] = cls.source.rglob(RECIPE_FILE)
 

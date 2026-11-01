@@ -10,7 +10,7 @@ import { handlers, showQuickPick, createQuickPick, PluginRowStandIn } from './so
 
 import { registerInitSourceModCommand } from '../initSourceModCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
-import { type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type PluginAddress, type WriteRefused } from '../../client';
+import { type InitSourceModOutcome, type InitSourceModProgress, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -20,7 +20,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 
-const MODS = mkdtempSync(join(tmpdir(), 'decompile-and-commit-mods-'));
+const MODS = mkdtempSync(join(tmpdir(), 'init-source-mod-mods-'));
 for (const mod of ['ModA', 'ModB', 'ModC']) mkdirSync(join(MODS, mod));
 afterAll(() => { rmSync(MODS, { recursive: true, force: true }); });
 
@@ -44,13 +44,13 @@ describe('modbench.mod.initSourceMod', () => {
   const row = (plugin: { name: string; origin: string }) => new PluginRowStandIn(plugin);
   const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
-  function decompileAndCommitCommands() {
-    let answer: DecompileAndCommitOutcome | WriteRefused = { landed: [], refused: [] };
+  function initSourceModCommands() {
+    let answer: InitSourceModOutcome | WriteRefused = { landed: [], refused: [] };
     const sent: string[][] = [];
     const commits: boolean[] = [];
-    const progressListeners: (((status: DecompileAndCommitProgress) => void) | undefined)[] = [];
+    const progressListeners: (((status: InitSourceModProgress) => void) | undefined)[] = [];
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('decompileAndCommit', (mods, options) => {
+    client.setCommandHandler('initSourceMod', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
       commits.push(...mods.map((mod) => mod.commit));
       progressListeners.push(options?.onProgress);
@@ -60,15 +60,15 @@ describe('modbench.mod.initSourceMod', () => {
       ...sourceCommands({
         client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') })).adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn()
       }),
-      answers: (next: DecompileAndCommitOutcome | WriteRefused) => { answer = next; },
+      answers: (next: InitSourceModOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,
       commits: () => commits,
       progressListeners: () => progressListeners,
     };
   }
 
-  function invokeDecompileAndCommit(
-    commands: ReturnType<typeof decompileAndCommitCommands>, onCommitted = vi.fn().mockResolvedValue(undefined),
+  function invokeInitSourceMod(
+    commands: ReturnType<typeof initSourceModCommands>, onCommitted = vi.fn().mockResolvedValue(undefined),
     paletteSelection: () => readonly unknown[] = () => [],
   ) {
     const said: (string | undefined)[] = [];
@@ -84,9 +84,9 @@ describe('modbench.mod.initSourceMod', () => {
   }
 
   it('on a plugin row, inits the plugin\'s mod after the one pick', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+    const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
 
     await handler(row(FIRST));
 
@@ -100,9 +100,9 @@ describe('modbench.mod.initSourceMod', () => {
 
   it('offers not committing first, and hands mEdit the pick', async () => {
     picking({ commit: false });
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modA([FIRST])], refused: [] });
-    const { handler } = invokeDecompileAndCommit(commands);
+    const { handler } = invokeInitSourceMod(commands);
 
     await handler(row(FIRST));
 
@@ -112,8 +112,8 @@ describe('modbench.mod.initSourceMod', () => {
 
   it('inits nothing and writes nothing on Esc at the pick', async () => {
     picking(undefined);
-    const commands = decompileAndCommitCommands();
-    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+    const commands = initSourceModCommands();
+    const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
 
     await handler(row(FIRST));
 
@@ -121,9 +121,9 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('ends the gesture on a read the Instance loader makes after the init source mod, and clears its message line', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler, said } = invokeDecompileAndCommit(commands);
+    const { handler, said } = invokeInitSourceMod(commands);
 
     await handler(row(FIRST));
 
@@ -134,9 +134,9 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('on selected Mods rows, inits every mod in one call under the Mods view\'s bar', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeDecompileAndCommit(commands);
+    const { handler, reporter } = invokeInitSourceMod(commands);
     const mods = [modRow('ModA'), modRow('ModB')];
 
     await handler(mods[1], mods);
@@ -147,9 +147,9 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('from the palette, inits the mod of a Plugins selection', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
-    const { handler, reporter } = invokeDecompileAndCommit(commands, undefined, () => [row(OTHER)]);
+    const { handler, reporter } = invokeInitSourceMod(commands, undefined, () => [row(OTHER)]);
 
     await handler();
 
@@ -159,10 +159,10 @@ describe('modbench.mod.initSourceMod', () => {
 
   it('warns of a note on a downloaded file that could not be read whole, and the mod still lands', async () => {
     const commands = {
-      ...decompileAndCommitCommands(),
-      decompileAndCommit: () => Promise.resolve({ landed: [modA([FIRST])], refused: [], notes: ['the hash index could not be written'] }),
+      ...initSourceModCommands(),
+      initSourceMod: () => Promise.resolve({ landed: [modA([FIRST])], refused: [], notes: ['the hash index could not be written'] }),
     };
-    const { handler, reporter, onCommitted } = invokeDecompileAndCommit(commands);
+    const { handler, reporter, onCommitted } = invokeInitSourceMod(commands);
 
     await handler(row(FIRST));
 
@@ -173,12 +173,12 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('names a mod mEdit refused while the rest land', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({
       landed: [modA([FIRST])],
       refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
     });
-    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+    const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
     const mods = [modRow('ModA'), modRow('ModC')];
 
     await handler(mods[0], mods);
@@ -192,9 +192,9 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and decompiles and commits the rest', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
-    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+    const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
     const loose = { name: 'Loose.esp', origin: 'Overwrite' };
 
     await handler(row(OTHER), [row(OTHER), row(loose)]);
@@ -207,8 +207,8 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('calls mEdit with nothing when every plugin selected is in no mod, and names each', async () => {
-    const commands = decompileAndCommitCommands();
-    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+    const commands = initSourceModCommands();
+    const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
 
     await handler(row({ name: 'Loose.esp', origin: 'Overwrite' }));
 
@@ -220,9 +220,9 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ refused: true, message: 'Could not init source mod 1 mod — git was not found on PATH.' });
-    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+    const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
 
     await handler(row(OTHER));
 
@@ -234,9 +234,9 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('names the mod it is about to init source mod before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
-    const commands = decompileAndCommitCommands();
+    const commands = initSourceModCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const { handler, said } = invokeDecompileAndCommit(commands);
+    const { handler, said } = invokeInitSourceMod(commands);
     const mods = [modRow('ModA'), modRow('ModB')];
 
     await handler(mods[0], mods);
@@ -255,10 +255,10 @@ describe('modbench.mod.initSourceMod', () => {
     const callingWith = (options: { commit: boolean }, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
 
     it('decompiles and commits the mods given, never the selection, reporting nothing, and answers the outcome', async () => {
-      const commands = decompileAndCommitCommands();
+      const commands = initSourceModCommands();
       const outcome = { landed: [modB([OTHER])], refused: [{ item: 'ModC', reason: 'its name gives it no source folder' }] };
       commands.answers(outcome);
-      const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands, undefined, () => [row(FIRST)]);
+      const { handler, onCommitted, reporter } = invokeInitSourceMod(commands, undefined, () => [row(FIRST)]);
 
       const answered = await handler(calling('ModB', 'ModC'));
 
@@ -270,8 +270,8 @@ describe('modbench.mod.initSourceMod', () => {
     });
 
     it('hands mEdit the commit the call gives, and asks no pick', async () => {
-      const commands = decompileAndCommitCommands();
-      const { handler } = invokeDecompileAndCommit(commands);
+      const commands = initSourceModCommands();
+      const { handler } = invokeInitSourceMod(commands);
 
       await handler(callingWith({ commit: false }, 'ModA'));
 
@@ -279,9 +279,9 @@ describe('modbench.mod.initSourceMod', () => {
     });
 
     it('answers the refusal of the whole call', async () => {
-      const commands = decompileAndCommitCommands();
+      const commands = initSourceModCommands();
       commands.answers({ refused: true, message: 'the executable was not found on PATH.' });
-      const { handler, onCommitted } = invokeDecompileAndCommit(commands);
+      const { handler, onCommitted } = invokeInitSourceMod(commands);
 
       expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'the executable was not found on PATH.' });
       expect(onCommitted).not.toHaveBeenCalled();

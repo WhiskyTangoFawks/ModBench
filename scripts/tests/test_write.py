@@ -12,7 +12,7 @@ from tests.fixture_medit import (
     RECIPE,
     RECIPE_FILE,
     changed,
-    decompile_and_commit_mod,
+    init_source_mod,
     fixture_medit,
     holding_unsaved,
     source_folder,
@@ -26,7 +26,7 @@ NEW_PLUGIN = 'MBDevNew.esp'
 class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = self.enterContext(fixture_medit())
-        decompile_and_commit_mod(self.fixture, CONDITIONS.origin)
+        init_source_mod(self.fixture, CONDITIONS.origin)
         self.source = source_folder(self.fixture.instance, CONDITIONS.origin)
         self.enterContext(window_of(self.fixture.url))
 

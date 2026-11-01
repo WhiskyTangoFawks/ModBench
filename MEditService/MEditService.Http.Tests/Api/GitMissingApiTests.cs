@@ -21,7 +21,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew("FirstNpc"); mod.Npcs.AddNew("SecondNpc"); }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require()).ToArray();
         Assert.Equal(2, npcs.Length);
@@ -62,11 +62,11 @@ public sealed class GitMissingApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
-        var response = await WithGitMissing(() => Client.DecompileAndCommit([Origin, "SecondMod"]));
+        var response = await WithGitMissing(() => Client.InitSourceMod([Origin, "SecondMod"]));
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile and commit", StringComparison.Ordinal));
+        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Init source mod", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
 
         var response = await WithGitMissing(() => Client.Decompile([(Plugin, Origin)]));
 
@@ -92,7 +92,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit([Origin, "SecondMod"])).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod([Origin, "SecondMod"])).EnsureSuccessStatusCode();
 
         var response = await WithGitMissing(() => Client.Compile([(Plugin, Origin), ("Second.esp", "SecondMod")]));
 
@@ -119,7 +119,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;

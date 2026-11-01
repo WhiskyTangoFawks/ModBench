@@ -66,14 +66,14 @@ internal sealed record NotificationEvent(
     IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
     RecordFilterClearedNotification? RecordFilterCleared = null,
     ModlistProgress? ModlistProgress = null,
-    DecompileAndCommitPhase? DecompileAndCommitPhase = null)
+    InitSourceModPhase? InitSourceModPhase = null)
 {
     public static NotificationEvent From(INotification notification) => notification switch
     {
         RowsChangedNotification n => new("rows-changed", n.Plugin.Name, n.Plugin.Origin, n.Keys, n.Sequence),
         PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
-        DecompileAndCommitProgressNotification n => new("decompile-and-commit-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, DecompileAndCommitPhase: n.Phase),
+        InitSourceModProgressNotification n => new("init-source-mod-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, InitSourceModPhase: n.Phase),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         ExternalChangeNotification n => new("external-change", "", n.Origin, [], 0, ChangedPlugins: n.Plugins),
         RecordFilterClearedNotification n => new("record-filter-cleared", "", "", [], 0, RecordFilterCleared: n),

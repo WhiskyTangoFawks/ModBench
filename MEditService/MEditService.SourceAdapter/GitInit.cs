@@ -42,12 +42,23 @@ internal static class GitInit
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             if (commit) CommitEach(git, journal, sourceFolder, plugins, repair);
-            else git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.UncommittedKey}", "true");
+            else StageEach(git, plugins);
+            git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitDone);
         }
         catch (Exception ex)
         {
             if (journal.Report(ex, journal.UndoSince(0)) is { } report) throw report;
             throw;
+        }
+    }
+
+    private static void StageEach(
+        SourceRepositoryGit git, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
+    {
+        git.Run("add", "-A");
+        foreach (var (_, plugin) in plugins)
+        {
+            if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Address.Name, binarySha256);
         }
     }
 
@@ -88,7 +99,7 @@ internal static class GitInit
     private static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
-        git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", "true");
+        git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitPending);
         foreach (var (key, value) in Settings) git.Run("config", key, value);
         EnsureCommitIdentity(git);
     }

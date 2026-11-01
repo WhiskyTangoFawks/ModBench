@@ -174,7 +174,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToDecompileAndCommit = (name: string) => ({
+const modToInitSourceMod = (name: string) => ({
   name, modFolder: `/instance/mods/${name}`, commit: true, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], buildFile: '{}' },
 });
 const modToBuild = (name: string) => ({
@@ -249,10 +249,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
     { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
       path: '/records/compare', body: { copies } },
-    { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModC')]),
+    { name: 'initSourceMod', verb: (c) => c.initSourceMod([modToInitSourceMod('ModA'), modToInitSourceMod('ModC')]),
       answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'CommitFailed', message: 'ModC was not initialized.' }] },
       reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC was not initialized.' }] },
-      path: '/decompile-and-commit', body: { mods: [modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModC')] } },
+      path: '/init-source-mod', body: { mods: [modToInitSourceMod('ModA'), modToInitSourceMod('ModC')] } },
     { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
       answer: {
         applied: [{
@@ -275,10 +275,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.' }] },
       path: '/plugins/decompile', body: { plugins: [first, second], force: true } },
-    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, newRepository: modToDecompileAndCommit('ModA').repository }], false),
+    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, newRepository: modToInitSourceMod('ModA').repository }], false),
       answer: { applied: [first], refused: [] },
       reads: { landed: [first], refused: [] },
-      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, newRepository: modToDecompileAndCommit('ModA').repository }], force: false } },
+      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, newRepository: modToInitSourceMod('ModA').repository }], force: false } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
       answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },
       path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },
@@ -405,7 +405,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
-      { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init source mod 2 mods' },
+      { name: 'initSourceMod', verb: (c) => c.initSourceMod([modToInitSourceMod('ModA'), modToInitSourceMod('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init source mod 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second], true), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
     ];

@@ -240,11 +240,7 @@ internal sealed class SourceRepositoryWrites(
         {
             journal.PutBackOnFailure(() =>
             {
-                journal.RecordUndo(() =>
-                {
-                    git.Run("reset", "-q", "--soft", head);
-                    git.Run("reset", "-q", head, "--", source);
-                }, description: $"the commits of {pluginFileName}'s repair");
+                journal.RecordUndo(() => PutBack(head, source), description: $"the commits of {pluginFileName}'s repair");
                 void Stage(TreeCommit commit)
                 {
                     ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, commit.Tree));
@@ -267,6 +263,19 @@ internal sealed class SourceRepositoryWrites(
         {
             locator.Forget();
         }
+    }
+
+    // Before the first commit there is no commit to go back to: the branch is dropped, and the index holds the files again.
+    private void PutBack(string? head, string source)
+    {
+        if (head is null)
+        {
+            git.Run("update-ref", "-d", "refs/heads/main");
+            git.Run("add", "-A", "--", source);
+            return;
+        }
+        git.Run("reset", "-q", "--soft", head);
+        git.Run("reset", "-q", head, "--", source);
     }
 
     /// <summary>The plugin's source in <paramref name="sourceFolder"/> becomes <paramref name="files"/>, placed: only what
