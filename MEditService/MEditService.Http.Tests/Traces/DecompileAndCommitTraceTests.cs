@@ -58,7 +58,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         {
             mods = new[]
             {
-                new { name = Origin, modFolder, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
+                new { name = Origin, modFolder, commit = true, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
             },
         });
 

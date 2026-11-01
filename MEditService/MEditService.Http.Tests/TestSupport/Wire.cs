@@ -71,6 +71,7 @@ internal static class Wire
             {
                 name,
                 modFolder = client.ModFolderSentFor(name),
+                commit = true,
                 repository = new
                 {
                     sourceFolder = client.SourceFolderSentFor(name),
