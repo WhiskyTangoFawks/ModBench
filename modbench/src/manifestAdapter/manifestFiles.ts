@@ -61,8 +61,8 @@ function refuseUnlessReadable(text: string): void {
   if ('refused' in read) throw new Error(read.refused);
 }
 
-/** Writes `manifest` as the manifest named for `folder`, in the spelling it holds it in, and removes one named otherwise;
- *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests, is not there, or the schema refuses the text. */
+/** Writes `manifest` as the manifest named for `folder`, in the spelling it holds, and removes one named otherwise;
+ *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests, is not there or the text is refused. */
 export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
   const [one, other] = await manifestsIn(folder);
   if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
