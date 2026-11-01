@@ -199,7 +199,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
       commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks: stepTasks(hostTasks), trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
-      registerRepositories: deps.registerRepositories, sourceFolderOf: (mod) => adapter.sourceFolder(mod),
+      registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say },

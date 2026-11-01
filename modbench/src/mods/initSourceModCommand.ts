@@ -2,9 +2,8 @@ import * as vscode from 'vscode';
 import { isRefused, type InitSourceModOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
-import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
@@ -19,7 +18,6 @@ export interface InitSourceModDeps {
   commands: Pick<SourceCommands, 'initSourceMod'>;
   reporter: Reporter;
   onCommitted: () => Promise<void>;
-  sourceFolderOf: (mod: string) => string | undefined;
   modOfOrigin: (origin: string) => string | undefined;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
@@ -56,7 +54,7 @@ export function registerInitSourceModCommand(deps: InitSourceModDeps, paletteSel
 }
 
 async function initSourceMods(
-  { progressIn, instance, commands, onCommitted, sourceFolderOf }: InitSourceModDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
+  { progressIn, instance, commands, onCommitted }: InitSourceModDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
 ): Promise<InitializedSourceMod> {
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
@@ -71,28 +69,11 @@ async function initSourceMods(
       if (isRefused(result)) return { applied: false, refusal: result.message };
       if (result.landed.length > 0) await onCommitted();
       const { notes = [], ...outcome } = result;
-      const unshown = await showInExplorer(sourceFolderOf, outcome.landed.map(({ mod }) => mod));
-      const partial = [...notes.map((detail) => ({ message: 'Init source mod:', detail, severity: 'warning' as const })), ...unshown];
-      return { applied: true, outcome, ...partial.length === 0 ? {} : { partial } };
+      return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Init source mod:', detail, severity: 'warning' as const })) } };
     } finally {
       progress.say(undefined);
     }
   });
-}
-
-// plugins.md, Init source mod, story 7: the source is shown in the Explorer when it lands.
-async function showInExplorer(sourceFolderOf: InitSourceModDeps['sourceFolderOf'], mods: readonly string[]): Promise<PartialFailure[]> {
-  const unshown: PartialFailure[] = [];
-  for (const mod of mods) {
-    try {
-      const folder = sourceFolderOf(mod);
-      if (folder === undefined) throw new Error('its name gives it no source folder');
-      await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
-    } catch (err) {
-      unshown.push({ message: 'Init source mod:', detail: `"${mod}" is a source mod, but its source could not be shown in the Explorer: ${errorMessage(err)}`, severity: 'warning' });
-    }
-  }
-  return unshown;
 }
 
 function reportInitiated(

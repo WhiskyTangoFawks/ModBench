@@ -15,7 +15,7 @@ export const showQuickPick = vi.fn<(items: readonly unknown[], options?: unknown
 
 export const createQuickPick = vi.fn();
 
-export const executeCommand = vi.fn().mockResolvedValue(undefined);
+const executeCommand = vi.fn().mockResolvedValue(undefined);
 
 /** The `vscode` module the source gestures run against; mock it with `vi.mock('vscode', () => vscodeModule())`. */
 export const vscodeModule = () => ({

@@ -111,7 +111,7 @@ const otherDeps = () => ({
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }),
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
-    registerRepositories: () => Promise.resolve(), sourceFolderOf: () => undefined,
+    registerRepositories: () => Promise.resolve(),
   },
   checkForUpdates: vi.fn(),
   manifestGestures: {

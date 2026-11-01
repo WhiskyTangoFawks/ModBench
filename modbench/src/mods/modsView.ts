@@ -52,7 +52,6 @@ interface SourceGestureDeps {
   say: (message: string | undefined) => void;
   /** Registers the source mods' repositories once an init source mod landed. */
   registerRepositories: () => Promise<void>;
-  sourceFolderOf: (mod: string) => string | undefined;
 }
 
 type ManifestDeps = Pick<ManifestGestureDeps, 'commands' | 'toolboxView' | 'say'>;
@@ -211,11 +210,11 @@ function registerSourceGestures(
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
   const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'), instance);
-  const { commands, pluginsView, say, registerRepositories, sourceFolderOf } = sourceGestures;
+  const { commands, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
     registerInitSourceModCommand({
-      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories, sourceFolderOf,
+      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories,
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({
