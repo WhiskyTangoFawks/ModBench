@@ -25,7 +25,7 @@ vi.mock('vscode', async () => {
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 import {
-  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands,
+  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerFileExclusionCommands, registerFileIgnoreCommands,
   registerModMoveCommand,
   registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
@@ -963,6 +963,34 @@ describe('exclude and include file: every selected file, in the right-clicked ro
     await invoke('modbench.mod.excludeFile');
 
     expect([fake.calls, reporter.reports]).toEqual([[], []]);
+  });
+});
+
+describe('ignore and unignore file: every selected file, in the command\'s direction', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
+  const origin = { kind: 'mod', name: 'M' } as const;
+  const fileA = new FileNode(modRow, origin, file('mods/M', 'a.dds'), 'a.dds');
+  const fileB = new FileNode(modRow, origin, file('mods/M', 'b.dds'), 'b.dds');
+  const instance = instanceOf([mod('M')]);
+
+  it.each([['ignoreFile', true], ['unignoreFile', false]] as const)('%s hands every selected file to the manifest write, and nothing else', async (verb, ignore) => {
+    const ignoreFiles = vi.fn().mockResolvedValue({ landed: [], refused: [] });
+
+    registerFileIgnoreCommands({ ignoreFiles }, instance, () => [], recordingReporter());
+    await invoke(`modbench.mod.${verb}`, fileA, [fileA, fileB, modRow]);
+
+    expect(ignoreFiles.mock.calls).toEqual([[[fileA.ref, fileB.ref], ignore]]);
+  });
+
+  it('writes nothing over a selection with no file', async () => {
+    const ignoreFiles = vi.fn();
+
+    registerFileIgnoreCommands({ ignoreFiles }, instance, () => [modRow], recordingReporter());
+    await invoke('modbench.mod.ignoreFile');
+
+    expect(ignoreFiles).not.toHaveBeenCalled();
   });
 });
 

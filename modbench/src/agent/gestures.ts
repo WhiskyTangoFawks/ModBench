@@ -297,6 +297,8 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
   ['modbench.mod.excludeFile', FILES],
   ['modbench.mod.includeFile', FILES],
+  ['modbench.mod.ignoreFile', FILES],
+  ['modbench.mod.unignoreFile', FILES],
   ['modbench.mod.addPublisherTag', PUBLISHER_TAG_ROWS],
   ['modbench.mod.removePublisherTag', PUBLISHER_TAG_ROWS],
   ['modbench.mod.install', INSTALL],

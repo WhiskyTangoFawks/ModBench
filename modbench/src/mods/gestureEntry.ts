@@ -50,6 +50,8 @@ interface ModsKeyContext {
   readonly holdsNonSourceMod: boolean;
   readonly holdsIncludedFile: boolean;
   readonly holdsExcludedFile: boolean;
+  readonly holdsIgnoredFile: boolean;
+  readonly holdsUnignoredFile: boolean;
 }
 
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
@@ -75,6 +77,8 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     holdsNonSourceMod: mods.some((row) => row.facts !== undefined && !row.facts.sourceMod),
     holdsIncludedFile: files.some((row) => row.exclusion === 'included'),
     holdsExcludedFile: files.some((row) => row.exclusion === 'excluded'),
+    holdsIgnoredFile: files.some((row) => row.ignoring === 'ignored'),
+    holdsUnignoredFile: files.some((row) => row.ignoring === 'unignored'),
   };
 }
 

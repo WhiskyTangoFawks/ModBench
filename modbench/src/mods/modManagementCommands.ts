@@ -12,6 +12,7 @@ import {
 } from '../drivingLib/gestureEntry';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
+import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import type { EntryRef, ModCommands, MovePlace, OrderEnd, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
@@ -87,6 +88,36 @@ export function registerFileExclusionCommands(
   return [
     registerAgentGesture('modbench.mod.excludeFile', viewSelection, gesture('Excluded')),
     registerAgentGesture('modbench.mod.includeFile', viewSelection, gesture('Included')),
+  ];
+}
+
+// modbench.mod.ignoreFile / modbench.mod.unignoreFile: the direction is the command's, as exclude and include are
+// (modlist-repository.md, The manifest, story 11).
+export function registerFileIgnoreCommands(
+  commands: Pick<ModlistRepositoryCommands, 'ignoreFiles'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+): vscode.Disposable[] {
+  const gesture = (ignore: boolean): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef>> => {
+    const verb = ignore ? 'ignore' : 'unignore';
+    return {
+      fromView: (entry) => {
+        const refs = pluralArgument(entry, 'file').map((row) => row.ref);
+        return refs.length === 0 ? undefined : refs;
+      },
+      fromAgent: ({ argument }) => argument.map(fileRefOf),
+      run: async (refs) => ({ applied: true, outcome: await runModsWriting(instance, () => commands.ignoreFiles(refs, ignore)) }),
+      report: (result, refs) => {
+        if (!result.applied) {
+          reporter.report('error', result.refusal, result.detail);
+          return;
+        }
+        reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${refs.length} files.`, result.outcome, fileLabel);
+      },
+    };
+  };
+  return [
+    registerAgentGesture('modbench.mod.ignoreFile', viewSelection, gesture(true)),
+    registerAgentGesture('modbench.mod.unignoreFile', viewSelection, gesture(false)),
   ];
 }
 

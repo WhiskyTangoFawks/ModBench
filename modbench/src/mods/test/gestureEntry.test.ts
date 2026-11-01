@@ -139,4 +139,15 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([plainInFolder, enabledMod], byRow)).toMatchObject({ holdsIncludedFile: true, holdsExcludedFile: false });
     expect(modsKeyContext([markedInFolder], byRow)).toMatchObject({ holdsIncludedFile: false, holdsExcludedFile: true });
   });
+
+  it('unignore sees a selected file the manifest ignores, and ignore one it does not', () => {
+    const origin = { kind: 'mod', name: 'On' } as const;
+    const plain = { relativePath: 'a.dds', path: '/instance/mods/On/a.dds', sourcePath: '/instance/mods/On/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' };
+    const unignored = new FileNode(enabledMod, origin, plain, 'a.dds');
+    const ignored = new FileNode(enabledMod, origin, plain, 'a.dds', 'none', false, true);
+
+    expect(modsKeyContext([unignored], byRow)).toMatchObject({ holdsIgnoredFile: false, holdsUnignoredFile: true });
+    expect(modsKeyContext([ignored], byRow)).toMatchObject({ holdsIgnoredFile: true, holdsUnignoredFile: false });
+    expect(modsKeyContext([unignored, ignored], byRow)).toMatchObject({ holdsIgnoredFile: true, holdsUnignoredFile: true });
+  });
 });

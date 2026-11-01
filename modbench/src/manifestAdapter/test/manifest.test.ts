@@ -37,6 +37,22 @@ const everyKindAndExclusion = (
   + '}\n'
 );
 
+const withIgnore = (
+  '{\n'
+  + '"version":1,\n'
+  + '"exclude":[\n'
+  + '"x.esp"\n'
+  + '],\n'
+  + '"ignore":[\n'
+  + '"F4SE/Plugins/BetterConsole.mem",\n'
+  + '"logs"\n'
+  + '],\n'
+  + '"files":{\n'
+  + '"x.esp":"BBBBBBBBBBA="\n'
+  + '}\n'
+  + '}\n'
+);
+
 const builtSourceMod = (
   '{\n'
   + '"version":1,\n'
@@ -56,6 +72,7 @@ describe('a manifest the adapter reads and writes', () => {
   it.each([
     ['the example formats/manifest.md gives', specExample],
     ['every kind of package but a repository, and exclusions', everyKindAndExclusion],
+    ['ignored paths, between exclusions and files', withIgnore],
     ['a built source mod, with a file a step makes', builtSourceMod],
     ['a manifest with no member but its version', noMember],
   ])('round-trips %s byte for byte', (_name, text) => {
@@ -77,6 +94,7 @@ describe('a manifest the adapter reads and writes', () => {
         { kind: 'installationFile', name: 'a.7z', size: 1, hash: H1 },
       ],
       exclude: ['b', 'A'],
+      ignore: ['d', 'C'],
       files: new Map([['b', H1], ['B', H1], ['A', H2], ['a', H2]]),
     };
     expect(manifestText(manifest)).toBe(
@@ -86,13 +104,14 @@ describe('a manifest the adapter reads and writes', () => {
       + `{"kind":"installationFile","name":"b.7z","size":1,"hash":"${H1}"},\n`
       + '{"kind":"gameFolder"}\n],\n'
       + '"exclude":[\n"A",\n"b"\n],\n'
+      + '"ignore":[\n"C",\n"d"\n],\n'
       + `"files":{\n"A":"${H2}",\n"a":"${H2}",\n"B":"${H1}",\n"b":"${H1}"\n}\n}\n`,
     );
   });
 
   it('reads any text the schema accepts, whatever its spacing and order', () => {
     const read = readManifest(`{ "files": { "a.esp": "${H1}" }, "version": 1 }`);
-    expect(read).toEqual({ manifest: { packages: [], exclude: [], files: new Map([['a.esp', H1]]) } });
+    expect(read).toEqual({ manifest: { packages: [], exclude: [], ignore: [], files: new Map([['a.esp', H1]]) } });
   });
 });
 
@@ -126,6 +145,10 @@ describe('a manifest the adapter refuses', () => {
     [`{"version":1,"files":{"A.esp":"${H1}","a.esp":"${H1}"}}`, "its manifest names 'A.esp' and 'a.esp', which differ only by case"],
     [`{"version":1,"exclude":["b.esp"],"files":{"a.esp":"${H1}"}}`, "its manifest excludes 'b.esp', which is none of its files nor a folder above one"],
     [`{"version":1,"exclude":["a","a"],"files":{"a/b.esp":"${H1}"}}`, "its manifest excludes 'a' twice"],
+    ['{"version":1,"ignore":["a","a"]}', "its manifest ignores 'a' twice"],
+    ['{"version":1,"ignore":["../a"]}', "its manifest names '../a', which is not a path in the folder"],
+    [`{"version":1,"ignore":["a.esp"],"files":{"a.esp":"${H1}"}}`, "its manifest ignores 'a.esp', which is one of its files or a folder above one"],
+    [`{"version":1,"ignore":["docs"],"files":{"docs/a.txt":"${H1}"}}`, "its manifest ignores 'docs', which is one of its files or a folder above one"],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}"},{"kind":"installationFile","name":"A.zip","size":2,"hash":"${H2}"}]}`, "its manifest names the installation file 'A.zip' twice"],
     ['{"version":1,"packages":[{"kind":"gameFolder"},{"kind":"gameFolder"}]}', 'its manifest names the game folder twice'],
     ['{"version":1,"packages":[{"kind":"repository","name":"Mod"},{"kind":"gameFolder"}]}', "its manifest names the repository 'Mod' beside another package"],

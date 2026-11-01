@@ -38,7 +38,7 @@ const reads: Parameters<typeof modValueOver>[0] = {
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
 };
 
-const EMPTY: Manifest = { packages: [], exclude: [], files: new Map() };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], files: new Map() };
 
 async function folderOf(name: string, files: Record<string, string> = {}): Promise<string> {
   const folder = join(root, 'mods', name);

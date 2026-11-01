@@ -23,3 +23,6 @@ export const differingFiles = ({ differing, namedByNoLine }: ModStatus): Readonl
 
 /** Whether the mod counts in the view's badge (modlist-repository.md, Status, story 4). */
 export const countsInBadge = (status: ModStatus): boolean => status.noManifest || differs(status);
+
+/** Each file of the mod whose row says ignored, by its path on disk. */
+export const ignoredFiles = ({ ignored }: ModStatus): ReadonlySet<string> => new Set(ignored);

@@ -20,6 +20,8 @@ export type ManifestPackage =
 export interface Manifest {
   readonly packages: readonly ManifestPackage[];
   readonly exclude: readonly string[];
+  /** The paths in the folder that the manifest neither records nor restores. */
+  readonly ignore: readonly string[];
   /** Each file by its path, with its hash; null for a file a build step makes. */
   readonly files: ReadonlyMap<string, string | null>;
 }

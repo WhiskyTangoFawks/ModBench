@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileText, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type BuildStep, type Manifest,
+  buildFileText, exclusionsOfFiles, isUnderAny, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type BuildStep, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
@@ -102,7 +102,8 @@ export async function newRepositoryOf(
   if ('refusal' in read) return read;
   const { sourceFolder, folder, held } = read;
   const installationFile = read.installationFile === undefined ? undefined : pagedFrom(read.installationFile, await downloadedRow(adapter, read.installationFile));
-  const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)));
+  const ignore = held?.ignore ?? [];
+  const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)).filter((path) => !isUnderAny(ignore, path)));
   if ('refusal' in all) return all;
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
   const own = installationFile === undefined ? undefined : downloadedFileOf(installationFile, nexusFileOf(adapter));
@@ -110,7 +111,7 @@ export async function newRepositoryOf(
     { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))) };
+  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], ignore: [], files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))) };
   const copied = [...new Set(all.map(({ path }) => path).filter((path) => !compiled.has(path)).map((path) => path.split('/')[0] ?? path))].sort();
   const taken = takenBySourceFolder(copied, manifestNameOf(sourceFolder));
   if (taken !== undefined) return { refusal: taken };
@@ -154,9 +155,13 @@ async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository
   try {
     const value = await adapter.folderValue(folder);
     const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
-    const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) });
+    const held = await manifestIn(folder);
+    const ignore = held !== undefined && 'manifest' in held ? held.manifest.ignore : [];
+    const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) }, ignore);
     if ('why' in files) return files.why;
-    const manifest: Manifest = { packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: value.exclude, files };
+    const manifest: Manifest = {
+      packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: exclusionsOfFiles(value.exclude, files), ignore, files,
+    };
     const notRestored = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder, { folder, manifest });
     if (notRestored !== undefined) return `its source folder could not be restored from its manifest: ${notRestored}`;
     await writeManifestIn(folder, manifest);

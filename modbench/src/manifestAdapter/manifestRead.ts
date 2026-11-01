@@ -1,6 +1,6 @@
 // spec/formats/manifest-1.schema.json and the rules manifest.md adds, read from any text the schema accepts.
 
-import { isExcludedBy } from './folderPaths';
+import { isUnderAny } from './folderPaths';
 import { MANIFEST_VERSION, type Manifest, type ManifestPackage, type ManifestRead } from './manifest';
 import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
@@ -120,9 +120,18 @@ function excludeOf(value: unknown, files: ReadonlyMap<string, unknown>): string[
   const twice = exclude.find((path, index) => exclude.indexOf(path) !== index);
   if (twice !== undefined) throw new Unreadable(`its ${FILE} excludes '${twice}' twice`);
   const paths = [...files.keys()];
-  const stray = exclude.find((excluded) => !paths.some((file) => isExcludedBy([excluded], file)));
+  const stray = exclude.find((excluded) => !paths.some((file) => isUnderAny([excluded], file)));
   if (stray !== undefined) throw new Unreadable(`its ${FILE} excludes '${stray}', which is none of its files nor a folder above one`);
   return exclude;
+}
+
+function ignoreOf(value: unknown, files: ReadonlyMap<string, unknown>): string[] {
+  const ignore = arrayOf(FILE, value, 'its ignore').map((path) => pathOf(textOf(FILE, path, 'its ignore')));
+  const twice = ignore.find((path, index) => ignore.indexOf(path) !== index);
+  if (twice !== undefined) throw new Unreadable(`its ${FILE} ignores '${twice}' twice`);
+  const recorded = ignore.find((ignored) => [...files.keys()].some((file) => file === ignored || isUnderAny([ignored], file)));
+  if (recorded !== undefined) throw new Unreadable(`its ${FILE} ignores '${recorded}', which is one of its files or a folder above one`);
+  return ignore;
 }
 
 function manifestOf(value: unknown): Manifest {
@@ -133,10 +142,13 @@ function manifestOf(value: unknown): Manifest {
   if (root.version !== MANIFEST_VERSION) {
     throw new Unreadable(`its ${FILE} is version ${JSON.stringify(root.version)}, and Modbench reads only version ${MANIFEST_VERSION}`);
   }
-  known(root, undefined, ['version', 'packages', 'exclude', 'files']);
+  known(root, undefined, ['version', 'packages', 'exclude', 'ignore', 'files']);
   const packages = Object.hasOwn(root, 'packages') ? packagesOf(root.packages) : [];
   const files = Object.hasOwn(root, 'files') ? filesOf(root.files, packages.some(({ kind }) => kind === 'repository')) : new Map<string, string | null>();
-  return { packages, exclude: Object.hasOwn(root, 'exclude') ? excludeOf(root.exclude, files) : [], files };
+  return {
+    packages, exclude: Object.hasOwn(root, 'exclude') ? excludeOf(root.exclude, files) : [],
+    ignore: Object.hasOwn(root, 'ignore') ? ignoreOf(root.ignore, files) : [], files,
+  };
 }
 
 /** `text` read as a manifest of version 1. */

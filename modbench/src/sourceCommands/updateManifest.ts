@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { foldersOf, namesOf, type Folders } from './folders';
@@ -112,10 +112,13 @@ async function folderMissing(adapter: Adapter, folder: string): Promise<boolean>
 
 type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[] } | { readonly unreadable: string };
 
-async function hashedFilesOf(adapter: Adapter, { folder, isSourceFolder }: Pick<ModToUpdate, 'folder' | 'isSourceFolder'>): Promise<Hashed> {
+async function hashedFilesOf(
+  adapter: Adapter, { folder, isSourceFolder }: Pick<ModToUpdate, 'folder' | 'isSourceFolder'>, ignore: readonly string[],
+): Promise<Hashed> {
   const value = await (isSourceFolder ? adapter.sourceFolderValue(folder) : adapter.folderValue(folder));
-  const files = ownFilesOf(value);
-  return 'why' in files ? { unreadable: files.why } : { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: value.exclude };
+  const files = ownFilesOf(value, ignore);
+  if ('why' in files) return { unreadable: files.why };
+  return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files) };
 }
 
 // A manifest of the format before version 1 is written over, as pre-alpha Modbench migrates none; one of another version
@@ -143,7 +146,7 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
 
   let hashed: Hashed;
   try {
-    hashed = await hashedFilesOf(adapter, mod);
+    hashed = await hashedFilesOf(adapter, mod, held?.ignore ?? []);
   } catch (err) {
     hashed = { unreadable: `a file could not be read: ${errorMessage(err)}` };
   }

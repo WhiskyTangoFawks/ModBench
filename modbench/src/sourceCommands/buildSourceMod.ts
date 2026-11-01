@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { folderAgainst, isExcludedBy, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type TaskStep } from '../manifestAdapter/manifestAdapter';
+import { folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type TaskStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -22,12 +22,13 @@ export interface BuildDeps {
   readonly trash: MoveToTrash;
 }
 
-/** A source mod to build: its folder and the paths the modlist excludes from it, and the repository that builds it with the
- *  build file it holds. */
+/** A source mod to build: its folder, the paths the modlist excludes from it and those its manifest ignores, and the
+ *  repository that builds it with the build file it holds. */
 export interface SourceModToBuild {
   readonly name: string;
   readonly folder: string;
   readonly exclude: readonly string[];
+  readonly ignore: readonly string[];
   readonly sourceFolder: string;
   readonly buildFile: BuildFile;
 }
@@ -66,14 +67,14 @@ const heldManifest = async (folder: string): Promise<Manifest | undefined> => {
 
 // A manifest names only the exclusions of the files it names (formats/manifest.md).
 function sourceModManifest(mod: SourceModToBuild, files: ReadonlyMap<string, string | null>): Manifest {
-  const exclude = mod.exclude.filter((excluded) => [...files.keys()].some((path) => isExcludedBy([excluded], path)));
-  return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, files };
+  const exclude = mod.exclude.filter((excluded) => [...files.keys()].some((path) => isUnderAny([excluded], path)));
+  return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, ignore: mod.ignore, files };
 }
 
 // source.md, Build, story 20: each file whose bytes its manifest does not record, which no build can make again.
 async function unrecordedIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
   const files = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-  const against = folderAgainst({ files, exclude: mod.exclude }, await adapter.folderValue(mod.folder));
+  const against = folderAgainst({ files, exclude: mod.exclude, ignore: mod.ignore }, await adapter.folderValue(mod.folder));
   return [...against.files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : [])), ...against.namedByNoLine];
 }
 
@@ -107,7 +108,7 @@ function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly hash?
 
 // Each file the folder holds that the build made, by the path the build gives it.
 function filesOf(
-  ownPath: Adapter['ownPath'], made: ReadonlyMap<string, Made>, folder: FolderValue, previous: ReadonlyMap<string, string | null>,
+  ownPath: Adapter['ownPath'], made: ReadonlyMap<string, Made>, folder: FolderValue, previous: ReadonlyMap<string, string | null>, ignore: readonly string[],
 ): Map<string, string | null> {
   const at = heldAt(folder);
   const files = new Map<string, string | null>();
@@ -115,7 +116,7 @@ function filesOf(
     const held = at(pathInFolder);
     const path = ownPath(pathInFolder);
     const recorded = previous.get(path);
-    if (held === undefined) continue;
+    if (held === undefined || isUnderAny(ignore, path)) continue;
     if (how === 'byATask') files.set(path, null);
     else if (how === 'leftAsItWas') {
       if (recorded !== undefined && recorded !== null && held.hash === recorded) files.set(path, recorded);
@@ -125,9 +126,10 @@ function filesOf(
   return files;
 }
 
-const notMadeIn = (made: ReadonlyMap<string, Made>, folder: FolderValue): string[] => {
+const notMadeIn = (made: ReadonlyMap<string, Made>, folder: FolderValue, ignore: readonly string[]): string[] => {
   const named = new Set([...made.keys()].map((path) => path.toLowerCase()));
-  return [...folder.files.keys()].filter((path) => !made.has(path) && !(folder.ignoresCase && named.has(path.toLowerCase()))).sort();
+  return [...folder.files].filter(([path, file]) => !made.has(path) && !(folder.ignoresCase && named.has(path.toLowerCase())) && !isUnderAny(ignore, file.path))
+    .map(([path]) => path).sort();
 };
 
 type Built = { readonly landed: ModBuilt } | { readonly refusal: BuildRefusal } | WriteRefused;
@@ -188,7 +190,8 @@ async function builtByMEdit(deps: BuildDeps, mod: SourceModToBuild, pass: BuildP
 // source.md, Build, stories 17 and 20: what a step moved aside, the plugin source a decompile replaced and
 // the loose files a pack packed, goes to the trash.
 async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { replaced, packed }: StepBuilt): Promise<string | undefined> {
-  return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packed ?? []);
+  const packedNotIgnored = (packed ?? []).filter((path) => !isUnderAny(mod.ignore, deps.adapter.ownPath(path)));
+  return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packedNotIgnored);
 }
 
 const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, uncommitted, unpushed }: StepBuilt): ModBuilt => ({
@@ -236,7 +239,7 @@ async function stoppedAs({ adapter }: BuildDeps, mod: SourceModToBuild, made: Re
   try {
     const folder = await adapter.folderValue(mod.folder);
     const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-    await writeManifestIn(mod.folder, sourceModManifest(mod, new Map([...previous, ...filesOf(adapter.ownPath, made, folder, previous)])));
+    await writeManifestIn(mod.folder, sourceModManifest(mod, new Map([...previous, ...filesOf(adapter.ownPath, made, folder, previous, mod.ignore)])));
     return failure;
   } catch (err) {
     return `${failure} Its manifest could not record what it wrote: ${errorMessage(err)}`;
@@ -253,13 +256,13 @@ async function finished(deps: BuildDeps, mod: SourceModToBuild, { outcome, made 
   } catch (err) {
     return { ...outcome, failure: await stoppedAs(deps, mod, made, `The build stopped after its steps, as its folder could not be read: ${errorMessage(err)}`) };
   }
-  const trashed = notMadeIn(made, folder);
+  const trashed = notMadeIn(made, folder, mod.ignore);
   const withTrashed: ModBuilt = { ...outcome, ...trashed.length === 0 ? {} : { trashed } };
   const why = await whyNotTrashed(adapter, deps.trash, mod.folder, trashed);
   if (why !== undefined) return { ...withTrashed, failure: await stoppedAs(deps, mod, made, `The build stopped as ${why}.`) };
   try {
     const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(adapter.ownPath, made, folder, previous)));
+    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(adapter.ownPath, made, folder, previous, mod.ignore)));
     return withTrashed;
   } catch (err) {
     return { ...withTrashed, failure: `The build could not write its manifest: ${errorMessage(err)}` };

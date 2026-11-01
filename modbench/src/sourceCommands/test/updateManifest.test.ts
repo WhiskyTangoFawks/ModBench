@@ -15,7 +15,7 @@ const HZ = 'ZZZZZZZZZZA=';
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'HHHHHHHHHHA=', entries: [{ path: 'a.nif', hash: HA }] };
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
-const EMPTY: Manifest = { packages: [], exclude: [], files: new Map() };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], files: new Map() };
 const holding = (files: Record<string, string>): Manifest['files'] => new Map(Object.entries(files));
 
 let root: string;
@@ -153,7 +153,31 @@ describe('update manifest', () => {
 
     await update(['ModA']);
 
-    expect(await manifestOf('ModA')).toEqual({ manifest: { ...EMPTY, exclude: ['b.esp', 'docs'], files: holding({ 'docs/a.txt': HA, 'b.esp': HB }) } });
+    expect(await manifestOf('ModA')).toEqual({ manifest: { ...EMPTY, exclude: ['b.esp', 'docs'], ignore: [], files: holding({ 'docs/a.txt': HA, 'b.esp': HB }) } });
+  });
+
+  it('leaves out a file its manifest ignores, with the exclusion of it, and keeps the ignore (The manifest, story 11)', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA, 'F4SE/Plugins/BetterConsole.mem': HB, 'logs.mohidden/x.log': HX } } });
+    await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, ignore: ['F4SE/Plugins/BetterConsole.mem', 'logs'] });
+
+    const result = await update(['ModA']);
+
+    expect([result.refused, await manifestOf('ModA')]).toEqual([
+      [], { manifest: { ...EMPTY, ignore: ['F4SE/Plugins/BetterConsole.mem', 'logs'], files: holding({ 'a.nif': HA }) } },
+    ]);
+  });
+
+  it('does not refuse a mod for an ignored file it cannot read (The manifest, story 11)', async () => {
+    const unreadable = { path: 'Game.mem', excluded: false, read: { kind: 'unreadable' as const, reason: 'EBUSY: resource busy' } };
+    const { update, manifestOf } = await over({
+      files: { ModA: {} },
+      adapterOver: { folderValue: () => Promise.resolve({ files: new Map([['Game.mem', unreadable]]), exclude: [], ignoresCase: false }) },
+    });
+    await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, ignore: ['Game.mem'] });
+
+    const result = await update(['ModA']);
+
+    expect([result.refused, await manifestOf('ModA')]).toEqual([[], { manifest: { ...EMPTY, ignore: ['Game.mem'] } }]);
   });
 
   it('writes a mod\'s manifest once, whatever the number of updates', async () => {
@@ -225,7 +249,7 @@ describe('update manifest', () => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
       const held: Manifest = {
         packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }, { kind: 'installationFile', name: 'Other.7z', size: 5, hash: OTHER.hash }],
-        exclude: [], files: holding({ 'a.nif': HA, 'b.nif': HB }),
+        exclude: [], ignore: [], files: holding({ 'a.nif': HA, 'b.nif': HB }),
       };
       const downloads = [INSTALLED, OTHER].filter((file) => !file.path.endsWith(missing));
       const { update, manifestHeld } = await over({
@@ -449,7 +473,7 @@ describe('update manifest', () => {
 
       const { packages, ...rest } = await heldIn(folder);
       expect([result.refused, result.landed.map(({ mod }) => mod), packages.map(({ kind }) => kind), rest]).toEqual([
-        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], files: holding({ 'Data/a.nif': HA }) },
+        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], ignore: [], files: holding({ 'Data/a.nif': HA }) },
       ]);
     });
   });
