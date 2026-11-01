@@ -131,8 +131,8 @@ internal sealed class SourceModBuild
         {
             if (!repository.ReplaceSourceMovingAside(plugin.Key, source.Files, source.BinarySha256).Holds(out var aside, out var failure))
             {
-                return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(
-                    $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}") with { Replaced = replaced });
+                var why = $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}";
+                return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(why) with { Replaced = replaced });
             }
             replaced.AddRange(aside);
         }
