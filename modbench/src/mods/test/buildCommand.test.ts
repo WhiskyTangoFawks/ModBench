@@ -34,7 +34,6 @@ describe('modbench.mod.build', () => {
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const LOOSE = { name: 'Loose.esp', origin: 'Overwrite' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [] });
