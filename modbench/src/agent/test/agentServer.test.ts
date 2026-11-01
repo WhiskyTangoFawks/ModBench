@@ -592,7 +592,7 @@ describe('the agent server, reading file order conflicts', () => {
       indicators: ['containsExcludedFiles', 'updateAvailable'],
       files: [
         { file: 'only.txt', excluded: false, gotten: true, publisherTags: ['Patched'] },
-        { file: 'skip.txt.mohidden', excluded: true, gotten: false, publisherTags: [] },
+        { file: 'skip.txt', excluded: true, gotten: false, publisherTags: [] },
       ],
     }]);
   });
@@ -650,6 +650,29 @@ describe('the agent server, resolving names against the instance', () => {
     expect(await resolve({ files: [{ mod: { name: 'B' }, path: 'textures/rock.dds' }] })).toEqual({
       isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'B', file: 'Textures/Rock.DDS' }] }),
     });
+  });
+
+  it('names an excluded file by its own path, without the mod manager\'s mark, answering that path', async () => {
+    const value = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'B', enabled: true }],
+      filesByMod: new Map([['B', [fileIn('/m', 'F4SE/Plugins/BetterConsole.mem.mohidden')]]]),
+    });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await call(client, 'resolve_instance_names', { files: [{ mod: { name: 'B' }, path: 'f4se/plugins/betterconsole.mem' }] })).toEqual({
+      isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'B', file: 'F4SE/Plugins/BetterConsole.mem' }] }),
+    });
+  });
+
+  it('refuses a path that carries the mod manager\'s mark', async () => {
+    const value = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'B', enabled: true }],
+      filesByMod: new Map([['B', [fileIn('/m', 'a.mem.mohidden')]]]),
+    });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await call(client, 'resolve_instance_names', { files: [{ mod: { name: 'B' }, path: 'a.mem.mohidden' }] }))
+      .toEqual({ isError: true, text: 'Nothing is named "a.mem.mohidden" in mod B.' });
   });
 
   it('refuses a path the mod has no file at', async () => {
@@ -1304,6 +1327,18 @@ describe('the agent server, running a gesture', () => {
         { kind: 'file', origin: mod('C'), relativePath: 'MESHES/x.nif' },
         { kind: 'file', origin: mod('B'), relativePath: 'Textures/Rock.DDS' },
       ],
+      options: {},
+    },
+    {
+      name: 'mod_include_file carries an excluded file as the mod has it on disk, named by its own path',
+      value: instanceValueFixture({
+        mods: [{ kind: 'mod', name: 'B', enabled: true }],
+        filesByMod: new Map([['B', [fileIn('/m', 'F4SE/Plugins/BetterConsole.mem.mohidden')]]]),
+      }),
+      tool: 'mod_include_file',
+      args: { argument: [{ mod: { name: 'B' }, path: 'F4SE/Plugins/BetterConsole.mem' }] },
+      command: 'modbench.mod.includeFile',
+      argument: [{ kind: 'file', origin: mod('B'), relativePath: 'F4SE/Plugins/BetterConsole.mem.mohidden' }],
       options: {},
     },
     ...(['add', 'remove'] as const).map((direction): GestureCase => ({

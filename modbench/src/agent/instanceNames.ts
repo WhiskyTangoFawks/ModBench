@@ -26,7 +26,7 @@ export const RESOLVE_INSTANCE_NAMES = {
   },
   of: (value: InstanceValue, { downloads = [], files = [] }: { downloads?: string[]; files?: FileName[] }) => {
     const refusals: string[] = [];
-    const named = { downloads: refusing(refusals, [], () => downloadedFilesNamed(value.downloadedFiles, downloads)), files: refusing(refusals, [], () => filesNamed(value, files)) };
+    const named = { downloads: refusing(refusals, [], () => downloadedFilesNamed(value.downloadedFiles, downloads)), files: refusing(refusals, [], () => filesNamed(value, files).map(({ mod, file }) => ({ mod, file }))) };
     if (refusals.length > 0) throw new Refusal(refusals.join(' '));
     return named;
   },
