@@ -72,8 +72,8 @@ export interface FolderAgainst {
   readonly ignored: readonly string[];
 }
 
-/** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system ignores it.
- *  Of two files at one own path, the one the manifest's exclusion fits is its. An ignored file is neither. */
+/** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system does.
+ *  Of two files at one own path, the one the exclusion fits is its. Ignored files are out. */
 export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore'>, folder: FolderValue): FolderAgainst {
   const present = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
   const ignored = present.filter(([, file]) => isUnderAny(manifest.ignore, file.path));
