@@ -242,10 +242,8 @@ describe('uninstall over the selection', () => {
 
   it.each<[string, ModNode, ModNode[] | undefined, string]>([
     ['naming the mod', modA, undefined, 'Uninstall "Mod A"? Its folder will be moved to the system trash. It loses its place in mod order and its publisher tags.'],
-    ['saying the source goes with the folder of a source mod', sourceA, undefined, 'Uninstall "Mod A"? Its folder and its source will be moved to the system trash. It loses its place in mod order and its publisher tags.'],
+    ['not mentioning the source of a source mod, which stays', sourceA, undefined, 'Uninstall "Mod A"? Its folder will be moved to the system trash. It loses its place in mod order and its publisher tags.'],
     ['listing every mod of a selection of several', modA, [modA, modB], 'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash. Each loses its place in mod order and its publisher tags.'],
-    ['naming the source mods whose source goes with the folders, for a selection of several', sourceA, [sourceA, modB],
-      'Uninstall "Mod A", "Mod B"? Their folders will be moved to the system trash, and the source of "Mod A" with them. Each loses its place in mod order and its publisher tags.'],
   ])('asks one modal %s', async (_case, clicked, selected, message) => {
     const ask = scriptedDialog(undefined);
 
@@ -253,16 +251,6 @@ describe('uninstall over the selection', () => {
     await invoke('modbench.mod.uninstall', clicked, selected);
 
     expect(ask.asked).toEqual([{ message, detail: undefined, buttons: ['Uninstall'] }]);
-  });
-
-  it('leaves out of the modal the source another mod\'s manifest still names, which stays', async () => {
-    const ask = scriptedDialog(undefined);
-    const sharing = { ...instance, value: instanceValueFixture({ mods: [...mods], paths: { ...instance.value.paths, sourceDirs: new Map([['Mod A', '/source/A'], ['Mod B', '/source/A']]) } }) };
-
-    registerModContextCommands({ commands: commandsOver(mods).commands, instance: sharing, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log: () => undefined });
-    await invoke('modbench.mod.uninstall', sourceA);
-
-    expect(ask.asked).toEqual([{ message: 'Uninstall "Mod A"? Its folder will be moved to the system trash. It loses its place in mod order and its publisher tags.', detail: undefined, buttons: ['Uninstall'] }]);
   });
 
   it('uninstalls the selection once confirmed: each folder into the trash it was given, then each line', async () => {
@@ -288,8 +276,6 @@ describe('uninstall over the selection', () => {
   });
 
   it.each<[string, InstanceAnswers, string, string]>([
-    ['source folder could not be trashed', { refusals: refusing('trashSourceFolder', 'the trash refused it') },
-      '"Mod A" was uninstalled, but its source folder could not be moved to the trash.', 'the trash refused it'],
     ['publisher tags could not be removed', { publisherTags: [], refusals: refusing('followModFolders', 'not JSON') },
       '"Mod A" was uninstalled, but its publisher tags could not be removed.', 'not JSON'],
     ['line could not be removed after its folder was trashed', { refusals: refusing('changeModOrder', 'disk full') },
@@ -1014,7 +1000,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
         commands: commands(), instance, viewSelection: () => [], reporter: reporter(), ask: scriptedDialog('Uninstall'), trash: vi.fn(), log: vi.fn(),
       });
       return invoke('modbench.mod.uninstall', modA);
-    }, ['trashEntryFolder', 'trashSourceFolder', 'changeModOrder']],
+    }, ['trashEntryFolder', 'changeModOrder']],
     ['separator delete', () => {
       registerSeparatorCommands(commands(), instance, reporter(), scriptedDialog('Delete'), vi.fn(), () => []);
       return invoke('modbench.separator.delete', groupA);
@@ -1183,8 +1169,7 @@ describe('the mod gestures, called by the agent', () => {
 
   describe('uninstall for an agent', () => {
     const register = (commands: ModCommands, ask = scriptedDialog()) =>
-      registerModContextCommands({ commands, instance: sourceInstance, viewSelection: () => [selected], reporter: recordingReporter(), ask, trash: vi.fn(), log: vi.fn() });
-    const sourceInstance = { ...instanceOf(mods), value: instanceValueFixture({ mods: [...mods], sourceMods: new Set(['Mod B']) }) };
+      registerModContextCommands({ commands, instance: instanceOf(mods), viewSelection: () => [selected], reporter: recordingReporter(), ask, trash: vi.fn(), log: vi.fn() });
 
     it('uninstalls the mods given when forced, never the selection, confirming nothing', async () => {
       const { fake, commands } = commandsOver(mods);
@@ -1211,7 +1196,7 @@ describe('the mod gestures, called by the agent', () => {
           landed: [],
           refused: [
             { item: { name: 'Mod A' }, reason: 'it would move its folder to the system trash, and lose its place in mod order and its publisher tags. Request it again with force to uninstall it.' },
-            { item: { name: 'Mod B' }, reason: 'it would move its folder and its source to the system trash, and lose its place in mod order and its publisher tags. Request it again with force to uninstall it.' },
+            { item: { name: 'Mod B' }, reason: 'it would move its folder to the system trash, and lose its place in mod order and its publisher tags. Request it again with force to uninstall it.' },
           ],
         },
       });

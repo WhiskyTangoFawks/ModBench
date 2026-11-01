@@ -222,7 +222,6 @@ async function renameSeparator(
 interface TrashedEntry {
   name: string;
   lineRefusal?: string;
-  sourceRefusal?: string;
 }
 
 const dropOf = (entry: EntryRef): ModOrderChange =>

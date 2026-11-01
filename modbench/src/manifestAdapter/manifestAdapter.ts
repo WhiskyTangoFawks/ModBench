@@ -8,4 +8,4 @@ export { buildFileIn, manifestAt, manifestIn, manifestNameOf, packagesAskedAt, w
 export { exclusionsOf, isExcludedBy, ownFilesOf } from './folderPaths';
 export { installationFileLack } from './packageLack';
 export { repositoryOf } from './manifestPackages';
-export { sourceFolderTrashed, sourceModsOf, type SourceMods } from './sourceMods';
+export { sourceModsOf, type SourceMods } from './sourceMods';
