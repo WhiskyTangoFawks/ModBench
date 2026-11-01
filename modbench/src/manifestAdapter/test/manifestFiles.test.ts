@@ -53,6 +53,13 @@ describe('writeManifestIn', () => {
     expect([wrote, await readFile(join(folder, 'Mod.manifest.json'), 'utf8'), await readdir(folder)]).toEqual([true, manifestText(manifest), ['Mod.manifest.json']]);
   });
 
+  it('refuses, writing nothing, a manifest its schema refuses, with the reason the reader gives', async () => {
+    const refused: Manifest = { ...manifest, packages: [{ kind: 'installationFile', name: 'M.7z', size: 1, hash: 'AAAAAAAAAAA=', host: { nexus: { game: 'fallout4', mod: 4, file: 0 } } }] };
+
+    await expect(writeManifestIn(folder, refused)).rejects.toThrow(/cannot be read at its package 1/);
+    expect(await readdir(folder)).toEqual([]);
+  });
+
   it('writes nothing, and says so, when the manifest already holds that text', async () => {
     await writeFile(join(folder, 'Mod.manifest.json'), manifestText(manifest));
     const before = (await stat(join(folder, 'Mod.manifest.json'))).mtimeMs;

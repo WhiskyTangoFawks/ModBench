@@ -8,8 +8,8 @@ import { BUILD_FILE } from '../wire/sourceMod';
 import type { BuildFileRead } from './buildFile';
 import { readBuildFile } from './buildFileRead';
 import type { Manifest, ManifestRead } from './manifest';
-import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
+import { manifestText, ordinal } from './manifestText';
 import { packagesAsked } from './manifestPackages';
 
 async function fileNamesIn(folder: string): Promise<string[]> {
@@ -56,14 +56,20 @@ async function writeWhole(folder: string, path: string, text: string): Promise<v
   }
 }
 
-/** Writes `manifest` as the manifest named for `folder`, in the spelling it holds it in, and removes one named otherwise;
- *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests or is not there. */
+function refuseUnlessReadable(text: string): void {
+  const read = readManifest(text);
+  if ('refused' in read) throw new Error(read.refused);
+}
+
+ *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests, is not there, or the schema refuses the text. */
+ *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests or is not there, or the schema refuses the text. */
 export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
   const [one, other] = await manifestsIn(folder);
   if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
   const named = one?.toLowerCase() === manifestNameOf(folder).toLowerCase() ? one : undefined;
   const path = join(folder, named ?? manifestNameOf(folder));
   const text = manifestText(manifest);
+  refuseUnlessReadable(text);
   if (named !== undefined && await textAt(path) === text) return false;
   await writeWhole(folder, path, text);
   if (one !== undefined && named === undefined) await rm(join(folder, one));
