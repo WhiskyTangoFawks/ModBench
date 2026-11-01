@@ -19,8 +19,8 @@ export function exclusionsOf(manifest: Pick<Manifest, 'exclude'> | undefined, fo
   return [...new Set([...recorded, ...folder.exclude])].sort();
 }
 
-/** Each file of `folder` by its own path, with its hash, but those `ignore` names; or why the folder's files are not one
- *  manifest's: a file that could not be read, or two files the folder holds at one own path. */
+/** Each file of `folder` by its own path, with its hash, less those `ignore` names; or why they are not one manifest's: a
+ *  file that could not be read, or two files at one own path. */
 export function ownFilesOf(folder: Pick<FolderValue, 'files'>, ignore: readonly string[] = []): ReadonlyMap<string, string> | { readonly why: string } {
   const files = new Map<string, string>();
   const heldAt = new Map<string, string>();

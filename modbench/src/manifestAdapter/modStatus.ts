@@ -73,8 +73,7 @@ export interface FolderAgainst {
 }
 
 /** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system ignores it.
- *  Of two files at one own path, the one the manifest's exclusion fits is its. A file the
- *  manifest ignores is neither. */
+ *  Of two files at one own path, the one the manifest's exclusion fits is its. An ignored file is neither. */
 export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore'>, folder: FolderValue): FolderAgainst {
   const present = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
   const ignored = present.filter(([, file]) => isUnderAny(manifest.ignore, file.path));

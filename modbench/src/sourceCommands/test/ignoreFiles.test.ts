@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
-import { ignoreFiles } from '../ignoreFiles';
+import { ignoreFiles, type FileToIgnore } from '../ignoreFiles';
 
 const HA = 'AAAAAAAAAAA=';
 const HB = 'BBBBBBBBBBA=';
@@ -18,7 +18,7 @@ beforeEach(async () => {
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-const fileOf = (mod: string, relativePath: string) => ({ origin: { kind: 'mod' as const, name: mod }, relativePath });
+const fileOf = (mod: string, relativePath: string): FileToIgnore => ({ origin: { kind: 'mod', name: mod }, relativePath });
 
 function over(held: Partial<Manifest> | undefined, files: Record<string, string>) {
   const folder = join(root, 'mods', 'ModA');
@@ -27,13 +27,17 @@ function over(held: Partial<Manifest> | undefined, files: Record<string, string>
     hashes: new Map(Object.entries(files).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)),
   });
   return {
-    run: async (files_: readonly ReturnType<typeof fileOf>[], ignore: boolean) => {
+    run: async (files_: readonly FileToIgnore[], ignore: boolean) => {
       if (held !== undefined) await writeManifestIn(folder, { ...EMPTY, ...held });
       return ignoreFiles({ adapter: fake.adapter }, files_, ignore);
     },
     manifest: async () => {
       const read = await manifestIn(folder);
       return read === undefined || 'refused' in read ? read : read.manifest;
+    },
+    ignoreOf: async () => {
+      const read = await manifestIn(folder);
+      return read === undefined || 'refused' in read ? undefined : read.manifest.ignore;
     },
   };
 }
@@ -58,9 +62,9 @@ describe('ignore file', () => {
 
   it('refuses a file of Overwrite, naming why, and writes nothing', async () => {
     const { run, manifest } = over(undefined, {});
-    const inOverwrite = { origin: { kind: 'runtimeOutput' as const }, relativePath: 'x.txt' };
+    const inOverwrite: FileToIgnore = { origin: { kind: 'runtimeOutput' }, relativePath: 'x.txt' };
 
-    const outcome = await run([inOverwrite as never], true);
+    const outcome = await run([inOverwrite], true);
 
     expect([outcome, await manifest()]).toEqual([{ landed: [], refused: [{ item: inOverwrite, reason: 'Overwrite is not a mod.' }] }, undefined]);
   });
@@ -77,10 +81,10 @@ describe('unignore file', () => {
   });
 
   it('refuses a file under an ignored folder, naming the folder', async () => {
-    const { run, manifest } = over({ ignore: ['logs'] }, { 'logs/run.log': HB });
+    const { run, ignoreOf } = over({ ignore: ['logs'] }, { 'logs/run.log': HB });
 
     const outcome = await run([fileOf('ModA', 'logs/run.log')], false);
 
-    expect([outcome.refused.map(({ reason }) => reason), (await manifest() as Manifest).ignore]).toEqual([["its manifest ignores 'logs', a folder above it"], ['logs']]);
+    expect([outcome.refused.map(({ reason }) => reason), await ignoreOf()]).toEqual([["its manifest ignores 'logs', a folder above it"], ['logs']]);
   });
 });
