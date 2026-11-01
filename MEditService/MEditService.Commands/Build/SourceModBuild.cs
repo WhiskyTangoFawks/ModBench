@@ -72,10 +72,16 @@ internal sealed class SourceModBuild
 
     private async Task<ModBuildOutcome> CompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> names, FolderWrite written)
     {
-        var ignored = names.Where(written.Ignores).Order(StringComparer.Ordinal).ToList();
+        var ignored = names.Where(written.Ignores).ToList();
         var plugins = Placed(loadOrder, mod, [.. names.Except(ignored)]);
-        var (landed, refused) = await CompileAsync(plugins);
-        return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(CompiledFiles(loadOrder, mod, plugins, landed)), Ignored = ignored };
+        var (landed, refused) = await CompileAsync(plugins, path =>
+        {
+            if (!written.Ignores(path)) return false;
+            ignored.Add(path);
+            return true;
+        });
+        var made = CompiledFiles(loadOrder, mod, plugins, landed).Where(file => !written.Ignores(file.Path));
+        return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(made), Ignored = [.. ignored.Order(StringComparer.Ordinal)] };
     }
 
     // source.md, Build, story 2: the extension takes the loose files an archive packs out of the folder, so the game reads one copy.
@@ -179,11 +185,11 @@ internal sealed class SourceModBuild
     }
 
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
-        IReadOnlyList<RegisteredPlugin> plugins)
+        IReadOnlyList<RegisteredPlugin> plugins, Func<string, bool> leavesUnwritten)
     {
         var twins = plugins.GroupBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase).Where(named => named.Count() > 1).ToList();
         List<RegisteredPlugin> compilable = [.. plugins.Except(twins.SelectMany(named => named))];
-        var compiled = await _compile.CompileAsync(compilable);
+        var compiled = await _compile.CompileAsync(compilable, leavesUnwritten);
         return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. compiled.Refused]);
     }
 

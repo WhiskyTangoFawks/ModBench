@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type TaskStep } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type TaskStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -67,7 +67,7 @@ const heldManifest = async (folder: string): Promise<Manifest | undefined> => {
 
 // A manifest names only the exclusions of the files it names (formats/manifest.md).
 function sourceModManifest(mod: SourceModToBuild, files: ReadonlyMap<string, string | null>): Manifest {
-  const exclude = mod.exclude.filter((excluded) => [...files.keys()].some((path) => isUnderAny([excluded], path)));
+  const exclude = exclusionsOfFiles(mod.exclude, files.keys());
   return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, ignore: mod.ignore, files };
 }
 

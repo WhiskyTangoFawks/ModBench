@@ -511,7 +511,7 @@ describe('restore from manifest', () => {
       const outcome = await restore(['ModA']);
 
       expect(writes(fake.calls)).toEqual([]);
-      expect(client.calls.find(({ method }) => method === 'build')?.args[0]).toMatchObject([{ name: 'ModA' }]);
+      expect(client.calls.find(({ method }) => method === 'build')?.args[0]).toMatchObject([{ name: 'ModA', ignore: ['mine.txt'] }]);
       expect(outcome).toMatchObject({ landed: [{ mod: 'ModA', namedByNoLine: [] }] });
     });
 

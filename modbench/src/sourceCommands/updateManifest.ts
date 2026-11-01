@@ -1,8 +1,9 @@
 import { basename } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
-import { exclusionsOfFiles, isUnderAny, manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, isUnderAny, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import { heldManifestIn } from './heldManifest';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
@@ -120,29 +121,17 @@ async function hashedFilesOf(
   const value = await (isSourceFolder ? adapter.sourceFolderValue(folder) : adapter.folderValue(folder));
   const files = ownFilesOf(value, ignore);
   if ('why' in files) return { unreadable: files.why };
-  return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files) };
-}
-
-// A manifest of the format before version 1 is written over, as pre-alpha Modbench migrates none; one of another version
-// is refused, naming both (formats/CLAUDE.md, Versions).
-async function heldManifestOf(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
-  try {
-    const held = await manifestIn(folder);
-    if (held === undefined || 'olderFormat' in held) return undefined;
-    return 'refused' in held ? refusal(`${held.refused}.`) : held.manifest;
-  } catch (err) {
-    return refusal(`its manifest could not be read: ${errorMessage(err)}`);
-  }
+  return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files.keys()) };
 }
 
 const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
 
-// The lines `added` records, laid over those `held` keeps.
+// The lines `added` records, laid over those `held` keeps: every held package stays, and `added` brings those it lacks.
 function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
   if (held === undefined) return added;
-  const addedPackages = new Set(added.packages.map(packageKey));
+  const heldKeys = new Set(held.packages.map(packageKey));
   return {
-    packages: [...held.packages.filter((pkg) => !addedPackages.has(packageKey(pkg))), ...added.packages],
+    packages: [...held.packages, ...added.packages.filter((pkg) => !heldKeys.has(packageKey(pkg)))],
     exclude: [...new Set([...held.exclude, ...added.exclude])],
     ignore: added.ignore,
     files: new Map([...held.files, ...added.files]),
@@ -152,8 +141,8 @@ function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
 async function updateMod(
   adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[], only?: readonly string[],
 ): Promise<Answer> {
-  const held = await heldManifestOf(mod.folder);
-  if (held !== undefined && 'refusal' in held) return held;
+  const held = await heldManifestIn(mod.folder);
+  if (held !== undefined && 'why' in held) return refusal(held.why);
   const holds = (name: string): boolean => name === (mod.installationFile === undefined ? undefined : basename(mod.installationFile.path)) || downloadedFiles.some(({ package: pkg }) => pkg.name === name);
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
     return refusal('its manifest names the game folder, and the game folder was not found.');
@@ -176,7 +165,7 @@ async function updateMod(
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
-    files, only === undefined ? hashed.exclude : exclusionsOfFiles(hashed.exclude, new Map(files.map(({ path }) => [path, path]))), held);
+    files, exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
   const recorded = only === undefined ? built : { ...built, manifest: laidOver(held, built.manifest) };
   let written: boolean;
   try {

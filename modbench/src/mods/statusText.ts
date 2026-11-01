@@ -26,3 +26,6 @@ export const countsInBadge = (status: ModStatus): boolean => status.noManifest |
 
 /** Each file of the mod whose row says ignored, by its path on disk. */
 export const ignoredFiles = ({ ignored }: ModStatus): ReadonlySet<string> => new Set(ignored);
+
+/** Each path the mod's manifest ignores as it names it. */
+export const ignoreEntriesOf = ({ ignoreEntries }: ModStatus): ReadonlySet<string> => new Set(ignoreEntries);

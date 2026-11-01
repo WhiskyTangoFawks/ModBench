@@ -102,6 +102,46 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACompile_LeavesUnwrittenAStringsFileTheManifestIgnores_WritingThePlugin_AnsweringTheFile()
+    {
+        await InitializedWithALocalizedPlugin();
+        var strings = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}").Order(StringComparer.Ordinal).ToList();
+        var kept = Assert.Single(strings, path => path.EndsWith(".STRINGS", StringComparison.OrdinalIgnoreCase));
+        WriteInFolder(kept, "the game wrote this");
+        File.Delete(Path.Combine(ModFolder, Plugin));
+
+        var built = await Landed(Compile() with { Ignore = [kept] });
+
+        Assert.Equal("the game wrote this", File.ReadAllText(Path.Combine(ModFolder, kept)));
+        Assert.True(File.Exists(Path.Combine(ModFolder, Plugin)));
+        Assert.Equal([kept], built.Ignored);
+        Assert.DoesNotContain(built.Made, file => file.Path == kept);
+    }
+
+    [Theory]
+    [InlineData("textures/A.dds")]
+    [InlineData("TEXTURES")]
+    public async Task ACopy_WritesAFileWhoseCaseDiffersFromTheIgnoreEntry_AsTheExtensionMatchesInTheCaseOfThePath(string ignore)
+    {
+        WriteSource(("textures/a.dds", "a"));
+
+        var built = await Landed(Copy("textures") with { Ignore = [ignore] });
+
+        Assert.Equal([("textures/a.dds", "a")], FilesIn(ModFolder));
+        Assert.Empty(built.Ignored);
+    }
+
+    [Fact]
+    public async Task ACopy_WritesAFileWhoseCaseDiffersFromTheExclusionEntry_UnmarkedAsTheExtensionMatchesInTheCaseOfThePath()
+    {
+        WriteSource(("textures/a.dds", "a"));
+
+        var built = await Landed(Copy("textures") with { Exclude = ["Textures/A.dds"] });
+
+        Assert.Equal([new MadeFile("textures/a.dds", VouchedFor: true)], built.Made);
+    }
+
+    [Fact]
     public async Task ACopyOfAPathTheSourceFolderDoesNotHold_RefusesTheMod_WritingNothing()
     {
         WriteSource(("meshes/c.nif", "c"));
@@ -184,7 +224,7 @@ public sealed class BuildModHandlerTests : IDisposable
     {
         WriteSource(("textures/a.dds", "a"), ("textures/b.dds", "b"), ("meshes/deep/c.nif", "c"));
 
-        await Landed(Copy("textures", "meshes") with { Exclude = ["Textures/A.dds", "meshes"] });
+        await Landed(Copy("textures", "meshes") with { Exclude = ["textures/a.dds", "meshes"] });
 
         Assert.Equal([("meshes.excluded/deep/c.nif", "c"), ("textures/a.dds.excluded", "a"), ("textures/b.dds", "b")], FilesIn(ModFolder));
     }

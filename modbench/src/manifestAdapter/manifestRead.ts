@@ -129,7 +129,7 @@ function ignoreOf(value: unknown, files: ReadonlyMap<string, unknown>): string[]
   const ignore = arrayOf(FILE, value, 'its ignore').map((path) => pathOf(textOf(FILE, path, 'its ignore')));
   const twice = ignore.find((path, index) => ignore.indexOf(path) !== index);
   if (twice !== undefined) throw new Unreadable(`its ${FILE} ignores '${twice}' twice`);
-  const recorded = ignore.find((ignored) => [...files.keys()].some((file) => file === ignored || isUnderAny([ignored], file)));
+  const recorded = ignore.find((ignored) => [...files.keys()].some((file) => isUnderAny([ignored], file)));
   if (recorded !== undefined) throw new Unreadable(`its ${FILE} ignores '${recorded}', which is one of its files or a folder above one`);
   return ignore;
 }

@@ -96,10 +96,15 @@ type FileExclusion = (typeof FILE_MARKS)[OriginFileMark]['state'];
 /** How a message names a file: its mod or Overwrite, and its path there. */
 export const fileLabel = ({ origin, relativePath }: OriginFileRef): string => `${originLabel(origin)}/${relativePath}`;
 
+/** Whether the manifest ignores a file: not at all, through a folder above it, or by an entry of its own path. */
+export type FileIgnore = 'unignored' | 'under' | 'entry';
+
+const IGNORE_CONTEXT: Record<FileIgnore, readonly string[]> = { unignored: [], under: ['ignored'], entry: ['ignored', 'ignoreEntry'] };
+
 export class FileNode extends vscode.TreeItem {
   readonly kind = 'file' as const;
   readonly exclusion: FileExclusion;
-  readonly ignoring: 'ignored' | 'unignored';
+  readonly ignoring: FileIgnore;
   constructor(
     public readonly parent: ModlistNode,
     public readonly origin: FileOrigin,
@@ -107,14 +112,14 @@ export class FileNode extends vscode.TreeItem {
     name: string,
     public readonly conflict: FileOrderConflict = 'none',
     holdsPublisherTag = false,
-    ignored = false,
+    ignoring: FileIgnore = 'unignored',
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
     this.exclusion = FILE_MARKS[file.markedExcluded ? 'Excluded' : 'Included'].state;
-    this.ignoring = ignored ? 'ignored' : 'unignored';
-    if (ignored) this.description = 'ignored';
-    this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion, ignored && 'ignored', ...publisherFlags(origin, holdsPublisherTag)].filter(Boolean).join(' ');
+    this.ignoring = ignoring;
+    if (ignoring !== 'unignored') this.description = 'ignored';
+    this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion, ...IGNORE_CONTEXT[ignoring], ...publisherFlags(origin, holdsPublisherTag)].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }
 
@@ -130,7 +135,7 @@ export function filesIn(
   filter?: {
     shown: ChildrenShown; matches: NameMatch; conflict: (origin: FileOrigin, file: OriginFile) => FileOrderConflict;
     differs: (origin: FileOrigin, relativePath: string) => boolean;
-    ignored: (origin: FileOrigin, relativePath: string) => boolean;
+    ignored: (origin: FileOrigin, file: OriginFile) => FileIgnore;
     holdsPublisherTag: (path: string) => boolean;
   },
 ): (FolderNode | FileNode)[] {
@@ -143,6 +148,6 @@ export function filesIn(
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.holdsPublisherTag(folder.path),
     ), filter?.differs(origin, folder.relativePath))),
     ...[...ownFiles.here].sort(byName).map(([name, file]) =>
-      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file.relativePath)), filter?.differs(origin, file.relativePath))),
+      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file)), filter?.differs(origin, file.relativePath))),
   ];
 }

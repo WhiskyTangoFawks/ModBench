@@ -167,6 +167,27 @@ describe('update manifest', () => {
     ]);
   });
 
+  it('records only the lines of the paths it is asked for, keeping every package the manifest holds as it is, and adding those it lacks', async () => {
+    const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
+    const heldPackage = { kind: 'installationFile' as const, name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { nexus: { game: 'fallout4', mod: 9, file: 9 } } };
+    const { update, manifestOf } = await over({
+      files: { ModA: { 'a.nif': HA, 'b.nif': HB, 'c.nif': HX } },
+      answers: {
+        installations: new Map([['ModA', read({ ...INSTALLED, page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' })]]),
+        downloadedFilesHashed: { files: [INSTALLED, OTHER], notes: [] },
+      },
+    });
+    await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [heldPackage], files: holding({ 'a.nif': HA }) });
+
+    await update(['ModA'], { only: new Map([['ModA', ['b.nif']]]) });
+
+    expect(await manifestOf('ModA')).toEqual({
+      manifest: {
+        ...EMPTY, packages: [heldPackage, { kind: 'installationFile', name: 'Other.7z', size: 5, hash: OTHER.hash }], files: holding({ 'a.nif': HA, 'b.nif': HB }),
+      },
+    });
+  });
+
   it('does not refuse a mod for an ignored file it cannot read (The manifest, story 11)', async () => {
     const unreadable = { path: 'Game.mem', excluded: false, read: { kind: 'unreadable' as const, reason: 'EBUSY: resource busy' } };
     const { update, manifestOf } = await over({

@@ -31,10 +31,10 @@ public sealed class CompilePluginHandler
     /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds it. No two differ
     /// in case alone. The build has asked <see cref="WhyNoPluginCompiles"/>.</summary>
     internal async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
-        IReadOnlyList<RegisteredPlugin> placed)
+        IReadOnlyList<RegisteredPlugin> placed, Func<string, bool>? leavesUnwritten = null)
     {
         var byKey = placed.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
-        return await Each([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
+        return await Each([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin], leavesUnwritten));
     }
 
     /// <summary>The cause no plugin of a selection escapes: no load order held, or git unable to run.</summary>

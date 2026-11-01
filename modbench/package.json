@@ -995,7 +995,7 @@
         },
         {
           "command": "modbench.mod.unignoreFile",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository && modbench.mod.holdsIgnoredFile"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository && modbench.mod.holdsIgnoreEntryFile"
         },
         {
           "command": "modbench.mod.addPublisherTag",
@@ -1698,7 +1698,7 @@
         },
         {
           "command": "modbench.mod.unignoreFile",
-          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bignored\\b/ && modbench.modlist.hasRepository",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bignoreEntry\\b/ && modbench.modlist.hasRepository",
           "group": "2_change@2"
         },
         {

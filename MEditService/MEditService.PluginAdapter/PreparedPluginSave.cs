@@ -38,10 +38,14 @@ public sealed class PreparedPluginSave : IDisposable
 
     /// <summary>The strings first and the binary last, each by one rename over the old file, so an
     /// interrupted commit leaves the old binary or the new one (plugins.md, Compile, story 5).</summary>
-    public void Commit()
+    public void Commit() => Commit(_ => false);
+
+    /// <summary>Commit, but a strings file whose path in the mod folder <paramref name="leaves"/> names stays as it is.</summary>
+    public void Commit(Func<string, bool> leaves)
     {
         foreach (var (tempStringsPath, finalStringsPath) in _stringsFiles)
         {
+            if (leaves($"Strings/{Path.GetFileName(finalStringsPath)}")) continue;
             Directory.CreateDirectory(Path.GetDirectoryName(finalStringsPath)
                 ?? throw new InvalidOperationException($"Expected '{finalStringsPath}' to have a parent directory."));
             File.Move(tempStringsPath, finalStringsPath, overwrite: true);

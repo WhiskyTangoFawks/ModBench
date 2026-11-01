@@ -1278,6 +1278,21 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(publisherTagItems(viewItem, facts)).toEqual(items);
   });
 
+  const ignoreItems = (viewItem: string, hasRepository: boolean): string[] =>
+    inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem, 'modbench.modlist.hasRepository': hasRepository }))
+      .filter((e) => ['modbench.mod.ignoreFile', 'modbench.mod.unignoreFile'].includes(e.command)).map((e) => e.command);
+
+  it.each([
+    ['file included', true, ['modbench.mod.ignoreFile']],
+    ['file included ignored', true, []],
+    ['file included ignored ignoreEntry', true, ['modbench.mod.unignoreFile']],
+    ['file included', false, []],
+    ['file included inOverwrite', true, []],
+    ['folder', true, []],
+  ])('on a %s row, with a repository %s, the ignore items are %j: unignore only on a row whose own path is an entry', (viewItem, hasRepository, items) => {
+    expect(ignoreItems(viewItem, hasRepository)).toEqual(items);
+  });
+
   const ON_THE_TREE = { focusedView: 'modbench.modList', listFocus: true, ...inInstance };
   const COPY = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
   const UNINSTALL = { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.mod.uninstall' };
@@ -1316,7 +1331,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
     ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
     ['modbench.mod.ignoreFile', { 'modbench.modlist.hasRepository': true, 'modbench.mod.holdsUnignoredFile': true }],
-    ['modbench.mod.unignoreFile', { 'modbench.modlist.hasRepository': true, 'modbench.mod.holdsIgnoredFile': true }],
+    ['modbench.mod.unignoreFile', { 'modbench.modlist.hasRepository': true, 'modbench.mod.holdsIgnoreEntryFile': true }],
     ['modbench.mod.addPublisherTag', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsTaggableRow': true }],
     ['modbench.mod.removePublisherTag', { 'modbench.mod.holdsPublisherTag': true }],
   ]);

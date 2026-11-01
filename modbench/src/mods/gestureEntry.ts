@@ -50,7 +50,8 @@ interface ModsKeyContext {
   readonly holdsNonSourceMod: boolean;
   readonly holdsIncludedFile: boolean;
   readonly holdsExcludedFile: boolean;
-  readonly holdsIgnoredFile: boolean;
+  /** A file the manifest ignores by an entry of its own path, which unignore takes back. */
+  readonly holdsIgnoreEntryFile: boolean;
   readonly holdsUnignoredFile: boolean;
 }
 
@@ -77,7 +78,7 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     holdsNonSourceMod: mods.some((row) => row.facts !== undefined && !row.facts.sourceMod),
     holdsIncludedFile: files.some((row) => row.exclusion === 'included'),
     holdsExcludedFile: files.some((row) => row.exclusion === 'excluded'),
-    holdsIgnoredFile: files.some((row) => row.ignoring === 'ignored'),
+    holdsIgnoreEntryFile: files.some((row) => row.ignoring === 'entry'),
     holdsUnignoredFile: files.some((row) => row.ignoring === 'unignored'),
   };
 }

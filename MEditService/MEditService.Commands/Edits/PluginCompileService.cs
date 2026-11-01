@@ -28,8 +28,8 @@ internal sealed class PluginCompileService(
             : PluginCompileOutcome.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
 
     /// <summary>The plugin compiled to its path, which the load order need not hold yet, as a fresh clone's build's does
-    /// not (source.md, Build, story 7).</summary>
-    public async Task<PluginCompileOutcome> CompileAsync(RegisteredPlugin registered)
+    /// not (source.md, Build, story 7). A strings file <paramref name="leavesUnwritten"/> names, by its path in the folder, is left.</summary>
+    public async Task<PluginCompileOutcome> CompileAsync(RegisteredPlugin registered, Func<string, bool>? leavesUnwritten = null)
     {
         var plugin = registered.Key;
         var loadOrder = loadOrderHolder.Current;
@@ -113,7 +113,7 @@ internal sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.InJudgedOrder().Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, tree, plugin, repository));
+        var saved = await tree.SaveAsync(registered.Path, loadOrderNames, content.Masters, save => Land(save, tree, plugin, repository, leavesUnwritten ?? (_ => false)));
         if (!saved.Holds(out var landed, out var failure))
         {
             return failure switch
@@ -145,10 +145,11 @@ internal sealed class PluginCompileService(
         return PluginCompileOutcome.Success(diagnostics);
     }
 
-    private static Answer<bool, PluginCompileOutcome> Land(PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository)
+    private static Answer<bool, PluginCompileOutcome> Land(
+        PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository, Func<string, bool> leavesUnwritten)
     {
         if (tree.DropsIn(save) is { Count: > 0 } drops) return Dropped(plugin, repository, drops);
-        return repository.WriteBinary(plugin, save.BinarySha256(), save.Commit).Holds(out var recorded, out var unwritten)
+        return repository.WriteBinary(plugin, save.BinarySha256(), () => save.Commit(leavesUnwritten)).Holds(out var recorded, out var unwritten)
             ? recorded
             : WriteFailed(plugin, unwritten.Reason);
     }

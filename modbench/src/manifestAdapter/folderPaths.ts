@@ -8,8 +8,10 @@ export const isUnderAny = (named: readonly string[], path: string): boolean =>
   named.some((one) => path === one || path.startsWith(`${one}/`));
 
 /** The paths of `exclude` that name one of `files` or a folder above one, which are the exclusions a manifest names. */
-export const exclusionsOfFiles = (exclude: readonly string[], files: ReadonlyMap<string, unknown>): string[] =>
-  exclude.filter((excluded) => [...files.keys()].some((path) => isUnderAny([excluded], path)));
+export const exclusionsOfFiles = (exclude: readonly string[], paths: Iterable<string>): string[] => {
+  const files = [...paths];
+  return exclude.filter((excluded) => files.some((path) => isUnderAny([excluded], path)));
+};
 
 /** The paths a source mod's build excludes: each `folder` excludes, and each `manifest` excludes that holds no file `folder`
  *  holds included. `folder` holds none to make the folder what `manifest` says. */

@@ -76,7 +76,7 @@ async function statusWith(values: (read: ReadValues) => StatusValues = (read) =>
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
 const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), packages: [MOD_ZIP], ...over });
 
@@ -125,7 +125,7 @@ describe('a mod\'s status against its manifest', () => {
     entries = [{ path: 'a.nif', hash: HELLO }];
     await manifested(manifest({ 'a.nif': HELLO }, { ignore: ['F4SE/Plugins/BetterConsole.mem', 'logs'] }));
 
-    expect(await status()).toEqual(heldAs({ ignored: ['F4SE/Plugins/BetterConsole.mem', 'logs/a.log'] }));
+    expect(await status()).toEqual(heldAs({ ignored: ['F4SE/Plugins/BetterConsole.mem', 'logs/a.log'], ignoreEntries: ['F4SE/Plugins/BetterConsole.mem', 'logs'] }));
   });
 
   it('after a fresh clone, names every file its manifest names gone, and none differing or named by no line', async () => {

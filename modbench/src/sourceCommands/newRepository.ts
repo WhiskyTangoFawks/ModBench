@@ -160,7 +160,7 @@ async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository
     const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) }, ignore);
     if ('why' in files) return files.why;
     const manifest: Manifest = {
-      packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: exclusionsOfFiles(value.exclude, files), ignore, files,
+      packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: exclusionsOfFiles(value.exclude, files.keys()), ignore, files,
     };
     const notRestored = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder, { folder, manifest });
     if (notRestored !== undefined) return `its source folder could not be restored from its manifest: ${notRestored}`;

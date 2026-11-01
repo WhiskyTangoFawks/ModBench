@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { ignoreFiles, type FileToIgnore } from '../ignoreFiles';
 
 const HA = 'AAAAAAAAAAA=';
@@ -20,11 +20,12 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 
 const fileOf = (mod: string, relativePath: string): FileToIgnore => ({ origin: { kind: 'mod', name: mod }, relativePath });
 
-function over(held: Partial<Manifest> | undefined, files: Record<string, string>, sourceFolders: Record<string, string> = {}) {
+function over(held: Partial<Manifest> | undefined, files: Record<string, string>, sourceFolders: Record<string, string> = {}, answers: InstanceAnswers = {}) {
   const folder = join(root, 'mods', 'ModA');
   const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(sourceFolders) }), {
     folderFiles: new Map([[folder, Object.keys(files)]]),
     hashes: new Map(Object.entries(files).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)),
+    ...answers,
   });
   return {
     fake,
@@ -53,12 +54,12 @@ describe('ignore file', () => {
     expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA]]) });
   });
 
-  it('creates the manifest of a mod that has none', async () => {
+  it('refuses a mod with no manifest, naming it, and writes none', async () => {
     const { run, manifest } = over(undefined, { [MEM]: HB, 'a.nif': HA });
 
-    await run([fileOf('ModA', MEM)], true);
+    const outcome = await run([fileOf('ModA', MEM)], true);
 
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM] });
+    expect([outcome.refused.map(({ reason }) => reason), await manifest()]).toEqual([['its mod has no manifest, so update manifest comes first'], undefined]);
   });
 
   it('refuses a file of Overwrite, naming why, and writes nothing', async () => {
@@ -68,6 +69,17 @@ describe('ignore file', () => {
     const outcome = await run([inOverwrite], true);
 
     expect([outcome, await manifest()]).toEqual([{ landed: [], refused: [{ item: inOverwrite, reason: 'Overwrite is not a mod.' }] }, undefined]);
+  });
+});
+
+describe('ignore file, of a mod installed from an installation file', () => {
+  it('records no package, since it records no file', async () => {
+    const installed = { path: '/downloads/ModA.7z', size: 10, hash: 'HHHHHHHHHHA=', entries: [{ path: 'a.nif', hash: HA }] };
+    const { run, manifest } = over({ files: new Map([['a.nif', HA]]) }, { [MEM]: HB, 'a.nif': HA }, {}, { installations: new Map([['ModA', { kind: 'read', answer: installed }]]) });
+
+    await run([fileOf('ModA', MEM)], true);
+
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA]]) });
   });
 });
 
@@ -92,11 +104,14 @@ describe('unignore file', () => {
     expect(calls.filter(({ verb }) => verb === 'writeSubmodules')).toEqual([]);
   });
 
-  it('refuses a file under an ignored folder, naming the folder', async () => {
-    const { run, ignoreOf } = over({ ignore: ['logs'] }, { 'logs/run.log': HB });
+  it('refuses a file under an ignored folder, naming the folder, while its sibling with an entry of its own lands', async () => {
+    const { run, manifest } = over({ ignore: ['logs', MEM] }, { 'logs/run.log': HB, [MEM]: HA });
 
-    const outcome = await run([fileOf('ModA', 'logs/run.log')], false);
+    const outcome = await run([fileOf('ModA', 'logs/run.log'), fileOf('ModA', MEM)], false);
 
-    expect([outcome.refused.map(({ reason }) => reason), await ignoreOf()]).toEqual([["its manifest ignores 'logs', a folder above it"], ['logs']]);
+    expect([outcome.landed, outcome.refused.map(({ item, reason }) => [item.relativePath, reason])]).toEqual([
+      [fileOf('ModA', MEM)], [['logs/run.log', "its manifest ignores 'logs', a folder above it"]],
+    ]);
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], files: new Map([[MEM, HA]]) });
   });
 });

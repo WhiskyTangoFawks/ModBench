@@ -26,6 +26,8 @@ export interface ModStatus {
   readonly namedByNoLine: readonly string[];
   /** The files the folder holds that its manifest ignores, by the paths the folder holds them at. */
   readonly ignored: readonly string[];
+  /** The paths the manifest ignores, as it names them. */
+  readonly ignoreEntries: readonly string[];
   readonly gone: readonly string[];
   /** The files no package holds the bytes of, nor a file of their name; `otherBytes`, those a package holds one of their name of. */
   readonly notInPackage: readonly string[];
@@ -42,7 +44,7 @@ export interface ModStatus {
 }
 
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
 const ordered = (paths: Iterable<string>): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
@@ -142,6 +144,7 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
     differing: ordered(files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : []))),
     namedByNoLine,
     ignored,
+    ignoreEntries: manifest.ignore,
     gone: ordered(files.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined ? [path] : []))),
     ...held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : {},
     noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHosted)),
