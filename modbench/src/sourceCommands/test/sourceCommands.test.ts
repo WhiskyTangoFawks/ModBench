@@ -216,7 +216,7 @@ describe('sourceCommands build, in mod order', () => {
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks, trash: vi.fn() }).build(['ModA']);
 
-    expect([tasks.runs.map(({ step }) => step.task), client.calls]).toEqual([['First'], []]);
+    expect([tasks.runs.map(({ step }) => 'task' in step ? step.task : ''), client.calls]).toEqual([['First'], []]);
     expect(outcome).toEqual({ landed: [{ ...landedOf('ModA'), failure: "The build stopped as its step 'First' exited with code 1." }], refused: [] });
   });
 

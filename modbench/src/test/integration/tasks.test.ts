@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, it } from 'mocha';
@@ -8,6 +8,7 @@ import { present } from '../../ports/present';
 import { stepTasks } from '../../sourceCommands/steps';
 import { hostTasks } from '../../tasks';
 
+const TEST_NODE = present(process.env.MODBENCH_TEST_NODE, 'the node .vscode-test.mjs hands the run');
 const TEST_PORT = present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run');
 
 const POWERSHELL_FAILURE_CODE = 1;
@@ -18,7 +19,7 @@ const RUNS: readonly { label: string; args: string[]; ran: string; code: number 
 ];
 
 describe('a step\'s user task, as .vscode-test.mjs writes it: a script that records its arguments and MEDIT_PORT in its folder and exits with the last', () => {
-  const tasks = stepTasks(hostTasks);
+  const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScripts: os.tmpdir() });
   const folders: string[] = [];
   afterEach(() => { for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true }); });
 
@@ -37,6 +38,25 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
     }));
 
     assert.deepStrictEqual(ran, RUNS.map(({ label, ran: recorded, code }) => [`step '${label}' exited with code ${code}`, `${recorded}\n${TEST_PORT}`]));
+  });
+});
+
+describe('a script step, run as a task Modbench makes', () => {
+  const folders: string[] = [];
+  afterEach(() => { for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true }); });
+
+  it('runs the script with the interpreter and its arguments in the mod\'s folder, in a terminal that holds medit\'s port and the folder medit.py is in, and answers its exit code', async () => {
+    const source = mkdtempSync(path.join(os.tmpdir(), 'modbench-script-source-'));
+    const folder = mkdtempSync(path.join(os.tmpdir(), 'modbench-script-mod-'));
+    folders.push(source, folder);
+    writeFileSync(path.join(source, 'fix.js'), "const args = process.argv.slice(2); require('fs').writeFileSync('ran.json', JSON.stringify({ args, port: process.env.MEDIT_PORT, pythonPath: process.env.PYTHONPATH })); process.exit(Number(args.at(-1)));");
+    const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScripts: source });
+
+    const why = await tasks.whyScriptFailed({ kind: 'script', script: 'fix.js', args: ['A.esp', '5'] }, { sourceFolder: source, folder });
+
+    const ran = JSON.parse(readFileSync(path.join(folder, 'ran.json'), 'utf8')) as { args: string[]; port: string; pythonPath: string };
+    assert.deepStrictEqual([why, ran.args, ran.port, path.basename(ran.pythonPath.split(path.delimiter)[0] ?? ''), existsSync(path.join(ran.pythonPath.split(path.delimiter)[0] ?? '', 'medit.py'))],
+      ["step 'fix.js' exited with code 5", ['A.esp', '5'], TEST_PORT, 'scripts', true]);
   });
 });
 

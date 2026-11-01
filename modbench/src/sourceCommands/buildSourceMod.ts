@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { exclusionsOfFiles, folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type TaskStep } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type DefaultScriptStep, type Manifest, type ScriptStep, type TaskStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -164,15 +164,17 @@ async function stampsIn(adapter: Adapter, folder: string): Promise<ReadonlyMap<s
   return stamps;
 }
 
-// Build, story 3: each file a task makes or changes is made by it.
-async function taskRan(deps: BuildDeps, mod: SourceModToBuild, step: TaskStep, made: Map<string, Made>): Promise<string | undefined> {
+// Build, story 3: each file a task or a script makes or changes is made by it.
+async function taskRan(deps: BuildDeps, mod: SourceModToBuild, step: TaskStep | ScriptStep | DefaultScriptStep, made: Map<string, Made>): Promise<string | undefined> {
   const before = await stampsIn(deps.adapter, mod.folder);
-  const failed = await deps.tasks.whyStepFailed(step, mod.folder);
+  const failed = step.kind === 'task'
+    ? await deps.tasks.whyStepFailed(step, mod.folder)
+    : await deps.tasks.whyScriptFailed(step, { sourceFolder: mod.sourceFolder, folder: mod.folder });
   for (const [path, stamp] of await stampsIn(deps.adapter, mod.folder)) if (before.get(path) !== stamp) made.set(path, 'byATask');
   return failed;
 }
 
-const wireStep = (step: Exclude<BuildStep, TaskStep>): BuildMod['step'] =>
+const wireStep = (step: Exclude<BuildStep, TaskStep | ScriptStep | DefaultScriptStep>): BuildMod['step'] =>
   (step.kind === 'pack' ? { pack: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
 
 type StepBuilt = BuildOutcome['landed'][number];
@@ -214,7 +216,7 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
   let outcome: ModBuilt = { mod: mod.name, compiled: [], refused: [], archivesRefused: [] };
   const ran = (failure?: string): Ran => ({ outcome, made, ...failure === undefined ? {} : { failure } });
   for (const [at, step] of mod.buildFile.steps.entries()) {
-    if (step.kind === 'task') {
+    if (step.kind === 'task' || step.kind === 'script' || step.kind === 'defaultScript') {
       const failed = await taskRan(deps, mod, step, made);
       if (failed !== undefined) return ran(`The build stopped as its ${failed}.`);
       continue;

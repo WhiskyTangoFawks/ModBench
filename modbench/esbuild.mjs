@@ -3,6 +3,7 @@ import * as esbuild from 'esbuild';
 
 rmSync('scripts', { recursive: true, force: true });
 cpSync('../scripts/medit.py', 'scripts/medit.py');
+cpSync('../scripts/default', 'scripts/default', { recursive: true, filter: (source) => !source.endsWith('__pycache__') });
 
 rmSync('schemas', { recursive: true, force: true });
 cpSync('../spec/formats', 'schemas', { recursive: true, filter: (source) => !source.endsWith('.md') });

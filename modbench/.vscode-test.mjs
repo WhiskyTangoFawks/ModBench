@@ -80,7 +80,7 @@ const shared = {
     '--logsPath', logs,
   ],
   // Linux's OS trash lives under XDG_DATA_HOME, and every run trashes folders of the same names.
-  env: { MODBENCH_TEST_PORT: String(port), MODBENCH_TEST_AGENT_PORT: String(agentPort), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: logs },
+  env: { MODBENCH_TEST_NODE: process.execPath, MODBENCH_TEST_PORT: String(port), MODBENCH_TEST_AGENT_PORT: String(agentPort), XDG_DATA_HOME: path.join(runDir, 'data'), MODBENCH_TEST_LOGS: logs },
   mocha: { timeout: 20000, ui: 'bdd' },
 };
 
