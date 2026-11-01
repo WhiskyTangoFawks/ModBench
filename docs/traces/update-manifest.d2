@@ -1,7 +1,7 @@
 # Update manifest, green: each mod's manifest from the mod as it is.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
-driving: "Mods · Source Control · Toolbox" {class: driving}
+driving: "Mods · Source · Source Control · Toolbox" {class: driving}
 sourcecommands: @../../spec/architecture/target-architecture.modbench_core.sourcecommands
 sourcecommands.label: source commands
 manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
@@ -14,7 +14,7 @@ instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "update manifest: the mods" {class: track}
+driving -> sourcecommands: "update manifest: the mods or source folders" {class: track}
 sourcecommands -> manifestadapter: "get: each mod's manifest" {class: track}
 instance -> manifestadapter: manifests {class: track}
 manifestadapter -> sourcecommands: "each mod's manifest" {class: track}

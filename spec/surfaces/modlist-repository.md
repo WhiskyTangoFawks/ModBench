@@ -63,8 +63,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none. On a source mod it records the source folder, since build records the mod's folder. Cites: ADR-0022; ADR-0027
-2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
+1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none: a mod's folder, or a source mod's source folder. It leaves a source mod's own folder to build, which records it. Cites: ADR-0022; ADR-0027
+2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
 5. A mod refused, and its manifest left as it was, when a package its manifest names is missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong
@@ -91,6 +91,7 @@ As a user, I want:
 | Mods view, title bar overflow | update manifest · restore from manifest…, on every manifest |
 | Source Control view, title bar overflow | update manifest · restore from manifest…, on every manifest |
 | Source Control view, welcome content with no repository | git init (Git init, story 2) |
+| Explorer menu, on the manifest in a source mod's source folder | update manifest ([source.md](source.md)) |
 | Toolbox, Modlist menu | git init, with no repository or one git init has not set up · update manifest · restore from manifest…, on every manifest |
 
 Each item but git init shows while the instance has a repository.

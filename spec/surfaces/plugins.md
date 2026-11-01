@@ -1,6 +1,6 @@
 # Plugins
 
-The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../out-of-scope/mo2.md) and [xedit.md](../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](commands.md) under Plugin and Record, `init source mod` and `build` under Mod, and Every view. What every view shares is in [common.md](common.md).
+The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../out-of-scope/mo2.md) and [xedit.md](../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](commands.md) under Plugin and Record, `init source mod` under Mod, and Every view. What every view shares is in [common.md](common.md).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -159,7 +159,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a compiled plugin) · load after… · create record… · init source mod… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · build (in a source mod) · copy value |
+| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a compiled plugin) · load after… · create record… · init source mod… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record, Menus and keys, story 4) · copy… · copy value · delete (Menus and keys, story 4) |
@@ -208,6 +208,7 @@ As a user, I want:
 4. Each file's line endings kept as written.
 5. An init source mod that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
 6. A mod that holds no plugin to become a source mod of its assets.
+7. Init to show me the source in the Explorer when it lands, since I work on it there. Cites: source.md
 
 ### Decompile
 

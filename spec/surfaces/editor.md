@@ -22,12 +22,12 @@ As a user, I want:
 2. Open, from a row's menu, to open the record pinned in the editor group I am in, so later clicks leave it alone. An extension's tree receives no double click, which pins in VS Code's Explorer. Cites: catalog `open`; VS Code's interaction
 3. A record already open in a tab to be shown, not opened twice. Cites: VS Code; common, A view, story 9
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Cites: catalog `open`; xEdit Compare Selected
-5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab is titled with its EditorID, or its FormKey when it has none. Cites: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
+5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab is titled with its EditorID, or its FormKey when it has none. Cites: ADR-0001; ADR-0020; source.md, The tree, story 1; ruling
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Cites: catalog `open`
 7. A tab I leave and come back to to be as I left it. Cites: VS Code keeps a tab's place
 8. A record given without a plugin, by any caller, to open the winning copy's file. Cites: xEdit lands on the winning copy
 9. The copy of a plugin with no plugin source, or with an unreadable one, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Cites: ADR-0007; ADR-0001
-10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. A container's tab shows its own fields, never its child lists. Cites: plugin-source.md, The tree, story 3; ruling
+10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. A container's tab shows its own fields, never its child lists. Cites: source.md, The tree, story 3; ruling
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Cites: ADR-0001; Existing tools
 12. Records of different record types opened at once to open one grid too. Cites: xedit.md, divergence 31
 

@@ -89,14 +89,12 @@ Each publisher tag is an indicator of its own, with the badge its publisher decl
 
 ## A source mod
 
-A source mod's folder is its build's output ([ADR-0027](../adr/0027-a-build-file-builds-a-source-mods-folder-from-its-source-folder.md)). As a user, I want:
+A source mod's folder is its build's output ([source.md](source.md), Build). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
 2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
-4. Build to make the folder hold its output, its manifest, the files its manifest ignores and the mod manager's files, and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0027; commands.md, Confirm what destroys
-5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
-6. Its build file checked against its schema as I type, with completion and each value's meaning on hover, as VS Code checks any JSON file with a schema. Cites: Existing tools; formats/build-file.md
+4. Uninstall to leave the source, so a build makes the mod again. Cites: source.md, Build, story 7
 
 ## Order and view state
 
@@ -118,7 +116,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest, on every manifest · restore from manifest…, on every manifest (the instance has a repository). Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · init source mod… (a mod that is not a source mod) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Mod menu | inline: open source (a source mod). Menu: open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · init source mod… (a mod that is not a source mod) · update manifest (a mod that is not a source mod) · restore from manifest… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · ignore or unignore (an instance with a repository) · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
@@ -178,30 +176,6 @@ As a user, I want:
 3. The mod to keep everything but its name: its place in mod order, its enabled state and its separator in every profile, and all its folder holds. A source mod's repository stays where it is. Cites: MO2; ADR-0007
 4. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active.
 
-### Build
-
-As a user, I want:
-
-1. Build to write the mod folder from its source folder by running its build file's steps in order. Cites: catalog `build`; ADR-0027
-2. A pack step to take the loose files it packs out of the mod folder, so the game reads one copy.
-3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a task makes or changes is recorded by its path alone, since a tool's output follows the tool, and is not checked. Cites: ADR-0022; ADR-0027; Existing tools; Never silently wrong
-4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
-5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
-6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
-7. From the palette with no mod, a pick of every source mod, one with no folder yet included, so a clone builds its mods back. Cites: commands.md, The entry point supplies what it knows
-8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, and what lifts that limit. The step's other plugins compile, and the refused plugin is left as it was.
-9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Cites: Never silently wrong
-10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it.
-11. A patcher to be a source mod whose step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
-12. Source mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
-13. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The repository, story 3
-14. Build as a task, so my chain builds before it deploys or publishes. Cites: commands.md, A task is an entry point for a chain
-15. A build from uncommitted or unpushed changes to land, with a warning that a clone does not rebuild it. Cites: Respect the user; Never silently wrong
-16. A step to be a built-in step, a task, or a Modbench script, a default one or one from the source folder, so what goes in the mod is only what my build file says. Cites: Respect the user; scripts.md, Default scripts
-17. A decompile step to replace plugin source without asking, sending what it replaces to the trash. Cites: commands.md, Confirm what destroys
-18. A failed step to stop its mod's build, so no step runs on what it left. Cites: Never silently wrong
-19. A script step to run its script with my window's Python, in a terminal, as a task Modbench makes and I never pick from Run Task. Cites: scripts.md, Running a Modbench script, stories 1–3
-
 ### Delete separator
 
 As a user, I want one confirmation for the selection that says the mods stay, and which separator they join. Cites: MO2; Confirm what destroys
@@ -227,7 +201,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 ### Uninstall
 
-As a user, I want one confirmation for the whole selection, naming the mods and what each loses: its folder, and a source mod's source, go to the trash, and it loses its place in mod order and its publisher tags. Cites: Confirm what destroys; MO2's recycle bin; A source mod, story 5
+As a user, I want one confirmation for the whole selection, naming the mods and what each loses: its folder goes to the trash, and it loses its place in mod order and its publisher tags. Cites: Confirm what destroys; MO2's recycle bin
 
 ### Check for updates
 

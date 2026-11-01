@@ -32,10 +32,10 @@ As a user, I want:
 As a user, I want:
 
 1. My agent to read any record the record index holds, in a compiled plugin or not: each plugin's copy, and the copy that wins. Cites: editor.md; editor-conflicts.md
-2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Cites: editor-referenced-by.md; plugin-source.md, In the text editor, story 4
+2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Cites: editor-referenced-by.md; source.md, In the text editor, story 4
 3. My agent to query the record index with one SQL SELECT. Cites: scripts.md, Reading, story 1; catalog, Record, `filter`
 4. My agent to edit a compiled plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Cites: ADR-0007; Any agent, story 2
-5. My agent to see the problems I see in the Problems panel for the source it changed. Cites: plugin-source.md, In the text editor, story 6
+5. My agent to see the problems I see in the Problems panel for the source it changed. Cites: source.md, In the text editor, story 6
 6. My agent never to edit a plugin with no plugin source. Editing needs plugin source, for my agent as for me. Cites: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Cites: catalog, Record, `open`
 8. My agent to change many records by a rule with a Modbench script, as I do. Cites: scripts.md; ADR-0021
