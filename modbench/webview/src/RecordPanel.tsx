@@ -191,8 +191,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, columns, editableColumns, partialFormColumns],
   );
 
-  // Every row opens expanded but a flags row, which opens collapsed (editor.md, Rows, story 3): the kept set holds
-  // the rows I toggled from how they open.
+  // Every row opens expanded but a flags row, which opens collapsed (editor.md, Rows, story 3): the stored set holds
+  // the rows toggled away from how they open.
   const collapsedNow = useMemo(() => {
     const collapsed = new Set(collapsedRows);
     for (const row of rows) {
