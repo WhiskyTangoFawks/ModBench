@@ -136,11 +136,10 @@ function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
   }];
 }
 
-// The manifest names a commit, so a build from changes no commit holds says so.
 function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
   return namedBuilt(outcome.landed.filter(({ uncommitted }) => uncommitted === true), {
-    one: 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.',
-    many: (count) => `Built ${count} mods from changes no commit holds, so their manifests' commits do not rebuild them.`,
+    one: 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.',
+    many: (count) => `Built ${count} mods from changes no commit holds, so the commits the instance repository pins do not rebuild them.`,
   });
 }
 
