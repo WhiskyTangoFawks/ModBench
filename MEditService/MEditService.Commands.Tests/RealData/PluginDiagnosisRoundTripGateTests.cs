@@ -135,7 +135,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         public List<LogEntry> Log { get; } = [];
 
-        public async Task<PluginInitiated> InitSourceModAsync()
+        public async Task<PluginInitialized> InitSourceModAsync()
         {
             var holder = new LoadOrderHolder();
             holder.Apply(_loadOrder);

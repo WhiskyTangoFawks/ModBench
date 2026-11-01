@@ -1160,7 +1160,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 
   it('mod menu: open, change, create, source control, copy, then destroy', () => {
-    expect(placed(rowMenu(MOD_ROW))).toEqual([
+    expect(placed(rowMenu(MOD_ROW).filter((e) => e.group !== 'inline'))).toEqual([
       ['modbench.mod.openFolder', '1_open'],
       ['modbench.mod.openSource', '1_open'],
       ['modbench.mod.openConflicts', '1_open'],
@@ -1184,6 +1184,13 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
+  it('offers open source inline on a source mod\'s row only', () => {
+    const inline = (viewItem: string) => menuOn(viewItem).filter(([, group]) => group === 'inline');
+
+    expect(inline('mod enabled sourceMod')).toEqual([['modbench.mod.openSource', 'inline']]);
+    expect(inline('mod enabled nonSourceMod')).toEqual([]);
+  });
+
   it('mod menu: enable and disable share one slot', () => {
     const slot = (command: string) => present(rowMenu(MOD_ROW).find((e) => e.command === command), command).group;
     expect(slot('modbench.mod.enable')).toBe(slot('modbench.mod.disable'));
@@ -1191,6 +1198,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
 
   const menuOn = (viewItem: string): [string, string][] =>
     placed(inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem })));
+  const menuWithoutInline = (viewItem: string) => menuOn(viewItem).filter(([, group]) => group !== 'inline');
 
   const OPEN_FOLDER_ENTRY: [string, string] = ['modbench.mod.openFolder', '1_open'];
   const OPEN_SOURCE_ENTRY: [string, string] = ['modbench.mod.openSource', '1_open'];
@@ -1247,7 +1255,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 
   it.each(menus)('the menu on a %s row', (contextValue, entries) => {
-    expect(menuOn(contextValue)).toEqual(entries);
+    expect(menuWithoutInline(contextValue)).toEqual(entries);
   });
 
   const ADD_PUBLISHER_TAG = 'modbench.mod.addPublisherTag';

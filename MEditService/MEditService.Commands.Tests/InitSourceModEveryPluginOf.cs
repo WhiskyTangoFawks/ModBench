@@ -27,19 +27,19 @@ internal static class InitSourceModEveryPluginOf
         answer.Holds(out var result, out var whole) ? [.. result.Refused.Select(r => r.Message)] : [whole.Message];
 
     /// <summary>The answer for a selection of one mod holding one plugin.</summary>
-    internal static PluginInitiated Only(this Answer<InitSourceModResult, SelectionRefusal<InitSourceModRefusal>> answer) =>
+    internal static PluginInitialized Only(this Answer<InitSourceModResult, SelectionRefusal<InitSourceModRefusal>> answer) =>
         !answer.Holds(out var result, out var whole)
-            ? new PluginInitiated(false, whole.Refusal, whole.Message)
+            ? new PluginInitialized(false, whole.Refusal, whole.Message)
             : result switch
             {
-                { Applied: [{ Plugins.Count: 1 }], Refused.Count: 0 } => new PluginInitiated(true, InitSourceModRefusal.None, ""),
-                { Applied.Count: 0, Refused: [var refused] } => new PluginInitiated(false, refused.Refusal, refused.Message),
+                { Applied: [{ Plugins.Count: 1 }], Refused.Count: 0 } => new PluginInitialized(true, InitSourceModRefusal.None, ""),
+                { Applied.Count: 0, Refused: [var refused] } => new PluginInitialized(false, refused.Refusal, refused.Message),
                 _ => throw new InvalidOperationException(
                     $"Expected one plugin's answer, got {result.Applied.Count} landed and {result.Refused.Count} refused."),
             };
 }
 
-internal sealed record PluginInitiated(bool Applied, InitSourceModRefusal Refusal, string Message);
+internal sealed record PluginInitialized(bool Applied, InitSourceModRefusal Refusal, string Message);
 
 /// <summary>Mods to init as the extension hands a mod with no file of the mod manager's.</summary>
 internal static class ToInitSourceMod

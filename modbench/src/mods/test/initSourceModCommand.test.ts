@@ -6,10 +6,10 @@ import { join } from 'node:path';
 vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
-import { handlers, showQuickPick, createQuickPick, PluginRowStandIn } from './sourceGestureHarness';
+import { handlers, showQuickPick, createQuickPick, executeCommand, PluginRowStandIn } from './sourceGestureHarness';
 
 import { registerInitSourceModCommand } from '../initSourceModCommand';
-import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
+import { instanceValueFixture, modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { type InitSourceModOutcome, type InitSourceModProgress, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -23,6 +23,12 @@ import { recordingTasks } from '../../test/recordingTasks';
 const MODS = mkdtempSync(join(tmpdir(), 'init-source-mod-mods-'));
 for (const mod of ['ModA', 'ModB', 'ModC']) mkdirSync(join(MODS, mod));
 afterAll(() => { rmSync(MODS, { recursive: true, force: true }); });
+
+const instanceWithSourceFolders = instanceValueFixture({
+  paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map([['ModA', '/source/ModA'], ['ModB', '/source/ModB']]) },
+});
+const revealed = (): (string | undefined)[] =>
+  executeCommand.mock.calls.filter((c) => c[0] === 'revealInExplorer').map((c) => c[1]?.fsPath);
 
 const picking = (picked: { commit: boolean } | undefined): void => { showQuickPick.mockResolvedValue(picked); };
 
@@ -76,7 +82,7 @@ describe('modbench.mod.initSourceMod', () => {
     const progressIn = (view: string) => ({ say: (message: string | undefined) => (view === 'modbench.modList' ? saidInMods : said).push(message) });
     const reporter = recordingReporter();
     registerInitSourceModCommand({
-      progressIn, instance: instanceThatReads, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
+      progressIn, instance: { ...instanceThatReads, value: instanceWithSourceFolders }, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.initSourceMod'), 'the init source mod command registerInitSourceModCommand registers'),
@@ -156,6 +162,41 @@ describe('modbench.mod.initSourceMod', () => {
 
     expect(commands.sent()).toEqual([['ModB']]);
     expect(reporter.landings).toEqual(['"ModB" is a source mod.']);
+  });
+
+  it('shows the source of the last mod that landed in the Explorer', async () => {
+    const commands = initSourceModCommands();
+    commands.answers({ landed: [modA([FIRST]), modB([OTHER])], refused: [] });
+    const { handler } = invokeInitSourceMod(commands);
+    const mods = [modRow('ModA'), modRow('ModB')];
+
+    await handler(mods[0], mods);
+
+    expect(revealed()).toEqual(['/source/ModB']);
+  });
+
+  it('shows no source when nothing landed', async () => {
+    const commands = initSourceModCommands();
+    commands.answers({ landed: [], refused: [] });
+    const { handler } = invokeInitSourceMod(commands);
+
+    await handler(modRow('ModA'));
+
+    expect(revealed()).toEqual([]);
+  });
+
+  it('warns when the source cannot be shown, and the mod still stands', async () => {
+    executeCommand.mockRejectedValueOnce(new Error('no explorer'));
+    const commands = initSourceModCommands();
+    commands.answers({ landed: [modA([FIRST])], refused: [] });
+    const { handler, reporter } = invokeInitSourceMod(commands);
+
+    await handler(row(FIRST));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'warning', message: 'Init source mod:', detail: '"ModA" is a source mod, but its source could not be shown in the Explorer: no explorer' },
+    ]);
+    expect(reporter.landings).toEqual(['"ModA" is a source mod.']);
   });
 
   it('warns of a note on a downloaded file that could not be read whole, and the mod still lands', async () => {
