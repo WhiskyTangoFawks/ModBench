@@ -1,40 +1,29 @@
 import type * as vscode from 'vscode';
-import { createModSync, createPluginSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
+import { createPluginSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
 import type { Instance } from './instanceLoader/instance';
-import type { ModSyncRun } from './modCommands/modCommands';
 import type { PluginSyncRun } from './pluginCommands/plugins';
 
-export interface InstanceSyncs {
+export interface PluginSyncOn {
   dispose(): void;
-  modSync: Sync;
   pluginSync: Sync;
 }
 
-interface InstanceSyncsDeps {
-  instance: Pick<Instance, 'subscribe' | 'value'>;
-  syncMods: ModSyncRun;
+interface PluginSyncDeps {
+  instance: Pick<Instance, 'subscribe'>;
   syncPlugins: PluginSyncRun;
   channel: SyncChannel;
 }
 
 // Termination: a write re-enters through the Instance adapter's signal. The next value agrees with
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
-export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: InstanceSyncsDeps): InstanceSyncs {
-  const { modOrderFile } = instance.value.managerNames;
-  const modSync = createModSync(syncMods, channel, modOrderFile);
+export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
   const pluginSync = createPluginSync(syncPlugins, channel);
-  const subscription = instance.subscribe(() => {
-    void modSync.run();
-    void pluginSync.run();
-  });
-  return { modSync, pluginSync, dispose: () => { subscription.dispose(); } };
+  const subscription = instance.subscribe(() => { void pluginSync.run(); });
+  return { pluginSync, dispose: () => { subscription.dispose(); } };
 }
 
-export function registerSyncCommands(
-  register: (command: string, handler: () => unknown) => vscode.Disposable, { modSync, pluginSync }: Pick<InstanceSyncs, 'modSync' | 'pluginSync'>,
-): vscode.Disposable[] {
-  return [
-    register('modbench.mod.sync', () => modSync.run()),
-    register('modbench.plugin.sync', () => pluginSync.run()),
-  ];
+export function registerPluginSyncCommand(
+  pluginSync: Pick<Sync, 'run'>, register: (command: string, handler: () => unknown) => vscode.Disposable,
+): vscode.Disposable {
+  return register('modbench.plugin.sync', () => pluginSync.run());
 }

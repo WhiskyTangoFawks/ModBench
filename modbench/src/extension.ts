@@ -6,7 +6,6 @@ import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
-import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
@@ -74,7 +73,8 @@ import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
 import { reachMEditFromEnvFile } from './agent/scriptEnvironmentFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
-import { instanceSyncs, registerSyncCommands } from './syncWiring';
+import { pluginSyncOn, registerPluginSyncCommand } from './syncWiring';
+import { modSyncOn, registerModSyncCommand } from './mods/modSync';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -177,12 +177,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
   own(instance.subscribe((value) => { modStatuses.derive(value); }));
-  const { modSync, pluginSync } = own(instanceSyncs({
-    instance, syncMods: modSyncOver(adapter), channel: outputChannel, syncPlugins: pluginSyncOver(adapter),
-  }));
-  ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
-  const sourceGestureRows = selectionInFocusedView(
-    own, deps.focusedView, [MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view], 'modbench.mod.sourceGestureRowsIn');
+  const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
+  own(registerModSyncCommand(modSync));
+  const { pluginSync } = own(pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter), channel: outputChannel }));
+  own(registerPluginSyncCommand(pluginSync, (command, handler) => vscode.commands.registerCommand(command, handler)));
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), pluginSync, modStatuses,
   }));
@@ -193,19 +191,15 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
   const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
-    instance, commands: modCommands(adapter), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter), copyReads: adapter, channel: outputChannel, modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
-    downloadedFileInstallReporting: {
-      reporter: reporterFor('downloadedFiles'), log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
-      progressViewId: DOWNLOADS_KEY_ARGS.view,
-    },
-    nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),
+    downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks: stepTasks(hostTasks), trash }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks: stepTasks(hostTasks), trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
-    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say, focusedView: deps.focusedView },
+    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
   }));
   const editing = own(editingFlow({
