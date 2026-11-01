@@ -11,7 +11,7 @@ export const file = (origin: string, relativePath: string, excluded = false): Or
 };
 
 export const folder = (origin: string, relativePath: string, excluded = false): OriginFolder =>
-  ({ relativePath, path: `/instance/${origin}/${relativePath}`, excluded });
+  ({ relativePath, path: `/instance/${origin}/${relativePath}`, includedPath: relativePath, excluded });
 
 /** An instance value over these mods, each listing these files, indexed as the Instance loader
  *  indexes them. */

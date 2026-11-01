@@ -54,7 +54,7 @@ const modM = new ModNode({ kind: 'mod', name: 'M', enabled: true });
 const modN = new ModNode({ kind: 'mod', name: 'N', enabled: true });
 const fileA = new FileNode(modM, origin, fileIn('/instance/mods/M', 'a.dds'), 'a.dds');
 const fileB = new FileNode(modM, origin, fileIn('/instance/mods/M', 'b.dds'), 'b.dds');
-const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/instance/mods/M/textures', excluded: false }, [], [], 'textures');
+const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/instance/mods/M/textures', includedPath: 'textures', excluded: false }, [], [], 'textures');
 const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, fileIn('/instance/mods/M', 'a.dds'), 'a.dds');
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {

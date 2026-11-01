@@ -1341,9 +1341,21 @@ describe('the agent server, running a gesture', () => {
       argument: [{ kind: 'file', origin: mod('B'), relativePath: 'F4SE/Plugins/BetterConsole.mem.mohidden' }],
       options: {},
     },
+    {
+      name: 'mod_add_publisher_tag carries a folder the mod manager excludes as the mod has it on disk, named by its own path',
+      value: instanceValueFixture({
+        mods: [{ kind: 'mod', name: 'B', enabled: true }],
+        foldersByMod: new Map([['B', [{ relativePath: 'Textures.mohidden', path: '/m/Textures.mohidden', includedPath: 'Textures', excluded: true }]]]),
+      }),
+      tool: 'mod_add_publisher_tag',
+      args: { argument: [{ mod: { name: 'B' }, path: 'Textures' }], options: { tag: 'Patched' } },
+      command: 'modbench.mod.addPublisherTag',
+      argument: [{ kind: 'file', origin: mod('B'), relativePath: 'Textures.mohidden' }],
+      options: { tag: 'Patched' },
+    },
     ...(['add', 'remove'] as const).map((direction): GestureCase => ({
       name: `mod_${direction}_publisher_tag carries each mod, or each file or folder by its path in its mod in the mod's own casing, and the tag as an Option`,
-      value: { ...CONFLICTED, foldersByMod: new Map([['B', [{ relativePath: 'Textures', path: '/m/Textures', excluded: false }]]]) },
+      value: { ...CONFLICTED, foldersByMod: new Map([['B', [{ relativePath: 'Textures', path: '/m/Textures', includedPath: 'Textures', excluded: false }]]]) },
       tool: `mod_${direction}_publisher_tag`,
       args: { argument: [{ mod: { name: 'C' } }, { mod: { name: 'B' }, path: 'textures' }, { mod: { name: 'C' }, path: 'meshes/X.NIF' }], options: { tag: 'Include' } },
       command: `modbench.mod.${direction}PublisherTag`,

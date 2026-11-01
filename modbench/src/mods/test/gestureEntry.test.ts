@@ -129,7 +129,7 @@ describe('what the Mods keys read off the selection', () => {
       ({ relativePath, path: `/instance/mods/On/${relativePath}`, sourcePath: `/instance/mods/On/${relativePath}`, excluded, markedExcluded, includedPath: relativePath });
     const included = new FileNode(enabledMod, origin, fileAt('a.dds', false, false), 'a.dds');
     const excluded = new FileNode(enabledMod, origin, fileAt('b.dds.mohidden', true, true), 'b.dds.mohidden');
-    const hidingFolder = new FolderNode(enabledMod, origin, { relativePath: 'x.mohidden', path: '/instance/mods/On/x.mohidden', excluded: true }, [], [], 'x.mohidden');
+    const hidingFolder = new FolderNode(enabledMod, origin, { relativePath: 'x.mohidden', path: '/instance/mods/On/x.mohidden', includedPath: 'x', excluded: true }, [], [], 'x.mohidden');
     const plainInFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/c.dds', true, false), 'c.dds');
     const markedInFolder = new FileNode(hidingFolder, origin, fileAt('x.mohidden/d.dds.mohidden', true, true), 'd.dds.mohidden');
 

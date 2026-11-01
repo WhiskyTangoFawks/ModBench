@@ -35,7 +35,7 @@ function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
     const segments = relativePath.split('/');
     for (let depth = 1; depth < segments.length; depth++) {
       const folder = segments.slice(0, depth).join('/');
-      byPath.set(folder, { relativePath: folder, path: path.slice(0, path.length - relativePath.length + folder.length), excluded: false });
+      byPath.set(folder, { relativePath: folder, path: path.slice(0, path.length - relativePath.length + folder.length), includedPath: folder, excluded: false });
     }
   }
   return [...byPath.values()];
@@ -118,9 +118,9 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
   it('an empty folder is a row with no expander, and a folder holding only an empty folder opens into it, as the Explorer\'s do', async () => {
     const provider = providerOver([mod('Armour')], { Armour: [file('Armour.esp')] }, [], {
       byMod: { Armour: [
-        { relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false },
-        { relativePath: 'outer', path: '/instance/mods/Armour/outer', excluded: false },
-        { relativePath: 'outer/inner', path: '/instance/mods/Armour/outer/inner', excluded: false },
+        { relativePath: 'empty', path: '/instance/mods/Armour/empty', includedPath: 'empty', excluded: false },
+        { relativePath: 'outer', path: '/instance/mods/Armour/outer', includedPath: 'outer', excluded: false },
+        { relativePath: 'outer/inner', path: '/instance/mods/Armour/outer/inner', includedPath: 'outer/inner', excluded: false },
       ] },
     });
     const children = await provider.getChildren(await rootOf(provider, ModNode, 'Armour'));
@@ -218,21 +218,21 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   it('carries where each folder sits as the value names it, by its whole path in its mod, in a mod and in Overwrite', async () => {
     const provider = providerOver([mod('Armour')], { Armour: [file('meshes/textures/a.nif'), file('textures/armour/a.dds')] }, [file('F4SE/a.log')], {
       byMod: { Armour: [
-        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes', excluded: false },
-        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures', excluded: false },
-        { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false },
-        { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', excluded: false },
+        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes', includedPath: 'meshes', excluded: false },
+        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures', includedPath: 'meshes/textures', excluded: false },
+        { relativePath: 'textures', path: '/instance/mods/Armour/textures', includedPath: 'textures', excluded: false },
+        { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', includedPath: 'textures/armour', excluded: false },
       ] },
-      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false }],
+      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', includedPath: 'F4SE', excluded: false }],
     });
     const textures = expectInstanceOf(await childNamed(provider, await rootOf(provider, ModNode, 'Armour'), 'textures'), FolderNode);
     const armour = expectInstanceOf(await childNamed(provider, textures, 'armour'), FolderNode);
     const f4se = expectInstanceOf(await childNamed(provider, await rootOf(provider, OverwriteNode, 'Overwrite'), 'F4SE'), FolderNode);
 
     expect([textures.folder, armour.folder, f4se.folder]).toEqual([
-      { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false },
-      { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', excluded: false },
-      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false },
+      { relativePath: 'textures', path: '/instance/mods/Armour/textures', includedPath: 'textures', excluded: false },
+      { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', includedPath: 'textures/armour', excluded: false },
+      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE', includedPath: 'F4SE', excluded: false },
     ]);
   });
 
@@ -264,7 +264,7 @@ describe('a row\'s context, which the publisher tag items of the menus read (mod
     const value = instanceValueFixture({
       mods: [mod('M')],
       filesByMod: new Map([['M', [file('textures/a.dds'), file('textures/b.dds')]]]),
-      foldersByMod: new Map([['M', [{ relativePath: 'textures', path: '/instance/mods/textures', excluded: false }]]]),
+      foldersByMod: new Map([['M', [{ relativePath: 'textures', path: '/instance/mods/textures', includedPath: 'textures', excluded: false }]]]),
       overwriteFiles: [file('o.log', '/instance/overwrite/o.log'), file('p.log', '/instance/overwrite/p.log')],
       paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M']]), sourceDirs: new Map() },
     });
@@ -485,7 +485,7 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
   });
 
   it('a mod whose only match is an empty folder is shown, and opens to it', async () => {
-    const empty: OriginFolder = { relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false };
+    const empty: OriginFolder = { relativePath: 'empty', path: '/instance/mods/Armour/empty', includedPath: 'empty', excluded: false };
     const provider = filtered('empty', true, { mods: [mod('Armour')], files: { Armour: [] }, folders: { Armour: [empty] } });
     const row = await rootOf(provider, ModNode, 'Armour');
 
@@ -526,7 +526,7 @@ describe('a file row\'s context, which the File menu\'s exclude or include reads
 
   const rowAt = async (path: string[]) => {
     const files = [file('a.dds'), excludedFile('b.dds.mohidden'), excludedFile('Textures.mohidden/a.dds', false), excludedFile('Textures.mohidden/b.dds.mohidden')];
-    const hidden: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', excluded: true };
+    const hidden: OriginFolder = { relativePath: 'Textures.mohidden', path: '/instance/mods/Textures.mohidden', includedPath: 'Textures', excluded: true };
     const provider = providerOver([mod('M')], { M: files }, [], { byMod: { M: [hidden] } });
     let row: ModlistNode = await rootOf(provider, ModNode, 'M');
     for (const label of path) row = await childNamed(provider, row, label);

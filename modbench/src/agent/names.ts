@@ -1,6 +1,6 @@
 import { foldPath } from '../instanceLoader/fileConflictIndex';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
-import { sameEntry, type OriginFile, type OriginFolder } from '../instanceAdapter/instanceAdapter';
+import { sameEntry, type OriginFolder } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
@@ -65,8 +65,7 @@ export interface FileNamed {
   relativePath: string;
 }
 
-const ownPathOf = (entry: OriginFolder | OriginFile): NamedPath =>
-  ({ ownPath: 'includedPath' in entry ? entry.includedPath : entry.relativePath, relativePath: entry.relativePath });
+const ownPathOf = ({ includedPath, relativePath }: OriginFolder): NamedPath => ({ ownPath: includedPath, relativePath });
 
 function pathMatches(own: readonly NamedPath[], path: string): NamedPath[] {
   const folded = own.filter(({ ownPath }) => foldPath(ownPath) === foldPath(path));

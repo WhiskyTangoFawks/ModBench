@@ -378,19 +378,19 @@ export interface Subscription {
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
 /** A folder in an origin, by the relative path the origin's own tree names it with, where it
- *  sits, and whether the mod manager keeps it from the game, by its own mark or a folder's above
- *  it. */
+ *  sits, the path it has when nothing excludes it, and whether the mod manager keeps it from the
+ *  game, by its own mark or a folder's above it. */
 export interface OriginFolder {
   readonly relativePath: string;
   readonly path: string;
+  readonly includedPath: string;
   readonly excluded: boolean;
 }
 
 /** A file in an origin, as a folder is, and where it is read from: a link's target. It carries
- *  the path it has when nothing excludes it; `markedExcluded` holds when its own mark excludes it. */
+ *  `markedExcluded` holds when its own mark excludes it. */
 export interface OriginFile extends OriginFolder {
   readonly sourcePath: string;
-  readonly includedPath: string;
   readonly markedExcluded: boolean;
 }
 
