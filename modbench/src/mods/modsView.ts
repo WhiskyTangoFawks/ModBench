@@ -29,6 +29,7 @@ import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
+import { publishBuildTargets } from './buildTargets';
 import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
