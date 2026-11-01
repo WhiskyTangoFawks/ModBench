@@ -52,6 +52,18 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
     expect(judge(['B.esp', 'A.esp'], facts)[0]?.plugins).toEqual([{ origin: 'From A.esp', filename: 'A.esp' }, { origin: 'From B.esp', filename: 'B.esp' }]);
   });
 
+  it('reads a master named in another case as present', () => {
+    const facts = factsFrom({ 'Base.ESM': {}, 'Patch.esp': { masters: ['base.esm'] } });
+
+    expect(judge(['Base.ESM', 'Patch.esp'], facts)).toEqual([]);
+  });
+
+  it('judges only the masters a plugin names, not the masters of those', () => {
+    const facts = factsFrom({ 'A.esm': { masters: ['Ghost.esm'] }, 'B.esp': { masters: ['A.esm'] } });
+
+    expect(judge(['A.esm', 'B.esp'], facts).map((broken) => broken.plugins.map((plugin) => plugin.filename))).toEqual([['A.esm']]);
+  });
+
   it('breaks, at Error, a plugin whose master is not in the order', () => {
     const facts = factsFrom({ 'B.esp': { masters: ['Ghost.esm'] } });
 

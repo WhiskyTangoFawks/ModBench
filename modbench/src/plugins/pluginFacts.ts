@@ -155,7 +155,7 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[] = []): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[]): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
