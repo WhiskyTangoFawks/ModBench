@@ -68,7 +68,7 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 | Label | the file's or folder's name | VS Code's Explorer |
 | Icon | the file icon theme's icon | VS Code's Explorer |
 | Colour | greyed when the game does not get the file (The tree, story 8) | |
-| Description | differs ([modlist-repository.md](modlist-repository.md), Status) | |
+| Description | ignored, or differs ([modlist-repository.md](modlist-repository.md), The manifest, story 11; Status) | |
 | Indicators | a badge at the right edge for each publisher tag that covers it ([Indicators](#indicators)) | [publishing.md](publishing.md), Publisher tags |
 | Tooltip | the path in its mod | |
 
@@ -94,7 +94,7 @@ A source mod's folder is its build's output ([ADR-0027](../adr/0027-a-build-file
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
 2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
-4. Build to make the folder hold what ADR-0027 names and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0027; commands.md, Confirm what destroys
+4. Build to make the folder hold its output, its manifest, the files its manifest ignores and the mod manager's files, and nothing else, sending each file it replaces or removes to the trash. Cites: ADR-0027; commands.md, Confirm what destroys
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
 6. Its build file checked against its schema as I type, with completion and each value's meaning on hover, as VS Code checks any JSON file with a schema. Cites: Existing tools; formats/build-file.md
 
@@ -118,10 +118,10 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest, on every manifest · restore from manifest…, on every manifest (the instance has a repository). Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · init source mod… (a mod that is not a source mod) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
-| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
+| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · ignore or unignore (an instance with a repository) · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
 | Folder menu | open folder · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a mod or a separator. Ctrl+C: copy value. |

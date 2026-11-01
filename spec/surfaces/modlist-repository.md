@@ -28,6 +28,8 @@ A mod's installation files are the downloaded files the mod was installed from. 
 7. Each package to name its version when one is known, so an upgrade reads in a git diff as the versions it moves between.
 8. A plugin's flags I change to need no source mod. Cites: ADR-0022
 9. A plugin I rename to need no source mod. Cites: ADR-0022
+10. Each package's host taken from its downloaded file's own metadata, never the mod's, so stale mod metadata never names a host the file did not come from. Cites: Never silently wrong
+11. A file in a mod I ignore, such as one the game rewrites on every run, neither recorded nor touched, so it never reads as changed: update manifest and init source mod leave it out, status never reads it as differing, and restore and build neither write nor trash it. Cites: commands.md, One identity
 
 ## Status
 
@@ -38,7 +40,7 @@ As a user, I want:
 3. Status to cost only what changed since Modbench last read it on this machine, and a clone to read a file as differing only when its bytes do. Cites: ADR-0003
 4. The Mods view's badge to count the mods that differ or have no manifest. Cites: VS Code's view badge
 5. A file a clone cannot rebuild to say why: a package holds a file of its name with other bytes, or no package holds its bytes. Cites: Never silently wrong
-6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and, when the mod holds a plugin, points at decompile and commit. Cites: mods.md, What install does, story 3; Respect the user
+6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and points at init source mod. Cites: mods.md, What install does, story 3; Respect the user
 7. An installation file the mod manager names that is missing or unreadable as a Warning in the Problems panel, naming the file and which of the two. Modbench never repairs the name. Cites: common, Reporting; Never silently wrong; Respect the user
 8. A file whose manifest changes how the game loads it not to read as differing when that change is its only difference. Cites: ADR-0022
 
@@ -76,9 +78,10 @@ As a user, I want:
 1. Each folder to become what its manifest says, a source mod's by its build, sending each file restore replaces or removes to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022; commands.md, Confirm what destroys
 2. Restore to ask nothing, since the trash takes back each file it replaces or removes. Cites: commands.md, Confirm what destroys
 3. A source mod left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
-4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the pinned file. A clone then restores with no file fetched by hand. Cites: Minimal by default
+4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the pinned file. A clone then restores with no Nexus file fetched by hand. Cites: Minimal by default
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
 6. A source mod's repository cloned when it is absent, and never moved when it is at another commit than the one the modlist pins, since my repository is mine to move. Cites: ADR-0003
+7. A package this machine lacks whose host is an address, named with that address, so I fetch it by hand. Cites: Deferred, item 2
 
 ## Menus and keys
 

@@ -4,7 +4,7 @@ A source mod's build file says how its build makes the mod's folder from the sou
 
 ## Consequences
 
-- The mod folder is the build's output, its manifest and the mod manager's files, and nothing else.
+- Build owns the mod folder, so a file in it that the source mod does not account for goes.
 
 ## Alternatives rejected
 

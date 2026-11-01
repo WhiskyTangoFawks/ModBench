@@ -1,6 +1,6 @@
 # Editor: the record panel
 
-The record panel shows a record as its file, with every active plugin's copy beside it: a row for each field, a column for each copy. Opened on several records, it shows them side by side instead. Its template is xEdit's View grid ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gestures are in [commands.md](commands.md) under Record, Plugin, Mod (`decompile and commit`, `build`) and Every view.
+The record panel shows a record as its file, with every active plugin's copy beside it: a row for each field, a column for each copy. Opened on several records, it shows them side by side instead. Its template is xEdit's View grid ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gestures are in [commands.md](commands.md) under Record, Plugin, Mod (`init source mod`, `build`) and Every view.
 
 The Editor surface has three more files:
 
@@ -73,7 +73,7 @@ A column's header tells me when the game does not use that copy, and when I cann
 | `(overridden)` | the plugin is an overridden plugin | that the game loads that mod's file instead, naming the mod | GLOSSARY.md, Overridden plugin |
 | `(not active)` | the plugin is not active | that the game does not load it, so no other copy is compared | ADR-0012 |
 | `(Partial Form)` | this copy carries only its children | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
-| `(read-only)` | I cannot edit this copy here | why, and what would let me: a game plugin is never edited; Overwrite is not a mod, so move the plugin into one; a plugin with no plugin source takes decompile and commit; an unreadable plugin source takes decompile | ADR-0007 |
+| `(read-only)` | I cannot edit this copy here | why, and what would let me: a game plugin is never edited; Overwrite is not a mod, so move the plugin into one; a plugin with no plugin source takes init source mod; an unreadable plugin source takes decompile | ADR-0007 |
 
 A column shows one status, the first in this table that applies. A Partial Form or overridden column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.
 
@@ -129,7 +129,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves, and on a templated field) · open field value (on a text field) · add (on an array, or an element of one) · move up · move down (on an element of an array that takes move, editor-fields.md, Arrays) · copy value · remove (on an element) |
-| Column header | referenced by · decompile and commit (a mod that is not a source mod) · decompile (in a source mod) · build (in a source mod) · copy… · delete (a compiled plugin) |
+| Column header | referenced by · init source mod… (a mod that is not a source mod) · decompile (in a source mod) · build (in a source mod) · copy… · delete (a compiled plugin) |
 | The tab's title bar | collapse no conflict, or show no conflict, whichever applies |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
@@ -139,7 +139,7 @@ As a user, I want:
 2. Open field value to open the field's text in a text editor tab beside the panel, titled `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long value can still be read. Cites: xedit.md, divergences 2 and 6; catalog `open field value`
 3. Copy on a column to copy that plugin's copy of the record, as in Plugins. Cites: catalog `copy`; xEdit's column header menu
 4. Delete on a column to remove that plugin's copy of the record. Cites: catalog `delete`; xEdit's column header menu; xedit.md, divergence 41
-5. Decompile on a column to act on that column's plugin. Decompile and commit, and build, act on its plugin's mod. Cites: catalog `decompile`, `decompile and commit`, `build`
+5. Decompile on a column to act on that column's plugin. Init source mod, and build, act on its plugin's mod. Cites: catalog `decompile`, `init source mod`, `build`
 
 ## Reporting
 

@@ -18,6 +18,7 @@ All three hold: it is hard to reverse, a reader would be surprised by it without
 - The title is the decision, as the shortest phrase that states it.
 - The opening paragraph is one to three sentences. The first states the decision, and the rest say why.
 - Consequences, when present, are effects a reader holding only the paragraph would get wrong, each with its reason.
+- A consequence states a rule, never a closed list of cases. The lower document that owns the cases holds the list.
 - Alternatives rejected, when present, are options a reader would propose, each with why not.
 - A new ADR takes the number one past the highest in this folder.
 - Revising a decision rewrites the ADR in place. Git holds its history.

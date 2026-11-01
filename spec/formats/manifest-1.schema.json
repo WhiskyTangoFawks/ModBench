@@ -21,6 +21,12 @@
       "items": { "$ref": "#/$defs/path" },
       "uniqueItems": true
     },
+    "ignore": {
+      "description": "The paths in the folder that the manifest neither records nor restores.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/path" },
+      "uniqueItems": true
+    },
     "flags": {
       "description": "Each plugin whose header flags the manifest sets apart from its package's copy, by its path, with each flag it sets or clears.",
       "type": "object",
@@ -112,7 +118,12 @@
           "description": "Where a clone fetches the file. Absent when Modbench knows no host for it.",
           "type": "object",
           "properties": {
-            "nexus": { "$ref": "#/$defs/nexusFile" }
+            "nexus": { "$ref": "#/$defs/nexusFile" },
+            "url": {
+              "description": "The address a clone downloads the file from by hand.",
+              "type": "string",
+              "format": "uri"
+            }
           },
           "minProperties": 1,
           "maxProperties": 1,
