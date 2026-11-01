@@ -12,17 +12,17 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     private readonly string _sourceFolder = sourceFolder;
     private readonly string _gitDir = GitDirOf(sourceFolder);
 
-    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
-    /// exists. A <c>.git</c> with no <c>main</c> is init's own, half made, or
-    /// <see cref="HoldsAnotherRepository"/>.</summary>
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists, or one init
+    /// was asked to commit nothing. Any other <c>.git</c> is <see cref="HoldsAnotherRepository"/>.</summary>
     internal static bool HoldsRepository(string sourceFolder)
     {
         var gitDir = GitDirOf(sourceFolder);
-        return Directory.Exists(gitDir) && HasMainBranch(gitDir);
+        return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || HoldsUncommittedInit(gitDir));
     }
 
     internal const string InitMarkSection = "medit";
     internal const string InitMarkKey = "init";
+    internal const string UncommittedKey = "uncommitted";
 
     /// <summary>A <c>.git</c> with no <c>main</c> and no init mark: someone else's, which init never
     /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
@@ -40,6 +40,13 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         if (!File.Exists(dotGit)) return dotGit;
         var line = File.ReadLines(dotGit).FirstOrDefault() ?? "";
         return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), sourceFolder) : dotGit;
+    }
+
+    // Set when init was asked to commit nothing, so a crashed init's half-made repository is not mistaken for it.
+    private static bool HoldsUncommittedInit(string gitDir)
+    {
+        var config = Path.Combine(gitDir, "config");
+        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim().StartsWith($"{UncommittedKey} =", StringComparison.Ordinal));
     }
 
     private static bool IsMarkedByInit(string gitDir)

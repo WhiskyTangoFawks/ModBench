@@ -43,6 +43,20 @@ public sealed class SourceRepositoryInitTests : IDisposable
     }
 
     [Fact]
+    public void AnInitAskedNotToCommit_WritesTheFilesAndMakesTheModASourceModWithNoCommit()
+    {
+        var source = TestAdapters.Source();
+
+        Assert.Null(source.Init(_sourceFolder, SourceInits.BuildFile, [], [Asset("textures/a.dds", "texture")], commit: false));
+
+        Assert.True(source.IsSourceMod(_sourceFolder));
+        Assert.Equal(string.Empty, Git("for-each-ref", "refs/heads"));
+        Assert.True(File.Exists(Path.Combine(_sourceFolder, "textures", "a.dds")));
+        Assert.True(File.Exists(Path.Combine(_sourceFolder, "build.json")));
+        Assert.Contains("textures/a.dds", Git("status", "--porcelain", "-uall"));
+    }
+
+    [Fact]
     public void ARepair_IsTheSecondCommit_HoldingOnlyThatPluginsRepairedTree()
     {
         var repaired = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"repaired\":1}"u8.ToArray())], "Repair A.esp");

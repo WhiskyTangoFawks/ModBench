@@ -405,7 +405,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
-      { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
+      { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not init source mod 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second], true), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
     ];

@@ -373,7 +373,7 @@ describe('sourceCommands decompileAndCommit', () => {
     expect([handed, outcome.refused]).toEqual([[], [{ item: 'ModA', reason: `its '${path.split('/')[0] ?? path}' is where its source folder holds its own` }]]);
   });
 
-  it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, decompile and commit)', async () => {
+  it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, init source mod)', async () => {
     const folder = folderOf('ModA');
     const client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndCommit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
@@ -431,7 +431,6 @@ describe('sourceCommands decompileAndCommit', () => {
   });
 
   it.each<[string, InstanceAnswers, string]>([
-    ['whose installation file cannot be read', { installations: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) }, 'EACCES'],
     ['a file of whose folder cannot be read', { folderFiles: new Map([[FOLDER, ['a.dds']]]) }, `a file of its folder could not be read: no answer fixed for ${join(FOLDER, 'a.dds')}`],
   ])('refuses a mod %s, naming why, and commits the rest', async (_case, answers, reason) => {
     const { client, handed } = committing();
@@ -440,6 +439,24 @@ describe('sourceCommands decompileAndCommit', () => {
 
     expect(handed).toMatchObject([{ name: 'ModB' }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason }] });
+  });
+
+  it('does not refuse a mod whose installation file cannot be read: no package yields its files, so each is an asset (modlist-repository.md, Update manifest, story 6)', async () => {
+    const { client, handed } = committing();
+    const adapter = modsAt({ ...hashed({ 'ModA.esp': 'P', 'scripts/b.pex': 'B' }), installations: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) });
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['ModA']);
+
+    expect([handed[0]?.repository.assets, outcome.refused]).toEqual([['scripts/b.pex'], []]);
+  });
+
+  it.each([[undefined, true], [true, true], [false, false]])('hands mEdit the mod\'s folder and, given %s, commit %s (plugins.md, Init source mod, stories 1 and 3)', async (asked, handedCommit) => {
+    const { client, handed } = committing();
+
+    await sourceCommands({ client, adapter: modsAt(hashed({ 'a.ini': 'I' })), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
+      .decompileAndCommit(['ModA'], asked === undefined ? {} : { commit: asked });
+
+    expect(handed).toMatchObject([{ name: 'ModA', modFolder: '/instance/mods/ModA', commit: handedCommit }]);
   });
 
   it('refuses a mod whose name gives it no source folder, naming why', async () => {

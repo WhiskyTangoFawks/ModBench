@@ -37,6 +37,6 @@ export function severalPackagesNote(status: ModStatus, holdsPlugin: boolean): St
   if (packages.length < 2 || manifestFile === undefined) return undefined;
   const isSourceMod = repositoryOf(status) !== undefined;
   const upgrade = `An upgrade replaces the files of every one of the ${packages.length} packages: ${packages.map(packageNoun).join(', ')}.`;
-  const decompile = holdsPlugin && !isSourceMod ? ' To keep edits to its plugin, run Decompile and Commit Mod.' : '';
+  const decompile = holdsPlugin && !isSourceMod ? ' To keep edits to its plugin, run Init Source Mod.' : '';
   return { file: manifestFile, message: `Made from several packages. ${upgrade}${decompile}` };
 }

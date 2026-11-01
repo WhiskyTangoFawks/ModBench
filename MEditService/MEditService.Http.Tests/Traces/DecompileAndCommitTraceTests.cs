@@ -58,7 +58,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         {
             mods = new[]
             {
-                new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
+                new { name = Origin, modFolder, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
             },
         });
 
@@ -75,12 +75,13 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         { "no mod", """{"mods": []}""" },
         { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "repository": {"buildFile": "{}"}}]}""" },
-        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
-        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
-        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
-        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"buildFile": "{}"}}]}""" },
+        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
+        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
+        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
+        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]
@@ -104,25 +105,10 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostJson(
             "/decompile-and-commit",
-            $$$"""{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
+            $$$"""{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task InitOfAModThatProvidesNoPlugin_RefusesThatMod_AndLandsTheOthers()
-    {
-        await Loaded();
-
-        var response = await Client.DecompileAndCommit([Origin, "NoSuchMod"]);
-
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal([Origin], body.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
-        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
-        Assert.Equal(("NoSuchMod", "ModProvidesNoPlugin"), (refused.GetProperty("item").GetString(), refused.GetProperty("refusal").GetString()));
-        Assert.Contains("NoSuchMod", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

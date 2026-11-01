@@ -33,7 +33,7 @@ import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
-import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
+import { registerInitSourceModCommand } from './initSourceModCommand';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
 import type { CheckForUpdates } from '../modCommands/checkForUpdates';
@@ -48,9 +48,9 @@ interface SourceGestureDeps {
   commands: SourceCommands;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
-  /** The Plugins view's message line, where decompile and commit says its phase. */
+  /** The Plugins view's message line, where init source mod says its phase. */
   say: (message: string | undefined) => void;
-  /** Registers the source mods' repositories once a decompile and commit landed. */
+  /** Registers the source mods' repositories once a init source mod landed. */
   registerRepositories: () => Promise<void>;
 }
 
@@ -210,8 +210,8 @@ function registerSourceGestures(
   const { commands, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
-    registerDecompileAndCommitCommand({
-      progress: { say }, instance, commands, reporter: reporterFor('mod.decompileAndCommit'), onCommitted: registerRepositories,
+    registerInitSourceModCommand({
+      progress: { say }, instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories,
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({

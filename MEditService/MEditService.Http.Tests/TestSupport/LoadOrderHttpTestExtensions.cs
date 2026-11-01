@@ -32,22 +32,27 @@ public static class LoadOrderHttpTestExtensions
 
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
-    private static readonly ConditionalWeakTable<HttpClient, Dictionary<string, string>> Sent = [];
+    private static readonly ConditionalWeakTable<HttpClient, Dictionary<string, (string SourceFolder, string Folder)>> Sent = [];
 
     /// <summary>The source folder the last load order this client put names for <paramref name="mod"/>, as Modbench
     /// hands init the one it named; the mod's own name when it named none.</summary>
     internal static string SourceFolderSentFor(this HttpClient client, string mod) =>
-        Sent.TryGetValue(client, out var sent) && sent.TryGetValue(mod, out var folder) ? folder : mod;
+        Sent.TryGetValue(client, out var sent) && sent.TryGetValue(mod, out var folders) ? folders.SourceFolder : mod;
 
-    private static Dictionary<string, string> SourceFoldersIn(JsonElement body)
+    /// <summary>The folder the last load order this client put names for <paramref name="mod"/>; the mod's own name when
+    /// it named none.</summary>
+    internal static string ModFolderSentFor(this HttpClient client, string mod) =>
+        Sent.TryGetValue(client, out var sent) && sent.TryGetValue(mod, out var folders) ? folders.Folder : mod;
+
+    private static Dictionary<string, (string SourceFolder, string Folder)> SourceFoldersIn(JsonElement body)
     {
-        var folders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var folders = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
         if (!body.TryGetProperty("plugins", out var plugins)) return folders;
         foreach (var plugin in plugins.EnumerateArray())
         {
             var provider = plugin.GetProperty("provider");
             if (provider.TryGetProperty("sourceFolder", out var folder) && folder.GetString() is { } sourceFolder)
-                folders.TryAdd(provider.GetProperty("mod").GetString() ?? string.Empty, sourceFolder);
+                folders.TryAdd(provider.GetProperty("mod").GetString() ?? string.Empty, (sourceFolder, provider.GetProperty("folder").GetString() ?? string.Empty));
         }
         return folders;
     }

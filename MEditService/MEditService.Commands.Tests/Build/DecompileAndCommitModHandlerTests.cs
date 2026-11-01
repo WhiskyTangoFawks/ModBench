@@ -57,19 +57,38 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce_AndRefusesTheModThatProvidesNothingOnItsOwn()
+    public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce()
     {
         _holder.Apply(Snapshot);
         var handler = TestEditService.DecompileAndCommitModHandler(_holder);
 
-        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()))).Value();
+        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin, Origin.ToUpperInvariant()))).Value();
 
         Assert.Equal([Origin], result.Applied.Select(mod => mod.Mod));
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal(
-            ("NoSuchMod", DecompileAndCommitRefusal.ModProvidesNoPlugin,
-                "'NoSuchMod' provides no plugin in the load order, so there is nothing to decompile and commit."),
-            (refused.Item, refused.Refusal, refused.Message));
+        Assert.Empty(result.Refused);
+    }
+
+    [Fact]
+    public async Task Init_OfAModThatProvidesNoPlugin_MakesItASourceModOfItsAssets()
+    {
+        var settings = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", "Settings")).FullName;
+        File.WriteAllText(Path.Combine(settings, "Settings.ini"), "[General]");
+        var sourceFolder = Path.Combine(_instanceRoot, "source", "Settings");
+
+        var result = await InitWith(new ModToDecompileAndCommit("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile)));
+
+        Assert.Empty(Assert.Single(result.Applied).Plugins);
+        Assert.Equal("[General]", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "main:Settings.ini"));
+    }
+
+    [Fact]
+    public async Task Init_AskedNotToCommit_WritesTheSourceFolderAndCommitsNothing()
+    {
+        var result = await InitWith(new ModToDecompileAndCommit(Origin, _mod.Folder, new NewRepository(SourceFolder, [], SourceInits.BuildFile), Commit: false));
+
+        Assert.Single(result.Applied);
+        Assert.True(File.Exists(Path.Combine(SourceFolder, "build.json")));
+        Assert.Equal(string.Empty, GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "for-each-ref", "refs/heads"));
     }
 
     [Fact]
@@ -108,7 +127,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     }
 
     private Task<DecompileAndCommitResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
-        InitWith(new ModToDecompileAndCommit(Origin, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile))));
+        InitWith(new ModToDecompileAndCommit(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile))));
 
     private async Task<DecompileAndCommitResult> InitWith(ModToDecompileAndCommit mod)
     {

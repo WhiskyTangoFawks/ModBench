@@ -47,7 +47,7 @@ interface ModsKeyContext {
   readonly singleCompareFileRow: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
-  readonly holdsNonSourceModWithPlugin: boolean;
+  readonly holdsNonSourceMod: boolean;
   readonly holdsIncludedFile: boolean;
   readonly holdsExcludedFile: boolean;
 }
@@ -72,7 +72,7 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     singleCompareFileRow: onlyRow?.kind === 'file' && onlyRow.conflict === 'loses',
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
-    holdsNonSourceModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.sourceMod),
+    holdsNonSourceMod: mods.some((row) => row.facts !== undefined && !row.facts.sourceMod),
     holdsIncludedFile: files.some((row) => row.exclusion === 'included'),
     holdsExcludedFile: files.some((row) => row.exclusion === 'excluded'),
   };

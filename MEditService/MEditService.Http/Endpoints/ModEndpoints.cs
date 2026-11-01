@@ -49,7 +49,7 @@ internal static class ModEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return EndpointMapping.BadRequest("At least one mod is required.");
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.ModFolder) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
             return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile);
@@ -60,7 +60,7 @@ internal static class ModEndpoints
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
-            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.Repository.ToNewRepository()))]),
+            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), mod.Commit))]),
             EndpointMapping.Refusal);
     }
 
@@ -165,8 +165,8 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 /// <summary>The mods to decompile and commit (ADR-0013).</summary>
 internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
 
-/// <summary>A mod by name, and the repository its decompile and commit makes.</summary>
-internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
+/// <summary>A mod by name and folder, the repository its decompile and commit makes, and whether it commits.</summary>
+internal sealed record DecompileAndCommitModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool Commit = true);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
 /// assets by path, its build file's text, and its manifest's name and text.</summary>

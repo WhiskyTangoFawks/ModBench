@@ -70,6 +70,7 @@ internal static class Wire
             mods = mods.Select(name => new
             {
                 name,
+                modFolder = client.ModFolderSentFor(name),
                 repository = new
                 {
                     sourceFolder = client.SourceFolderSentFor(name),

@@ -47,9 +47,11 @@ internal static class ToDecompileAndCommit
     /// <summary>Each mod with the source folder the load order's provider names for it, or its own name when none
     /// does.</summary>
     internal static IReadOnlyList<ModToDecompileAndCommit> In(LoadOrderSnapshot? loadOrder, params string[] mods) =>
-        [.. mods.Select(mod => new ModToDecompileAndCommit(mod, new NewRepository(SourceFolderOf(loadOrder, mod), [], SourceInits.BuildFile)))];
+        [.. mods.Select(mod => new ModToDecompileAndCommit(mod, ProviderOf(loadOrder, mod)?.Folder ?? mod, new NewRepository(SourceFolderOf(loadOrder, mod), [], SourceInits.BuildFile)))];
 
-    private static string SourceFolderOf(LoadOrderSnapshot? loadOrder, string mod) =>
+    private static PluginProvider.FromMod? ProviderOf(LoadOrderSnapshot? loadOrder, string mod) =>
         loadOrder?.Plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>()
-            .FirstOrDefault(provider => string.Equals(provider.Name, mod, StringComparison.OrdinalIgnoreCase))?.SourceFolder ?? mod;
+            .FirstOrDefault(provider => string.Equals(provider.Name, mod, StringComparison.OrdinalIgnoreCase));
+
+    private static string SourceFolderOf(LoadOrderSnapshot? loadOrder, string mod) => ProviderOf(loadOrder, mod)?.SourceFolder ?? mod;
 }

@@ -1148,12 +1148,14 @@ export interface components {
         };
         DecompileAndCommitModRequest: {
             name: string;
+            modFolder: string;
             repository: components["schemas"]["NewRepositoryRequest"];
+            commit: boolean;
         };
         /** @enum {string} */
         DecompileAndCommitPhase: "Parsing" | "Serializing" | "Committing";
         /** @enum {string} */
-        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        DecompileAndCommitRefusal: "None" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         DecompileAndCommitRefused: {
             item: string;
             refusal: components["schemas"]["DecompileAndCommitRefusal"];

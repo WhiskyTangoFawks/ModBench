@@ -27,10 +27,10 @@ interface SourceCommandsDeps {
   trash: MoveToTrash;
 }
 
-/** A mod's progress through decompile and commit, reading its files here before mEdit's phases. */
+/** A mod's progress through init source mod, reading its files here before mEdit's phases. */
 export type DecompileProgress = Omit<DecompileAndCommitProgress, 'phase'> & { phase?: DecompileAndCommitProgress['phase'] | 'ReadingFiles' };
 
-/** What decompile and commit answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
+/** What init source mod answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
 export type DecompileAndCommitted = DecompileAndCommitOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
@@ -133,7 +133,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
     /** A mod whose name gives it no source folder, or whose files, installation file or metadata cannot be read, is refused
      *  here, naming why, and mEdit decompiles and commits the rest. */
     decompileAndCommit: async (
-      mods: readonly string[], options: { onProgress?: (status: DecompileProgress) => void } = {},
+      mods: readonly string[], { commit = true, onProgress }: { commit?: boolean; onProgress?: (status: DecompileProgress) => void } = {},
     ): Promise<DecompileAndCommitted | WriteRefused> => {
       const made = new Map<string, MadeRepository>();
       const refused: ItemRefusal<string>[] = [];
@@ -142,14 +142,14 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       const downloaded = await downloadedPackagesOf(adapter);
       const notes = downloaded.notes.length > 0 ? { notes: downloaded.notes } : {};
       for (const [at, mod] of mods.entries()) {
-        options.onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
+        onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
         const decided = await newRepositoryOf(adapter, mod, game, downloaded.files);
         if ('refusal' in decided) refused.push({ item: mod, reason: decided.refusal });
         else made.set(mod, decided);
       }
       if (made.size === 0) return { landed: [], refused, ...notes };
-      const sent: DecompileAndCommitMod[] = [...made].map(([name, { repository }]) => ({ name, repository }));
-      const outcome = await client.decompileAndCommit(sent, options);
+      const sent: DecompileAndCommitMod[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit }));
+      const outcome = await client.decompileAndCommit(sent, onProgress === undefined ? {} : { onProgress });
       if (isRefused(outcome)) return outcome;
       const notLinked = [...await foldersNotLinked(adapter, made, outcome.landed.map(({ mod }) => mod))].map(([item, why]) => ({ item, reason: `was committed, but ${why}.` }));
       return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked], ...notes };

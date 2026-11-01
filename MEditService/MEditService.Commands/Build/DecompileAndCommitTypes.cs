@@ -2,8 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to decompile and commit, by name, and the repository made for it.</summary>
-public sealed record ModToDecompileAndCommit(string Name, NewRepository Repository);
+/// <summary>A mod to decompile and commit, by name and folder, and the repository made for it. Without
+/// <paramref name="Commit"/> the repository holds its files as working-tree changes.</summary>
+public sealed record ModToDecompileAndCommit(string Name, string ModFolder, NewRepository Repository, bool Commit = true);
 
 /// <summary>Why decompile and commit refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
@@ -11,9 +12,6 @@ public sealed record ModToDecompileAndCommit(string Name, NewRepository Reposito
 public enum DecompileAndCommitRefusal
 {
     None,
-
-    /// <summary>The load order holds no plugin the mod provides.</summary>
-    ModProvidesNoPlugin,
 
     /// <summary>The mod's source folder already holds a repository.</summary>
     AlreadyInitialized,

@@ -43,7 +43,7 @@ describe('decompileAndRepair', () => {
     notLinked = undefined;
   });
 
-  it('repairs each plugin, a mod with no repository handed the one decompile and commit makes', async () => {
+  it('repairs each plugin, a mod with no repository handed the one init source mod makes', async () => {
     expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [REFUSED] } });
     expect(sent()).toEqual([[[{ plugin: MALFORMED, newRepository: MADE.repository }], true]]);
   });

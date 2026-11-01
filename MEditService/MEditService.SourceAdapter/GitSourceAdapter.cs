@@ -47,8 +47,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null) =>
-        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, repair, manifest, ignored));
+        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null, bool commit = true) =>
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, repair, manifest, ignored, commit));
 
     public string FileIn(string sourceFolder, string path) => Path.Combine(sourceFolder, path);
 

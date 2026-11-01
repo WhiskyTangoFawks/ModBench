@@ -23,13 +23,6 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
         RepairedInInit? repair, Action<DecompileAndCommitPhase> setPhase, CancellationToken cancel)
     {
         var provided = ProvidedBy(loadOrder, toCommit.Name);
-        if (provided.Count == 0)
-        {
-            return Refused(DecompileAndCommitRefusal.ModProvidesNoPlugin,
-                $"'{toCommit.Name}' provides no plugin in the load order, so there is nothing to decompile and commit.");
-        }
-
-        var mod = (PluginProvider.FromMod)provided[0].Provider;
 
         if (source.IsSourceMod(toCommit.Repository.SourceFolder))
         {
@@ -56,7 +49,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
             }
             setPhase(DecompileAndCommitPhase.Parsing);
             var decompiled = await decompiler.DecompileAsync(
-                loadOrder, plugin, mod.Folder, onParsed: () => setPhase(DecompileAndCommitPhase.Serializing), cancel);
+                loadOrder, plugin, toCommit.ModFolder, onParsed: () => setPhase(DecompileAndCommitPhase.Serializing), cancel);
             if (decompiled.Source is { } read)
             {
                 verified.Add((read.Files, new DecompiledPlugin(plugin.Key, read.BinarySha256)));
@@ -79,11 +72,11 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
         }
 
         setPhase(DecompileAndCommitPhase.Committing);
-        List<FileToCopy> assets = [.. toCommit.Repository.Assets.Select(path => new FileToCopy(path, () => modFolders.OpenFile(mod.Folder, path)))];
-        if (Commit(toCommit.Repository.SourceFolder, verified, toCommit.Repository.BuildFile, assets, repair, toCommit.Repository.Manifest, toCommit.Repository.Ignored) is { } failure)
+        List<FileToCopy> assets = [.. toCommit.Repository.Assets.Select(path => new FileToCopy(path, () => modFolders.OpenFile(toCommit.ModFolder, path)))];
+        if (Commit(toCommit.Repository.SourceFolder, verified, toCommit.Repository.BuildFile, assets, repair, toCommit.Repository.Manifest, toCommit.Repository.Ignored, toCommit.Commit) is { } failure)
         {
-            logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", mod.Name, failure.Reason);
-            return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}");
+            logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", toCommit.Name, failure.Reason);
+            return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{toCommit.Name}' was not initialized: {failure.Reason}");
         }
 
         return ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Landed([.. verified.Select(v => v.Plugin.Address)]);
@@ -99,7 +92,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
     // The adapter writes nothing when any of it fails (plugins.md, Decompile and commit, story 5).
     private SourceFailure? Commit(
         string sourceFolder, List<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> verified, byte[] buildFile,
-        List<FileToCopy> assets, RepairedInInit? repair, RootFile? manifest, IReadOnlyList<string>? ignored)
+        List<FileToCopy> assets, RepairedInInit? repair, RootFile? manifest, IReadOnlyList<string>? ignored, bool commit)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -107,6 +100,6 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
                 sourceFolder, verified.Count, verified.Sum(v => v.Tree.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, buildFile, verified, assets, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null, manifest, ignored);
+        return source.Init(sourceFolder, buildFile, verified, assets, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null, manifest, ignored, commit);
     }
 }

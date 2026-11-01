@@ -143,7 +143,7 @@ export type { PluginAddress };
 
 type DecompiledAndCommittedMod = components['schemas']['DecompiledAndCommittedMod'];
 
-/** Decompile and commit's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+/** Init source mod's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
 export interface DecompileAndCommitOutcome {
   landed: readonly DecompiledAndCommittedMod[];
   refused: readonly ItemRefusal<string>[];
@@ -153,7 +153,7 @@ export interface DecompileAndCommitOutcome {
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
-/** A mod to decompile and commit, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
+/** A mod to init source mod, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
 export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
 /** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
@@ -186,7 +186,7 @@ export interface BuildOutcome {
 // Where a modlist gesture is: the mod it works on, none once it ends, and how many mods it has done of how many.
 type ModlistProgress = components['schemas']['ModlistProgress'];
 
-/** A mod's progress through decompile and commit: its place in the selection and the step it is at. */
+/** A mod's progress through init source mod: its place in the selection and the step it is at. */
 export type DecompileAndCommitProgress = ModlistProgress & { phase?: components['schemas']['DecompileAndCommitPhase'] | null };
 
 /** A source mod's repository as the instance repository pins it: the folder git checks it out in, the pin and its branch. */

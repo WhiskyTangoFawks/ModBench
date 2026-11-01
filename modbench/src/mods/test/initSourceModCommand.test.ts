@@ -8,7 +8,7 @@ vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeMod
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { handlers, showQuickPick, createQuickPick, PluginRowStandIn } from './sourceGestureHarness';
 
-import { registerDecompileAndCommitCommand } from '../decompileAndCommitCommand';
+import { registerInitSourceModCommand } from '../initSourceModCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -28,9 +28,10 @@ beforeEach(() => {
   handlers.clear();
   progressSteps.length = 0;
   vi.clearAllMocks();
+  showQuickPick.mockResolvedValue({ label: 'Commit to main', commit: true });
 });
 
-describe('modbench.mod.decompileAndCommit', () => {
+describe('modbench.mod.initSourceMod', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
@@ -44,10 +45,12 @@ describe('modbench.mod.decompileAndCommit', () => {
   function decompileAndCommitCommands() {
     let answer: DecompileAndCommitOutcome | WriteRefused = { landed: [], refused: [] };
     const sent: string[][] = [];
+    const commits: boolean[] = [];
     const progressListeners: (((status: DecompileAndCommitProgress) => void) | undefined)[] = [];
     const client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndCommit', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
+      commits.push(...mods.map((mod) => mod.commit ?? true));
       progressListeners.push(options?.onProgress);
       return Promise.resolve(answer);
     });
@@ -57,6 +60,7 @@ describe('modbench.mod.decompileAndCommit', () => {
       }),
       answers: (next: DecompileAndCommitOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,
+      commits: () => commits,
       progressListeners: () => progressListeners,
     };
   }
@@ -68,16 +72,16 @@ describe('modbench.mod.decompileAndCommit', () => {
     const said: (string | undefined)[] = [];
     const progress = { say: (message: string | undefined) => said.push(message) };
     const reporter = recordingReporter();
-    registerDecompileAndCommitCommand({
+    registerInitSourceModCommand({
       progress, instance: instanceThatReads, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
     }, paletteSelection);
     return {
-      handler: present(handlers.get('modbench.mod.decompileAndCommit'), 'the decompile and commit command registerDecompileAndCommitCommand registers'),
+      handler: present(handlers.get('modbench.mod.initSourceMod'), 'the init source mod command registerInitSourceModCommand registers'),
       onCommitted, reporter, said,
     };
   }
 
-  it('on a plugin row, decompiles and commits the plugin\'s mod, asking nothing', async () => {
+  it('on a plugin row, inits the plugin\'s mod after the one pick', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
@@ -86,13 +90,35 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(commands.sent()).toEqual([['ModA']]);
     expect(createQuickPick).not.toHaveBeenCalled();
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(reporter.landings).toEqual(['Decompiled and committed "ModA".']);
+    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(reporter.landings).toEqual(['"ModA" is a source mod.']);
     expect(reporter.reports).toEqual([]);
     expect(onCommitted).toHaveBeenCalledOnce();
   });
 
-  it('ends the gesture on a read the Instance loader makes after the decompile and commit, and clears its message line', async () => {
+  it('offers not committing first, and hands mEdit the pick', async () => {
+    showQuickPick.mockResolvedValue({ label: 'Do not commit', commit: false });
+    const commands = decompileAndCommitCommands();
+    commands.answers({ landed: [modA([FIRST])], refused: [] });
+    const { handler } = invokeDecompileAndCommit(commands);
+
+    await handler(row(FIRST));
+
+    const [items] = showQuickPick.mock.calls[0] as [{ label: string; commit: boolean }[]];
+    expect([items.map((item) => item.commit), commands.commits()]).toEqual([[false, true], [false]]);
+  });
+
+  it('inits nothing and writes nothing on Esc at the pick', async () => {
+    showQuickPick.mockResolvedValue(undefined);
+    const commands = decompileAndCommitCommands();
+    const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
+
+    await handler(row(FIRST));
+
+    expect([commands.sent(), reporter.reports, reporter.landings, onCommitted.mock.calls.length]).toEqual([[], [], [], 0]);
+  });
+
+  it('ends the gesture on a read the Instance loader makes after the init source mod, and clears its message line', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, said } = invokeDecompileAndCommit(commands);
@@ -105,7 +131,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     expect(said.at(-1)).toBeUndefined();
   });
 
-  it('on selected Mods rows, decompiles and commits every mod in one call under the Mods view\'s bar', async () => {
+  it('on selected Mods rows, inits every mod in one call under the Mods view\'s bar', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeDecompileAndCommit(commands);
@@ -115,10 +141,10 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(commands.sent()).toEqual([['ModA', 'ModB']]);
     expect(progressSteps[0]).toBe('progress opens on modbench.modList');
-    expect(reporter.landings).toEqual(['Decompiled and committed 2 mods.']);
+    expect(reporter.landings).toEqual(['2 mods are source mods.']);
   });
 
-  it('from the palette, decompiles and commits the mod of a Plugins selection', async () => {
+  it('from the palette, inits the mod of a Plugins selection', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeDecompileAndCommit(commands, undefined, () => [row(OTHER)]);
@@ -126,7 +152,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     await handler();
 
     expect(commands.sent()).toEqual([['ModB']]);
-    expect(reporter.landings).toEqual(['Decompiled and committed "ModB".']);
+    expect(reporter.landings).toEqual(['"ModB" is a source mod.']);
   });
 
   it('warns of a note on a downloaded file that could not be read whole, and the mod still lands', async () => {
@@ -139,7 +165,7 @@ describe('modbench.mod.decompileAndCommit', () => {
     await handler(row(FIRST));
 
     expect([reporter.reports, reporter.landings]).toEqual([
-      [{ severity: 'warning', message: 'Decompile and commit:', detail: 'the hash index could not be written' }], ['Decompiled and committed "ModA".'],
+      [{ severity: 'warning', message: 'Init source mod:', detail: 'the hash index could not be written' }], ['"ModA" is a source mod.'],
     ]);
     expect(onCommitted).toHaveBeenCalledOnce();
   });
@@ -157,7 +183,7 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(commands.sent()).toEqual([['ModA', 'ModC']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not decompile and commit 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
+      severity: 'error', message: 'Could not init source mod for 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
     }]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).toHaveBeenCalledOnce();
@@ -173,7 +199,7 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(commands.sent()).toEqual([['ModB']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not decompile and commit 1 of 2 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
+      severity: 'error', message: 'Could not init source mod for 1 of 2 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
     }]);
     expect(onCommitted).toHaveBeenCalledOnce();
   });
@@ -186,26 +212,26 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(commands.sent()).toEqual([]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not decompile and commit 1 of 1 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
+      severity: 'error', message: 'Could not init source mod for 1 of 1 plugins.', detail: '"Loose.esp (Overwrite)" (it is not in a mod)',
     }]);
     expect(onCommitted).not.toHaveBeenCalled();
   });
 
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
     const commands = decompileAndCommitCommands();
-    commands.answers({ refused: true, message: 'Could not decompile and commit 1 mod — git was not found on PATH.' });
+    commands.answers({ refused: true, message: 'Could not init source mod 1 mod — git was not found on PATH.' });
     const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
 
     await handler(row(OTHER));
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not decompile and commit 1 mod — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not init source mod 1 mod — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).not.toHaveBeenCalled();
   });
 
-  it('names the mod it is about to decompile and commit before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
+  it('names the mod it is about to init source mod before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const { handler, said } = invokeDecompileAndCommit(commands);
@@ -213,17 +239,18 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     await handler(mods[0], mods);
 
-    expect(said).toContain('Decompiling and committing "ModA"…');
+    expect(said).toContain('Initializing source mod "ModA"…');
 
-    const onProgress = present(commands.progressListeners()[0], 'the progress listener the decompile and commit carried to mEdit');
+    const onProgress = present(commands.progressListeners()[0], 'the progress listener the init source mod carried to mEdit');
     said.length = 0;
     onProgress({ mod: 'ModB', phase: 'Committing', modsDone: 0, modsTotal: 1 });
 
-    expect(said).toEqual(['Decompiling and committing "ModB" — committing to git…']);
+    expect(said).toEqual(['Initializing source mod "ModB" — writing the repository…']);
   });
 
   describe('called by the agent', () => {
-    const calling = (...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), {});
+    const calling = (...mods: string[]) => callingWith({ commit: true }, ...mods);
+    const callingWith = (options: { commit: boolean }, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
 
     it('decompiles and commits the mods given, never the selection, reporting nothing, and answers the outcome', async () => {
       const commands = decompileAndCommitCommands();
@@ -238,6 +265,15 @@ describe('modbench.mod.decompileAndCommit', () => {
       expect(onCommitted).toHaveBeenCalledOnce();
       expect(reporter.reports).toEqual([]);
       expect(reporter.landings).toEqual([]);
+    });
+
+    it('hands mEdit the commit the call gives, and asks no pick', async () => {
+      const commands = decompileAndCommitCommands();
+      const { handler } = invokeDecompileAndCommit(commands);
+
+      await handler(callingWith({ commit: false }, 'ModA'));
+
+      expect([commands.commits(), showQuickPick.mock.calls.length]).toEqual([[false], 0]);
     });
 
     it('answers the refusal of the whole call', async () => {

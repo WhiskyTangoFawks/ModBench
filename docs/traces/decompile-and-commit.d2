@@ -1,4 +1,4 @@
-# Decompile and commit, green: a mod put under git as a source mod, every file of it in its repository.
+# Init source mod, green: a mod put under git as a source mod, every file of it in its repository.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 driving: "Toolbox · Mods · Source Control" {class: driving}
@@ -30,7 +30,7 @@ instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "decompile and commit: the mods" {class: track}
+driving -> sourcecommands: "init source mod: the mods" {class: track}
 sourcecommands -> manifestadapter: "get: each mod's manifest" {class: track}
 instance -> manifestadapter: manifests {class: track}
 manifestadapter -> sourcecommands: "each mod's manifest, when it has one" {class: track}

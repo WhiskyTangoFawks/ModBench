@@ -421,7 +421,7 @@ class HttpMEditClient implements MEditClient {
     const unsubscribe = options.onProgress ? this.notifications.onNotification('decompile-and-commit-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
-        verb: 'decompile and commit', noun: 'mod', items: mods.map((mod) => mod.name),
+        verb: 'init source mod', noun: 'mod', items: mods.map((mod) => mod.name),
         op: (counted) => `decompileAndCommit(${counted})`,
         post: () => this.apiClient.POST('/decompile-and-commit', { body: { mods: [...mods] } }),
         outcome: selectionOutcome,
