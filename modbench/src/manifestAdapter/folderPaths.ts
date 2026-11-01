@@ -3,9 +3,11 @@
 import type { FolderValue } from '../repositoriesLib/statusValues';
 import type { Manifest } from './manifest';
 
-/** Whether `named` names `path` or a folder above it, as formats/manifest.md matches `exclude` and `ignore`: in their case. */
-export const isUnderAny = (named: readonly string[], path: string): boolean =>
-  named.some((one) => path === one || path.startsWith(`${one}/`));
+/** Whether `named` names `path` or a folder above it, as formats/manifest.md matches `exclude` and `ignore`: in any case. */
+export const isUnderAny = (named: readonly string[], path: string): boolean => {
+  const folded = path.toLowerCase();
+  return named.some((one) => folded === one.toLowerCase() || folded.startsWith(`${one.toLowerCase()}/`));
+};
 
 /** The paths of `exclude` that name one of `files` or a folder above one, which are the exclusions a manifest names. */
 export const exclusionsOfFiles = (exclude: readonly string[], paths: Iterable<string>): string[] => {

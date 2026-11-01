@@ -128,6 +128,13 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(heldAs({ ignored: ['F4SE/Plugins/BetterConsole.mem', 'logs/a.log'], ignoreEntries: ['F4SE/Plugins/BetterConsole.mem', 'logs'] }));
   });
 
+  it('reads a file as ignored whose case differs from the entry, as a manifest path ignores case', async () => {
+    await write('Logs/a.log', EDITED);
+    await manifested(manifest({}, { ignore: ['logs'] }));
+
+    expect(await status()).toEqual(heldAs({ ignored: ['Logs/a.log'], ignoreEntries: ['logs'] }));
+  });
+
   it('after a fresh clone, names every file its manifest names gone, and none differing or named by no line', async () => {
     entries = [{ path: 'a.nif', hash: HELLO }];
     await manifested(manifest({ 'a.nif': HELLO }));

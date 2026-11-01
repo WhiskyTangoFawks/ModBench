@@ -12,6 +12,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { MoveToTrash } from '../ports/trash';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
+import { heldManifestIn } from './heldManifest';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
@@ -43,17 +44,6 @@ async function hashed(adapter: Pick<Adapter, 'originFileHash'>, folder: string, 
   return files;
 }
 
-// A manifest of the format before version 1 names nothing init source mod keeps.
-async function heldManifest(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
-  try {
-    const read = await manifestIn(folder);
-    if (read === undefined || 'olderFormat' in read) return undefined;
-    return 'refused' in read ? { refusal: `its manifest cannot be read: ${read.refused}` } : read.manifest;
-  } catch (err) {
-    return { refusal: `its manifest could not be read: ${errorMessage(err)}` };
-  }
-}
-
 interface ModRead {
   readonly sourceFolder: string;
   readonly folder: string;
@@ -72,8 +62,8 @@ async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise
   const taken = typeof game.folder === 'string' ? { gameFiles: NONE_HELD, notes: [] } : await gameFilesOf(adapter, { mod, folder }, game, false);
   if ('refusal' in taken) return taken;
   if (taken.notes.length > 0) return { refusal: taken.notes.join('; ') };
-  const held = await heldManifest(folder);
-  if (held !== undefined && 'refusal' in held) return held;
+  const held = await heldManifestIn(folder);
+  if (held !== undefined && 'why' in held) return { refusal: held.why };
   if (typeof game.folder === 'string' && held?.packages.some(({ kind }) => kind === 'gameFolder')) {
     return { refusal: 'its manifest names the game folder, and the game folder was not found' };
   }

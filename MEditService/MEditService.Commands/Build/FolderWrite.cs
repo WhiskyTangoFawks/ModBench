@@ -7,10 +7,10 @@ namespace MEditService.Commands.Build;
 internal sealed class FolderWrite(
     IModFolderRepository repository, string folder, IReadOnlyList<string> exclude, IReadOnlyList<string> ignore, string exclusionMark)
 {
-    private readonly HashSet<string> _excluded = exclude.ToHashSet(StringComparer.Ordinal);
-    private readonly HashSet<string> _ignored = ignore.ToHashSet(StringComparer.Ordinal);
+    private readonly HashSet<string> _excluded = exclude.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _ignored = ignore.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Whether the manifest ignores the path, or a folder above it, in the path's case.</summary>
+    /// <summary>Whether the manifest ignores the path, or a folder above it, in any case.</summary>
     public bool Ignores(string path)
     {
         var segments = path.Split('/');

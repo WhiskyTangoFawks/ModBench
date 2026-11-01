@@ -121,24 +121,24 @@ public sealed class BuildModHandlerTests : IDisposable
     [Theory]
     [InlineData("textures/A.dds")]
     [InlineData("TEXTURES")]
-    public async Task ACopy_WritesAFileWhoseCaseDiffersFromTheIgnoreEntry_AsTheExtensionMatchesInTheCaseOfThePath(string ignore)
+    public async Task ACopy_LeavesUnwrittenAFileWhoseCaseDiffersFromTheIgnoreEntry_AsAManifestPathIgnoresCase(string ignore)
     {
         WriteSource(("textures/a.dds", "a"));
 
         var built = await Landed(Copy("textures") with { Ignore = [ignore] });
 
-        Assert.Equal([("textures/a.dds", "a")], FilesIn(ModFolder));
-        Assert.Empty(built.Ignored);
+        Assert.False(Directory.Exists(ModFolder));
+        Assert.Equal(["textures/a.dds"], built.Ignored);
     }
 
     [Fact]
-    public async Task ACopy_WritesAFileWhoseCaseDiffersFromTheExclusionEntry_UnmarkedAsTheExtensionMatchesInTheCaseOfThePath()
+    public async Task ACopy_MarksAFileWhoseCaseDiffersFromTheExclusionEntry_AsAManifestPathIgnoresCase()
     {
         WriteSource(("textures/a.dds", "a"));
 
         var built = await Landed(Copy("textures") with { Exclude = ["Textures/A.dds"] });
 
-        Assert.Equal([new MadeFile("textures/a.dds", VouchedFor: true)], built.Made);
+        Assert.Equal([new MadeFile("textures/a.dds.excluded", VouchedFor: true)], built.Made);
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public sealed class BuildModHandlerTests : IDisposable
     {
         WriteSource(("textures/a.dds", "a"), ("textures/b.dds", "b"), ("meshes/deep/c.nif", "c"));
 
-        await Landed(Copy("textures", "meshes") with { Exclude = ["textures/a.dds", "meshes"] });
+        await Landed(Copy("textures", "meshes") with { Exclude = ["Textures/A.dds", "meshes"] });
 
         Assert.Equal([("meshes.excluded/deep/c.nif", "c"), ("textures/a.dds.excluded", "a"), ("textures/b.dds", "b")], FilesIn(ModFolder));
     }
