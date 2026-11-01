@@ -17,7 +17,7 @@ function modsByBuildTarget(sourceDirs: ReadonlyMap<string, string>): ReadonlyMap
   }));
 }
 
-const isUri = (value: unknown): value is vscode.Uri =>
+export const isUri = (value: unknown): value is vscode.Uri =>
   typeof value === 'object' && value !== null && 'fsPath' in value && 'scheme' in value;
 
 /** The Explorer menu and the run button of a source mod's source folder or build file (source.md, Menus and keys): an

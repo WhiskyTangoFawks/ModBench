@@ -48,8 +48,8 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const deps = { adapter: { ...fake.adapter, ...adapterOver } };
   return {
     fake,
-    update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false) =>
-      updateManifest(deps, mods, options, others, everyMod),
+    update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false, sourceFolders: readonly string[] = []) =>
+      updateManifest(deps, mods, options, others, everyMod, sourceFolders),
     manifestOf: (mod: string) => manifestIn(join(modsDir, mod)),
     manifestHeld: async (mod: string): Promise<Manifest> => {
       const read = await manifestIn(join(modsDir, mod));
@@ -283,15 +283,41 @@ describe('update manifest', () => {
       return over({ files: { ModA: {}, ModB: files }, sourceFolders: { ModB: SOURCE() }, answers, sourceFiles: { [SOURCE()]: sourceFiles } });
     };
 
-    it('has its mod folder left to its build, and its source folder recorded in a manifest of its own, naming no file git holds', async () => {
-      const { update, manifestOf } = await among(
-        { 'extra.nif': HX }, { heldByGit: new Map([[SOURCE(), ['plugin.json']]]) }, { 'tool.dll': HA, 'plugin.json': HX, '.git': HB, '.git/HEAD': HB });
+    const SOURCE_FILES = { 'tool.dll': HA, 'plugin.json': HX, '.git': HB, '.git/HEAD': HB };
+    const GIT_HOLDS = () => ({ heldByGit: new Map([[SOURCE(), ['plugin.json']]]) });
+
+    it('has neither its mod folder nor its source folder recorded when named as a mod', async () => {
+      const { update, manifestOf } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
 
       const result = await update(['ModA', 'ModB']);
+
+      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await manifestIn(SOURCE())]).toEqual([['ModA'], [], undefined, undefined]);
+    });
+
+    it('has its source folder recorded in a manifest of its own, naming no file git holds, when named as a source folder', async () => {
+      const { update, manifestOf } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
+
+      const result = await update(['ModA'], {}, [], false, ['ModB']);
 
       expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await heldIn(SOURCE())]).toEqual([
         ['ModA', 'ModB'], [], undefined, { ...EMPTY, files: holding({ 'tool.dll': HA }) },
       ]);
+    });
+
+    it('has its source folder recorded when every mod is updated', async () => {
+      const { update } = await among({}, GIT_HOLDS(), SOURCE_FILES);
+
+      await update(['ModA', 'ModB'], {}, [], true);
+
+      expect(await heldIn(SOURCE())).toEqual({ ...EMPTY, files: holding({ 'tool.dll': HA }) });
+    });
+
+    it('is refused when named as a source folder though no source folder builds it', async () => {
+      const { update } = await among();
+
+      const result = await update([], {}, [], false, ['ModA']);
+
+      expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModA']]);
     });
 
     it('is refused, with no mod landed, when its source folder holds two manifests', async () => {
@@ -299,7 +325,7 @@ describe('update manifest', () => {
       await writeFile(join(SOURCE(), 'one.manifest.json'), '{}');
       await writeFile(join(SOURCE(), 'two.manifest.json'), '{}');
 
-      const result = await update(['ModB']);
+      const result = await update([], {}, [], false, ['ModB']);
 
       expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModB']]);
     });
@@ -309,7 +335,7 @@ describe('update manifest', () => {
 
       const result = await update(['ModB']);
 
-      expect([fake.calls[0], result.landed.map(({ mod }) => mod), result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, ['ModB'], []]);
+      expect([fake.calls[0], result.landed, result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, [], []]);
     });
 
     it('still has its submodule entry written, as a mod acted on', async () => {

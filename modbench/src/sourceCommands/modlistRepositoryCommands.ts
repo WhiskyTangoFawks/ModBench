@@ -90,8 +90,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
     /** Each mod's manifest from the mod as it is; `everyMod`: the mods are every mod, so a source mod that is gone loses its
      *  submodule entry. */
     updateManifest: (
-      mods: readonly string[], options: { onProgress?: (status: UpdateManifestStatus) => void; signal?: AbortSignal } = {}, others: readonly OtherManifest[] = [], everyMod = false,
-    ): Promise<UpdateManifestResult> => updateManifest(deps, mods, options, others, everyMod),
+      mods: readonly string[], options: { onProgress?: (status: UpdateManifestStatus) => void; signal?: AbortSignal } = {}, others: readonly OtherManifest[] = [], everyMod = false, sourceFolders: readonly string[] = [],
+    ): Promise<UpdateManifestResult> => updateManifest(deps, mods, options, others, everyMod, sourceFolders),
 
     /** `everyManifest`: the mods are every mod, so a source mod whose folder its build has not made joins them. */
     restoreFromManifest: (

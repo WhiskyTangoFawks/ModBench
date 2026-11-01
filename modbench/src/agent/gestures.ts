@@ -192,6 +192,17 @@ const MODS_OR_EVERY_MOD = gestureInput(
   (value, { argument }) => new AgentCall(entryArguments(value, argument ?? []), {}),
 );
 
+const SOURCE_FOLDER = z.object({ kind: z.literal('folder'), path: z.string() });
+
+const UPDATE_MANIFEST = gestureInput(
+  `${EVERY_MOD_BY_DEFAULT_TAKES}; or a source folder, { kind: 'folder', path: its path in the instance }`,
+  z.object({ argument: z.array(z.union([ENTRY_NAME, SOURCE_FOLDER])).optional() }),
+  (value, { argument = [] }) => new AgentCall([
+    ...entryArguments(value, argument.filter((one): one is z.infer<typeof ENTRY_NAME> => !('path' in one))),
+    ...argument.filter((one): one is z.infer<typeof SOURCE_FOLDER> => 'path' in one),
+  ], {}),
+);
+
 const BUILD = gestureInput(
   'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder',
   EVERY_MOD_BY_DEFAULT,
@@ -311,7 +322,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.instance.purge', NO_INPUT],
   ['modbench.instance.moveToOverwrite', MOVE_TO_OVERWRITE],
   ['modbench.instance.logOut', NO_INPUT],
-  ['modbench.mod.updateManifest', MODS_OR_EVERY_MOD],
+  ['modbench.mod.updateManifest', UPDATE_MANIFEST],
   ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],
   ['modbench.mod.restoreFromManifest', MODS_OR_EVERY_MOD],
 ]);

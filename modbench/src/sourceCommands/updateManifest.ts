@@ -187,10 +187,12 @@ async function submodulesWritten(
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
-/** Each mod's manifest from the mod as it is; a source mod's build records its own. A mod the adapter cannot answer is refused, naming why. `everyMod`:
+/** Each mod's manifest from the mod as it is; a source mod's build records its own folder, and `sourceFolders` names the source mods whose
+ *  source folder is recorded here, every one when `everyMod`. A mod the adapter cannot answer is refused, naming why. `everyMod`:
  *  a source mod that is gone loses its submodule entry. */
 export async function updateManifest(
   deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
+  sourceFolders: readonly string[] = [],
 ): Promise<UpdateManifestResult> {
   const { adapter } = deps;
   const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
@@ -200,15 +202,23 @@ export async function updateManifest(
   const notes: ModNote[] = [];
   const read: ModToUpdate[] = [];
   const passedOver: string[] = [];
-  for (const mod of new Set(namesOf(mods, others))) {
-    if (signal?.aborted) break;
-    const sourceFolder = folders.isMod(mod) ? sourceMods.folderOf(mod) : undefined;
-    if (sourceFolder !== undefined) passedOver.push(mod);
+  const record = async (mod: string, readOf: () => ReturnType<typeof readMod>): Promise<void> => {
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const answer = sourceFolder === undefined ? await readMod(adapter, mod, folders, game) : await readSourceFolder(adapter, mod, sourceFolder, game);
-    if ('refusal' in answer) { refused.push({ item: mod, reason: answer.refusal }); continue; }
+    const answer = await readOf();
+    if ('refusal' in answer) { refused.push({ item: mod, reason: answer.refusal }); return; }
     read.push(answer.read);
     notes.push(...answer.notes.map((note) => ({ mod, note })));
+  };
+  for (const mod of new Set(namesOf(mods, others))) {
+    if (signal?.aborted) break;
+    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) passedOver.push(mod);
+    else await record(mod, () => readMod(adapter, mod, folders, game));
+  }
+  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceFolders)) {
+    if (signal?.aborted) break;
+    const folder = sourceMods.folderOf(mod);
+    if (folder === undefined) refused.push({ item: mod, reason: 'no source folder builds it' });
+    else await record(mod, () => readSourceFolder(adapter, mod, folder, game));
   }
   const nothingUpdated = async (): Promise<UpdateManifestResult> => {
     const cancelled = cancelledIf(signal);

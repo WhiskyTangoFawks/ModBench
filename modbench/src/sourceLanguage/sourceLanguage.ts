@@ -15,6 +15,7 @@ import { completionsAt } from './completion';
 import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import { handUnsavedPluginSource } from './handUnsaved';
 import { registerBuildEntryPoint } from './buildEntryPoint';
+import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
@@ -123,7 +124,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   };
   const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
   const problems = sourceProblems(deps);
-  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, problems, ...(deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : []));
+  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, problems, ...(deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : []));
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),
