@@ -82,6 +82,11 @@
           "type": "string",
           "minLength": 1
         },
+        "packageVersion": {
+          "description": "The version the file's host gives it. Absent when Modbench knows none.",
+          "type": "string",
+          "minLength": 1
+        },
         "size": {
           "description": "The file's size, in bytes.",
           "type": "integer",
