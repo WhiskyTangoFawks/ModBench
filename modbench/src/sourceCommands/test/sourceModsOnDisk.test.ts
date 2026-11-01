@@ -75,9 +75,6 @@ async function aSourceMod(buildFile: Partial<BuildFile> = {}, made: readonly Mad
     await new Promise((resolve) => setTimeout(resolve, 25));
     const failed = await step();
     return typeof failed === 'string' ? failed : tasks.whyStepFailed(...ran);
-  }, whyScriptFailed: async (...ran: Parameters<typeof tasks.whyScriptFailed>) => {
-    const failed = await step();
-    return typeof failed === 'string' ? failed : tasks.whyScriptFailed(...ran);
   } };
   const trashed: string[] = [];
   const inTrash: Record<string, string> = {};

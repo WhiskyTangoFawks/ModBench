@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { exclusionsOfFiles, folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type DefaultScriptStep, type Manifest, type ScriptStep, type TaskStep } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type RunStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -91,9 +91,9 @@ export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'
   return undefined;
 }
 
-// Build, stories 3 and 8: how a step made a file. A task's is recorded by its path alone, and a file mEdit left as it was
+// Build, stories 3 and 8: how a step made a file. A task's or a script's is recorded by its path alone, and a file mEdit left as it was
 // keeps its recorded hash while the folder holds those bytes.
-type Made = 'vouched' | 'leftAsItWas' | 'byATask';
+type Made = 'vouched' | 'leftAsItWas' | 'byARun';
 
 // Each file of the folder by the path it holds it at, matched in any case where the file system ignores it.
 function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly hash?: string; readonly unreadable?: string } | undefined {
@@ -117,7 +117,7 @@ function filesOf(
     const path = ownPath(pathInFolder);
     const recorded = previous.get(path);
     if (held === undefined || isUnderAny(ignore, path)) continue;
-    if (how === 'byATask') files.set(path, null);
+    if (how === 'byARun') files.set(path, null);
     else if (how === 'leftAsItWas') {
       if (recorded !== undefined && recorded !== null && held.hash === recorded) files.set(path, recorded);
     } else if (held.hash === undefined) throw new Error(`'${pathInFolder}' could not be read: ${held.unreadable ?? ''}`);
@@ -165,16 +165,14 @@ async function stampsIn(adapter: Adapter, folder: string): Promise<ReadonlyMap<s
 }
 
 // Build, story 3: each file a task or a script makes or changes is made by it.
-async function taskRan(deps: BuildDeps, mod: SourceModToBuild, step: TaskStep | ScriptStep | DefaultScriptStep, made: Map<string, Made>): Promise<string | undefined> {
+async function stepRan(deps: BuildDeps, mod: SourceModToBuild, step: RunStep, made: Map<string, Made>): Promise<string | undefined> {
   const before = await stampsIn(deps.adapter, mod.folder);
-  const failed = step.kind === 'task'
-    ? await deps.tasks.whyStepFailed(step, mod.folder)
-    : await deps.tasks.whyScriptFailed(step, { sourceFolder: mod.sourceFolder, folder: mod.folder });
-  for (const [path, stamp] of await stampsIn(deps.adapter, mod.folder)) if (before.get(path) !== stamp) made.set(path, 'byATask');
+  const failed = await deps.tasks.whyStepFailed(step, { sourceFolder: mod.sourceFolder, folder: mod.folder });
+  for (const [path, stamp] of await stampsIn(deps.adapter, mod.folder)) if (before.get(path) !== stamp) made.set(path, 'byARun');
   return failed;
 }
 
-const wireStep = (step: Exclude<BuildStep, TaskStep | ScriptStep | DefaultScriptStep>): BuildMod['step'] =>
+const wireStep = (step: Exclude<BuildStep, RunStep>): BuildMod['step'] =>
   (step.kind === 'pack' ? { pack: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
 
 type StepBuilt = BuildOutcome['landed'][number];
@@ -217,7 +215,7 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
   const ran = (failure?: string): Ran => ({ outcome, made, ...failure === undefined ? {} : { failure } });
   for (const [at, step] of mod.buildFile.steps.entries()) {
     if (step.kind === 'task' || step.kind === 'script' || step.kind === 'defaultScript') {
-      const failed = await taskRan(deps, mod, step, made);
+      const failed = await stepRan(deps, mod, step, made);
       if (failed !== undefined) return ran(`The build stopped as its ${failed}.`);
       continue;
     }

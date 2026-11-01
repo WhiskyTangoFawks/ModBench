@@ -1,7 +1,7 @@
-import type { DefaultScriptStep, ScriptStep, TaskStep } from '../manifestAdapter/manifestAdapter';
+import type { RunStep } from '../manifestAdapter/manifestAdapter';
 import type { StepTasks } from '../sourceCommands/steps';
 
-interface StepRun { readonly step: TaskStep | ScriptStep | DefaultScriptStep; readonly folder: string }
+interface StepRun { readonly step: RunStep; readonly folder: string }
 
 /** A machine whose user tasks are those labelled: each step run is recorded, and fails as `failures` says by folder, or
  *  exits with code 0. */
@@ -12,11 +12,7 @@ export function recordingTasks(
   return {
     runs,
     labels: () => Promise.resolve(labels),
-    whyStepFailed: (step, folder) => {
-      runs.push({ step, folder });
-      return Promise.resolve(failures[folder]);
-    },
-    whyScriptFailed: (step, { folder }) => {
+    whyStepFailed: (step, { folder }) => {
       runs.push({ step, folder });
       return Promise.resolve(failures[folder]);
     },

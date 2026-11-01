@@ -1,6 +1,7 @@
+import itertools
 import threading
 import unittest
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 
 import medit
@@ -21,18 +22,27 @@ PATCH = medit.Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')
 ITEM_A = '000800:MBDevConflictA.esp'
 WATCH_INTERVAL_S = 0.25
 DELETED = 0x20
+PERSISTENT = 0x400
 INITIALLY_DISABLED = 0x800
+FLAGS = 'MajorRecordFlagsRaw'
 
 
-def resend_with(fixture: Fixture, created: list[medit.Plugin]) -> None:
-    enabled = [plugin_entry(fixture.instance, plugin, len(PLUGINS) + at) for at, plugin in enumerate(created)]
+class Created:
+    def __init__(self) -> None:
+        self.enabled: list[medit.Plugin] = []
+        self.disabled: list[medit.Plugin] = []
+
+
+def resend_with(fixture: Fixture, created: Created) -> None:
+    enabled = [plugin_entry(fixture.instance, plugin, len(PLUGINS) + at) for at, plugin in enumerate(created.enabled)]
+    disabled = [plugin_entry(fixture.instance, plugin, None) for plugin in created.disabled]
     call('PUT', fixture.url + '/load-order', {
-        **fixture.load_order, 'plugins': fixture.load_order['plugins'] + enabled,
-        'active': fixture.load_order['active'] + [plugin._asdict() for plugin in created]})
+        **fixture.load_order, 'plugins': fixture.load_order['plugins'] + enabled + disabled,
+        'active': fixture.load_order['active'] + [plugin._asdict() for plugin in created.enabled]})
 
 
 @contextmanager
-def watching(fixture: Fixture, created: list[medit.Plugin]) -> Generator[None]:
+def watching(fixture: Fixture, created: Created) -> Generator[None]:
     stopped = threading.Event()
 
     def resend() -> None:
@@ -50,24 +60,47 @@ def watching(fixture: Fixture, created: list[medit.Plugin]) -> Generator[None]:
 
 class CleanAgainstTheFixtureInstance(unittest.TestCase):
     fixture: Fixture
-    created: list[medit.Plugin]
+    created: Created
+    names: Iterator[int]
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.fixture = cls.enterClassContext(fixture_medit())
-        cls.created = []
+        cls.created = Created()
+        cls.names = itertools.count()
         init_source_mod(cls.fixture, PATCH.origin)
         init_source_mod(cls.fixture, CONDITIONS.origin)
         cls.enterClassContext(window_of(cls.fixture.url))
         cls.enterClassContext(watching(cls.fixture, cls.created))
+        player_holder = cls.enabled('MBDevPlayerHolder.esp')
+        cls.player = medit.create_record(player_holder, 'misc')
+        medit.edit(player_holder, cls.player, 'set', 'EditorID', 'PlayerRef')
+
+    @classmethod
+    def enabled(cls, name: str | None = None) -> medit.Plugin:
+        plugin = medit.create_plugin(name or f'MBDevClean{next(cls.names)}.esp', CONDITIONS.origin)
+        cls.created.enabled.append(plugin)
+        return plugin
 
     def keys_of(self, plugin: medit.Plugin) -> set[str]:
         return {row['form_key'] for row in medit.select(f"SELECT form_key FROM records WHERE plugin = '{plugin.name}'")}
 
-    def enabled(self, name: str) -> medit.Plugin:
-        plugin = medit.create_plugin(name, CONDITIONS.origin)
-        self.created.append(plugin)
-        return plugin
+    def cell_and_reference_in(self, plugin: medit.Plugin) -> tuple[str, str]:
+        cell = medit.create_record(plugin, 'cell')
+        return cell, medit.create_record(plugin, 'refr', container=cell)
+
+    def deleted_override(self, base_set: bool = True, flags: int = DELETED) -> tuple[medit.Plugin, str]:
+        master = self.enabled()
+        _, reference = self.cell_and_reference_in(master)
+        if base_set:
+            medit.edit(master, reference, 'set', 'Base', ITEM_A)
+        medit.edit(master, reference, 'set', 'Position', '1, 2, 3')
+        override = self.enabled()
+        medit.copy(master, reference, override)
+        medit.edit(override, reference, 'set', 'TeleportDestination.Door', ITEM_A)
+        medit.edit(override, reference, 'set', FLAGS, flags & PERSISTENT)
+        medit.edit(override, reference, 'set', FLAGS, flags)
+        return override, reference
 
     def test_removes_an_override_identical_to_the_record_it_overrides_and_keeps_the_others(self) -> None:
         medit.copy(CONFLICT_A, ITEM_A, PATCH, replace=True)
@@ -78,39 +111,98 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(before - self.keys_of(PATCH), {ITEM_A})
 
     def test_removes_an_override_identical_to_the_master_though_a_plugin_loaded_between_them_changed_the_record(self) -> None:
-        later = self.enabled('MBDevCleanAfterPatch.esp')
+        later = self.enabled()
         medit.copy(CONFLICT_A, ITEM_A, later)
-        cleaned = clean(later)
-        self.assertEqual(cleaned.identical_to_master, [ITEM_A])
+        self.assertEqual(clean(later).identical_to_master, [ITEM_A])
 
     def test_keeps_an_override_identical_to_the_previous_override_but_not_to_the_master(self) -> None:
-        later = self.enabled('MBDevCleanCopiesPatch.esp')
+        later = self.enabled()
         medit.copy(PATCH, ITEM_A, later)
-        cleaned = clean(later)
-        self.assertEqual(cleaned.identical_to_master, [])
+        self.assertEqual(clean(later).identical_to_master, [])
         self.assertIn(ITEM_A, self.keys_of(later))
 
-    def test_undeletes_disables_and_moves_underground_a_deleted_reference_and_enables_it_opposite_the_player(self) -> None:
-        base = self.enabled('MBDevCleanBase.esp')
-        player = medit.create_record(base, 'misc')
-        medit.edit(base, player, 'set', 'EditorID', 'PlayerRef')
-        cell = medit.create_record(base, 'cell')
-        reference = medit.create_record(base, 'refr', container=cell)
-        medit.edit(base, reference, 'set', 'Base', ITEM_A)
-        cleaned_plugin = self.enabled('MBDevCleanDeleted.esp')
-        medit.copy(base, reference, cleaned_plugin)
-        medit.edit(cleaned_plugin, reference, 'set', 'MajorRecordFlagsRaw', DELETED)
-        cleaned = clean(cleaned_plugin)
-        self.assertEqual(cleaned.undeleted_and_disabled, [reference])
-        record = medit.read(cleaned_plugin, reference)
-        self.assertEqual(
-            [record['MajorRecordFlagsRaw'], record['Position'], record['EnableParent']['Reference'], record['EnableParent']['Flags']],
-            [INITIALLY_DISABLED, '0, 0, -30000', player, ['SetEnableStateToOppositeOfParent']])
+    def test_removes_an_override_that_differs_from_the_master_only_in_its_version_stamp(self) -> None:
+        later = self.enabled()
+        medit.copy(CONFLICT_A, ITEM_A, later)
+        medit.edit(later, ITEM_A, 'set', 'VersionControl', 123)
+        self.assertEqual(clean(later).identical_to_master, [ITEM_A])
 
-    def test_leaves_a_deleted_reference_its_master_holds_no_base_for(self) -> None:
-        own = self.enabled('MBDevCleanOwnDeleted.esp')
-        cell = medit.create_record(own, 'cell')
-        reference = medit.create_record(own, 'refr', container=cell)
-        medit.edit(own, reference, 'set', 'MajorRecordFlagsRaw', DELETED)
-        self.assertEqual(clean(own).undeleted_and_disabled, [])
-        self.assertEqual(medit.read(own, reference)['MajorRecordFlagsRaw'], DELETED)
+    def test_removes_a_cell_identical_to_its_master_once_its_references_are_removed(self) -> None:
+        master = self.enabled()
+        cell, reference = self.cell_and_reference_in(master)
+        override = self.enabled()
+        medit.copy(master, cell, override)
+        medit.copy(master, reference, override)
+        clean(override)
+        self.assertEqual(self.keys_of(override) & {cell, reference}, set())
+
+    def test_keeps_a_cell_identical_to_its_master_while_one_of_its_references_differs(self) -> None:
+        master = self.enabled()
+        cell, reference = self.cell_and_reference_in(master)
+        override = self.enabled()
+        medit.copy(master, cell, override)
+        medit.copy(master, reference, override)
+        medit.edit(override, reference, 'set', 'Scale', 2)
+        clean(override)
+        self.assertEqual(self.keys_of(override) & {cell, reference}, {cell, reference})
+
+    def test_undeletes_disables_and_lowers_a_deleted_reference_keeping_x_and_y_and_enables_it_opposite_the_player(self) -> None:
+        override, reference = self.deleted_override()
+        self.assertEqual(clean(override).undeleted_and_disabled, [reference])
+        record = medit.read(override, reference)
+        self.assertEqual(
+            [record[FLAGS], record['Position'], 'TeleportDestination' in record, record['EnableParent']['Reference'], record['EnableParent']['Flags']],
+            [INITIALLY_DISABLED, '1, 2, -30000', False, self.player, ['SetEnableStateToOppositeOfParent']])
+
+    def test_leaves_the_position_of_a_persistent_deleted_reference(self) -> None:
+        override, reference = self.deleted_override(flags=DELETED | PERSISTENT)
+        clean(override)
+        self.assertEqual(medit.read(override, reference)['Position'], '1, 2, 3')
+
+    def test_skips_a_deleted_reference_whose_master_holds_no_base_saying_so(self) -> None:
+        override, reference = self.deleted_override(base_set=False)
+        with self.assertLogs('clean') as logged:
+            self.assertEqual(clean(override).undeleted_and_disabled, [])
+        self.assertEqual(
+            [logged.output[0], logged.output[1]],
+            [f'INFO:clean:Skipping: {reference}', 'WARNING:clean:<Warning: Plugin contains 1 deleted references which can not be undeleted>'])
+        self.assertEqual(medit.read(override, reference)[FLAGS], DELETED)
+
+    def test_reads_the_base_of_the_master_in_the_load_order_not_of_a_plugin_of_the_same_name_that_is_not_active(self) -> None:
+        master = self.enabled()
+        _, reference = self.cell_and_reference_in(master)
+        inactive = medit.create_plugin(master.name, PATCH.origin)
+        self.created.disabled.append(inactive)
+        self.cell_and_reference_in(inactive)
+        medit.edit(inactive, reference, 'set', 'Base', ITEM_A)
+        override = self.enabled()
+        medit.copy(master, reference, override)
+        medit.edit(override, reference, 'set', FLAGS, DELETED)
+        self.assertEqual(clean(override).undeleted_and_disabled, [])
+
+    def test_warns_of_a_deleted_navmesh_and_leaves_it(self) -> None:
+        plugin = self.enabled()
+        cell, _ = self.cell_and_reference_in(plugin)
+        navmesh = medit.create_record(plugin, 'navm', container=cell)
+        medit.edit(plugin, navmesh, 'set', FLAGS, DELETED)
+        with self.assertLogs('clean', 'WARNING') as logged:
+            clean(plugin)
+        self.assertEqual(logged.output, ['WARNING:clean:<Warning: Plugin contains 1 deleted NavMeshes which can not be undeleted>'])
+        self.assertEqual(medit.read(plugin, navmesh)[FLAGS], DELETED)
+
+    def test_refuses_a_plugin_that_is_not_active(self) -> None:
+        inactive = medit.create_plugin('MBDevCleanInactive.esp', CONDITIONS.origin)
+        self.created.disabled.append(inactive)
+        with self.assertRaisesRegex(medit.MEditError, 'is not active'):
+            clean(inactive)
+
+    def test_names_both_records_when_two_define_the_player_reference(self) -> None:
+        second = self.enabled()
+        duplicate = medit.create_record(second, 'misc')
+        medit.edit(second, duplicate, 'set', 'EditorID', 'PlayerRef')
+        self.addCleanup(medit.delete, second, duplicate)
+        override, _ = self.deleted_override()
+        with self.assertRaises(medit.MEditError) as raised:
+            clean(override)
+        self.assertIn(self.player, str(raised.exception))
+        self.assertIn(duplicate, str(raised.exception))

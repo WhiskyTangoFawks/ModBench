@@ -19,7 +19,7 @@ const RUNS: readonly { label: string; args: string[]; ran: string; code: number 
 ];
 
 describe('a step\'s user task, as .vscode-test.mjs writes it: a script that records its arguments and MEDIT_PORT in its folder and exits with the last', () => {
-  const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScripts: os.tmpdir() });
+  const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScript: () => Promise.resolve(undefined) });
   const folders: string[] = [];
   afterEach(() => { for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true }); });
 
@@ -33,7 +33,7 @@ describe('a step\'s user task, as .vscode-test.mjs writes it: a script that reco
     const ran = await Promise.all(RUNS.map(async ({ label, args }) => {
       const folder = mkdtempSync(path.join(os.tmpdir(), 'modbench-step-'));
       folders.push(folder);
-      const why = await tasks.whyStepFailed({ kind: 'task', task: label, args }, folder);
+      const why = await tasks.whyStepFailed({ kind: 'task', task: label, args }, { sourceFolder: folder, folder });
       return [why, readFileSync(path.join(folder, 'ran.txt'), 'utf8')];
     }));
 
@@ -50,9 +50,9 @@ describe('a script step, run as a task Modbench makes', () => {
     const folder = mkdtempSync(path.join(os.tmpdir(), 'modbench-script-mod-'));
     folders.push(source, folder);
     writeFileSync(path.join(source, 'fix.js'), "const { delimiter, join } = require('path'); const args = process.argv.slice(2); const [scripts = ''] = (process.env.PYTHONPATH ?? '').split(delimiter); require('fs').writeFileSync('ran.json', JSON.stringify({ args, port: process.env.MEDIT_PORT, meditOnPythonPath: require('fs').existsSync(join(scripts, 'medit.py')) })); process.exit(Number(args.at(-1)));");
-    const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScripts: source });
+    const tasks = stepTasks(hostTasks, { interpreter: () => Promise.resolve(TEST_NODE), defaultScript: () => Promise.resolve(undefined) });
 
-    const why = await tasks.whyScriptFailed({ kind: 'script', script: 'fix.js', args: ['A.esp', '5'] }, { sourceFolder: source, folder });
+    const why = await tasks.whyStepFailed({ kind: 'script', script: 'fix.js', args: ['A.esp', '5'] }, { sourceFolder: source, folder });
 
     assert.deepStrictEqual(
       [why, JSON.parse(readFileSync(path.join(folder, 'ran.json'), 'utf8'))],

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { HostTasks } from './ports/tasks';
+import { defaultScriptIn } from './agent/defaultScripts';
 import { selectedInterpreter } from './agent/pythonInterpreter';
-import type { ScriptHost } from './sourceCommands/steps';
+import type { ScriptHost } from './ports/scriptHost';
 
 type ProcessTask = vscode.Task & { readonly execution: vscode.ProcessExecution };
 type ShellCommandTask = vscode.Task & {
@@ -38,4 +39,4 @@ export const hostTasks: HostTasks<vscode.Task, ProcessTask, ShellCommandTask, Sh
 };
 
 export const scriptHostIn = (extensionUri: vscode.Uri): ScriptHost =>
-  ({ interpreter: selectedInterpreter, defaultScripts: vscode.Uri.joinPath(extensionUri, 'scripts', 'default').fsPath });
+  ({ interpreter: selectedInterpreter, defaultScript: defaultScriptIn(vscode.Uri.joinPath(extensionUri, 'scripts', 'default')) });

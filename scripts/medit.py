@@ -22,6 +22,11 @@ class Plugin(NamedTuple):
     origin: str
 
 
+class RecordCopy(NamedTuple):
+    plugin: Plugin
+    conflict_this: str | None
+
+
 @dataclass(frozen=True)
 class RecordName:
     form_key: str
@@ -53,6 +58,12 @@ def read(plugin: Name, form_key: str) -> JsonRecord:
     name, origin = _plugin(plugin)
     document = _call('GET', f'/plugins/{_quoted(name)}/records/{_quoted(form_key)}/rendered-document?origin={_quoted(origin)}')
     return json.loads(document['text'])
+
+
+def compare(form_key: str) -> list[RecordCopy]:
+    """Each plugin's copy of a record in load order, with the state xEdit gives it against the master, such as IdenticalToMaster."""
+    overrides = _call('GET', f'/records/{_quoted(form_key)}/compare')['overrides']
+    return [RecordCopy(Plugin(copy['plugin'], copy['origin']), copy['conflictThis']) for copy in overrides]
 
 
 def referenced_by(form_key: str) -> list[Referrer]:

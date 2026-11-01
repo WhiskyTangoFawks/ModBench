@@ -54,7 +54,9 @@ function hostEndingEachRunAsSaid(tasks: readonly FakeTask[], endOf: Readonly<Rec
   return { tasksHost, executed };
 }
 
-const NO_PYTHON = { interpreter: () => Promise.resolve(undefined), defaultScripts: '/ext/scripts/default' };
+const NO_PYTHON = { interpreter: () => Promise.resolve(undefined), defaultScript: (name: string) => Promise.resolve(name === 'clean' ? join('/ext/scripts/default', 'clean.py') : undefined) };
+
+const folders = { sourceFolder: '/src/Mod', folder: '/mods/Mod' };
 
 const userTask = (label: string, kind: FakeTask['kind'] = 'process'): FakeTask => ({ label, user: true, kind });
 
@@ -72,7 +74,7 @@ describe('stepTasks', () => {
   ])('runs %s, in the folder the manifest builds', async (_case, task, args, rebuilt) => {
     const { tasksHost, executed } = hostEndingEachRunAsSaid([task]);
 
-    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'Optimise', args }, '/mods/Mod')).toBeUndefined();
+    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'Optimise', args }, folders)).toBeUndefined();
 
     expect(executed).toEqual([{ label: 'Optimise', rebuilt }]);
   });
@@ -86,7 +88,7 @@ describe('stepTasks', () => {
   ])('names why a step whose task %s failed', async (_case, tasks, endOf, why) => {
     const { tasksHost } = hostEndingEachRunAsSaid(tasks, endOf);
 
-    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'A', args: [] }, '/mods/Mod')).toBe(why);
+    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'A', args: [] }, folders)).toBe(why);
   });
 
   it.each<[string, string[]]>([
@@ -96,7 +98,7 @@ describe('stepTasks', () => {
   ])('refuses a step with arguments on a command line, %s included, running nothing, as no quoting can be known for it', async (_case, args) => {
     const { tasksHost, executed } = hostEndingEachRunAsSaid([userTask('A', 'shellLine')]);
 
-    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'A', args }, '/mods/Mod'))
+    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'A', args }, folders))
       .toBe('step \'A\' did not run: its task \'A\' is one command line, which takes no arguments: give the task an "args" list, which VS Code quotes');
 
     expect(executed).toEqual([]);
@@ -105,36 +107,43 @@ describe('stepTasks', () => {
   it('reads an exit code that arrives before the host answers which run it started', async () => {
     const { tasksHost } = hostEndingEachRunAsSaid([userTask('A')], { A: { exitCode: 4, before: true } });
 
-    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'A', args: [] }, '/mods/Mod')).toBe("step 'A' exited with code 4");
+    expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'task', task: 'A', args: [] }, folders)).toBe("step 'A' exited with code 4");
   });
 
   describe('a script step', () => {
-    const folders = { sourceFolder: '/src/Mod', folder: '/mods/Mod' };
     const PYTHON = { ...NO_PYTHON, interpreter: () => Promise.resolve('/venv/bin/python') };
 
-    it.each<[string, ScriptStep | DefaultScriptStep, string]>([
-      ['by its path in the source folder', { kind: 'script', script: 'fix/a.py', args: ['A.esp'] }, join('/src/Mod', 'fix/a.py')],
-      ['by its name among the default scripts', { kind: 'defaultScript', name: 'clean', args: ['A.esp'] }, join('/ext/scripts/default', 'clean.py')],
-    ])('runs the script %s with the selected interpreter, in the mod\'s folder, never as a task Run Task offers', async (_case, step, script) => {
+    it.each<[string, ScriptStep | DefaultScriptStep, string, string]>([
+      ['by its path in the source folder', { kind: 'script', script: 'fix/a.py', args: ['A.esp'] }, 'fix/a.py', join('/src/Mod', 'fix/a.py')],
+      ['by its name among the default scripts', { kind: 'defaultScript', name: 'clean', args: ['A.esp'] }, 'clean', join('/ext/scripts/default', 'clean.py')],
+    ])('runs the script %s with the selected interpreter, in the mod\'s folder, never as a task Run Task offers', async (_case, step, label, script) => {
       const { tasksHost, executed } = hostEndingEachRunAsSaid([]);
 
-      expect(await stepTasks(tasksHost, PYTHON).whyScriptFailed(step, folders)).toBeUndefined();
+      expect(await stepTasks(tasksHost, PYTHON).whyStepFailed(step, folders)).toBeUndefined();
 
-      expect(executed).toEqual([{ label: step.kind === 'script' ? step.script : step.name, rebuilt: undefined, script: { command: '/venv/bin/python', args: [script, 'A.esp'], cwd: '/mods/Mod' } }]);
+      expect(executed).toEqual([{ label, rebuilt: undefined, script: { command: '/venv/bin/python', args: [script, 'A.esp'], cwd: '/mods/Mod' } }]);
     });
 
     it('names why a step ran no script when the window has no interpreter, running nothing', async () => {
       const { tasksHost, executed } = hostEndingEachRunAsSaid([]);
 
-      expect(await stepTasks(tasksHost, NO_PYTHON).whyScriptFailed({ kind: 'script', script: 'a.py', args: [] }, folders))
+      expect(await stepTasks(tasksHost, NO_PYTHON).whyStepFailed({ kind: 'script', script: 'a.py', args: [] }, folders))
         .toBe("step 'a.py' did not run: no Python interpreter is selected for this window: select one with Python: Select Interpreter");
+      expect(executed).toEqual([]);
+    });
+
+    it('names a default script Modbench does not ship, running nothing', async () => {
+      const { tasksHost, executed } = hostEndingEachRunAsSaid([]);
+
+      expect(await stepTasks(tasksHost, PYTHON).whyStepFailed({ kind: 'defaultScript', name: '../medit', args: [] }, folders))
+        .toBe("step '../medit' did not run: Modbench ships no default script '../medit'");
       expect(executed).toEqual([]);
     });
 
     it('names the exit code of a script that fails', async () => {
       const { tasksHost } = hostEndingEachRunAsSaid([], { clean: { exitCode: 3 } });
 
-      expect(await stepTasks(tasksHost, PYTHON).whyScriptFailed({ kind: 'defaultScript', name: 'clean', args: [] }, folders)).toBe("step 'clean' exited with code 3");
+      expect(await stepTasks(tasksHost, PYTHON).whyStepFailed({ kind: 'defaultScript', name: 'clean', args: [] }, folders)).toBe("step 'clean' exited with code 3");
     });
   });
 });
