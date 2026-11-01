@@ -304,6 +304,20 @@ describe('the sizes and hashes of the record index', () => {
       expect([afterSecondAsk, listed.length, await indexText()]).toEqual([1, 2, '']);
     });
 
+    it('asked for one downloaded file at a time, as the installation file read does, reads no file again that is unchanged or failed, nor extracts a missing one', async () => {
+      clockAnHourPastEveryWrite();
+      const listed: string[] = [];
+      const crashing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: (path) => { listed.push(path); return Promise.reject(new Error('7z crashed')); } };
+      const crashed = await fileHolding('Crashes.rar', 'archive');
+      const session = hashIndex(folder, crashing);
+      const first = [await session.downloadedFileHash(crashed), await session.downloadedFileHash(join(root, 'Gone.7z'))];
+      const reads = vi.mocked(digestOf).mock.calls.length;
+
+      const second = [await session.downloadedFileHash(crashed), await session.downloadedFileHash(join(root, 'Gone.7z'))];
+
+      expect([second, listed, vi.mocked(digestOf).mock.calls.length]).toEqual([first, [crashed], reads]);
+    });
+
     it('shows a file it could not hash as a problem on that file, until it hashes or is gone', async () => {
       clockAnHourPastEveryWrite();
       const reading: InstallationFileReader = { ...fakeInstallationFileReader(ENTRIES), list: () => Promise.reject(new Error('Can not open the file as archive')) };
