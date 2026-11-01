@@ -33,7 +33,7 @@ export type DecompileProgress = Omit<DecompileAndCommitProgress, 'phase'> & { ph
 /** What decompile and commit answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
 export type DecompileAndCommitted = DecompileAndCommitOutcome & { readonly notes?: readonly string[] };
 
-const unsavedRefusal =(mod: string, paths: readonly string[]): ItemRefusal<string> =>
+const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
 
 type Adapter = SourceCommandsDeps['adapter'];
@@ -140,7 +140,8 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       const sourceMods = await sourceModsNow();
       const game = await gameToHand(adapter, sourceMods);
       const downloaded = await downloadedPackagesOf(adapter);
-      const notes = downloaded.notes.length > 0 ? { notes: downloaded.notes } : {};      for (const [at, mod] of mods.entries()) {
+      const notes = downloaded.notes.length > 0 ? { notes: downloaded.notes } : {};
+      for (const [at, mod] of mods.entries()) {
         options.onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
         const decided = await newRepositoryOf(client, adapter, mod, game, downloaded.files);
         if ('refusal' in decided) refused.push({ item: mod, reason: decided.refusal });
