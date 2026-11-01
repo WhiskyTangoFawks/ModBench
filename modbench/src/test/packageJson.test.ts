@@ -1038,15 +1038,15 @@ describe('package.json git init, update manifest and restore from manifest follo
   });
 
   it.each([
-    ['a mod', 'mod enabled', '4_sourceControl'],
+    ['a mod that is not a source mod', 'mod enabled nonSourceMod', '4_sourceControl'],
     ['a separator', 'separator', '4_sourceControl'],
   ])('offers update manifest, then restore from manifest, on %s row while the instance holds a repository', (_row, viewItem, group) => {
     expect([onRow('modbench.modList', viewItem, hasRepository), onRow('modbench.modList', viewItem, inInstance)])
       .toEqual([[[UPDATE_MANIFEST, group], [RESTORE_FROM_MANIFEST, group]], []]);
   });
 
-  it('offers update manifest, then restore from manifest, on a source mod row, whose source folder has a manifest of its own', () => {
-    expect(onRow('modbench.modList', 'mod enabled sourceMod', hasRepository)).toEqual([[UPDATE_MANIFEST, '4_sourceControl'], [RESTORE_FROM_MANIFEST, '4_sourceControl']]);
+  it('offers restore from manifest alone on a source mod row, whose own folder its build records', () => {
+    expect(onRow('modbench.modList', 'mod enabled sourceMod', hasRepository)).toEqual([[RESTORE_FROM_MANIFEST, '4_sourceControl']]);
   });
 
   it('offers git init on the Modlist row with no repository or one git init has not set up, and update manifest then restore from manifest with a repository', () => {
@@ -1359,7 +1359,7 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, 'modbench.source.build', ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, 'modbench.source.build', 'modbench.source.updateManifest', ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1446,6 +1446,18 @@ describe('package.json Referenced By menus', () => {
 describe('package.json contributes the strings language as a setting (editor-fields.md, By type)', () => {
   it('a string defaulting to English', () => {
     expect(pkg.contributes.configuration.properties['modbench.stringsLanguage']).toMatchObject({ type: 'string', default: 'English' });
+  });
+});
+
+describe('package.json update manifest\'s Explorer entry point (source.md, Menus and keys)', () => {
+  it('offers it on a manifest directly in a source mod\'s source folder, while the instance holds a repository', () => {
+    const entries = present(pkg.contributes.menus['explorer/context'], "contributes.menus['explorer/context']").filter((e: MenuEntry) => e.command === 'modbench.source.updateManifest');
+
+    expect(entries).toHaveLength(1);
+    const when = present(entries[0], 'the entry').when;
+    expect([
+      requires(when, 'resourceFilename =~ /\\.manifest\\.json$/'), requires(when, 'resourceDirname in modbench.source.sourceFolders'), requires(when, HAS_REPOSITORY_KEY),
+    ]).toEqual([true, true, true]);
   });
 });
 

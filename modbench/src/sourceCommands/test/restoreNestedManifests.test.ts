@@ -60,7 +60,7 @@ describe('manifests outside mods/ over an instance on disk, one nested in the fo
   it('updates the manifest beside them and acts on neither of the pair', async () => {
     const { commands, found } = await instanceWithANestedPair();
 
-    const outcome = await commands.updateManifest([], {}, found.others);
+    const outcome = await commands.updateManifest([], {}, found.others, false, []);
 
     expect([...outcome.landed.map(({ mod }) => mod), ...outcome.refused.map(({ item }) => item)]).toEqual(['plugins/rb/']);
   });

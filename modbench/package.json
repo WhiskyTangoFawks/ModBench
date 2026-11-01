@@ -814,6 +814,11 @@
         "icon": "$(play)"
       },
       {
+        "command": "modbench.source.updateManifest",
+        "title": "Update Manifest",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.modlist.gitInit",
         "title": "Git Init Modlist",
         "category": "Modbench"
@@ -1119,6 +1124,10 @@
           "when": "false"
         },
         {
+          "command": "modbench.source.updateManifest",
+          "when": "false"
+        },
+        {
           "command": "modbench.recordGrid.editHere",
           "when": "false"
         },
@@ -1260,6 +1269,11 @@
           "command": "modbench.source.build",
           "when": "resource in modbench.source.buildTargets",
           "group": "modbench@1"
+        },
+        {
+          "command": "modbench.source.updateManifest",
+          "when": "resourceFilename =~ /\\.manifest\\.json$/ && resourceDirname in modbench.source.sourceFolders && modbench.modlist.hasRepository",
+          "group": "modbench@2"
         }
       ],
       "editor/title/run": [
@@ -1576,7 +1590,7 @@
         },
         {
           "command": "modbench.mod.updateManifest",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bnonSourceMod\\b/ && modbench.modlist.hasRepository",
           "group": "4_sourceControl@3"
         },
         {
