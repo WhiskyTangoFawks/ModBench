@@ -28,7 +28,7 @@ internal sealed class PluginCompileService(
             : PluginCompileOutcome.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
 
     /// <summary>The plugin compiled to its path, which the load order need not hold yet, as a fresh clone's build's does
-    /// not (source.md, Build, story 7). A strings file <paramref name="leavesUnwritten"/> names, by its path in the folder, is left.</summary>
+    /// not (source.md, Build, story 7). A strings file <paramref name="leavesUnwritten"/> names is left.</summary>
     public async Task<PluginCompileOutcome> CompileAsync(RegisteredPlugin registered, Func<string, bool>? leavesUnwritten = null)
     {
         var plugin = registered.Key;

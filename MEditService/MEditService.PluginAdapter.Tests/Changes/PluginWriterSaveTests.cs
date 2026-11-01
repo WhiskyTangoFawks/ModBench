@@ -13,7 +13,7 @@ public sealed class PluginWriterSaveTests
     {
         await TreeSaves.SaveAsync(pluginPath, prep =>
         {
-            prep.Commit();
+            prep.Commit(_ => false);
             return true;
         });
     }
@@ -89,7 +89,7 @@ public sealed class PluginWriterSaveTests
             var added = FolderEntries.TheOneAddedTo(data.DataFolder, entriesBefore);
             File.Delete(Path.Combine(added, "TestPlugin.esp"));
 
-            return Assert.ThrowsAny<IOException>(prep.Commit);
+            return Assert.ThrowsAny<IOException>(() => prep.Commit(_ => false));
         });
 
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
@@ -114,7 +114,7 @@ public sealed class PluginWriterSaveTests
 
         var saved = await tree.SaveAsync(pluginPath, ["Other.esm", "Fixture.esp"], ["Master.esm", "Other.esm"], save =>
         {
-            save.Commit();
+            save.Commit(_ => false);
             return true;
         });
 
@@ -136,7 +136,7 @@ public sealed class PluginWriterSaveTests
         var drops = (await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
         {
             var dropped = tree.DropsIn(save);
-            save.Commit();
+            save.Commit(_ => false);
             return dropped;
         })).Answered();
 
@@ -160,7 +160,7 @@ public sealed class PluginWriterSaveTests
 
         var saved = await tree.SaveAsync(child.Path, source.Masters, source.Masters, save =>
         {
-            save.Commit();
+            save.Commit(_ => false);
             return true;
         });
 

@@ -67,7 +67,7 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
 
         await SaveModifiedAsync(prep =>
         {
-            prep.Commit();
+            prep.Commit(_ => false);
             return true;
         });
 
@@ -92,7 +92,7 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
             var added = FolderEntries.TheOneAddedTo(_dataFolder, entriesBefore);
             File.Delete(Directory.GetFiles(Path.Combine(added, "Strings"))[0]);
 
-            return Assert.ThrowsAny<IOException>(prep.Commit);
+            return Assert.ThrowsAny<IOException>(() => prep.Commit(_ => false));
         });
 
         Assert.Equal(before, File.ReadAllBytes(_pluginPath));
