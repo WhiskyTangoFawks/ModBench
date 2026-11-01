@@ -30,7 +30,7 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress
   };
 
   const open = (module: string, imagesFolder: vscode.Uri): vscode.WebviewPanel => {
-    const opened = vscode.window.createWebviewPanel('modbench.fomod', `FOMOD: ${module}`, vscode.ViewColumn.Active, { retainContextWhenHidden: true });
+    const opened = vscode.window.createWebviewPanel('modbench.fomod', `FOMOD: ${module}`, vscode.ViewColumn.Active, { retainContextWhenHidden: true, enableFindWidget: true });
     opened.onDidDispose(() => {
       if (!closing) moved({ kind: 'cancel' });
     });

@@ -13,7 +13,7 @@ const { createWebviewPanel, panels } = vi.hoisted(() => {
   const made: FakePanel[] = [];
   return {
     panels: made,
-    createWebviewPanel: vi.fn((_type: string, title: string): FakePanel => {
+    createWebviewPanel: vi.fn((_type: string, title: string, _column?: unknown, _options?: { enableFindWidget?: boolean }): FakePanel => {
       let disposeListener = (): void => undefined;
       let messageListener: (message: unknown) => void = () => undefined;
       const panel: FakePanel = {
@@ -70,6 +70,12 @@ describe('the FOMOD installer\'s page, in a tab', () => {
 
     expect(page().title).toBe('FOMOD: My Module');
     expect(createWebviewPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds text in the page, as the record panel and the conflict table do (common.md, A view, story 12)', () => {
+    fomodDialog(EXTENSION, vi.fn(), PROGRESS).show(STATE, RELEASE);
+
+    expect(createWebviewPanel.mock.calls[0]?.[3]).toMatchObject({ enableFindWidget: true });
   });
 
   it('lets the page load images from the release\'s folder and no other', () => {

@@ -136,7 +136,7 @@ function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
   }];
 }
 
-// mods.md, Build, story 1: the manifest names a commit, so a build from changes no commit holds says so.
+// The manifest names a commit, so a build from changes no commit holds says so.
 function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
   return namedBuilt(outcome.landed.filter(({ uncommitted }) => uncommitted === true), {
     one: 'Built 1 mod from changes no commit holds, so its manifest\'s commit does not rebuild it.',
