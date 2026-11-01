@@ -106,12 +106,10 @@ By [common.md](common.md#reporting). As a user, I want:
 
 What I expect to need and choose not to build yet, each with why.
 
-1. An official master cleaned with xEdit as a source mod whose build step runs the cleaning on the game's own file, so git holds the process, not a delta. It waits on item 6.
+1. An official master cleaned with xEdit as a source mod whose build step runs the cleaning on the game's own file, so git holds the process, not a delta. It waits on item 5.
 2. Fetching an installation file from a host other than Nexus, or a game's files from its store, such as a Steam depot. Restore from manifest names what it lacks, and I fetch it.
 3. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
 4. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
-5. An archive built in a mod from its installation file's files, so a change to one entry reads as that entry in a diff.
-6. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
-7. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
-8. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
-9. Packing loose files into an archive loaded by a dummy plugin, as a change the manifest records. A texture's bytes in an archive need not equal its loose file's, so it waits for how Modbench compares an archive's content.
+5. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
+6. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
+7. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
