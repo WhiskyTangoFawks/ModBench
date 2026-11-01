@@ -143,6 +143,14 @@ plugins:
     expect([entries[0]?.msg, problems.map(({ line }) => line)]).toEqual([[], [3, 4]]);
   });
 
+  it('names a file whose aliases expand without end as not read, instead of expanding them', () => {
+    const levels = Array.from({ length: 10 }, (_, i) => `  - &l${i + 1} [${Array.from({ length: 10 }, () => `*l${i}`).join(', ')}]`);
+    const bomb = `plugins: []\nl:\n  - &l0 [a, b]\n${levels.join('\n')}\n  - name: X\n`;
+    const { entries, problems } = readRules(filesOf({ userlist: text(bomb) }));
+
+    expect([entries, problems.map(({ file }) => file)]).toEqual([[], ['userlist']]);
+  });
+
   it('names a file that could not be read, without a line', () => {
     const { problems } = readRules(filesOf({ userlist: { path: '/instance/userlist.yaml', kind: 'unreadable', reason: 'EACCES' } }));
 

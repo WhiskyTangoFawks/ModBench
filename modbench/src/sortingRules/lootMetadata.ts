@@ -58,6 +58,9 @@ const MESSAGE_LEVELS: Record<string, RuleLevel> = { say: 'info', warn: 'warning'
 // LOOT reads a name holding any of these as a regular expression over the whole file name.
 const REGEX_NAME = /[:\\*?|]/;
 
+// The real Fallout 4 masterlist with its prelude resolves 368 aliases; a file that needs far more is an alias bomb.
+const MAX_ALIASES = 4000;
+
 const PRELUDE_KEY = /^prelude:[ \t]*(#.*)?$/;
 const NEXT_TOP_LEVEL_KEY = /^[^\s#]/;
 
@@ -117,7 +120,12 @@ class FileReader {
     const plugins = document.get('plugins', true);
     if (!isSeq(plugins)) return;
     // One conversion of the whole document: converting each entry alone resolves its anchors again, and takes seconds on a masterlist.
-    const converted: unknown = document.toJS({ maxAliasCount: -1 });
+    let converted: unknown;
+    try {
+      converted = document.toJS({ maxAliasCount: MAX_ALIASES });
+    } catch (err) {
+      return this.problem(undefined, err instanceof Error ? err.message : String(err));
+    }
     const plain = isRecord(converted) && Array.isArray(converted.plugins) ? converted.plugins : [];
     plugins.items.forEach((item, index) => this.entry(item, plain[index]));
   }
