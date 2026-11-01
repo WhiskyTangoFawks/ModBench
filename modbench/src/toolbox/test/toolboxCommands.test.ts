@@ -27,7 +27,7 @@ import { progressSteps } from '../../test/recordedProgress';
 const switchProfile = vi.fn<InstanceCommands['switchProfile']>();
 
 import { registerRefreshCommand, registerToolboxCommands } from '../toolboxCommands';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { recordingReporter, tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
@@ -192,7 +192,7 @@ describe('Refresh', () => {
     result: RefreshResult, instanceRoot = '/instance',
     refill: Promise<void> = Promise.resolve(),
   ) {
-    const reporter = recordingReporter();
+    const { reporter, reporterFor, tags } = tagRecordingReporterFor();
     const released: true[] = [];
     registerRefreshCommand({
       commands: { refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); } },
@@ -204,11 +204,15 @@ describe('Refresh', () => {
           return Promise.resolve(undefined);
         },
       },
-      reporterFor: () => reporter,
+      reporterFor,
       instanceRoot,
     });
-    return { reporter, released, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
+    return { reporter, tags, released, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
   }
+
+  it('reports under the refresh tag', () => {
+    expect(registerRefresh({ applied: true }).tags).toEqual(['refresh']);
+  });
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
     const { reporter, run } = registerRefresh({ applied: true });

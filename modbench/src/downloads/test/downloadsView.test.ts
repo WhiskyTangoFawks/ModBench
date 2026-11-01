@@ -1,3 +1,4 @@
+import { recordedWithProgress } from '../../test/recordedProgress';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -24,6 +25,7 @@ vi.mock('vscode', () => ({
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
+    withProgress: recordedWithProgress,
     createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => treeViews.create(id, options),
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
@@ -46,8 +48,8 @@ import { DownloadedFileNode } from '../DownloadsProvider';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { recordingReporter } from '../../test/surfacingDoubles';
-import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { recordingReporter, tagRecordingReporterFor } from '../../test/surfacingDoubles';
+import { downloadedFilesOf, fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 
 type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
@@ -196,6 +198,28 @@ describe('the Downloads view tells its palette entries, which are handed no row,
   });
 });
 
+
+describe('the Downloads view names its own tags', () => {
+  it('reports under the downloadedFiles tag', () => {
+    const { reporterFor, tags } = tagRecordingReporterFor();
+    createDownloadsView({ ...downloadsViewDeps(instanceOver()), reporterFor });
+
+    expect(tags).toEqual(['downloadedFiles']);
+  });
+
+  it('prefixes a line it logs for a delete that left metadata behind with [downloadedFiles]', async () => {
+    const lines: string[] = [];
+    const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: downloadedFilesOf('a.7z') }), { metadataLeftBehind: 'EPERM' });
+    createDownloadsView({
+      ...downloadsViewDeps(instanceOver(downloadedFileRowFixture('a.7z'))),
+      commands: downloadedFileCommands(fake.adapter), channel: { warn: (line) => lines.push(line) },
+    });
+
+    await command('modbench.downloadedFile.delete')(new DownloadedFileNode(downloadedFileRowFixture('a.7z')));
+
+    expect(lines).toEqual([expect.stringMatching(/^\[downloadedFiles\] "a\.7z" was deleted/)]);
+  });
+});
 
 describe('the Downloads view contributes to the copy value catalog', () => {
   it('under the downloaded file tag', () => {

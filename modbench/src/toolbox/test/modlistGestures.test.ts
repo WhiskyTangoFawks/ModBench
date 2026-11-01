@@ -18,7 +18,7 @@ vi.mock('vscode', async () => {
 
 import { progressSteps } from '../../test/recordedProgress';
 import { registerModlistCommands } from '../modlistGestures';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -29,13 +29,13 @@ const GIT_INIT = 'modbench.modlist.gitInit';
 const REFUSAL = '/instance already holds a repository.';
 
 function register() {
-  const reporter = recordingReporter();
+  const { reporter, reporterFor, tags } = tagRecordingReporterFor();
   registerModlistCommands({
     commands: { gitInit },
     instance: { value: instanceValueFixture({}), refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
-    reporterFor: () => reporter,
+    reporterFor,
   });
-  return { reporter, run: (...args: unknown[]) => present(handlers.get(GIT_INIT), `the handler for "${GIT_INIT}"`)(...args) };
+  return { reporter, tags, run: (...args: unknown[]) => present(handlers.get(GIT_INIT), `the handler for "${GIT_INIT}"`)(...args) };
 }
 
 beforeEach(() => {
@@ -46,6 +46,10 @@ beforeEach(() => {
 });
 
 describe('Git init', () => {
+  it('reports under the modlist tag', () => {
+    expect(register().tags).toEqual(['modlist']);
+  });
+
   it('makes the repository under the Toolbox\'s progress, which closes once the Instance loader has read again, and says nothing', async () => {
     gitInit.mockImplementationOnce(() => { progressSteps.push('git init'); return Promise.resolve({ applied: true }); });
     const { reporter, run } = register();
