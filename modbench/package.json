@@ -632,6 +632,7 @@
       {
         "command": "modbench.mod.openSource",
         "title": "Open Mod Source",
+        "icon": "$(source-control)",
         "category": "Modbench"
       },
       {
@@ -1473,6 +1474,11 @@
           "command": "modbench.mod.openSource",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bsourceMod\\b/",
           "group": "1_open@2"
+        },
+        {
+          "command": "modbench.mod.openSource",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bsourceMod\\b/",
+          "group": "inline"
         },
         {
           "command": "modbench.mod.openConflicts",

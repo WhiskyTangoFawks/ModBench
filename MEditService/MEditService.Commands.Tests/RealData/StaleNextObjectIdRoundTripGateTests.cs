@@ -79,7 +79,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             _holder.Apply(_loadOrder);
         }
 
-        public async Task<PluginInitiated> InitSourceModAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
+        public async Task<PluginInitialized> InitSourceModAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
             (await InitSourceModEveryPluginOf.ModAsync(
                 _loadOrder, Plugin.Origin,
                 deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : null)).Only();

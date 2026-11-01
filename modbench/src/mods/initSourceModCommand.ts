@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import { isRefused, type InitSourceModOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
+import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
@@ -14,7 +15,7 @@ import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGesture
 export interface InitSourceModDeps {
   /** The message line of the view the gesture was fired from, which the phase line goes on. */
   progressIn: (view: string) => { say: (message: string | undefined) => void };
-  instance: Pick<Instance, 'refresh'>;
+  instance: Pick<Instance, 'refresh' | 'value'>;
   commands: Pick<SourceCommands, 'initSourceMod'>;
   reporter: Reporter;
   onCommitted: () => Promise<void>;
@@ -48,7 +49,7 @@ export function registerInitSourceModCommand(deps: InitSourceModDeps, paletteSel
     },
     fromAgent: ({ argument, options }) => ({ ...givenByAgent(argument), commit: options.commit }),
     run: ({ mods, commit, invokedFrom }) => initSourceMods(deps, mods, commit, invokedFrom),
-    report: (result, { mods, refusedRows }) => reportInitiated(deps.reporter, result, mods, refusedRows),
+    report: (result, { mods, refusedRows }) => reportInitialized(deps.reporter, result, mods, refusedRows),
   };
   return registerAgentGesture('modbench.mod.initSourceMod', paletteSelection, gesture, isClickedRow);
 }
@@ -59,7 +60,7 @@ async function initSourceMods(
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   const progress = progressIn(invokedFrom);
-  return runWritingGesture(invokedFrom, instance, async (): Promise<InitializedSourceMod> => {
+  const result = await runWritingGesture(invokedFrom, instance, async (): Promise<InitializedSourceMod> => {
     try {
       progress.say(initSourceModProgressMessage(firstMod, undefined));
       const result = await commands.initSourceMod(mods, {
@@ -74,9 +75,24 @@ async function initSourceMods(
       progress.say(undefined);
     }
   });
+  const lastLanded = result.applied ? result.outcome.landed.at(-1) : undefined;
+  if (!result.applied || lastLanded === undefined) return result;
+  const unshown = await showInExplorer(instance.value.paths.sourceDirs.get(lastLanded.mod), lastLanded.mod);
+  return unshown === undefined ? result : { ...result, partial: [...result.partial ?? [], unshown] };
 }
 
-function reportInitiated(
+// plugins.md, Init source mod, story 7: the source is shown in the Explorer when it lands.
+async function showInExplorer(folder: string | undefined, mod: string): Promise<PartialFailure | undefined> {
+  try {
+    if (folder === undefined) throw new Error('the instance names no source folder for it');
+    await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
+    return undefined;
+  } catch (err) {
+    return { message: 'Init source mod:', detail: `"${mod}" is a source mod, but its source could not be shown in the Explorer: ${errorMessage(err)}`, severity: 'warning' };
+  }
+}
+
+function reportInitialized(
   reporter: Reporter, result: InitializedSourceMod, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
 ): void {
   if (!result.applied) { reporter.report('error', result.refusal); return; }
