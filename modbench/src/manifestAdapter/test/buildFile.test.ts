@@ -9,7 +9,7 @@ describe('a build file the adapter reads and refuses', () => {
     const text = JSON.stringify({
       version: 1,
       steps: [
-        { decompile: ['originals/A.esp'] }, { compile: ['A.esp'] }, { copy: ['textures', 'readme.txt'] },
+        { decompile: ['A.esp'] }, { compile: ['A.esp'] }, { copy: ['textures', 'readme.txt'] },
         { task: 'Optimise textures', args: ['--in', 'textures'], page: 'https://example.com/optimiser' }, { task: 'Archive' },
         { pack: { 'mod.ba2': ['a.nif', 'b.nif'] } },
       ],
@@ -18,7 +18,7 @@ describe('a build file the adapter reads and refuses', () => {
     expect(read(text)).toEqual({
       buildFile: {
         steps: [
-          { kind: 'decompile', paths: ['originals/A.esp'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures', 'readme.txt'] },
+          { kind: 'decompile', paths: ['A.esp'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures', 'readme.txt'] },
           { kind: 'task', task: 'Optimise textures', args: ['--in', 'textures'], page: 'https://example.com/optimiser' }, { kind: 'task', task: 'Archive', args: [] },
           { kind: 'pack', archives: [{ path: 'mod.ba2', files: ['a.nif', 'b.nif'] }] },
         ],
@@ -65,7 +65,8 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"version":1,"steps":[{"copy":"a"}]}', 'its build file cannot be read at its step 1'],
     ['{"version":1,"steps":[{"copy":["a","a"]}]}', "its build file cannot be read at its step 1: it names 'a' twice"],
     ['{"version":1,"steps":[{"decompile":["../A.esp"]}]}', "its build file's step 1 names '../A.esp', which is not a path in the folder"],
-    ['{"version":1,"steps":[{"compile":["plugins/A.esp"]}]}', "its build file cannot be read at its step 1: it compiles 'plugins/A.esp', which is not at the root of the mod's folder"],
+    ['{"version":1,"steps":[{"compile":["plugins/A.esp"]}]}', "its build file cannot be read at its step 1: it names 'plugins/A.esp', which is not a plugin at the root"],
+    ['{"version":1,"steps":[{"decompile":["originals/A.esp"]}]}', "its build file cannot be read at its step 1: it names 'originals/A.esp', which is not a plugin at the root"],
     ['{"version":1,"steps":[{"pack":{}}]}', 'its build file cannot be read at its step 1: it names no archive'],
     ['{"version":1,"steps":[{"pack":{"a.ba2":[]}}]}', "its build file cannot be read at its step 1: it names no file for 'a.ba2'"],
     ['{"version":1,"steps":[{"pack":{"a.ba2":["../x"]}}]}', "its build file's step 1 names '../x'"],

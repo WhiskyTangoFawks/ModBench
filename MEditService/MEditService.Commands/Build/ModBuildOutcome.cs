@@ -17,8 +17,9 @@ public abstract record BuildStep
     {
     }
 
-    /// <summary>Each plugin decompiled into its plugin source, by its path in the source folder.</summary>
-    public sealed record Decompile(IReadOnlyList<string> Plugins) : BuildStep;
+    /// <summary>Each plugin at the root of the source folder decompiled into its plugin source, by its name; a decompile that
+    /// only checks writes nothing.</summary>
+    public sealed record Decompile(IReadOnlyList<string> Plugins, bool OnlyChecks = false) : BuildStep;
 
     /// <summary>Each plugin compiled from its plugin source into the mod's folder, by its name.</summary>
     public sealed record Compile(IReadOnlyList<string> Plugins) : BuildStep;
@@ -26,7 +27,7 @@ public abstract record BuildStep
     /// <summary>Each file or folder copied from the source folder into the mod's folder, by its path in both.</summary>
     public sealed record Copy(IReadOnlyList<string> Paths) : BuildStep;
 
-    /// <summary>Each archive packed from the loose files of the mod's folder, which it takes out of the folder.</summary>
+    /// <summary>Each archive packed from the loose files of the mod's folder.</summary>
     public sealed record Pack(IReadOnlyList<ArchiveToPack> Archives) : BuildStep;
 }
 
@@ -44,7 +45,8 @@ public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Te
 /// plugin's or archive's file does not.</summary>
 public sealed record MadeFile(string Path, bool VouchedFor);
 
-/// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Uncommitted and Unpushed: its source's.</summary>
+/// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Packed: each loose file an archive it made
+/// packs, by its path in the folder. Uncommitted and Unpushed: its source's.</summary>
 internal sealed record ModBuildOutcome(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
@@ -54,6 +56,8 @@ internal sealed record ModBuildOutcome(
     bool Unpushed = false)
 {
     public IReadOnlyList<MadeFile> Made { get; init; } = [];
+
+    public IReadOnlyList<string> Packed { get; init; } = [];
 
     internal static ModBuildOutcome Stopped(string failure) => new([], [], [], failure);
 }

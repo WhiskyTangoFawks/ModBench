@@ -71,7 +71,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
     {
         byte[] bytes = [0x44, 0x44, 0x53, 0x20, 0x00, 0xFF, 0x0D, 0x0A];
 
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [new Asset("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))]));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [new FileToCopy("Textures/Sub Folder/a.dds", () => new MemoryStream(bytes))]));
 
         Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(_sourceFolder, "Textures", "Sub Folder", "a.dds")));
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
@@ -134,7 +134,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_sourceFolder, "plugin-source", "B.esp")));
     }
 
-    private static Asset Asset(string path, string text) => new(path, () => new MemoryStream(Encoding.UTF8.GetBytes(text)));
+    private static FileToCopy Asset(string path, string text) => new(path, () => new MemoryStream(Encoding.UTF8.GetBytes(text)));
 
     private string[] SubjectsOnMain() =>
         Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);

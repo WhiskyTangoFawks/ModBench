@@ -95,9 +95,10 @@ public sealed class BuildModTraceTests : HostedTests
         var answer = await Answer(await Client.Build(
             [(Origin, _builtFolder)], new { pack = new[] { new { path = "Main.ba2", files = new[] { "meshes/a.nif" } } } }, new { general = ba2, textures = ba2 }));
 
-        Assert.Empty(Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("archivesRefused").EnumerateArray());
+        var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
+        Assert.Empty(built.GetProperty("archivesRefused").EnumerateArray());
+        Assert.Equal(["meshes/a.nif"], built.GetProperty("packed").EnumerateArray().Select(path => path.GetString()));
         Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
-        Assert.False(File.Exists(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
     private const string Copy = "\"step\": {\"copy\": [\"a.nif\"]}";
@@ -111,6 +112,8 @@ public sealed class BuildModTraceTests : HostedTests
         { "a step of two kinds", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"copy\": [\"a.nif\"], \"compile\": [\"a.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
         { "a step naming no path", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"copy\": []}}], \"exclusionMark\": \".mohidden\"}" },
         { "a compile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"compile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
+        { "a decompile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"decompile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
+        { "a check of a decompile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"checkDecompile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
         { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"pack\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}}], \"exclusionMark\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",

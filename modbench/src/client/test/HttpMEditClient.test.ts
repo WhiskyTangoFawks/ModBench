@@ -178,8 +178,7 @@ const modToDecompileAndCommit = (name: string) => ({
   name, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], buildFile: '{}' },
 });
 const modToBuild = (name: string) => ({
-  name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, exclude: ['b.dds'], taken: ['a.dds'],
-  archives: [{ path: `${name}.ba2`, files: ['a.dds'] }],
+  name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, exclude: ['b.dds'], step: { pack: [{ path: `${name}.ba2`, files: ['a.dds'] }] },
 });
 const buildFacts = {
   exclusionMark: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
@@ -259,17 +258,17 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         applied: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, refusal: 'PluginSourceUnreadable', message: 'Second.esp has no readable source.' }],
           archivesRefused: [{ item: 'ModA.ba2', refusal: 'VariantNotWritten', message: 'Modbench packs no archive for this game.' }],
-          failure: 'The build stopped before compiling.', made: [{ path: 'a.nif', vouchedFor: true }],
+          failure: 'The build stopped at its copy.', made: [{ path: 'a.nif', vouchedFor: true }], packed: ['a.dds'],
         }],
-        refused: [{ item: 'ModC', refusal: 'ArchiveFileNotAnAsset', message: "'ModC.ba2' takes 'a.dds', which is not an asset of its source." }],
+        refused: [{ item: 'ModC', refusal: 'ArchiveFileNotInFolder', message: "'ModC.ba2' takes 'a.dds', which its folder does not hold." }],
       },
       reads: {
         landed: [{
           mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
           archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }],
-          failure: 'The build stopped before compiling.', made: [{ path: 'a.nif', vouchedFor: true }],
+          failure: 'The build stopped at its copy.', made: [{ path: 'a.nif', vouchedFor: true }], packed: ['a.dds'],
         }],
-        refused: [{ item: 'ModC', reason: "'ModC.ba2' takes 'a.dds', which is not an asset of its source." }],
+        refused: [{ item: 'ModC', reason: "'ModC.ba2' takes 'a.dds', which its folder does not hold." }],
       },
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),

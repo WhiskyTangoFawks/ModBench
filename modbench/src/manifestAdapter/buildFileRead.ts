@@ -70,8 +70,8 @@ const stepOf = (index: number, line: unknown): BuildStep => {
   known(members, step, [kind]);
   if (kind === 'pack') return { kind, archives: archivesOf(where, step, members.pack) };
   const paths = pathsOf(where, step, members[kind]);
-  const inAFolder = kind === 'compile' ? paths.find((path) => path.includes('/')) : undefined;
-  if (inAFolder !== undefined) throw unreadable(FILE, where, `it compiles '${inAFolder}', which is not at the root of the mod's folder`);
+  const inAFolder = kind === 'copy' ? undefined : paths.find((path) => path.includes('/'));
+  if (inAFolder !== undefined) throw unreadable(FILE, where, `it names '${inAFolder}', which is not a plugin at the root`);
   return { kind, paths };
 };
 

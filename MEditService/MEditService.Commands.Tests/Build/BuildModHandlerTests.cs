@@ -68,7 +68,7 @@ public sealed class BuildModHandlerTests : IDisposable
         var refused = Assert.Single((await Build(Copy("meshes", "textures"))).Refused);
 
         Assert.Equal(
-            (BuildRefusal.SourceUnreadable, $"was not built: '{SourceFolder}' holds no 'textures' to copy."), (refused.Refusal, refused.Message));
+            (BuildRefusal.SourceUnreadable, $"'{SourceFolder}' holds no 'textures' to copy."), (refused.Refusal, refused.Message));
         Assert.False(Directory.Exists(ModFolder));
     }
 
@@ -156,7 +156,7 @@ public sealed class BuildModHandlerTests : IDisposable
         var refused = Assert.Single((await Build(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif", "a.txt"])), Packing)).Refused);
 
         Assert.Equal(
-            (BuildRefusal.ArchiveFileNotInFolder, "was not built: 'Mod - Main.ba2' takes 'a.txt', which its folder does not hold."),
+            (BuildRefusal.ArchiveFileNotInFolder, "'Mod - Main.ba2' takes 'a.txt', which its folder does not hold."),
             (refused.Refusal, refused.Message));
         Assert.Equal([("meshes/c.nif", "c")], FilesIn(ModFolder));
     }
@@ -201,17 +201,18 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task APack_PacksEachArchiveFromTheLooseFilesInItsFolder_TexturesAsTheTexturesVariant_TakingThemOutOfTheFolder()
+    public async Task APack_PacksEachArchiveFromTheLooseFilesInItsFolder_TexturesAsTheTexturesVariant_AnsweringEachLooseFileItPacked()
     {
         WriteInFolder("meshes/c.nif", "c");
         WriteInFolder("readme.txt", "loose");
         Write(ModFolder, "textures/a.dds", Dds.Dxt1(8, 8, 1).File);
 
-        var built = await Landed(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"]), new ArchiveToPack("Mod - Textures.ba2", ["textures/a.dds"])), Packing);
+        var built = await Landed(Pack(new ArchiveToPack("Mod - Main.ba2", ["Meshes/C.nif"]), new ArchiveToPack("Mod - Textures.ba2", ["textures/a.dds"])), Packing);
 
         Assert.Empty(built.ArchivesRefused);
-        Assert.Equal(["Mod - Main.ba2", "Mod - Textures.ba2", "readme.txt"], FilesIn(ModFolder).Select(file => file.Path));
+        Assert.Equal(["Mod - Main.ba2", "Mod - Textures.ba2", "meshes/c.nif", "readme.txt", "textures/a.dds"], FilesIn(ModFolder).Select(file => file.Path));
         Assert.Equal([new MadeFile("Mod - Main.ba2", VouchedFor: true), new MadeFile("Mod - Textures.ba2", VouchedFor: true)], built.Made);
+        Assert.Equal(["meshes/c.nif", "textures/a.dds"], built.Packed);
         Assert.Equal("GNRL", Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(ModFolder, "Mod - Main.ba2")), 8, 4));
         Assert.Equal("DX10", Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(ModFolder, "Mod - Textures.ba2")), 8, 4));
     }
@@ -227,6 +228,7 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(("Mod - Main.ba2", ArchiveRefusal.VariantNotWritten), (refused.Item, refused.Refusal));
         Assert.Equal([("meshes/c.nif", "c")], FilesIn(ModFolder));
         Assert.Equal([new MadeFile("Mod - Main.ba2", VouchedFor: false)], built.Made);
+        Assert.Empty(built.Packed);
     }
 
     [Fact]
@@ -261,10 +263,10 @@ public sealed class BuildModHandlerTests : IDisposable
         await InitializedWithALocalizedPlugin();
         var replacement = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
         replacement.Doors.AddNew("ReplacingDoor");
-        replacement.WriteToBinary(Path.Combine(Directory.CreateDirectory(Path.Combine(SourceFolder, "originals")).FullName, Plugin));
+        replacement.WriteToBinary(Path.Combine(SourceFolder, Plugin));
         var before = SourceFilesOf(Plugin);
 
-        var decompiled = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([$"originals/{Plugin}"])));
+        var decompiled = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])));
         await Landed(Compile());
 
         Assert.Equal((null, []), (decompiled.Failure, decompiled.Made));
@@ -274,14 +276,31 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ADecompileOfAPluginTheSourceFolderDoesNotHold_RefusesTheMod_LeavingItsPluginSource()
+    public async Task ADecompileThatOnlyChecks_DecompilesThroughTheGate_AndWritesNothing()
+    {
+        await InitializedWithALocalizedPlugin();
+        var replacement = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        replacement.Doors.AddNew("ReplacingDoor");
+        replacement.WriteToBinary(Path.Combine(SourceFolder, Plugin));
+        var before = SourceFilesOf(Plugin).Select(File.ReadAllText).ToList();
+
+        var checkedOnly = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin], OnlyChecks: true)));
+
+        Assert.Equal((null, []), (checkedOnly.Failure, checkedOnly.Made));
+        Assert.Equal(before, SourceFilesOf(Plugin).Select(File.ReadAllText));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ADecompileOfAPluginTheSourceFolderDoesNotHold_RefusesTheMod_LeavingItsPluginSource(bool onlyChecks)
     {
         await InitializedWithALocalizedPlugin();
         var before = SourceFilesOf(Plugin);
 
-        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])))).Refused);
+        var refused = Assert.Single((await Build(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin], onlyChecks)))).Refused);
 
-        Assert.Equal((BuildRefusal.NotDecompiled, $"was not built: '{SourceFolder}' holds no '{Plugin}' to decompile."), (refused.Refusal, refused.Message));
+        Assert.Equal((BuildRefusal.NotDecompiled, $"'{SourceFolder}' holds no '{Plugin}' to decompile."), (refused.Refusal, refused.Message));
         Assert.Equal(before, SourceFilesOf(Plugin));
     }
 

@@ -526,7 +526,7 @@ describe('restore from manifest', () => {
 
     it('is skipped with its build\'s reason when the build refused it', async () => {
       const { restore, client } = await sourceMod();
-      client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'was not built: no load order is held.' }] }));
+      client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'no load order is held.' }] }));
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not built: no load order is held.' }]);
     });

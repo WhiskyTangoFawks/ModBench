@@ -49,18 +49,17 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     internal static string RootIn(string sourceFolder, string pluginFileName) =>
         Path.Combine(sourceFolder, RootFor(pluginFileName));
 
-
     /// <summary>Each of <paramref name="paths"/> that is a file, and every file under each that is a folder, by its forward-slash
     /// path in the source folder, which is its path in the mod folder.</summary>
-    internal static IReadOnlyList<Asset> FilesAt(string sourceFolder, IReadOnlyList<string> paths)
+    internal static IReadOnlyList<FileToCopy> FilesAt(string sourceFolder, IReadOnlyList<string> paths)
     {
-        Asset AssetOf(string file) => new(Path.GetRelativePath(sourceFolder, file).Replace('\\', '/'), () => File.OpenRead(file));
-        List<Asset> files = [];
+        FileToCopy FileOf(string file) => new(Path.GetRelativePath(sourceFolder, file).Replace('\\', '/'), () => File.OpenRead(file));
+        List<FileToCopy> files = [];
         foreach (var path in paths)
         {
             var at = Path.Combine(sourceFolder, path);
-            if (File.Exists(at)) files.Add(AssetOf(at));
-            else if (Directory.Exists(at)) files.AddRange(Directory.EnumerateFiles(at, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(AssetOf));
+            if (File.Exists(at)) files.Add(FileOf(at));
+            else if (Directory.Exists(at)) files.AddRange(Directory.EnumerateFiles(at, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(FileOf));
             else throw SourceStopException.Unreadable($"'{sourceFolder}' holds no '{path}' to copy.");
         }
         return [.. files.Where(file => !TempName.HoldsTemp(file.Path)).DistinctBy(file => file.Path, StringComparer.Ordinal)];

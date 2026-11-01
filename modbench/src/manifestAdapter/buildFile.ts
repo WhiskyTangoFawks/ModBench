@@ -13,7 +13,7 @@ export interface ManifestArchive {
   readonly files: readonly string[];
 }
 
-/** A built-in step names paths: a decompile and a copy in the source folder, a compile of plugins at the root of both. */
+/** A built-in step names paths: a copy's in the source folder, and a decompile's or a compile's of plugins at the root. */
 export type BuildStep =
   | { readonly kind: 'decompile' | 'compile' | 'copy'; readonly paths: readonly string[] }
   | { readonly kind: 'pack'; readonly archives: readonly ManifestArchive[] }

@@ -174,24 +174,36 @@ async function taskRan(deps: BuildDeps, mod: SourceModToBuild, step: TaskStep, m
 const wireStep = (step: Exclude<BuildStep, TaskStep>): BuildMod['step'] =>
   (step.kind === 'pack' ? { pack: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
 
-// mods.md, Build, story 17: a decompile step sends the plugin source it replaces to the trash.
-async function sourceTrashedFor(deps: BuildDeps, mod: SourceModToBuild, step: BuildStep): Promise<string | undefined> {
-  if (step.kind !== 'decompile') return undefined;
-  const trees = step.paths.map((path) => `${PLUGIN_SOURCE_FOLDER}/${path.split('/').at(-1) ?? path}`);
-  return whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, trees);
-}
-
 type StepBuilt = BuildOutcome['landed'][number];
 
-// One built-in step, as mEdit runs it, or why it did not run.
-async function builtInStep(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass, step: Exclude<BuildStep, TaskStep>): Promise<StepBuilt | { readonly why: string } | WriteRefused> {
-  const notTrashed = await sourceTrashedFor(deps, mod, step);
-  if (notTrashed !== undefined) return { why: notTrashed };
-  const answer = await deps.client.build([{ name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude], step: wireStep(step) }], pass.facts);
+type StepAnswer = StepBuilt | { readonly why: string } | WriteRefused;
+
+async function builtByMEdit(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass, step: BuildMod['step']): Promise<StepAnswer> {
+  const answer = await deps.client.build([{ name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude], step }], pass.facts);
   if (isRefused(answer)) return answer;
   const [refusal] = answer.refused;
-  if (refusal !== undefined) return { why: refusal.reason.replace(/^was not built: /, '') };
+  if (refusal !== undefined) return { why: refusal.reason };
   return answer.landed[0] ?? { why: 'mEdit answered nothing for it' };
+}
+
+// Each folder of plugin source named for one of `plugins`, in any case.
+async function treesOf(adapter: Adapter, sourceFolder: string, plugins: readonly string[]): Promise<string[]> {
+  const named = new Set(plugins.map((plugin) => plugin.toLowerCase()));
+  const trees = new Set((await adapter.filesIn(join(sourceFolder, PLUGIN_SOURCE_FOLDER))).map((path) => path.split('/')[0] ?? path));
+  return [...trees].filter((tree) => named.has(tree.toLowerCase())).map((tree) => `${PLUGIN_SOURCE_FOLDER}/${tree}`);
+}
+
+// mods.md, Build, story 17: the plugin source a decompile step replaces goes to the trash once mEdit's check of it lands, so a
+// refused decompile writes nothing.
+async function builtInStep(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass, step: Exclude<BuildStep, TaskStep>): Promise<StepAnswer> {
+  const trees = step.kind === 'decompile' ? await treesOf(deps.adapter, mod.sourceFolder, step.paths) : [];
+  if (step.kind === 'decompile' && trees.length > 0) {
+    const checked = await builtByMEdit(deps, mod, pass, { checkDecompile: [...step.paths] });
+    if (isRefused(checked) || 'why' in checked) return checked;
+    const notTrashed = await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, trees);
+    if (notTrashed !== undefined) return { why: notTrashed };
+  }
+  return builtByMEdit(deps, mod, pass, wireStep(step));
 }
 
 const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, uncommitted, unpushed }: StepBuilt): ModBuilt => ({
@@ -226,6 +238,9 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
     }
     for (const { path, vouchedFor } of built.made) made.set(path, vouchedFor ? 'vouched' : 'leftAsItWas');
     outcome = joined(outcome, built);
+    // mods.md, A source mod, story 4: each loose file a pack takes out of the folder goes to the trash.
+    const notTrashed = await whyNotTrashed(deps.adapter, deps.trash, mod.folder, built.packed ?? []);
+    if (notTrashed !== undefined) return ran(`The build stopped at its step ${at + 1}, as ${notTrashed}.`);
     const stopped = whyStoppedAfter(built, at, mod.buildFile.steps.length);
     if (stopped !== undefined) return ran(stopped);
   }

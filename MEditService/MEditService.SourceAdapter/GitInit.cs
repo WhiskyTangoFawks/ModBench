@@ -8,8 +8,8 @@ namespace MEditService.SourceAdapter;
 /// <summary>A plugin whose source init writes, and the hash of the binary it was decompiled from.</summary>
 public sealed record DecompiledPlugin(PluginAddress Address, string? BinarySha256);
 
-/// <summary>A file of the mod no installation file yields, by its forward-slash path in the mod folder.</summary>
-public sealed record Asset(string Path, Func<Stream> Open);
+/// <summary>A file to copy, by its forward-slash path in the folder it is copied into.</summary>
+public sealed record FileToCopy(string Path, Func<Stream> Open);
 
 /// <summary>A file at the root of a new repository, by its name there.</summary>
 public sealed record RootFile(string Name, byte[] Content);
@@ -20,7 +20,7 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
+        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
         IReadOnlyList<string>? ignored = null)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
@@ -108,7 +108,7 @@ internal static class GitInit
 
     // Root-anchored, so no same-named folder deeper is un-ignored. An un-ignore outranks the user's global
     // excludes. The ignored paths come last: a package yields them (ADR-0022).
-    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<Asset> assets, IReadOnlyList<string> ignored) =>
+    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<FileToCopy> assets, IReadOnlyList<string> ignored) =>
         "*\n" +
         "!/.gitignore\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +

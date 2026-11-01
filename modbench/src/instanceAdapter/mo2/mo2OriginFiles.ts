@@ -61,12 +61,12 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
 
     async trashFileIn(folder, relativePath, trash) {
       const file = fileUnder(folder, relativePath);
-      const notAFile = new Error(`Not a file of "${folder}": "${relativePath}"`);
-      if (file === undefined) throw notAFile;
+      const outside = new Error(`Not a file or folder of "${folder}": "${relativePath}"`);
+      if (file === undefined) throw outside;
       const real = await realPathIfThere(file);
       if (real === undefined) return undefined;
       const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
-      if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw notAFile;
+      if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw outside;
       await trash(file);
       const above = relativePath.split('/').slice(0, -1);
       try {

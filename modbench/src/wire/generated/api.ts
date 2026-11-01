@@ -974,6 +974,7 @@ export interface components {
         };
         BuildStepRequest: {
             decompile?: string[] | null;
+            checkDecompile?: string[] | null;
             compile?: string[] | null;
             copy?: string[] | null;
             pack?: components["schemas"]["ArchiveRequest"][] | null;
@@ -1364,6 +1365,7 @@ export interface components {
             uncommitted: boolean;
             unpushed: boolean;
             made: components["schemas"]["MadeFile"][];
+            packed: string[];
         };
         ModlistProgress: {
             mod?: string | null;

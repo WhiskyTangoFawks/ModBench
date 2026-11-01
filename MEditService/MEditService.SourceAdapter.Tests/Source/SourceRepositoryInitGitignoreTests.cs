@@ -39,7 +39,7 @@ public sealed class SourceRepositoryInitGitignoreTests
         Assert.False(Ignored(sourceFolder, "textures/new.dds"));
     }
 
-    private static Asset Asset(string path) => new(path, () => new MemoryStream("asset"u8.ToArray()));
+    private static FileToCopy Asset(string path) => new(path, () => new MemoryStream("asset"u8.ToArray()));
 
     [Fact]
     public void TheBuildFile_IsTracked_AndOneOutsideTheRootIsNot()

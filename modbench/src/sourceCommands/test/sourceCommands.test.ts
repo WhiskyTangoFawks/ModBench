@@ -54,7 +54,7 @@ const buildingEach = (client: InMemoryMEditClient): void => {
 describe('sourceCommands build', () => {
   it('hands mEdit each built-in step of each mod\'s build file in order, one call each, with the source folder that builds it, its folder, what its folder excludes, the exclusion mark and the release\'s archive variants', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [
-      { kind: 'decompile', paths: ['originals/A.esp'] }, { kind: 'copy', paths: ['textures'] }, COMPILE, { kind: 'pack', archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] },
+      { kind: 'decompile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures'] }, COMPILE, { kind: 'pack', archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] },
     ] }));
     const client = new InMemoryMEditClient();
     buildingEach(client);
@@ -65,7 +65,7 @@ describe('sourceCommands build', () => {
     const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: BA2, textures: BA2 } };
     const modA = { name: 'ModA', sourceFolder: SOURCES.ModA, folder: folderOf('ModA'), exclude: ['b.dds'] };
     expect(client.calls).toEqual([
-      { method: 'build', args: [[{ ...modA, step: { decompile: ['originals/A.esp'] } }], facts] },
+      { method: 'build', args: [[{ ...modA, step: { decompile: ['A.esp'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { copy: ['textures'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { compile: ['A.esp'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { pack: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] } }], facts] },
@@ -220,21 +220,21 @@ describe('sourceCommands build, in mod order', () => {
     expect(outcome).toEqual({ landed: [{ ...landedOf('ModA'), failure: "The build stopped as its step 'First' exited with code 1." }], refused: [] });
   });
 
-  it.each<[string, readonly BuildStep[], unknown]>([
+  it.each<[string, readonly BuildStep[], unknown, number]>([
     ['refuses the mod when its first step is refused', [{ kind: 'copy', paths: ['textures'] }, COMPILE],
-      { landed: [], refused: [{ item: 'ModA', reason: "was not built: '/s' holds no 'textures' to copy." }] }],
+      { landed: [], refused: [{ item: 'ModA', reason: "was not built: '/s' holds no 'textures' to copy." }] }, 1],
     ['lands the mod, naming why, when a later step is refused, and runs no step after it', [COMPILE, { kind: 'copy', paths: ['textures'] }, COMPILE],
-      { landed: [{ ...landedOf('ModA'), failure: "The build stopped at its step 2: '/s' holds no 'textures' to copy." }], refused: [] }],
-  ])('%s (mods.md, Build, story 18)', async (_case, steps, expected) => {
+      { landed: [{ ...landedOf('ModA'), failure: "The build stopped at its step 2: '/s' holds no 'textures' to copy." }], refused: [] }, 2],
+  ])('%s (mods.md, Build, story 18)', async (_case, steps, expected, calls) => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps }));
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve(mods[0]?.step?.copy === undefined
       ? { landed: [builtOf('ModA')], refused: [] }
-      : { landed: [], refused: [{ item: 'ModA', reason: "was not built: '/s' holds no 'textures' to copy." }] }));
+      : { landed: [], refused: [{ item: 'ModA', reason: "'/s' holds no 'textures' to copy." }] }));
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
-    expect([outcome, client.calls.length]).toEqual([expected, steps.length === 2 ? 1 : 2]);
+    expect([outcome, client.calls.length]).toEqual([expected, calls]);
   });
 
   it('stops after a step that refused a plugin when a step comes after it, and lands the mod with the plugin refused', async () => {
@@ -248,21 +248,55 @@ describe('sourceCommands build, in mod order', () => {
     expect([outcome, client.calls.length]).toEqual([{ landed: [{ ...landedOf('ModA'), refused, failure: 'The build stopped after its step 1, which refused a file.' }], refused: [] }, 1]);
   });
 
-  it('sends the plugin source of each plugin a decompile step names to the trash, by its name, before mEdit decompiles it (mods.md, Build, story 17)', async () => {
-    await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'decompile', paths: ['originals/A.esp', 'B.esp'] }] }));
-    const client = new InMemoryMEditClient();
-    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
-    const trashedBefore: unknown[] = [];
-    client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
-      trashedBefore.push(...fake.calls.filter((call) => call.verb === 'trashFileIn'));
-      return Promise.resolve({ landed: mods.map((mod) => builtOf(mod.name)), refused: [] });
+  describe('a decompile step (mods.md, Build, story 17)', () => {
+    const DECOMPILE: BuildStep = { kind: 'decompile', paths: ['A.esp', 'B.esp'] };
+    const holdingPluginSource = (paths: readonly string[]) => fakeInstanceAdapter(readingFixture({
+      modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES),
+    }), { folderFiles: new Map([[join(SOURCES.ModA, 'plugin-source'), paths]]) });
+    const decompiling = async (paths: readonly string[], checkAnswer: Awaited<ReturnType<InMemoryMEditClient['build']>> = { landed: [builtOf('ModA')], refused: [] }) => {
+      await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [DECOMPILE] }));
+      const client = new InMemoryMEditClient();
+      const fake = holdingPluginSource(paths);
+      const log: unknown[] = [];
+      const adapter = { ...fake.adapter, trashFileIn: (...args: Parameters<typeof fake.adapter.trashFileIn>) => { log.push({ trashed: args[1] }); return fake.adapter.trashFileIn(...args); } };
+      client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
+        log.push({ step: mods[0]?.step });
+        return Promise.resolve(mods[0]?.step?.checkDecompile === undefined ? { landed: [builtOf('ModA')], refused: [] } : checkAnswer);
+      });
+      const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+      return { outcome, log };
+    };
+
+    it('has mEdit check it, then sends each plugin source folder it replaces to the trash, in any case, then has mEdit decompile', async () => {
+      const { log } = await decompiling(['A.esp/npc_/1.json', 'a.ESP/npc_/2.json', 'C.esp/npc_/3.json']);
+
+      expect(log).toEqual([
+        { step: { checkDecompile: ['A.esp', 'B.esp'] } }, { trashed: 'plugin-source/A.esp' }, { trashed: 'plugin-source/a.ESP' }, { step: { decompile: ['A.esp', 'B.esp'] } },
+      ]);
     });
+
+    it('sends nothing to the trash and refuses the mod when mEdit refuses its check (commands.md, An item that cannot proceed writes nothing)', async () => {
+      const { outcome, log } = await decompiling(['A.esp/npc_/1.json'], { landed: [], refused: [{ item: 'ModA', reason: 'A.esp does not round-trip.' }] });
+
+      expect([outcome, log]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason: 'was not built: A.esp does not round-trip.' }] }, [{ step: { checkDecompile: ['A.esp', 'B.esp'] } }]]);
+    });
+
+    it('has mEdit decompile at once when the source folder holds no plugin source it replaces', async () => {
+      const { log } = await decompiling(['C.esp/npc_/3.json']);
+
+      expect(log).toEqual([{ step: { decompile: ['A.esp', 'B.esp'] } }]);
+    });
+  });
+
+  it('sends each loose file a pack step packed to the trash (mods.md, A source mod, story 4; Build, story 2)', async () => {
+    await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'pack', archives: [{ path: 'ModA.ba2', files: ['textures/a.dds'] }] }] }));
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), packed: ['Textures/a.dds'] }], refused: [] }));
+    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
 
     await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
-    expect(trashedBefore).toEqual([
-      { verb: 'trashFileIn', folder: SOURCES.ModA, relativePath: 'plugin-source/A.esp' }, { verb: 'trashFileIn', folder: SOURCES.ModA, relativePath: 'plugin-source/B.esp' },
-    ]);
+    expect(fake.calls.filter((call) => call.verb === 'trashFileIn')).toEqual([{ verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'Textures/a.dds' }]);
   });
 
   it('names a mod whose manifest could not be written', async () => {

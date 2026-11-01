@@ -21,8 +21,8 @@ public sealed class SourceToBuildTests : IDisposable
 
         var source = Built(["textures", "readme.txt"]);
 
-        Assert.Equal(["textures/Sub Folder/a.dds", "textures/b.dds", "readme.txt"], source.Assets.Select(asset => asset.Path));
-        using var opened = new StreamReader(source.Assets[0].Open());
+        Assert.Equal(["textures/Sub Folder/a.dds", "textures/b.dds", "readme.txt"], source.Files.Select(file => file.Path));
+        using var opened = new StreamReader(source.Files[0].Open());
         Assert.Equal("texture", opened.ReadToEnd());
     }
 
@@ -32,7 +32,7 @@ public sealed class SourceToBuildTests : IDisposable
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")]));
         TempLeftover.DeadWriters(Path.Combine(_sourceFolder, "textures"));
 
-        Assert.Equal(["textures/a.dds"], Built(["textures"]).Assets.Select(asset => asset.Path));
+        Assert.Equal(["textures/a.dds"], Built(["textures"]).Files.Select(file => file.Path));
     }
 
     [Fact]
@@ -107,5 +107,5 @@ public sealed class SourceToBuildTests : IDisposable
 
     private SourceToBuild Built(IReadOnlyList<string>? copied = null) => TestAdapters.Source().SourceToBuild(_sourceFolder, copied ?? []).Value();
 
-    private static Asset Texture(string path) => new(path, () => new MemoryStream("texture"u8.ToArray()));
+    private static FileToCopy Texture(string path) => new(path, () => new MemoryStream("texture"u8.ToArray()));
 }

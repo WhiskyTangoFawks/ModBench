@@ -33,10 +33,10 @@ internal sealed class SourceModBuild
         var written = new FolderWrite(_modFolders, mod.Folder, mod.Exclude, instance.ExclusionMark);
         var ran = mod.Step switch
         {
-            BuildStep.Copy => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(Copied(source.Assets, written)),
+            BuildStep.Copy => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(Copied(source.Files, written)),
             BuildStep.Compile compile => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(await CompiledAsync(loadOrder, mod, compile.Plugins)),
             BuildStep.Pack pack => Packed(mod, pack.Archives, instance.Archives, written),
-            BuildStep.Decompile decompile => await DecompiledAsync(loadOrder, mod, decompile.Plugins),
+            BuildStep.Decompile decompile => await DecompiledAsync(loadOrder, mod, decompile),
             _ => throw new ArgumentOutOfRangeException(nameof(mod), mod.Step, "A build file names no other built-in step."),
         };
         return ran is ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote { Outcome: var outcome }
@@ -44,7 +44,7 @@ internal sealed class SourceModBuild
             : ran;
     }
 
-    private static ModBuildOutcome Copied(IReadOnlyList<Asset> files, FolderWrite written)
+    private static ModBuildOutcome Copied(IReadOnlyList<FileToCopy> files, FolderWrite written)
     {
         try
         {
@@ -71,7 +71,7 @@ internal sealed class SourceModBuild
         return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(CompiledFiles(loadOrder, mod, plugins, landed)) };
     }
 
-    // mods.md, Build, story 2: the loose files an archive packs are taken out of the folder, so the game reads one copy.
+    // mods.md, Build, story 2: the extension takes the loose files an archive packs out of the folder, so the game reads one copy.
     private ItemAnswer<BuildRefusal, ModBuildOutcome> Packed(
         ModToBuild mod, IReadOnlyList<ArchiveToPack> archives, ArchiveVariants? variants, FolderWrite written)
     {
@@ -93,6 +93,7 @@ internal sealed class SourceModBuild
         var packer = new ArchivePacker(_modFolders);
         List<ItemRefused<string, ArchiveRefusal>> refused = [];
         List<(string, bool)> made = [];
+        List<string> takenOut = [];
         foreach (var (archive, loose) in packed)
         {
             var at = written.PathOf(archive.Path);
@@ -101,41 +102,29 @@ internal sealed class SourceModBuild
                 : packer.Pack(mod.Folder, at, [.. archive.Files.Zip(loose, (file, path) => new ArchiveFile(file, () => _modFolders.OpenFile(mod.Folder, path)))],
                     VariantOf(archive, variants));
             made.Add((at, refusal is null));
-            if (refusal is not null)
-            {
-                refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
-                continue;
-            }
-            try
-            {
-                foreach (var path in loose) _modFolders.DeleteFile(mod.Folder, path);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(
-                    $"The build stopped at its pack, as a file '{archive.Path}' packs could not be taken out of its folder: {e.Message}"));
-            }
+            if (refusal is null) takenOut.AddRange(loose);
+            else refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
         }
-        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made) });
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Packed = takenOut });
     }
 
     private static IArchiveVariant VariantOf(ArchiveToPack archive, ArchiveVariants variants) =>
         archive.Files.All(file => file.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) ? variants.Textures : variants.General;
 
-    // Each plugin decompiles before any plugin source is written.
-    private async Task<ItemAnswer<BuildRefusal, ModBuildOutcome>> DecompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> paths)
+    private async Task<ItemAnswer<BuildRefusal, ModBuildOutcome>> DecompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, BuildStep.Decompile step)
     {
         var provider = new PluginProvider.FromMod(mod.Name, mod.Folder, mod.SourceFolder);
         List<(RegisteredPlugin Plugin, PluginSource Source)> decompiled = [];
-        foreach (var path in paths)
+        foreach (var name in step.Plugins)
         {
-            var at = _source.FileIn(mod.SourceFolder, path);
-            if (!_plugins.Exists(at)) return Refused(BuildRefusal.NotDecompiled, $"'{mod.SourceFolder}' holds no '{path}' to decompile.");
-            var plugin = new RegisteredPlugin(path.Split('/')[^1], mod.Name, at, provider, Line: null, PluginStrings.None);
+            var at = _source.FileIn(mod.SourceFolder, name);
+            if (!_plugins.Exists(at)) return Refused(BuildRefusal.NotDecompiled, $"'{mod.SourceFolder}' holds no '{name}' to decompile.");
+            var plugin = new RegisteredPlugin(name, mod.Name, at, provider, Line: null, PluginStrings.None);
             var read = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, CancellationToken.None, namesRepair: false);
             if (read.Source is not { } source) return Refused(BuildRefusal.NotDecompiled, read.Message);
             decompiled.Add((plugin, source));
         }
+        if (step.OnlyChecks) return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null));
 
         var repository = _source.OverFolder(provider, loadOrder.GameRelease);
         foreach (var (plugin, source) in decompiled)
@@ -204,5 +193,5 @@ internal sealed class SourceModBuild
     };
 
     private static ItemAnswer<BuildRefusal, ModBuildOutcome> Refused(BuildRefusal refusal, string why) =>
-        ItemAnswer<BuildRefusal, ModBuildOutcome>.Refused(refusal, $"was not built: {why}");
+        ItemAnswer<BuildRefusal, ModBuildOutcome>.Refused(refusal, why);
 }
