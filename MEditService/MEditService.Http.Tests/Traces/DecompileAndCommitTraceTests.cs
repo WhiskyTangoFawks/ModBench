@@ -106,7 +106,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostJson(
             "/init-source-mod",
-            $$$"""{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
+            $$$"""{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
