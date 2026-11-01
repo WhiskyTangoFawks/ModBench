@@ -10,12 +10,14 @@ export interface StatusProblem {
 
 /** Each unfinished state of a mod, on the file it concerns (modlist-repository.md, Status, story 2). */
 export function statusProblems(status: ModStatus, folder: string): StatusProblem[] {
-  if (status.noManifest) return [{ file: folder, message: 'No manifest.' }];
+  const installation = status.installationFileProblem === undefined ? [] : [{ file: folder, message: status.installationFileProblem }];
+  if (status.noManifest) return [{ file: folder, message: 'No manifest.' }, ...installation];
   const onFiles = (paths: readonly string[], message: string): StatusProblem[] => paths.map((path) => ({ file: join(folder, path), message }));
   const { manifestFile } = status;
   const onManifest = (messages: readonly string[]): StatusProblem[] =>
     (manifestFile === undefined ? [] : messages.map((message) => ({ file: manifestFile, message })));
   return [
+    ...installation,
     ...onFiles(status.differing, 'Differs from its manifest.'),
     ...onFiles(status.namedByNoLine, 'No line of the mod\'s manifest names this file.'),
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),

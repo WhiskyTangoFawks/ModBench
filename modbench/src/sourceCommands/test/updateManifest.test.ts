@@ -125,6 +125,23 @@ describe('update manifest', () => {
     ]);
   });
 
+  it.each([
+    ['missing', 'this machine does not hold Gone.7z, the file it is installed from'],
+    ['unreadable', 'Modbench cannot tell what Gone.7z installs: 7z crashed'],
+  ])('takes a file from the downloaded file that holds its bytes when the installation file the mod manager names is %s (Update manifest, story 6)', async (_what, reason) => {
+    const { update, manifestOf } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: { installations: new Map([['ModA', { kind: 'unreadable', reason }]]), downloadedFilesHashed: { files: [INSTALLED], notes: [] } },
+    });
+
+    const result = await update(['ModA']);
+
+    expect([result.refused, result.landed.map(({ mod }) => mod), await manifestOf('ModA')]).toEqual([
+      [], ['ModA'],
+      { manifest: { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], files: holding({ 'a.nif': HA }) } },
+    ]);
+  });
+
   it('refuses a mod whose folder holds a file and its excluded copy, which its manifest names as one file', async () => {
     const { update } = await over({ files: { ModA: { 'b.esp': HA, 'b.esp.mohidden': HB } } });
 
@@ -249,12 +266,6 @@ describe('update manifest', () => {
       const { result } = await refusedBy({ adapterOver: { modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : join(modsDir, mod)) } });
 
       expect([result.refused, result.landed.map(({ mod }) => mod)]).toEqual([[{ item: 'ModA', reason: 'its name gives it no folder' }], ['ModB']]);
-    });
-
-    it('whose installation file cannot be read', async () => {
-      const { result } = await refusedBy({ answers: { installations: new Map([['ModA', { kind: 'unreadable', reason: 'its installation file is not indexed' }]]) } });
-
-      expect([result.refused, result.landed.map(({ mod }) => mod)]).toEqual([[{ item: 'ModA', reason: 'its installation file is not indexed' }], ['ModB']]);
     });
 
     it('whose game files cannot be read', async () => {
@@ -430,7 +441,7 @@ describe('update manifest', () => {
     });
 
     it('gives the submodules of every source mod to the Instance adapter when it acts on every mod, though a mod was refused', async () => {
-      const { update, fake } = await over({ answers: { installations: new Map([['ModB', { kind: 'unreadable', reason: 'not indexed' }]]) } });
+      const { update, fake } = await over({ answers: { gameFilesTaken: new Map([['ModB', { kind: 'unreadable', reason: 'EACCES' }]]) } });
 
       const result = await update(['ModA', 'ModB'], {}, [], true);
 
@@ -507,9 +518,9 @@ describe('update manifest', () => {
     });
 
     it('answers every refusal of a call that no mod can be updated in, with the paths still shown', async () => {
-      const { update } = await over({ answers: { installations: new Map([['ModA', { kind: 'unreadable', reason: 'not indexed' }]]) } });
+      const { update } = await over({ answers: { gameFilesTaken: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) } });
 
-      expect(await update(['ModA'])).toEqual({ landed: [], refused: [{ item: 'ModA', reason: 'not indexed' }], notes: [], repositoryNotes: [] });
+      expect(await update(['ModA'])).toEqual({ landed: [], refused: [{ item: 'ModA', reason: 'EACCES' }], notes: [], repositoryNotes: [] });
     });
   });
 

@@ -34,6 +34,8 @@ export interface ModStatus {
   readonly packagesLacking: readonly string[];
   /** The manifest's path as the folder spells it; none when the folder holds none or it cannot be read. */
   readonly manifestFile?: string;
+  /** Why the installation file the mod manager names is missing or unreadable; none when it reads or none is named. */
+  readonly installationFileProblem?: string;
   readonly unreadable?: string;
 }
 
