@@ -10,7 +10,7 @@ const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
 interface NexusCommandDeps {
   commands: NexusLogin;
   nexus: Nexus;
-  reporter: Reporter;
+  reporterFor: (tag: string) => Reporter;
 }
 
 function askForKey(commands: NexusLogin, reporter: Reporter): Promise<void> {
@@ -38,7 +38,8 @@ function askForKey(commands: NexusLogin, reporter: Reporter): Promise<void> {
   });
 }
 
-export function registerNexusCommands({ commands, nexus, reporter }: NexusCommandDeps): vscode.Disposable[] {
+export function registerNexusCommands({ commands, nexus, reporterFor }: NexusCommandDeps): vscode.Disposable[] {
+  const reporter = reporterFor('nexus');
   const markLoggedIn = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('setContext', LOGGED_IN_KEY, await nexus.loggedIn());

@@ -6,7 +6,6 @@ import { createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
-import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
@@ -29,15 +28,16 @@ import type { PluginsShown } from './drivingLib/pluginsShown';
 import { deploymentFolderOf } from './instanceCommands/deploy';
 import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
-import { attachPort, deploymentFolderSetting, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
+import { attachPort } from './workspaceConfig';
+import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
+import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import { fileProblemsOver } from './ports/fileProblems';
 import { problemsHostOver } from './problemsHost';
 import { ModStatuses } from './modStatus/modStatuses';
-import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
-import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
+import { DOWNLOADS_KEY_ARGS } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import type { PluginsTxtPlaceOf } from './toolbox/ToolboxProvider';
@@ -73,7 +73,8 @@ import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
 import { reachMEditFromEnvFile } from './agent/scriptEnvironmentFile';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
-import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
+import { pluginSyncOn, registerPluginSyncCommand } from './syncWiring';
+import { modSyncOn, registerModSyncCommand } from './mods/modSync';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -115,7 +116,6 @@ interface InstanceSide {
   viewMessages: () => string[];
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
-  downloadsSelection: () => readonly DownloadsTreeNode[];
 }
 
 type Views = InstanceSide & vscode.Disposable;
@@ -129,7 +129,7 @@ function buildBareSide(own: Own): InstanceSide {
     toolbox: own(createToolboxView({ instance: undefined })),
     viewMessages: () => [],
     sourceFiles: NO_SOURCE_FILES,
-    copyValue: [], downloadsSelection: () => [],
+    copyValue: [],
   };
 }
 
@@ -177,37 +177,29 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(`[modList] ${line}`)));
   own(instance.subscribe((value) => { modStatuses.derive(value); }));
-  const { modSync, pluginSync } = own(instanceSyncs({
-    instance, syncMods: modSyncOver(adapter), channel: outputChannel, syncPlugins: pluginSyncOver(adapter),
-  }));
-  ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
-  const sourceGestureRows = selectionInFocusedView(
-    own, deps.focusedView, [MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view], 'modbench.mod.sourceGestureRowsIn');
+  const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
+  own(registerModSyncCommand(modSync));
+  const { pluginSync } = own(pluginSyncOn({ instance, syncPlugins: pluginSyncOver(adapter), channel: outputChannel }));
+  own(registerPluginSyncCommand(pluginSync, (command, handler) => vscode.commands.registerCommand(command, handler)));
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), pluginSync, modStatuses,
   }));
   const downloads = own(createDownloadsView({
-    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporter: reporterFor('downloadedFiles'), trash,
-    log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
-    logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
+    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
   }));
   const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, (folder) => adapter.nonSteamPrefix(folder));
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
   const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
-    instance, commands: modCommands(adapter), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter), copyReads: adapter, channel: outputChannel, modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
-    downloadedFileInstallReporting: {
-      reporter: reporterFor('downloadedFiles'), log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
-      progressViewId: DOWNLOADS_KEY_ARGS.view,
-    },
-    nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),
+    downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks: stepTasks(hostTasks), trash }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks: stepTasks(hostTasks), trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
-    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say, focusedView: deps.focusedView },
+    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
   }));
   const editing = own(editingFlow({
@@ -215,14 +207,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   void editing.enter(instance.landed());
   void client.start();
-  const putLoadOrder = loadOrderPutHandler(editing, stringsLanguage);
-  own(loadOrderPutOnEachValue(instance, putLoadOrder));
-  own(loadOrderPutOnEachLanguageChange(onStringsLanguageChange, instance, putLoadOrder));
-  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
+  own(registerPutLoadOrder(editing, instance));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
-  ownAll(own, registerNexusCommands({ commands: nexusLogin(deps.nexus), nexus: deps.nexus, reporter: reporterFor('nexus') }));
+  ownAll(own, registerNexusCommands({ commands: nexusLogin(deps.nexus), nexus: deps.nexus, reporterFor }));
   own(publishRepository(instance, instanceRoot));
-  ownAll(own, registerModlistCommands({ commands: modlist, instance, reporter: reporterFor('modlist') }));
+  ownAll(own, registerModlistCommands({ commands: modlist, instance, reporterFor }));
   own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
   own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
   own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloads.view));
@@ -236,7 +225,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     ]),
   ));
   own(registerRefreshCommand({
-    commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
+    commands, nextRefill: plugins.nextRefill, instance, reporterFor, instanceRoot,
   }));
   ownAll(own, registerDeployCommands({
     commands: deployCommands({
@@ -244,15 +233,14 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt),
       deploymentFolder: deploymentFolderSetting,
     }),
-    instance, reporter: reporterFor('deploy'),
+    instance, reporterFor,
   }));
   return {
     instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
     viewMessages: () => [...downloads.messages(), ...toolbox.messages(), ...mods.messages()],
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
-    copyValue: [mods.copyValue, plugins.copyValue],
-    downloadsSelection: () => downloads.view.selection,
+    copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
   };
 }
 
@@ -273,7 +261,6 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
   own(registerCopyValueCommand(
     [
       ...side.copyValue,
-      { text: downloadsCopyValueText(side.downloadsSelection), reporterTag: 'downloadedFile.copyValue' },
       ...deps.editor.copyValue,
     ],
     reporterFor,

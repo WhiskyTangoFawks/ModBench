@@ -13,7 +13,7 @@ vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleS
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
-import { instanceSyncs } from '../syncWiring';
+import { pluginSyncOn } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
 import { pluginSyncOver, type PluginSyncRun } from '../pluginCommands/plugins';
@@ -21,11 +21,11 @@ import { present } from '../ports/present';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
-import { modSyncOver, type ModSyncRun } from '../modCommands/modCommands';
+import { modSyncOver } from '../modCommands/modCommands';
+import { modSyncOn } from '../mods/modSync';
 import { manifestedIn } from './modStatusFixture';
 import { NO_DEPLOYMENT_FOLDER } from './noDeploymentFolder';
 
-const noModSync: ModSyncRun = () => Promise.resolve({ applied: true, added: [], dropped: [] });
 
 const PROFILE = 'Default';
 const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n';
@@ -71,8 +71,8 @@ async function wiredInstance(): Promise<{
   instances.push(instance);
 
   const syncs: ReturnType<PluginSyncRun>[] = [];
-  instanceSyncs({
-    instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync,
+  pluginSyncOn({
+    instance, channel: { error: () => {}, info: () => {} },
     syncPlugins: () => {
       const run = pluginSyncOver(adapter)();
       syncs.push(run);
@@ -142,8 +142,8 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
     instances.push(instance);
-    const { pluginSync } = instanceSyncs({
-      instance, channel: { error: () => {}, info: () => {} }, syncMods: noModSync, syncPlugins: pluginSyncOver(adapter),
+    const { pluginSync } = pluginSyncOn({
+      instance, channel: { error: () => {}, info: () => {} }, syncPlugins: pluginSyncOver(adapter),
     });
 
     await instance.refresh();
@@ -175,9 +175,8 @@ describe('the game folder not found, across the whole instance', () => {
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) }));
-    const { pluginSync, modSync } = instanceSyncs({
-      instance, channel, syncMods: modSyncOver(fake.adapter), syncPlugins: pluginSyncOver(fake.adapter),
-    });
+    const { modSync } = modSyncOn({ instance, channel, syncMods: modSyncOver(fake.adapter) });
+    const { pluginSync } = pluginSyncOn({ instance, channel, syncPlugins: pluginSyncOver(fake.adapter) });
 
     await instance.refresh();
     await instance.refresh();
@@ -198,7 +197,7 @@ describe('plugin sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
     const syncPlugins = vi.fn<PluginSyncRun>(() => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
-    const { pluginSync } = instanceSyncs({ instance, syncMods: noModSync, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
+    const { pluginSync } = pluginSyncOn({ instance, channel: { error: vi.fn(), info: vi.fn() }, syncPlugins });
 
     instance.publish(instanceValueFixture());
     instance.publish(instanceValueFixture());

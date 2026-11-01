@@ -26,9 +26,8 @@ vi.mock('vscode', async () => {
 });
 
 import { Instance } from '../instanceLoader/instance';
-import { instanceSyncs } from '../syncWiring';
+import { pluginSyncOn } from '../syncWiring';
 import { pluginSyncOver } from '../pluginCommands/plugins';
-import { modSyncOver } from '../modCommands/modCommands';
 import { registerRenamePluginCommand } from '../plugins/pluginRenameCommand';
 import { PluginNode } from '../plugins/pluginRows';
 import { recordingReporter } from './surfacingDoubles';
@@ -76,8 +75,8 @@ describe('a rename while a recompute is reading', () => {
       gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
-    const { pluginSync } = instanceSyncs({
-      instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },
+    const { pluginSync } = pluginSyncOn({
+      instance, syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
     await pluginSync.settled();

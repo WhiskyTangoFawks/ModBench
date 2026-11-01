@@ -59,6 +59,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
+import { createFocusedView } from '../../drivingLib/focusedView';
 import { ModStatuses } from '../../modStatus/modStatuses';
 import { modValueOver } from '../../instanceAdapter/modValue';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -101,17 +102,17 @@ const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row)
 
 const otherDeps = () => ({
   commands: modCommands(fakeInstanceAdapter().adapter), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
-  extensionUri: Uri.file('/extension'), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
+  extensionUri: Uri.file('/extension'), downloadsView: 'modbench.downloads', channel: { warn: () => undefined },
+  focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
   sourceGestures: {
-    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }), rows: () => [],
+    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }),
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
     registerRepositories: () => Promise.resolve(),
   },
   checkForUpdates: vi.fn(),
   manifestGestures: {
     toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), otherManifests: vi.fn() }, say: () => undefined,
-    focusedView: { id: () => undefined, selection: () => [] },
   },
 });
 
@@ -149,7 +150,7 @@ describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', (
     const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], pathProblems: [{ kind: 'namesNoPath', file, line: 2, tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, entry: 'gone' }] } as const;
     const instance = new FakeInstance(instanceValueFixture({ publisherConfiguration }));
 
-    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance, ...noSync() });
 
     expect(diagnosticCollections.get('modbench-publisher')?.has(Uri.file(file))).toBe(true);
   });
@@ -157,7 +158,7 @@ describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', (
 
 describe('the Mods view is a tree whose rows select several at once (common.md, story 6; mods.md)', () => {
   it('selects several rows and has Collapse All', () => {
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
 
     const { canSelectMany, showCollapseAll } = treeViews.view('modbench.modList').options;
     expect({ canSelectMany, showCollapseAll }).toEqual({ canSelectMany: true, showCollapseAll: true });
@@ -168,7 +169,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
     const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+      createModsView({ ...otherDeps(), instance, ...noSync() });
     await shownRows();
 
     modListFilter.open();
@@ -189,7 +190,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
 describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, ...noSync() });
     expect(modListView.description).toBe('7 / 8');
 
     modListFilter.open();
@@ -199,7 +200,7 @@ describe('the Mods view\'s description counts the mods', () => {
 
   it('follows a new instance value, with nothing pushed', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    const { view: modListView } = createModsView({ ...otherDeps(), instance, ...noSync() });
 
     instance.publish(listing([...LISTED_MODS, mod('Parked Mod', false)]));
 
@@ -212,7 +213,7 @@ describe('the Mods view registers its own gestures', () => {
     const value = instanceValueFixture({
       paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Cloned And Unlisted', '/source/Cloned And Unlisted']]) },
     });
-    createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(value), ...noSync() });
 
     await present(h.state.commands.get('modbench.mod.build'), 'the modbench.mod.build handler')();
 
@@ -221,18 +222,18 @@ describe('the Mods view registers its own gestures', () => {
 
   it('says whether any mod is a source mod, for the palette to offer build', () => {
     const value = instanceValueFixture({ sourceMods: new Set(['Source']) });
-    createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(value), ...noSync() });
     expect(h.state.contextKeys.get('modbench.mod.anySource')).toBe(true);
   });
 
   it('offers build as a task, for a chain', () => {
     h.taskTypes.length = 0;
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     expect(h.taskTypes).toEqual(['modbench.mod.build']);
   });
 
   it('hears its copy value in the Mods view\'s key', () => {
-    const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+    const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     expect([copyValue.reporterTag, copyValue.text({ view: 'modbench.modList' }, undefined)]).toEqual(['mod.copyValue', '']);
   });
 });
@@ -240,7 +241,7 @@ describe('the Mods view registers its own gestures', () => {
 describe('the Mods title-bar sort icons', () => {
   it('set the tree\'s own direction', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance, ...noSync() });
     const losingAtTop = await shownLabels();
 
     await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
@@ -253,7 +254,7 @@ describe('the Mods title-bar sort icons', () => {
 describe('the Mods view tells its keys, which are handed no row, what the selection holds', () => {
   it('sets the Space direction and the Delete and F2 kind off the selection', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance, ...noSync() });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -276,7 +277,7 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
   it('follows a mod enabled in a new instance value while the selection still holds the row built before', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance, ...noSync() });
     treeViews.view().selectRows([new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     instance.publish(listing(LISTED_MODS.map((m) => (m.name === 'Harder VATS' ? mod('Harder VATS') : m))));
@@ -285,11 +286,47 @@ describe('the Mods view tells its keys, which are handed no row, what the select
   });
 });
 
+describe('the Mods view names its own tags and palette context keys', () => {
+  it('reports a downloaded file install under the downloadedFiles tag', () => {
+    const tags: string[] = [];
+    createModsView({ ...otherDeps(), reporterFor: (tag) => { tags.push(tag); return recordingReporter(); }, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+
+    expect(tags).toContain('downloadedFiles');
+  });
+
+  it('sets modbench.mod.sourceGestureRowsIn to the focused view while it is the Mods or Plugins view, and clears it otherwise', () => {
+    const focusedView = createFocusedView();
+    createModsView({ ...otherDeps(), focusedView, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const held = () => h.state.contextKeys.get('modbench.mod.sourceGestureRowsIn');
+
+    focusedView.enter('modbench.pluginListTree');
+    const inPlugins = held();
+    focusedView.enter('modbench.toolbox');
+
+    expect([inPlugins, held()]).toEqual(['modbench.pluginListTree', undefined]);
+  });
+
+  it('sets modbench.mod.nexusRowIn to the focused Downloads view while one row with a Nexus id is selected in it', () => {
+    const focusedView = createFocusedView();
+    createModsView({ ...otherDeps(), focusedView, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    let selected: () => void = () => undefined;
+    const downloads: Parameters<typeof focusedView.follow>[1] = {
+      selection: [{ nexusModId: '1' }],
+      onDidChangeSelection: (listener) => { selected = () => { listener({ selection: [] }); }; return { dispose: () => undefined }; },
+    };
+    focusedView.follow('modbench.downloads', downloads);
+
+    selected();
+
+    expect(h.state.contextKeys.get('modbench.mod.nexusRowIn')).toBe('modbench.downloads');
+  });
+});
+
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
   const mountFiltered = (
     term: string, log: (line: string) => void = () => undefined, prepare: (view: FakeTreeView) => void = () => undefined,
   ) => {
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log, ...noSync() }).nameFilter.open();
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), channel: { warn: log }, ...noSync() }).nameFilter.open();
     prepare(treeViews.view());
     currentBox().type(term);
   };
@@ -317,7 +354,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
     await vi.waitFor(() => expect(lines).not.toEqual([]));
 
     expect(lines).toEqual([
-      'Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
+      '[modList] Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
     ]);
   });
 
@@ -338,7 +375,7 @@ describe('the Mods view says when the list is empty', () => {
 
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
-    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    const { view: modListView, nameFilter: modListFilter } = createModsView({ ...otherDeps(), instance, ...noSync() });
     expect(modListView.message).toBeUndefined();
     expect(modListView.description).toBeUndefined();
 
@@ -361,7 +398,7 @@ describe('the Mods view says when the list is empty', () => {
     ];
     let run = 0;
     const { modSync } = modSyncAnswering(() => Promise.resolve(present(outcomes[run++], 'an outcome for this run')));
-    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, modSync });
+    const { view: modListView } = createModsView({ ...otherDeps(), instance, modSync });
     instance.publish(listing([]));
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
 
@@ -375,7 +412,7 @@ describe('the Mods view says when the list is empty', () => {
   it('gives the agent the line it shows, sync\'s refusal included', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
     const { modSync } = modSyncAnswering(() => Promise.resolve({ applied: false as const, refusal: '/instance/mods does not exist' }));
-    const mods = createModsView({ ...otherDeps(), instance, log: () => undefined, modSync });
+    const mods = createModsView({ ...otherDeps(), instance, modSync });
     const { view } = mods;
     instance.publish(listing([]));
     await waitForMessage(view, (m) => m === NO_MODS, 'the empty-list message');
@@ -400,7 +437,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
       overwriteFolders: overwrite ? [folder('overwrite', 'F4SE')] : [],
     });
     const { view: modListView, nameFilter: modListFilter } =
-      createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
+      createModsView({ ...otherDeps(), instance: new FakeInstance(value), ...noSync() });
     modListFilter.open();
     currentBox().type(term);
     return modListView;
@@ -450,7 +487,7 @@ describe('the Mods view tells the indicator and publisher tag decorations when a
   it('asks VS Code to decorate again, for each indicator and each publisher tag the publisher declares, on the separator\'s expand and on its collapse', async () => {
     const publisherTags = [{ name: 'Include', badge: 'IN', marksPaths: true }] as const;
     createModsView({
-      ...otherDeps(), instance: new FakeInstance(instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags })), log: () => undefined, ...noSync(),
+      ...otherDeps(), instance: new FakeInstance(instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags })), ...noSync(),
     });
     const fired = listenToEachDecorationProvider();
     const row = present((await shownRows()).find((node) => node instanceof SeparatorNode), 'the separator row');
@@ -470,7 +507,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
 
   it('counts each mod Mod status derives with no manifest', async () => {
     const statuses = new ModStatuses(foldersHoldingNothing(), () => undefined);
-    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), log: () => undefined, ...noSync(), statuses });
+    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), ...noSync(), statuses });
 
     statuses.derive(holdingModA);
 
@@ -484,7 +521,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     await manifestedIn(folder);
     const holdingManifested = instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')], modFolders: [{ kind: 'mod', name: 'ModA', path: folder, modName: 'ModA' }] });
     const statuses = new ModStatuses(foldersHoldingNothing(() => Promise.reject(new Error('EACCES'))), () => undefined);
-    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingManifested), log: () => undefined, ...noSync(), statuses });
+    const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingManifested), ...noSync(), statuses });
 
     statuses.derive(holdingManifested);
 
@@ -499,7 +536,7 @@ describe('the Mods view\'s selection and the highlight (plugins.md, The highligh
     plugins: [{ name: 'A.esp', path: '/Alpha/A.esp', origin: 'Alpha', line: 0, enabled: true, winning: true }],
     filesByMod: new Map([['Alpha', [file('Alpha', 'A.esp')]]]),
   });
-  const view = () => createModsView({ ...otherDeps(), instance: new FakeInstance(held), log: () => undefined, ...noSync() });
+  const view = () => createModsView({ ...otherDeps(), instance: new FakeInstance(held), ...noSync() });
 
   it('relates a selected mod to the plugin rows it holds, and to no mod row', async () => {
     const { relatesRows } = view();

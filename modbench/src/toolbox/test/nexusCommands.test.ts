@@ -58,7 +58,7 @@ import { registerNexusCommands } from '../nexusCommands';
 import { LOGGED_IN_KEY } from '../../test/manifest';
 import { nexusLogin } from '../../instanceCommands/nexusLogin';
 import { acceptingGoodKey, GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { present } from '../../ports/present';
 
@@ -66,9 +66,9 @@ function registered(secretsFail?: 'get' | 'delete') {
   const over = nexusAnswering(acceptingGoodKey);
   if (secretsFail === 'get') over.secrets.get = () => Promise.reject(new Error('keyring locked'));
   if (secretsFail === 'delete') over.secrets.delete = () => Promise.reject(new Error('keyring locked'));
-  const reporter = recordingReporter();
-  registerNexusCommands({ commands: nexusLogin(over.nexus), nexus: over.nexus, reporter });
-  return { ...over, reporter };
+  const { reporter, reporterFor, tags } = tagRecordingReporterFor();
+  registerNexusCommands({ commands: nexusLogin(over.nexus), nexus: over.nexus, reporterFor });
+  return { ...over, reporter, tags };
 }
 
 const run = (id: string, ...args: unknown[]) => (present(handlers.get(id), `the registered handler for "${id}"`) as (...given: unknown[]) => Promise<unknown>)(...args);
@@ -104,6 +104,10 @@ describe('Log in', () => {
 
     expect(sent).toEqual([]);
     expect(await nexus.loggedIn()).toBe(false);
+  });
+
+  it('reports under the nexus tag', () => {
+    expect(registered().tags).toEqual(['nexus']);
   });
 
   it('keeps the prompt open on a refused key, saying why in the prompt and in the Output', async () => {

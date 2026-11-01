@@ -14,30 +14,34 @@ import { ExcludedDownloadedFileDecorationProvider } from './ExcludedDownloadedFi
 import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
 import { linesOf } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
-import { DOWNLOADS_KEY_ARGS, downloadsKeyContext } from './keyContext';
+import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from './keyContext';
+import type { CopyValueAdapter } from '../drivingLib/copyValue';
 
 interface DownloadsViewDeps {
   commands: DownloadedFileCommands;
   queryInfo: QueryInfo;
   instance: InstanceView & Pick<Instance, 'refresh'>;
-  reporter: Reporter;
+  reporterFor: (tag: string) => Reporter;
   trash: MoveToTrash;
-  log: (line: string) => void;
-  logUnresolved: (line: string) => void;
+  channel: { warn(line: string): void };
 }
 
 interface DownloadsView extends vscode.Disposable {
   provider: DownloadsProvider;
   view: vscode.TreeView<DownloadsTreeNode>;
   nameFilter: NameFilter;
+  copyValue: CopyValueAdapter;
   /** The lines the view's message line shows, for the agent. */
   messages(): string[];
 }
 
 /** Rows come from the Instance value alone (ADR-0015). */
 export function createDownloadsView(
-  { commands, queryInfo, instance, reporter, trash, log, logUnresolved }: DownloadsViewDeps,
+  { commands, queryInfo, instance, reporterFor, trash, channel }: DownloadsViewDeps,
 ): DownloadsView {
+  const reporter = reporterFor('downloadedFiles');
+  const log = (line: string): void => { channel.warn(`[downloadedFiles] ${line}`); };
+  const logUnresolved = (line: string): void => { channel.warn(`[instance] ${line}`); };
   const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
   const view = vscode.window.createTreeView(DOWNLOADS_KEY_ARGS.view, {
     treeDataProvider: provider,
@@ -85,6 +89,7 @@ export function createDownloadsView(
   );
   return {
     provider, view, nameFilter,
+    copyValue: { text: downloadsCopyValueText(() => view.selection), reporterTag: 'downloadedFile.copyValue' },
     messages: () => linesOf(provider.viewMessage()),
     dispose: () => { disposable.dispose(); },
   };
