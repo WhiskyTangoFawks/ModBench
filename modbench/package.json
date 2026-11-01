@@ -805,6 +805,11 @@
       {
         "command": "modbench.mod.build",
         "title": "Build Mod",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.source.build",
+        "title": "Build Mod",
         "category": "Modbench",
         "icon": "$(play)"
       },
@@ -1110,6 +1115,10 @@
           "when": "false"
         },
         {
+          "command": "modbench.source.build",
+          "when": "false"
+        },
+        {
           "command": "modbench.recordGrid.editHere",
           "when": "false"
         },
@@ -1248,14 +1257,14 @@
       ],
       "explorer/context": [
         {
-          "command": "modbench.mod.build",
+          "command": "modbench.source.build",
           "when": "resource in modbench.source.buildTargets",
           "group": "modbench@1"
         }
       ],
       "editor/title/run": [
         {
-          "command": "modbench.mod.build",
+          "command": "modbench.source.build",
           "when": "resource in modbench.source.buildTargets",
           "group": "navigation@1"
         }

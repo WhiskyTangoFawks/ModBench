@@ -1359,7 +1359,7 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, 'modbench.source.build', ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE, OPEN_DEPLOYMENT_FOLDER_SETTING];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1451,10 +1451,10 @@ describe('package.json contributes the strings language as a setting (editor-fie
 
 describe('package.json build\'s entry points (source.md, Menus and keys)', () => {
   const ON_A_SOURCE_RESOURCE = 'resource in modbench.source.buildTargets';
-  const entriesOf = (menu: string) =>
-    present(Reflect.get(pkg.contributes.menus, menu), `contributes.menus['${menu}']`).filter((e: MenuEntry) => e.command === 'modbench.mod.build');
+  const entriesOf = (menu: string, command = 'modbench.source.build') =>
+    present(Reflect.get(pkg.contributes.menus, menu), `contributes.menus['${menu}']`).filter((e: MenuEntry) => e.command === command);
 
-  it.each(['explorer/context', 'editor/title/run'])('offers build in %s on a source mod\'s folder and build file alone', (menu) => {
+  it.each(['explorer/context', 'editor/title/run'])('offers the build entry point in %s on a source mod\'s folder and build file alone', (menu) => {
     const entries = entriesOf(menu);
 
     expect(entries).toHaveLength(1);
@@ -1462,6 +1462,6 @@ describe('package.json build\'s entry points (source.md, Menus and keys)', () =>
   });
 
   it('offers build on no Mods or Plugins row', () => {
-    expect(entriesOf('view/item/context').filter((e: MenuEntry) => /modbench\.(modList|pluginListTree)/.test(e.when))).toEqual([]);
+    expect(entriesOf('view/item/context', 'modbench.mod.build').filter((e: MenuEntry) => /modbench\.(modList|pluginListTree)/.test(e.when))).toEqual([]);
   });
 });

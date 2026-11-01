@@ -34,6 +34,7 @@ describe('modbench.mod.build', () => {
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const LOOSE = { name: 'Loose.esp', origin: 'Overwrite' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
+  const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [] });
@@ -56,7 +57,7 @@ describe('modbench.mod.build', () => {
       },
       instance: instanceThatReads,
       reporter, problems: new BuildProblems(diagnostics, { subscribe: () => ({ dispose: () => undefined }) }),
-      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceDirs: () => FILES.paths.sourceDirs, pluginsView: 'modbench.pluginListTree',
+      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_MODS, pluginsView: 'modbench.pluginListTree',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
     }, () => options.selection ?? []);
     return {
@@ -211,18 +212,6 @@ describe('modbench.mod.build', () => {
       { severity: 'error', message: 'Could not build 1 mod — No load order has been received.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
-  });
-
-  it('from the Explorer on a source folder or its build file, builds that mod, and on several, each once', async () => {
-    const { handler } = registered({ landed: [built('ModA'), built('ModB')], refused: [] });
-    const folderA = vscode.Uri.file(normalize('/instance/source/ModA'));
-    const fileA = vscode.Uri.file(normalize('/instance/source/ModA/build.json'));
-    const folderB = vscode.Uri.file(normalize('/instance/source/ModB'));
-
-    await handler(folderA, [folderA, fileA, folderB]);
-
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(builds).toEqual([['ModA', 'ModB']]);
   });
 
   it('from the palette with a selection, builds the selection without the pick', async () => {
