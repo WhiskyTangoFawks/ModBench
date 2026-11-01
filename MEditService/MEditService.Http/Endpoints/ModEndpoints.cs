@@ -28,7 +28,7 @@ internal static class ModEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/init-source-mod", InitSourceMod)
-            .WithName("ModToInitSourceMod")
+            .WithName("InitSourceMod")
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +

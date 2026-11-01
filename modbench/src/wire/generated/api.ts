@@ -144,7 +144,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, in one commit. A mod lands or is refused whole. Progress is the init-source-mod-progress notification. */
-        post: operations["ModToInitSourceMod"];
+        post: operations["InitSourceMod"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2089,7 +2089,7 @@ export interface operations {
             };
         };
     };
-    ModToInitSourceMod: {
+    InitSourceMod: {
         parameters: {
             query?: never;
             header?: never;
