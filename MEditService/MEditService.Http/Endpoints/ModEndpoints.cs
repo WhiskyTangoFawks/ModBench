@@ -27,14 +27,14 @@ internal static class ModEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        app.MapPost("/decompile-and-commit", DecompileAndCommit)
-            .WithName("DecompileAndCommitMod")
+        app.MapPost("/init-source-mod", InitSourceMod)
+            .WithName("InitSourceMod")
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, in one commit. " +
-                "A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
-            .Produces<DecompileAndCommitResult>()
+                "plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed to main when asked. " +
+                "A mod lands or is refused whole. Progress is the init-source-mod-progress notification.")
+            .Produces<InitSourceModResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
@@ -42,15 +42,17 @@ internal static class ModEndpoints
         return app;
     }
 
-    // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> DecompileAndCommit(DecompileAndCommitRequest req, DecompileAndCommitModHandler decompileAndCommitModHandler, ILoggerFactory loggerFactory)
+    // init-source-mod: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
+    internal static async Task<IResult> InitSourceMod(InitSourceModRequest req, InitSourceModHandler initSourceModHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return EndpointMapping.BadRequest("At least one mod is required.");
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.ModFolder) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
             return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
+        if (mods.Any(mod => mod.Commit is null))
+            return EndpointMapping.BadRequest(ModToInitSourceModRequest.LacksCommit);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
@@ -59,8 +61,8 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestFileIsAPath);
 
         return await EndpointMapping.Answered(
-            "Decompile and commit", logger,
-            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.Repository.ToNewRepository()))]),
+            "Init source mod", logger,
+            initSourceModHandler.InitSourceModAsync([.. mods.Select(mod => new ModToInitSourceMod(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), mod.Commit == true))]),
             EndpointMapping.Refusal);
     }
 
@@ -162,11 +164,14 @@ internal sealed record Ba2VariantRequest(uint Version, bool Compressed);
 
 internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint FileFlags);
 
-/// <summary>The mods to decompile and commit (ADR-0013).</summary>
-internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
+/// <summary>The mods to init source mod (ADR-0013).</summary>
+internal sealed record InitSourceModRequest(IReadOnlyList<ModToInitSourceModRequest> Mods);
 
-/// <summary>A mod by name, and the repository its decompile and commit makes.</summary>
-internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);
+/// <summary>A mod by name and folder, the repository its init source mod makes, and whether it commits.</summary>
+internal sealed record ModToInitSourceModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool? Commit)
+{
+    internal const string LacksCommit = "A mod to init needs commit: true to commit what it tracks, or false to leave it uncommitted.";
+}
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
 /// assets by path, its build file's text, and its manifest's name and text.</summary>

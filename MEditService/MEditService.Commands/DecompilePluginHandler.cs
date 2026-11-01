@@ -57,7 +57,7 @@ public sealed class DecompilePluginHandler
         {
             return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.NotInSourceMod,
                 $"{plugin.Name} is not in a source mod, so there is no working tree to decompile it into. "
-                + $"Run decompile and commit on {mod.Name}.");
+                + $"Run init source mod on {mod.Name}.");
         }
 
         var repository = _source.OverFolder(mod, loadOrder.GameRelease);

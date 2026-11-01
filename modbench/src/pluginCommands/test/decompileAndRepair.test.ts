@@ -10,7 +10,7 @@ import type { MEditClient } from '../../client';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const REFUSED = { item: { name: 'Clean.esp', origin: 'Harbor' }, reason: 'Clean.esp is not malformed.' };
-const MADE = { repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
+const MADE = { modFolder: '/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
 
 describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
@@ -43,7 +43,7 @@ describe('decompileAndRepair', () => {
     notLinked = undefined;
   });
 
-  it('repairs each plugin, a mod with no repository handed the one decompile and commit makes', async () => {
+  it('repairs each plugin, a mod with no repository handed the one init source mod makes', async () => {
     expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [REFUSED] } });
     expect(sent()).toEqual([[[{ plugin: MALFORMED, newRepository: MADE.repository }], true]]);
   });

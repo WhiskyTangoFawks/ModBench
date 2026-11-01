@@ -125,7 +125,7 @@ public abstract class TestInstance : IDisposable
 
     private void Init(string origin)
     {
-        var result = DecompileAndCommitEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
+        var result = InitSourceModEveryPluginOf.ModAsync(Snapshot(), origin).GetAwaiter().GetResult();
         if (result.RefusalMessages() is { Count: > 0 } messages)
             throw new InvalidOperationException($"Expected '{origin}' to init: {string.Join("; ", messages)}");
     }

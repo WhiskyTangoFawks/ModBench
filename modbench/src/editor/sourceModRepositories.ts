@@ -63,7 +63,7 @@ export interface SourceModRepositoriesDeps {
 
 export interface SourceModRepositories {
   /** Registers each source mod's repository with `vscode.git`, once per notice: a reconcile
-   *  settled, or a landed decompile and commit. */
+   *  settled, or a landed init source mod. */
   registerRepositories: () => Promise<void>;
   /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
    *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a

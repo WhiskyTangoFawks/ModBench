@@ -13,7 +13,7 @@ public enum DecompileRefusal
     PluginNotLoaded,
 
     /// <summary>The plugin's mod is not a source mod, so it has no working tree to go into; the
-    /// way out is decompile and commit on its mod.</summary>
+    /// way out is init source mod on its mod.</summary>
     NotInSourceMod,
 
     /// <summary>The plugin comes from the game or from no mod, so no mod can hold a source for it; no

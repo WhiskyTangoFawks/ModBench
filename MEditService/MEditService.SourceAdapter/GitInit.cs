@@ -14,17 +14,19 @@ public sealed record FileToCopy(string Path, Func<Stream> Open);
 /// <summary>A file at the root of a new repository, by its name there.</summary>
 public sealed record RootFile(string Name, byte[] Content);
 
-/// <summary>Makes a mod's repository: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>. An init that
-/// fails writes nothing, and it never deletes a repository it did not make (ADR-0003).</summary>
+/// <summary>Makes a mod's repository: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, or none when asked. An init that
+/// fails writes nothing and never deletes a repository it did not make (ADR-0003).</summary>
 internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
+        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
         IReadOnlyList<string>? ignored = null)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
+        if (!commit && repair is not null)
+            throw new ArgumentException("A repair is a commit, so an init that commits nothing cannot hold one.", nameof(repair));
 
         WriteJournal journal = new(sourceFolder);
         var git = new SourceRepositoryGit(sourceFolder);
@@ -39,23 +41,34 @@ internal static class GitInit
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored ?? [])));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
-            git.Run("add", "-A");
-            git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
-            if (repair is var (repaired, commit))
-            {
-                SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired.Name, SourceRepositoryLayout.PristineFilesOf(repaired.Name, commit.Tree));
-                git.Run("add", "-A");
-                git.Run("commit", "-q", "-m", commit.Message);
-            }
-            foreach (var (_, plugin) in plugins)
-            {
-                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Address.Name, binarySha256);
-            }
+            Track(git, journal, sourceFolder, commit, plugins, repair);
+            git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitDone);
         }
         catch (Exception ex)
         {
             if (journal.Report(ex, journal.UndoSince(0)) is { } report) throw report;
             throw;
+        }
+    }
+
+    private static void Track(
+        SourceRepositoryGit git, WriteJournal journal, string sourceFolder, bool commit,
+        IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins, (PluginAddress Plugin, TreeCommit Commit)? repair)
+    {
+        git.Run("add", "-A");
+        if (commit)
+        {
+            git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
+            if (repair is var (repaired, repairCommit))
+            {
+                SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired.Name, SourceRepositoryLayout.PristineFilesOf(repaired.Name, repairCommit.Tree));
+                git.Run("add", "-A");
+                git.Run("commit", "-q", "-m", repairCommit.Message);
+            }
+        }
+        foreach (var (_, plugin) in plugins)
+        {
+            if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Address.Name, binarySha256);
         }
     }
 
@@ -78,7 +91,7 @@ internal static class GitInit
     private static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
-        git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", "true");
+        git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitPending);
         foreach (var (key, value) in Settings) git.Run("config", key, value);
         EnsureCommitIdentity(git);
     }

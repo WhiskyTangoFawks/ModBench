@@ -26,7 +26,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var response = await Client.DecompileAndCommit(Origin);
+        var response = await Client.InitSourceMod(Origin);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -37,7 +37,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(
-            "decompile-and-commit-progress", e => e.TryGetProperty("decompileAndCommitPhase", out var phase) && phase.GetString() == "Committing");
+            "init-source-mod-progress", e => e.TryGetProperty("initSourceModPhase", out var phase) && phase.GetString() == "Committing");
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Origin);
 
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
@@ -54,11 +54,11 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
-        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
+        var response = await Client.PostAsJsonAsync("/init-source-mod", new
         {
             mods = new[]
             {
-                new { name = Origin, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
+                new { name = Origin, modFolder, commit = true, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
             },
         });
 
@@ -74,13 +74,15 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     public static TheoryData<string, string> NotARequestToInit => new()
     {
         { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "repository": {"buildFile": "{}"}}]}""" },
-        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
-        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
-        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
-        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a folder", """{"mods": [{"name": "InitializedMod", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without commit", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"buildFile": "{}"}}]}""" },
+        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
+        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
+        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
+        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]
@@ -89,7 +91,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostJson("/decompile-and-commit", body);
+        var response = await Client.PostJson("/init-source-mod", body);
 
         Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
@@ -103,26 +105,11 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
 
         var response = await Client.PostJson(
-            "/decompile-and-commit",
-            $$$"""{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
+            "/init-source-mod",
+            $$$"""{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task InitOfAModThatProvidesNoPlugin_RefusesThatMod_AndLandsTheOthers()
-    {
-        await Loaded();
-
-        var response = await Client.DecompileAndCommit([Origin, "NoSuchMod"]);
-
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal([Origin], body.GetProperty("applied").EnumerateArray().Select(m => m.GetProperty("mod").GetString()));
-        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
-        Assert.Equal(("NoSuchMod", "ModProvidesNoPlugin"), (refused.GetProperty("item").GetString(), refused.GetProperty("refusal").GetString()));
-        Assert.Contains("NoSuchMod", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -131,7 +118,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
 
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsCompiledPlugin(Plugin);

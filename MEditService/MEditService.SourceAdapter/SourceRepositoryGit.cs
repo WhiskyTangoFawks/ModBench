@@ -12,17 +12,18 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     private readonly string _sourceFolder = sourceFolder;
     private readonly string _gitDir = GitDirOf(sourceFolder);
 
-    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
-    /// exists. A <c>.git</c> with no <c>main</c> is init's own, half made, or
-    /// <see cref="HoldsAnotherRepository"/>.</summary>
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists, or one init
+    /// was asked to commit nothing. Any other <c>.git</c> is <see cref="HoldsAnotherRepository"/>.</summary>
     internal static bool HoldsRepository(string sourceFolder)
     {
         var gitDir = GitDirOf(sourceFolder);
-        return Directory.Exists(gitDir) && HasMainBranch(gitDir);
+        return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || InitFinished(gitDir));
     }
 
     internal const string InitMarkSection = "medit";
     internal const string InitMarkKey = "init";
+    internal const string InitPending = "pending";
+    internal const string InitDone = "done";
 
     /// <summary>A <c>.git</c> with no <c>main</c> and no init mark: someone else's, which init never
     /// writes to (ADR-0003). The mark is a config key set right after <c>git init</c>.</summary>
@@ -42,6 +43,21 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), sourceFolder) : dotGit;
     }
 
+    // Whether Modbench's init finished here, with a commit or without. Its mark says "pending" until then, so a crashed
+    // init's half-made repository is not mistaken for a made one.
+    private static bool InitFinished(string gitDir)
+    {
+        var config = Path.Combine(gitDir, "config");
+        if (!File.Exists(config)) return false;
+        var inMark = false;
+        foreach (var line in File.ReadLines(config).Select(line => line.Trim()))
+        {
+            if (line.StartsWith('[')) inMark = line == $"[{InitMarkSection}]";
+            else if (inMark && line.Replace(" ", "") == $"{InitMarkKey}={InitDone}") return true;
+        }
+        return false;
+    }
+
     private static bool IsMarkedByInit(string gitDir)
     {
         var config = Path.Combine(gitDir, "config");
@@ -51,16 +67,14 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     // Read off the ref store's files, not by running git: every read of a compiled plugin asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
     private static bool HasMainBranch(string gitDir) =>
-        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
+        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedRefs(gitDir).Contains("refs/heads/main");
 
-    private static HashSet<string> PackedBranches(string gitDir)
+    private static HashSet<string> PackedRefs(string gitDir)
     {
-        const string prefix = " refs/heads/";
         var packedRefs = Path.Combine(gitDir, "packed-refs");
-        if (!File.Exists(packedRefs)) return [];
-        return [.. File.ReadLines(packedRefs)
-            .Select(line => line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0 ? line[(at + prefix.Length)..] : null)
-            .OfType<string>()];
+        return File.Exists(packedRefs)
+            ? [.. File.ReadLines(packedRefs).Select(line => line.IndexOf(' ', StringComparison.Ordinal) is var at and >= 0 ? line[(at + 1)..] : null).OfType<string>()]
+            : [];
     }
 
     internal string GitDirectory => _gitDir;
@@ -79,13 +93,23 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
 
     internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _sourceFolder, out stdout, args);
 
-    internal string HeadCommit() => Run("rev-parse", "HEAD").Trim();
+    /// <summary>The commit at HEAD, or null before the first commit of an init that committed nothing.</summary>
+    internal string? HeadCommit()
+    {
+        if (TryRun(out var head, "rev-parse", "--verify", "--quiet", "HEAD")) return head.Trim();
+        if (TryRun(out var branch, "symbolic-ref", "--quiet", "HEAD") && !RefIsStored(branch.Trim())) return null;
+        throw SourceStopException.GitFailed($"git cannot read HEAD of '{_sourceFolder}'");
+    }
+
+    // A loose ref is a file, until git packs it into packed-refs.
+    private bool RefIsStored(string gitRef) =>
+        File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
 
     internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all").Length > 0;
 
     /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit at HEAD.</summary>
     internal bool RemoteHoldsHead(string remote) =>
-        Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+        HeadCommit() is null || Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.
@@ -148,9 +172,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         // write that did not happen. The ref keeps naming the old and the new binary (ADR-0003).
         try
         {
-            var parked = LastCompileRef(pluginFileName);
-            var parent = Run("rev-parse", $"{parked}^").Trim();
-            ParkTrailers("Compile", pluginFileName, parent, [$"{BinaryTrailer}: {binarySha256}"]);
+            ParkTrailers("Compile", pluginFileName, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
             return true;
         }
         catch (SourceStopException)
@@ -191,10 +213,11 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
     // subject names the gesture that made the record. Only the trailers are read, so the commit holds
     // git's empty tree.
-    private void ParkTrailers(string gesture, string pluginFileName, string parent, IEnumerable<string> trailers)
+    private void ParkTrailers(string gesture, string pluginFileName, string? parent, IEnumerable<string> trailers)
     {
         var message = string.Join('\n', [$"{gesture}: {pluginFileName}", "", .. trailers]);
-        Park(pluginFileName, Run("commit-tree", EmptyTree, "-p", parent, "-m", message).Trim());
+        string[] parentArgs = parent is null ? [] : ["-p", parent];
+        Park(pluginFileName, Run(["commit-tree", EmptyTree, .. parentArgs, "-m", message]).Trim());
     }
 
     // The one place the last-compile ref moves.

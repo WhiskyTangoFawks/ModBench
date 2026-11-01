@@ -61,15 +61,15 @@ public sealed class NonCompiledPluginReadOnlyTests
 
         Assert.NotEqual(initable.Refusal, notInitable.Refusal);
         Assert.DoesNotContain("patch", initable.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Decompile and commit", notInitable.Message, StringComparison.Ordinal);
-        Assert.Contains("Decompile and commit its mod", initable.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Init source mod", notInitable.Message, StringComparison.Ordinal);
+        Assert.Contains("Init source mod its mod", initable.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task InitingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
         using var mod = SourceEditFixture.NonCompiledPlugin();
-        var compiledPlugin = await DecompileAndCommitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
+        var compiledPlugin = await InitSourceModEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
         Assert.Empty(compiledPlugin.RefusalMessages());
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));

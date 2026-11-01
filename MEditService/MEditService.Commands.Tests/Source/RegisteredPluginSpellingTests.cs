@@ -22,7 +22,7 @@ public sealed class RegisteredPluginSpellingTests : TestInstance
     [Fact]
     public async Task Init_OfAPluginWithAMixedCaseExtension_CommitsItsSourceRootAsRegistered()
     {
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(LoadOrder, Origin)).Value();
+        var result = (await InitSourceModEveryPluginOf.ModAsync(LoadOrder, Origin)).Value();
 
         Assert.Empty(result.Refused);
         var repository = TestAdapters.Source().Open(TestMod.Of(_plugin, ModFolderOf(_plugin)), GameRelease.Fallout4).Require();
@@ -33,7 +33,7 @@ public sealed class RegisteredPluginSpellingTests : TestInstance
     [Fact]
     public async Task Compile_OfAPluginWithAMixedCaseExtension_ReadsTheSourceRootAsRegistered()
     {
-        Assert.Empty((await DecompileAndCommitEveryPluginOf.ModAsync(LoadOrder, Origin)).RefusalMessages());
+        Assert.Empty((await InitSourceModEveryPluginOf.ModAsync(LoadOrder, Origin)).RefusalMessages());
 
         await CompileHandler.CompileLandedAsync(_plugin);
     }

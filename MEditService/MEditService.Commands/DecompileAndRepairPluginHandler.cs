@@ -95,9 +95,9 @@ public sealed class DecompileAndRepairPluginHandler
                 return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
-                loadOrder, new ModToDecompileAndCommit(mod.Name, made),
+                loadOrder, new ModToInitSourceMod(mod.Name, mod.Folder, made, Commit: true),
                 leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
-            if (init is ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
+            if (init is ItemAnswer<InitSourceModRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");
             leftOutOfANewRepository.UnionWith(leftOut);
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
@@ -125,10 +125,10 @@ public sealed class DecompileAndRepairPluginHandler
         _ => Refused(DecompileAndRepairRefusal.RepairFailed, $"{plugin.Name}'s repair could not be made: {failure.Reason}."),
     };
 
-    private static DecompileAndRepairRefusal RefusalOfInit(DecompileAndCommitRefusal refusal) => refusal switch
+    private static DecompileAndRepairRefusal RefusalOfInit(InitSourceModRefusal refusal) => refusal switch
     {
-        DecompileAndCommitRefusal.AlreadyInitialized => DecompileAndRepairRefusal.AnotherRepository,
-        DecompileAndCommitRefusal.CommitFailed => DecompileAndRepairRefusal.WriteFailed,
+        InitSourceModRefusal.AlreadyInitialized => DecompileAndRepairRefusal.AnotherRepository,
+        InitSourceModRefusal.CommitFailed => DecompileAndRepairRefusal.WriteFailed,
         _ => DecompileAndRepairRefusal.OtherPluginRefused,
     };
 

@@ -32,13 +32,13 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod], () => false).selectionToggle).toBe('enable');
   });
 
-  it('the palette\'s decompile and commit sees a selection that holds a mod with no repository providing a plugin', () => {
-    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, { holdsPlugin: true, sourceMod: false });
-    const sourceModWithPlugin = new ModNode({ kind: 'mod', name: 'SourceMod', enabled: true }, { holdsPlugin: true, sourceMod: true });
-    expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsNonSourceModWithPlugin).toBe(true);
-    expect(modsKeyContext([enabledMod, sourceModWithPlugin], byRow).holdsNonSourceModWithPlugin).toBe(false);
-    expect(modsKeyContext([enabledMod, group], byRow).holdsNonSourceModWithPlugin).toBe(false);
-    expect(modsKeyContext([], byRow).holdsNonSourceModWithPlugin).toBe(false);
+  it('the palette\'s init source mod sees a selection that holds a mod with no repository, whether or not it provides a plugin', () => {
+    const noPlugin = new ModNode({ kind: 'mod', name: 'Settings', enabled: true }, { holdsPlugin: false, sourceMod: false });
+    const sourceMod = new ModNode({ kind: 'mod', name: 'SourceMod', enabled: true }, { holdsPlugin: true, sourceMod: true });
+    expect(modsKeyContext([enabledMod, noPlugin], byRow).holdsNonSourceMod).toBe(true);
+    expect(modsKeyContext([enabledMod, sourceMod], byRow).holdsNonSourceMod).toBe(false);
+    expect(modsKeyContext([enabledMod, group], byRow).holdsNonSourceMod).toBe(false);
+    expect(modsKeyContext([], byRow).holdsNonSourceMod).toBe(false);
   });
 
   it('Space does nothing over a selection with no mod', () => {

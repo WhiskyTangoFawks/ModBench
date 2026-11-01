@@ -51,6 +51,12 @@ const MODS = gestureInput(
   (value, { argument }) => new AgentCall(modArguments(value, argument), {}),
 );
 
+const INIT_SOURCE_MOD = gestureInput(
+  `${MODS_TAKES}; options: { commit: true to commit what it tracks to main as \`Init <mod>\`, false to leave it uncommitted }`,
+  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ commit: z.boolean() }) }),
+  (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
+);
+
 const MOVE_PLACE = z.union([
   z.object({ kind: z.enum(['ungrouped', 'modOrder']) }),
   z.object({ kind: z.enum(['separator', 'mod']), name: z.string() }),
@@ -274,7 +280,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.disable', MODS],
   ['modbench.mod.move', MOVE_MODS],
   ['modbench.mod.uninstall', UNINSTALL],
-  ['modbench.mod.decompileAndCommit', MODS],
+  ['modbench.mod.initSourceMod', INIT_SOURCE_MOD],
   ['modbench.mod.build', BUILD],
   ['modbench.mod.rename', RENAME_MOD],
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],

@@ -18,7 +18,7 @@ public sealed class SharedFilenameEditApiTests : HostedTests
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit([WinningOrigin, OverriddenOrigin])).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod([WinningOrigin, OverriddenOrigin])).EnsureSuccessStatusCode();
         var formKey = $"000800:{PluginName}";
 
         var response = await Client.EditChanges(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);

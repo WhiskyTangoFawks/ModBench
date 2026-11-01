@@ -22,7 +22,7 @@ public sealed class PluginProblemsApiTests : HostedTests
             .WithPlugin("Plain.esp", mod => mod.Npcs.AddNew("PlainNpc"), origin: "PlainMod")
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
