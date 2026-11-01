@@ -6,7 +6,7 @@ import { join } from 'node:path';
 vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
 import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
-import { handlers, showQuickPick, createQuickPick, PluginRowStandIn } from './sourceGestureHarness';
+import { handlers, showQuickPick, createQuickPick, executeCommand, PluginRowStandIn } from './sourceGestureHarness';
 
 import { registerInitSourceModCommand } from '../initSourceModCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
@@ -76,7 +76,7 @@ describe('modbench.mod.initSourceMod', () => {
     const progressIn = (view: string) => ({ say: (message: string | undefined) => (view === 'modbench.modList' ? saidInMods : said).push(message) });
     const reporter = recordingReporter();
     registerInitSourceModCommand({
-      progressIn, instance: instanceThatReads, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
+      progressIn, sourceFolderOf: (mod) => (mod === 'ModC' ? undefined : `/source/${mod}`), instance: instanceThatReads, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.initSourceMod'), 'the init source mod command registerInitSourceModCommand registers'),
@@ -97,6 +97,36 @@ describe('modbench.mod.initSourceMod', () => {
     expect(reporter.landings).toEqual(['"ModA" is a source mod.']);
     expect(reporter.reports).toEqual([]);
     expect(onCommitted).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['a committed init', 'a Mods row', true, () => modRow('ModA')],
+    ['an uncommitted init', 'a Mods row', false, () => modRow('ModA')],
+    ['a committed init', 'a plugin row', true, () => row(FIRST)],
+    ['an uncommitted init', 'a plugin row', false, () => row(FIRST)],
+  ])('shows the source of what landed in the Explorer: %s fired from %s (plugins.md, Init source mod, story 7)', async (_init, _from, commit, fired) => {
+    picking({ commit });
+    const commands = initSourceModCommands();
+    commands.answers({ landed: [modA([FIRST])], refused: [{ item: 'ModB', reason: 'ModB was not initialized.' }] });
+    const { handler } = invokeInitSourceMod(commands);
+
+    await handler(fired());
+
+    expect(executeCommand.mock.calls.filter(([command]) => command === 'revealInExplorer'))
+      .toEqual([['revealInExplorer', expect.objectContaining({ fsPath: '/source/ModA' })]]);
+  });
+
+  it('warns of a source it could not show, and the mod still stands as a source mod', async () => {
+    const commands = initSourceModCommands();
+    commands.answers({ landed: [{ mod: 'ModC', plugins: [] }], refused: [] });
+    const { handler, reporter, onCommitted } = invokeInitSourceMod(commands);
+
+    await handler(modRow('ModC'));
+
+    expect([reporter.reports, reporter.landings, onCommitted.mock.calls.length]).toEqual([
+      [{ severity: 'warning', message: 'Init source mod:', detail: '"ModC" is a source mod, but its source could not be shown in the Explorer: its name gives it no source folder' }],
+      ['"ModC" is a source mod.'], 1,
+    ]);
   });
 
   it('offers not committing first, and hands mEdit the pick', async () => {
