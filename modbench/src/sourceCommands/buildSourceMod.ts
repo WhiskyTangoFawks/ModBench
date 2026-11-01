@@ -91,7 +91,7 @@ export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'
   return undefined;
 }
 
-// Build, stories 3 and 8: how a step made a file. A task's or a script's is recorded by its path alone, and a file mEdit left as it was
+// Build, stories 3 and 8: how a step made a file. A run's is recorded by its path alone, and a file mEdit left as it was
 // keeps its recorded hash while the folder holds those bytes.
 type Made = 'vouched' | 'leftAsItWas' | 'byARun';
 
