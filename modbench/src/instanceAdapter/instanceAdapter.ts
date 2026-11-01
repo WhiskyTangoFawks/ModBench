@@ -825,8 +825,6 @@ export interface InstanceAdapter {
   trashingReplaced<T>(folder: string, paths: readonly string[], trash: MoveToTrash, write: () => Promise<T>): Promise<
     { readonly answer: T } | { readonly notTrashed: string }
   >;
-  /** Moves a source mod's repository folder into the trash. */
-  trashSourceFolder(sourceFolder: string, trash: MoveToTrash): Promise<void>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an
    *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
   install(installed: InstallPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;

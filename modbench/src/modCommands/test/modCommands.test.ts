@@ -1,14 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
 import { fileInFolder } from '../../instanceAdapter/instanceAdapter';
 import type {
   EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 const separator = (name: string, enabled = false): ModlistEntry => ({ kind: 'separator', name, enabled });
@@ -243,7 +239,7 @@ describe('uninstallMods', () => {
   const installedFrom = (...pairs: readonly (readonly [string, string])[]): InstanceAnswers =>
     ({ metadata: new Map(pairs.map(([mod, name]) => [mod, { installationFile: { name } }])) });
 
-  it('trashes the folder, then the source folder, then removes the line, then marks the downloaded file uninstalled, in that order', async () => {
+  it('trashes the folder, then removes the line, then marks the downloaded file uninstalled, in that order', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', INSTALLATION_FILE]), sourceMods(new Map([['Unofficial Patch', SOURCE]])));
 
     const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
@@ -251,7 +247,6 @@ describe('uninstallMods', () => {
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Unofficial Patch' }], refused: [] } });
     expect(fake.calls).toEqual([
       { verb: 'trashEntryFolder', entry: { kind: 'mod', name: 'Unofficial Patch' } },
-      { verb: 'trashSourceFolder', sourceFolder: SOURCE },
       orderWrite([{ kind: 'dropMod', mod: 'Unofficial Patch' }]),
       { verb: 'markDownloadedFile', name: INSTALLATION_FILE, mark: 'Uninstalled' },
     ]);
@@ -267,45 +262,6 @@ describe('uninstallMods', () => {
       orderWrite([{ kind: 'dropMod', mod: 'Harder VATS' }, { kind: 'dropMod', mod: 'ENBoost' }]),
     ]);
     expect(verbs(fake.calls)).not.toContain('markDownloadedFile');
-  });
-
-  it.each([
-    ['keeps the repository another mod\'s manifest still names', ['Harder VATS'], []],
-    ['trashes a shared repository once, when every mod that names it goes', ['Harder VATS', 'ENBoost'], [SOURCE]],
-  ])('%s (mods.md, Uninstall)', async (_case, uninstalled, sourcesTrashed) => {
-    const mods = await mkdtemp(join(tmpdir(), 'shared-repository-'));
-    for (const name of ['Harder VATS', 'ENBoost']) {
-      await mkdir(join(mods, name));
-      await writeManifestIn(join(mods, name), {
-        packages: [{ kind: 'repository', name: 'Harder VATS' }], exclude: [], files: new Map(),
-      });
-    }
-    const { fake, commands } = over(FIXTURE_ORDER, {}, {
-      modFolders: modFoldersIn(mods, 'Harder VATS', 'ENBoost'), ...sourceMods(new Map([['Harder VATS', SOURCE]])),
-    });
-
-    await commands.uninstallMods(uninstalled, NO_TRASH).finally(() => rm(mods, { recursive: true }));
-
-    expect(fake.calls.flatMap((call) => (call.verb === 'trashSourceFolder' ? [call.sourceFolder] : []))).toEqual(sourcesTrashed);
-  });
-
-  it('trashes no source folder of a mod no repository builds', async () => {
-    const { fake, commands } = over();
-
-    await commands.uninstallMods(['ENBoost'], NO_TRASH);
-
-    expect(verbs(fake.calls)).not.toContain('trashSourceFolder');
-  });
-
-  it('lands the mod carrying the source\'s failure when the source folder cannot be trashed', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('trashSourceFolder', 'the trash refused it') }, sourceMods(new Map([['Harder VATS', SOURCE]])));
-
-    const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
-
-    expect(outcome).toEqual({
-      applied: true, outcome: { landed: [{ name: 'Harder VATS', sourceRefusal: 'the trash refused it' }], refused: [] },
-    });
-    expect(verbs(fake.calls)).toContain('changeModOrder');
   });
 
   it('refuses an unknown mod by name, trashing and marking nothing for it, while the rest land', async () => {

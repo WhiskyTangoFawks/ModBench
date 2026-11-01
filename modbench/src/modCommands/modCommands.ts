@@ -11,7 +11,6 @@ import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, newNameRefusal, ty
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { installMod } from './install';
-import { sourceFolderTrashed, sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 export type { SelectionResult };
 export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
@@ -236,11 +235,8 @@ async function trashThenUnlist(
   adapter: InstanceAdapter, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
   let order: readonly EntryRef[];
-  let sourceMods: SourceMods | undefined;
   try {
-    const { mods, modFolders } = await adapter.modOrder();
-    order = mods;
-    if (kind === 'mod') sourceMods = await sourceModsOf(modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+    order = (await adapter.modOrder()).mods;
   } catch (err) {
     return refuse(err);
   }
@@ -248,30 +244,18 @@ async function trashThenUnlist(
     .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
-  const sourceRefusals = new Map<string, string>();
   const listed = names.filter((n) => isListed(adapter, order, { kind, name: n }));
-  const sourcesTrashed = new Set<string>();
   for (const name of listed) {
-    const sourceFolder = sourceMods && sourceFolderTrashed(sourceMods.folders, name, listed, (mod) => adapter.entryKey({ kind: 'mod', name: mod }));
     try {
       if (await adapter.trashEntryFolder({ kind, name }, trash)) trashed.add(name);
       toUnlist.push(name);
     } catch (err) {
       refused.push({ item: { name }, reason: errorMessage(err) });
-      continue;
-    }
-    if (sourceFolder !== undefined && !sourcesTrashed.has(sourceFolder)) {
-      sourcesTrashed.add(sourceFolder);
-      try {
-        await adapter.trashSourceFolder(sourceFolder, trash);
-      } catch (err) {
-        sourceRefusals.set(name, errorMessage(err));
-      }
     }
   }
   const lines = await changeModOrder(adapter, () => toUnlist.map((name) => dropOf({ kind, name })));
   const landedEntry = (name: string, lineRefusal?: string): TrashedEntry => ({
-    name, ...(lineRefusal !== undefined && { lineRefusal }), ...(sourceRefusals.has(name) && { sourceRefusal: sourceRefusals.get(name) }),
+    name, ...(lineRefusal !== undefined && { lineRefusal }),
   });
   if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => landedEntry(name)), refused } };
   return {
