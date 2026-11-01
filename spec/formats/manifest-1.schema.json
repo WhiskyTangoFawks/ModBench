@@ -83,7 +83,7 @@
           "minLength": 1
         },
         "packageVersion": {
-          "description": "The version the file's host gives it. Absent when Modbench knows none.",
+          "description": "The file's version. Absent when Modbench knows none.",
           "type": "string",
           "minLength": 1
         },
