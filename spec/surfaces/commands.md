@@ -74,7 +74,7 @@ A template is a standalone program. Modbench is not. A gesture leaves this file 
 | Plugins | navigator | plugin list | [plugins.md](plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](downloads.md) |
 | Editor | View grid, Referenced By | - | [editor.md](editor.md) |
-| Plugin source | Referenced By, Ctrl + click | - | [plugin-source.md](plugin-source.md) |
+| Source | Referenced By, Ctrl + click | - | [source.md](source.md) |
 | Agent | - | - | [agent.md](agent.md) |
 | Scripts | Apply Script | - | [scripts.md](scripts.md) |
 | Modlist repository | - | - | [modlist-repository.md](modlist-repository.md) |
@@ -94,7 +94,7 @@ The xEdit Messages tab is not a surface: failures and wrong states go where comm
 | Editor, Referenced By | VS Code's References view | - | opened by the gesture |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Mods, the FOMOD installer | an editor tab | - | opened by install |
-| Plugin source, the text editor | an editor tab | - | opened by the user |
+| Source | the Explorer, an editor tab, and Source Control | - | opened by the user, or by init source mod |
 | Modlist repository, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself.
@@ -141,12 +141,12 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 |---|---|---|---|---|---|---|---|
 | enable / disable | writes | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Enable or disable each mod in the active profile. | update-load-order-file |
 | move | writes | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
-| uninstall | writes | `modbench.mod.uninstall` | mods | force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list | Send each mod's folder, and a source mod's source, to the trash, and remove the mod from mod order. | update-load-order-file |
+| uninstall | writes | `modbench.mod.uninstall` | mods | force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list | Send each mod's folder to the trash, and remove the mod from mod order. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](mods-fomod.md)); install anyway, for a FOMOD that names a missing file | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
 | init source mod | writes | `modbench.mod.initSourceMod` | mods | commit to main | none | Make a mod a source mod: a repository that holds its source. | decompile-and-commit |
 | build | writes | `modbench.mod.build` | mods, or none for every source mod | - | none | Write a source mod's folder as its build file says, and record it in its manifest. | build-mod |
-| update manifest | writes | `modbench.mod.updateManifest` | mods or separators, or none for every manifest | - | none | Record each folder in its manifest. | update-manifest |
+| update manifest | writes | `modbench.mod.updateManifest` | mods, separators or source folders, or none for every manifest | - | none | Record each folder in its manifest. | update-manifest |
 | restore from manifest | writes | `modbench.mod.restoreFromManifest` | mods or separators, or none for every manifest | - | none | Make each folder what its manifest says, building each source mod's. | restore-from-manifest |
 | check for updates | writes | `modbench.mod.checkForUpdates` | mods or separators, or none for every mod | - | MO2 mod list | Ask Nexus for the newest version of each mod, and write it in the mod's metadata. | - |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
