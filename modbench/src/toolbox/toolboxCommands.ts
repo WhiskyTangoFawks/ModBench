@@ -57,13 +57,14 @@ interface RefreshGestureDeps {
    *  wait is released. */
   nextRefill: () => { ended: Promise<void>; release: () => void };
   instance: Pick<Instance, 'value' | 'refresh'>;
-  reporter: Reporter;
+  reporterFor: (tag: string) => Reporter;
   /** Names this instance in toolbox.md's Reporting story 1. Modbench cannot name the other
    *  window that holds the record index, only the one refused here. */
   instanceRoot: string;
 }
 
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
+  const reporter = deps.reporterFor('refresh');
   const refusalOf = (outcome: Extract<RefreshResult, { applied: false }>) => outcome.heldElsewhere
     ? { message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: deps.instanceRoot }
     : { message: 'Could not refresh.', detail: outcome.refusal };
@@ -77,7 +78,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     refill.release();
     const { message, detail } = refusalOf(outcome);
     if (fromAgent) return { applied: false, refusal: message, detail };
-    deps.reporter.report('error', message, detail);
+    reporter.report('error', message, detail);
     return undefined;
   };
   return vscode.commands.registerCommand('modbench.instance.refresh', (called?: unknown) =>

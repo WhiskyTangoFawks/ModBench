@@ -38,6 +38,13 @@ export function recordingReporter(): RecordingReporter {
   };
 }
 
+/** A `reporterFor` over one recording reporter that notes each tag it was asked for. */
+export function tagRecordingReporterFor(): { reporter: RecordingReporter; tags: string[]; reporterFor: (tag: string) => Reporter } {
+  const reporter = recordingReporter();
+  const tags: string[] = [];
+  return { reporter, tags, reporterFor: (tag) => { tags.push(tag); return reporter; } };
+}
+
 interface RecordedQuestion { message: string; detail?: string; buttons: string[] }
 
 export type ScriptedDialog = AskQuestion & { readonly asked: RecordedQuestion[] };

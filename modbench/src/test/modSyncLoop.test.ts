@@ -10,16 +10,13 @@ import { Instance } from '../instanceLoader/instance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
-import { instanceSyncs } from '../syncWiring';
+import { modSyncOn } from '../mods/modSync';
 import { modSyncOver, type ModSyncRun } from '../modCommands/modCommands';
-import type { PluginSyncRun } from '../pluginCommands/plugins';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { adapterOver } from './mo2/adapterOver';
 import { STEADY_WINDOW } from './steadyWindow';
-
-const noPluginSync: PluginSyncRun = () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] });
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
@@ -54,8 +51,8 @@ async function settledWiredInstance(): Promise<{
   instances.push(instance);
   const channel = channelDouble();
   const syncs: ReturnType<ModSyncRun>[] = [];
-  const { modSync } = instanceSyncs({
-    instance, channel, syncPlugins: noPluginSync,
+  const { modSync } = modSyncOn({
+    instance, channel,
     syncMods: () => {
       const run = modSyncOver(adapterOver(root))();
       syncs.push(run);
@@ -93,8 +90,8 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   const channel = channelDouble();
   const syncs: ReturnType<ModSyncRun>[] = [];
   const syncMods = modSyncOver(fake.adapter);
-  const { modSync } = instanceSyncs({
-    instance, channel, syncPlugins: noPluginSync,
+  const { modSync } = modSyncOn({
+    instance, channel,
     syncMods: () => {
       const run = syncMods();
       syncs.push(run);
@@ -130,7 +127,7 @@ describe('mod sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
     const syncMods = vi.fn<ModSyncRun>(() => Promise.resolve({ applied: true, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
-    const { modSync } = instanceSyncs({ instance, syncPlugins: noPluginSync, channel: channelDouble(), syncMods });
+    const { modSync } = modSyncOn({ instance, channel: channelDouble(), syncMods });
 
     instance.publish(instanceValueFixture());
     instance.publish(instanceValueFixture());
@@ -144,8 +141,8 @@ describe('mod sync, as each landed value drives it', () => {
       managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' },
     }));
     const channel = channelDouble();
-    const { modSync } = instanceSyncs({
-      instance, syncPlugins: noPluginSync, channel,
+    const { modSync } = modSyncOn({
+      instance, channel,
       syncMods: () => Promise.resolve({ applied: true, added: ['New Mod'], dropped: [] }),
     });
 

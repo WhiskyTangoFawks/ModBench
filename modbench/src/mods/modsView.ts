@@ -10,7 +10,8 @@ import type { MoveToTrash } from '../ports/trash';
 import type { DrawsHighlight, RelatesRows } from '../drivingLib/highlightFollowsFocus';
 import { pluginsHeld } from './pluginsHeld';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
-import type { NexusModRow } from '../drivingLib/inFocusedView';
+import { nexusRowInFocusedView, selectionInFocusedView } from '../drivingLib/inFocusedView';
+import type { FocusedView } from '../drivingLib/focusedView';
 import { errorMessage } from '../ports/errorMessage';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { linesOf, messageLine } from '../drivingLib/messageLine';
@@ -45,8 +46,6 @@ import {
 
 interface SourceGestureDeps {
   commands: SourceCommands;
-  /** The rows of the focused Mods or Plugins view, which the palette's decompile and commit and build act on. */
-  rows: () => readonly unknown[];
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
   /** The Plugins view's message line, where decompile and commit says its phase. */
@@ -55,20 +54,20 @@ interface SourceGestureDeps {
   registerRepositories: () => Promise<void>;
 }
 
-type ManifestDeps = Pick<ManifestGestureDeps, 'commands' | 'toolboxView' | 'say' | 'focusedView'>;
+type ManifestDeps = Pick<ManifestGestureDeps, 'commands' | 'toolboxView' | 'say'>;
 
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'quiet'>;
   commands: ModCommands;
   copyReads: CopyReads;
-  log: (line: string) => void;
+  channel: { warn(line: string): void };
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
   extensionUri: vscode.Uri;
-  downloadedFileInstallReporting: Parameters<typeof registerModInstallCommands>[0]['downloadedFileInstallReporting'];
-  /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
-  nexusRow: () => NexusModRow | undefined;
+  /** The Downloads view's id, whose bar an install from a downloaded file runs under, and whose selected row the palette's view on Nexus can act on. */
+  downloadsView: string;
+  focusedView: FocusedView;
   /** Mod sync, whose failure the view's message line says. */
   modSync: SyncMessage;
   sourceGestures: SourceGestureDeps;
@@ -79,7 +78,7 @@ interface ModsViewDeps {
 }
 
 const checkForUpdatesDeps = (
-  { checkForUpdates, manifestGestures: { focusedView } }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh' | 'quiet'>, reporter: Reporter,
+  { checkForUpdates, focusedView }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh' | 'quiet'>, reporter: Reporter,
 ): CheckForUpdatesDeps => ({ commands: { checkForUpdates }, instance, reporter, focusedView });
 
 interface ModsView extends vscode.Disposable {
@@ -96,7 +95,15 @@ interface ModsView extends vscode.Disposable {
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
  *  the loser silently vanishes. */
 export function createModsView(deps: ModsViewDeps): ModsView {
-  const { instance, commands, log, modSync, reporterFor, ask, trash, statuses } = deps;
+  const { instance, commands, channel, modSync, reporterFor, ask, trash, statuses, focusedView } = deps;
+  const log = (line: string): void => { channel.warn(`[modList] ${line}`); };
+  const downloadedFileInstallReporting = {
+    reporter: reporterFor('downloadedFiles'), log: (line: string) => { channel.warn(`[downloadedFiles] ${line}`); }, progressViewId: deps.downloadsView,
+  };
+  const owned: vscode.Disposable[] = [];
+  const own = <T extends vscode.Disposable>(disposable: T): T => { owned.push(disposable); return disposable; };
+  const nexusRow = nexusRowInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.downloadsView], 'modbench.mod.nexusRowIn');
+  const sourceGestureRows = selectionInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.sourceGestures.pluginsView], 'modbench.mod.sourceGestureRowsIn');
   const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // modlist-repository.md, Status, story 1
   const open = new OpenRows(instance);
   const provider = new ModListProvider({ instance, statuses, open, reporter: reporterFor('modlist.drop') });
@@ -135,6 +142,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const expand = () => void expandFilteredRows(view, provider, log);
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
+    ...owned,
     provider.onDidChangeTreeData(showCount),
     provider.onDidChangeTreeData(showBadge),
     view.onDidChangeSelection(showKeyContext),
@@ -151,8 +159,8 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
     }),
-    ...registerSourceGestures(deps, provider),
-    ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist') }),
+    ...registerSourceGestures(deps, provider, sourceGestureRows),
+    ...registerManifestGestures({ ...deps.manifestGestures, focusedView, instance, reporter: reporterFor('modlist') }),
     ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
@@ -171,9 +179,9 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, trash, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
+      commands, instance, reporterFor, trash, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting,
     }),
-    registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
+    registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRow),
     ...registerSortDirectionToggle('mod', provider),
     nameFilter,
     view,
@@ -190,12 +198,12 @@ export function createModsView(deps: ModsViewDeps): ModsView {
 }
 
 function registerSourceGestures(
-  { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider,
+  { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider, rows: () => readonly unknown[],
 ): vscode.Disposable[] {
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
   const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'), instance);
-  const { commands, rows, pluginsView, say, registerRepositories } = sourceGestures;
+  const { commands, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
     registerDecompileAndCommitCommand({

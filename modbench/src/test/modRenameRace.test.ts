@@ -25,7 +25,7 @@ vi.mock('vscode', async () => {
 });
 
 import { Instance } from '../instanceLoader/instance';
-import { instanceSyncs } from '../syncWiring';
+import { modSyncOn } from '../mods/modSync';
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
 import { registerModContextCommands } from '../mods/modManagementCommands';
 import { ModNode } from '../mods/ModListProvider';
@@ -71,9 +71,8 @@ describe('a rename while a recompute is reading', () => {
       gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
-    const { modSync } = instanceSyncs({
-      instance, syncMods: modSyncOver(writer),
-      syncPlugins: () => Promise.resolve({ applied: true, wrote: false, added: [], dropped: [] }), channel: { error: () => {}, info: () => {} },
+    const { modSync } = modSyncOn({
+      instance, syncMods: modSyncOver(writer), channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
     await modSync.settled();

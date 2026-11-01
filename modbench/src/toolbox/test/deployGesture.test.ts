@@ -32,7 +32,7 @@ vi.mock('vscode', async () => {
 import { progressSteps } from '../../test/recordedProgress';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerDeployCommands } from '../deployGesture';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import type { InstanceSubscriber } from '../../instanceLoader/instance';
@@ -54,7 +54,7 @@ function deployAnswering(
   result: DeployResult,
   { sequence = 1, moved = NOT_MOVED, purged = NOT_PURGED, unmanagedNow = [] }: { sequence?: number; moved?: MoveToOverwriteResult; purged?: PurgeResult; unmanagedNow?: readonly string[] } = {},
 ) {
-  const reporter = recordingReporter();
+  const { reporter, reporterFor, tags } = tagRecordingReporterFor();
   const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
   const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
   const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
@@ -62,9 +62,9 @@ function deployAnswering(
   registerDeployCommands({
     commands: { deploy, purge, moveToOverwrite, unmanaged },
     instance: { subscribe: (subscriber) => { subscribers.push(subscriber); return { dispose: () => undefined }; }, landed: () => Promise.resolve(value), sequence, refresh: () => { progressSteps.push('read again'); return Promise.resolve(undefined); } },
-    reporter,
+    reporterFor,
   });
-  return { reporter, deploy, purge, moveToOverwrite, unmanaged, commands: { deploy }, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
+  return { reporter, tags, deploy, purge, moveToOverwrite, unmanaged, commands: { deploy }, runPurge: present(handlers.get('modbench.instance.purge'), 'the purge handler'), run: present(handlers.get('modbench.instance.deploy'), 'the deploy handler'), runMove: present(handlers.get('modbench.instance.moveToOverwrite'), 'the move handler') };
 }
 
 beforeEach(() => {
@@ -77,6 +77,10 @@ beforeEach(() => {
 });
 
 describe('Deploy', () => {
+  it('reports under the deploy tag', () => {
+    expect(deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED }).tags).toEqual(['deploy']);
+  });
+
   it('deploys the files the instance value says the game gets, under the Toolbox\'s progress, and says nothing', async () => {
     const { reporter, deploy, run } = deployAnswering({ applied: true, wrote: true, leftOut: [], unmanaged: [], lost: [], leftAside: [], pluginsTxt: UNCHANGED });
 

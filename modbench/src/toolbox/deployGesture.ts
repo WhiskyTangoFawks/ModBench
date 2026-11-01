@@ -12,10 +12,11 @@ import { TOOLBOX_VIEW } from './toolboxCommands';
 interface DeployGestureDeps {
   commands: Pick<DeployCommands, 'deploy' | 'purge' | 'moveToOverwrite' | 'unmanaged'>;
   instance: Pick<Instance, 'landed' | 'sequence' | 'refresh' | 'subscribe'>;
-  reporter: Reporter;
+  reporterFor: (tag: string) => Reporter;
 }
 
-export function registerDeployCommands({ commands, instance, reporter }: DeployGestureDeps): vscode.Disposable[] {
+export function registerDeployCommands({ commands, instance, reporterFor }: DeployGestureDeps): vscode.Disposable[] {
+  const reporter = reporterFor('deploy');
   const collection = vscode.languages.createDiagnosticCollection('modbench-deployment-unmanaged');
   const problems = unmanagedProblems(collection);
   let leftOut: readonly { path: string; winner: string }[] = [];
@@ -95,7 +96,7 @@ function pathsOf(called: unknown): readonly string[] | undefined {
   return Array.isArray(called) && called.every((path) => typeof path === 'string') ? called : undefined;
 }
 
-function registerMoveToOverwriteCommand({ commands, instance, reporter }: DeployGestureDeps, publishProblems: () => Promise<void>): vscode.Disposable {
+function registerMoveToOverwriteCommand({ commands, instance, reporter }: Omit<DeployGestureDeps, 'reporterFor'> & { reporter: Reporter }, publishProblems: () => Promise<void>): vscode.Disposable {
   const move = async (called: unknown): Promise<GestureResult<never, string> | undefined> => {
     const result = await commands.moveToOverwrite(pathsOf(called));
     await publishProblems();
