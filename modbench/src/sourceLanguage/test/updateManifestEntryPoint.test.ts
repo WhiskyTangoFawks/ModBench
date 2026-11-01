@@ -15,10 +15,10 @@ vi.mock('vscode', async () => ({
   },
   Uri: await (async () => {
     const { Uri: base } = await import('../../test/vscodeMock');
-    // The real Uri.toString writes a drive letter in lower case.
     return { ...base, file: (path: string) => {
       const uri = base.file(path);
-      return Object.assign(uri, { toString: () => Object.getPrototypeOf(uri).toString.call(uri).replace(/^file:\/\/\/?([A-Z]):/, (_, drive: string) => `file://${drive.toLowerCase()}:`) });
+      const written = uri.toString().replace(/^file:\/\/([A-Z]):/, (_match: string, drive: string) => `file://${drive.toLowerCase()}:`);
+      return Object.assign(uri, { toString: () => written });
     } };
   })(),
   Disposable: class { constructor(readonly dispose: () => void) {} },
@@ -64,7 +64,7 @@ describe('the update manifest entry point (source.md, Menus and keys)', () => {
       'modbench.mod.updateManifest', folder('/instance/source/ModA'), [folder('/instance/source/ModA'), folder('/instance/source/ModB')]);
   });
 
-  it('finds the source folder of a manifest whose drive letter differs in case', async () => {
+  it('finds the source folder of a manifest whose drive letter differs in case, as the real Uri writes it in lower case', async () => {
     const { entry } = registered(new Map([['ModA', 'C:/instance/source/ModA']]));
 
     await entry(Uri.file('c:/instance/source/ModA/ModA.manifest.json'));
