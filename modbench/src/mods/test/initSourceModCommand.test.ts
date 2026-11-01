@@ -52,7 +52,7 @@ describe('modbench.mod.initSourceMod', () => {
     const client = new InMemoryMEditClient();
     client.setCommandHandler('initSourceMod', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
-      commits.push(...mods.map((mod) => mod.commit));
+      commits.push(...mods.map((mod) => mod.commit === true));
       progressListeners.push(options?.onProgress);
       return Promise.resolve(answer);
     });
