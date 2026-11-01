@@ -13,7 +13,7 @@ import { pluginAddressOf } from '../../src/wire/pluginAddress';
 import { addElement, editField, focusCell, keepViewState, listen, openColumns, pageGlobals } from './nativeBridge';
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
-import { pastedValue } from './modelValue';
+import { pastedValue, readsAsFlags } from './modelValue';
 import { EXTENSION_TO_WEBVIEW, type ColumnStatus, type ModRepository, type ViewState } from '../../src/wire/messages';
 import type { RecordCopy } from '../../src/wire/recordCopy';
 import type { RecordPanelClient } from './RecordPanelClient';
@@ -191,6 +191,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, columns, editableColumns, partialFormColumns],
   );
 
+  // Every row opens expanded but a flags row, which opens collapsed (editor.md, Rows, story 3): the stored set holds
+  // the rows toggled away from how they open.
+  const collapsedNow = useMemo(() => {
+    const collapsed = new Set(collapsedRows);
+    for (const row of rows) {
+      if (row.kind === 'field' && readsAsFlags(row.meta)) {
+        if (collapsed.has(row.key)) collapsed.delete(row.key); else collapsed.add(row.key);
+      }
+    }
+    return collapsed;
+  }, [rows, collapsedRows]);
+
   const shownRows = useMemo(
     () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRows }) : rows,
     [rows, collapseNoConflict, severalRecords, restoredRows],
@@ -209,8 +221,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     setRestoredRows(prev => new Set([...prev, ...run.holds]));
   };
   const focused = useMemo<GridCell | ValueCell | undefined>(
-    () => focusedCell ? shownCell(shownRows, collapsedRows, collapsedColumns, focusedCell) : undefined,
-    [shownRows, collapsedRows, collapsedColumns, focusedCell],
+    () => focusedCell ? shownCell(shownRows, collapsedNow, collapsedColumns, focusedCell) : undefined,
+    [shownRows, collapsedNow, collapsedColumns, focusedCell],
   );
   // Told after every render, since a re-read or a move changes what the focused cell's menu would
   // offer without a new focus. Only a user's focus enters the grid.
@@ -332,7 +344,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const rowHeight = e.currentTarget.querySelector('tr')?.offsetHeight ?? 0;
     const viewport = (scroller.current?.clientHeight ?? 0) - (headerRow.current?.offsetHeight ?? 0);
     const page = rowHeight > 0 ? Math.max(1, Math.floor(viewport / rowHeight) - 1) : 1;
-    const move = navigate(e.key, navRows(shownRows, collapsedRows), navColumns, focusedCell, page);
+    const move = navigate(e.key, navRows(shownRows, collapsedNow), navColumns, focusedCell, page);
     if (!move) return;
     e.preventDefault();
     const toggled = 'toggle' in move ? shownRows.find(row => row.key === move.toggle) : undefined;
@@ -353,7 +365,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           />
         );
       case 'recordHeader':
-        return <RecordHeaderRow {...shared} row={row} expanded={!collapsedRows.has(row.key)} onToggle={onToggle} />;
+        return <RecordHeaderRow {...shared} row={row} expanded={!collapsedNow.has(row.key)} onToggle={onToggle} />;
       case 'formId':
         // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
         return (
@@ -365,7 +377,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       case 'field':
         return (
           <DiffRow
-            {...shared} row={row} isExpanded={!collapsedRows.has(row.key)} onToggle={onToggle}
+            {...shared} row={row} isExpanded={!collapsedNow.has(row.key)} onToggle={onToggle}
             onEdit={handleCellCommit} onPaste={pasteInto} stringsLanguage={stringsLanguage}
           />
         );
@@ -423,7 +435,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           </thead>
           <tbody onKeyDown={handleGridKey}>
             <EditorMounted.Provider value={editorMounted}>
-              {visibleRows(shownRows, collapsedRows).map(renderRow)}
+              {visibleRows(shownRows, collapsedNow).map(renderRow)}
             </EditorMounted.Provider>
           </tbody>
         </table>

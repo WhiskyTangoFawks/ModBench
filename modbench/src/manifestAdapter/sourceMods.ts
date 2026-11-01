@@ -71,7 +71,7 @@ export async function sourceModsOf(
 }
 
 /** The source folder uninstalling `mod`, among the mods `uninstalled`, sends to the trash: its own, unless a mod left
- *  behind builds from it too (mods.md, Uninstall). Mods are matched by `keyOf`. */
+ *  behind builds from it too. Mods are matched by `keyOf`. */
 export function sourceFolderTrashed(
   folders: ReadonlyMap<string, string>, mod: string, uninstalled: readonly string[], keyOf: (mod: string) => string,
 ): string | undefined {
