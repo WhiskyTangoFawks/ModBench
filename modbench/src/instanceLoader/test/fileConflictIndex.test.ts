@@ -172,7 +172,7 @@ describe('what the reading holds: the walk is the adapter\'s', () => {
 
   it('keeps each file where the adapter says it sits and is read from, and each folder where it sits', () => {
     const linked = { relativePath: 'x/linked.dds', path: '/mods/ModA/x/linked.dds', sourcePath: '/shared/real.dds', excluded: false, markedExcluded: false, includedPath: 'x/linked.dds' };
-    const folder = { relativePath: 'x', path: '/mods/ModA/x', excluded: false };
+    const folder = { relativePath: 'x', path: '/mods/ModA/x', includedPath: 'x', excluded: false };
     const index = buildFileConflictIndex(
       [mod('ModA')], [], answering(['ModA'], { folder: '/mods/ModA', files: [linked], folders: [folder], notes: [] }),
     );

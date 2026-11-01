@@ -337,7 +337,7 @@ describe('a click on a separator, a mod, Overwrite or a folder only selects', ()
     const entries = [mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')];
     const provider = makeProvider([], { instance: new FakeInstance(instanceValueFixture({
       ...valueOf(entries, { overwriteFiles: overwriteHolding(5) }),
-      overwriteFolders: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false }],
+      overwriteFolders: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', includedPath: 'F4SE', excluded: false }],
     })) });
     const roots = await provider.getChildren();
     const children = await Promise.all(roots.map((n) => provider.getChildren(n)));

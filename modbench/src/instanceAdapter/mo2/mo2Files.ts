@@ -47,7 +47,7 @@ function keep(walk: Walk, path: string, sourcePath: string = path): void {
 
 const keepFolder = (walk: Walk, path: string): void => {
   const relativePath = relativeUnder(walk.root, path);
-  walk.folders.push({ relativePath, path, excluded: isExcluded(relativePath) });
+  walk.folders.push({ relativePath, path, includedPath: includedPathOf(relativePath), excluded: isExcluded(relativePath) });
 };
 
 // Another tool can remove a subfolder mid-walk: that skips it alone, noted. The root's absence is

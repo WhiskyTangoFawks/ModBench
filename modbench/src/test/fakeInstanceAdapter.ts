@@ -231,9 +231,12 @@ const inTheWay = (path: string): Error => new Error(`The folder "${path}" is in 
 
 const isMarked = (name: string): boolean => name.toLowerCase().endsWith(EXCLUSION_MARK);
 
+const unmarked = (relativePath: string): string =>
+  relativePath.split('/').map((segment) => (isMarked(segment) ? segment.slice(0, -EXCLUSION_MARK.length) : segment)).join('/');
+
 export function fileIn(folder: string, relativePath: string): OriginFile {
   const segments = relativePath.split('/');
-  const includedPath = segments.map((segment) => (isMarked(segment) ? segment.slice(0, -EXCLUSION_MARK.length) : segment)).join('/');
+  const includedPath = unmarked(relativePath);
   return {
     relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`,
     excluded: segments.some(isMarked), markedExcluded: isMarked(relativePath), includedPath,
@@ -518,7 +521,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         withOriginFiles(origin, {
           ...held,
           files: held.files.map((file) => fileIn(folder, renamedPath(file.relativePath))),
-          folders: held.folders.map((one) => ({ ...one, relativePath: renamedPath(one.relativePath), path: `${folder}/${renamedPath(one.relativePath)}`, excluded: renamedPath(one.relativePath).split('/').some(isMarked) })),
+          folders: held.folders.map((one) => ({ ...one, relativePath: renamedPath(one.relativePath), path: `${folder}/${renamedPath(one.relativePath)}`, includedPath: unmarked(renamedPath(one.relativePath)), excluded: renamedPath(one.relativePath).split('/').some(isMarked) })),
         });
         return { gone: false, wrote: true, relativePath: renamedPath(relativePath) };
       }),

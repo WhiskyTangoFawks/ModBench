@@ -54,23 +54,38 @@ export function downloadedFilesNamed(downloadedFiles: InstanceValue['downloadedF
   return [...given];
 }
 
-function pathMatches(own: readonly OriginFolder[], path: string): string[] {
-  const folded = own.filter(({ relativePath }) => foldPath(relativePath) === foldPath(path)).map(({ relativePath }) => relativePath);
-  return folded.includes(path) ? [path] : folded;
+interface NamedPath {
+  readonly ownPath: string;
+  readonly relativePath: string;
 }
 
-function fileIn(mod: Entry | undefined, given: FileName, own: readonly OriginFolder[]): { mod: string; file: string } | string {
+export interface FileNamed {
+  mod: string;
+  file: string;
+  relativePath: string;
+}
+
+const ownPathOf = ({ includedPath, relativePath }: OriginFolder): NamedPath => ({ ownPath: includedPath, relativePath });
+
+function pathMatches(own: readonly NamedPath[], path: string): NamedPath[] {
+  const folded = own.filter(({ ownPath }) => foldPath(ownPath) === foldPath(path));
+  const exact = folded.filter(({ ownPath }) => ownPath === path);
+  return exact.length > 0 ? exact : folded;
+}
+
+function fileIn(mod: Entry | undefined, given: FileName, own: readonly NamedPath[]): FileNamed | string {
   const name = mod?.name ?? given.mod.name;
   if (mod?.kind !== 'mod') return `"${name}" is a separator; it has no files.`;
   const matches = pathMatches(own, given.path);
-  if (matches.length === 0) return `Nothing is named "${given.path}" in mod ${name}.`;
-  if (matches.length > 1) return `"${given.path}" means more than one thing in mod ${name}: ${matches.join('; ')}.`;
-  return { mod: name, file: matches.join() };
+  const [only, second] = matches;
+  if (only === undefined) return `Nothing is named "${given.path}" in mod ${name}.`;
+  if (second !== undefined) return `"${given.path}" means more than one thing in mod ${name}: ${matches.map(({ relativePath }) => relativePath).join('; ')}.`;
+  return { mod: name, file: only.ownPath, relativePath: only.relativePath };
 }
 
 function pathsIn(
-  value: InstanceValue, given: readonly FileName[], heldBy: (mod: string) => readonly OriginFolder[],
-): { mod: string; file: string }[] {
+  value: InstanceValue, given: readonly FileName[], heldBy: (mod: string) => readonly NamedPath[],
+): FileNamed[] {
   const mods = modsNamed(value, given.map(({ mod }) => mod));
   const resolved = given.map((one, at) => fileIn(mods[at], one, heldBy(mods[at]?.name ?? '')));
   const refusals = resolved.filter((one) => typeof one === 'string');
@@ -78,13 +93,13 @@ function pathsIn(
   return resolved.filter((one) => typeof one !== 'string');
 }
 
-/** Each file by its path in its mod, answered in the mod's own casing. */
-export const filesNamed = (value: InstanceValue, given: readonly FileName[]): { mod: string; file: string }[] =>
-  pathsIn(value, given, (mod) => value.filesByMod.get(mod) ?? []);
+/** Each file by its path in its mod, with the mod manager's mark left out, in the mod's own casing. */
+export const filesNamed = (value: InstanceValue, given: readonly FileName[]): FileNamed[] =>
+  pathsIn(value, given, (mod) => (value.filesByMod.get(mod) ?? []).map(ownPathOf));
 
-/** Each file or folder by its path in its mod, answered in the mod's own casing. */
-export const filesAndFoldersNamed = (value: InstanceValue, given: readonly FileName[]): { mod: string; file: string }[] =>
-  pathsIn(value, given, (mod) => [...value.filesByMod.get(mod) ?? [], ...value.foldersByMod.get(mod) ?? []]);
+/** Each file or folder by its path in its mod, as `filesNamed` answers a file. */
+export const filesAndFoldersNamed = (value: InstanceValue, given: readonly FileName[]): FileNamed[] =>
+  pathsIn(value, given, (mod) => [...value.filesByMod.get(mod) ?? [], ...value.foldersByMod.get(mod) ?? []].map(ownPathOf));
 
 const asPlugin = ({ name, origin }: PluginAddress): string => `${name} in ${origin}`;
 

@@ -37,7 +37,7 @@ function rowOf(value: InstanceValue, mod: string, contents: ReadonlyMap<string, 
     mod, enabled, wins: [], loses: [],
     indicators: entry?.kind === 'mod' && enabled ? indicatorsOf(value, entry, own) : [],
     files: own.map((file) => ({
-      file: file.relativePath, excluded: file.excluded, gotten: !isFileNotGotten(value, modOrigin(mod), enabled, file),
+      file: file.includedPath, excluded: file.excluded, gotten: !isFileNotGotten(value, modOrigin(mod), enabled, file),
       publisherTags: pathTagsOf(covering, file.path, mod).map(({ name }) => name),
       ...contentsOf(contents.get(`${mod}\0${file.relativePath}`)),
     })).sort(byFile),

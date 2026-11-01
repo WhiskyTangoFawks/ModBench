@@ -1430,8 +1430,8 @@ describe('the MO2 Instance adapter', () => {
         expect(files.files.find((f) => f.relativePath === 'Textures/a.dds'))
           .toMatchObject({ path: join(folder, 'Textures', 'a.dds'), sourcePath: join(folder, 'Textures', 'a.dds') });
         expect(files.folders).toEqual([
-          { relativePath: 'Textures', path: join(folder, 'Textures'), excluded: false },
-          { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source'), excluded: false },
+          { relativePath: 'Textures', path: join(folder, 'Textures'), includedPath: 'Textures', excluded: false },
+          { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source'), includedPath: 'Textures/Source', excluded: false },
         ]);
       });
 
@@ -1519,6 +1519,8 @@ describe('the MO2 Instance adapter', () => {
         expect(['Textures.mohidden/Armour/a.dds', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map((path) => excludedOf(files.files, path)))
           .toEqual([true, true, false]);
         expect(['Textures.mohidden', 'Textures.mohidden/Armour'].map((path) => excludedOf(files.folders, path))).toEqual([true, true]);
+        expect(files.folders.filter(({ relativePath }) => relativePath.startsWith('Textures.mohidden')).map(({ includedPath }) => includedPath))
+          .toEqual(['Textures', 'Textures/Armour']);
       });
 
       it('says which files their own mark excludes, apart from their folder, and the path each has unmarked', async () => {
@@ -1545,7 +1547,7 @@ describe('the MO2 Instance adapter', () => {
         const files = await source.originFiles(mod('Harder VATS'), 'list');
 
         expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
-        expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked'), excluded: false });
+        expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked'), includedPath: 'linked', excluded: false });
       });
 
       it('notes a link cycle and walks each file once', async () => {
@@ -1614,7 +1616,7 @@ describe('the MO2 Instance adapter', () => {
         expect(relativePaths(files.files)).toContain('Stray.esp');
         expect(relativePaths(files.files).some((path) => path.startsWith('F4SE/'))).toBe(true);
         expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
-        expect(files.folders).toContainEqual({ relativePath: 'F4SE', path: join(folder, 'F4SE'), excluded: false });
+        expect(files.folders).toContainEqual({ relativePath: 'F4SE', path: join(folder, 'F4SE'), includedPath: 'F4SE', excluded: false });
       });
 
       it.each([

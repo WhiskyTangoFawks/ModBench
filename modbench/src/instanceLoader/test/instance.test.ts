@@ -253,7 +253,7 @@ describe('Instance — the value', () => {
   });
 
   it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files and folders, a disabled mod\'s too', async () => {
-    const folder = { relativePath: 'textures', path: '/instance/mods/Harder VATS/textures', excluded: false };
+    const folder = { relativePath: 'textures', path: '/instance/mods/Harder VATS/textures', includedPath: 'textures', excluded: false };
     const { instance } = loader({
       mods: [mod(NONO), mod(PATCH), mod('Harder VATS', false)],
       modFiles: new Map([
@@ -732,7 +732,7 @@ describe('Instance — game folder and the archives the game loads', () => {
 describe('Instance — Overwrite\'s files', () => {
   it('carries each file and folder under the overwrite/ folder, by the path in it and where it sits', async () => {
     const log = fileIn('/overwrite', 'F4SE/plugin.log');
-    const folder = { relativePath: 'F4SE', path: '/overwrite/F4SE', excluded: false };
+    const folder = { relativePath: 'F4SE', path: '/overwrite/F4SE', includedPath: 'F4SE', excluded: false };
     const { instance, fake } = loader();
     await instance.refresh();
     expect(instance.value.overwriteFiles).toEqual([]);
