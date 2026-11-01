@@ -1,5 +1,5 @@
 // commands.md, decompile and commit: a repository holding the mod's plugin source, a build file, and as its assets only the
-// files its installation file does not yield with their bytes (ADR-0016).
+// files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
 import { isRefused, type MEditClient, type NewRepository } from '../client';
@@ -13,10 +13,10 @@ import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
-import { buildManifest, downloadedFileOf, nexusFileOf, pagedFrom, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceFolder' | 'installationFile' | 'downloadedFile' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
+  'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
   & FolderRestoreAdapter;
 
@@ -86,9 +86,19 @@ async function downloadedRow(adapter: Pick<Adapter, 'downloadedFile'>, file: Ins
   return row.kind === 'read' ? row.answer : undefined;
 }
 
+/** Every downloaded file as a package, and why any could not be read whole; asked once for a selection of mods. */
+export async function downloadedPackagesOf(
+  adapter: Pick<Adapter, 'downloadedFilesHashed' | 'nexusFileAt'>,
+): Promise<{ readonly files: readonly DownloadedFile[]; readonly notes: readonly string[] }> {
+  const { files, notes } = await adapter.downloadedFilesHashed();
+  return { files: downloadedFilesOf(files, nexusFileOf(adapter)), notes };
+}
+
 /** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
  *  which takes from the mod's packages each file they give, and its assets. */
-export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand): Promise<MadeRepository | { readonly refusal: string }> {
+export async function newRepositoryOf(
+  client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand, downloadedFiles: readonly DownloadedFile[],
+): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, held } = read;
@@ -98,7 +108,7 @@ export async function newRepositoryOf(client: SourcePathsClient, adapter: Adapte
   const compiled = pluginsAndTheirStringsFiles(all.map(({ path }) => path), await adapter.gameRelease());
   const own = installationFile === undefined ? undefined : downloadedFileOf(installationFile, nexusFileOf(adapter));
   const recorded = buildManifest(
-    { downloadedFiles: [], ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
+    { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
   const yielded = [...recorded.manifest.files].filter(([path]) => recorded.sources.has(path));
@@ -164,7 +174,7 @@ export const newRepositoriesOver = (adapter: Adapter): {
 } => ({
   of: async (mod, client) => {
     const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods));
+    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods), (await downloadedPackagesOf(adapter)).files);
   },
   notLinked: (made, committed) => foldersNotLinked(adapter, made, committed),
 });

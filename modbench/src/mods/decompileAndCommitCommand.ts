@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import { isRefused, type DecompileAndCommitOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
@@ -50,7 +50,8 @@ async function decompileAndCommitMods(
       });
       if (isRefused(result)) return { applied: false, refusal: result.message };
       if (result.landed.length > 0) await onCommitted();
-      return { applied: true, outcome: result };
+      const { notes = [], ...outcome } = result;
+      return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Decompile and commit:', detail, severity: 'warning' as const })) } };
     } finally {
       progress.say(undefined);
     }
@@ -61,6 +62,7 @@ function reportDecompiledAndCommitted(
   reporter: Reporter, result: DecompiledAndCommitted, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
 ): void {
   if (!result.applied) { reporter.report('error', result.refusal); return; }
+  reportPartial(reporter, result.partial);
   const { landed, refused } = result.outcome;
   if (refused.length + refusedRows.length > 0) {
     reportRefused(reporter, mods.length, { refused, plugins: landed.flatMap((mod) => mod.plugins), refusedPlugins: refusedRows });

@@ -46,7 +46,7 @@ Clone the modlist repository: the clone is the instance folder. Log in to Nexus,
 
 ## Source mods
 
-Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, its manifest, its build file, and only the files its installation file does not yield with their bytes, in one commit. The manifest names the installation file the rest come from, and restore writes them into `source/`. You choose how the repository uses its `main` branch.
+Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit. The manifest names the packages the rest come from, and restore writes them into `source/`. You choose how the repository uses its `main` branch.
 
 The build file is yours: Modbench writes the first one and never rewrites it. Build makes the mod folder exactly what the build file makes, and records it in a manifest in the mod folder, like any other mod's. When a build comes out differently on another machine, from a tool or the load order, the manifest changes and Source Control shows it.
 

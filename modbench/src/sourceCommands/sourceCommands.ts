@@ -11,14 +11,14 @@ import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
-import { foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
+import { downloadedPackagesOf, foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'sourcePaths' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'sourceFolderValue'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
@@ -29,6 +29,9 @@ interface SourceCommandsDeps {
 
 /** A mod's progress through decompile and commit, reading its files here before mEdit's phases. */
 export type DecompileProgress = Omit<DecompileAndCommitProgress, 'phase'> & { phase?: DecompileAndCommitProgress['phase'] | 'ReadingFiles' };
+
+/** What decompile and commit answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
+export type DecompileAndCommitted = DecompileAndCommitOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
@@ -131,23 +134,25 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
      *  here, naming why, and mEdit decompiles and commits the rest. */
     decompileAndCommit: async (
       mods: readonly string[], options: { onProgress?: (status: DecompileProgress) => void } = {},
-    ): Promise<DecompileAndCommitOutcome | WriteRefused> => {
+    ): Promise<DecompileAndCommitted | WriteRefused> => {
       const made = new Map<string, MadeRepository>();
       const refused: ItemRefusal<string>[] = [];
       const sourceMods = await sourceModsNow();
       const game = await gameToHand(adapter, sourceMods);
+      const downloaded = await downloadedPackagesOf(adapter);
+      const notes = downloaded.notes.length > 0 ? { notes: downloaded.notes } : {};
       for (const [at, mod] of mods.entries()) {
         options.onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
-        const decided = await newRepositoryOf(client, adapter, mod, game);
+        const decided = await newRepositoryOf(client, adapter, mod, game, downloaded.files);
         if ('refusal' in decided) refused.push({ item: mod, reason: decided.refusal });
         else made.set(mod, decided);
       }
-      if (made.size === 0) return { landed: [], refused };
+      if (made.size === 0) return { landed: [], refused, ...notes };
       const sent: DecompileAndCommitMod[] = [...made].map(([name, { repository }]) => ({ name, repository }));
       const outcome = await client.decompileAndCommit(sent, options);
       if (isRefused(outcome)) return outcome;
       const notLinked = [...await foldersNotLinked(adapter, made, outcome.landed.map(({ mod }) => mod))].map(([item, why]) => ({ item, reason: `was committed, but ${why}.` }));
-      return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked] };
+      return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked], ...notes };
     },
   };
 }
