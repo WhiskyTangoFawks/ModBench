@@ -126,7 +126,7 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...builtUncommitted(outcome), ...builtUnpushed(outcome)];
+  [...builtUncommitted(outcome), ...builtUnpushed(outcome), ...builtOverIgnored(outcome)];
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {
@@ -141,6 +141,13 @@ function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
     one: 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.',
     many: (count) => `Built ${count} mods from changes no commit holds, so the commits the instance repository pins do not rebuild them.`,
   });
+}
+
+// modlist-repository.md, The manifest, story 11: a step that would write a path the manifest ignores leaves it as it is.
+function builtOverIgnored(outcome: BuildOutcome): PartialFailure[] {
+  return outcome.landed.flatMap(({ mod, ignored = [] }) => ignored.map((path) => ({
+    message: `Left "${path}" in "${mod}" unwritten, as its manifest ignores it.`, detail: path, severity: 'warning' as const,
+  })));
 }
 
 // A clone elsewhere fetches the commit the manifest names from the remote.

@@ -63,13 +63,13 @@ describe('sourceCommands build', () => {
       .build(['ModA', 'ModB']);
 
     const facts = { exclusionMark: EXCLUSION_MARK, archives: { general: BA2, textures: BA2 } };
-    const modA = { name: 'ModA', sourceFolder: SOURCES.ModA, folder: folderOf('ModA'), exclude: ['b.dds'] };
+    const modA = { name: 'ModA', sourceFolder: SOURCES.ModA, folder: folderOf('ModA'), exclude: ['b.dds'], ignore: [] };
     expect(client.calls).toEqual([
       { method: 'build', args: [[{ ...modA, step: { decompile: ['A.esp'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { copy: ['textures'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { compile: ['A.esp'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { pack: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] } }], facts] },
-      { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], step: { compile: ['A.esp'] } }], facts] },
+      { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], ignore: [], step: { compile: ['A.esp'] } }], facts] },
     ]);
   });
 

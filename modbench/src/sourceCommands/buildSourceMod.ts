@@ -180,7 +180,7 @@ type StepBuilt = BuildOutcome['landed'][number];
 type StepAnswer = StepBuilt | { readonly why: string } | WriteRefused;
 
 async function builtByMEdit(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass, step: BuildMod['step']): Promise<StepAnswer> {
-  const answer = await deps.client.build([{ name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude], step }], pass.facts);
+  const answer = await deps.client.build([{ name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude], ignore: [...mod.ignore], step }], pass.facts);
   if (isRefused(answer)) return answer;
   const [refusal] = answer.refused;
   if (refusal !== undefined) return { why: refusal.reason };
@@ -194,8 +194,9 @@ async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { repl
   return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packedNotIgnored);
 }
 
-const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, uncommitted, unpushed }: StepBuilt): ModBuilt => ({
+const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt): ModBuilt => ({
   ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused], archivesRefused: [...outcome.archivesRefused, ...archivesRefused],
+  ...ignored === undefined && outcome.ignored === undefined ? {} : { ignored: [...outcome.ignored ?? [], ...ignored ?? []] },
   ...uncommitted === true ? { uncommitted } : {}, ...unpushed === true ? { unpushed } : {},
 });
 

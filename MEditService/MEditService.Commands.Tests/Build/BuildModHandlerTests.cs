@@ -61,6 +61,47 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACopy_LeavesUnwrittenEachFileAtAPathTheManifestIgnores_OrInAnIgnoredFolder_AnsweringEach()
+    {
+        WriteSource(("F4SE/Plugins/Game.mem", "from the source"), ("logs/run.log", "from the source"), ("meshes/c.nif", "c"));
+        WriteInFolder("F4SE/Plugins/Game.mem", "the game wrote this");
+
+        var built = await Landed(Copy("F4SE", "logs", "meshes") with { Ignore = ["F4SE/Plugins/Game.mem", "logs"] });
+
+        Assert.Equal([("F4SE/Plugins/Game.mem", "the game wrote this"), ("meshes/c.nif", "c")], FilesIn(ModFolder));
+        Assert.Equal(["F4SE/Plugins/Game.mem", "logs/run.log"], built.Ignored);
+        Assert.Equal([new MadeFile("meshes/c.nif", VouchedFor: true)], built.Made);
+    }
+
+    [Fact]
+    public async Task APack_LeavesUnpackedAnArchiveAtAPathTheManifestIgnores_AnsweringIt_AndPacksTheRest()
+    {
+        WriteInFolder("meshes/c.nif", "c");
+        WriteInFolder("meshes/d.nif", "d");
+        WriteInFolder("Mod - Main.ba2", "the game's own");
+
+        var built = await Landed(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"]), new ArchiveToPack("Mod - Extra.ba2", ["meshes/d.nif"])) with { Ignore = ["Mod - Main.ba2"] }, Packing);
+
+        Assert.Equal(["Mod - Main.ba2"], built.Ignored);
+        Assert.Equal(["meshes/d.nif"], built.Packed);
+        Assert.Equal("the game's own", File.ReadAllText(Path.Combine(ModFolder, "Mod - Main.ba2")));
+        Assert.Equal([new MadeFile("Mod - Extra.ba2", VouchedFor: true)], built.Made);
+    }
+
+    [Fact]
+    public async Task ACompile_LeavesUncompiledAPluginTheManifestIgnores_AnsweringIt()
+    {
+        await InitializedWithALocalizedPlugin();
+        File.Delete(Path.Combine(ModFolder, Plugin));
+
+        var built = await Landed(Compile() with { Ignore = [Plugin] });
+
+        Assert.Equal([Plugin], built.Ignored);
+        Assert.Empty(built.Compiled);
+        Assert.False(File.Exists(Path.Combine(ModFolder, Plugin)));
+    }
+
+    [Fact]
     public async Task ACopyOfAPathTheSourceFolderDoesNotHold_RefusesTheMod_WritingNothing()
     {
         WriteSource(("meshes/c.nif", "c"));

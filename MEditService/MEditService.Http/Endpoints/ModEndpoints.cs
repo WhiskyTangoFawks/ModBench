@@ -81,9 +81,9 @@ internal static class ModEndpoints
         foreach (var mod in mods)
         {
             if (mod.Step?.ToStep() is not { } step) return EndpointMapping.BadRequest(BuildStepRequest.NotOneStep);
-            if (!FolderPaths.AreInTheFolder([.. mod.Exclude ?? [], .. mod.Step.Paths()]))
-                return EndpointMapping.BadRequest("Every path a mod excludes or its step names is a forward-slash path in its folder.");
-            toBuild.Add(new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, step) { Exclude = mod.Exclude ?? [] });
+            if (!FolderPaths.AreInTheFolder([.. mod.Exclude ?? [], .. mod.Ignore ?? [], .. mod.Step.Paths()]))
+                return EndpointMapping.BadRequest("Every path a mod excludes or ignores, or its step names, is a forward-slash path in its folder.");
+            toBuild.Add(new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, step) { Exclude = mod.Exclude ?? [], Ignore = mod.Ignore ?? [] });
         }
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
@@ -106,9 +106,10 @@ internal static class FolderPaths
 /// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, and the archive variants, if any.</summary>
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives);
 
-/// <summary>A mod, the source folder that builds it, its folder, what its folder excludes, and the step of its build file to
-/// run (ADR-0016).</summary>
-internal sealed record BuildModRequest(string Name, string SourceFolder, string Folder, BuildStepRequest? Step, IReadOnlyList<string>? Exclude = null);
+/// <summary>A mod, the source folder that builds it, its folder, what its folder excludes and what its manifest ignores, and
+/// the step of its build file to run (ADR-0016).</summary>
+internal sealed record BuildModRequest(
+    string Name, string SourceFolder, string Folder, BuildStepRequest? Step, IReadOnlyList<string>? Exclude = null, IReadOnlyList<string>? Ignore = null);
 
 /// <summary>One built-in step of a build file: exactly one of its members, each naming at least one path.</summary>
 internal sealed record BuildStepRequest(

@@ -55,6 +55,14 @@ describe('the build task', () => {
     }]);
   });
 
+  it('warns of each file a step left unwritten because the manifest ignores its path, naming it', async () => {
+    const { reporter } = await build(DEFINITION, applied({ landed: [landed({ ignored: ['F4SE/Plugins/Game.mem'] })], refused: [] }));
+
+    expect(reporter.shownFailures).toEqual([expect.objectContaining({
+      severity: 'warning', message: 'Left "F4SE/Plugins/Game.mem" in "ModA" unwritten, as its manifest ignores it.',
+    })]);
+  });
+
   it.each([
     ['a mod refused', { landed: [], refused: [{ item: 'ModC', reason: 'no repository' }] }, 'Could not build "ModC": no repository'],
     [

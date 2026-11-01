@@ -42,5 +42,5 @@ public sealed class BuildModHandler
         [.. built.Compiled.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
         [.. built.Refused.Select(refused => new CompileRefused(refused.Item, refused.Refusal, refused.Message))],
         [.. built.ArchivesRefused.Select(refused => new ArchiveRefused(refused.Item, refused.Refusal, refused.Message))],
-        built.Failure, built.Uncommitted, built.Unpushed, built.Made, built.Packed, built.Replaced);
+        built.Failure, built.Uncommitted, built.Unpushed, built.Made, built.Packed, built.Replaced, built.Ignored);
 }

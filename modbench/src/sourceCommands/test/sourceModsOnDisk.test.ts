@@ -242,7 +242,7 @@ describe('build over an instance on disk', () => {
   });
 
   it('leaves a file its manifest ignores in the folder, neither sent to the trash nor recorded, and keeps the ignore (The manifest, story 11)', async () => {
-    const { build, status, recorded, trashed } = await aSourceMod();
+    const { build, status, recorded, trashed, sent } = await aSourceMod();
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['F4SE/Plugins/Game.mem', 'logs'], files: new Map() });
     await put('mods/Mod/F4SE/Plugins/Game.mem', 'the game wrote this');
     await put('mods/Mod/logs/run.log', 'a run');
@@ -250,6 +250,7 @@ describe('build over an instance on disk', () => {
 
     await build();
 
+    expect(sent[0]?.ignore).toEqual(['F4SE/Plugins/Game.mem', 'logs']);
     expect(await textsBelow(join(root, 'mods', 'Mod'))).toMatchObject({ 'F4SE/Plugins/Game.mem': 'the game wrote this', 'logs/run.log': 'a run' });
     expect([[...new Set(trashed)], (await recorded())?.ignore, pathsIn(await recorded())]).toEqual([['mine.txt'], ['F4SE/Plugins/Game.mem', 'logs'], ['Mod.esp', 'b.nif', 'textures/c.dds']]);
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], ignored: ['F4SE/Plugins/Game.mem', 'logs/run.log'] });
