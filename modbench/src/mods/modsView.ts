@@ -207,7 +207,10 @@ function registerSourceGestures(
   { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider, rows: () => readonly unknown[],
   sayInMods: (message: string | undefined) => void,
 ): vscode.Disposable[] {
-  const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
+  const showAnySource = () => {
+    void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0);
+    publishBuildTargets(instance.value.paths.sourceDirs);
+  };
   showAnySource();
   const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'), instance);
   const { commands, pluginsView, say, registerRepositories } = sourceGestures;
@@ -220,7 +223,7 @@ function registerSourceGestures(
     registerBuildCommand({
       commands, instance, reporter: reporterFor('mod.build'), problems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin),
-      modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
+      modOfOrigin: owner, sourceDirs: () => instance.value.paths.sourceDirs, pluginsView,
     }, rows),
     registerBuildTask(reporterFor('mod.build')),
     provider.onDidChangeTreeData(showAnySource),

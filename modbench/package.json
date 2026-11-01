@@ -805,7 +805,8 @@
       {
         "command": "modbench.mod.build",
         "title": "Build Mod",
-        "category": "Modbench"
+        "category": "Modbench",
+        "icon": "$(play)"
       },
       {
         "command": "modbench.modlist.gitInit",
@@ -1245,6 +1246,20 @@
           "group": "modbench@2"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "modbench.mod.build",
+          "when": "resource in modbench.source.buildTargets",
+          "group": "modbench@1"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "modbench.mod.build",
+          "when": "resource in modbench.source.buildTargets",
+          "group": "navigation@1"
+        }
+      ],
       "editor/title": [
         {
           "command": "modbench.record.collapseNoConflict",
@@ -1551,11 +1566,6 @@
           "group": "4_sourceControl@1"
         },
         {
-          "command": "modbench.mod.build",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bsourceMod\\b/",
-          "group": "4_sourceControl@2"
-        },
-        {
           "command": "modbench.mod.updateManifest",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
           "group": "4_sourceControl@3"
@@ -1739,11 +1749,6 @@
           "command": "modbench.plugin.decompileAndRepair",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bmalformed\\b/ && viewItem =~ /\\b(inSourceMod|inNonSourceMod)\\b/",
           "group": "4_sourceControl@3"
-        },
-        {
-          "command": "modbench.mod.build",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binSourceMod\\b/",
-          "group": "4_sourceControl@4"
         },
         {
           "command": "modbench.copyValue",

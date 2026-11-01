@@ -82,6 +82,7 @@ export class FakeUri {
 export const Uri = {
   file: (fsPath: string): FakeUri => new FakeUri('file', fsPath.replaceAll('\\', '/'), '', fsPath),
   from: ({ scheme, path, query }: { scheme: string; path: string; query?: string }): FakeUri => new FakeUri(scheme, path, query),
+  joinPath: (base: FakeUri, ...segments: string[]): FakeUri => Uri.file([base.fsPath, ...segments].join('/')),
 };
 
 class ParsedUri {

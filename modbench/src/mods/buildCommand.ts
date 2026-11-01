@@ -12,6 +12,8 @@ import type { BuildProblems } from './buildProblems';
 import { pluginRowName } from '../wire/pluginAddress';
 import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
 import { MODS_KEY_ARGS } from './gestureEntry';
+import { buildTargetsOf, isUri } from './buildTargets';
+import type { ItemRefusal } from '../ports/selectionOutcome';
 
 /** What build needs: the build itself, the Instance loader's refresh, where the diagnostics go, and
  *  how the user is told. */
@@ -22,7 +24,7 @@ export interface BuildDeps {
   problems: BuildProblems;
   sourceFiles: SourceFilesOf;
   modOfOrigin: (origin: string) => string | undefined;
-  sourceModNames: () => Iterable<string>;
+  sourceDirs: () => ReadonlyMap<string, string>;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
 }
@@ -33,17 +35,31 @@ export type Built = GestureResult<BuildOutcome['landed'][number], string>;
 export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   const gesture: AgentGesture<unknown, BuildGiven, Built> = {
     fromView: async (entry) => {
+      const resources = entry.selection.filter(isUri);
+      if (resources.length > 0) return builtFromExplorer(resources, deps.sourceDirs());
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const named = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
       if (named) return { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView), everySource: false };
-      const mods = await pickSourceMods(deps.sourceModNames());
+      const mods = await pickSourceMods(deps.sourceDirs().keys());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view, everySource: false };
     },
     fromAgent: ({ argument }) => ({ ...givenByAgent(argument), everySource: argument.length === 0 }),
     run: (given) => buildMods(deps, given),
     report: (result) => reportBuildResult(deps.reporter, result),
   };
-  return registerAgentGesture('modbench.mod.build', paletteSelection, gesture, isClickedRow);
+  return registerAgentGesture('modbench.mod.build', paletteSelection, gesture, (value): value is unknown => isClickedRow(value) || isUri(value));
+}
+
+// source.md, Menus and keys: the Explorer's source folder or build file stands for its source mod.
+function builtFromExplorer(resources: readonly vscode.Uri[], sourceDirs: ReadonlyMap<string, string>): BuildGiven {
+  const targets = buildTargetsOf(sourceDirs);
+  const mods = new Set<string>();
+  const refusedRows: ItemRefusal<string>[] = [];
+  for (const resource of resources) {
+    const mod = targets.get(resource.toString());
+    if (mod === undefined) refusedRows.push({ item: resource.fsPath, reason: 'it is not a source mod\'s source folder or build file' }); else mods.add(mod);
+  }
+  return { mods: [...mods], refusedRows, invokedFrom: MODS_KEY_ARGS.view, everySource: false };
 }
 
 // source.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
