@@ -23,7 +23,7 @@ internal static class Submodules
         if (cloned) Clone(submodule, cancel);
         var git = new SourceRepositoryGit(submodule.Folder);
         if (!git.Exists) throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
-        var head = git.HeadCommit();
+        var head = git.HeadCommit() ?? throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no commit.");
         var detachedAtThePin = head == submodule.Pin && git.Run("branch", "--show-current").Length == 0;
         return new SubmoduleHead(head, detachedAtThePin ? Landed(git, submodule, cloned) : null);
     }

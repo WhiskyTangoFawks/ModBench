@@ -286,7 +286,7 @@ async function clonedAtThePin(pass: Pass, pinned: Submodule): Promise<Cloned> {
   return leftDetached ? { leftDetached } : {};
 }
 
-/** A source folder made what its manifest says, the manifest it holds having been written by decompile and commit. Answers why not. */
+/** A source folder made what its manifest says, the manifest it holds having been written by init source mod. Answers why not. */
 export async function sourceFolderRestoredFrom(
   deps: FolderPass['deps'], mod: string, sourceFolder: string, through: ModFolder,
 ): Promise<string | undefined> {

@@ -165,10 +165,12 @@ def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
     return instance / 'source' / mod
 
 
-def decompile_and_commit_mod(fixture: Fixture, mod: str) -> None:
-    call('POST', fixture.url + '/decompile-and-commit', {'mods': [{'name': mod, 'repository': {
-        'sourceFolder': str(source_folder(fixture.instance, mod)), 'assets': [],
-        'buildFile': json.dumps({'output': mod})}}]})
+def init_source_mod(fixture: Fixture, mod: str) -> None:
+    call('POST', fixture.url + '/init-source-mod', {'mods': [{
+        'name': mod, 'modFolder': str(fixture.instance / 'mods' / mod), 'commit': True,
+        'repository': {
+            'sourceFolder': str(source_folder(fixture.instance, mod)), 'assets': [],
+            'buildFile': json.dumps({'output': mod})}}]})
 
 
 def watcher_resends_load_order(fixture: Fixture, *created: Plugin) -> None:

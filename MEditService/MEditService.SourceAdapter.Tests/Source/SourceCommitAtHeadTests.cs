@@ -38,6 +38,17 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
+    public void AFolderHoldingARepositoryWithNoCommit_IsUnreadable_NamingIt()
+    {
+        Directory.CreateDirectory(SourceFolder);
+        Assert.Null(TestAdapters.Source().Init(SourceFolder, SourceInits.BuildFile, [], [], commit: false));
+
+        var failure = TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, _commits["first"], null), CancellationToken.None).Stopped();
+
+        Assert.Equal($"'{SourceFolder}' holds no commit.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
+    }
+
+    [Fact]
     public void ASubmoduleFolderACloneLeftEmpty_IsCheckedOutByGitAtItsPin_AsASourceMod()
     {
         Directory.CreateDirectory(SourceFolder);

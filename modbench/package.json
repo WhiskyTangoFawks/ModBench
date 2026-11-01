@@ -73,9 +73,9 @@
             ]
           },
           {
-            "id": "decompile",
-            "title": "Decompile a mod",
-            "description": "Decompile and Commit Mod turns each plugin of a mod into plugin source: one JSON file for each record, in a repository of its own in source/. Right-click a mod that holds a plugin and has no source.\n[Show the Mods view](command:modbench.modList.focus)",
+            "id": "initSourceMod",
+            "title": "Init a source mod",
+            "description": "Init Source Mod puts a mod under git, in a repository of its own in source/, with each plugin as plugin source: one JSON file for each record. Right-click a mod that has no source.\n[Show the Mods view](command:modbench.modList.focus)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
@@ -787,8 +787,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.mod.decompileAndCommit",
-        "title": "Decompile and Commit Mod",
+        "command": "modbench.mod.initSourceMod",
+        "title": "Init Source Mod…",
         "category": "Modbench"
       },
       {
@@ -1028,8 +1028,8 @@
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsEnabledPlugin"
         },
         {
-          "command": "modbench.mod.decompileAndCommit",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsNonSourceModWithPlugin && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInNonSourceMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
+          "command": "modbench.mod.initSourceMod",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsNonSourceMod && modbench.mod.sourceGestureRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInNonSourceMod && modbench.mod.sourceGestureRowsIn == modbench.pluginListTree"
         },
         {
           "command": "modbench.plugin.decompile",
@@ -1540,8 +1540,8 @@
           "group": "6_destroy@1"
         },
         {
-          "command": "modbench.mod.decompileAndCommit",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/ && viewItem =~ /\\bnonSourceMod\\b/",
+          "command": "modbench.mod.initSourceMod",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bnonSourceMod\\b/",
           "group": "4_sourceControl@1"
         },
         {
@@ -1720,7 +1720,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.mod.decompileAndCommit",
+          "command": "modbench.mod.initSourceMod",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binNonSourceMod\\b/",
           "group": "4_sourceControl@1"
         },
@@ -1837,7 +1837,7 @@
           "group": "2_change@4"
         },
         {
-          "command": "modbench.mod.decompileAndCommit",
+          "command": "modbench.mod.initSourceMod",
           "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && inMod == nonSourceMod",
           "group": "4_sourceControl@1"
         },

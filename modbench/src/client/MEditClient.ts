@@ -44,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'init-source-mod-progress', 'external-change',
   'record-filter-cleared',
 ] as const;
 
@@ -56,7 +56,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
  *  `NotificationEvent`, carrying only the fields its kind uses. */
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
-  'decompile-and-commit-progress': DecompileAndCommitProgress;
+  'init-source-mod-progress': InitSourceModProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
@@ -141,11 +141,11 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 
 export type { PluginAddress };
 
-type DecompiledAndCommittedMod = components['schemas']['DecompiledAndCommittedMod'];
+type InitializedMod = components['schemas']['InitializedMod'];
 
-/** Decompile and commit's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
-export interface DecompileAndCommitOutcome {
-  landed: readonly DecompiledAndCommittedMod[];
+/** Init source mod's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+export interface InitSourceModOutcome {
+  landed: readonly InitializedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 
@@ -153,8 +153,8 @@ export interface DecompileAndCommitOutcome {
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
-/** A mod to decompile and commit, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
-export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
+/** A mod to init source mod, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
+export type ModToInitSourceMod = components['schemas']['ModToInitSourceModRequest'];
 
 /** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
 export type NewRepository = components['schemas']['NewRepositoryRequest'];
@@ -186,8 +186,8 @@ export interface BuildOutcome {
 // Where a modlist gesture is: the mod it works on, none once it ends, and how many mods it has done of how many.
 type ModlistProgress = components['schemas']['ModlistProgress'];
 
-/** A mod's progress through decompile and commit: its place in the selection and the step it is at. */
-export type DecompileAndCommitProgress = ModlistProgress & { phase?: components['schemas']['DecompileAndCommitPhase'] | null };
+/** A mod's progress through init source mod: its place in the selection and the step it is at. */
+export type InitSourceModProgress = ModlistProgress & { phase?: components['schemas']['InitSourceModPhase'] | null };
 
 /** A source mod's repository as the instance repository pins it: the folder git checks it out in, the pin and its branch. */
 export type Submodule = components['schemas']['SubmoduleRequest'];
@@ -228,7 +228,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  decompileAndCommit(mods: readonly DecompileAndCommitMod[], options?: { onProgress?: (status: DecompileAndCommitProgress) => void }): Promise<DecompileAndCommitOutcome | WriteRefused>;
+  initSourceMod(mods: readonly ModToInitSourceMod[], options?: { onProgress?: (status: InitSourceModProgress) => void }): Promise<InitSourceModOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,

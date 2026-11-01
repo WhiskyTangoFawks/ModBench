@@ -18,7 +18,7 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
             .WithPlugin(Plugin, mod => placedRef = ContainerModPlugin.AddTo(mod).TemporaryRef, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
+        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
 

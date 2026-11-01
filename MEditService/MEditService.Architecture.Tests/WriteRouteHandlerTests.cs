@@ -29,7 +29,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler), "CreateRecordChanges"),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler), "PutLoadOrder"),
         ("POST", "/build", typeof(BuildModHandler), "Build"),
-        ("POST", "/decompile-and-commit", typeof(DecompileAndCommitModHandler), "DecompileAndCommit"),
+        ("POST", "/init-source-mod", typeof(InitSourceModHandler), "InitSourceMod"),
         ("POST", "/clone-submodules", typeof(CloneSubmodulesHandler), "CloneSubmodules"),
     ];
 

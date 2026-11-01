@@ -8,7 +8,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { DecompileAndCommitMod } from '../../client';
+import type { ModToInitSourceMod } from '../../client';
 import type { BuildMod, BuildOutcome } from '../../client/MEditClient';
 import type { InstallationFileReader } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
@@ -427,8 +427,8 @@ describe('a mod installed from an installation file, then decompiled and committ
       .toEqual({ landed: true });
     await adapter.writeInstalledFrom(join(root, 'mods', 'Mod'), ['Mod.7z'], (path) => rm(path));
     const client = new InMemoryMEditClient();
-    const handed: DecompileAndCommitMod[] = [];
-    client.setCommandHandler('decompileAndCommit', async ([mod]) => {
+    const handed: ModToInitSourceMod[] = [];
+    client.setCommandHandler('initSourceMod', async ([mod]) => {
       if (mod === undefined) throw new Error('no mod');
       handed.push(mod);
       await put(`source/Mod/${BUILD_FILE}`, mod.repository.buildFile);
@@ -445,7 +445,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     });
     const trashed: string[] = [];
     const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
-    expect(await commands.decompileAndCommit(['Mod'])).toMatchObject({ refused: [] });
+    expect(await commands.initSourceMod(['Mod'], { commit: true })).toMatchObject({ refused: [] });
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
     const restoreSourceFolder = async (): Promise<string | undefined> => {
       const folder = join(root, 'mods', 'Mod');
@@ -464,7 +464,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     return { manifest: read.manifest, status: await status() };
   }
 
-  it('reads as its manifest says right after decompile and commit, which records the folder as it is (GLOSSARY, Manifest)', async () => {
+  it('reads as its manifest says right after init source mod, which records the folder as it is (GLOSSARY, Manifest)', async () => {
     const { status } = await anInstalledModDecompiled();
 
     expect(await status()).toMatchObject({ noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
@@ -521,7 +521,7 @@ describe('a mod installed from an installation file, then decompiled and committ
   });
 });
 
-describe('decompile and commit over an instance on disk', () => {
+describe('init source mod over an instance on disk', () => {
   async function aModWithItsManifest(manifest: Partial<Manifest> = {}) {
     root = await mkdtemp(join(tmpdir(), 'modbench-init-'));
     await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
@@ -532,18 +532,18 @@ describe('decompile and commit over an instance on disk', () => {
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
     const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
-    return { client, decompileAndCommit: () => commands.decompileAndCommit(['Mod']) };
+    return { client, initSourceMod: () => commands.initSourceMod(['Mod'], { commit: true }) };
   }
 
   it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
-    const { client, decompileAndCommit } = await aModWithItsManifest();
-    const handed: DecompileAndCommitMod[] = [];
-    client.setCommandHandler('decompileAndCommit', (mods) => {
+    const { client, initSourceMod } = await aModWithItsManifest();
+    const handed: ModToInitSourceMod[] = [];
+    client.setCommandHandler('initSourceMod', (mods) => {
       handed.push(...mods);
       return Promise.resolve({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     });
 
-    const outcome = await decompileAndCommit();
+    const outcome = await initSourceMod();
 
     const [sent] = handed;
     expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'] });
@@ -554,9 +554,9 @@ describe('decompile and commit over an instance on disk', () => {
   });
 
   it('refuses a mod whose folder\'s manifest names the game folder when the game folder was not found, handing mEdit nothing', async () => {
-    const { client, decompileAndCommit } = await aModWithItsManifest({ packages: [{ kind: 'gameFolder' }] });
+    const { client, initSourceMod } = await aModWithItsManifest({ packages: [{ kind: 'gameFolder' }] });
 
-    const outcome = await decompileAndCommit();
+    const outcome = await initSourceMod();
 
     expect([outcome, client.calls]).toEqual([
       { landed: [], refused: [{ item: 'Mod', reason: 'its manifest names the game folder, and the game folder was not found' }] }, [],
@@ -564,7 +564,7 @@ describe('decompile and commit over an instance on disk', () => {
   });
 });
 
-describe('decompile and commit of a mod several downloaded files yield, over an instance on disk', () => {
+describe('init source mod of a mod several downloaded files yield, over an instance on disk', () => {
   const YIELDS: Record<string, readonly string[]> = {
     'Alpha-100-1.zip': ['alpha.txt'], 'Beta-100-2.zip': ['beta.txt'], 'Gamma-200-1.zip': ['gamma.txt'], 'Delta-200-2.zip': ['delta.txt'],
   };
@@ -583,14 +583,14 @@ describe('decompile and commit of a mod several downloaded files yield, over an 
     for (const file of folderFiles) await put(`mods/Multi/${file}`, file === 'own.txt' ? 'mine' : `bytes of ${file}`);
     for (const name of Object.keys(YIELDS)) await put(`downloads/${name}`, `the downloaded ${name}`);
     const client = new InMemoryMEditClient();
-    const handed: DecompileAndCommitMod[] = [];
-    client.setCommandHandler('decompileAndCommit', (mods) => {
+    const handed: ModToInitSourceMod[] = [];
+    client.setCommandHandler('initSourceMod', (mods) => {
       handed.push(...mods);
       return Promise.resolve({ landed: [], refused: [] });
     });
     const adapter = adapterOver(root, { installationFileReader: readerOfEachFile });
     const noting = { ...adapter, downloadedFilesHashed: async () => ({ ...await adapter.downloadedFilesHashed(), notes }) };
-    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).decompileAndCommit(['Multi']);
+    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).initSourceMod(['Multi'], { commit: true });
     const repository = handed[0]?.repository;
     const manifest = readManifest(repository?.manifest ?? '');
     assert('manifest' in manifest);

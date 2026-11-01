@@ -41,6 +41,7 @@ vi.mock('vscode', () => ({
       return Promise.resolve(undefined);
     },
     registerCustomEditorProvider: () => ({ dispose: () => undefined }),
+    withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
       return { dispose: () => undefined };
@@ -68,6 +69,7 @@ import { join } from 'node:path';
 import { manifestedIn } from '../../test/modStatusFixture';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { createModSync } from '../../drivingLib/syncFailureReport';
+import { AgentCall } from '../../drivingLib/agentGesture';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
@@ -386,6 +388,24 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
     await vi.waitFor(() => expect(treeViews.view().reveals).not.toEqual([]));
 
     expect([whileHidden, treeViews.view().reveals.map((r) => r.label)]).toEqual([[], ['Unassigned (Modlist Development)']]);
+  });
+});
+
+describe('the Mods view says the phase of an init source mod fired from it', () => {
+  it('says the mod and the phase on its own message line while it runs, and takes the line back when it lands', async () => {
+    let release = () => undefined;
+    const running = new Promise<{ landed: []; refused: [] }>((resolve) => { release = () => { resolve({ landed: [], refused: [] }); }; });
+    const deps = otherDeps();
+    const sourceGestures = { ...deps.sourceGestures, commands: { ...deps.sourceGestures.commands, initSourceMod: () => running } };
+    const { view } = createModsView({ ...deps, sourceGestures, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const handler = present(h.state.commands.get('modbench.mod.initSourceMod'), 'the init source mod command createModsView registers');
+
+    const fired = handler(new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true }));
+
+    await waitForMessage(view, (m) => m === 'Initializing source mod "Source mod Patch Mod"…', 'the phase line');
+    release();
+    await fired;
+    await waitForMessage(view, (m) => m === undefined, 'the line given back');
   });
 });
 

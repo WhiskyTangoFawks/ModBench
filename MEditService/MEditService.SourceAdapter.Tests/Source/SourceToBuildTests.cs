@@ -17,7 +17,7 @@ public sealed class SourceToBuildTests : IDisposable
     {
         Assert.Null(TestAdapters.Source().Init(
             _sourceFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("A.esp")],
-            [Texture("textures/Sub Folder/a.dds"), Texture("textures/b.dds"), Texture("readme.txt"), Texture("meshes/c.nif")]));
+            [Texture("textures/Sub Folder/a.dds"), Texture("textures/b.dds"), Texture("readme.txt"), Texture("meshes/c.nif")], commit: true));
 
         var source = Built(["textures", "readme.txt"]);
 
@@ -29,7 +29,7 @@ public sealed class SourceToBuildTests : IDisposable
     [Fact]
     public void ALeftoverInACopiedFolder_IsNoFileOfTheBuild()
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")]));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")], commit: true));
         TempLeftover.DeadWriters(Path.Combine(_sourceFolder, "textures"));
 
         Assert.Equal(["textures/a.dds"], Built(["textures"]).Files.Select(file => file.Path));
@@ -38,7 +38,7 @@ public sealed class SourceToBuildTests : IDisposable
     [Fact]
     public void ACopiedPathTheSourceFolderDoesNotHold_IsUnreadable_NamingIt()
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
 
         var failure = TestAdapters.Source().SourceToBuild(_sourceFolder, ["textures"]).Stopped();
 
@@ -50,7 +50,7 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("notes.txt", false)]
     public void ASourceWithARemote_SaysWhetherItsWorkingTreeHoldsChangesNoCommitHolds(string written, bool uncommitted)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")]));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")], commit: true));
         Git("remote", "add", "origin", "https://example.com/mod.git");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_sourceFolder, written)).Require());
         File.WriteAllText(Path.Combine(_sourceFolder, written), "new");
@@ -63,11 +63,32 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("refs/heads/kept", true)]
     public void ASourceWithARemote_SaysWhetherItsRemoteHoldsTheCommitAtHead_AsTheLastFetchSaw(string holding, bool unpushed)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
         Git("remote", "add", "origin", "https://example.com/mod.git");
         Git("update-ref", holding, "HEAD");
 
         Assert.Equal(unpushed, Built().Unpushed);
+    }
+
+    [Fact]
+    public void ASourceWithARemoteAndNoCommitYet_IsNotUnpushed_ButHoldsChangesNoCommitHolds()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")], commit: false));
+        Git("remote", "add", "origin", "https://example.com/mod.git");
+
+        var source = Built();
+
+        Assert.Equal((true, false), (source.Uncommitted, source.Unpushed));
+    }
+
+    [Fact]
+    public void ASourceWithARemoteWhoseHeadGitCannotRead_IsAFailure_NotUnpushed()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
+        Git("remote", "add", "origin", "https://example.com/mod.git");
+        File.WriteAllText(Path.Combine(_sourceFolder, ".git", "refs", "heads", "main"), "not a commit");
+
+        Assert.IsType<SourceFailure.GitFailed>(TestAdapters.Source().SourceToBuild(_sourceFolder, []).Stopped());
     }
 
     [Theory]
@@ -75,7 +96,7 @@ public sealed class SourceToBuildTests : IDisposable
     [InlineData("upstream", "fork", "fork")]
     public void ASourceWithRemotes_SaysWhetherOrigin_ElseTheFirstRemoteByName_HoldsTheCommitAtHead(string added, string addedNext, string holding)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
         Git("remote", "add", added, $"https://example.com/{added}.git");
         Git("remote", "add", addedNext, $"https://example.com/{addedNext}.git");
         Git("update-ref", $"refs/remotes/{holding}/main", "HEAD");

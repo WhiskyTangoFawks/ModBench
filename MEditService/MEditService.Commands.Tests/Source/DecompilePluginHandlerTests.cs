@@ -33,8 +33,8 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             new LoadOrderEntry("First.esp", Path.Combine(_sourceMod, "First.esp"), SourceModName, 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
         ]));
-        var committed = TestEditService.DecompileAndCommitModHandler(_holder)
-            .DecompileAndCommitAsync(ToDecompileAndCommit.In(_holder.Held?.Snapshot, SourceModName))
+        var committed = TestEditService.InitSourceModHandler(_holder)
+            .InitSourceModAsync(ToInitSourceMod.In(_holder.Held?.Snapshot, SourceModName))
             .GetAwaiter().GetResult().Value();
         Assert.Equal([CompiledPlugin("First.esp")], Assert.Single(committed.Applied).Plugins);
         WritePlugin(_sourceMod, "Second.esp", "SecondNpc");
@@ -161,7 +161,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInSourceMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.Contains($"decompile and commit on {NonSourceModName}", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"init source mod on {NonSourceModName}", refused.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", NonSourceModName, "", new PluginProvider.FromMod(NonSourceModName, _nonSourceMod, _nonSourceMod), Line: null, PluginStrings.None)));
     }
 
