@@ -59,6 +59,7 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"version":1,"exclude":[]}', "its build file holds 'exclude', which Modbench does not read"],
     ['{"version":1,"steps":[{"copy":["a"]},{}]}', 'its build file cannot be read at its step 2: it names no step'],
     ['{"version":1,"steps":[{"script":"clean.py"}]}', "its build file's step 1 holds 'script', which Modbench does not read"],
+    ['{"version":1,"steps":[{"unpack":{"a.ba2":["x.nif"]}}]}', "its build file's step 1 holds 'unpack', which Modbench does not read"],
     ['{"version":1,"steps":[{"copy":["a"],"compile":["A.esp"]}]}', "its build file cannot be read at its step 1: it names both 'compile' and 'copy'"],
     ['{"version":1,"steps":[{"copy":["a"],"args":[]}]}', "its build file's step 1 holds 'args', which Modbench does not read"],
     ['{"version":1,"steps":[{"copy":[]}]}', 'its build file cannot be read at its step 1: it names no path'],
