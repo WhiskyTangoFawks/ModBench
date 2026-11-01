@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>One source mod's plugins and archives made from its source into its folder, or the mod refused.</summary>
+/// <summary>One built-in step of a source mod's build run on its folder or its source folder, or the mod refused.</summary>
 internal sealed class SourceModBuild
 {
     private readonly CompilePluginHandler _compile;
@@ -15,69 +15,135 @@ internal sealed class SourceModBuild
     private readonly ISourceAdapter _source;
     private readonly IModFolderRepository _modFolders;
     private readonly IPluginAdapter _plugins;
+    private readonly PluginDecompiler _decompiler;
 
     internal SourceModBuild(
-        CompilePluginHandler compile, LoadOrderHolder loadOrder, ISourceAdapter source, IModFolderRepository modFolders, IPluginAdapter plugins) =>
-        (_compile, _loadOrder, _source, _modFolders, _plugins) = (compile, loadOrder, source, modFolders, plugins);
+        CompilePluginHandler compile, LoadOrderHolder loadOrder, ISourceAdapter source, IModFolderRepository modFolders, IPluginAdapter plugins,
+        PluginDecompiler decompiler) =>
+        (_compile, _loadOrder, _source, _modFolders, _plugins, _decompiler) = (compile, loadOrder, source, modFolders, plugins, decompiler);
 
-    /// <summary>Compiled against the held load order. Everything that refuses the mod is checked before its first write.</summary>
+    /// <summary>Against the held load order. Everything that refuses the mod is checked before the step's first write.</summary>
     internal async Task<ItemAnswer<BuildRefusal, ModBuildOutcome>> BuildAsync(ModToBuild mod, InstanceToBuild instance)
     {
         if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
         var loadOrder = _loadOrder.Require();
-        if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
+        if (!_source.SourceToBuild(mod.SourceFolder, mod.Step is BuildStep.Copy copy ? copy.Paths : []).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
 
         var written = new FolderWrite(_modFolders, mod.Folder, mod.Exclude, instance.ExclusionMark);
-        var plugins = Placed(loadOrder, mod, source.Plugins);
-        var compiled = CompiledPaths(loadOrder, plugins, [.. source.Assets.Select(asset => asset.Path)]);
-        var assets = source.Assets
-            .Where(asset => !compiled.Contains(asset.Path))
-            .ToDictionary(asset => asset.Path, StringComparer.OrdinalIgnoreCase);
-        List<(ArchiveToPack Archive, List<Asset> Files)> archives = [];
-        foreach (var archive in mod.Archives)
+        var ran = mod.Step switch
         {
-            List<Asset> files = [];
-            foreach (var file in archive.Files.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                if (assets.TryGetValue(file, out var asset)) files.Add(asset);
-                else return Refused(BuildRefusal.ArchiveFileNotAnAsset, $"'{archive.Path}' takes '{file}', which is not an asset of its source.");
-            }
-            archives.Add((archive, files));
-        }
+            BuildStep.Copy => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(Copied(source.Files, written)),
+            BuildStep.Compile compile => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(await CompiledAsync(loadOrder, mod, compile.Plugins)),
+            BuildStep.Pack pack => Packed(mod, pack.Archives, instance.Archives, written),
+            BuildStep.Decompile decompile => await DecompiledAsync(loadOrder, mod, decompile),
+            _ => throw new ArgumentOutOfRangeException(nameof(mod), mod.Step, "A build file names no other built-in step."),
+        };
+        return ran is ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote { Outcome: var outcome }
+            ? ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(outcome with { Uncommitted = source.Uncommitted, Unpushed = source.Unpushed })
+            : ran;
+    }
 
-        var packed = mod.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var loose = assets.Values.Where(asset => !packed.Contains(asset.Path)).ToList();
+    private static ModBuildOutcome Copied(IReadOnlyList<FileToCopy> files, FolderWrite written)
+    {
         try
         {
-            foreach (var asset in loose)
+            foreach (var file in files)
             {
-                written.Write(asset.Path, output =>
+                written.Write(file.Path, output =>
                 {
-                    using var content = asset.Open();
+                    using var content = file.Open();
                     content.CopyTo(output);
                 });
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
-                [], [], [],
-                $"The build stopped before compiling, as a file could not be read or written: {e.Message}"));
+            return ModBuildOutcome.Stopped($"The build stopped at its copy, as a file could not be read or written: {e.Message}");
+        }
+        return new ModBuildOutcome([], [], [], null) { Made = MadeOf(files.Select(file => (written.PathOf(file.Path), true))) };
+    }
+
+    private async Task<ModBuildOutcome> CompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> names)
+    {
+        var plugins = Placed(loadOrder, mod, names);
+        var (landed, refused) = await CompileAsync(plugins);
+        return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(CompiledFiles(loadOrder, mod, plugins, landed)) };
+    }
+
+    // mods.md, Build, story 2: the extension takes the loose files an archive packs out of the folder, so the game reads one copy.
+    private ItemAnswer<BuildRefusal, ModBuildOutcome> Packed(
+        ModToBuild mod, IReadOnlyList<ArchiveToPack> archives, ArchiveVariants? variants, FolderWrite written)
+    {
+        var held = _modFolders.FilePaths(mod.Folder).ToLookup(path => path, StringComparer.OrdinalIgnoreCase);
+        List<(ArchiveToPack Archive, List<string> Loose)> packed = [];
+        foreach (var archive in archives)
+        {
+            List<string> loose = [];
+            foreach (var file in archive.Files)
+            {
+                var at = written.PathOf(file);
+                if ((held[at].FirstOrDefault(path => path == at) ?? held[at].FirstOrDefault()) is not { } inFolder)
+                    return Refused(BuildRefusal.ArchiveFileNotInFolder, $"'{archive.Path}' takes '{file}', which its folder does not hold.");
+                loose.Add(inFolder);
+            }
+            packed.Add((archive, loose));
         }
 
-        var (landed, refused) = await CompileAsync(plugins);
-        var archivesRefused = Pack(mod, archives, instance.Archives, written);
-
-        Dictionary<string, bool> made = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var asset in loose) made[written.PathOf(asset.Path)] = true;
-        foreach (var (path, vouched) in CompiledFiles(loadOrder, mod, plugins, landed)) made[path] = vouched;
-        foreach (var archive in mod.Archives.Select(archive => archive.Path)) made[written.PathOf(archive)] = archivesRefused.All(refusal => refusal.Item != archive);
-        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
-            landed, refused, archivesRefused, null, source.Uncommitted, source.Unpushed)
+        var packer = new ArchivePacker(_modFolders);
+        List<ItemRefused<string, ArchiveRefusal>> refused = [];
+        List<(string, bool)> made = [];
+        List<string> takenOut = [];
+        foreach (var (archive, loose) in packed)
         {
-            Made = [.. made.Select(file => new MadeFile(file.Key, file.Value)).OrderBy(file => file.Path, StringComparer.Ordinal)],
-        });
+            var at = written.PathOf(archive.Path);
+            var refusal = variants is null
+                ? new PackRefusal(ArchiveRefusal.VariantNotWritten, "Modbench packs no archive for this game.")
+                : packer.Pack(mod.Folder, at, [.. archive.Files.Zip(loose, (file, path) => new ArchiveFile(file, () => _modFolders.OpenFile(mod.Folder, path)))],
+                    VariantOf(archive, variants));
+            made.Add((at, refusal is null));
+            if (refusal is null) takenOut.AddRange(loose);
+            else refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
+        }
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Packed = takenOut });
+    }
+
+    private static IArchiveVariant VariantOf(ArchiveToPack archive, ArchiveVariants variants) =>
+        archive.Files.All(file => file.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) ? variants.Textures : variants.General;
+
+    private async Task<ItemAnswer<BuildRefusal, ModBuildOutcome>> DecompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, BuildStep.Decompile step)
+    {
+        var provider = new PluginProvider.FromMod(mod.Name, mod.Folder, mod.SourceFolder);
+        List<(RegisteredPlugin Plugin, PluginSource Source)> decompiled = [];
+        foreach (var name in step.Plugins)
+        {
+            var at = _source.FileIn(mod.SourceFolder, name);
+            if (!_plugins.Exists(at)) return Refused(BuildRefusal.NotDecompiled, $"'{mod.SourceFolder}' holds no '{name}' to decompile.");
+            var plugin = new RegisteredPlugin(name, mod.Name, at, provider, Line: null, PluginStrings.None);
+            var read = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, CancellationToken.None, namesRepair: false);
+            if (read.Source is not { } source) return Refused(BuildRefusal.NotDecompiled, read.Message);
+            decompiled.Add((plugin, source));
+        }
+
+        var repository = _source.OverFolder(provider, loadOrder.GameRelease);
+        SortedSet<string> replaced = new(StringComparer.Ordinal);
+        foreach (var (plugin, source) in decompiled)
+        {
+            if (!repository.ReplaceSourceMovingAside(plugin.Key, source.Files, source.BinarySha256).Holds(out var aside, out var failure))
+            {
+                var why = $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}";
+                return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(why) with { Replaced = [.. replaced] });
+            }
+            replaced.UnionWith(aside);
+        }
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null) { Replaced = [.. replaced] });
+    }
+
+    private static IReadOnlyList<MadeFile> MadeOf(IEnumerable<(string Path, bool Vouched)> files)
+    {
+        Dictionary<string, bool> made = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, vouched) in files) made[path] = vouched;
+        return [.. made.Select(file => new MadeFile(file.Key, file.Value)).OrderBy(file => file.Path, StringComparer.Ordinal)];
     }
 
     // Each file compile writes for the mod's plugins that the folder holds, as this build made it when its plugin compiled.
@@ -104,12 +170,6 @@ internal sealed class SourceModBuild
         ];
     }
 
-    // A plugin with no file yet tells nothing of its strings until it compiles.
-    private HashSet<string> CompiledPaths(LoadOrderSnapshot loadOrder, IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<string> paths) =>
-        plugins
-            .SelectMany(plugin => _plugins.Exists(plugin.Path) ? _plugins.WrittenByCompile(plugin, paths, loadOrder.GameRelease) : [plugin.Name])
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
         IReadOnlyList<RegisteredPlugin> plugins)
     {
@@ -126,31 +186,6 @@ internal sealed class SourceModBuild
             $"{plugin.Name} cannot be compiled: the plugin sources {named} differ only in case, and one mod folder cannot hold them on Windows."));
     }
 
-    private List<ItemRefused<string, ArchiveRefusal>> Pack(
-        ModToBuild mod, IReadOnlyList<(ArchiveToPack Archive, List<Asset> Files)> archives, ArchiveVariants? variants, FolderWrite written)
-    {
-        var packer = new ArchivePacker(_modFolders);
-        List<ItemRefused<string, ArchiveRefusal>> refused = [];
-        foreach (var (archive, files) in archives)
-        {
-            if (variants is null)
-            {
-                refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, ArchiveRefusal.VariantNotWritten,
-                    $"'{archive.Path}' was not packed: Modbench packs no archive for this game."));
-                continue;
-            }
-
-            var variant = files.All(file => file.Path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) ? variants.Textures : variants.General;
-            var at = written.PathOf(archive.Path);
-            if (packer.Pack(mod.Folder, at, [.. files.Select(file => new ArchiveFile(file.Path, file.Open))], variant) is { } refusal)
-            {
-                refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
-            }
-        }
-
-        return refused;
-    }
-
     private static BuildRefusal WholeCompileRefused(CompileRefusal refusal) => refusal switch
     {
         CompileRefusal.NoLoadOrder => BuildRefusal.NoLoadOrder,
@@ -159,5 +194,5 @@ internal sealed class SourceModBuild
     };
 
     private static ItemAnswer<BuildRefusal, ModBuildOutcome> Refused(BuildRefusal refusal, string why) =>
-        ItemAnswer<BuildRefusal, ModBuildOutcome>.Refused(refusal, $"was not built: {why}");
+        ItemAnswer<BuildRefusal, ModBuildOutcome>.Refused(refusal, why);
 }

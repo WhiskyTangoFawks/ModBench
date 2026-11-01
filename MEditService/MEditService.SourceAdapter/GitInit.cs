@@ -8,8 +8,8 @@ namespace MEditService.SourceAdapter;
 /// <summary>A plugin whose source init writes, and the hash of the binary it was decompiled from.</summary>
 public sealed record DecompiledPlugin(PluginAddress Address, string? BinarySha256);
 
-/// <summary>A file of the mod no installation file yields, by its forward-slash path in the mod folder.</summary>
-public sealed record Asset(string Path, Func<Stream> Open);
+/// <summary>A file to copy, by its forward-slash path in the folder it is copied into.</summary>
+public sealed record FileToCopy(string Path, Func<Stream> Open);
 
 /// <summary>A file at the root of a new repository, by its name there.</summary>
 public sealed record RootFile(string Name, byte[] Content);
@@ -20,7 +20,7 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
+        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
         IReadOnlyList<string>? ignored = null)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
@@ -32,11 +32,11 @@ internal static class GitInit
         {
             WriteEachPlugin(sourceFolder, plugins, journal);
             foreach (var asset in assets)
-                journal.Copy(Path.Combine(sourceFolder, SourceRepositoryLayout.AssetsFolderName, asset.Path), asset.Open);
+                journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
             if (!git.Exists)
                 journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
             CreateRepository(git);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, ignored ?? [])));
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored ?? [])));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             git.Run("add", "-A");
@@ -108,16 +108,18 @@ internal static class GitInit
 
     // Root-anchored, so no same-named folder deeper is un-ignored. An un-ignore outranks the user's global
     // excludes. The ignored paths come last: a package yields them (ADR-0022).
-    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<string> ignored) =>
+    private static string GitignoreContent(RootFile? manifest, IReadOnlyList<FileToCopy> assets, IReadOnlyList<string> ignored) =>
         "*\n" +
         "!/.gitignore\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
-        $"!/{SourceRepositoryLayout.RootFolderName}/\n" +
-        $"!/{SourceRepositoryLayout.RootFolderName}/**\n" +
-        $"!/{SourceRepositoryLayout.AssetsFolderName}/\n" +
-        $"!/{SourceRepositoryLayout.AssetsFolderName}/**\n" +
+        Unignored($"{SourceRepositoryLayout.RootFolderName}/") +
         (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +
+        string.Concat(assets.Select(asset => RootEntryOf(asset.Path)).Distinct(StringComparer.Ordinal).Select(Unignored)) +
         string.Concat(ignored.Select(path => $"/{Escaped(path)}\n"));
+
+    private static string RootEntryOf(string path) => path.Split('/') is [var file] ? Escaped(file) : $"{Escaped(path.Split('/')[0])}/";
+
+    private static string Unignored(string entry) => entry.EndsWith('/') ? $"!/{entry}\n!/{entry}**\n" : $"!/{entry}\n";
 
     private static string Escaped(string path) => Regex.Replace(path, @"[\\*?\[\]#! ]", @"\$0");
 }

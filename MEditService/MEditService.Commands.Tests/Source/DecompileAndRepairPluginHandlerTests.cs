@@ -69,7 +69,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal([plugin], result.Applied);
         Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_newMod, 3));
         var init = Git(_newMod, "show", "--name-only", "--format=", "HEAD~1");
-        Assert.Contains("assets/textures/a.dds", init, StringComparison.Ordinal);
+        Assert.Contains("textures/a.dds", init, StringComparison.Ordinal);
         Assert.Contains("plugin-source/Clean.esp/", init, StringComparison.Ordinal);
         Assert.True(TreeHolds(_newMod, "HEAD~1", Lossless.Diagnosis), "the init commit holds no placeholder");
         AssertTheRepairChangesOnlyThePlaceholders(_newMod);

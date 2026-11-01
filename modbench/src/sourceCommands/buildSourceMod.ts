@@ -1,10 +1,10 @@
-// mods.md, Build: mEdit compiles and packs the source folder, the steps run, and the extension records in the mod's manifest
-// what the build made (ADR-0016, ADR-0027).
+// mods.md, Build: the build file's steps run in order, mEdit running each built-in one, and the extension records in the mod's
+// manifest what the build made (ADR-0016, ADR-0027).
 
 import { basename, join } from 'node:path';
-import { isRefused, type BuildFacts, type BuildOutcome, type MadeFile, type MEditClient, type WriteRefused } from '../client';
+import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { folderAgainst, isExcludedBy, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { folderAgainst, isExcludedBy, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type TaskStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -38,7 +38,7 @@ export interface BuildPass {
   readonly tasks: ReadonlySet<string>;
 }
 
-/** A mod that built, as mEdit answers it without the files it made. `trashed`: each other file its folder held. */
+/** A mod that built, as mEdit answers its steps without the files they made. `trashed`: each other file its folder held. */
 export type ModBuilt = Omit<BuildOutcome['landed'][number], 'made'> & { readonly trashed?: readonly string[] };
 
 /** A mod refused before anything was written; `lacksATask`: this machine has no task for a tool its steps run. */
@@ -77,13 +77,6 @@ async function unrecordedIn(adapter: Adapter, mod: SourceModToBuild): Promise<st
   return [...against.files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : [])), ...against.namedByNoLine];
 }
 
-// mods.md, Build, story 10: what a build wrote is recorded once it is written, so a build that stops after leaves none to
-// read as changed outside Modbench. Every other file stays.
-async function writtenRecorded(mod: SourceModToBuild, written: ReadonlyMap<string, string | null>): Promise<void> {
-  const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-  await writeManifestIn(mod.folder, sourceModManifest(mod, new Map([...previous, ...written])));
-}
-
 /** Why one of `paths` in `folder` could not be moved to the trash, or a folder that left empty removed, if one could not. */
 export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'>, trash: MoveToTrash, folder: string, paths: readonly string[]): Promise<string | undefined> {
   for (const path of paths) {
@@ -97,15 +90,9 @@ export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'
   return undefined;
 }
 
-// What mEdit made, each file by the path the folder holds it at.
-interface Output {
-  readonly vouched: ReadonlySet<string>;
-  readonly leftAsItWas: readonly string[];
-}
-
-function outputOf(made: readonly MadeFile[]): Output {
-  return { vouched: new Set(made.filter(({ vouchedFor }) => vouchedFor).map(({ path }) => path)), leftAsItWas: made.filter(({ vouchedFor }) => !vouchedFor).map(({ path }) => path) };
-}
+// Build, stories 3 and 8: how a step made a file. A task's is recorded by its path alone, and a file mEdit left as it was
+// keeps its recorded hash while the folder holds those bytes.
+type Made = 'vouched' | 'leftAsItWas' | 'byATask';
 
 // Each file of the folder by the path it holds it at, matched in any case where the file system ignores it.
 function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly hash?: string; readonly unreadable?: string } | undefined {
@@ -118,59 +105,30 @@ function heldAt(folder: FolderValue): (pathInFolder: string) => { readonly hash?
   };
 }
 
-// Build, stories 3 and 8: each file by the path the build gives it. A file mEdit left as it was keeps its recorded hash
-// while the folder holds those bytes; `stepped`: each file the steps made.
+// Each file the folder holds that the build made, by the path the build gives it.
 function filesOf(
-  ownPath: Adapter['ownPath'], output: Output, stepped: readonly string[], folder: FolderValue, previous: ReadonlyMap<string, string | null>,
+  ownPath: Adapter['ownPath'], made: ReadonlyMap<string, Made>, folder: FolderValue, previous: ReadonlyMap<string, string | null>,
 ): Map<string, string | null> {
   const at = heldAt(folder);
   const files = new Map<string, string | null>();
-  for (const pathInFolder of output.leftAsItWas) {
+  for (const [pathInFolder, how] of made) {
+    const held = at(pathInFolder);
     const path = ownPath(pathInFolder);
     const recorded = previous.get(path);
-    if (recorded !== undefined && recorded !== null && at(pathInFolder)?.hash === recorded) files.set(path, recorded);
-  }
-  for (const pathInFolder of stepped) files.set(ownPath(pathInFolder), null);
-  for (const pathInFolder of output.vouched) {
-    const held = at(pathInFolder);
     if (held === undefined) continue;
-    if (held.hash === undefined) throw new Error(`'${pathInFolder}' could not be read: ${held.unreadable ?? ''}`);
-    files.set(ownPath(pathInFolder), held.hash);
+    if (how === 'byATask') files.set(path, null);
+    else if (how === 'leftAsItWas') {
+      if (recorded !== undefined && recorded !== null && held.hash === recorded) files.set(path, recorded);
+    } else if (held.hash === undefined) throw new Error(`'${pathInFolder}' could not be read: ${held.unreadable ?? ''}`);
+    else files.set(path, held.hash);
   }
   return files;
 }
 
-const notInOutput = (output: Output, folder: FolderValue): string[] => {
-  const exact = new Set([...output.vouched, ...output.leftAsItWas]);
-  const named = new Set([...exact].map((path) => path.toLowerCase()));
-  return [...folder.files.keys()]
-    .filter((path) => !exact.has(path) && !(folder.ignoresCase && named.has(path.toLowerCase()))).sort();
+const notMadeIn = (made: ReadonlyMap<string, Made>, folder: FolderValue): string[] => {
+  const named = new Set([...made.keys()].map((path) => path.toLowerCase()));
+  return [...folder.files.keys()].filter((path) => !made.has(path) && !(folder.ignoresCase && named.has(path.toLowerCase()))).sort();
 };
-
-// mods.md, Build, story 10: a build that stops records each file mEdit vouches for, which are written.
-async function stoppedAs({ adapter }: BuildDeps, mod: SourceModToBuild, output: Output, failure: string): Promise<string> {
-  try {
-    const folder = await adapter.folderValue(mod.folder);
-    await writtenRecorded(mod, filesOf(adapter.ownPath, { ...output, leftAsItWas: [] }, [], folder, new Map()));
-    return failure;
-  } catch (err) {
-    return `${failure} Its manifest could not record what it wrote: ${errorMessage(err)}`;
-  }
-}
-
-// Build, story 3: the manifest names the repository and each file the build made; a file left in the folder after the steps
-// ran, and mEdit did not make, is a step's.
-async function recorded(deps: BuildDeps, mod: SourceModToBuild, output: Output): Promise<Pick<ModBuilt, 'failure'>> {
-  const { adapter } = deps;
-  try {
-    const folder = await adapter.folderValue(mod.folder);
-    const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(adapter.ownPath, output, notInOutput(output, folder), folder, previous)));
-    return {};
-  } catch (err) {
-    return { failure: `The build could not write its manifest: ${errorMessage(err)}` };
-  }
-}
 
 type Built = { readonly landed: ModBuilt } | { readonly refusal: BuildRefusal } | WriteRefused;
 
@@ -180,76 +138,131 @@ const refusedAs = (mod: string, why: string, lacksATask = false): { readonly ref
 // Why this machine cannot run a build file's steps: each task it has none of, with the page its tool comes from (Build, story 13).
 function toolsWithoutTask({ steps }: BuildFile, tasks: ReadonlySet<string>): string | undefined {
   const pages = new Map<string, string | undefined>();
-  for (const { task, page } of steps) if (!tasks.has(task) && pages.get(task) === undefined) pages.set(task, page);
+  for (const step of steps) if (step.kind === 'task' && !tasks.has(step.task) && pages.get(step.task) === undefined) pages.set(step.task, step.page);
   const named = [...pages].map(([task, page]) => (page === undefined ? `'${task}'` : `'${task}' (${page})`));
   const last = named.pop();
   if (last === undefined) return undefined;
   return named.length === 0 ? `this machine has no task for its tool ${last}` : `this machine has no task for its tools ${named.join(', ')} and ${last}`;
 }
 
-// What mEdit and the steps made, before the manifest records it; `failure`: why the build stopped.
+// What the steps made, before the manifest records it; `failure`: why the build stopped.
 interface Ran {
   readonly outcome: ModBuilt;
-  readonly output: Output;
+  readonly made: ReadonlyMap<string, Made>;
   readonly failure?: string;
 }
 
 // A write changes the time of a file's change, whatever it writes, and a tool can keep the rest across one.
-async function stampsOf(adapter: Adapter, folder: string, paths: readonly string[]): Promise<ReadonlyMap<string, string>> {
+async function stampsIn(adapter: Adapter, folder: string): Promise<ReadonlyMap<string, string>> {
   const stamps = new Map<string, string>();
-  for (const path of paths) {
+  for (const path of await adapter.filesIn(folder)) {
     const stamp = await adapter.fileStamp(join(folder, path));
     stamps.set(path, stamp.kind === 'read' ? `${stamp.answer.size}:${stamp.answer.modifiedNs}:${stamp.answer.changedNs}` : `unreadable:${stamp.reason}`);
   }
   return stamps;
 }
 
-// ADR-0027: a file a step made last time that the steps did not write again is none of the folder's output, so it goes to
-// the trash. `before`: the stamps of those files before the steps ran.
-async function stepFilesNotMadeAgain(deps: BuildDeps, mod: SourceModToBuild, before: ReadonlyMap<string, string>): Promise<{ readonly why?: string; readonly trashed: string[] }> {
-  const after = await stampsOf(deps.adapter, mod.folder, [...before.keys()]);
-  const notMade = [...before].filter(([path, stamp]) => after.get(path) === stamp).map(([path]) => path);
-  return { trashed: notMade, why: await whyNotTrashed(deps.adapter, deps.trash, mod.folder, notMade) };
+// Build, story 3: each file a task makes or changes is made by it.
+async function taskRan(deps: BuildDeps, mod: SourceModToBuild, step: TaskStep, made: Map<string, Made>): Promise<string | undefined> {
+  const before = await stampsIn(deps.adapter, mod.folder);
+  const failed = await deps.tasks.whyStepFailed(step, mod.folder);
+  for (const [path, stamp] of await stampsIn(deps.adapter, mod.folder)) if (before.get(path) !== stamp) made.set(path, 'byATask');
+  return failed;
 }
 
-// Build, story 1: mEdit makes the folder, each other file it held goes to the trash but those its steps made last time,
-// and then the steps run.
-async function builtAndStepped(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built | Ran> {
-  const answer = await deps.client.build([{
-    name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude],
-    archives: mod.buildFile.archives.map(({ path, files }) => ({ path, files: [...files] })),
-  }], pass.facts);
+const wireStep = (step: Exclude<BuildStep, TaskStep>): BuildMod['step'] =>
+  (step.kind === 'pack' ? { pack: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
+
+type StepBuilt = BuildOutcome['landed'][number];
+
+type StepAnswer = StepBuilt | { readonly why: string } | WriteRefused;
+
+async function builtByMEdit(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass, step: BuildMod['step']): Promise<StepAnswer> {
+  const answer = await deps.client.build([{ name: mod.name, sourceFolder: mod.sourceFolder, folder: mod.folder, exclude: [...mod.exclude], step }], pass.facts);
   if (isRefused(answer)) return answer;
-  const [mEditRefused] = answer.refused;
-  if (mEditRefused !== undefined) return { refusal: mEditRefused };
-  const [built] = answer.landed;
-  if (built === undefined) return refusedAs(mod.name, 'mEdit answered nothing for it');
-  const { made, ...outcome } = built;
-  const output = outputOf(made);
-  if (outcome.failure !== undefined) return { outcome, output, failure: outcome.failure };
-  let trashed: string[];
-  let stepFiles: ReadonlyMap<string, string>;
-  try {
-    const folder = await deps.adapter.folderValue(mod.folder);
-    const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-    const stepsRemake = (path: string): boolean => mod.buildFile.steps.length > 0 && previous.get(deps.adapter.ownPath(path)) === null;
-    const others = notInOutput(output, folder);
-    trashed = others.filter((path) => !stepsRemake(path));
-    stepFiles = await stampsOf(deps.adapter, mod.folder, others.filter(stepsRemake));
-  } catch (err) {
-    return { landed: { ...outcome, failure: `The build stopped before its steps, as its folder could not be read: ${errorMessage(err)}` } };
+  const [refusal] = answer.refused;
+  if (refusal !== undefined) return { why: refusal.reason };
+  return answer.landed[0] ?? { why: 'mEdit answered nothing for it' };
+}
+
+// mods.md, Build, story 17, and A source mod, story 4: what a step moved aside, the plugin source a decompile replaced and
+// the loose files a pack packed, goes to the trash.
+async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { replaced, packed }: StepBuilt): Promise<string | undefined> {
+  return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packed ?? []);
+}
+
+const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, uncommitted, unpushed }: StepBuilt): ModBuilt => ({
+  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused], archivesRefused: [...outcome.archivesRefused, ...archivesRefused],
+  ...uncommitted === true ? { uncommitted } : {}, ...unpushed === true ? { unpushed } : {},
+});
+
+// A step that refused a plugin or an archive stops the steps after it.
+function whyStoppedAfter({ failure, refused, archivesRefused }: StepBuilt, at: number, steps: number): string | undefined {
+  const refusedHere = refused.length + archivesRefused.length;
+  if (failure !== undefined || refusedHere === 0 || at === steps - 1) return failure;
+  return `The build stopped after its step ${at + 1}, which refused ${refusedHere === 1 ? 'a file' : `${refusedHere} files`}.`;
+}
+
+// mods.md, Build, stories 1 and 18: each step runs in order, and a failed step stops the mod's build. A first step that
+// fails refuses the mod.
+async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: BuildPass): Promise<Built | Ran> {
+  const made = new Map<string, Made>();
+  let outcome: ModBuilt = { mod: mod.name, compiled: [], refused: [], archivesRefused: [] };
+  const ran = (failure?: string): Ran => ({ outcome, made, ...failure === undefined ? {} : { failure } });
+  for (const [at, step] of mod.buildFile.steps.entries()) {
+    if (step.kind === 'task') {
+      const failed = await taskRan(deps, mod, step, made);
+      if (failed !== undefined) return ran(`The build stopped as its ${failed}.`);
+      continue;
+    }
+    const built = await builtByMEdit(deps, mod, pass, wireStep(step));
+    if (isRefused(built) || 'why' in built) {
+      const why = isRefused(built) ? `mEdit refused it: ${built.message}` : built.why;
+      if (at > 0) return ran(`The build stopped at its step ${at + 1}: ${why.replace(/\.$/, '')}.`);
+      return isRefused(built) ? built : refusedAs(mod.name, why);
+    }
+    for (const { path, vouchedFor } of built.made) made.set(path, vouchedFor ? 'vouched' : 'leftAsItWas');
+    outcome = joined(outcome, built);
+    const notTrashed = await whyAsideNotTrashed(deps, mod, built);
+    if (notTrashed !== undefined) return ran(`The build stopped at its step ${at + 1}, as ${notTrashed}.`);
+    const stopped = whyStoppedAfter(built, at, mod.buildFile.steps.length);
+    if (stopped !== undefined) return ran(stopped);
   }
-  const ran = (failure: string | undefined): Ran => ({ outcome: { ...outcome, ...trashed.length === 0 ? {} : { trashed } }, output, failure });
-  const why = await whyNotTrashed(deps.adapter, deps.trash, mod.folder, trashed);
-  if (why !== undefined) return ran(`The build stopped as ${why}.`);
-  const stepFailed = mod.buildFile.steps.length === 0 ? undefined : await deps.tasks.whyStepsFailed(mod.buildFile.steps, mod.folder);
-  if (stepFailed !== undefined) return ran(`The build stopped as its ${stepFailed}.`);
+  return ran();
+}
+
+// mods.md, Build, story 10: a build that stops records each file it wrote, and keeps every other line its manifest held.
+async function stoppedAs({ adapter }: BuildDeps, mod: SourceModToBuild, made: ReadonlyMap<string, Made>, failure: string): Promise<string> {
   try {
-    const old = await stepFilesNotMadeAgain(deps, mod, stepFiles);
-    trashed = [...trashed, ...old.trashed].sort();
-    return ran(old.why === undefined ? undefined : `The build stopped as ${old.why}.`);
+    const folder = await adapter.folderValue(mod.folder);
+    const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
+    await writeManifestIn(mod.folder, sourceModManifest(mod, new Map([...previous, ...filesOf(adapter.ownPath, made, folder, previous)])));
+    return failure;
   } catch (err) {
-    return ran(`The build stopped after its steps, as their files could not be read: ${errorMessage(err)}`);
+    return `${failure} Its manifest could not record what it wrote: ${errorMessage(err)}`;
+  }
+}
+
+// ADR-0027: each file the folder holds that no step made goes to the trash, and the manifest names the repository and each
+// file the build made.
+async function finished(deps: BuildDeps, mod: SourceModToBuild, { outcome, made }: Ran): Promise<ModBuilt> {
+  const { adapter } = deps;
+  let folder: FolderValue;
+  try {
+    folder = await adapter.folderValue(mod.folder);
+  } catch (err) {
+    return { ...outcome, failure: await stoppedAs(deps, mod, made, `The build stopped after its steps, as its folder could not be read: ${errorMessage(err)}`) };
+  }
+  const trashed = notMadeIn(made, folder);
+  const withTrashed: ModBuilt = { ...outcome, ...trashed.length === 0 ? {} : { trashed } };
+  const why = await whyNotTrashed(adapter, deps.trash, mod.folder, trashed);
+  if (why !== undefined) return { ...withTrashed, failure: await stoppedAs(deps, mod, made, `The build stopped as ${why}.`) };
+  try {
+    const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
+    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(adapter.ownPath, made, folder, previous)));
+    return withTrashed;
+  } catch (err) {
+    return { ...withTrashed, failure: `The build could not write its manifest: ${errorMessage(err)}` };
   }
 }
 
@@ -264,10 +277,10 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
     return refusedAs(mod.name, `its folder could not be read: ${errorMessage(err)}`);
   }
   // mods.md, A source mod, story 4: what no manifest records goes to the trash before anything is written.
-  const ran = await deps.adapter.trashingReplaced(mod.folder, unrecorded, deps.trash, () => builtAndStepped(deps, mod, pass));
+  const ran = await deps.adapter.trashingReplaced(mod.folder, unrecorded, deps.trash, () => builtByItsSteps(deps, mod, pass));
   if ('notTrashed' in ran) return refusedAs(mod.name, ran.notTrashed);
   const { answer } = ran;
-  if (!('output' in answer)) return answer;
-  if (answer.failure !== undefined) return { landed: { ...answer.outcome, failure: await stoppedAs(deps, mod, answer.output, answer.failure) } };
-  return { landed: { ...answer.outcome, ...await recorded(deps, mod, answer.output) } };
+  if (!('made' in answer)) return answer;
+  if (answer.failure !== undefined) return { landed: { ...answer.outcome, failure: await stoppedAs(deps, mod, answer.made, answer.failure) } };
+  return { landed: await finished(deps, mod, answer) };
 }

@@ -13,36 +13,44 @@ public sealed class SourceToBuildTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public void AnInitializedSource_BuildsItsAssetsAndItsPlugins()
+    public void ACopiedFolder_IsEachFileUnderIt_AndACopiedFile_IsItself_ByItsPathInTheSourceFolder()
     {
         Assert.Null(TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("B.esp"), PluginBaselines.OneRecordOf("A.esp")],
-            [new Asset("textures/Sub Folder/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
+            _sourceFolder, SourceInits.BuildFile, [PluginBaselines.OneRecordOf("A.esp")],
+            [Texture("textures/Sub Folder/a.dds"), Texture("textures/b.dds"), Texture("readme.txt"), Texture("meshes/c.nif")]));
 
-        var source = Built();
+        var source = Built(["textures", "readme.txt"]);
 
-        Assert.Equal(["A.esp", "B.esp"], source.Plugins);
-        var asset = Assert.Single(source.Assets);
-        Assert.Equal("textures/Sub Folder/a.dds", asset.Path);
-        using var opened = new StreamReader(asset.Open());
+        Assert.Equal(["textures/Sub Folder/a.dds", "textures/b.dds", "readme.txt"], source.Files.Select(file => file.Path));
+        using var opened = new StreamReader(source.Files[0].Open());
         Assert.Equal("texture", opened.ReadToEnd());
     }
 
     [Fact]
-    public void ALeftoverInTheAssets_IsNoAssetOfTheBuild()
+    public void ALeftoverInACopiedFolder_IsNoFileOfTheBuild()
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [new Asset("textures/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
-        TempLeftover.DeadWriters(Path.Combine(_sourceFolder, "assets", "textures"));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")]));
+        TempLeftover.DeadWriters(Path.Combine(_sourceFolder, "textures"));
 
-        Assert.Equal(["textures/a.dds"], Built().Assets.Select(asset => asset.Path));
+        Assert.Equal(["textures/a.dds"], Built(["textures"]).Files.Select(file => file.Path));
+    }
+
+    [Fact]
+    public void ACopiedPathTheSourceFolderDoesNotHold_IsUnreadable_NamingIt()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
+
+        var failure = TestAdapters.Source().SourceToBuild(_sourceFolder, ["textures"]).Stopped();
+
+        Assert.Equal($"'{_sourceFolder}' holds no 'textures' to copy.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
     }
 
     [Theory]
-    [InlineData("assets/textures/new.dds", true)]
+    [InlineData("textures/new.dds", true)]
     [InlineData("notes.txt", false)]
     public void ASourceWithARemote_SaysWhetherItsWorkingTreeHoldsChangesNoCommitHolds(string written, bool uncommitted)
     {
-        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], []));
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [Texture("textures/a.dds")]));
         Git("remote", "add", "origin", "https://example.com/mod.git");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(_sourceFolder, written)).Require());
         File.WriteAllText(Path.Combine(_sourceFolder, written), "new");
@@ -76,26 +84,28 @@ public sealed class SourceToBuildTests : IDisposable
     }
 
     [PosixFact]
-    public void AssetsWhosePathsDifferOnlyInCase_AreUnreadable_NamingBoth()
+    public void CopiedFilesWhosePathsDifferOnlyInCase_AreUnreadable_NamingBoth()
     {
-        WriteAsset("Scripts/a.pex");
-        WriteAsset("scripts/A.pex");
+        WriteFile("Scripts/a.pex");
+        WriteFile("scripts/A.pex");
 
-        var failure = TestAdapters.Source().SourceToBuild(_sourceFolder).Stopped();
+        var failure = TestAdapters.Source().SourceToBuild(_sourceFolder, ["Scripts", "scripts"]).Stopped();
 
         Assert.Equal(
-            $"'{Path.Combine(_sourceFolder, "assets")}' holds 'Scripts/a.pex' and 'scripts/A.pex', which differ only in case: one mod folder cannot hold both on Windows.",
+            $"'{_sourceFolder}' holds 'Scripts/a.pex' and 'scripts/A.pex', which differ only in case: one mod folder cannot hold both on Windows.",
             Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
     }
 
-    private void WriteAsset(string path)
+    private void WriteFile(string path)
     {
-        var file = Path.Combine(_sourceFolder, "assets", path);
+        var file = Path.Combine(_sourceFolder, path);
         Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
         File.WriteAllText(file, path);
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_sourceFolder, ".git"), _sourceFolder, args);
 
-    private SourceToBuild Built() => TestAdapters.Source().SourceToBuild(_sourceFolder).Value();
+    private SourceToBuild Built(IReadOnlyList<string>? copied = null) => TestAdapters.Source().SourceToBuild(_sourceFolder, copied ?? []).Value();
+
+    private static FileToCopy Texture(string path) => new(path, () => new MemoryStream("texture"u8.ToArray()));
 }

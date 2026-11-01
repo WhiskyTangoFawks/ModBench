@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -26,6 +27,64 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
         Assert.Equal(" D plugin-source/A.esp/npc_/A.esp/000001.json", Git("status", "--porcelain", "--untracked-files=no").TrimEnd('\n'));
+    }
+
+    [Fact]
+    public void ASourceReplacedMovingItsTreeAside_IsTheNewFiles_AndAnswersWhereTheTreeNowIs_UnderItsOwnName()
+    {
+        var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Value();
+
+        Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
+        var moved = Assert.Single(aside);
+        Assert.Equal(Plugin, moved.Split('/')[^1]);
+        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(_modFolder, moved, "npc_", "A.esp", "000001.json")));
+        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
+    }
+
+    [Fact]
+    public void ATreeMovedAside_OutlivesALeftoverSweepOnceMEditRestarts()
+    {
+        var aside = Assert.Single(Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value());
+        var afterARestart = TempLeftover.AsIfItsWriterExited(Path.Combine(_modFolder, aside.Split('/')[0]));
+
+        TempName.RemoveLeftovers(_modFolder);
+
+        Assert.True(Directory.Exists(Path.Combine(afterARestart, Plugin)));
+    }
+
+    [Fact]
+    public void ASourceReplacedMovingItsTreeAside_AlsoAnswersEachTreeAnEarlierOneLeftAside()
+    {
+        var earlier = Assert.Single(Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value());
+
+        var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000003.json", "{}")], Sha).Value();
+
+        Assert.Equal(2, aside.Count);
+        Assert.Equal(earlier, aside[0]);
+        Assert.True(Directory.Exists(Path.Combine(_modFolder, aside[1])));
+    }
+
+    [PosixFact]
+    public void ASourceReplacedMovingItsTreeAside_MovesEachTreeNamedForThePluginInAnyCaseAside()
+    {
+        Directory.CreateDirectory(Path.Combine(_modFolder, "plugin-source", "a.ESP"));
+        System.IO.File.WriteAllText(Path.Combine(_modFolder, "plugin-source", "a.ESP", "twin.json"), "{}");
+
+        var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value();
+
+        Assert.Equal([Plugin, "a.ESP"], aside.Select(path => path.Split('/')[^1]));
+        Assert.Equal([Plugin], Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source")).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void ASourceReplacedMovingItsTreeAside_ThatFails_PutsTheTreeBack()
+    {
+        TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
+
+        Assert.IsType<SourceFailure.Inaccessible>(Repository.ReplaceSourceMovingAside(Address, secondFileNeedsADirectoryTheFirstOccupies, Sha).Stopped());
+
+        Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
+        Assert.Equal(["plugin-source"], Directory.GetDirectories(_modFolder).Select(Path.GetFileName).Where(name => name != ".git"));
     }
 
     [Fact]

@@ -419,7 +419,7 @@ describe('restore from manifest', () => {
 
       expect(client.calls.map(({ method, args }) => [method, args[0]])).toEqual([
         ['cloneSubmodules', [pinned()]],
-        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], archives: [] }]],
+        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], step: { compile: ['A.esp'] } }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([{ verb: 'trashFileIn' }]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
@@ -526,7 +526,7 @@ describe('restore from manifest', () => {
 
     it('is skipped with its build\'s reason when the build refused it', async () => {
       const { restore, client } = await sourceMod();
-      client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'was not built: no load order is held.' }] }));
+      client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'no load order is held.' }] }));
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not built: no load order is held.' }]);
     });

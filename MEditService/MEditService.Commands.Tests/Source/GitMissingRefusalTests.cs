@@ -43,7 +43,7 @@ public sealed class GitMissingRefusalTests : IDisposable
             .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, new NewRepository(mod.ModFolder, [], SourceInits.BuildFile))], force)));
 
     private static readonly Gesture Build = new("build", (services, mod, _) => Whole(services.GetRequiredService<BuildModHandler>().BuildAsync(
-        [new ModToBuild(SourceEditFixture.ModFolderOrigin, mod.ModFolder, mod.ModFolder)], new InstanceToBuild("", null))));
+        [new ModToBuild(SourceEditFixture.ModFolderOrigin, mod.ModFolder, mod.ModFolder, new BuildStep.Copy(["a.nif"]))], new InstanceToBuild("", null))));
 
     private static readonly Gesture Edit = new("edit", (services, mod, _) => Task.FromResult(Single(
         services.GetRequiredService<EditRecordChangesHandler>()

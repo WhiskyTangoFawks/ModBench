@@ -16,22 +16,16 @@ internal static class ModEndpoints
             .WithName("BuildMod")
             .WithTags("Mods")
             .WithDescription(
-                "Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, " +
-                "and each archive packed from the assets. A file of the source's under an excluded path is written under the exclusion mark. " +
-                "A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a " +
-                "read or write stopped it part way, and each file it made with whether the source vouches for it. " +
+                "Runs one built-in step of each source mod's build file: a decompile of plugins in its source folder into their plugin " +
+                "source, a compile of plugins into its folder, a copy of files or folders from its source folder into its folder, or a " +
+                "pack of loose files of its folder into archives, which takes them out of the folder. A file written under an excluded " +
+                "path is written under the exclusion mark. A mod is refused before it writes, or lands naming what failed when a read " +
+                "or write stopped it part way, and each file it made with whether the source vouches for it. " +
                 "Progress is the build-progress notification.")
             .Produces<BuildResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
-
-        app.MapPost("/source-paths", SourcePaths)
-            .WithName("SourcePaths")
-            .WithTags("Mods")
-            .WithDescription("Where a source folder holds each given file of a mod folder, as an asset, by its forward-slash path in the source folder.")
-            .Produces<SourcePathsResult>()
-            .ProducesProblem(400);
 
         app.MapPost("/decompile-and-commit", DecompileAndCommit)
             .WithName("DecompileAndCommitMod")
@@ -47,11 +41,6 @@ internal static class ModEndpoints
 
         return app;
     }
-
-    internal static IResult SourcePaths(SourcePathsRequest req, ISourceAdapter source) =>
-        req.Paths is { } paths && FolderPaths.AreInTheFolder(paths)
-            ? Results.Ok(new SourcePathsResult([.. paths.Select(source.AssetPathOf)]))
-            : EndpointMapping.BadRequest("Every path is a forward-slash path in the mod folder.");
 
     // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
     internal static async Task<IResult> DecompileAndCommit(DecompileAndCommitRequest req, DecompileAndCommitModHandler decompileAndCommitModHandler, ILoggerFactory loggerFactory)
@@ -86,10 +75,13 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("Every mod needs a name, a source folder and a folder.");
         }
-        if (mods.Any(mod => !FolderPaths.AreInTheFolder([
-            .. mod.Exclude ?? [], .. (mod.Archives ?? []).SelectMany(archive => (IEnumerable<string>)[archive.Path, .. archive.Files ?? []])])))
+        List<ModToBuild> toBuild = [];
+        foreach (var mod in mods)
         {
-            return EndpointMapping.BadRequest("Every path a mod excludes or packs is a forward-slash path in its folder.");
+            if (mod.Step?.ToStep() is not { } step) return EndpointMapping.BadRequest(BuildStepRequest.NotOneStep);
+            if (!FolderPaths.AreInTheFolder([.. mod.Exclude ?? [], .. mod.Step.Paths()]))
+                return EndpointMapping.BadRequest("Every path a mod excludes or its step names is a forward-slash path in its folder.");
+            toBuild.Add(new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, step) { Exclude = mod.Exclude ?? [] });
         }
         if (string.IsNullOrWhiteSpace(req.ExclusionMark))
             return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
@@ -97,15 +89,7 @@ internal static class ModEndpoints
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 
         return await EndpointMapping.Answered(
-            "Build", logger,
-            buildModHandler.BuildAsync(
-                [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder)
-                {
-                    Exclude = mod.Exclude ?? [],
-                    Archives = [.. (mod.Archives ?? []).Select(archive => new ArchiveToPack(archive.Path, archive.Files ?? []))],
-                })],
-                new InstanceToBuild(req.ExclusionMark, variants)),
-            EndpointMapping.Refusal);
+            "Build", logger, buildModHandler.BuildAsync(toBuild, new InstanceToBuild(req.ExclusionMark, variants)), EndpointMapping.Refusal);
     }
 }
 
@@ -120,11 +104,35 @@ internal static class FolderPaths
 /// <summary>The mods to build with the instance's facts (ADR-0013): the exclusion mark, and the archive variants, if any.</summary>
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives);
 
-/// <summary>A mod, the source folder that builds it, its folder, and what the extension hands its build (ADR-0016).</summary>
-internal sealed record BuildModRequest(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<string>? Exclude = null, IReadOnlyList<ArchiveRequest>? Archives = null);
+/// <summary>A mod, the source folder that builds it, its folder, what its folder excludes, and the step of its build file to
+/// run (ADR-0016).</summary>
+internal sealed record BuildModRequest(string Name, string SourceFolder, string Folder, BuildStepRequest? Step, IReadOnlyList<string>? Exclude = null);
 
-/// <summary>An archive by its path in the mod folder, and the files it takes.</summary>
+/// <summary>One built-in step of a build file: exactly one of its members, each naming at least one path.</summary>
+internal sealed record BuildStepRequest(
+    IReadOnlyList<string>? Decompile = null, IReadOnlyList<string>? Compile = null, IReadOnlyList<string>? Copy = null,
+    IReadOnlyList<ArchiveRequest>? Pack = null)
+{
+    internal const string NotOneStep =
+        "Every mod names one step: a decompile, a compile, a copy or a pack, each of at least one path, each plugin at the root.";
+
+    internal BuildStep? ToStep() => (Decompile, Compile, Copy, Pack) switch
+    {
+        ([_, ..] decompile, null, null, null) when AtTheRoot(decompile) => new BuildStep.Decompile(decompile),
+        (null, [_, ..] compile, null, null) when AtTheRoot(compile) => new BuildStep.Compile(compile),
+        (null, null, [_, ..] copy, null) => new BuildStep.Copy(copy),
+        (null, null, null, [_, ..] pack) when pack.All(archive => archive.Files is [_, ..]) =>
+            new BuildStep.Pack([.. pack.Select(archive => new ArchiveToPack(archive.Path, archive.Files))]),
+        _ => null,
+    };
+
+    internal IEnumerable<string?> Paths() =>
+        [.. Decompile ?? [], .. Compile ?? [], .. Copy ?? [], .. (Pack ?? []).SelectMany(archive => (IEnumerable<string?>)[archive.Path, .. archive.Files ?? []])];
+
+    private static bool AtTheRoot(IReadOnlyList<string?> plugins) => plugins.All(plugin => plugin?.Contains('/', StringComparison.Ordinal) == false);
+}
+
+/// <summary>An archive by its path in the mod folder, and the loose files it packs there.</summary>
 internal sealed record ArchiveRequest(string Path, IReadOnlyList<string> Files);
 
 /// <summary>The variant an archive of textures packs as, and the one every other archive packs as.</summary>
@@ -156,12 +164,6 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 
 /// <summary>The mods to decompile and commit (ADR-0013).</summary>
 internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
-
-/// <summary>Files of a mod folder, by forward-slash path.</summary>
-internal sealed record SourcePathsRequest(IReadOnlyList<string>? Paths);
-
-/// <summary>Where the source folder holds each file of the request, in the request's order.</summary>
-internal sealed record SourcePathsResult(IReadOnlyList<string> Paths);
 
 /// <summary>A mod by name, and the repository its decompile and commit makes.</summary>
 internal sealed record DecompileAndCommitModRequest(string Name, NewRepositoryRequest Repository);

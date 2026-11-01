@@ -2,11 +2,12 @@
 // files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
-import { isRefused, type MEditClient, type NewRepository } from '../client';
+import type { NewRepository } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  BUILD_FILE_VERSION, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest,
+  buildFileText, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type BuildStep, type Manifest,
 } from '../manifestAdapter/manifestAdapter';
+import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
 import type { MoveToTrash } from '../ports/trash';
 import { pluginCompanionRule } from '../tables/gamePaths';
@@ -19,8 +20,6 @@ type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
   & FolderRestoreAdapter;
-
-type SourcePathsClient = Pick<MEditClient, 'sourcePaths'>;
 
 /** The repository a mod's decompile and commit makes. */
 export interface MadeRepository {
@@ -94,10 +93,10 @@ export async function downloadedPackagesOf(
   return { files: downloadedFilesOf(files, nexusFileOf(adapter)), notes };
 }
 
-/** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: its build file,
- *  which takes from the mod's packages each file they give, and its assets. */
+/** The repository decompile and commit makes for `mod`, as decompile and repair does for a mod with none: a manifest of
+ *  what its packages give, its assets, and a build file that builds its folder back. */
 export async function newRepositoryOf(
-  client: SourcePathsClient, adapter: Adapter, mod: string, game: GameToHand, downloadedFiles: readonly DownloadedFile[],
+  adapter: Adapter, mod: string, game: GameToHand, downloadedFiles: readonly DownloadedFile[],
 ): Promise<MadeRepository | { readonly refusal: string }> {
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
@@ -111,16 +110,28 @@ export async function newRepositoryOf(
     { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  const yielded = [...recorded.manifest.files].filter(([path]) => recorded.sources.has(path));
-  const placed = await client.sourcePaths(yielded.map(([path]) => path));
-  if (isRefused(placed)) return { refusal: `mEdit could not place its files in the source folder: ${placed.message}` };
-  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], files: new Map(yielded.map(([, hash], at) => [placed.paths[at] ?? '', hash])) };
+  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))) };
+  const copied = [...new Set(all.map(({ path }) => path).filter((path) => !compiled.has(path)).map((path) => path.split('/')[0] ?? path))].sort();
+  const taken = takenBySourceFolder(copied, manifestNameOf(sourceFolder));
+  if (taken !== undefined) return { refusal: taken };
+  const plugins = [...compiled].filter(isPluginAtRoot).sort();
+  const steps: BuildStep[] = [
+    ...copied.length === 0 ? [] : [{ kind: 'copy' as const, paths: copied }],
+    ...plugins.length === 0 ? [] : [{ kind: 'compile' as const, paths: plugins }],
+  ];
   return {
     repository: {
-      sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: `{"version":${BUILD_FILE_VERSION}}\n`,
+      sourceFolder, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText({ steps }),
       manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest), ignored: [...sourceManifest.files.keys()],
     },
   };
+}
+
+// A source folder holds the mod's files at their own paths, beside its own (wire/sourceMod.ts).
+function takenBySourceFolder(entries: readonly string[], manifestFile: string): string | undefined {
+  const own = [BUILD_FILE, PLUGIN_SOURCE_FOLDER, '.gitignore', '.git', manifestFile];
+  const taken = entries.find((entry) => own.some((name) => name.toLowerCase() === entry.toLowerCase()));
+  return taken === undefined ? undefined : `its '${taken}' is where its source folder holds its own`;
 }
 
 const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: readonly string[]): string[] => {
@@ -169,12 +180,12 @@ export async function foldersNotLinked(
 
 /** The repository decompile and commit makes for each mod decompile and repair asks for, read as the instance is now. */
 export const newRepositoriesOver = (adapter: Adapter): {
-  readonly of: (mod: string, client: SourcePathsClient) => Promise<MadeRepository | { readonly refusal: string }>;
+  readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
   readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 } => ({
-  of: async (mod, client) => {
+  of: async (mod) => {
     const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
-    return newRepositoryOf(client, adapter, mod, await gameToHand(adapter, sourceMods), (await downloadedPackagesOf(adapter)).files);
+    return newRepositoryOf(adapter, mod, await gameToHand(adapter, sourceMods), (await downloadedPackagesOf(adapter)).files);
   },
   notLinked: (made, committed) => foldersNotLinked(adapter, made, committed),
 });

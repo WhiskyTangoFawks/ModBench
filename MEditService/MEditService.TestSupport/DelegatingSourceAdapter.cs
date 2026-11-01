@@ -42,14 +42,15 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual string ContentStamp(string text) => inner.ContentStamp(text);
 
-    public virtual string AssetPathOf(string pathInModFolder) => inner.AssetPathOf(pathInModFolder);
-
     public virtual SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null) =>
+        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null) =>
         inner.Init(sourceFolder, buildFile, plugins, assets, repair, manifest, ignored);
 
-    public virtual Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => inner.SourceToBuild(sourceFolder);
+    public virtual string FileIn(string sourceFolder, string path) => inner.FileIn(sourceFolder, path);
+
+    public virtual Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied) =>
+        inner.SourceToBuild(sourceFolder, copied);
 
     public virtual Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => inner.CommitAtHead(submodule, cancel);
 

@@ -82,7 +82,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
 
         Assert.Single((await InitWith(["Scripts/Quest.pex"], "{\"files\": []}")).Applied);
 
-        Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
+        Assert.Equal(["Scripts/Quest.pex"], CommittedAssets());
         Assert.Equal("{\"files\": []}", GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "show", "main:build.json"));
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
@@ -126,5 +126,5 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
     private string[] CommittedAssets() =>
         [.. GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Where(path => path.StartsWith("assets/", StringComparison.Ordinal))];
+            .Where(path => path != ".gitignore" && path != "build.json" && !path.StartsWith("plugin-source/", StringComparison.Ordinal))];
 }

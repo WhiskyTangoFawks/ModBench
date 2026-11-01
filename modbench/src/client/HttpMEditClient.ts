@@ -15,7 +15,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type SourcePaths, type Submodule, type SubmodulesCloned,
+  type Submodule, type SubmodulesCloned,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -500,6 +500,8 @@ class HttpMEditClient implements MEditClient {
         landed: answer.applied.map((m) => ({
           mod: m.mod, compiled: m.compiled, refused: itemRefusals(m.refused), archivesRefused: itemRefusals(m.archivesRefused),
           made: m.made,
+          ...(m.packed.length > 0 ? { packed: m.packed } : {}),
+          ...(m.replaced.length > 0 ? { replaced: m.replaced } : {}),
           ...(m.failure ? { failure: m.failure } : {}),
           ...(m.uncommitted ? { uncommitted: true as const } : {}),
           ...(m.unpushed ? { unpushed: true as const } : {}),
@@ -514,14 +516,6 @@ class HttpMEditClient implements MEditClient {
       op: `cloneSubmodules(${submodules.length})`,
       failMsg: 'Could not clone the submodules the instance repository pins',
       post: () => this.apiClient.POST('/clone-submodules', { body: { submodules: [...submodules] } }),
-    });
-  }
-
-  sourcePaths(paths: readonly string[]): Promise<SourcePaths | WriteRefused> {
-    return this.mutate({
-      op: `sourcePaths(${paths.length})`,
-      failMsg: 'Could not ask where the source folder holds the mod folder\'s files',
-      post: () => this.apiClient.POST('/source-paths', { body: { paths: [...paths] } }),
     });
   }
 

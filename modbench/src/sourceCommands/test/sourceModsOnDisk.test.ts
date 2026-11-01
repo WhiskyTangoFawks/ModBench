@@ -9,14 +9,13 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { DecompileAndCommitMod } from '../../client';
-import type { BuildMod, MadeFile } from '../../client/MEditClient';
+import type { BuildMod, BuildOutcome } from '../../client/MEditClient';
 import type { InstallationFileReader } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { recordingTasks } from '../../test/recordingTasks';
 import { statusNow } from '../../test/statusNow';
-import { manifestIn, sourceModsOf, writeManifestIn, type BuildFile, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { buildFileText } from '../../test/buildFiles';
+import { buildFileText, manifestIn, sourceModsOf, writeManifestIn, type BuildFile, type BuildStep, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { readManifest } from '../../manifestAdapter/manifestRead';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceCommands } from '../sourceCommands';
@@ -38,11 +37,17 @@ async function textsBelow(folder: string): Promise<Record<string, string>> {
   return Object.fromEntries(await Promise.all(files.map(async (file) => [relative(folder, file).replaceAll('\\', '/'), await readFile(file, 'utf8')] as const)));
 }
 
+type MadeFile = BuildOutcome['landed'][number]['made'][number];
+
 const ASSETS = ['b.nif', 'textures/c.dds'];
 
 const MADE = [{ path: 'Mod.esp', vouchedFor: true }, ...ASSETS.map((path) => ({ path, vouchedFor: true }))];
 
-const STEP = { task: 'Optimise', args: [], page: 'https://example.com/o' };
+const COMPILE: BuildStep = { kind: 'compile', paths: ['Mod.esp'] };
+
+const STEP: BuildStep = { kind: 'task', task: 'Optimise', args: [], page: 'https://example.com/o' };
+
+const WITH_STEP = { steps: [COMPILE, STEP] };
 
 const pathsIn = (manifest: Manifest | undefined): string[] => [...manifest?.files.keys() ?? []].sort();
 
@@ -57,7 +62,7 @@ async function aSourceMod(buildFile: Partial<BuildFile> = {}, made: readonly Mad
   execFileSync('git', ['init', '-q', join(root, 'source', 'Mod')]);
   const adapter = adapterOver(root);
   for (const asset of ASSETS) await put(`source/Mod/${asset}`, `bytes of ${asset}`);
-  await put(`source/Mod/${BUILD_FILE}`, buildFileText({ archives: [], steps: [], ...buildFile }));
+  await put(`source/Mod/${BUILD_FILE}`, buildFileText({ steps: [COMPILE], ...buildFile }));
   const client = new InMemoryMEditClient();
   const sent: BuildMod[] = [];
   client.setCommandHandler('build', async (mods: readonly BuildMod[]) => {
@@ -66,10 +71,10 @@ async function aSourceMod(buildFile: Partial<BuildFile> = {}, made: readonly Mad
     return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...made] }], refused: [] };
   });
   const tasks = recordingTasks(['Optimise']);
-  const stepping = { ...tasks, whyStepsFailed: async (...ran: Parameters<typeof tasks.whyStepsFailed>) => {
+  const stepping = { ...tasks, whyStepFailed: async (...ran: Parameters<typeof tasks.whyStepFailed>) => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     const failed = await step();
-    return typeof failed === 'string' ? failed : tasks.whyStepsFailed(...ran);
+    return typeof failed === 'string' ? failed : tasks.whyStepFailed(...ran);
   } };
   const trashed: string[] = [];
   const inTrash: Record<string, string> = {};
@@ -120,15 +125,22 @@ describe('build over an instance on disk', () => {
   });
 
   it('records by its path alone each file a step makes, whatever its path, and reads it as the build made it', async () => {
-    const { build, status, recorded } = await aSourceMod({
-      steps: [STEP],
-    }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); await put('mods/Mod/logs/optimise.log', 'log'); });
+    const { build, status, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/made.dds', 'made'); await put('mods/Mod/logs/optimise.log', 'log'); });
 
     await build();
 
     expect(Object.fromEntries((await recorded())?.files ?? [])).toEqual({
       'b.nif': 'OZFIfvr0kjo=', 'textures/c.dds': 'RNWYjJS3keA=', 'made.dds': null, 'logs/optimise.log': null, 'Mod.esp': 'QnTauWK5/T8=',
     });
+    expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
+  });
+
+  it('records by its path alone a file a task changes, though a step before it made the file with its bytes (mods.md, Build, story 3)', async () => {
+    const { build, status, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/Mod.esp', 'cleaned'); });
+
+    await build();
+
+    expect(Object.fromEntries((await recorded())?.files ?? [])).toEqual({ 'b.nif': 'OZFIfvr0kjo=', 'textures/c.dds': 'RNWYjJS3keA=', 'Mod.esp': null });
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [] });
   });
 
@@ -163,9 +175,7 @@ describe('build over an instance on disk', () => {
 
   it('stops when a step fails, and records what mEdit wrote, keeping the line of the file a step made before (mods.md, Build, story 10)', async () => {
     let fails = false;
-    const { build, client, status, recorded } = await aSourceMod({
-      steps: [STEP],
-    }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); return fails ? "step 'Optimise' exited with code 2" : undefined; });
+    const { build, client, status, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/made.dds', 'made'); return fails ? "step 'Optimise' exited with code 2" : undefined; });
     await build();
     client.setCommandHandler('build', async () => {
       await put('mods/Mod/Mod.esp', 'built again');
@@ -283,9 +293,7 @@ describe('build over an instance on disk', () => {
 
 describe('what build sends to the trash, over an instance on disk (mods.md, A source mod, story 4)', () => {
   it('sends no copy of a file its last build made, though I excluded one since, nor of a step\'s file whatever its bytes', async () => {
-    const { build, client, commands, trashed } = await aSourceMod({
-      steps: [STEP],
-    }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
+    const { build, client, commands, trashed } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
     await build();
     await rename(join(root, 'mods', 'Mod', 'textures', 'c.dds'), join(root, 'mods', 'Mod', 'textures', 'c.dds.mohidden'));
     await put('mods/Mod/made.dds', 'made again');
@@ -299,9 +307,9 @@ describe('what build sends to the trash, over an instance on disk (mods.md, A so
   });
 
   it('sends to the trash the file a step made before when its build file holds no step now, and records no line for it', async () => {
-    const { build, commands, recorded, inTrash } = await aSourceMod({ steps: [STEP] }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
+    const { build, commands, recorded, inTrash } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/made.dds', 'made'); });
     await build();
-    await writeFile(join(root, 'source', 'Mod', BUILD_FILE), buildFileText({ steps: [], archives: [] }));
+    await writeFile(join(root, 'source', 'Mod', BUILD_FILE), buildFileText({ steps: [COMPILE] }));
 
     await commands.build(['Mod']);
 
@@ -310,7 +318,7 @@ describe('what build sends to the trash, over an instance on disk (mods.md, A so
 
   it('sends to the trash the file a step made before and stops making, and records no line for it, while the file it makes again stays', async () => {
     let makes = ['made.dds', 'again.dds'];
-    const { build, recorded, inTrash } = await aSourceMod({ steps: [STEP] }, MADE, async () => { for (const path of makes) await put(`mods/Mod/${path}`, 'made'); });
+    const { build, recorded, inTrash } = await aSourceMod(WITH_STEP, MADE, async () => { for (const path of makes) await put(`mods/Mod/${path}`, 'made'); });
     await build();
     makes = ['again.dds'];
 
@@ -384,7 +392,7 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
   });
 
   it('records one line for a file a step now makes, though its last manifest recorded its bytes', async () => {
-    const { build, recorded } = await aSourceMod({ steps: [STEP] }, MADE, async () => { await put('mods/Mod/Mod - Main.ba2', 'made'); });
+    const { build, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/Mod - Main.ba2', 'made'); });
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], files: new Map([['Mod - Main.ba2', 'QnTauWK5/T8=']]) });
 
     await build();
@@ -462,25 +470,26 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await status()).toMatchObject({ noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
   });
 
-  it('hands mEdit its source folder\'s manifest, which names the files its installation file yields and no asset, and writes those files into the source folder (plugins.md, Decompile and commit, stories 2 and 3)', async () => {
+  it('hands mEdit its source folder\'s manifest, which names the files its installation file yields and no asset, and a build file that copies them and compiles its plugin, and writes those files into the source folder at their own paths (plugins.md, Init source mod, story 2)', async () => {
     const { handed } = await anInstalledModDecompiled();
 
     const [sent] = handed;
     const manifest = readManifest(sent?.repository.manifest ?? '');
     assert('manifest' in manifest);
     expect([sent?.repository.manifestFile, sent?.repository.assets, sent?.repository.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.repository.ignored])
-      .toEqual(['Mod.manifest.json', [], '{"version":1}\n', ['assets/b.nif', 'assets/textures/c.dds'], ['installationFile'], ['assets/b.nif', 'assets/textures/c.dds']]);
+      .toEqual(['Mod.manifest.json', [], '{"version":1,"steps":[\n{"copy":["b.nif","textures"]},\n{"compile":["Mod.esp"]}\n]}\n', ASSETS, ['installationFile'], ASSETS]);
     expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
-      .toEqual(['Mod.manifest.json', 'assets/b.nif', 'assets/textures/c.dds', 'build.json']);
+      .toEqual(['Mod.manifest.json', 'b.nif', 'build.json', 'textures/c.dds']);
   });
 
-  it('restores the files its source folder\'s manifest names to the path that manifest gives them, which is where the build reads an asset', async () => {
+  it('restores the files its source folder\'s manifest names to the path that manifest gives them, which is where the build copies them from', async () => {
     const { restoreSourceFolder } = await anInstalledModDecompiled();
-    await rm(join(root, 'source', 'Mod', 'assets'), { recursive: true });
+    await rm(join(root, 'source', 'Mod', 'b.nif'));
+    await rm(join(root, 'source', 'Mod', 'textures'), { recursive: true });
 
     expect(await restoreSourceFolder()).toBeUndefined();
 
-    expect(await textsBelow(join(root, 'source', 'Mod', 'assets'))).toEqual({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
+    expect(await textsBelow(join(root, 'source', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
   });
 
   it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (modlist-repository.md, Update manifest, story 2)', async () => {
@@ -591,7 +600,7 @@ describe('decompile and commit of a mod several downloaded files yield, over an 
   it('commits as assets only the files no installation file of the mod yields, and names both packages, for a mod made from two installation files', async () => {
     const { assets, packages, yielded } = await decompiled('installationFile=Alpha-100-1.zip\r\n', ['alpha.txt', 'beta.txt', 'own.txt']);
 
-    expect([assets, packages, yielded]).toEqual([['own.txt'], ['Alpha-100-1.zip', 'Beta-100-2.zip'], ['assets/alpha.txt', 'assets/beta.txt']]);
+    expect([assets, packages, yielded]).toEqual([['own.txt'], ['Alpha-100-1.zip', 'Beta-100-2.zip'], ['alpha.txt', 'beta.txt']]);
   });
 
   it('finds the package of a mod whose metadata names no installation file', async () => {

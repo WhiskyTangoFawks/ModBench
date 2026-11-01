@@ -126,25 +126,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Makes each source mod's plugins and archives in its folder from its source: its assets copied, each plugin compiled, and each archive packed from the assets. A file of the source's under an excluded path is written under the exclusion mark. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, what failed when a read or write stopped it part way, and each file it made with whether the source vouches for it. Progress is the build-progress notification. */
+        /** @description Runs one built-in step of each source mod's build file: a decompile of plugins in its source folder into their plugin source, a compile of plugins into its folder, a copy of files or folders from its source folder into its folder, or a pack of loose files of its folder into archives, which takes them out of the folder. A file written under an excluded path is written under the exclusion mark. A mod is refused before it writes, or lands naming what failed when a read or write stopped it part way, and each file it made with whether the source vouches for it. Progress is the build-progress notification. */
         post: operations["BuildMod"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/source-paths": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Where a source folder holds each given file of a mod folder, as an asset, by its forward-slash path in the source folder. */
-        post: operations["SourcePaths"];
         delete?: never;
         options?: never;
         head?: never;
@@ -970,11 +953,11 @@ export interface components {
             name: string;
             sourceFolder: string;
             folder: string;
+            step?: components["schemas"]["BuildStepRequest"] | null;
             exclude?: string[] | null;
-            archives?: components["schemas"]["ArchiveRequest"][] | null;
         };
         /** @enum {string} */
-        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "ArchiveFileNotAnAsset";
+        BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "ArchiveFileNotInFolder" | "NotDecompiled";
         BuildRefused: {
             item: string;
             refusal: components["schemas"]["BuildRefusal"];
@@ -988,6 +971,12 @@ export interface components {
         BuildResult: {
             applied: components["schemas"]["ModBuilt"][];
             refused: components["schemas"]["BuildRefused"][];
+        };
+        BuildStepRequest: {
+            decompile?: string[] | null;
+            compile?: string[] | null;
+            copy?: string[] | null;
+            pack?: components["schemas"]["ArchiveRequest"][] | null;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
@@ -1375,6 +1364,8 @@ export interface components {
             uncommitted: boolean;
             unpushed: boolean;
             made: components["schemas"]["MadeFile"][];
+            packed: string[];
+            replaced: string[];
         };
         ModlistProgress: {
             mod?: string | null;
@@ -1665,12 +1656,6 @@ export interface components {
         SourceMove: {
             from: string;
             to: string;
-        };
-        SourcePathsRequest: {
-            paths?: string[] | null;
-        };
-        SourcePathsResult: {
-            paths: string[];
         };
         SourceProblem: {
             formKey?: string | null;
@@ -2093,39 +2078,6 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    SourcePaths: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SourcePathsRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SourcePathsResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

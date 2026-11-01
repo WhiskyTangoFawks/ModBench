@@ -2396,6 +2396,16 @@ describe('the MO2 Instance adapter', () => {
       expect(trashed).toEqual([join(root, 'mods', 'Harder VATS', 'Textures', 'a.dds')]);
     });
 
+    it('moves a folder to the trash whole, and removes each folder it leaves empty', async () => {
+      const source = join(root, 'source', 'Mod');
+      await put(join(source, 'plugin-source', 'A.esp', 'npc_', '1.json'));
+      const trash: MoveToTrash = (path) => rm(path, { recursive: true });
+
+      await adapter.trashFileIn(source, 'plugin-source/A.esp', trash);
+
+      expect(await readdir(source)).toEqual([]);
+    });
+
     it('removes each folder the trashed file leaves empty, and keeps the mod\'s folder and a folder that holds more', async () => {
       const mod = join(root, 'mods', 'Built');
       await put(join(mod, 'Textures', 'sub', 'a.dds'));
@@ -2439,7 +2449,7 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.trashFileIn(join(root, 'mods', 'Harder VATS'), 'linked/a.txt', (file) => {
         trashed.push(file);
         return Promise.resolve();
-      })).rejects.toThrow(/Not a file of/);
+      })).rejects.toThrow(/Not a file or folder of/);
 
       expect(trashed).toEqual([]);
     });

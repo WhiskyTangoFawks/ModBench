@@ -79,7 +79,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
         }
 
         setPhase(DecompileAndCommitPhase.Committing);
-        List<Asset> assets = [.. toCommit.Repository.Assets.Select(path => new Asset(path, () => modFolders.OpenFile(mod.Folder, path)))];
+        List<FileToCopy> assets = [.. toCommit.Repository.Assets.Select(path => new FileToCopy(path, () => modFolders.OpenFile(mod.Folder, path)))];
         if (Commit(toCommit.Repository.SourceFolder, verified, toCommit.Repository.BuildFile, assets, repair, toCommit.Repository.Manifest, toCommit.Repository.Ignored) is { } failure)
         {
             logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", mod.Name, failure.Reason);
@@ -99,7 +99,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
     // The adapter writes nothing when any of it fails (plugins.md, Decompile and commit, story 5).
     private SourceFailure? Commit(
         string sourceFolder, List<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> verified, byte[] buildFile,
-        List<Asset> assets, RepairedInInit? repair, RootFile? manifest, IReadOnlyList<string>? ignored)
+        List<FileToCopy> assets, RepairedInInit? repair, RootFile? manifest, IReadOnlyList<string>? ignored)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {

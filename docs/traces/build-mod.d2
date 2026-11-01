@@ -46,22 +46,29 @@ tasks -> sourcecommands: "each task's label" {class: outside}
 sourcecommands."refused when a tool has no task"
 sourcecommands -> driving: "confirm: each file I changed, and each file the build does not make" {class: compile}
 driving -> sourcecommands: "yes" {class: compile}
-sourcecommands -> client: "build: each mod's folder · the archives to pack and the files each takes" {class: compile}
-client -> http: envelope {class: compile}
-http -> engine: envelope {class: compile}
-source -> sourceadapter: "each mod's source at its commit" {class: compile}
-sourceadapter -> engine: "the source" {class: compile}
-engine -> commands: "compile-plugin, per plugin" {class: compile}
-engine -> modfolderadapter: "the assets · the archives" {class: compile}
-modfolderadapter -> modfolder: "the folder" {class: compile}
-engine -> http: "the files it made, per mod" {class: compile}
-http -> client: "the files it made, per mod" {class: compile}
-client -> sourcecommands: "the files it made, per mod" {class: compile}
+builtin: "each built-in step, a decompile, compile, copy or pack, in build-file order" {
+  sourcecommands -> client: "build: the mod's folder · its step" {class: compile}
+  client -> http: envelope {class: compile}
+  http -> engine: envelope {class: compile}
+  source -> sourceadapter: "the source folder's files · plugin source" {class: compile}
+  sourceadapter -> engine: "the files a copy names · the plugin source" {class: compile}
+  engine -> commands: "compile-plugin, per plugin a compile names" {class: compile}
+  engine -> sourceadapter: "the plugin source a decompile makes, once every plugin of it decompiled" {class: compile}
+  sourceadapter -> engine: "each plugin source folder it moved aside, in this build or one before" {class: compile}
+  engine -> modfolderadapter: "the files a copy writes · the archives a pack makes" {class: compile}
+  modfolderadapter -> modfolder: "the folder" {class: compile}
+  engine -> http: "the files it made · what it moved aside or packed" {class: compile}
+  http -> client: "the files it made · what it moved aside or packed" {class: compile}
+  client -> sourcecommands: "the files it made · what it moved aside or packed" {class: compile}
+  sourcecommands -> instanceadapter: "trash: the plugin source moved aside · the loose files packed" {class: compile}
+}
 
-withsteps: "a mod whose build file holds steps" {
-  sourcecommands -> tasks: "each step's task, with its arguments, in the mod's folder" {class: outside}
+task: "each task step, in build-file order among the built-in steps" {
+  sourcecommands -> tasks: "the step's task, with its arguments, in the mod's folder" {class: outside}
   tasks -> sourcecommands: "its exit code" {class: outside}
 }
+
+sourcecommands."a failed step stops the mod's build"
 
 sourcecommands -> instanceadapter: "get: the files the build made, hashed" {class: compile}
 instance -> instanceadapter: "each mod's files" {class: compile}

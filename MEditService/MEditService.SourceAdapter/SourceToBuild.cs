@@ -1,16 +1,16 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a source mod's build writes from its source, as its working tree says. Uncommitted: its working tree holds
+/// <summary>What a build step copies from a source folder, as its working tree says. Uncommitted: its working tree holds
 /// changes no commit holds. Unpushed: its remote, as last fetched, lacks HEAD.</summary>
-public sealed record SourceToBuild(IReadOnlyList<string> Plugins, IReadOnlyList<Asset> Assets, bool Uncommitted = false, bool Unpushed = false)
+public sealed record SourceToBuild(IReadOnlyList<FileToCopy> Files, bool Uncommitted = false, bool Unpushed = false)
 {
-    internal static SourceToBuild In(string sourceFolder)
+    internal static SourceToBuild In(string sourceFolder, IReadOnlyList<string> copied)
     {
-        var assets = SourceRepositoryLayout.AssetsIn(sourceFolder);
-        if (TwinsIn(assets.Select(asset => asset.Path)) is { } twins)
-            throw SourceStopException.Unreadable($"'{Path.Combine(sourceFolder, SourceRepositoryLayout.AssetsFolderName)}' holds {twins}.");
+        var files = SourceRepositoryLayout.FilesAt(sourceFolder, copied);
+        if (TwinsIn(files.Select(file => file.Path)) is { } twins)
+            throw SourceStopException.Unreadable($"'{sourceFolder}' holds {twins}.");
         var remote = Submodules.RemoteOf(sourceFolder);
-        return new SourceToBuild(SourceRepositoryLayout.PluginsIn(sourceFolder), assets, remote?.Uncommitted ?? false, remote?.Unpushed ?? false);
+        return new SourceToBuild(files, remote?.Uncommitted ?? false, remote?.Unpushed ?? false);
     }
 
     private static string? TwinsIn(IEnumerable<string> paths) =>

@@ -199,6 +199,33 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
+    /// <summary>Moves each of <paramref name="trees"/> into one new folder at the source folder's root, keeping its name, then
+    /// writes the plugin's tree; answers where each now is, after each tree an earlier write left aside.</summary>
+    internal IReadOnlyList<string> ReplaceSourceMovingAside(string pluginFileName, IReadOnlyList<string> trees, IReadOnlyList<TreeFile> files, string binarySha256)
+    {
+        if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
+            throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+
+        var stranded = SourceRepositoryLayout.AsideIn(_sourceFolder);
+        var journal = new WriteJournal(_sourceFolder);
+        var aside = SourceRepositoryLayout.NewAsideFolderIn(_sourceFolder);
+        try
+        {
+            journal.PutBackOnFailure(() =>
+            {
+                if (trees.Count > 0) journal.CreateDirectory(aside);
+                foreach (var tree in trees) journal.Move(SourceRepositoryLayout.RootIn(_sourceFolder, tree), Path.Combine(aside, tree));
+                ReplaceTree(journal, _sourceFolder, pluginFileName, files);
+                git.ParkDecompiled(pluginFileName, binarySha256);
+            });
+        }
+        finally
+        {
+            locator.Forget();
+        }
+        return [.. stranded, .. trees.Select(tree => $"{Path.GetFileName(aside)}/{tree}")];
+    }
+
     /// <summary>Decompile and repair's commits of the plugin's source alone, the baseline then the repair, each unless the
     /// branch holds it, all or nothing: what else is staged stays staged.</summary>
     internal void CommitRepair(string pluginFileName, TreeCommit baseline, TreeCommit repaired, string binarySha256)

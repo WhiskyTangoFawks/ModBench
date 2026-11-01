@@ -45,5 +45,4 @@ internal sealed class FakeModFolders : IModFolderRepository
         Written[(folder, path)] = bytes;
         WithBytes(folder, path, bytes);
     }
-
 }

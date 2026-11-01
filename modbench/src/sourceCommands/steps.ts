@@ -1,36 +1,30 @@
-import type { ManifestStep } from '../manifestAdapter/manifestAdapter';
+import type { TaskStep } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { HostTasks } from '../ports/tasks';
 
-/** A manifest's steps, each run as the VS Code user task its label names (mods.md, Build, story 13). */
+/** A build file's task steps, each run as the VS Code user task its label names (mods.md, Build, story 13). */
 export interface StepTasks {
   /** The label of each user task this machine has. */
   readonly labels: () => Promise<readonly string[]>;
-  /** Runs each step in order in the folder the manifest builds, and answers why the first that did not exit with
-   *  code 0 failed, or nothing when every step did. */
-  readonly whyStepsFailed: (steps: readonly ManifestStep[], folder: string) => Promise<string | undefined>;
+  /** Runs the step in the folder the build file builds, and answers why it did not exit with code 0, or nothing when it did. */
+  readonly whyStepFailed: (step: TaskStep, folder: string) => Promise<string | undefined>;
 }
 
 export function stepTasks<Task, P extends Task, C extends Task, L extends Task, Run>(host: HostTasks<Task, P, C, L, Run>): StepTasks {
   const userTasks = async (): Promise<Task[]> => (await host.fetch()).filter((task) => host.isUserTask(task));
-  const run = async ({ task, args }: ManifestStep, folder: string): Promise<number | string> => {
+  const run = async ({ task, args }: TaskStep, folder: string): Promise<number | string> => {
     const found = (await userTasks()).find((held) => host.labelOf(held) === task);
     if (found === undefined) return `this machine has no user task '${task}'`;
     const withArgs = withStepArgs(host, found, task, args, folder);
     if (typeof withArgs === 'string') return withArgs;
     return await exitCodeOf(host, withArgs.task) ?? `its task '${task}' ended with no exit code`;
   };
-  const ended = (step: ManifestStep, folder: string): Promise<number | string> =>
-    run(step, folder).catch((err: unknown) => `its task '${step.task}' could not run: ${errorMessage(err)}`);
   return {
     labels: async () => (await userTasks()).map((task) => host.labelOf(task)),
-    whyStepsFailed: async (steps, folder) => {
-      for (const step of steps) {
-        const end = await ended(step, folder);
-        if (end === 0) continue;
-        return typeof end === 'number' ? `step '${step.task}' exited with code ${end}` : `step '${step.task}' did not run: ${end}`;
-      }
-      return undefined;
+    whyStepFailed: async (step, folder) => {
+      const end = await run(step, folder).catch((err: unknown) => `its task '${step.task}' could not run: ${errorMessage(err)}`);
+      if (end === 0) return undefined;
+      return typeof end === 'number' ? `step '${step.task}' exited with code ${end}` : `step '${step.task}' did not run: ${end}`;
     },
   };
 }
