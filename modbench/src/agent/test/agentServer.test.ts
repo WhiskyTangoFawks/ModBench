@@ -398,6 +398,13 @@ describe('the agent server, given an instance value', () => {
       expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'] }]);
     });
 
+    it('answers every member ModStatus holds but the ones it leaves out', async () => {
+      statusRead.answer = [{ ...status('Big Rocks'), addedLater: ['x.nif'] } as ModStatus];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], addedLater: ['x.nif'] }]);
+    });
+
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
       const { client } = await clientOf(new FakeInstance(VALUE));
 
