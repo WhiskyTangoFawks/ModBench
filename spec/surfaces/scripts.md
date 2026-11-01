@@ -34,6 +34,13 @@ As a user, I want:
 5. A Modbench script's writes to reach every view. Cites: common, A view, story 2; ADR-0015
 6. A write to a file I hold unsaved changes in to be refused, naming the file, so my unsaved text never reaches the disk through a Modbench script. Cites: Never silently wrong
 
+## Default scripts
+
+As a user, I want:
+
+1. Each default Modbench script to be an ordinary one I can read and copy, through the path its build step prints.
+2. A default Modbench script that cleans a plugin as xEdit's Quick Auto Clean does. Cites: out-of-scope/xedit.md, Plugin
+
 ## Reporting
 
 As a user, I want:

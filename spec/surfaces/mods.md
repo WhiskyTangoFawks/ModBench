@@ -182,14 +182,14 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from its source folder: its assets, its plugins compiled from their plugin source, and its steps run in order. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0027
-2. The build file to name, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
-3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a step makes is recorded by its path alone, since a tool's output follows the tool and my load order, and is not checked. Cites: ADR-0022; ADR-0027; Existing tools; Never silently wrong
+1. Build to write the mod folder from its source folder by running its build file's steps in order. Cites: catalog `build`; ADR-0027
+2. A pack step to take the loose files it packs out of the mod folder, so the game reads one copy.
+3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a task makes or changes is recorded by its path alone, since a tool's output follows the tool, and is not checked. Cites: ADR-0022; ADR-0027; Existing tools; Never silently wrong
 4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
 7. From the palette with no mod, a pick of every source mod, one with no folder yet included, so a clone builds its mods back. Cites: commands.md, The entry point supplies what it knows
-8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, and what lifts that limit. The rest of the mod builds, and the refused plugin is left as it was.
+8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, and what lifts that limit. The step's other plugins compile, and the refused plugin is left as it was.
 9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Cites: Never silently wrong
 10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it.
 11. A patcher to be a source mod whose step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
@@ -197,6 +197,10 @@ As a user, I want:
 13. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; modlist-repository.md, The repository, story 3
 14. Build as a task, so my chain builds before it deploys or publishes. Cites: commands.md, A task is an entry point for a chain
 15. A build from uncommitted or unpushed changes to land, with a warning that a clone does not rebuild it. Cites: Respect the user; Never silently wrong
+16. A step to be a built-in step that decompiles, compiles, copies or packs, a task, or a Modbench script, a default one or one from the source folder, so what goes in the mod is only what my build file says. Cites: Respect the user; scripts.md, Default scripts
+17. A decompile step to replace plugin source without asking, sending what it replaces to the trash. Cites: commands.md, Confirm what destroys
+18. A failed step to stop its mod's build, so no step runs on what it left. Cites: Never silently wrong
+19. A script step to run its script with my window's Python, in a terminal, as a task Modbench makes and I never pick from Run Task. Cites: scripts.md, Running a Modbench script, stories 1–3
 
 ### Delete separator
 

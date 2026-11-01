@@ -235,7 +235,7 @@ The one file recording what a folder holds: the packages it is made from, each p
 Avoid: record (a plugin's unit of data), recipe, directives, build file (that builds a source mod's folder)
 
 # Build file
-The file in a source mod's repository that its build runs: the steps and the tools they run, and the archives it packs. Its author writes it.
+The file in a source mod's repository that its build runs: the steps that make the mod's folder. Its author writes it.
 
 Avoid: manifest (that records a folder)
 

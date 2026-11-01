@@ -12,42 +12,106 @@
       "description": "The steps the build runs, in order.",
       "type": "array",
       "items": { "$ref": "#/$defs/step" }
-    },
-    "archives": {
-      "description": "Each archive to pack, by its path in the mod's folder, with the paths of the loose files it packs.",
-      "type": "object",
-      "propertyNames": { "$ref": "manifest-1.schema.json#/$defs/path" },
-      "additionalProperties": {
-        "type": "array",
-        "items": { "$ref": "manifest-1.schema.json#/$defs/path" },
-        "uniqueItems": true
-      }
     }
   },
   "required": ["version"],
   "additionalProperties": false,
   "$defs": {
+    "paths": {
+      "type": "array",
+      "items": { "$ref": "manifest-1.schema.json#/$defs/path" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "args": {
+      "description": "The arguments the step hands what it runs.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "step": {
-      "type": "object",
-      "properties": {
-        "task": {
-          "description": "The label of the VS Code user task that runs the step.",
-          "type": "string",
-          "minLength": 1
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "decompile": { "description": "Each plugin to decompile into its plugin source, by its path in the source folder.", "$ref": "#/$defs/paths" }
+          },
+          "required": ["decompile"],
+          "additionalProperties": false
         },
-        "args": {
-          "description": "The arguments the step hands its task.",
-          "type": "array",
-          "items": { "type": "string" }
+        {
+          "type": "object",
+          "properties": {
+            "compile": { "description": "Each plugin to compile from its plugin source into the mod's folder, by its path in both.", "$ref": "#/$defs/paths" }
+          },
+          "required": ["compile"],
+          "additionalProperties": false
         },
-        "page": {
-          "description": "The page where the user gets the tool the task runs. Absent when the tool comes with the source folder.",
-          "type": "string",
-          "format": "uri"
+        {
+          "type": "object",
+          "properties": {
+            "copy": { "description": "Each file or folder to copy from the source folder into the mod's folder, by its path in both.", "$ref": "#/$defs/paths" }
+          },
+          "required": ["copy"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pack": {
+              "description": "Each archive to pack, by its path in the mod's folder, with the paths of the loose files it packs there.",
+              "type": "object",
+              "propertyNames": { "$ref": "manifest-1.schema.json#/$defs/path" },
+              "additionalProperties": { "$ref": "#/$defs/paths" },
+              "minProperties": 1
+            }
+          },
+          "required": ["pack"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task": {
+              "description": "The label of the VS Code user task that runs the step, in the mod's folder.",
+              "type": "string",
+              "minLength": 1
+            },
+            "args": { "$ref": "#/$defs/args" },
+            "page": {
+              "description": "The page where the user gets the tool the task runs. Absent when the tool comes with the source folder.",
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": ["task"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "script": {
+              "description": "The Modbench script the step runs, by its path in the source folder.",
+              "$ref": "manifest-1.schema.json#/$defs/path"
+            },
+            "args": { "$ref": "#/$defs/args" }
+          },
+          "required": ["script"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "defaultScript": {
+              "description": "The default Modbench script the step runs, by its name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "args": { "$ref": "#/$defs/args" }
+          },
+          "required": ["defaultScript"],
+          "additionalProperties": false
         }
-      },
-      "required": ["task"],
-      "additionalProperties": false
+      ]
     }
   }
 }
