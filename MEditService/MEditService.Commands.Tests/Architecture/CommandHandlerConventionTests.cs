@@ -20,7 +20,7 @@ public sealed class CommandHandlerConventionTests
         typeof(CreateRecordChanges),
         typeof(InitSourceModRefused),
         typeof(InitSourceModResult),
-        typeof(InitiatedMod),
+        typeof(InitializedMod),
         typeof(DecompileAndRepairRefusal),
         typeof(DecompileAndRepairRefused),
         typeof(DecompileAndRepairResult),

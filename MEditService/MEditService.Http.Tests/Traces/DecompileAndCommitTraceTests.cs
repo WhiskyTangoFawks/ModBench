@@ -76,6 +76,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         { "no mod", """{"mods": []}""" },
         { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
         { "a mod without a folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without commit", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
         { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"buildFile": "{}"}}]}""" },
         { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s"}}]}""" },
         { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },

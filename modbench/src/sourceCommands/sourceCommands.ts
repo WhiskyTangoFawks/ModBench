@@ -31,7 +31,7 @@ interface SourceCommandsDeps {
 export type InitProgress = Omit<InitSourceModProgress, 'phase'> & { phase?: InitSourceModProgress['phase'] | 'ReadingFiles' };
 
 /** What init source mod answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
-export type InitiatedSourceMod = InitSourceModOutcome & { readonly notes?: readonly string[] };
+export type InitializedSourceMod = InitSourceModOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
@@ -134,7 +134,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
      *  and mEdit makes the rest source mods. */
     initSourceMod: async (
       mods: readonly string[], { commit, onProgress }: { commit: boolean; onProgress?: (status: InitProgress) => void },
-    ): Promise<InitiatedSourceMod | WriteRefused> => {
+    ): Promise<InitializedSourceMod | WriteRefused> => {
       const made = new Map<string, MadeRepository>();
       const refused: ItemRefusal<string>[] = [];
       const sourceMods = await sourceModsNow();

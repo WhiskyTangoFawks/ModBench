@@ -141,11 +141,11 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 
 export type { PluginAddress };
 
-type InitiatedMod = components['schemas']['InitiatedMod'];
+type InitializedMod = components['schemas']['InitializedMod'];
 
 /** Init source mod's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
 export interface InitSourceModOutcome {
-  landed: readonly InitiatedMod[];
+  landed: readonly InitializedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 

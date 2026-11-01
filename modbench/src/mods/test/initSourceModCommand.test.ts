@@ -177,7 +177,7 @@ describe('modbench.mod.initSourceMod', () => {
     const commands = initSourceModCommands();
     commands.answers({
       landed: [modA([FIRST])],
-      refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }],
+      refused: [{ item: 'ModC', reason: 'ModC was not initialized.' }],
     });
     const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
     const mods = [modRow('ModA'), modRow('ModC')];
@@ -186,7 +186,7 @@ describe('modbench.mod.initSourceMod', () => {
 
     expect(commands.sent()).toEqual([['ModA', 'ModC']]);
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not init source mod for 1 of 2 mods.', detail: '"ModC" (ModC provides no plugin.)',
+      severity: 'error', message: 'Could not init source mod for 1 of 2 mods.', detail: '"ModC" (ModC was not initialized.)',
     }]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).toHaveBeenCalledOnce();

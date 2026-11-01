@@ -1290,10 +1290,10 @@ export interface components {
             mods: components["schemas"]["ModToInitSourceModRequest"][];
         };
         InitSourceModResult: {
-            applied: components["schemas"]["InitiatedMod"][];
+            applied: components["schemas"]["InitializedMod"][];
             refused: components["schemas"]["InitSourceModRefused"][];
         };
-        InitiatedMod: {
+        InitializedMod: {
             mod: string;
             plugins: components["schemas"]["PluginAddress"][];
         };
@@ -1367,7 +1367,7 @@ export interface components {
             name: string;
             modFolder: string;
             repository: components["schemas"]["NewRepositoryRequest"];
-            commit: boolean;
+            commit?: boolean | null;
         };
         ModlistProgress: {
             mod?: string | null;

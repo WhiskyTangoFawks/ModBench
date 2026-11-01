@@ -12,7 +12,6 @@ import { pluginRowName } from '../wire/pluginAddress';
 import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
 
 export interface InitSourceModDeps {
-  /** The Plugins view's message line, which the phase line goes on. */
   /** The message line of the view the gesture was fired from, which the phase line goes on. */
   progressIn: (view: string) => { say: (message: string | undefined) => void };
   instance: Pick<Instance, 'refresh'>;
@@ -24,7 +23,7 @@ export interface InitSourceModDeps {
   pluginsView: string;
 }
 
-type InitiatedSourceMod = GestureResult<InitSourceModOutcome['landed'][number], string>;
+type InitializedSourceMod = GestureResult<InitSourceModOutcome['landed'][number], string>;
 
 interface InitOptions { readonly commit: boolean }
 
@@ -41,7 +40,7 @@ async function pickWhetherToCommit(): Promise<boolean | undefined> {
 /** commands.md, `init source mod`: the mods of Mods rows, plugin rows, a column header, or the palette's
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
 export function registerInitSourceModCommand(deps: InitSourceModDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
-  const gesture: AgentGesture<unknown, InitGiven, InitiatedSourceMod, InitOptions> = {
+  const gesture: AgentGesture<unknown, InitGiven, InitializedSourceMod, InitOptions> = {
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const commit = targets.mods.length === 0 ? false : await pickWhetherToCommit();
@@ -56,11 +55,11 @@ export function registerInitSourceModCommand(deps: InitSourceModDeps, paletteSel
 
 async function initSourceMods(
   { progressIn, instance, commands, onCommitted }: InitSourceModDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
-): Promise<InitiatedSourceMod> {
+): Promise<InitializedSourceMod> {
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   const progress = progressIn(invokedFrom);
-  return runWritingGesture(invokedFrom, instance, async (): Promise<InitiatedSourceMod> => {
+  return runWritingGesture(invokedFrom, instance, async (): Promise<InitializedSourceMod> => {
     try {
       progress.say(initSourceModProgressMessage(firstMod, undefined));
       const result = await commands.initSourceMod(mods, {
@@ -78,7 +77,7 @@ async function initSourceMods(
 }
 
 function reportInitiated(
-  reporter: Reporter, result: InitiatedSourceMod, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
+  reporter: Reporter, result: InitializedSourceMod, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
 ): void {
   if (!result.applied) { reporter.report('error', result.refusal); return; }
   reportPartial(reporter, result.partial);

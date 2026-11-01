@@ -51,6 +51,8 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest("At least one mod is required.");
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.ModFolder) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
             return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
+        if (mods.Any(mod => mod.Commit is null))
+            return EndpointMapping.BadRequest(ModToInitSourceModRequest.LacksCommit);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
@@ -60,7 +62,7 @@ internal static class ModEndpoints
 
         return await EndpointMapping.Answered(
             "Init source mod", logger,
-            initSourceModHandler.InitSourceModAsync([.. mods.Select(mod => new ModToInitSourceMod(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), mod.Commit))]),
+            initSourceModHandler.InitSourceModAsync([.. mods.Select(mod => new ModToInitSourceMod(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), mod.Commit == true))]),
             EndpointMapping.Refusal);
     }
 
@@ -166,7 +168,10 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 internal sealed record InitSourceModRequest(IReadOnlyList<ModToInitSourceModRequest> Mods);
 
 /// <summary>A mod by name and folder, the repository its init source mod makes, and whether it commits.</summary>
-internal sealed record ModToInitSourceModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool Commit);
+internal sealed record ModToInitSourceModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool? Commit)
+{
+    internal const string LacksCommit = "A mod to init needs commit: true to commit what it tracks, or false to leave it uncommitted.";
+}
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
 /// assets by path, its build file's text, and its manifest's name and text.</summary>

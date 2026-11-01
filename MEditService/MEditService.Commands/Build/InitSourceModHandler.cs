@@ -42,7 +42,7 @@ public sealed class InitSourceModHandler
                 phase => _notifications.Publish(new InitSourceModProgressNotification(at, phase)), cancel),
             cancel);
         return decompiled.ToResult(
-            landed => new InitiatedMod(landed.Item, landed.Outcome),
+            landed => new InitializedMod(landed.Item, landed.Outcome),
             refused => new InitSourceModRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new InitSourceModResult(applied, refused));
     }
