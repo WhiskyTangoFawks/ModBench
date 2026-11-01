@@ -479,23 +479,19 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       expect(await filesIn(folder(UPGRADED))).toEqual(['.git/HEAD', '.gitignore', 'meta.ini', 'plugin-source/released.json']);
     });
 
-    it('sends the mod\'s metadata to the trash when the upgrade corrects its game name, and leaves it when it does not', async () => {
-      const upgrade = () => holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
+    it('keeps the mod\'s gameName, whatever the instance spells it, and trashes no metadata for it', async () => {
       const carried = await meta(UPGRADED);
 
-      await upgrade();
-      const replaced = { ...inTrash };
-      inTrash = {};
-      await upgrade();
+      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
 
-      expect([replaced['meta.ini'], carried.includes('gameName=Fallout4'), inTrash['meta.ini']]).toEqual([carried, true, undefined]);
+      expect([carried.includes('gameName=Fallout4'), await meta(UPGRADED), inTrash['meta.ini']]).toEqual([true, carried, undefined]);
     });
 
     it('keeps the meta the mod had, and never takes a meta the release ships', async () => {
       await holding(['meta.ini']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, trash);
 
       expect(await meta(UPGRADED)).toBe(
-        '[General]\r\ngameName=Fallout 4\r\nmodid=4598\r\nversion=2.1.5.0\r\ncategory="-1,"\r\ninstallationFile=Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z\r\n',
+        '[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\ncategory="-1,"\r\ninstallationFile=Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z\r\n',
       );
     });
 
