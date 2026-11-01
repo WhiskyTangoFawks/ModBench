@@ -187,9 +187,8 @@ async function submodulesWritten(
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
-/** Each mod's manifest from the mod as it is; a source mod's build records its own folder, and `sourceFolders` names the source mods whose
- *  source folder is recorded here, every one when `everyMod`. A mod the adapter cannot answer is refused, naming why. `everyMod`:
- *  a source mod that is gone loses its submodule entry. */
+/** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceFolders`, or every one when
+ *  `everyMod`; a source mod's own folder is its build's. A mod the adapter cannot answer is refused, naming why. */
 export async function updateManifest(
   deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
   sourceFolders: readonly string[] = [],

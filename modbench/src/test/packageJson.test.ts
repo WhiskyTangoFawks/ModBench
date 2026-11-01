@@ -1454,7 +1454,7 @@ describe('package.json update manifest\'s Explorer entry point (source.md, Menus
     const entries = present(pkg.contributes.menus['explorer/context'], "contributes.menus['explorer/context']").filter((e: MenuEntry) => e.command === 'modbench.source.updateManifest');
 
     expect(entries).toHaveLength(1);
-    const when = present(entries[0]).when;
+    const when = present(entries[0], 'the entry').when;
     expect([requires(when, 'resourceFilename =~ /\\.manifest\\.json$/'), requires(when, 'resourceDirname in modbench.source.sourceFolders')]).toEqual([true, true]);
   });
 });
