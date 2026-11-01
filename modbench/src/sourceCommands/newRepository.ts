@@ -1,5 +1,5 @@
 // commands.md, decompile and commit: a repository holding the mod's plugin source, a build file, and as its assets only the
-// files its installation file does not yield with their bytes (ADR-0016).
+// files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
 import { isRefused, type MEditClient, type NewRepository } from '../client';
