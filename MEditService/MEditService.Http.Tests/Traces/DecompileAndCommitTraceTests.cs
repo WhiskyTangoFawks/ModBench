@@ -74,15 +74,15 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     public static TheoryData<string, string> NotARequestToInit => new()
     {
         { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a folder", """{"mods": [{"name": "InitializedMod", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a folder", """{"mods": [{"name": "InitializedMod", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
         { "a mod without commit", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"buildFile": "{}"}}]}""" },
-        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
-        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
-        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
-        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"buildFile": "{}"}}]}""" },
+        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
+        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
+        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
+        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]
