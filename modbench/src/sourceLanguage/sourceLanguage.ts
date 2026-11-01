@@ -19,7 +19,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
-  instance: Pick<Instance, 'value' | 'subscribe'>;
+  instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
 }
@@ -123,7 +123,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   };
   const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
   const problems = sourceProblems(deps);
-  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, problems, registerBuildEntryPoint(deps));
+  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, problems, ...(deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : []));
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),
