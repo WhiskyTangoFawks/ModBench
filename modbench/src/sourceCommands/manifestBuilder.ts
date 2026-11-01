@@ -46,9 +46,12 @@ const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === 
 export const pagedFrom = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page'> | undefined): InstallationFile =>
   (downloaded?.page === undefined ? file : { ...file, page: downloaded.page });
 
+const isId = (id: number): boolean => Number.isInteger(id) && id >= 1;
+
 /** The downloaded file as a package, its host the one `nexusFileOf` reads from its page. */
 export const downloadedFileOf = (file: InstallationFile, nexusFileOf: (page: string) => NexusFile | undefined): DownloadedFile => {
-  const nexus = file.page === undefined ? undefined : nexusFileOf(file.page);
+  const named = file.page === undefined ? undefined : nexusFileOf(file.page);
+  const nexus = named !== undefined && isId(named.mod) && isId(named.file) ? named : undefined;
   return { file, package: { kind: 'installationFile', name: basename(file.path), size: file.size, hash: file.hash, ...nexus === undefined ? {} : { host: { nexus } } } };
 };
 
