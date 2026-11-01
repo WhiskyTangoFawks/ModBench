@@ -11,10 +11,7 @@ const registerCommand = vi.fn((command: string, handler: (...args: unknown[]) =>
   return { dispose: vi.fn() };
 });
 
-export const showQuickPick = vi.fn<
-  (items: readonly { label: string; description?: string }[], options?: unknown) =>
-    Promise<{ label: string; description?: string }[] | undefined>
->();
+export const showQuickPick = vi.fn<(items: readonly unknown[], options?: unknown) => Promise<unknown>>();
 
 export const createQuickPick = vi.fn();
 

@@ -24,11 +24,13 @@ const MODS = mkdtempSync(join(tmpdir(), 'decompile-and-commit-mods-'));
 for (const mod of ['ModA', 'ModB', 'ModC']) mkdirSync(join(MODS, mod));
 afterAll(() => { rmSync(MODS, { recursive: true, force: true }); });
 
+const picking = (picked: { commit: boolean } | undefined): void => { showQuickPick.mockResolvedValue(picked); };
+
 beforeEach(() => {
   handlers.clear();
   progressSteps.length = 0;
   vi.clearAllMocks();
-  showQuickPick.mockResolvedValue({ label: 'Commit to main', commit: true });
+  picking({ commit: true });
 });
 
 describe('modbench.mod.initSourceMod', () => {
@@ -50,7 +52,7 @@ describe('modbench.mod.initSourceMod', () => {
     const client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndCommit', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
-      commits.push(...mods.map((mod) => mod.commit ?? true));
+      commits.push(...mods.map((mod) => mod.commit));
       progressListeners.push(options?.onProgress);
       return Promise.resolve(answer);
     });
@@ -97,19 +99,19 @@ describe('modbench.mod.initSourceMod', () => {
   });
 
   it('offers not committing first, and hands mEdit the pick', async () => {
-    showQuickPick.mockResolvedValue({ label: 'Do not commit', commit: false });
+    picking({ commit: false });
     const commands = decompileAndCommitCommands();
     commands.answers({ landed: [modA([FIRST])], refused: [] });
     const { handler } = invokeDecompileAndCommit(commands);
 
     await handler(row(FIRST));
 
-    const [items] = showQuickPick.mock.calls[0] as [{ label: string; commit: boolean }[]];
-    expect([items.map((item) => item.commit), commands.commits()]).toEqual([[false, true], [false]]);
+    expect(showQuickPick.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ commit: false }), expect.objectContaining({ commit: true })]);
+    expect(commands.commits()).toEqual([false]);
   });
 
   it('inits nothing and writes nothing on Esc at the pick', async () => {
-    showQuickPick.mockResolvedValue(undefined);
+    picking(undefined);
     const commands = decompileAndCommitCommands();
     const { handler, onCommitted, reporter } = invokeDecompileAndCommit(commands);
 

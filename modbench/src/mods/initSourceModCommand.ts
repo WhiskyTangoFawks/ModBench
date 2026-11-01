@@ -25,7 +25,7 @@ export interface InitSourceModDeps {
 
 type InitiatedSourceMod = GestureResult<DecompileAndCommitOutcome['landed'][number], string>;
 
-export interface InitOptions { readonly commit: boolean }
+interface InitOptions { readonly commit: boolean }
 
 type InitGiven = ModsGiven & InitOptions;
 

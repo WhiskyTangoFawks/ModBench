@@ -57,9 +57,8 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
-    /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree, the
-    /// assets, build file, manifest and any repair, with the <paramref name="ignored"/> paths ignored. With
-    /// <paramref name="commit"/> false it commits nothing: the files stay working-tree changes, and a repair is not allowed.</summary>
+    /// <summary>A repository for a mod that has none: one commit, <c>Init &lt;mod&gt;</c>, of its plugins, assets, build
+    /// file and manifest, then any repair. Without <paramref name="commit"/>, no commit and no repair.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null, bool commit = true);

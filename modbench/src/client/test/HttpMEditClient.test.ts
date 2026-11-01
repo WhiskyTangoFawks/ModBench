@@ -175,7 +175,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 }
 
 const modToDecompileAndCommit = (name: string) => ({
-  name, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], buildFile: '{}' },
+  name, modFolder: `/instance/mods/${name}`, commit: true, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], buildFile: '{}' },
 });
 const modToBuild = (name: string) => ({
   name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, exclude: ['b.dds'], step: { pack: [{ path: `${name}.ba2`, files: ['a.dds'] }] },
@@ -250,8 +250,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
       path: '/records/compare', body: { copies } },
     { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModC')]),
-      answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
-      reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
+      answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'CommitFailed', message: 'ModC was not initialized.' }] },
+      reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC was not initialized.' }] },
       path: '/decompile-and-commit', body: { mods: [modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModC')] } },
     { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
       answer: {
