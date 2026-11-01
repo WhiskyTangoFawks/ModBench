@@ -13,6 +13,8 @@ export interface PluginFactsFeedDeps {
   client: PluginFactsClient;
   /** The plugins the tree shows; mEdit's facts about any other are dropped. */
   shownPlugins: () => readonly PluginAddress[];
+  /** The plugins the game loads, in load order: the order the sorting rules judge. */
+  activePlugins: () => readonly PluginAddress[];
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
@@ -21,6 +23,10 @@ export interface PluginFactsFeedDeps {
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
   /** The Plugin source unreadable status's other surface, the Problems panel. */
   publishSourceUnreadable: (warnings: readonly SourceUnreadableProblem[]) => void;
+  /** The Sorting errors status's other surface, the Problems panel. */
+  publishSortingErrors: (errors: readonly PluginProblem[]) => void;
+  /** The Sorting warnings status's other surface, the Problems panel. */
+  publishSortingWarnings: (warnings: readonly PluginProblem[]) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -91,8 +97,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.reconciled(plugins, failures);
+    this.facts.reconciled(plugins, failures, this.deps.activePlugins());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
+    this.deps.publishSortingErrors(this.facts.problems().sortingErrors);
+    this.deps.publishSortingWarnings(this.facts.problems().sortingWarnings);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
     this.changed.fire();

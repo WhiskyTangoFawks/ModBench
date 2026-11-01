@@ -21,7 +21,6 @@ public sealed class CompareGoldenTests(CompareGoldenFixture fixture) : IClassFix
         p.Masters,
         p.IsImmutable,
         p.Origin,
-        p.MissingMasters,
         p.InLoadOrder,
         p.HasMatchingRecords,
     };

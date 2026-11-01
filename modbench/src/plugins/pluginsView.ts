@@ -93,6 +93,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
   const failedToReadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-failed-to-read');
+  const sortingErrorDiagnostics = vscode.languages.createDiagnosticCollection('modbench-sorting-errors');
+  const sortingWarningDiagnostics = vscode.languages.createDiagnosticCollection('modbench-sorting-warnings');
   const sourceUnreadableDiagnostics = vscode.languages.createDiagnosticCollection('modbench-source-unreadable');
   const tree = new PluginsTreeProvider({
     instance,
@@ -105,6 +107,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
       (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),
     publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
+    publishSortingErrors: (errors) => publishPluginProblems(sortingErrorDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
+    publishSortingWarnings: (warnings) => publishPluginProblems(sortingWarningDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishSourceUnreadable: (warnings) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning,
       (plugin, { decompileRepairs }) => decompileLink(plugin, decompileRepairs)),
   });

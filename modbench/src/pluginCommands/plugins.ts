@@ -99,7 +99,7 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginFactsOf> {
     const copies = held.filter((plugin) => pluginKey(plugin.name) === pluginKey(name));
     const loaded = copies.length === 1 ? copies : copies.filter((copy) => copy.inLoadOrder);
     const [copy] = loaded;
-    return loaded.length === 1 && copy !== undefined ? { origin: copy.origin, masters: copy.masters, blueprint: copy.isBlueprint } : undefined;
+    return loaded.length === 1 && copy !== undefined ? { origin: copy.origin, masters: copy.masters, blueprint: copy.isBlueprint, master: copy.isMaster } : undefined;
   };
 }
 

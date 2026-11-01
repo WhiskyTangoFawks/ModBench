@@ -1,4 +1,5 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
+import { judge, type BrokenRule } from '../sortingRules/judge';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
@@ -12,7 +13,7 @@ export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 't
 
 export type SourceUnreadableProblem = PluginProblem & { decompileRepairs: boolean };
 
-type StatusKind = 'notRestored' | 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
+type StatusKind = 'notRestored' | 'failedToRead' | 'sortingErrors' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed' | 'sortingWarnings';
 
 export interface PluginStatus {
   kind: StatusKind;
@@ -44,7 +45,7 @@ export type Expansion = { kind: 'records' } | { kind: 'error'; message: string }
 // snapshot's index failed.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'sourceUnreadable', 'changedOutside', 'malformed']);
+const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'sourceUnreadable', 'changedOutside', 'malformed', 'sortingWarnings']);
 
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -53,8 +54,8 @@ interface PluginRead {
   compiledPlugin: boolean;
   sourceUnreadable: UnreadableSource | undefined;
   masters: readonly string[];
-  missingMasters?: string[];
-  lateMasters?: string[];
+  master: boolean;
+  blueprint: boolean;
   parseFailure: boolean;
 }
 
@@ -65,15 +66,13 @@ const notRestored = (mod: string | undefined): PluginStatus | undefined => mod =
 const failedToRead = (reason: string | undefined): PluginStatus | undefined => reason === undefined ? undefined
   : { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${reason}` };
 
-// "Missing" is the reference tool's word for a master that is not active, file present or not.
-const masterIssues = (missingMasters: readonly string[], lateMasters: readonly string[]): PluginStatus | undefined => {
-  const count = missingMasters.length + lateMasters.length;
-  if (count === 0) return undefined;
-  const lines = [
-    ...missingMasters.length === 0 ? [] : [`Missing masters: ${missingMasters.join(', ')}`],
-    ...lateMasters.length === 0 ? [] : [`Masters loading after it: ${lateMasters.join(', ')}`],
-  ];
-  return { kind: 'masterIssues', words: count === 1 ? '1 master issue' : `${count} master issues`, tooltipLine: lines.join('; ') };
+const sortingStatus = (kind: 'sortingErrors' | 'sortingWarnings', broken: readonly BrokenRule[]): PluginStatus | undefined => {
+  if (broken.length === 0) return undefined;
+  const [noun, label] = kind === 'sortingErrors' ? ['error', 'Error'] : ['warning', 'Warning'];
+  return {
+    kind, words: broken.length === 1 ? `1 ${noun}` : `${broken.length} ${noun}s`,
+    tooltipLine: broken.map(({ reason }) => `${label}: ${reason}`).join('\n'),
+  };
 };
 
 const unreadableRecords = (held: boolean): PluginStatus | undefined => !held ? undefined
@@ -107,6 +106,9 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
+  // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
+  private sorting = new ByPluginAddress<BrokenRule[]>();
+  private sortingNames: PluginAddress[] = [];
   private sourceUnreadableProblems: readonly SourceUnreadableProblem[] = [];
   private matches?: ByPluginAddress<boolean>;
   private diagnosisTexts = new ByPluginAddress<string[]>();
@@ -151,18 +153,19 @@ export class PluginFacts {
     this.indexFailure = undefined;
   }
 
-  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, and each
-   *  failure. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[]): void {
+  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
+   *  the active plugins in load order, which the sorting rules judge. */
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[]): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.clearOverride();
     this.refreshed(plugins);
+    this.judgeSorting(activeOrder);
   }
 
-  /** The facts alone, leaving which plugins are held as they are. No `missingMasters` means not
-   *  yet checked, so the last answer stays until one lands. */
+  /** The facts alone, leaving which plugins are held as they are and the sorting statuses as the
+   *  last reconcile judged them. */
   refreshed(plugins: readonly PluginMetadata[]): void {
     answered(this.factsRead);
     const reads = new ByPluginAddress<PluginRead>();
@@ -171,8 +174,7 @@ export class PluginFacts {
       reads.set(p, {
         readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
-        masters: p.masters, missingMasters: p.missingMasters ?? this.reads.get(p)?.missingMasters,
-        lateMasters: p.lateMasters ?? this.reads.get(p)?.lateMasters,
+        masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint,
       });
       matches.set(p, p.hasMatchingRecords);
     }
@@ -187,6 +189,29 @@ export class PluginFacts {
       `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
     ] as const]));
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
+  }
+
+  // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
+  private judgeSorting(activeOrder: readonly PluginAddress[]): void {
+    const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
+    const broken = judge(activeOrder.map(({ name }) => name), (filename) => {
+      const address = addressOf.get(filename.toLowerCase());
+      const read = address && this.reads.get(address);
+      return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
+    });
+    this.sorting = new ByPluginAddress<BrokenRule[]>();
+    this.sortingNames = [];
+    for (const rule of broken) {
+      for (const { origin, filename } of rule.plugins) {
+        const address = { name: filename, origin };
+        if (!this.sorting.has(address)) this.sortingNames.push(address);
+        this.sorting.append(address, rule);
+      }
+    }
+  }
+
+  private brokenAt(address: PluginAddress, level: BrokenRule['level']): BrokenRule[] {
+    return (this.sorting.get(address) ?? []).filter((rule) => rule.level === level);
   }
 
   /** mEdit's facts about each plugin could not be read: a row not held expands to the error row
@@ -284,11 +309,12 @@ export class PluginFacts {
     return [
       notRestored(this.notRestoredFrom.get(address)),
       failedToRead(this.loadFailures.get(address)?.reason),
-      masterIssues(read?.missingMasters ?? [], read?.lateMasters ?? []),
+      sortingStatus('sortingErrors', this.brokenAt(address, 'error')),
       unreadableRecords(read?.parseFailure === true),
       sourceUnreadable(read?.sourceUnreadable),
       changedOutside(this.changed.has(address)),
       malformed(this.diagnosisTexts.get(address) ?? []),
+      sortingStatus('sortingWarnings', this.brokenAt(address, 'warning')),
     ].filter((s): s is PluginStatus => s !== undefined);
   }
 
@@ -341,14 +367,21 @@ export class PluginFacts {
     return { editable: read?.readOnly === false };
   }
 
+  private sortingProblems(level: BrokenRule['level']): PluginProblem[] {
+    return this.sortingNames.flatMap((address) => this.brokenAt(address, level)
+      .map(({ reason }) => ({ plugin: address.name, origin: address.origin, text: reason })));
+  }
+
   /** What the Problems panel shows, read from the same answers as the rows' statuses. */
   problems(): {
     malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginProblem[]; failedToRead: readonly PluginProblem[];
-    sourceUnreadable: readonly SourceUnreadableProblem[];
+    sourceUnreadable: readonly SourceUnreadableProblem[]; sortingErrors: readonly PluginProblem[]; sortingWarnings: readonly PluginProblem[];
   } {
     return {
       malformed: this.diagnosisReports,
       sourceUnreadable: this.sourceUnreadableProblems,
+      sortingErrors: this.sortingProblems('error'),
+      sortingWarnings: this.sortingProblems('warning'),
       failedToRead: this.loadFailures.values().flatMap(({ name, origin, diagnosis }) =>
         diagnosis == null ? [] : [{ plugin: name, origin, text: diagnosis }]),
       changedOutside: [...this.changedByMod.values()].flat()

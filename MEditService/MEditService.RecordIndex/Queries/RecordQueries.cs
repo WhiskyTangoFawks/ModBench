@@ -39,20 +39,16 @@ internal sealed class RecordQueries(
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var snapshot = _loadOrder.Require();
         var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        var masterIssues = Indexed
-            ? MasterResolution.Classify(snapshot, opened)
-            : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
         var derivations = reads.GetDerivations();
         PluginResponse ToResponse(RegisteredPlugin plugin, bool hasMatchingRecords)
         {
             DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
-            var problems = masterIssues?.GetValueOrDefault(plugin.Key, MasterProblems.None);
             var content = opened[plugin.Key];
             var loadOrderIndex = snapshot.LoadOrderIndex(plugin.Key);
             return new(plugin.Name, plugin.Path, loadOrderIndex, content.IsLight, content.IsMaster, content.IsBlueprint,
                 content.Masters, IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, plugin.Origin,
-                problems?.Missing, problems?.Late, InLoadOrder: loadOrderIndex is not null, hasMatchingRecords,
+                InLoadOrder: loadOrderIndex is not null, hasMatchingRecords,
                 IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
                 HasParseFailure: parseFailures.Contains(plugin.Key),
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,

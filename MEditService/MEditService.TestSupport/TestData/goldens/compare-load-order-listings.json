@@ -139,7 +139,6 @@
       "IsMaster": true,
       "LoadOrderIndex": 0,
       "Masters": [],
-      "MissingMasters": [],
       "Name": "Base.esm",
       "Origin": "Data/"
     },
@@ -153,7 +152,6 @@
       "Masters": [
         "Base.esm"
       ],
-      "MissingMasters": [],
       "Name": "Mid.esp",
       "Origin": "Data/"
     },
@@ -167,7 +165,6 @@
       "Masters": [
         "Base.esm"
       ],
-      "MissingMasters": [],
       "Name": "Top.esp",
       "Origin": "Data/"
     }

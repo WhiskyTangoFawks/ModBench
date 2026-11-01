@@ -40,24 +40,28 @@ function clientFindingNoDefects(): InMemoryMEditClient {
 
 interface FeedOptions {
   readonly shownPlugins?: () => readonly PluginAddress[];
+  readonly activePlugins?: () => readonly PluginAddress[];
   readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
 }
 
-function feedOver({ shownPlugins = () => [A], publishDiagnoses }: FeedOptions = {}) {
+function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses }: FeedOptions = {}) {
   const client = clientFindingNoDefects();
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
+  const sortingErrors = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const feed = new PluginFactsFeed({
-    client, shownPlugins,
+    client, shownPlugins, activePlugins,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,
     publishChangedOutside: changedOutside.push,
     publishFailedToRead: () => undefined,
     publishSourceUnreadable: sourceUnreadable.push,
+    publishSortingErrors: sortingErrors.push,
+    publishSortingWarnings: () => undefined,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
-  return { feed, client, diagnoses, changedOutside, sourceUnreadable, changes };
+  return { feed, client, diagnoses, changedOutside, sourceUnreadable, sortingErrors, changes };
 }
 
 async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
@@ -86,6 +90,17 @@ describe('PluginFactsFeed', () => {
     expect(compiledPluginFlag(feed)).toBe(true);
     expect(feed.rows.contextFlags({ name: 'Unshown.esp', origin: 'SomeMod' })).toEqual([]);
     expect(changes).toHaveBeenCalled();
+  });
+
+  it('judges the active order at a reconcile and publishes the broken rules to the Problems panel', async () => {
+    const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A] });
+    client.setQueryAnswer('getPlugins', [held({ masters: ['Ghost.esm'] })]);
+
+    await feed.reconciled([]);
+
+    const text = '"Ghost.esm" is a master of "A.esp", and is missing or not active.';
+    expect(sortingErrors.items).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod', text }]]);
+    expect(feed.rows.description(A)).toBe('1 error');
   });
 
   it('names an unreadable plugin list on the rows and the message line, and answers undefined', async () => {
