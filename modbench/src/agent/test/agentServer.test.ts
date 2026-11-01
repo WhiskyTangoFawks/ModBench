@@ -368,8 +368,41 @@ describe('the agent server, given an instance value', () => {
       const { client } = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
-        { name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], otherBytes: ['c.nif'], noHost: [], packagesLacking: [], packages: [] },
+        { mods: ['Big Rocks'], differing: ['a.nif'], notInPackage: ['b.nif'], otherBytes: ['c.nif'] },
       ]);
+    });
+
+    it('groups the mods of one status, leaving out each empty member', async () => {
+      statusRead.answer = [status('Big Rocks', { noManifest: true }), status('InAnotherProfile', { noManifest: true })];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'], noManifest: true }]);
+    });
+
+    it('groups mods that match their manifests whatever their manifest file and package', async () => {
+      const lone = (name: string) => ({ kind: 'installationFile' as const, name, size: 1, hash: 'h' });
+      statusRead.answer = [
+        status('Big Rocks', { manifestFile: '/i/mods/Big Rocks/Big Rocks.manifest.json', packages: [lone('a.7z')] }),
+        status('InAnotherProfile', { manifestFile: '/i/mods/InAnotherProfile/InAnotherProfile.manifest.json', packages: [lone('b.7z')] }),
+      ];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'] }]);
+    });
+
+    it('leaves out the packages of a mod made from several, which list_problems gives as a note', async () => {
+      const packages = [{ kind: 'installationFile' as const, name: 'a.7z', size: 1, hash: 'h' }, { kind: 'gameFolder' as const }];
+      statusRead.answer = [status('Big Rocks', { packages })];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'] }]);
+    });
+
+    it('answers every member ModStatus holds but the ones it leaves out', async () => {
+      statusRead.answer = [{ ...status('Big Rocks'), addedLater: ['x.nif'] } as ModStatus];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], addedLater: ['x.nif'] }]);
     });
 
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
