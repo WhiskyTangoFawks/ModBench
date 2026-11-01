@@ -73,8 +73,8 @@
             ]
           },
           {
-            "id": "decompile",
-            "title": "Decompile a mod",
+            "id": "initSourceMod",
+            "title": "Init a source mod",
             "description": "Init Source Mod puts a mod under git, in a repository of its own in source/, with each plugin as plugin source: one JSON file for each record. Right-click a mod that has no source.\n[Show the Mods view](command:modbench.modList.focus)",
             "media": {
               "markdown": "walkthrough/getting-started.md"

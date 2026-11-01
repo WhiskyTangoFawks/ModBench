@@ -24,8 +24,9 @@ public sealed class SourceRepositoryUncommittedInitTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void TheIndex_HoldsWhatAnInitTracks_AndNothingIsCommitted()
+    public void TheIndex_HoldsWhatAnInitTracks_AndNothingIsCommitted_YetTheModIsASourceMod()
     {
+        Assert.True(TestAdapters.Source().IsSourceMod(_modFolder));
         Assert.Equal(
             [".gitignore", "build.json", Was, "textures/a.dds"],
             Git("ls-files").Split('\n', StringSplitOptions.RemoveEmptyEntries));
@@ -74,6 +75,15 @@ public sealed class SourceRepositoryUncommittedInitTests : IDisposable
         Assert.Equal(
             [".gitignore", "build.json", Was, "textures/a.dds"],
             Git("ls-files").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Fact]
+    public void ARepositoryWhoseInitMarkIsInAnotherSection_IsNotASourceMod()
+    {
+        var config = Path.Combine(_modFolder, ".git", "config");
+        System.IO.File.WriteAllText(config, System.IO.File.ReadAllText(config).Replace("[medit]", "[other]", StringComparison.Ordinal));
+
+        Assert.False(TestAdapters.Source().IsSourceMod(_modFolder));
     }
 
     private ISourceRepository Repository => TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);

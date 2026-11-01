@@ -445,7 +445,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     });
     const trashed: string[] = [];
     const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
-    expect(await commands.initSourceMod(['Mod'])).toMatchObject({ refused: [] });
+    expect(await commands.initSourceMod(['Mod'], { commit: true })).toMatchObject({ refused: [] });
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
     const restoreSourceFolder = async (): Promise<string | undefined> => {
       const folder = join(root, 'mods', 'Mod');
@@ -532,7 +532,7 @@ describe('init source mod over an instance on disk', () => {
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
     const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
-    return { client, initSourceMod: () => commands.initSourceMod(['Mod']) };
+    return { client, initSourceMod: () => commands.initSourceMod(['Mod'], { commit: true }) };
   }
 
   it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
@@ -590,7 +590,7 @@ describe('init source mod of a mod several downloaded files yield, over an insta
     });
     const adapter = adapterOver(root, { installationFileReader: readerOfEachFile });
     const noting = { ...adapter, downloadedFilesHashed: async () => ({ ...await adapter.downloadedFilesHashed(), notes }) };
-    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).initSourceMod(['Multi']);
+    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).initSourceMod(['Multi'], { commit: true });
     const repository = handed[0]?.repository;
     const manifest = readManifest(repository?.manifest ?? '');
     assert('manifest' in manifest);

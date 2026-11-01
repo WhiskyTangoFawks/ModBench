@@ -13,7 +13,7 @@ namespace MEditService.Commands.Build;
 internal sealed record RepairedInInit(RegisteredPlugin Plugin, IReadOnlyList<TreeFile> Baseline, string OriginalSha256, TreeCommit Repaired);
 
 /// <summary>Init source mod's init of a mod's repository, which decompile and repair makes too: each plugin through
-/// the round-trip gate, the assets and its build file (ADR-0016), in one commit, or nothing.</summary>
+/// the round-trip gate, the assets and its build file (ADR-0016), all written, or nothing.</summary>
 internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderRepository modFolders, PluginDecompiler decompiler)
 {
     /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's plugins but
@@ -100,6 +100,6 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
                 sourceFolder, verified.Count, verified.Sum(v => v.Tree.Count), assets.Count);
         }
 
-        return source.Init(sourceFolder, buildFile, verified, assets, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null, manifest, ignored, commit);
+        return source.Init(sourceFolder, buildFile, verified, assets, commit, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null, manifest, ignored);
     }
 }

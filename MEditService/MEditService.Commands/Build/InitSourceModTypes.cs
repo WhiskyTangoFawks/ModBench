@@ -4,7 +4,7 @@ namespace MEditService.Commands.Build;
 
 /// <summary>A mod to init source mod, by name and folder, and the repository made for it. Without
 /// <paramref name="Commit"/> the repository holds its files as working-tree changes.</summary>
-public sealed record ModToInitSourceMod(string Name, string ModFolder, NewRepository Repository, bool Commit = true);
+public sealed record ModToInitSourceMod(string Name, string ModFolder, NewRepository Repository, bool Commit);
 
 /// <summary>Why init source mod refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>

@@ -72,14 +72,15 @@ describe('modbench.mod.initSourceMod', () => {
     paletteSelection: () => readonly unknown[] = () => [],
   ) {
     const said: (string | undefined)[] = [];
-    const progress = { say: (message: string | undefined) => said.push(message) };
+    const saidInMods: (string | undefined)[] = [];
+    const progressIn = (view: string) => ({ say: (message: string | undefined) => (view === 'modbench.modList' ? saidInMods : said).push(message) });
     const reporter = recordingReporter();
     registerInitSourceModCommand({
-      progress, instance: instanceThatReads, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
+      progressIn, instance: instanceThatReads, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.initSourceMod'), 'the init source mod command registerInitSourceModCommand registers'),
-      onCommitted, reporter, said,
+      onCommitted, reporter, said, saidInMods,
     };
   }
 
@@ -191,7 +192,7 @@ describe('modbench.mod.initSourceMod', () => {
     expect(onCommitted).toHaveBeenCalledOnce();
   });
 
-  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and decompiles and commits the rest', async () => {
+  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and inits the rest', async () => {
     const commands = initSourceModCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
     const { handler, onCommitted, reporter } = invokeInitSourceMod(commands);
@@ -233,10 +234,20 @@ describe('modbench.mod.initSourceMod', () => {
     expect(onCommitted).not.toHaveBeenCalled();
   });
 
+  it('says the mod and the phase on the message line of the view the gesture was fired from', async () => {
+    const commands = initSourceModCommands();
+    commands.answers({ landed: [modA([FIRST])], refused: [] });
+    const { handler, said, saidInMods } = invokeInitSourceMod(commands);
+
+    await handler(modRow('ModA'));
+
+    expect([said, saidInMods.at(0)]).toEqual([[], 'Initializing source mod "ModA"…']);
+  });
+
   it('names the mod it is about to init source mod before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
     const commands = initSourceModCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
-    const { handler, said } = invokeInitSourceMod(commands);
+    const { handler, saidInMods: said } = invokeInitSourceMod(commands);
     const mods = [modRow('ModA'), modRow('ModB')];
 
     await handler(mods[0], mods);
@@ -254,7 +265,7 @@ describe('modbench.mod.initSourceMod', () => {
     const calling = (...mods: string[]) => callingWith({ commit: true }, ...mods);
     const callingWith = (options: { commit: boolean }, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
 
-    it('decompiles and commits the mods given, never the selection, reporting nothing, and answers the outcome', async () => {
+    it('inits the mods given, never the selection, reporting nothing, and answers the outcome', async () => {
       const commands = initSourceModCommands();
       const outcome = { landed: [modB([OTHER])], refused: [{ item: 'ModC', reason: 'its name gives it no source folder' }] };
       commands.answers(outcome);

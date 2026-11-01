@@ -20,7 +20,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("meshes/a.nif"), Asset("readme.txt")]);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("meshes/a.nif"), Asset("readme.txt")], commit: true);
 
         Assert.Equal(
             [".gitignore", "build.json", "meshes/a.nif", "plugin-source/Test.esp/npc_/Test.esp/000001.json", "readme.txt"],
@@ -31,7 +31,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     public void AFileLaterPutBesideTheAssets_IsIgnored_AndOneLaterPutInTheFolderOfAnAssetIsTracked()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("textures/a.dds")]);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("textures/a.dds")], commit: true);
         File.WriteAllText(Path.Combine(sourceFolder, "Test.esp"), "a stray build output");
         File.WriteAllText(Path.Combine(sourceFolder, "textures", "new.dds"), "a new asset");
 
@@ -45,7 +45,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     public void TheBuildFile_IsTracked_AndOneOutsideTheRootIsNot()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [], commit: true);
 
         Assert.False(Ignored(sourceFolder, "build.json"));
         Assert.True(Ignored(sourceFolder, "docs/build.json"));
@@ -55,7 +55,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     public void ATopLevelFolderThatMerelyEndsWithPluginSource_StaysIgnored_ForThePatternIsNotASuffixMatch()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], []);
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [], commit: true);
         Directory.CreateDirectory(Path.Combine(sourceFolder, "My-plugin-source"));
         File.WriteAllText(Path.Combine(sourceFolder, "My-plugin-source", "notes.txt"), "Notes");
 
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryInitGitignoreTests
         File.WriteAllText(Path.Combine(sourceFolder, "assets.nif"), "a file a package yields");
 
         TestAdapters.Source().Init(
-            sourceFolder, SourceInits.BuildFile, [Plugin], [], null, new RootFile("Mod.manifest.json", "{}"u8.ToArray()));
+            sourceFolder, SourceInits.BuildFile, [Plugin], [], true, null, new RootFile("Mod.manifest.json", "{}"u8.ToArray()));
 
         Assert.Equal(
             [".gitignore", "Mod.manifest.json", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
@@ -82,7 +82,7 @@ public sealed class SourceRepositoryInitGitignoreTests
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
         TestAdapters.Source().Init(
-            sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("textures/a.dds")], null,
+            sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("textures/a.dds")], true, null,
             new RootFile("Mod.manifest.json", "{}"u8.ToArray()), ["textures/b [1].dds"]);
 
         Assert.True(Ignored(sourceFolder, "textures/b [1].dds"));
@@ -95,7 +95,7 @@ public sealed class SourceRepositoryInitGitignoreTests
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
         const string Name = "Mod [Patch] #1!.manifest.json";
 
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [], null, new RootFile(Name, "{}"u8.ToArray()));
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [], true, null, new RootFile(Name, "{}"u8.ToArray()));
 
         Assert.Contains(Name, CommittedPaths(sourceFolder));
     }

@@ -13,7 +13,8 @@ import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGesture
 
 export interface InitSourceModDeps {
   /** The Plugins view's message line, which the phase line goes on. */
-  progress: { say: (message: string | undefined) => void };
+  /** The message line of the view the gesture was fired from, which the phase line goes on. */
+  progressIn: (view: string) => { say: (message: string | undefined) => void };
   instance: Pick<Instance, 'refresh'>;
   commands: Pick<SourceCommands, 'initSourceMod'>;
   reporter: Reporter;
@@ -54,10 +55,11 @@ export function registerInitSourceModCommand(deps: InitSourceModDeps, paletteSel
 }
 
 async function initSourceMods(
-  { progress, instance, commands, onCommitted }: InitSourceModDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
+  { progressIn, instance, commands, onCommitted }: InitSourceModDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
 ): Promise<InitiatedSourceMod> {
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
+  const progress = progressIn(invokedFrom);
   return runWritingGesture(invokedFrom, instance, async (): Promise<InitiatedSourceMod> => {
     try {
       progress.say(initSourceModProgressMessage(firstMod, undefined));

@@ -35,7 +35,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         [
             new FileToCopy("textures/a.dds", () => new MemoryStream("a"u8.ToArray())),
             new FileToCopy("textures/held.dds", () => throw new IOException("textures/held.dds is held by another process")),
-        ]);
+        ], commit: true);
 
         Assert.Contains("textures/held.dds is held by another process", failure.Require().Reason, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsSourceMod(_modFolder));
@@ -52,7 +52,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         [
             new FileToCopy("a.txt", () => new MemoryStream("ours"u8.ToArray())),
             new FileToCopy("b.txt", () => throw new IOException("b.txt is held by another process")),
-        ]);
+        ], commit: true);
 
         Assert.Equal("theirs", File.ReadAllText(existing));
     }

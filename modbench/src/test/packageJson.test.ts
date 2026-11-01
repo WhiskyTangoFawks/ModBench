@@ -237,8 +237,8 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
     ]);
   });
 
-  it('ticks the decompile step when a source mod exists (story 3)', () => {
-    expect(steps.find(({ id }) => id === 'decompile')?.completionEvents).toEqual([`onContext:${ANY_SOURCE_MOD_KEY} == true`]);
+  it('ticks the init source mod step when a source mod exists (story 3)', () => {
+    expect(steps.find(({ id }) => id === 'initSourceMod')?.completionEvents).toEqual([`onContext:${ANY_SOURCE_MOD_KEY} == true`]);
   });
 
   it('links each step only to commands that exist', () => {

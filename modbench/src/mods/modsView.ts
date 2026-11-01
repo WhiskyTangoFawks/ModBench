@@ -48,9 +48,9 @@ interface SourceGestureDeps {
   commands: SourceCommands;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
-  /** The Plugins view's message line, where init source mod says its phase. */
+  /** The Plugins view's message line, where init source mod says its phase when fired from there. */
   say: (message: string | undefined) => void;
-  /** Registers the source mods' repositories once a init source mod landed. */
+  /** Registers the source mods' repositories once an init source mod landed. */
   registerRepositories: () => Promise<void>;
 }
 
@@ -113,7 +113,8 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     showCollapseAll: true,
     dragAndDropController: provider,
   });
-  const viewMessage = () => messageLine(provider.viewMessage(), modSync.message(), statusMessage());
+  let phaseMessage: string | undefined;
+  const viewMessage = () => messageLine(provider.viewMessage(), phaseMessage, modSync.message(), statusMessage());
   const nameFilter = registerNameFilter({
     view,
     object: 'modbench.mod',
@@ -127,6 +128,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     onRowsChanged: provider.onDidChangeTreeData,
     onViewMessageChanged: (listener) => joinSyncMessages(modSync, statuses).onMessageChanged(listener),
   });
+  const sayPhase = (message: string | undefined) => { phaseMessage = message; nameFilter.refresh(); };
   const showCount = () => nameFilter.setBaseDescription(provider.description());
   showCount();
   const showBadge = () => { view.badge = provider.badge(); };
@@ -163,7 +165,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
     }),
-    ...registerSourceGestures(deps, provider, sourceGestureRows),
+    ...registerSourceGestures(deps, provider, sourceGestureRows, sayPhase),
     ...registerManifestGestures({ ...deps.manifestGestures, focusedView, instance, reporter: reporterFor('modlist') }),
     ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
@@ -203,6 +205,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
 
 function registerSourceGestures(
   { instance, reporterFor, sourceGestures }: ModsViewDeps, provider: ModListProvider, rows: () => readonly unknown[],
+  sayInMods: (message: string | undefined) => void,
 ): vscode.Disposable[] {
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
@@ -211,7 +214,7 @@ function registerSourceGestures(
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
     registerInitSourceModCommand({
-      progress: { say }, instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories,
+      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories,
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({

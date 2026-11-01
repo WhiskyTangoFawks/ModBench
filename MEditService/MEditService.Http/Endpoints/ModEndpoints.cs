@@ -32,7 +32,7 @@ internal static class ModEndpoints
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, in one commit. " +
+                "plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed to main when asked. " +
                 "A mod lands or is refused whole. Progress is the init-source-mod-progress notification.")
             .Produces<InitSourceModResult>()
             .ProducesProblem(400)
@@ -166,7 +166,7 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 internal sealed record InitSourceModRequest(IReadOnlyList<ModToInitSourceModRequest> Mods);
 
 /// <summary>A mod by name and folder, the repository its init source mod makes, and whether it commits.</summary>
-internal sealed record ModToInitSourceModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool Commit = true);
+internal sealed record ModToInitSourceModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool Commit);
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
 /// assets by path, its build file's text, and its manifest's name and text.</summary>

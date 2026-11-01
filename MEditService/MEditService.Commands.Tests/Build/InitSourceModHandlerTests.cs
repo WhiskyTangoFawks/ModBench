@@ -75,7 +75,7 @@ public sealed class InitSourceModHandlerTests : IDisposable
         File.WriteAllText(Path.Combine(settings, "Settings.ini"), "[General]");
         var sourceFolder = Path.Combine(_instanceRoot, "source", "Settings");
 
-        var result = await InitWith(new ModToInitSourceMod("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile)));
+        var result = await InitWith(new ModToInitSourceMod("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile), Commit: true));
 
         Assert.Empty(Assert.Single(result.Applied).Plugins);
         Assert.Equal("[General]", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "main:Settings.ini"));
@@ -127,7 +127,7 @@ public sealed class InitSourceModHandlerTests : IDisposable
     }
 
     private Task<InitSourceModResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
-        InitWith(new ModToInitSourceMod(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile))));
+        InitWith(new ModToInitSourceMod(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile)), Commit: true));
 
     private async Task<InitSourceModResult> InitWith(ModToInitSourceMod mod)
     {

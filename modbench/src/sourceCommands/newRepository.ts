@@ -62,7 +62,7 @@ interface ModRead {
   readonly held: Manifest | undefined;
 }
 
-// plugins.md, Init source mod, story 5: a mod whose files cannot be read whole is refused, naming why.
+// A mod whose files cannot be read whole is refused, naming why.
 async function modRead(adapter: Adapter, mod: string, game: GameToHand): Promise<ModRead | { readonly refusal: string }> {
   const sourceFolder = adapter.sourceFolder(mod);
   if (sourceFolder === undefined) return { refusal: 'its name gives it no source folder' };

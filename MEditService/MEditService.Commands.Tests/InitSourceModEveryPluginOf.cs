@@ -27,19 +27,19 @@ internal static class InitSourceModEveryPluginOf
         answer.Holds(out var result, out var whole) ? [.. result.Refused.Select(r => r.Message)] : [whole.Message];
 
     /// <summary>The answer for a selection of one mod holding one plugin.</summary>
-    internal static PluginDecompiledAndCommitted Only(this Answer<InitSourceModResult, SelectionRefusal<InitSourceModRefusal>> answer) =>
+    internal static PluginInitiated Only(this Answer<InitSourceModResult, SelectionRefusal<InitSourceModRefusal>> answer) =>
         !answer.Holds(out var result, out var whole)
-            ? new PluginDecompiledAndCommitted(false, whole.Refusal, whole.Message)
+            ? new PluginInitiated(false, whole.Refusal, whole.Message)
             : result switch
             {
-                { Applied: [{ Plugins.Count: 1 }], Refused.Count: 0 } => new PluginDecompiledAndCommitted(true, InitSourceModRefusal.None, ""),
-                { Applied.Count: 0, Refused: [var refused] } => new PluginDecompiledAndCommitted(false, refused.Refusal, refused.Message),
+                { Applied: [{ Plugins.Count: 1 }], Refused.Count: 0 } => new PluginInitiated(true, InitSourceModRefusal.None, ""),
+                { Applied.Count: 0, Refused: [var refused] } => new PluginInitiated(false, refused.Refusal, refused.Message),
                 _ => throw new InvalidOperationException(
                     $"Expected one plugin's answer, got {result.Applied.Count} landed and {result.Refused.Count} refused."),
             };
 }
 
-internal sealed record PluginDecompiledAndCommitted(bool Applied, InitSourceModRefusal Refusal, string Message);
+internal sealed record PluginInitiated(bool Applied, InitSourceModRefusal Refusal, string Message);
 
 /// <summary>Mods to init as the extension hands a mod with no file of the mod manager's.</summary>
 internal static class ToInitSourceMod
@@ -47,7 +47,7 @@ internal static class ToInitSourceMod
     /// <summary>Each mod with the source folder the load order's provider names for it, or its own name when none
     /// does.</summary>
     internal static IReadOnlyList<ModToInitSourceMod> In(LoadOrderSnapshot? loadOrder, params string[] mods) =>
-        [.. mods.Select(mod => new ModToInitSourceMod(mod, ProviderOf(loadOrder, mod)?.Folder ?? mod, new NewRepository(SourceFolderOf(loadOrder, mod), [], SourceInits.BuildFile)))];
+        [.. mods.Select(mod => new ModToInitSourceMod(mod, ProviderOf(loadOrder, mod)?.Folder ?? mod, new NewRepository(SourceFolderOf(loadOrder, mod), [], SourceInits.BuildFile), Commit: true))];
 
     private static PluginProvider.FromMod? ProviderOf(LoadOrderSnapshot? loadOrder, string mod) =>
         loadOrder?.Plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>()

@@ -17,7 +17,7 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     internal static bool HoldsRepository(string sourceFolder)
     {
         var gitDir = GitDirOf(sourceFolder);
-        return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || HoldsUncommittedInit(gitDir));
+        return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || InitFinished(gitDir));
     }
 
     internal const string InitMarkSection = "medit";
@@ -43,11 +43,19 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), sourceFolder) : dotGit;
     }
 
-    // The mark says "pending" until init finishes, so a crashed init's half-made repository is not mistaken for a made one.
-    private static bool HoldsUncommittedInit(string gitDir)
+    // Whether Modbench's init finished here, with a commit or without. Its mark says "pending" until then, so a crashed
+    // init's half-made repository is not mistaken for a made one.
+    private static bool InitFinished(string gitDir)
     {
         var config = Path.Combine(gitDir, "config");
-        return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim().Replace(" ", "") == $"{InitMarkKey}={InitDone}");
+        if (!File.Exists(config)) return false;
+        var inMark = false;
+        foreach (var line in File.ReadLines(config).Select(line => line.Trim()))
+        {
+            if (line.StartsWith('[')) inMark = line == $"[{InitMarkSection}]";
+            else if (inMark && line.Replace(" ", "") == $"{InitMarkKey}={InitDone}") return true;
+        }
+        return false;
     }
 
     private static bool IsMarkedByInit(string gitDir)
@@ -59,16 +67,14 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     // Read off the ref store's files, not by running git: every read of a compiled plugin asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
     private static bool HasMainBranch(string gitDir) =>
-        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
+        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedRefs(gitDir).Contains("refs/heads/main");
 
-    private static HashSet<string> PackedBranches(string gitDir)
+    private static HashSet<string> PackedRefs(string gitDir)
     {
-        const string prefix = " refs/heads/";
         var packedRefs = Path.Combine(gitDir, "packed-refs");
-        if (!File.Exists(packedRefs)) return [];
-        return [.. File.ReadLines(packedRefs)
-            .Select(line => line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0 ? line[(at + prefix.Length)..] : null)
-            .OfType<string>()];
+        return File.Exists(packedRefs)
+            ? [.. File.ReadLines(packedRefs).Select(line => line.IndexOf(' ', StringComparison.Ordinal) is var at and >= 0 ? line[(at + 1)..] : null).OfType<string>()]
+            : [];
     }
 
     internal string GitDirectory => _gitDir;
@@ -88,7 +94,16 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _sourceFolder, out stdout, args);
 
     /// <summary>The commit at HEAD, or null before the first commit of an init that committed nothing.</summary>
-    internal string? HeadCommit() => TryRun(out var head, "rev-parse", "--verify", "--quiet", "HEAD") ? head.Trim() : null;
+    internal string? HeadCommit()
+    {
+        if (TryRun(out var head, "rev-parse", "--verify", "--quiet", "HEAD")) return head.Trim();
+        if (TryRun(out var branch, "symbolic-ref", "--quiet", "HEAD") && !RefIsStored(branch.Trim())) return null;
+        throw SourceStopException.GitFailed($"git cannot read HEAD of '{_sourceFolder}'");
+    }
+
+    // A loose ref is a file, until git packs it into packed-refs.
+    private bool RefIsStored(string gitRef) =>
+        File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
 
     internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all").Length > 0;
 

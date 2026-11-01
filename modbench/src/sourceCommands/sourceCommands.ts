@@ -28,7 +28,7 @@ interface SourceCommandsDeps {
 }
 
 /** A mod's progress through init source mod, reading its files here before mEdit's phases. */
-export type DecompileProgress = Omit<InitSourceModProgress, 'phase'> & { phase?: InitSourceModProgress['phase'] | 'ReadingFiles' };
+export type InitProgress = Omit<InitSourceModProgress, 'phase'> & { phase?: InitSourceModProgress['phase'] | 'ReadingFiles' };
 
 /** What init source mod answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
 export type InitiatedSourceMod = InitSourceModOutcome & { readonly notes?: readonly string[] };
@@ -130,10 +130,10 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       return { landed, refused };
     },
 
-    /** A mod whose name gives it no source folder, or whose files, installation file or metadata cannot be read, is refused
-     *  here, naming why, and mEdit decompiles and commits the rest. */
+    /** A mod whose name gives it no source folder, or whose files or metadata cannot be read, is refused here, naming why,
+     *  and mEdit makes the rest source mods. */
     initSourceMod: async (
-      mods: readonly string[], { commit = true, onProgress }: { commit?: boolean; onProgress?: (status: DecompileProgress) => void } = {},
+      mods: readonly string[], { commit, onProgress }: { commit: boolean; onProgress?: (status: InitProgress) => void },
     ): Promise<InitiatedSourceMod | WriteRefused> => {
       const made = new Map<string, MadeRepository>();
       const refused: ItemRefusal<string>[] = [];
@@ -151,7 +151,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       const sent: ModToInitSourceMod[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit }));
       const outcome = await client.initSourceMod(sent, onProgress === undefined ? {} : { onProgress });
       if (isRefused(outcome)) return outcome;
-      const notLinked = [...await foldersNotLinked(adapter, made, outcome.landed.map(({ mod }) => mod))].map(([item, why]) => ({ item, reason: `was committed, but ${why}.` }));
+      const notLinked = [...await foldersNotLinked(adapter, made, outcome.landed.map(({ mod }) => mod))].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'initialized'}, but ${why}.` }));
       return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked], ...notes };
     },
   };

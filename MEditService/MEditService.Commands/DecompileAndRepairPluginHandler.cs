@@ -95,7 +95,7 @@ public sealed class DecompileAndRepairPluginHandler
                 return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
-                loadOrder, new ModToInitSourceMod(mod.Name, mod.Folder, made),
+                loadOrder, new ModToInitSourceMod(mod.Name, mod.Folder, made, Commit: true),
                 leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
             if (init is ItemAnswer<InitSourceModRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");

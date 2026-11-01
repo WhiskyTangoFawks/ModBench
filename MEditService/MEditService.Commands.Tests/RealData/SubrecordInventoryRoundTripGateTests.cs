@@ -42,7 +42,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "ShortRdatMod", _dataFolder);
         }
 
-        public async Task<PluginDecompiledAndCommitted> InitSourceModAsync() =>
+        public async Task<PluginInitiated> InitSourceModAsync() =>
             (await InitSourceModEveryPluginOf.ModAsync(_loadOrder, "ShortRdatMod")).Only();
 
         public void Dispose()

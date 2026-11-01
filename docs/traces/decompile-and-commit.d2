@@ -51,7 +51,7 @@ http -> engine: envelope {class: track}
 engine -> commands: "decompile-plugin, every plugin of the mod" {class: track}
 modfolder -> modfolderadapter: "the assets" {class: track}
 modfolderadapter -> engine: "the assets" {class: track}
-engine -> sourceadapter: "the repository and its first commit: plugin source, assets, the manifest" {class: track}
+engine -> sourceadapter: "the repository, and its first commit when asked: plugin source, assets, the manifest" {class: track}
 sourceadapter -> source: "the source folder" {class: track}
 engine -> http: "the outcome" {class: track}
 http -> client: "the outcome" {class: track}

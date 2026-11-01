@@ -20,8 +20,8 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<FileToCopy> assets, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
-        IReadOnlyList<string>? ignored = null, bool commit = true)
+        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
+        IReadOnlyList<string>? ignored = null)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
@@ -41,8 +41,7 @@ internal static class GitInit
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored ?? [])));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
-            if (commit) CommitEach(git, journal, sourceFolder, plugins, repair);
-            else StageEach(git, plugins);
+            Track(git, journal, sourceFolder, commit, plugins, repair);
             git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitDone);
         }
         catch (Exception ex)
@@ -52,27 +51,20 @@ internal static class GitInit
         }
     }
 
-    private static void StageEach(
-        SourceRepositoryGit git, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins)
-    {
-        git.Run("add", "-A");
-        foreach (var (_, plugin) in plugins)
-        {
-            if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Address.Name, binarySha256);
-        }
-    }
-
-    private static void CommitEach(
-        SourceRepositoryGit git, WriteJournal journal, string sourceFolder,
+    private static void Track(
+        SourceRepositoryGit git, WriteJournal journal, string sourceFolder, bool commit,
         IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins, (PluginAddress Plugin, TreeCommit Commit)? repair)
     {
         git.Run("add", "-A");
-        git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
-        if (repair is var (repaired, repairCommit))
+        if (commit)
         {
-            SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired.Name, SourceRepositoryLayout.PristineFilesOf(repaired.Name, repairCommit.Tree));
-            git.Run("add", "-A");
-            git.Run("commit", "-q", "-m", repairCommit.Message);
+            git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
+            if (repair is var (repaired, repairCommit))
+            {
+                SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired.Name, SourceRepositoryLayout.PristineFilesOf(repaired.Name, repairCommit.Tree));
+                git.Run("add", "-A");
+                git.Run("commit", "-q", "-m", repairCommit.Message);
+            }
         }
         foreach (var (_, plugin) in plugins)
         {

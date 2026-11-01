@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands.Build;
 
 /// <summary>The init source mod gesture's handler (ADR-0007, ADR-0014). The mod is the item of the selection:
-/// it lands whole with one commit, `Init &lt;mod&gt;`, or refuses whole.</summary>
+/// it lands whole, or refuses whole.</summary>
 public sealed class InitSourceModHandler
 {
     private readonly LoadOrderHolder _loadOrder;
@@ -42,7 +42,7 @@ public sealed class InitSourceModHandler
                 phase => _notifications.Publish(new InitSourceModProgressNotification(at, phase)), cancel),
             cancel);
         return decompiled.ToResult(
-            landed => new DecompiledAndCommittedMod(landed.Item, landed.Outcome),
+            landed => new InitiatedMod(landed.Item, landed.Outcome),
             refused => new InitSourceModRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new InitSourceModResult(applied, refused));
     }
