@@ -79,6 +79,19 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
                     "Remove the extra ones by hand.").Failure,
             });
 
+    // A tree moved aside stays until the extension trashes it, across a restart of mEdit.
+    private static readonly string AsideStart = TempName.KeptStart("aside");
+
+    /// <summary>A new folder at the source folder's root to move trees aside into.</summary>
+    internal static string NewAsideFolderIn(string sourceFolder) => Path.Combine(sourceFolder, AsideStart + Path.GetRandomFileName());
+
+    /// <summary>What each folder at the source folder's root that holds trees moved aside holds, else the folder itself, by
+    /// its forward-slash path in the source folder.</summary>
+    internal static IReadOnlyList<string> AsideIn(string sourceFolder) =>
+        [.. Directory.EnumerateDirectories(sourceFolder, AsideStart + "*").Order(StringComparer.Ordinal).SelectMany(aside =>
+            Directory.EnumerateFileSystemEntries(aside).Order(StringComparer.Ordinal).Select(entry => Path.GetRelativePath(sourceFolder, entry).Replace('\\', '/'))
+                .DefaultIfEmpty(Path.GetFileName(aside)))];
+
     /// <summary>Each folder of the mod's plugin source spelled as <paramref name="pluginFileName"/> without case.</summary>
     internal static IReadOnlyList<string> TreesNamedIn(string sourceFolder, string pluginFileName) =>
         NamedIn(Path.Combine(sourceFolder, RootFolderName), pluginFileName);

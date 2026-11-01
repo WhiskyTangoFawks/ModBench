@@ -12,6 +12,10 @@ public static class TempName
 
     public static string FolderIn(string folder) => Combine(folder);
 
+    /// <summary>The start of a temp name for <paramref name="purpose"/> that carries no writer, so no leftover sweep removes
+    /// it.</summary>
+    public static string KeptStart(string purpose) => $"{Prefix}{purpose}_";
+
     private static bool IsTemp(string name) => name.StartsWith(Prefix, StringComparison.Ordinal);
 
     public static bool HoldsTemp(string forwardSlashPath) => forwardSlashPath.Split('/').Any(IsTemp);

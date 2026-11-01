@@ -54,7 +54,7 @@ builtin: "each built-in step, a decompile, compile, copy or pack, in build-file 
   sourceadapter -> engine: "the files a copy names · the plugin source" {class: compile}
   engine -> commands: "compile-plugin, per plugin a compile names" {class: compile}
   engine -> sourceadapter: "the plugin source a decompile makes, once every plugin of it decompiled" {class: compile}
-  sourceadapter -> engine: "each plugin source folder it moved aside" {class: compile}
+  sourceadapter -> engine: "each plugin source folder it moved aside, in this build or one before" {class: compile}
   engine -> modfolderadapter: "the files a copy writes · the archives a pack makes" {class: compile}
   modfolderadapter -> modfolder: "the folder" {class: compile}
   engine -> http: "the files it made · what it moved aside or packed" {class: compile}

@@ -292,6 +292,21 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ADecompile_AlsoAnswersThePluginSourceAnEarlierBuildLeftAside_SoTheExtensionTrashesIt()
+    {
+        await InitializedWithALocalizedPlugin();
+        var replacement = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        replacement.Doors.AddNew("ReplacingDoor");
+        replacement.WriteToBinary(Path.Combine(SourceFolder, Plugin));
+        var stranded = Assert.Single((await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])))).Replaced);
+
+        var decompiled = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])));
+
+        Assert.Equal(2, decompiled.Replaced.Count);
+        Assert.Contains(stranded, decompiled.Replaced);
+    }
+
+    [Fact]
     public async Task ADecompileRefusingItsSecondPlugin_WritesNoPluginSource()
     {
         await InitializedWithALocalizedPlugin();

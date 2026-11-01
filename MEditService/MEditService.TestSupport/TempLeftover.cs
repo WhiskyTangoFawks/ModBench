@@ -8,6 +8,18 @@ public static class TempLeftover
 
     public static string RunningWriters(string folder) => Hold(folder, Environment.ProcessId);
 
+    /// <summary>The file or folder at <paramref name="path"/> as a later process finds it once this one exits: a name that
+    /// carries this process's id carries a dead one. Answers where it now is.</summary>
+    public static string AsIfItsWriterExited(string path)
+    {
+        var name = Path.GetFileName(path);
+        var dead = name.Replace($"_{Environment.ProcessId}_", $"_{NoSuchProcess}_", StringComparison.Ordinal);
+        if (dead == name) return path;
+        var moved = Path.Combine(Path.GetDirectoryName(path) ?? "", dead);
+        Directory.Move(path, moved);
+        return moved;
+    }
+
     /// <summary>A leftover folder no delete can empty: its file is held open on Windows, its folder read-only elsewhere.
     /// Disposing releases it.</summary>
     public static IDisposable Undeletable(string folder)

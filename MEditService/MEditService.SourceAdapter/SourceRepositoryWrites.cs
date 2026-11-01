@@ -2,7 +2,6 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using CodecDocument = MEditService.Codec.Serialization.Document;
@@ -201,14 +200,15 @@ internal sealed class SourceRepositoryWrites(
     }
 
     /// <summary>Moves each of <paramref name="trees"/> into one new folder at the source folder's root, keeping its name, then
-    /// writes the plugin's tree; answers where each now is.</summary>
+    /// writes the plugin's tree; answers where each now is, after each tree an earlier write left aside.</summary>
     internal IReadOnlyList<string> ReplaceSourceMovingAside(string pluginFileName, IReadOnlyList<string> trees, IReadOnlyList<TreeFile> files, string binarySha256)
     {
         if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
             throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
 
+        var stranded = SourceRepositoryLayout.AsideIn(_sourceFolder);
         var journal = new WriteJournal(_sourceFolder);
-        var aside = TempName.FolderIn(_sourceFolder);
+        var aside = SourceRepositoryLayout.NewAsideFolderIn(_sourceFolder);
         try
         {
             journal.PutBackOnFailure(() =>
@@ -223,7 +223,7 @@ internal sealed class SourceRepositoryWrites(
         {
             locator.Forget();
         }
-        return [.. trees.Select(tree => $"{Path.GetFileName(aside)}/{tree}")];
+        return [.. stranded, .. trees.Select(tree => $"{Path.GetFileName(aside)}/{tree}")];
     }
 
     /// <summary>Decompile and repair's commits of the plugin's source alone, the baseline then the repair, each unless the

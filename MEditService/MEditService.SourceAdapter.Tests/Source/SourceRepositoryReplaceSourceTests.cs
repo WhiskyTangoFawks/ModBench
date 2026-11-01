@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -38,6 +39,29 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(Plugin, moved.Split('/')[^1]);
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(_modFolder, moved, "npc_", "A.esp", "000001.json")));
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
+    }
+
+    [Fact]
+    public void ATreeMovedAside_OutlivesALeftoverSweepOnceMEditRestarts()
+    {
+        var aside = Assert.Single(Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value());
+        var afterARestart = TempLeftover.AsIfItsWriterExited(Path.Combine(_modFolder, aside.Split('/')[0]));
+
+        TempName.RemoveLeftovers(_modFolder);
+
+        Assert.True(Directory.Exists(Path.Combine(afterARestart, Plugin)));
+    }
+
+    [Fact]
+    public void ASourceReplacedMovingItsTreeAside_AlsoAnswersEachTreeAnEarlierOneLeftAside()
+    {
+        var earlier = Assert.Single(Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value());
+
+        var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000003.json", "{}")], Sha).Value();
+
+        Assert.Equal(2, aside.Count);
+        Assert.Equal(earlier, aside[0]);
+        Assert.True(Directory.Exists(Path.Combine(_modFolder, aside[1])));
     }
 
     [PosixFact]
