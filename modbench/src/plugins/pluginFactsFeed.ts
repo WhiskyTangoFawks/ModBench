@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { PluginFacts, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
+import { PluginFacts, type LootRules, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
+import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
+import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
@@ -15,6 +17,8 @@ export interface PluginFactsFeedDeps {
   shownPlugins: () => readonly PluginAddress[];
   /** The plugins the game loads, in load order: the order the sorting rules judge. */
   activePlugins: () => readonly PluginAddress[];
+  /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
+  rules: () => LootRules & Pick<ReadRules, 'files' | 'problems'>;
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
@@ -27,6 +31,10 @@ export interface PluginFactsFeedDeps {
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
   publishSortingWarnings: (warnings: readonly PluginProblem[]) => void;
+  /** The Info sorting rules' only surface besides the tooltip, the Problems panel. */
+  publishSortingInfo: (info: readonly PluginProblem[]) => void;
+  /** The sorting rule files' own lines in the Problems panel. */
+  publishRuleFiles: (diagnostics: readonly RuleFileDiagnostic[]) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -97,10 +105,9 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.reconciled(plugins, failures, this.deps.activePlugins());
+    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.rules());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
-    this.deps.publishSortingErrors(this.facts.problems().sortingErrors);
-    this.deps.publishSortingWarnings(this.facts.problems().sortingWarnings);
+    this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
     this.changed.fire();
@@ -108,6 +115,22 @@ export class PluginFactsFeed implements vscode.Disposable {
     // ADR-0019's background tier, and retries at the next reconcile.
     void this.scanDiagnoses(generation);
     return plugins.length;
+  }
+
+  private publishSorting(): void {
+    const { sortingErrors, sortingWarnings, sortingInfo } = this.facts.problems();
+    this.deps.publishSortingErrors(sortingErrors);
+    this.deps.publishSortingWarnings(sortingWarnings);
+    this.deps.publishSortingInfo(sortingInfo);
+    const { files, problems } = this.deps.rules();
+    this.deps.publishRuleFiles(ruleFileDiagnostics(files, problems, this.facts.brokenRules()));
+  }
+
+  /** LOOT's rules changed: the order the last reconcile judged is judged again. Before that reconcile there is nothing to judge. */
+  rulesChanged(): void {
+    if (!this.facts.rejudged(this.deps.rules())) return;
+    this.publishSorting();
+    this.changed.fire();
   }
 
   /** Re-reads the facts alone, leaving the held load order as it is. A later re-read wins, and

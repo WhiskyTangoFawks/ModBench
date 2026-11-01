@@ -7,6 +7,7 @@ import { ignoreSkippedLink, type SkippedLink } from './files';
 import {
   filesWinningFirst, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
+  type SortingRuleFiles,
 } from './instanceAdapter';
 import { groupModOrder } from './modGroups';
 import type { ManagerReading } from './publisher';
@@ -59,6 +60,7 @@ export interface ReadingSource extends ArchiveReads {
   /** The files at an origin's root, as `originFiles` lists them. */
   originRootFiles(origin: FileOrigin, folders: ModFolders | undefined | 'list'): Promise<OriginFiles>;
   sourceRepositories(): Promise<ReadonlyMap<string, string>>;
+  sortingRuleFiles(): Promise<SortingRuleFiles>;
   holdsRepository(): Promise<boolean>;
   repositorySetUp(): Promise<boolean>;
   watchNotes(): string[];
@@ -114,7 +116,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
     withNotes(listed, source.modLineKey, ({ kind, name }) => `${source.names.modOrderFile} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
   const downloadedFilesRead = settings.downloadedFiles(skipLink);
-  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceRepositories, modFiles, folderMeta, holdsRepository, repositorySetUp, managerRunning] = await Promise.all([
+  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceRepositories, sortingRuleFiles, modFiles, folderMeta, holdsRepository, repositorySetUp, managerRunning] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadedFilesRead,
@@ -130,6 +132,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
     modFoldersRead,
     source.originFiles({ kind: 'runtimeOutput' }, 'list'),
     source.sourceRepositories(),
+    source.sortingRuleFiles(),
     Promise.all([modsKept, modFoldersRead]).then(async ([entries, folders]) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name }, folders)] as const)))),
     Promise.all([modsKept, modFoldersRead, downloadedFilesRead]).then(([entries, folders, downloadedFiles]) =>
@@ -144,7 +147,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, runtimeOutput, modFiles, folderMeta,
-    sourceRepositories, holdsRepository, repositorySetUp, watchNotes: source.watchNotes(), managerRunning,
+    sourceRepositories, sortingRuleFiles, holdsRepository, repositorySetUp, watchNotes: source.watchNotes(), managerRunning,
     gameFolderLinks: gameFolderLinks.size,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };

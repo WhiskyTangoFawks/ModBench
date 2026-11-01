@@ -20,6 +20,10 @@ import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
 import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
+import { fileIsPresent } from '../instanceLoader/fileIsPresent';
+import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
+import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
+import { sortingRuleFilesMessage } from './sortingRuleFilesMessage';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
@@ -60,6 +64,10 @@ interface PluginsTreeProviderOptions {
   publishSortingErrors: (errors: readonly PluginProblem[]) => void;
   /** The Sorting warnings status's other surface, the Problems panel. */
   publishSortingWarnings: (warnings: readonly PluginProblem[]) => void;
+  /** The Info sorting rules' Problems panel entries. */
+  publishSortingInfo: (info: readonly PluginProblem[]) => void;
+  /** The sorting rule files' own lines in the Problems panel. */
+  publishRuleFiles: (diagnostics: readonly RuleFileDiagnostic[]) => void;
   /** Each mod's folder against its manifest, as mEdit last answered it. */
   modStatuses: LastModStatuses;
   /** Says why a drop cannot land. */
@@ -113,6 +121,8 @@ export class PluginsTreeProvider
   private readonly records: RecordBrowserFacet;
   private readonly modStatuses: LastModStatuses;
   private instanceValue: InstanceValue;
+  private readonly readRules = rulesReader();
+  private rules: ReadRules;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
   private filterText = '';
@@ -141,12 +151,21 @@ export class PluginsTreeProvider
       publishSourceUnreadable: options.publishSourceUnreadable,
       publishSortingErrors: options.publishSortingErrors,
       publishSortingWarnings: options.publishSortingWarnings,
+      publishSortingInfo: options.publishSortingInfo,
+      publishRuleFiles: options.publishRuleFiles,
+      rules: () => ({ ...this.rules, isPresent: (filename) => fileIsPresent(this.instanceValue, filename) }),
     });
     this.instanceValue = options.instance.value;
+    this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
       this.instanceValue = value;
       this.cache = undefined;
+      const rules = this.readRules(value.sortingRuleFiles);
+      if (rules !== this.rules) {
+        this.rules = rules;
+        this.facts.rulesChanged();
+      }
       this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()));
     this.modStatuses = options.modStatuses;
@@ -178,7 +197,10 @@ export class PluginsTreeProvider
   }
 
   standingMessage(): string | undefined {
-    return messageLine(managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)));
+    return messageLine(
+      managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)),
+      this.instance.sequence === 0 ? undefined : sortingRuleFilesMessage(this.rules),
+    );
   }
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows

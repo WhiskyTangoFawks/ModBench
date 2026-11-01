@@ -7,7 +7,18 @@ import { EventEmitter } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ EventEmitter }));
 
-import { PluginFactsFeed } from '../pluginFactsFeed';
+import { PluginFactsFeed, type PluginFactsFeedDeps } from '../pluginFactsFeed';
+import { rulesReader, type SortingRuleFiles } from '../../sortingRules/lootMetadata';
+
+const USERLIST = '/instance/userlist.yaml';
+const filesWith = (masterlist: string, userlist = ''): SortingRuleFiles => ({
+  masterlist: { path: '/instance/masterlist.yaml', kind: 'text', text: masterlist },
+  prelude: { path: '/instance/prelude.yaml', kind: 'absent' },
+  userlist: userlist === '' ? { path: USERLIST, kind: 'absent' } : { path: USERLIST, kind: 'text', text: userlist },
+});
+const rulesOf = (files: SortingRuleFiles, present: readonly string[] = []): ReturnType<PluginFactsFeedDeps['rules']> =>
+  ({ ...rulesReader()(files), isPresent: (filename) => present.includes(filename) });
+const NO_RULES = rulesOf(filesWith('plugins: []\n'));
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
@@ -42,16 +53,21 @@ interface FeedOptions {
   readonly shownPlugins?: () => readonly PluginAddress[];
   readonly activePlugins?: () => readonly PluginAddress[];
   readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+  readonly rules?: () => ReturnType<PluginFactsFeedDeps['rules']>;
 }
 
-function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses }: FeedOptions = {}) {
+function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES }: FeedOptions = {}) {
   const client = clientFindingNoDefects();
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
   const sortingErrors = watched<readonly { plugin: string; origin: string; text: string }[]>();
+  const sortingInfo = watched<readonly { plugin: string; origin: string; text: string }[]>();
+  const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
   const feed = new PluginFactsFeed({
-    client, shownPlugins, activePlugins,
+    client, shownPlugins, activePlugins, rules,
+    publishSortingInfo: sortingInfo.push,
+    publishRuleFiles: ruleFiles.push,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,
     publishChangedOutside: changedOutside.push,
     publishFailedToRead: () => undefined,
@@ -61,7 +77,7 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
-  return { feed, client, diagnoses, changedOutside, sourceUnreadable, sortingErrors, changes };
+  return { feed, client, diagnoses, changedOutside, sourceUnreadable, sortingErrors, sortingInfo, ruleFiles, changes };
 }
 
 async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
@@ -101,6 +117,52 @@ describe('PluginFactsFeed', () => {
     const text = '"Ghost.esm" is a master of "A.esp", and is missing or not active.';
     expect(sortingErrors.items).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod', text }]]);
     expect(feed.rows.description(A)).toBe('1 error');
+  });
+
+  it('judges LOOT\'s rules with the game\'s: a requirement that is missing is a Sorting error', async () => {
+    const rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
+    const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held()]);
+
+    await feed.reconciled([]);
+
+    expect(sortingErrors.items).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod', text: '"A.esp" requires "Missing.esp", which is missing.' }]]);
+  });
+
+  it('shows a LOOT say message in the tooltip and the Problems panel at Info, and sets no icon or status', async () => {
+    const rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    msg: [{type: say, content: Read the page.}]\n'));
+    const { feed, client, sortingInfo } = feedOver({ activePlugins: () => [A], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held()]);
+
+    await feed.reconciled([]);
+
+    expect(sortingInfo.items).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod', text: 'Read the page.' }]]);
+    expect([feed.rows.icon(A), feed.rows.description(A), feed.rows.tooltipLines(A).at(-1)]).toEqual([undefined, undefined, 'Info: Read the page.']);
+  });
+
+  it('publishes a rule the userlist states on its line in the userlist', async () => {
+    const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n'), ['B.esp']);
+    const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held()]);
+
+    await feed.reconciled([]);
+
+    expect(ruleFiles.items).toEqual([[{ path: USERLIST, line: 2, level: 'error', text: '"A.esp" is incompatible with "B.esp", which is present.' }]]);
+  });
+
+  it('judges the order of the last reconcile again when the rules change, and not before one', async () => {
+    let rules = NO_RULES;
+    const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held()]);
+    rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
+    feed.rulesChanged();
+    const beforeReconcile = sortingErrors.items.length;
+
+    await feed.reconciled([]);
+    rules = NO_RULES;
+    feed.rulesChanged();
+
+    expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
   });
 
   it('names an unreadable plugin list on the rows and the message line, and answers undefined', async () => {

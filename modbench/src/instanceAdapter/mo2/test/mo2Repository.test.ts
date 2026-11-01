@@ -99,6 +99,17 @@ describe('the MO2 adapter\'s repository', () => {
       expect(runGit('check-ignore', '.vscode/settings.json').trim()).toBe('.vscode/settings.json');
     });
 
+    it('lets the repository hold the sorting rule files, which a clone needs', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      for (const file of ['masterlist.yaml', 'prelude.yaml', 'userlist.yaml', 'other.yaml']) await put(file, 'plugins: []\n');
+
+      await adapter.writeIgnoreList();
+
+      expect(runGit('status', '--porcelain', '--', '*.yaml').split('\n').filter((line) => line !== '').map((line) => line.slice(3)).sort())
+        .toEqual(['masterlist.yaml', 'prelude.yaml', 'userlist.yaml']);
+    });
+
     it('takes back only its own lines, keeping a line another program added after them', async () => {
       const adapter = await instance();
       await put('.gitignore', 'mine\n');

@@ -13,6 +13,7 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
 import { folderValueOver, modValueOver, sourceFolderValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
+import { READ_SORTING_RULE_FILES } from './readSortingRuleFiles';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
 function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFiles> {
@@ -42,6 +43,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     programVersions: { kind: 'unresolved' },
     dataFolderPlugins: { kind: 'unresolved' },
     creationClubList: [],
+    sortingRuleFiles: READ_SORTING_RULE_FILES,
     archiveList: [],
     archiveListNotes: [],
     dataFolderArchives: { kind: 'unresolved' },

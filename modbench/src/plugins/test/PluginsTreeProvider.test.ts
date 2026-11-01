@@ -46,6 +46,9 @@ import { parseRowResourceUri } from '../recordResourceUri';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { listsForThePluginAsked, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
 import { browserClient } from './browserRows';
+import { ABSENT_SORTING_RULE_FILES } from '../../instanceAdapter/instanceAdapter';
+import { READ_SORTING_RULE_FILES } from '../../test/readSortingRuleFiles';
+import type { PluginProblem } from '../pluginFacts';
 
 type ModStatus = NonNullable<ReturnType<LastModStatuses['of']>>;
 
@@ -102,6 +105,7 @@ function makeTree(
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
+    publishSortingErrors: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishSortingErrors'];
     loadedWithNoLine: readonly (string | PluginAddress)[];
     reporter: RecordingReporter;
   }> = {},
@@ -114,6 +118,7 @@ function makeTree(
     ...(extra.reporter && { reporter: extra.reporter }),
     ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
     ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
+    ...(extra.publishSortingErrors && { publishSortingErrors: extra.publishSortingErrors }),
   });
   return { tree, client, records, instance };
 }
@@ -1102,6 +1107,27 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     h.tree.facts.indexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
     expect(h.tree.viewMessage()).toBeUndefined();
+  });
+
+  it('says there is no masterlist, naming update masterlist, once the instance has read', () => {
+    const noMasterlist = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>
+      new FakeInstance({ ...valueOf(plugins), sortingRuleFiles: ABSENT_SORTING_RULE_FILES });
+
+    expect(makeTree([A_ROW()], { instance: noMasterlist([A_ROW()]) }).tree.viewMessage()).toMatch(/No masterlist.*update masterlist/);
+  });
+
+  it('judges the last reconcile\'s order again when the instance\'s sorting rule files change', async () => {
+    const instance = new FakeInstance(valueOf([A_ROW()]));
+    const errors: (readonly PluginProblem[])[] = [];
+    const h = makeTree([A_ROW()], { instance, publishSortingErrors: (published) => errors.push(published) });
+    await reconcile(h, [held('A.esp')]);
+
+    instance.publish({
+      ...valueOf([A_ROW()]),
+      sortingRuleFiles: { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Missing.esp]\n' } },
+    });
+
+    expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']);
   });
 
   it('puts no rows over a record filter that matched nothing', async () => {

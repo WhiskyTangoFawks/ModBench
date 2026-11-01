@@ -46,7 +46,7 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm), the FOMOD installer (its engine) and the Wabbajack publisher (jsonc-parser) import a package.',
+    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm), the FOMOD installer (its engine) and the Wabbajack publisher (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
@@ -59,6 +59,10 @@ const FOMOD_ENGINE_PACKAGE_IMPORT = {
 const JSONC_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|jsonc-parser$)',
     message: 'The Wabbajack publisher imports one package: the parser that reads its settings as Wabbajack does.',
+};
+const YAML_PACKAGE_IMPORT = {
+    regex: '^(?![.]|node:|vscode$|yaml$)',
+    message: 'LOOT\'s metadata imports one package: the YAML parser that keeps line positions and resolves its anchors.',
 };
 const adapterInternalsImport = (constructs) => ({
     regex: `^(\\.{1,2}/)+instanceAdapter(/(?!(instanceAdapter${constructs ? '|openInstance' : ''})$).*)?$`,
@@ -284,6 +288,12 @@ export default defineConfig(
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, extra: [JSONC_PACKAGE_IMPORT],
             }),
+        },
+    },
+    {
+        files: ['src/sortingRules/lootMetadata.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: false, path: true, extra: [YAML_PACKAGE_IMPORT] }),
         },
     },
     {

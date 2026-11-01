@@ -22,6 +22,7 @@ const HASH_INDEX = 'hash-index';
 const IGNORE_LIST_FILE = '.gitignore';
 const SUBMODULES_FILE = '.gitmodules';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
+const SORTING_RULE_FILES = { masterlist: 'masterlist.yaml', prelude: 'prelude.yaml', userlist: 'userlist.yaml' } as const;
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
@@ -113,6 +114,13 @@ const loadOrderFile = (instanceRoot: string, profile: string): string =>
 export const pluginOrderFiles = (instanceRoot: string, profile: string): [loadOrder: string, plugins: string] =>
   [loadOrderFile(instanceRoot, profile), pluginsFile(instanceRoot, profile)];
 
+/** LOOT's metadata files, at the instance root. */
+export const sortingRuleFilePaths = (instanceRoot: string): Record<keyof typeof SORTING_RULE_FILES, string> => ({
+  masterlist: join(instanceRoot, SORTING_RULE_FILES.masterlist),
+  prelude: join(instanceRoot, SORTING_RULE_FILES.prelude),
+  userlist: join(instanceRoot, SORTING_RULE_FILES.userlist),
+});
+
 export const downloadedFilePath = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
 export const downloadedFileMetadataPath = (downloadsDir: string, name: string): string =>
@@ -172,6 +180,7 @@ export const SOURCE_GLOB = `${SOURCE_MODS_FOLDER}/**`;
 export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
 export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
+export const SORTING_RULE_FILES_GLOB = `{${Object.values(SORTING_RULE_FILES).join(',')}}`;
 /** A profile switch rewrites the settings and nothing else. */
 export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
@@ -193,6 +202,7 @@ const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, 
 /** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
+  ...Object.values(SORTING_RULE_FILES).map((file) => `!/${file}`),
   ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
   ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),

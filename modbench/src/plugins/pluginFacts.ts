@@ -1,5 +1,7 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { judge, type BrokenRule } from '../sortingRules/judge';
+import { judgeLoot } from '../sortingRules/lootJudge';
+import type { LootEntry } from '../sortingRules/lootMetadata';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
@@ -20,6 +22,15 @@ export interface PluginStatus {
   words: string;
   tooltipLine: string;
 }
+
+/** LOOT's rules and where the files they apply to are present, as the sorting rules judge them. */
+export interface LootRules {
+  readonly entries: readonly LootEntry[];
+  readonly isPresent: (filename: string) => boolean;
+}
+
+// No metadata: only the game's own sorting rules are judged.
+const NO_LOOT_RULES: LootRules = { entries: [], isPresent: () => true };
 
 export type StatusIcon = 'error' | 'warning';
 
@@ -109,6 +120,8 @@ export class PluginFacts {
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
   private sortingNames: PluginAddress[] = [];
+  private broken: BrokenRule[] = [];
+  private judgedActiveOrder?: readonly PluginAddress[];
   private sourceUnreadableProblems: readonly SourceUnreadableProblem[] = [];
   private matches?: ByPluginAddress<boolean>;
   private diagnosisTexts = new ByPluginAddress<string[]>();
@@ -155,13 +168,22 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[]): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], loot: LootRules = NO_LOOT_RULES): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.clearOverride();
     this.refreshed(plugins);
-    this.judgeSorting(activeOrder);
+    this.judgedActiveOrder = activeOrder;
+    this.judgeSorting(activeOrder, loot);
+  }
+
+  /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed. A no-op
+   *  before the first reconcile completes, as the order is not judged before then. */
+  rejudged(loot: LootRules): boolean {
+    if (this.judgedActiveOrder === undefined) return false;
+    this.judgeSorting(this.judgedActiveOrder, loot);
+    return true;
   }
 
   /** The facts alone, leaving which plugins are held as they are and the sorting statuses as the
@@ -192,13 +214,17 @@ export class PluginFacts {
   }
 
   // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
-  private judgeSorting(activeOrder: readonly PluginAddress[]): void {
+  private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootRules): void {
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
-    const broken = judge(activeOrder.map(({ name }) => name), (filename) => {
-      const address = addressOf.get(filename.toLowerCase());
-      const read = address && this.reads.get(address);
-      return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
-    });
+    const broken = [
+      ...judge(activeOrder.map(({ name }) => name), (filename) => {
+        const address = addressOf.get(filename.toLowerCase());
+        const read = address && this.reads.get(address);
+        return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
+      }),
+      ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), loot.entries, loot.isPresent),
+    ];
+    this.broken = broken;
     this.sorting = new ByPluginAddress<BrokenRule[]>();
     this.sortingNames = [];
     for (const rule of broken) {
@@ -208,6 +234,11 @@ export class PluginFacts {
         this.sorting.append(address, rule);
       }
     }
+  }
+
+  /** Every broken sorting rule, once each, as the last judging found them. */
+  brokenRules(): readonly BrokenRule[] {
+    return this.broken;
   }
 
   private brokenAt(address: PluginAddress, level: BrokenRule['level']): BrokenRule[] {
@@ -349,7 +380,7 @@ export class PluginFacts {
   tooltipLines(address: PluginAddress): string[] {
     const lines = [address.name, this.notRestoredFrom.get(address) ?? pluginOriginName(address.origin)];
     if (this.reads.get(address)?.readOnly === true) lines.push('read-only');
-    return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
+    return [...lines, ...this.statuses(address).map((s) => s.tooltipLine), ...this.brokenAt(address, 'info').map(({ reason }) => `Info: ${reason}`)];
   }
 
   /** Nothing until mEdit answers: an unknown is neither a compiled plugin nor one with no plugin source, nor editable. */
@@ -376,12 +407,14 @@ export class PluginFacts {
   problems(): {
     malformed: PluginDiagnosisReport[]; changedOutside: readonly PluginProblem[]; failedToRead: readonly PluginProblem[];
     sourceUnreadable: readonly SourceUnreadableProblem[]; sortingErrors: readonly PluginProblem[]; sortingWarnings: readonly PluginProblem[];
+    sortingInfo: readonly PluginProblem[];
   } {
     return {
       malformed: this.diagnosisReports,
       sourceUnreadable: this.sourceUnreadableProblems,
       sortingErrors: this.sortingProblems('error'),
       sortingWarnings: this.sortingProblems('warning'),
+      sortingInfo: this.sortingProblems('info'),
       failedToRead: this.loadFailures.values().flatMap(({ name, origin, diagnosis }) =>
         diagnosis == null ? [] : [{ plugin: name, origin, text: diagnosis }]),
       changedOutside: [...this.changedByMod.values()].flat()

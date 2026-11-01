@@ -16,8 +16,8 @@ import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationCl
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
-import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders } from '../instanceAdapter';
-import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
+import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
+import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
@@ -25,6 +25,7 @@ import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context
 import { originFilesIn } from './mo2Files';
 import { sourceRepositoriesIn } from './sourceRepositories';
 import { errorMessage } from '../../ports/errorMessage';
+import { errnoCode } from '../../ports/errno';
 import { holdsPathToken } from '../pathTokens';
 
 /** The names of the downloaded files in `downloadsDir`; undefined when it is absent. */
@@ -67,6 +68,14 @@ export async function readMetaIni(context: Mo2Context, mod: string, folders: Mod
   if (entryNamed(mod).kind === 'separator') return {};
   const folder = await modFolderNamed(context, mod, folders);
   return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
+}
+
+async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
+  try {
+    return { path, kind: 'text', text: await get(path) };
+  } catch (err) {
+    return errnoCode(err) === 'ENOENT' ? { path, kind: 'absent' } : { path, kind: 'unreadable', reason: errorMessage(err) };
+  }
 }
 
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
@@ -129,6 +138,12 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     originRootFiles: (origin, folders) => originFilesIn(context, origin, true, folders),
 
     sourceRepositories: () => sourceRepositoriesIn(instanceRoot),
+
+    async sortingRuleFiles() {
+      const paths = sortingRuleFilePaths(instanceRoot);
+      const [masterlist, prelude, userlist] = await Promise.all([sortingRuleFile(paths.masterlist), sortingRuleFile(paths.prelude), sortingRuleFile(paths.userlist)]);
+      return { masterlist, prelude, userlist };
+    },
 
     holdsRepository: () => isRepository(instanceRoot),
     repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile),

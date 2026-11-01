@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { PluginAddress } from '../client';
 import type { PluginPlace, PluginProblem } from './pluginFacts';
+import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 
 /** Targets the plugin binary itself, which is where a malformed plugin's diagnoses, a change
  *  outside Modbench and a failed read's diagnosis all live, and one call answers for the whole
@@ -27,6 +28,18 @@ export function publishPluginProblems<T extends PluginProblem>(
     byUri.set(fsPath, list);
   }
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
+}
+
+const SEVERITY = { error: vscode.DiagnosticSeverity.Error, warning: vscode.DiagnosticSeverity.Warning, info: vscode.DiagnosticSeverity.Information } as const;
+
+/** The sorting rule files' own lines, each at its level. */
+export function publishRuleFileDiagnostics(collection: vscode.DiagnosticCollection, entries: readonly RuleFileDiagnostic[]): void {
+  collection.clear();
+  const byPath = new Map<string, vscode.Diagnostic[]>();
+  for (const { path, line, level, text } of entries) {
+    byPath.set(path, [...byPath.get(path) ?? [], modbenchDiagnostic(new vscode.Range(line, 0, line, Number.MAX_SAFE_INTEGER), text, SEVERITY[level])]);
+  }
+  for (const [path, list] of byPath) collection.set(vscode.Uri.file(path), list);
 }
 
 /** plugin-source.md, Decompile and repair, story 1: a Malformed entry's link in the Problems panel, which fires the
