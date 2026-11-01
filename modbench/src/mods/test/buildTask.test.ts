@@ -36,15 +36,23 @@ describe('the build task', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.mod.build', new AgentCall([], {}));
   });
 
-  const WARNING = "Built 1 mod from changes no commit holds, so its manifest's commit does not rebuild it.";
+  const WARNING = 'Built 1 mod from changes no commit holds, so the commit the instance repository pins does not rebuild it.';
 
-  it('passes when the build only warned, and writes the warning to the terminal and the Output', async () => {
+  it('passes when the build only warned, and writes the warning to the terminal and the Output (mods.md, Build, story 15)', async () => {
     const { written, closedWith, reporter } = await build(DEFINITION, applied({ landed: [landed({ uncommitted: true })], refused: [] }));
 
     expect([written, closedWith, reporter.shownFailures]).toEqual([
       `${WARNING} "ModA"\r\nBuilt "ModA".\r\n`, [0],
       [{ severity: 'warning', message: WARNING, detail: '"ModA"' }],
     ]);
+  });
+
+  it('warns of a mod built at a commit its remote does not hold (mods.md, Build, story 15)', async () => {
+    const { reporter } = await build(DEFINITION, applied({ landed: [landed({ unpushed: true })], refused: [] }));
+
+    expect(reporter.shownFailures).toEqual([{
+      severity: 'warning', message: 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.', detail: '"ModA"',
+    }]);
   });
 
   it.each([
