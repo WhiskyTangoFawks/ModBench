@@ -1431,6 +1431,16 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
     expect(item.checkboxState).toBe(vscode.TreeItemCheckboxState.Checked);
   });
 
+  it('reads an enabled master mEdit failed to read as present, for the game loads what mEdit cannot read', async () => {
+    const rows = [plugin({ name: 'Broken.esm', line: 0 }), plugin({ name: 'A.esp', line: 1 })];
+    const h = makeTree(rows);
+
+    await reconcile(h, [held('A.esp', { masters: ['Broken.esm'] })], [{ name: 'Broken.esm', origin: 'SomeMod', reason: 'Malformed record' }]);
+
+    const [, item] = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row));
+    expect(item?.description).toBeUndefined();
+  });
+
   it('reads a master that is listed but disabled as missing, at Error', async () => {
     const rows = [plugin({ name: 'Base.esm', line: 0, enabled: false }), plugin({ name: 'A.esp', line: 1 })];
     const h = makeTree(rows);
