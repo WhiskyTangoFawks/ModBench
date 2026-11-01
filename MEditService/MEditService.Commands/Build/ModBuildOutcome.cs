@@ -8,6 +8,9 @@ namespace MEditService.Commands.Build;
 public sealed record ModToBuild(string Name, string SourceFolder, string Folder, BuildStep Step)
 {
     public IReadOnlyList<string> Exclude { get; init; } = [];
+
+    /// <summary>The paths in the folder the mod's manifest ignores, which a step leaves unwritten.</summary>
+    public IReadOnlyList<string> Ignore { get; init; } = [];
 }
 
 /// <summary>A built-in step of a build file (formats/build-file-1.schema.json).</summary>
@@ -44,8 +47,8 @@ public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Te
 /// plugin's or archive's file does not.</summary>
 public sealed record MadeFile(string Path, bool VouchedFor);
 
-/// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Packed: each loose file an archive it made
-/// packs, by its path in the folder. Uncommitted and Unpushed: its source's.</summary>
+/// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Packed: each loose file an archive packs.
+/// Ignored: each file it left unwritten. Uncommitted and Unpushed: its source's.</summary>
 internal sealed record ModBuildOutcome(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
@@ -59,6 +62,9 @@ internal sealed record ModBuildOutcome(
     public IReadOnlyList<string> Packed { get; init; } = [];
 
     public IReadOnlyList<string> Replaced { get; init; } = [];
+
+    /// <summary>Each file a step would have made at a path the manifest ignores, by its path in the folder.</summary>
+    public IReadOnlyList<string> Ignored { get; init; } = [];
 
     internal static ModBuildOutcome Stopped(string failure) => new([], [], [], failure);
 }

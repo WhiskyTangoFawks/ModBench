@@ -177,7 +177,7 @@ public sealed class PluginAdapterTests
 
         await TreeSaves.SaveAsync(patchPath, prep =>
         {
-            prep.Commit();
+            prep.Commit(_ => false);
             return true;
         }, reversed);
 

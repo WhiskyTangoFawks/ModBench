@@ -64,7 +64,7 @@ async function write(path: string, text: string, at = folder): Promise<void> {
 const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } };
 const REPOSITORY: ManifestPackage = { kind: 'repository', name: 'Mod' };
 const manifest = (files: Record<string, string | null>, over: Partial<Manifest> = {}): Manifest =>
-  ({ packages: [MOD_ZIP], exclude: [], files: new Map(Object.entries(files)), ...over });
+  ({ packages: [MOD_ZIP], exclude: [], ignore: [], files: new Map(Object.entries(files)), ...over });
 
 const manifested = (held: Manifest): Promise<void> => write('mod.manifest.json', manifestText(held));
 
@@ -76,7 +76,7 @@ async function statusWith(values: (read: ReadValues) => StatusValues = (read) =>
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
 const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), packages: [MOD_ZIP], ...over });
 
@@ -118,6 +118,21 @@ describe('a mod\'s status against its manifest', () => {
     entries = [{ path: 'a.nif', hash: HELLO }];
 
     expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json'), packages: [MOD_ZIP] }));
+  });
+
+  it('lists a file its manifest ignores as ignored, neither differing nor named by no line, though its bytes are none the manifest records', async () => {
+    await Promise.all([write('F4SE/Plugins/BetterConsole.mem', EDITED), write('logs/a.log', EDITED), write('a.nif', HELLO)]);
+    entries = [{ path: 'a.nif', hash: HELLO }];
+    await manifested(manifest({ 'a.nif': HELLO }, { ignore: ['F4SE/Plugins/BetterConsole.mem', 'logs'] }));
+
+    expect(await status()).toEqual(heldAs({ ignored: ['F4SE/Plugins/BetterConsole.mem', 'logs/a.log'], ignoreEntries: ['F4SE/Plugins/BetterConsole.mem', 'logs'] }));
+  });
+
+  it('reads a file as ignored whose case differs from the entry, as a manifest path ignores case', async () => {
+    await write('Logs/a.log', EDITED);
+    await manifested(manifest({}, { ignore: ['logs'] }));
+
+    expect(await status()).toEqual(heldAs({ ignored: ['Logs/a.log'], ignoreEntries: ['logs'] }));
   });
 
   it('after a fresh clone, names every file its manifest names gone, and none differing or named by no line', async () => {

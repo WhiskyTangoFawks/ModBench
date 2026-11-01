@@ -61,6 +61,87 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACopy_LeavesUnwrittenEachFileAtAPathTheManifestIgnores_OrInAnIgnoredFolder_AnsweringEach()
+    {
+        WriteSource(("F4SE/Plugins/Game.mem", "from the source"), ("logs/run.log", "from the source"), ("meshes/c.nif", "c"));
+        WriteInFolder("F4SE/Plugins/Game.mem", "the game wrote this");
+
+        var built = await Landed(Copy("F4SE", "logs", "meshes") with { Ignore = ["F4SE/Plugins/Game.mem", "logs"] });
+
+        Assert.Equal([("F4SE/Plugins/Game.mem", "the game wrote this"), ("meshes/c.nif", "c")], FilesIn(ModFolder));
+        Assert.Equal(["F4SE/Plugins/Game.mem", "logs/run.log"], built.Ignored);
+        Assert.Equal([new MadeFile("meshes/c.nif", VouchedFor: true)], built.Made);
+    }
+
+    [Fact]
+    public async Task APack_LeavesUnpackedAnArchiveAtAPathTheManifestIgnores_AnsweringIt_AndPacksTheRest()
+    {
+        WriteInFolder("meshes/c.nif", "c");
+        WriteInFolder("meshes/d.nif", "d");
+        WriteInFolder("Mod - Main.ba2", "the game's own");
+
+        var built = await Landed(Pack(new ArchiveToPack("Mod - Main.ba2", ["meshes/c.nif"]), new ArchiveToPack("Mod - Extra.ba2", ["meshes/d.nif"])) with { Ignore = ["Mod - Main.ba2"] }, Packing);
+
+        Assert.Equal(["Mod - Main.ba2"], built.Ignored);
+        Assert.Equal(["meshes/d.nif"], built.Packed);
+        Assert.Equal("the game's own", File.ReadAllText(Path.Combine(ModFolder, "Mod - Main.ba2")));
+        Assert.Equal([new MadeFile("Mod - Extra.ba2", VouchedFor: true)], built.Made);
+    }
+
+    [Fact]
+    public async Task ACompile_LeavesUncompiledAPluginTheManifestIgnores_AnsweringIt()
+    {
+        await InitializedWithALocalizedPlugin();
+        File.Delete(Path.Combine(ModFolder, Plugin));
+
+        var built = await Landed(Compile() with { Ignore = [Plugin] });
+
+        Assert.Equal([Plugin], built.Ignored);
+        Assert.Empty(built.Compiled);
+        Assert.False(File.Exists(Path.Combine(ModFolder, Plugin)));
+    }
+
+    [Fact]
+    public async Task ACompile_LeavesUnwrittenAStringsFileTheManifestIgnores_WritingThePlugin_AnsweringTheFile()
+    {
+        await InitializedWithALocalizedPlugin();
+        var strings = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}").Order(StringComparer.Ordinal).ToList();
+        var kept = Assert.Single(strings, path => path.EndsWith(".STRINGS", StringComparison.OrdinalIgnoreCase));
+        WriteInFolder(kept, "the game wrote this");
+        File.Delete(Path.Combine(ModFolder, Plugin));
+
+        var built = await Landed(Compile() with { Ignore = [kept] });
+
+        Assert.Equal("the game wrote this", File.ReadAllText(Path.Combine(ModFolder, kept)));
+        Assert.True(File.Exists(Path.Combine(ModFolder, Plugin)));
+        Assert.Equal([kept], built.Ignored);
+        Assert.DoesNotContain(built.Made, file => file.Path == kept);
+    }
+
+    [Theory]
+    [InlineData("textures/A.dds")]
+    [InlineData("TEXTURES")]
+    public async Task ACopy_LeavesUnwrittenAFileWhoseCaseDiffersFromTheIgnoreEntry_AsAManifestPathIgnoresCase(string ignore)
+    {
+        WriteSource(("textures/a.dds", "a"));
+
+        var built = await Landed(Copy("textures") with { Ignore = [ignore] });
+
+        Assert.False(Directory.Exists(ModFolder));
+        Assert.Equal(["textures/a.dds"], built.Ignored);
+    }
+
+    [Fact]
+    public async Task ACopy_MarksAFileWhoseCaseDiffersFromTheExclusionEntry_AsAManifestPathIgnoresCase()
+    {
+        WriteSource(("textures/a.dds", "a"));
+
+        var built = await Landed(Copy("textures") with { Exclude = ["Textures/A.dds"] });
+
+        Assert.Equal([new MadeFile("textures/a.dds.excluded", VouchedFor: true)], built.Made);
+    }
+
+    [Fact]
     public async Task ACopyOfAPathTheSourceFolderDoesNotHold_RefusesTheMod_WritingNothing()
     {
         WriteSource(("meshes/c.nif", "c"));

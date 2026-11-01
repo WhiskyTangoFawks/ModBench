@@ -139,6 +139,7 @@ export function buildManifest(
       ...takenFromTheGame.length === 0 || game === undefined ? [] : [gameFolderPackage(game.places.filter((place) => placesTaken.has(place)), takenFromTheGame, held)],
     ],
     exclude,
+    ignore: held?.ignore ?? [],
     files: new Map(files.map(({ path, hash }) => [path, hash])),
   };
   const packageFiles = [

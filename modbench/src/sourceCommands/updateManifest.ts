@@ -1,8 +1,9 @@
 import { basename } from 'node:path';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
-import { manifestIn, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
+import { exclusionsOfFiles, isUnderAny, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import { heldManifestIn } from './heldManifest';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, pagedFrom, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
@@ -50,6 +51,8 @@ interface ModToUpdate {
 }
 
 interface UpdateOptions {
+  /** For a mod named here, the own paths whose files alone it records, the manifest's other lines kept as they are. */
+  readonly only?: ReadonlyMap<string, readonly string[]>;
   readonly onProgress?: (status: UpdateManifestStatus) => void;
   readonly signal?: AbortSignal;
 }
@@ -112,27 +115,34 @@ async function folderMissing(adapter: Adapter, folder: string): Promise<boolean>
 
 type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[] } | { readonly unreadable: string };
 
-async function hashedFilesOf(adapter: Adapter, { folder, isSourceFolder }: Pick<ModToUpdate, 'folder' | 'isSourceFolder'>): Promise<Hashed> {
+async function hashedFilesOf(
+  adapter: Adapter, { folder, isSourceFolder }: Pick<ModToUpdate, 'folder' | 'isSourceFolder'>, ignore: readonly string[],
+): Promise<Hashed> {
   const value = await (isSourceFolder ? adapter.sourceFolderValue(folder) : adapter.folderValue(folder));
-  const files = ownFilesOf(value);
-  return 'why' in files ? { unreadable: files.why } : { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: value.exclude };
+  const files = ownFilesOf(value, ignore);
+  if ('why' in files) return { unreadable: files.why };
+  return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files.keys()) };
 }
 
-// A manifest of the format before version 1 is written over, as pre-alpha Modbench migrates none; one of another version
-// is refused, naming both (formats/CLAUDE.md, Versions).
-async function heldManifestOf(folder: string): Promise<Manifest | undefined | { readonly refusal: string }> {
-  try {
-    const held = await manifestIn(folder);
-    if (held === undefined || 'olderFormat' in held) return undefined;
-    return 'refused' in held ? refusal(`${held.refused}.`) : held.manifest;
-  } catch (err) {
-    return refusal(`its manifest could not be read: ${errorMessage(err)}`);
-  }
+const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
+
+// The lines `added` records, laid over those `held` keeps: every held package stays, and `added` brings those it lacks.
+function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
+  if (held === undefined) return added;
+  const heldKeys = new Set(held.packages.map(packageKey));
+  return {
+    packages: [...held.packages, ...added.packages.filter((pkg) => !heldKeys.has(packageKey(pkg)))],
+    exclude: [...new Set([...held.exclude, ...added.exclude])],
+    ignore: added.ignore,
+    files: new Map([...held.files, ...added.files]),
+  };
 }
 
-async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[]): Promise<Answer> {
-  const held = await heldManifestOf(mod.folder);
-  if (held !== undefined && 'refusal' in held) return held;
+async function updateMod(
+  adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[], only?: readonly string[],
+): Promise<Answer> {
+  const held = await heldManifestIn(mod.folder);
+  if (held !== undefined && 'why' in held) return refusal(held.why);
   const holds = (name: string): boolean => name === (mod.installationFile === undefined ? undefined : basename(mod.installationFile.path)) || downloadedFiles.some(({ package: pkg }) => pkg.name === name);
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
     return refusal('its manifest names the game folder, and the game folder was not found.');
@@ -143,7 +153,7 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
 
   let hashed: Hashed;
   try {
-    hashed = await hashedFilesOf(adapter, mod);
+    hashed = await hashedFilesOf(adapter, mod, held?.ignore ?? []);
   } catch (err) {
     hashed = { unreadable: `a file could not be read: ${errorMessage(err)}` };
   }
@@ -152,9 +162,11 @@ async function updateMod(adapter: Adapter, mod: ModToUpdate, downloadedFiles: re
   const own = mod.installationFile;
   const installationFile = own === undefined ? undefined
     : downloadedFileOf(pagedFrom(own, downloadedFiles.find(({ package: pkg }) => pkg.name === basename(own.path))?.file), nexusFileOf(adapter));
-  const recorded = buildManifest(
+  const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
+  const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
-    hashed.files, hashed.exclude, held);
+    files, exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
+  const recorded = only === undefined ? built : { ...built, manifest: laidOver(held, built.manifest) };
   let written: boolean;
   try {
     written = await writeManifestIn(mod.folder, recorded.manifest);
@@ -190,7 +202,7 @@ const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (
 /** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceModsToRecord`, or every one when
  *  `everyMod`. A source mod's own folder is its build's. */
 export async function updateManifest(
-  deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
+  deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal, only }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
   sourceModsToRecord: readonly string[],
 ): Promise<UpdateManifestResult> {
   const { adapter } = deps;
@@ -238,7 +250,7 @@ export async function updateManifest(
   for (const [at, mod] of read.entries()) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
-    const answer = await updateMod(adapter, mod, downloadedFiles);
+    const answer = await updateMod(adapter, mod, downloadedFiles, only?.get(mod.name));
     if (!mod.isSourceFolder) acted.push(mod.name);
     if ('refusal' in answer) { refused.push({ item: mod.name, reason: answer.refusal }); continue; }
     landed.push(answer.landed);

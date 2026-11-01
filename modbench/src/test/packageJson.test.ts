@@ -1267,15 +1267,30 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['mod enabled holdsPublisherTag', { 'modbench.mod.hasPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@4`, `${REMOVE_PUBLISHER_TAG} 2_change@5`]],
     ['mod enabled', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsPublisherTag': true }, [`${ADD_PUBLISHER_TAG} 2_change@4`]],
     ['file included', { 'modbench.mod.hasPublisher': true }, []],
-    ['file included', { 'modbench.mod.hasPathPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@2`]],
-    ['file included holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@2`, `${REMOVE_PUBLISHER_TAG} 2_change@3`]],
-    ['folder holdsPublisherTag', {}, [`${REMOVE_PUBLISHER_TAG} 2_change@3`]],
-    ['folder', { 'modbench.mod.hasPathPublisher': true, 'modbench.mod.holdsPublisherTag': true }, [`${ADD_PUBLISHER_TAG} 2_change@2`]],
+    ['file included', { 'modbench.mod.hasPathPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@3`]],
+    ['file included holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@3`, `${REMOVE_PUBLISHER_TAG} 2_change@4`]],
+    ['folder holdsPublisherTag', {}, [`${REMOVE_PUBLISHER_TAG} 2_change@4`]],
+    ['folder', { 'modbench.mod.hasPathPublisher': true, 'modbench.mod.holdsPublisherTag': true }, [`${ADD_PUBLISHER_TAG} 2_change@3`]],
     ['file included inOverwrite holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, []],
     ['folder inOverwrite holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, []],
     ['separator', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsPublisherTag': true }, []],
   ])('on a %s row with %j, the publisher tag items are %j', (viewItem, facts, items) => {
     expect(publisherTagItems(viewItem, facts)).toEqual(items);
+  });
+
+  const ignoreItems = (viewItem: string, hasRepository: boolean): string[] =>
+    inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem, 'modbench.modlist.hasRepository': hasRepository }))
+      .filter((e) => ['modbench.mod.ignoreFile', 'modbench.mod.unignoreFile'].includes(e.command)).map((e) => e.command);
+
+  it.each([
+    ['file included', true, ['modbench.mod.ignoreFile']],
+    ['file included ignored', true, []],
+    ['file included ignored ignoreEntry', true, ['modbench.mod.unignoreFile']],
+    ['file included', false, []],
+    ['file included inOverwrite', true, []],
+    ['folder', true, []],
+  ])('on a %s row, with a repository %s, the ignore items are %j: unignore only on a row whose own path is an entry', (viewItem, hasRepository, items) => {
+    expect(ignoreItems(viewItem, hasRepository)).toEqual(items);
   });
 
   const ON_THE_TREE = { focusedView: 'modbench.modList', listFocus: true, ...inInstance };
@@ -1315,6 +1330,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
     ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
     ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
+    ['modbench.mod.ignoreFile', { 'modbench.modlist.hasRepository': true, 'modbench.mod.holdsUnignoredFile': true }],
+    ['modbench.mod.unignoreFile', { 'modbench.modlist.hasRepository': true, 'modbench.mod.holdsIgnoreEntryFile': true }],
     ['modbench.mod.addPublisherTag', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsTaggableRow': true }],
     ['modbench.mod.removePublisherTag', { 'modbench.mod.holdsPublisherTag': true }],
   ]);

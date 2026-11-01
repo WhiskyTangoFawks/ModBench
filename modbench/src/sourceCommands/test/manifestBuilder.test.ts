@@ -29,7 +29,7 @@ const namesOf = (manifest: Manifest): string[] => manifest.packages.map((pkg) =>
 
 describe('a mod\'s manifest from its files', () => {
   it('names nothing for a folder of metadata alone', () => {
-    expect(built({}).manifest).toEqual({ packages: [], exclude: [], files: new Map() });
+    expect(built({}).manifest).toEqual({ packages: [], exclude: [], ignore: [], files: new Map() });
   });
 
   it('names each file with its hash, the installation file with its host on Nexus, and the paths the folder excludes', () => {
@@ -37,7 +37,7 @@ describe('a mod\'s manifest from its files', () => {
 
     expect(manifest).toEqual({
       packages: [{ kind: 'installationFile', name: 'Mod-1.7z', size: 7, hash: 'hash of Mod-1.7z', host: { nexus: NEXUS } }],
-      exclude: ['a.nif'], files: new Map([['a.nif', 'HA']]),
+      exclude: ['a.nif'], ignore: [], files: new Map([['a.nif', 'HA']]),
     });
   });
 
@@ -137,7 +137,7 @@ describe('a mod\'s files that the game folder holds', () => {
 
   describe('when the held manifest names the game folder\'s host', () => {
     const heldHost = { steam: { app: 377160, depots: { 1: 'v' } } };
-    const heldGame = (files: Record<string, string>): Manifest => ({ packages: [{ kind: 'gameFolder', host: heldHost }], exclude: [], files: new Map(Object.entries(files)) });
+    const heldGame = (files: Record<string, string>): Manifest => ({ packages: [{ kind: 'gameFolder', host: heldHost }], exclude: [], ignore: [], files: new Map(Object.entries(files)) });
 
     it('keeps it while the files taken keep their bytes, though the places record other depots', () => {
       const { manifest } = built({ 'a.nif': 'HA' }, { game: gameOf(place({ 'a.nif': 'HA' }, { steamApp: 377160, depots: [{ id: '1', version: 'w' }] })) }, heldGame({ 'a.nif': 'HA' }));

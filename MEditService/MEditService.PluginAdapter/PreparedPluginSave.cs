@@ -36,12 +36,13 @@ public sealed class PreparedPluginSave : IDisposable
     /// <summary>The hash of the binary Commit puts in place, spelled as the commit trailers spell it.</summary>
     public string BinarySha256() => PluginBinaryHash.TrailerFormOfFile(_tmpPath);
 
-    /// <summary>The strings first and the binary last, each by one rename over the old file, so an
-    /// interrupted commit leaves the old binary or the new one (plugins.md, Compile, story 5).</summary>
-    public void Commit()
+    /// <summary>The strings first, the binary last, each by one rename over the old file, so an interrupted commit leaves the
+    /// old binary or the new one (plugins.md, Compile, story 5). <c>leaves</c> keeps a strings file.</summary>
+    public void Commit(Func<string, bool> leaves)
     {
         foreach (var (tempStringsPath, finalStringsPath) in _stringsFiles)
         {
+            if (leaves($"Strings/{Path.GetFileName(finalStringsPath)}")) continue;
             Directory.CreateDirectory(Path.GetDirectoryName(finalStringsPath)
                 ?? throw new InvalidOperationException($"Expected '{finalStringsPath}' to have a parent directory."));
             File.Move(tempStringsPath, finalStringsPath, overwrite: true);

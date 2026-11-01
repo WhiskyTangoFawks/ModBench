@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FolderValue } from '../../repositoriesLib/statusValues';
-import { exclusionsOf, isExcludedBy } from '../manifestAdapter';
+import { exclusionsOf, isUnderAny } from '../manifestAdapter';
 
 const holding = (paths: readonly string[], exclude: readonly string[] = []): Pick<FolderValue, 'files' | 'exclude'> => ({
   files: new Map(paths.map((path) => {
@@ -30,13 +30,14 @@ describe('exclusionsOf', () => {
   });
 });
 
-describe('isExcludedBy', () => {
+describe('isUnderAny', () => {
   it.each([
     ['the path itself', ['a.esp'], 'a.esp', true],
     ['a folder above it', ['docs'], 'docs/a.txt', true],
-    ['a path in another case, as a manifest names paths in their case', ['Docs'], 'docs/a.txt', false],
+    ['a folder above it in another case, as a manifest path ignores case', ['Docs'], 'docs/a.txt', true],
+    ['the path itself in another case', ['A.ESP'], 'a.esp', true],
     ['a path its own begins with', ['docs'], 'docsx/a.txt', false],
   ])('matches %s: %s', (_case, exclude, path, excluded) => {
-    expect(isExcludedBy(exclude, path)).toBe(excluded);
+    expect(isUnderAny(exclude, path)).toBe(excluded);
   });
 });

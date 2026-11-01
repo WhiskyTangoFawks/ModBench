@@ -661,6 +661,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.ignoreFile",
+        "title": "Ignore Mod File",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.unignoreFile",
+        "title": "Unignore Mod File",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.addPublisherTag",
         "title": "Add Publisher Tag",
         "category": "Modbench"
@@ -978,6 +988,14 @@
         {
           "command": "modbench.mod.includeFile",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsExcludedFile"
+        },
+        {
+          "command": "modbench.mod.ignoreFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository && modbench.mod.holdsUnignoredFile"
+        },
+        {
+          "command": "modbench.mod.unignoreFile",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository && modbench.mod.holdsIgnoreEntryFile"
         },
         {
           "command": "modbench.mod.addPublisherTag",
@@ -1674,14 +1692,24 @@
           "group": "2_change@1"
         },
         {
+          "command": "modbench.mod.ignoreFile",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && !(viewItem =~ /\\bignored\\b/) && !(viewItem =~ /\\binOverwrite\\b/) && modbench.modlist.hasRepository",
+          "group": "2_change@2"
+        },
+        {
+          "command": "modbench.mod.unignoreFile",
+          "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bignoreEntry\\b/ && modbench.modlist.hasRepository",
+          "group": "2_change@2"
+        },
+        {
           "command": "modbench.mod.addPublisherTag",
           "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem =~ /\\bfolder\\b/) && !(viewItem =~ /\\binOverwrite\\b/) && modbench.mod.hasPathPublisher",
-          "group": "2_change@2"
+          "group": "2_change@3"
         },
         {
           "command": "modbench.mod.removePublisherTag",
           "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem =~ /\\bfolder\\b/) && !(viewItem =~ /\\binOverwrite\\b/) && viewItem =~ /\\bholdsPublisherTag\\b/",
-          "group": "2_change@3"
+          "group": "2_change@4"
         },
         {
           "command": "modbench.copyValue",

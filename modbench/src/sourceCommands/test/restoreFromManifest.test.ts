@@ -19,7 +19,7 @@ const HB = 'BBBBBBBBBBA=';
 const HC = 'CCCCCCCCCCA=';
 const EDITED = 'EEEEEEEEEEA=';
 const PACK = 'PPPPPPPPPPA=';
-const EMPTY: Manifest = { packages: [], exclude: [], files: new Map() };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], files: new Map() };
 const MOD_7Z = { kind: 'installationFile', name: 'ModA.7z', size: 10, hash: PACK } as const;
 const DOWNLOADED: InstallationFile = {
   path: '/downloads/ModA.7z', size: 10, hash: PACK, entries: [{ path: 'a.nif', hash: HA }, { path: 'b.nif', hash: HB }, { path: 'Data/c.nif', hash: HC }],
@@ -100,6 +100,19 @@ describe('restore from manifest', () => {
       { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] },
     ]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['b.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], refused: [] });
+  });
+
+  it('writes and sends to the trash nothing of a file its manifest ignores, whatever its bytes (The manifest, story 11)', async () => {
+    const { restore, fake } = await over({
+      files: { ModA: { 'a.nif': HA, 'Game.mem': EDITED, 'logs/run.log': 'L' } },
+      manifests: { ModA: fromTheZip({ 'a.nif': HA }, { ignore: ['Game.mem', 'logs'] }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) },
+    });
+
+    const outcome = await restore(['ModA']);
+
+    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] }]);
+    expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: [], namedByNoLine: [] }], refused: [] });
   });
 
   it('names every installation file of a mod to the metadata, in the order the manifest reads them', async () => {
@@ -394,14 +407,14 @@ describe('restore from manifest', () => {
     const pinned = (): { folder: string; pin: string; branch: string } => ({ folder: source(), pin: 'abc', branch: 'main' });
     const BUILT = { mod: 'ModA', compiled: [], refused: [], archivesRefused: [], made: [{ path: 'a.esp', vouchedFor: true }, { path: 'b.nif', vouchedFor: true }] };
 
-    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string>; heldByGit: string[]; modFiles?: Record<string, string> }) {
+    async function sourceMod(answers: InstanceAnswers = {}, exclude: string[] = [], sourceFolderHolds?: { manifest: Manifest; files: Record<string, string>; heldByGit: string[]; modFiles?: Record<string, string> }, ignore: string[] = []) {
       await mkdir(source(), { recursive: true });
       await writeBuildFile(source(), buildFileOf());
       if (sourceFolderHolds !== undefined) await writeManifestIn(source(), sourceFolderHolds.manifest);
       const setup = await over({
         foldersOutsideMods: sourceFolderHolds === undefined ? {} : { [source()]: sourceFolderHolds.files },
         files: { ModA: { 'a.esp': EDITED, 'b.nif': HB, 'mine.txt': 'M' } }, sourceFolders: { ModA: source() },
-        manifests: { ModA: { packages: [REPOSITORY], exclude, files: holding({ 'a.esp': HA, 'b.nif': HB, ...sourceFolderHolds?.modFiles }) } },
+        manifests: { ModA: { packages: [REPOSITORY], exclude, ignore, files: holding({ 'a.esp': HA, 'b.nif': HB, ...sourceFolderHolds?.modFiles }) } },
         answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), pins: new Map([['ModA', pinned()]]), heldByGit: new Map([[source(), sourceFolderHolds?.heldByGit ?? []]]), ...answers },
       });
       setup.client.setCommandResult('cloneSubmodules', { applied: [{ folder: source(), leftDetached: "its branch 'main' is at def" }], refused: [] });
@@ -419,7 +432,7 @@ describe('restore from manifest', () => {
 
       expect(client.calls.map(({ method, args }) => [method, args[0]])).toEqual([
         ['cloneSubmodules', [pinned()]],
-        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], step: { compile: ['A.esp'] } }]],
+        ['build', [{ name: 'ModA', sourceFolder: source(), folder: folderOf('ModA'), exclude: [], ignore: [], step: { compile: ['A.esp'] } }]],
       ]);
       expect(writes(fake.calls)).toMatchObject([{ verb: 'trashFileIn' }]);
       expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: ['mine.txt'], leftDetached: "its branch 'main' is at def" }], refused: [] });
@@ -446,7 +459,7 @@ describe('restore from manifest', () => {
       });
 
       it('writes a game file its manifest names at the layout\'s path from the game folder, as the mod folder holds it', async () => {
-        const named = { manifest: { packages: [{ kind: 'gameFolder' } as const], exclude: [], files: holding({ 'assets/x.nif': HA }) }, files: {}, heldByGit: [], modFiles: { 'x.nif': HA } };
+        const named = { manifest: { packages: [{ kind: 'gameFolder' } as const], exclude: [], ignore: [], files: holding({ 'assets/x.nif': HA }) }, files: {}, heldByGit: [], modFiles: { 'x.nif': HA } };
         const { restore, fake } = await sourceMod({ places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/x.nif', HA, 'x.nif']) }] }, [], named);
 
         await restore(['ModA']);
@@ -490,6 +503,16 @@ describe('restore from manifest', () => {
       const outcome = await restore(['ModA']);
 
       expect([client.calls.map(({ method }) => method), outcome.landed.map(({ mod }) => mod)]).toEqual([['build'], ['ModA']]);
+    });
+
+    it('is built over the paths its manifest ignores, which its build sends to the trash no more than it records (The manifest, story 11)', async () => {
+      const { restore, client, fake } = await sourceMod({}, [], undefined, ['mine.txt']);
+
+      const outcome = await restore(['ModA']);
+
+      expect(writes(fake.calls)).toEqual([]);
+      expect(client.calls.find(({ method }) => method === 'build')?.args[0]).toMatchObject([{ name: 'ModA', ignore: ['mine.txt'] }]);
+      expect(outcome).toMatchObject({ landed: [{ mod: 'ModA', namedByNoLine: [] }] });
     });
 
     it('is built with the exclusions its manifest records, whatever its folder holds', async () => {

@@ -110,6 +110,27 @@ describe('a file row says differs when its bytes differ or no line names it, and
   });
 });
 
+describe('a file row says ignored when its manifest ignores it, and its menu keys on that (mods.md, A row, File and folder; Menus and keys)', () => {
+  it('says ignored on the file its manifest ignores only, and does not count it in the badge', async () => {
+    const { provider } = providerOver([status('ModA', { ignored: ['readme.txt'], ignoreEntries: ['readme.txt'] })]);
+    const modRow = await row(provider, 'ModA');
+    const meshes = await row(provider, 'meshes', modRow);
+    const ignored = await row(provider, 'readme.txt', modRow);
+
+    expect([ignored.description, ignored.contextValue, (await row(provider, 'a.nif', meshes)).contextValue, provider.badge()])
+      .toEqual(['ignored', expect.stringMatching(/\bignored\b.*\bignoreEntry\b|\bignoreEntry\b.*\bignored\b/), expect.not.stringMatching(/\bignored\b/), undefined]);
+  });
+
+  it('says ignored, with no entry of its own, on a file under an ignored folder', async () => {
+    const { provider } = providerOver([status('ModA', { ignored: ['meshes/a.nif'], ignoreEntries: ['meshes'] })]);
+    const meshes = await row(provider, 'meshes', await row(provider, 'ModA'));
+    const under = await row(provider, 'a.nif', meshes);
+
+    expect([under.description, under.contextValue]).toEqual(['ignored', expect.not.stringMatching(/ignoreEntry/)]);
+    expect(under.contextValue).toMatch(/\bignored\b/);
+  });
+});
+
 describe('the view\'s badge counts the mods that differ or have no manifest (mods.md, The view)', () => {
   it('counts them while the instance holds a repository', () => {
     const { provider } = providerOver([status('ModA', { noManifest: true }), status('ModB', { gone: ['a.nif'] }), status('ModC')]);

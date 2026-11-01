@@ -34,13 +34,14 @@ import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
 import { registerInitSourceModCommand } from './initSourceModCommand';
+import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
 import type { CheckForUpdates } from '../modCommands/checkForUpdates';
 import { registerConflictTable } from './conflictTableEditor';
 import { sameCopies, type CopyReads } from '../drivingLib/sameCopies';
 import {
-  modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
+  modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerFileIgnoreCommands, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
 } from './modManagementCommands';
 
@@ -54,7 +55,9 @@ interface SourceGestureDeps {
   registerRepositories: () => Promise<void>;
 }
 
-type ManifestDeps = Pick<ManifestGestureDeps, 'commands' | 'toolboxView' | 'say'>;
+type ManifestDeps = Pick<ManifestGestureDeps, 'toolboxView' | 'say'> & {
+  commands: ManifestGestureDeps['commands'] & Pick<ModlistRepositoryCommands, 'ignoreFiles'>;
+};
 
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'quiet'>;
@@ -170,6 +173,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
+    ...registerFileIgnoreCommands(deps.manifestGestures.commands, instance, () => view.selection, reporterFor('mod.ignoreFile')),
     ...registerPublisherTagCommands(commands, instance, () => view.selection, reporterFor('mod.publisherTag')),
     registerModMoveCommand(
       commands, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),

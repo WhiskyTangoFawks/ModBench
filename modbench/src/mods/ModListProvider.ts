@@ -10,12 +10,12 @@ import { messageLine } from '../drivingLib/messageLine';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
   anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode,
-  type ChildrenShown,
+  type ChildrenShown, type FileIgnore,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 import type { OpenRows } from './openRows';
-import { countsInBadge, differingFiles, lackedLine, statusDescription } from './statusText';
+import { countsInBadge, differingFiles, ignoreEntriesOf, ignoredFiles, lackedLine, statusDescription } from './statusText';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import { blankIcon } from '../drivingLib/blankIcon';
@@ -446,8 +446,13 @@ export class ModListProvider
       const status = origin.kind === 'mod' ? this.statusOf(origin) : undefined;
       return status !== undefined && [...differingFiles(status)].some((path) => path === relativePath || path.startsWith(`${relativePath}/`));
     };
+    const ignored = (origin: FileOrigin, file: OriginFile): FileIgnore => {
+      const status = origin.kind === 'mod' ? this.statusOf(origin) : undefined;
+      if (status === undefined || !ignoredFiles(status).has(file.relativePath)) return 'unignored';
+      return ignoreEntriesOf(status).has(file.includedPath) ? 'entry' : 'under';
+    };
     const holdsPublisherTag = (path: string) => tagsHeldAt(this.instanceValue, path).length > 0;
-    return { shown: row.shown, matches: this.matches, conflict, differs, holdsPublisherTag };
+    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag };
   }
 
   getParent(element: ModlistNode): ModlistNode | undefined {

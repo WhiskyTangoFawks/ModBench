@@ -3,7 +3,7 @@ import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { Refusal } from '../drivingLib/refusal';
 
-const LEFT_OUT = new Set<string>(['mod', 'manifestFile', 'packages'] satisfies (keyof ModStatus)[]);
+const LEFT_OUT = new Set<string>(['mod', 'manifestFile', 'packages', 'ignored', 'ignoreEntries'] satisfies (keyof ModStatus)[]);
 
 const isHeld = (member: unknown): boolean =>
   member === true || ((typeof member === 'string' || Array.isArray(member)) && member.length > 0);

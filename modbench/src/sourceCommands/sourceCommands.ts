@@ -54,12 +54,14 @@ async function noRepository(folder: string | undefined): Promise<string> {
   return held !== undefined && 'refused' in held ? `was not built: ${held.refused}.` : 'no repository in the source folder builds it';
 }
 
-// mods.md, A source mod, story 2: the build keeps the exclusions the folder holds, and those its manifest records.
-async function exclusionsIn(adapter: Adapter, folder: string): Promise<readonly string[] | { readonly reason: string }> {
+// mods.md, A source mod, story 2: the build keeps the exclusions the folder holds, and those its manifest records, and the
+// paths its manifest ignores (modlist-repository.md, The manifest, story 11).
+async function keptByBuildIn(adapter: Adapter, folder: string): Promise<{ exclude: readonly string[]; ignore: readonly string[] } | { readonly reason: string }> {
   try {
     const held = await manifestIn(folder);
     if (held !== undefined && 'refused' in held && !('olderFormat' in held)) return { reason: `was not built: ${held.refused}.` };
-    return exclusionsOf(held !== undefined && 'manifest' in held ? held.manifest : undefined, await adapter.folderValue(folder));
+    const manifest = held !== undefined && 'manifest' in held ? held.manifest : undefined;
+    return { exclude: exclusionsOf(manifest, await adapter.folderValue(folder)), ignore: manifest?.ignore ?? [] };
   } catch (err) {
     return { reason: `was not built: its folder could not be read: ${errorMessage(err)}.` };
   }
@@ -81,9 +83,9 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
   if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
   const buildFile = await heldBuildFile(sourceFolder);
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
-  const exclude = await exclusionsIn(adapter, folder);
-  if ('reason' in exclude) return { item: mod, reason: exclude.reason };
-  return { name: mod, folder, exclude, sourceFolder, buildFile };
+  const kept = await keptByBuildIn(adapter, folder);
+  if ('reason' in kept) return { item: mod, reason: kept.reason };
+  return { name: mod, folder, ...kept, sourceFolder, buildFile };
 }
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,

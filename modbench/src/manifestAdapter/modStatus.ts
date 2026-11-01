@@ -5,7 +5,7 @@ import { isManifestPath } from '../repositoriesLib/manifestPath';
 import type { FolderFile, FolderValue, HashedPath, StatusValues } from '../repositoriesLib/statusValues';
 import type { Manifest, ManifestPackage } from './manifest';
 import type { ManifestAt } from './manifestFiles';
-import { isExcludedBy } from './folderPaths';
+import { isUnderAny } from './folderPaths';
 import { installationFileLack } from './packageLack';
 import { packageWithoutHost, repositoryOf } from './manifestPackages';
 
@@ -24,6 +24,10 @@ export interface ModStatus {
   readonly noManifest: boolean;
   readonly differing: readonly string[];
   readonly namedByNoLine: readonly string[];
+  /** The files the folder holds that its manifest ignores, by the paths the folder holds them at. */
+  readonly ignored: readonly string[];
+  /** The paths the manifest ignores, as it names them. */
+  readonly ignoreEntries: readonly string[];
   readonly gone: readonly string[];
   /** The files no package holds the bytes of, nor a file of their name; `otherBytes`, those a package holds one of their name of. */
   readonly notInPackage: readonly string[];
@@ -40,7 +44,7 @@ export interface ModStatus {
 }
 
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
 const ordered = (paths: Iterable<string>): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
@@ -66,17 +70,21 @@ interface FileAgainstFolder {
 export interface FolderAgainst {
   readonly files: readonly FileAgainstFolder[];
   readonly namedByNoLine: readonly string[];
+  /** The files the manifest ignores, by the paths the folder holds them at. */
+  readonly ignored: readonly string[];
 }
 
-/** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system ignores it.
- *  Of two files at one own path, the one the manifest's exclusion fits is its. */
-export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude'>, folder: FolderValue): FolderAgainst {
-  const held = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
+/** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system does.
+ *  Of two files at one own path, the one the exclusion fits is its. Ignored files are out. */
+export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore'>, folder: FolderValue): FolderAgainst {
+  const present = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
+  const ignored = present.filter(([, file]) => isUnderAny(manifest.ignore, file.path));
+  const held = present.filter((entry) => !ignored.includes(entry));
   const exactly = byOwnPath(held, (path) => path);
   const inAnyCase = byOwnPath(held, folded);
   const claimed = new Set<string>();
   const files = [...manifest.files].map(([path, hash]): FileAgainstFolder => {
-    const excluded = isExcludedBy(manifest.exclude, path);
+    const excluded = isUnderAny(manifest.exclude, path);
     const candidates = (exactly.get(path) ?? (folder.ignoresCase ? inAnyCase.get(folded(path)) : undefined) ?? []).filter(([at]) => !claimed.has(at));
     const [pathInFolder, file] = candidates.find(([, one]) => one.excluded === excluded) ?? candidates[0] ?? [];
     if (pathInFolder === undefined || file === undefined) return { path, hash };
@@ -84,7 +92,10 @@ export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude'>, fol
     if (hash === null) return { path, hash, pathInFolder };
     return { path, hash, pathInFolder, holdsItsBytes: file.excluded === excluded && file.read.kind === 'read' && file.read.answer.hash === hash };
   });
-  return { files, namedByNoLine: ordered(held.flatMap(([pathInFolder]) => (claimed.has(pathInFolder) ? [] : [pathInFolder]))) };
+  return {
+    files, namedByNoLine: ordered(held.flatMap(([pathInFolder]) => (claimed.has(pathInFolder) ? [] : [pathInFolder]))),
+    ignored: ordered(ignored.map(([pathInFolder]) => pathInFolder)),
+  };
 }
 
 /** Each file of `manifest` no package holds the bytes of, split by whether a package holds a file of its name: its path,
@@ -126,12 +137,14 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   if (values.kind === 'notAsked') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;
-  const { files, namedByNoLine } = folderAgainst(manifest, values.folder);
+  const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder);
   const held = packagesHeld(manifest, values);
   return {
     ...nothing(mod.name, { manifestFile: file, packages: manifest.packages }),
     differing: ordered(files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : []))),
     namedByNoLine,
+    ignored,
+    ignoreEntries: manifest.ignore,
     gone: ordered(files.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined ? [path] : []))),
     ...held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : {},
     noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHosted)),

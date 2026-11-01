@@ -955,6 +955,7 @@ export interface components {
             folder: string;
             step?: components["schemas"]["BuildStepRequest"] | null;
             exclude?: string[] | null;
+            ignore?: string[] | null;
         };
         /** @enum {string} */
         BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "ArchiveFileNotInFolder" | "NotDecompiled";
@@ -1362,6 +1363,7 @@ export interface components {
             made: components["schemas"]["MadeFile"][];
             packed: string[];
             replaced: string[];
+            ignored: string[];
         };
         ModToInitSourceModRequest: {
             name: string;

@@ -30,11 +30,11 @@ internal sealed class SourceModBuild
         if (!_source.SourceToBuild(mod.SourceFolder, mod.Step is BuildStep.Copy copy ? copy.Paths : []).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
 
-        var written = new FolderWrite(_modFolders, mod.Folder, mod.Exclude, instance.ExclusionMark);
+        var written = new FolderWrite(_modFolders, mod.Folder, mod.Exclude, mod.Ignore, instance.ExclusionMark);
         var ran = mod.Step switch
         {
             BuildStep.Copy => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(Copied(source.Files, written)),
-            BuildStep.Compile compile => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(await CompiledAsync(loadOrder, mod, compile.Plugins)),
+            BuildStep.Compile compile => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(await CompiledAsync(loadOrder, mod, compile.Plugins, written)),
             BuildStep.Pack pack => Packed(mod, pack.Archives, instance.Archives, written),
             BuildStep.Decompile decompile => await DecompiledAsync(loadOrder, mod, decompile),
             _ => throw new ArgumentOutOfRangeException(nameof(mod), mod.Step, "A build file names no other built-in step."),
@@ -46,6 +46,8 @@ internal sealed class SourceModBuild
 
     private static ModBuildOutcome Copied(IReadOnlyList<FileToCopy> files, FolderWrite written)
     {
+        var ignored = files.Where(file => written.Ignores(file.Path)).ToList();
+        files = [.. files.Except(ignored)];
         try
         {
             foreach (var file in files)
@@ -61,14 +63,25 @@ internal sealed class SourceModBuild
         {
             return ModBuildOutcome.Stopped($"The build stopped at its copy, as a file could not be read or written: {e.Message}");
         }
-        return new ModBuildOutcome([], [], [], null) { Made = MadeOf(files.Select(file => (written.PathOf(file.Path), true))) };
+        return new ModBuildOutcome([], [], [], null)
+        {
+            Made = MadeOf(files.Select(file => (written.PathOf(file.Path), true))),
+            Ignored = [.. ignored.Select(file => file.Path).Order(StringComparer.Ordinal)],
+        };
     }
 
-    private async Task<ModBuildOutcome> CompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> names)
+    private async Task<ModBuildOutcome> CompiledAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, IReadOnlyList<string> names, FolderWrite written)
     {
-        var plugins = Placed(loadOrder, mod, names);
-        var (landed, refused) = await CompileAsync(plugins);
-        return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(CompiledFiles(loadOrder, mod, plugins, landed)) };
+        var ignored = names.Where(written.Ignores).ToList();
+        var plugins = Placed(loadOrder, mod, [.. names.Except(ignored)]);
+        var (landed, refused) = await CompileAsync(plugins, path =>
+        {
+            if (!written.Ignores(path)) return false;
+            ignored.Add(path);
+            return true;
+        });
+        var made = CompiledFiles(loadOrder, mod, plugins, landed).Where(file => !written.Ignores(file.Path));
+        return new ModBuildOutcome(landed, refused, [], null) { Made = MadeOf(made), Ignored = [.. ignored.Order(StringComparer.Ordinal)] };
     }
 
     // source.md, Build, story 2: the extension takes the loose files an archive packs out of the folder, so the game reads one copy.
@@ -76,8 +89,9 @@ internal sealed class SourceModBuild
         ModToBuild mod, IReadOnlyList<ArchiveToPack> archives, ArchiveVariants? variants, FolderWrite written)
     {
         var held = _modFolders.FilePaths(mod.Folder).ToLookup(path => path, StringComparer.OrdinalIgnoreCase);
+        var ignored = archives.Where(archive => written.Ignores(archive.Path)).Select(archive => archive.Path).Order(StringComparer.Ordinal).ToList();
         List<(ArchiveToPack Archive, List<string> Loose)> packed = [];
-        foreach (var archive in archives)
+        foreach (var archive in archives.Where(archive => !ignored.Contains(archive.Path)))
         {
             List<string> loose = [];
             foreach (var file in archive.Files)
@@ -105,7 +119,7 @@ internal sealed class SourceModBuild
             if (refusal is null) takenOut.AddRange(loose);
             else refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
         }
-        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Packed = takenOut });
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Packed = takenOut, Ignored = ignored });
     }
 
     private static IArchiveVariant VariantOf(ArchiveToPack archive, ArchiveVariants variants) =>
@@ -171,11 +185,11 @@ internal sealed class SourceModBuild
     }
 
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
-        IReadOnlyList<RegisteredPlugin> plugins)
+        IReadOnlyList<RegisteredPlugin> plugins, Func<string, bool> leavesUnwritten)
     {
         var twins = plugins.GroupBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase).Where(named => named.Count() > 1).ToList();
         List<RegisteredPlugin> compilable = [.. plugins.Except(twins.SelectMany(named => named))];
-        var compiled = await _compile.CompileAsync(compilable);
+        var compiled = await _compile.CompileAsync(compilable, leavesUnwritten);
         return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. compiled.Refused]);
     }
 

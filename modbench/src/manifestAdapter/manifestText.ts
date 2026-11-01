@@ -38,13 +38,14 @@ const packageObject = (pkg: ManifestPackage): object => {
 const block = (key: string, open: string, close: string, lines: readonly string[]): string[] =>
   (lines.length === 0 ? [] : [`${JSON.stringify(key)}:${open}\n${lines.join(',\n')}\n${close}`]);
 
-export function manifestText({ packages, exclude, files }: Manifest): string {
+export function manifestText({ packages, exclude, ignore, files }: Manifest): string {
   const ordered = [...packages].sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || ordinalIgnoreCaseThenOrdinal(nameOf(a), nameOf(b)));
   const paths = [...files.keys()].sort(ordinalIgnoreCaseThenOrdinal);
   const members = [
     `"version":${MANIFEST_VERSION}`,
     ...block('packages', '[', ']', ordered.map((pkg) => JSON.stringify(packageObject(pkg)))),
     ...block('exclude', '[', ']', [...exclude].sort(ordinalIgnoreCaseThenOrdinal).map((path) => JSON.stringify(path))),
+    ...block('ignore', '[', ']', [...ignore].sort(ordinalIgnoreCaseThenOrdinal).map((path) => JSON.stringify(path))),
     ...block('files', '{', '}', paths.map((path) => `${JSON.stringify(path)}:${JSON.stringify(files.get(path) ?? null)}`)),
   ];
   return `{\n${members.join(',\n')}\n}\n`;
