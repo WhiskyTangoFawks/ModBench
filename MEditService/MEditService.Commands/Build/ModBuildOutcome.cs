@@ -47,8 +47,8 @@ public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Te
 /// plugin's or archive's file does not.</summary>
 public sealed record MadeFile(string Path, bool VouchedFor);
 
-/// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Packed: each loose file an archive it made
-/// packs, by its path in the folder. Ignored: each file it left unwritten. Uncommitted and Unpushed: its source's.</summary>
+/// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Packed: each loose file an archive packs.
+/// Ignored: each file it left unwritten. Uncommitted and Unpushed: its source's.</summary>
 internal sealed record ModBuildOutcome(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
