@@ -546,6 +546,25 @@ export type PublisherConfiguration =
   | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly pathProblems: readonly TagPathProblem[] }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** One sorting rule file as the instance holds it: where it is, and its text, or that it is absent or why it could not be read. */
+export type SortingRuleFile = { readonly path: string } & (
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unreadable'; readonly reason: string }
+);
+
+/** LOOT's metadata files in the instance (ADR-0026). */
+export interface SortingRuleFiles {
+  readonly masterlist: SortingRuleFile;
+  readonly prelude: SortingRuleFile;
+  readonly userlist: SortingRuleFile;
+}
+
+/** The files before any read: none is there. */
+export const ABSENT_SORTING_RULE_FILES: SortingRuleFiles = {
+  masterlist: { path: '', kind: 'absent' }, prelude: { path: '', kind: 'absent' }, userlist: { path: '', kind: 'absent' },
+};
+
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
 export interface InstanceReading extends InstanceGame {
   /** The profile the mod manager's configuration selects. */
@@ -564,6 +583,7 @@ export interface InstanceReading extends InstanceGame {
   /** The links in the listings of the game folder, which Modbench ignores: a link is a deployed file. */
   readonly gameFolderLinks: number;
   readonly creationClubList: readonly string[];
+  readonly sortingRuleFiles: SortingRuleFiles;
   /** The archives the INIs list, in load order. */
   readonly archiveList: readonly string[];
   /** Each INI the game reads that the archive list did not. */

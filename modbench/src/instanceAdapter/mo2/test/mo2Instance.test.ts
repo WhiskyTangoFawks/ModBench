@@ -725,6 +725,29 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
+    describe('LOOT\'s metadata files, at the instance root', () => {
+      it('answers each file\'s text, and a file that is not there as absent', async () => {
+        await writeFile(join(root, 'masterlist.yaml'), 'plugins: []\n');
+        await writeFile(join(root, 'userlist.yaml'), 'plugins: []\n');
+
+        const files = await source.sortingRuleFiles();
+
+        expect(files).toEqual({
+          masterlist: { path: join(root, 'masterlist.yaml'), kind: 'text', text: 'plugins: []\n' },
+          prelude: { path: join(root, 'prelude.yaml'), kind: 'absent' },
+          userlist: { path: join(root, 'userlist.yaml'), kind: 'text', text: 'plugins: []\n' },
+        });
+      });
+
+      it('answers unreadable, with why, for a file that cannot be read as a file', async () => {
+        await mkdir(join(root, 'userlist.yaml'));
+
+        const { userlist } = await source.sortingRuleFiles();
+
+        expect(expectKind(userlist, 'unreadable').reason).toMatch(/EISDIR/);
+      });
+    });
+
     describe('the game folder\'s Creation Club list, where Mod Management takes the Creation Club plugins from', () => {
       let game: string;
 

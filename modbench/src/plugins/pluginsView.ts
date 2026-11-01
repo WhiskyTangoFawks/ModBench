@@ -17,7 +17,7 @@ import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
 import type { RecordBrowser } from './RecordBrowser';
-import { decompileAndRepairLink, decompileLink, publishPluginProblems } from './loadDiagnostics';
+import { decompileAndRepairLink, decompileLink, publishPluginProblems, publishRuleFileDiagnostics } from './loadDiagnostics';
 import { PLUGINS_KEY_ARGS, pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
@@ -95,6 +95,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const failedToReadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-failed-to-read');
   const sortingErrorDiagnostics = vscode.languages.createDiagnosticCollection('modbench-sorting-errors');
   const sortingWarningDiagnostics = vscode.languages.createDiagnosticCollection('modbench-sorting-warnings');
+  const sortingInfoDiagnostics = vscode.languages.createDiagnosticCollection('modbench-sorting-info');
+  const ruleFileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-sorting-rule-files');
   const sourceUnreadableDiagnostics = vscode.languages.createDiagnosticCollection('modbench-source-unreadable');
   const tree = new PluginsTreeProvider({
     instance,
@@ -109,6 +111,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
     publishSortingErrors: (errors) => publishPluginProblems(sortingErrorDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
     publishSortingWarnings: (warnings) => publishPluginProblems(sortingWarningDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
+    publishSortingInfo: (info) => publishPluginProblems(sortingInfoDiagnostics, pluginFile, info, vscode.DiagnosticSeverity.Information),
+    publishRuleFiles: (diagnostics) => publishRuleFileDiagnostics(ruleFileDiagnostics, diagnostics),
     publishSourceUnreadable: (warnings) => publishPluginProblems(sourceUnreadableDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning,
       (plugin, { decompileRepairs }) => decompileLink(plugin, decompileRepairs)),
   });

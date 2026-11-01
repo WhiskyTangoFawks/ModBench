@@ -21,6 +21,8 @@ export function pluginsTreeOver(
     publishSourceUnreadable: () => undefined,
     publishSortingErrors: () => undefined,
     publishSortingWarnings: () => undefined,
+    publishSortingInfo: () => undefined,
+    publishRuleFiles: () => undefined,
     modStatuses: NO_MOD_STATUSES,
     reporter: recordingReporter(),
     ...overrides,

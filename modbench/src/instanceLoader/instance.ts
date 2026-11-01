@@ -12,9 +12,9 @@ import { modNamesOf } from './modName';
 import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from './downloadedFileRows';
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
-  type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  ABSENT_SORTING_RULE_FILES, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
-  type PublisherTag, type Subscription,
+  type PublisherTag, type SortingRuleFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -120,6 +120,8 @@ export interface InstanceValue {
   /** Each publisher tag the instance's publisher declares: the adapter's answer, before any read too. */
   readonly publisherTags: readonly PublisherTag[];
   readonly publisherConfiguration: PublisherConfiguration;
+  /** LOOT's metadata files, as the instance holds them. */
+  readonly sortingRuleFiles: SortingRuleFiles;
 }
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
@@ -250,6 +252,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: new Map() },
   publisherTags: adapter.publisherTags,
   publisherConfiguration: { kind: 'none' },
+  sortingRuleFiles: ABSENT_SORTING_RULE_FILES,
 });
 
 export class Instance implements Subscription {
@@ -531,6 +534,7 @@ export class Instance implements Subscription {
       paths,
       publisherTags: adapter.publisherTags,
       publisherConfiguration: reading.publisherConfiguration,
+      sortingRuleFiles: reading.sortingRuleFiles,
     };
   }
 }

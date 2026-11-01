@@ -1,3 +1,5 @@
+import type { RuleLevel, RuleSource } from './lootMetadata';
+
 interface PluginFacts {
   origin: string;
   masters: readonly string[];
@@ -9,16 +11,18 @@ interface PluginFacts {
 /** `undefined` while mEdit cannot say, and a rule that needs the answer is not judged. */
 export type PluginFactsOf = (filename: string) => PluginFacts | undefined;
 
-interface PluginRef {
+export interface PluginRef {
   origin: string;
   filename: string;
 }
 
 export interface BrokenRule {
-  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag';
-  level: 'error' | 'warning';
+  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'message' | 'condition';
+  level: RuleLevel;
   plugins: PluginRef[];
   reason: string;
+  /** Where LOOT's metadata states the rule; the game's rules have none. */
+  source?: RuleSource;
 }
 
 // ADR-0012: the game compares a plugin's filename without case.

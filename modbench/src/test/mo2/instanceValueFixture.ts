@@ -1,5 +1,6 @@
 import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import { READ_SORTING_RULE_FILES } from '../readSortingRuleFiles';
 import { groupModOrder } from '../../instanceAdapter/modGroups';
 import { modOfOrigin } from '../../instanceLoader/modOfOrigin';
 import { entryKey } from '../../instanceAdapter/mo2/mo2Context';
@@ -39,6 +40,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map() },
     publisherTags: [],
     publisherConfiguration: { kind: 'none' },
+    sortingRuleFiles: READ_SORTING_RULE_FILES,
   };
   const value = { ...base, ...overrides };
   const modGroups = groupModOrder(value.mods);
