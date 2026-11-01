@@ -65,7 +65,8 @@ internal sealed class SourceModBuild
         }
         return new ModBuildOutcome([], [], [], null)
         {
-            Made = MadeOf(files.Select(file => (written.PathOf(file.Path), true))), Ignored = [.. ignored.Select(file => file.Path).Order(StringComparer.Ordinal)],
+            Made = MadeOf(files.Select(file => (written.PathOf(file.Path), true))),
+            Ignored = [.. ignored.Select(file => file.Path).Order(StringComparer.Ordinal)],
         };
     }
 

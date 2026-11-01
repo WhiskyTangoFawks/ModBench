@@ -59,8 +59,8 @@ async function manifestChanged(
   }
 }
 
-/** Ignores each file in its mod's manifest, or puts it back and records that file's own line, nothing else of the mod. A
- *  source mod's own folder is recorded by its build. A mod's files land or are refused together. */
+/** Ignores each file in its mod's manifest, or puts it back and records that file's line alone. A source mod's folder is
+ *  recorded by its build. A mod's files land or are refused together. */
 export async function ignoreFiles(
   deps: IgnoreFilesDeps & UpdateManifestDeps, files: readonly FileToIgnore[], ignore: boolean,
 ): Promise<SelectionOutcome<FileToIgnore>> {

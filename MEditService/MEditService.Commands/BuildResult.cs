@@ -9,8 +9,7 @@ public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<
     : ISelectionAnswer<BuildRefused>;
 
 /// <summary>A mod whose step ran: what it compiled and refused, what stopped it, each file it made, which its manifest
-/// records (ADR-0016), what it took out of the way for the extension to trash,
-/// and each file it left unwritten because its manifest ignores the path.</summary>
+/// records (ADR-0016), what it took out of the way for the extension to trash, and each file it left unwritten, ignored.</summary>
 public sealed record ModBuilt(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
     IReadOnlyList<ArchiveRefused> ArchivesRefused, string? Failure, bool Uncommitted, bool Unpushed,

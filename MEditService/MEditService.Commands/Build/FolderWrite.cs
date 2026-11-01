@@ -3,7 +3,7 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>The writes of one build into a mod folder. A path the configuration excludes, or one in a folder it
-/// excludes, is written with the mod manager's exclusion mark on the excluded name. A path its manifest ignores is not written.</summary>
+/// excludes, is written with the mod manager's exclusion mark on the excluded name. An ignored path is not written.</summary>
 internal sealed class FolderWrite(
     IModFolderRepository repository, string folder, IReadOnlyList<string> exclude, IReadOnlyList<string> ignore, string exclusionMark)
 {
