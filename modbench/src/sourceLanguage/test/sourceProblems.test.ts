@@ -49,7 +49,7 @@ function feed(files: Record<string, string>, sourceFiles = sourceFolders, answer
   return { client, reporter, published, status, answered };
 }
 
-describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', () => {
+describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
   it('puts a reference to a missing record on its file, spanning the FormKey no active plugin holds', async () => {
     const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
     const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });

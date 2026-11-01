@@ -1,6 +1,6 @@
 // spec/formats/build-file.md, version 1: the build file as its schema states it.
 
-/** A step the VS Code user task its label names runs (mods.md, Build, story 13). */
+/** A step the VS Code user task its label names runs (source.md, Build, story 13). */
 export interface TaskStep {
   readonly kind: 'task';
   readonly task: string;

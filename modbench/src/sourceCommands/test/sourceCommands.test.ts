@@ -208,7 +208,7 @@ describe('sourceCommands build, in mod order', () => {
     expect(await recorded('ModB')).toMatchObject({ packages: [{ kind: 'repository', name: 'Old ModB' }] });
   });
 
-  it('stops a mod\'s build at a failed step, running no step after it (mods.md, Build, story 18)', async () => {
+  it('stops a mod\'s build at a failed step, running no step after it (source.md, Build, story 18)', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'task', task: 'First', args: [] }, COMPILE, { kind: 'task', task: 'Second', args: [] }] }));
     const client = new InMemoryMEditClient();
     buildingEach(client);
@@ -225,7 +225,7 @@ describe('sourceCommands build, in mod order', () => {
       { landed: [], refused: [{ item: 'ModA', reason: "was not built: '/s' holds no 'textures' to copy." }] }, 1],
     ['lands the mod, naming why, when a later step is refused, and runs no step after it', [COMPILE, { kind: 'copy', paths: ['textures'] }, COMPILE],
       { landed: [{ ...landedOf('ModA'), failure: "The build stopped at its step 2: '/s' holds no 'textures' to copy." }], refused: [] }, 2],
-  ])('%s (mods.md, Build, story 18)', async (_case, steps, expected, calls) => {
+  ])('%s (source.md, Build, story 18)', async (_case, steps, expected, calls) => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps }));
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', (mods: readonly BuildMod[]) => Promise.resolve(mods[0]?.step?.copy === undefined
@@ -248,7 +248,7 @@ describe('sourceCommands build, in mod order', () => {
     expect([outcome, client.calls.length]).toEqual([{ landed: [{ ...landedOf('ModA'), refused, failure: 'The build stopped after its step 1, which refused a file.' }], refused: [] }, 1]);
   });
 
-  describe('a decompile step (mods.md, Build, story 17)', () => {
+  describe('a decompile step (source.md, Build, story 17)', () => {
     const ASIDE = ['.medit_tmp_1_x/A.esp', '.medit_tmp_1_x/a.ESP'];
     const decompiling = async (answer: Awaited<ReturnType<InMemoryMEditClient['build']>>) => {
       await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'decompile', paths: ['A.esp', 'B.esp'] }] }));
@@ -288,7 +288,7 @@ describe('sourceCommands build, in mod order', () => {
     });
   });
 
-  it('sends each loose file a pack step packed to the trash (mods.md, A source mod, story 4; Build, story 2)', async () => {
+  it('sends each loose file a pack step packed to the trash (source.md, Build, stories 2 and 20)', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'pack', archives: [{ path: 'ModA.ba2', files: ['textures/a.dds'] }] }] }));
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), packed: ['Textures/a.dds'] }], refused: [] }));

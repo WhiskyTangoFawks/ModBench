@@ -106,7 +106,7 @@ describe('a mod\'s status against its manifest', () => {
     expect(await status()).toEqual(heldAs());
   });
 
-  it('reads and names the manifest a folder renamed outside Modbench holds under the name it had (mods.md, Build, story 4)', async () => {
+  it('reads and names the manifest a folder renamed outside Modbench holds under the name it had (source.md, Build, story 4)', async () => {
     await write('Old Name.manifest.json', manifestText(manifest({})));
 
     expect(await status()).toEqual(heldAs({ manifestFile: join(folder, 'Old Name.manifest.json') }));

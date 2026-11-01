@@ -21,7 +21,7 @@ const spanned = (text: string, formKey: string): string | undefined => {
   return member && text.slice(member.start, member.end);
 };
 
-describe('a definition\'s place in its record\'s document (plugin-source.md, In the text editor, story 1)', () => {
+describe('a definition\'s place in its record\'s document (source.md, In the text editor, story 1)', () => {
   it('is the record\'s own FormKey member', () => {
     expect(spanned(GUN_TEXT, GUN)).toBe(`"FormKey": "${GUN}"`);
   });
@@ -55,7 +55,7 @@ function definitions({ open = (): Promise<{ getText(): string }> => Promise.reso
   return { client, reporter, opened, definitionAt };
 }
 
-describe('Go to Definition on a FormKey (plugin-source.md, In the text editor, story 1)', () => {
+describe('Go to Definition on a FormKey (source.md, In the text editor, story 1)', () => {
   it('opens the winning copy\'s file at the record\'s own FormKey member', async () => {
     const { definitionAt } = definitions();
 
