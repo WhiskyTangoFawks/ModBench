@@ -1,6 +1,5 @@
 import { isMap, isNode, isSeq, LineCounter, parseDocument } from 'yaml';
 
-/** One of LOOT's metadata files as the instance holds it. */
 type SortingRuleFile = { readonly path: string } & (
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'absent' }
@@ -220,7 +219,6 @@ function readRuleFile(name: RuleFileName, file: SortingRuleFile, source: RuleSou
   return reader;
 }
 
-/** LOOT's rules from the instance's sorting rule files, the masterlist's entries then the userlist's, and what did not read. */
 function readRules(files: SortingRuleFiles): { entries: LootEntry[]; problems: RuleFileProblem[] } {
   const prelude = readRuleFile('prelude', files.prelude, undefined);
   const substituted = files.masterlist.kind === 'text' && files.prelude.kind === 'text'
