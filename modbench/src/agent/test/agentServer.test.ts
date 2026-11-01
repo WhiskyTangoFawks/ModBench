@@ -379,6 +379,25 @@ describe('the agent server, given an instance value', () => {
       expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'], noManifest: true }]);
     });
 
+    it('groups mods that match their manifests whatever their manifest file and lone installation file', async () => {
+      const lone = (name: string) => ({ kind: 'installationFile' as const, name, size: 1, hash: 'h' });
+      statusRead.answer = [
+        status('Big Rocks', { manifestFile: '/i/mods/Big Rocks/Big Rocks.manifest.json', packages: [lone('a.7z')] }),
+        status('InAnotherProfile', { manifestFile: '/i/mods/InAnotherProfile/InAnotherProfile.manifest.json', packages: [lone('b.7z')] }),
+      ];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'] }]);
+    });
+
+    it('keeps the packages of a mod made from several', async () => {
+      const packages = [{ kind: 'installationFile' as const, name: 'a.7z', size: 1, hash: 'h' }, { kind: 'gameFolder' as const }];
+      statusRead.answer = [status('Big Rocks', { packages })];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], packages }]);
+    });
+
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
       const { client } = await clientOf(new FakeInstance(VALUE));
 
