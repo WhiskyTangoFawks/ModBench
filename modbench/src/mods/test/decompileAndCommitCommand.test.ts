@@ -129,6 +129,21 @@ describe('modbench.mod.decompileAndCommit', () => {
     expect(reporter.landings).toEqual(['Decompiled and committed "ModB".']);
   });
 
+  it('warns of a note on a downloaded file that could not be read whole, and the mod still lands', async () => {
+    const commands = {
+      ...decompileAndCommitCommands(),
+      decompileAndCommit: () => Promise.resolve({ landed: [modA([FIRST])], refused: [], notes: ['the hash index could not be written'] }),
+    };
+    const { handler, reporter, onCommitted } = invokeDecompileAndCommit(commands);
+
+    await handler(row(FIRST));
+
+    expect([reporter.reports, reporter.landings]).toEqual([
+      [{ severity: 'warning', message: 'Decompile and commit:', detail: 'the hash index could not be written' }], ['Decompiled and committed "ModA".'],
+    ]);
+    expect(onCommitted).toHaveBeenCalledOnce();
+  });
+
   it('names a mod mEdit refused while the rest land', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({
