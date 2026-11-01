@@ -37,6 +37,7 @@ As a user, I want:
 4. The Mods view's badge to count the mods that differ or have no manifest. Cites: VS Code's view badge
 5. A file a clone cannot rebuild to say why: a package holds a file of its name with other bytes, or no package holds its bytes. Cites: Never silently wrong
 6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and, when the mod holds a plugin, points at decompile and commit. Cites: mods.md, What install does, story 3; Respect the user
+7. An installation file the mod manager names that is missing or unreadable as a Warning in the Problems panel, naming the file and which of the two. Modbench never repairs the name. Cites: common, Reporting; Never silently wrong; Respect the user
 
 ## Git init
 
@@ -61,7 +62,8 @@ As a user, I want:
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
-5. A mod refused, and its manifest left as it was, when a package it is made from is missing from this machine, so a missing download never reads as files no package holds. Cites: Never silently wrong
+5. A mod refused, and its manifest left as it was, when a package its manifest names is missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong
+6. Each file of a mod to come from whichever downloaded file holds its bytes, so an installation file the mod manager names that is missing or unreadable never refuses the mod. Cites: Status, story 7
 
 ## Restore from manifest
 
