@@ -100,7 +100,7 @@ export class ModStatuses {
     } catch (err) {
       return mods.map(({ name }) => unreadableStatus(name, `git could not say which folders it holds: ${errorMessage(err)}`));
     }
-    return Promise.all(mods.map((mod) => (held.has(mod.folder) ? heldWholeStatus(mod.name) : this.statusOf(mod))));
+    return Promise.all(mods.map(async (mod) => (held.has(mod.folder) ? heldWholeStatus(mod.name) : this.statusOf(mod))));
   }
 
   private async statusOf(mod: ModAt): Promise<ModStatus> {
