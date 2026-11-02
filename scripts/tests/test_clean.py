@@ -95,6 +95,7 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         if base_set:
             medit.edit(master, reference, 'set', 'Base', ITEM_A)
         medit.edit(master, reference, 'set', 'Position', '1, 2, 3')
+        medit.edit(master, reference, 'set', 'TeleportDestination.Door', ITEM_A)
         override = self.enabled()
         medit.copy(master, reference, override)
         medit.edit(override, reference, 'set', FLAGS, flags & PERSISTENT)
@@ -150,8 +151,8 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(clean(override).undeleted_and_disabled, [reference])
         record = medit.read(override, reference)
         self.assertEqual(
-            [record[FLAGS], record['Position'], record['EnableParent']['Reference'], record['EnableParent']['Flags']],
-            [INITIALLY_DISABLED, '1, 2, -30000', self.player, ['SetEnableStateToOppositeOfParent']])
+            [record[FLAGS], record['Position'], 'TeleportDestination' in record, record['EnableParent']['Reference'], record['EnableParent']['Flags']],
+            [INITIALLY_DISABLED, '1, 2, -30000', False, self.player, ['SetEnableStateToOppositeOfParent']])
 
     def test_leaves_the_position_of_a_persistent_deleted_reference(self) -> None:
         override, reference = self.deleted_override(flags=DELETED | PERSISTENT)

@@ -38,7 +38,7 @@ export function stepTasks<Task, P extends Task, C extends Task, L extends Task, 
     labels: async () => (await userTasks()).map((task) => host.labelOf(task)),
     whyStepFailed: async (step, folders) => {
       const label = labelOf(step);
-      const end = await run(step, folders).catch((err: unknown) => `${step.kind === 'task' ? `its task '${label}'` : 'it'} could not run: ${errorMessage(err)}`);
+      const end = await run(step, folders).catch((err: unknown) => `'${label}' could not run: ${errorMessage(err)}`);
       if (end === 0) return undefined;
       return typeof end === 'number' ? `step '${label}' exited with code ${end}` : `step '${label}' did not run: ${end}`;
     },

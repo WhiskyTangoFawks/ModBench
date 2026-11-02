@@ -82,7 +82,7 @@ describe('stepTasks', () => {
   it.each<[string, readonly FakeTask[], Readonly<Record<string, End>>, string]>([
     ['exits with another code', [userTask('A'), userTask('B')], { A: { exitCode: 2 } }, "step 'A' exited with code 2"],
     ['ends with no exit code', [userTask('A'), userTask('B')], { A: { exitCode: undefined } }, "step 'A' did not run: its task 'A' ended with no exit code"],
-    ['cannot start', [userTask('A'), userTask('B')], { A: { refused: 'no shell' } }, "step 'A' did not run: its task 'A' could not run: no shell"],
+    ['cannot start', [userTask('A'), userTask('B')], { A: { refused: 'no shell' } }, "step 'A' did not run: 'A' could not run: no shell"],
     ['has only a workspace task', [{ label: 'A', user: false, kind: 'process' }, userTask('B')], {}, "step 'A' did not run: this machine has no user task 'A'"],
     ['takes no arguments', [userTask('A', 'custom'), userTask('B')], {}, "step 'A' did not run: its task 'A' is no shell or process task, so it takes no arguments"],
   ])('names why a step whose task %s failed', async (_case, tasks, endOf, why) => {
