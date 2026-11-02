@@ -184,33 +184,22 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(1u)]
-    [InlineData(2u)]
-    [InlineData(3u)]
-    public void ACubemapOfAWrittenTexturesBa2_UnpacksWithItsCubeCapsAndAllSixFaces(uint version)
+    [InlineData(1u, 1u)]
+    [InlineData(2u, 2u)]
+    [InlineData(3u, 3u)]
+    [InlineData(1u, 7u)]
+    [InlineData(1u, 8u)]
+    public void ACubemapOfATexturesBa2_UnpacksWithTheCubeFlags(uint packedVersion, uint archiveVersion)
     {
         var cubemap = Dds.CubemapDxt1(8, 8);
         With("textures/Sky.dds", cubemap.File);
-        var archive = Packed(new Ba2Variant(version, Ba2Contents.Textures, Compressed: true), "textures/Sky.dds");
+        var archive = Packed(new Ba2Variant(packedVersion, Ba2Contents.Textures, Compressed: true), "textures/Sky.dds");
+        if (archiveVersion != packedVersion) SetVersion(archive, archiveVersion);
 
         var sky = Read(Assert.Single(Unpacked(GameRelease.Fallout4, archive, "textures/sky.dds")));
 
         Assert.Equal((0x8u | 0x1000u, 0xFE00u), (U32(sky, 108), U32(sky, 112)));
         Assert.Equal(cubemap.Pixels, sky[128..]);
-    }
-
-    [Theory]
-    [InlineData(7u)]
-    [InlineData(8u)]
-    public void ACubemapOfAFallout4TexturesBa2_UnpacksWithItsCubeCaps(uint version)
-    {
-        With("textures/Sky.dds", Dds.CubemapDxt1(8, 8).File);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), "textures/Sky.dds");
-        SetVersion(archive, version);
-
-        var sky = Read(Assert.Single(Unpacked(GameRelease.Fallout4, archive, "textures/sky.dds")));
-
-        Assert.Equal(0xFE00u, U32(sky, 112));
     }
 
     [Fact]

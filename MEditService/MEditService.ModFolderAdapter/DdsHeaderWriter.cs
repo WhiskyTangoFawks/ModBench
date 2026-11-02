@@ -27,7 +27,6 @@ internal static class DdsHeaderWriter
     private const uint ComplexCaps = 0x8;
     private const uint MipmapCaps = 0x400000;
     private const uint CubemapWithAllFaces = 0xFE00;
-    private const uint TextureCubeMisc = 0x4;
     private const uint Texture2D = DdsHeader.Texture2D;
 
     private sealed record PixelFormat(uint Flags, uint Code = 0, uint Bits = 0, uint Red = 0, uint Green = 0, uint Blue = 0, uint AlphaMask = 0);
@@ -89,7 +88,7 @@ internal static class DdsHeaderWriter
             Put(header, 84, Cc("DX10"));
             Put(header, MainLength, dxgiFormat);
             Put(header, MainLength + 4, Texture2D);
-            Put(header, MainLength + 8, isCubemap ? TextureCubeMisc : 0);
+            Put(header, MainLength + 8, isCubemap ? DdsHeader.CubeMapMisc : 0);
             Put(header, MainLength + 12, 1);
         }
         else

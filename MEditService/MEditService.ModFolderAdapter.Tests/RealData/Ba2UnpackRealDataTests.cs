@@ -13,6 +13,7 @@ public sealed class Ba2UnpackRealDataTests
     private const int MipCountAt = 28;
     private const int CapsAt = 108;
     private const int CapsLength = 4;
+    private const int TextureChunkLength = 24;
     private const int Caps2At = 112;
     private const int MiscFlagsAt = 136;
     private const uint CubemapWithAllFaces = 0xFE00;
@@ -66,7 +67,7 @@ public sealed class Ba2UnpackRealDataTests
 
     [InstalledGameSmokeTheory("compare the DDS headers Modbench writes with Mutagen's", GameRelease.Fallout4)]
     [MemberData(nameof(InstalledFallout4))]
-    public void TheDdsHeaderOfEveryTextureOfAVersion1Archive_MatchesMutagens_ExceptTheCapsOfASingleMipTexture(GameRelease release)
+    public void TheDdsHeaderOfEveryTextureOfAVersion1Archive_MatchesMutagens_ExceptTheCapsOfASingleMipTextureAndTheCubeFieldsOfACubemapWhichCarryTheCubeFlags(GameRelease release)
     {
         Assert.True(new GameLocator().TryGetDataDirectory(release, out var data));
 
@@ -74,6 +75,7 @@ public sealed class Ba2UnpackRealDataTests
         var compared = 0;
         foreach (var archive in Directory.EnumerateFiles(data.Path, "*.ba2").Where(IsVersion1Textures))
         {
+            var cubemaps = CubemapPaths(archive);
             var mutagen = Archive.CreateReader(release, archive).Files
                 .GroupBy(file => file.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
                 .Where(named => named.Count() == 1)
@@ -84,7 +86,7 @@ public sealed class Ba2UnpackRealDataTests
                 foreach (var file in files)
                 {
                     compared++;
-                    var difference = Difference(Bytes(file), mutagen[file.Path].GetBytes());
+                    var difference = Difference(Bytes(file), mutagen[file.Path].GetBytes(), cubemaps.Contains(file.Path));
                     if (difference is not null) differences.Add($"{archive}: {file.Path}: {difference}");
                 }
             }
@@ -98,27 +100,26 @@ public sealed class Ba2UnpackRealDataTests
     private static IEnumerable<string> EntryPaths(GameRelease release, string archive) =>
         Archive.CreateReader(release, archive).Files.Select(file => file.Path.Replace('\\', '/'));
 
-    private static string? Difference(byte[] written, byte[] mutagens)
+    private static string? Difference(byte[] written, byte[] mutagens, bool isCubemap)
     {
         if (written.Length != mutagens.Length) return $"{written.Length} bytes against Mutagen's {mutagens.Length}";
 
         var headerLength = written.AsSpan(84, 4).SequenceEqual("DX10"u8) ? ExtendedHeaderLength : MainHeaderLength;
         var (ours, theirs) = (written[..headerLength], mutagens[..headerLength]);
         var mips = BinaryPrimitives.ReadUInt32LittleEndian(written.AsSpan(MipCountAt));
-        var isCubemap = BinaryPrimitives.ReadUInt32LittleEndian(written.AsSpan(Caps2At)) != 0;
         if (isCubemap && !CarriesTheCubeFlags(written, headerLength)) return "a cubemap without the cube caps and all six faces";
         foreach (var header in new[] { ours, theirs })
         {
             if (mips == 1 || isCubemap) Array.Clear(header, CapsAt, CapsLength);
             if (isCubemap)
             {
-                Array.Clear(header, Caps2At, 4);
-                if (headerLength == ExtendedHeaderLength) Array.Clear(header, MiscFlagsAt, 4);
+                Array.Clear(header, Caps2At, CapsLength);
+                if (headerLength == ExtendedHeaderLength) Array.Clear(header, MiscFlagsAt, CapsLength);
             }
             if (BinaryPrimitives.ReadUInt32LittleEndian(written.AsSpan(PixelFormatFlagsAt)) == UncompressedRgb)
             {
                 BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(FlagsAt), BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(FlagsAt)) & ~(PitchFlag | LinearSizeFlag));
-                Array.Clear(header, PitchOrLinearSizeAt, 4);
+                Array.Clear(header, PitchOrLinearSizeAt, CapsLength);
             }
         }
 
@@ -126,6 +127,30 @@ public sealed class Ba2UnpackRealDataTests
         return differing.Count == 0
             ? null
             : $"header bytes {string.Join(',', differing)} differ, in a {mips}-mip texture of {FormatOf(written)}";
+    }
+
+    private static HashSet<string> CubemapPaths(string archive)
+    {
+        using var reader = new BinaryReader(File.OpenRead(archive));
+        reader.ReadBytes(8);
+        var kind = reader.ReadBytes(4);
+        var count = reader.ReadUInt32();
+        var nameTable = reader.ReadInt64();
+        Assert.True(kind.AsSpan().SequenceEqual("DX10"u8));
+        var cube = new List<bool>();
+        for (var i = 0; i < count; i++)
+        {
+            reader.ReadBytes(13);
+            var chunks = reader.ReadByte();
+            reader.ReadBytes(8);
+            cube.Add(reader.ReadByte() != 0);
+            reader.ReadByte();
+            reader.ReadBytes(chunks * TextureChunkLength);
+        }
+
+        reader.BaseStream.Position = nameTable;
+        return new HashSet<string>(cube.Select(isCube => (isCube, Name: System.Text.Encoding.UTF8.GetString(reader.ReadBytes(reader.ReadUInt16())).Replace('\\', '/')))
+            .Where(entry => entry.isCube).Select(entry => entry.Name), StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool CarriesTheCubeFlags(byte[] written, int headerLength) =>
@@ -150,13 +175,5 @@ public sealed class Ba2UnpackRealDataTests
         using var whole = new MemoryStream();
         content.CopyTo(whole);
         return whole.ToArray();
-    }
-
-    private static bool StartsWithDds(ArchiveFile file)
-    {
-        using var content = file.Open();
-        Span<byte> magic = stackalloc byte[4];
-        content.ReadExactly(magic);
-        return magic.SequenceEqual("DDS "u8);
     }
 }
