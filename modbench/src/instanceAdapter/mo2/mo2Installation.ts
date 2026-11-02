@@ -29,7 +29,7 @@ const installedFileOf = ({ nexusId, installedFiles = [] }: MetaIni): InstalledFi
   installedFiles.find((file) => file.nexusId === nexusId) ?? installedFiles[0];
 
 // A mod with no game of its own is the instance's game's.
-async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'page' | 'unpagedGame'>> {
+async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise<{ page?: string; unpagedGame?: string }> {
   const file = installedFileOf(meta);
   const modId = file?.nexusId || meta.nexusId;
   if (!modId) return {};
@@ -45,8 +45,12 @@ async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, n
     const directUrl = meta.directURL === undefined ? {} : { directUrl: meta.directURL };
     const modId = effectiveModId(meta.modID, name);
     if (modId === undefined) return directUrl;
-    const domain = nexusDomainForMetaGame(meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot))));
-    return domain === undefined ? directUrl : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...directUrl };
+    const game = meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot)));
+    const domain = nexusDomainForMetaGame(game);
+    if (domain !== undefined) return { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...directUrl };
+    return meta.directURL === undefined
+      ? { note: `${name} comes from '${game}', a game whose host the instance adapter has no page on, so its manifest names no host` }
+      : directUrl;
   } catch (err) {
     return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
   }
@@ -159,7 +163,7 @@ export function mo2Installation(
       const path = located.answer;
       if (!(await exists(path))) return { kind: 'unreadable', reason: `this machine does not hold ${installationFileName}, the file it is installed from` };
       const hashed = await downloadedFileHash(path);
-      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...(await nexusPageOf(meta, context)), ...hashed.answer } } : refused(hashed.reason);
+      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : refused(hashed.reason);
     },
 
     async downloadedFile(name) {

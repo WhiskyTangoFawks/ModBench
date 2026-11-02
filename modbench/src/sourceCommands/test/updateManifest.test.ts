@@ -472,12 +472,6 @@ describe('update manifest', () => {
     expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).packages.map((pkg) => ('name' in pkg ? pkg.name : pkg.kind))]).toEqual([[], ['ModA'], ['ModA-1.0.7z']]);
   });
 
-  it('notes a mod whose installation file comes from a game without a Nexus domain', async () => {
-    const { update } = await over({ answers: { installations: new Map([['ModA', read({ ...INSTALLED, unpagedGame: 'EnderalSE' })]]) } });
-
-    expect((await update(['ModA'])).notes).toEqual([{ mod: 'ModA', note: expect.stringContaining("its installation file comes from 'EnderalSE'") as unknown }]);
-  });
-
   describe('a mod\'s files that its installation file lacks', () => {
     it('are taken from another downloaded file, whose entries the hash index kept, which is named a package', async () => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };

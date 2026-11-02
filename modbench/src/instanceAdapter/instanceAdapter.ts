@@ -462,8 +462,6 @@ export interface InstallationFile extends HashedDownloadedFile {
   readonly page?: string;
   /** The address the file was downloaded from outside its host's pages, the downloaded file's own metadata's. */
   readonly directUrl?: string;
-  /** The game the metadata names when the registry has no Nexus domain for it, so the file carries no page. */
-  readonly unpagedGame?: string;
 }
 
 interface MetadataInstallationFile {

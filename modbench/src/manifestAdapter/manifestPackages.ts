@@ -7,8 +7,8 @@ type RepositoryPackage = Extract<ManifestPackage, { kind: 'repository' }>;
 export const repositoryOf = (manifest: Pick<Manifest, 'packages'>): RepositoryPackage | undefined =>
   manifest.packages.find((pkg): pkg is RepositoryPackage => pkg.kind === 'repository');
 
-/** Whether `text` is an address a person fetches a file from, which the schema's `url` host takes. */
-export const isAddress = (text: string): boolean => URL.canParse(text) && /^https?:$/.test(new URL(text).protocol);
+/** Whether `text` is a URI, which the schema's `url` host takes. */
+export const isAddress = (text: string): boolean => URL.canParse(text);
 
 /** `pkg` as a problem names it when it has no host (modlist-repository.md, The manifest, story 5); none when it has one.
  *  `repositoryHosted`: whether a repository package's repository is a submodule. */

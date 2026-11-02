@@ -76,12 +76,7 @@ async function readMod(
       name: mod, folder, ...withGame(game, taken.gameFiles),
       ...installationFile === undefined ? {} : { installationFile },
     },
-    notes: [
-      ...taken.notes,
-      ...installationFile?.unpagedGame === undefined
-        ? []
-        : [`its installation file comes from '${installationFile.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no host`],
-    ],
+    notes: taken.notes,
   };
 }
 

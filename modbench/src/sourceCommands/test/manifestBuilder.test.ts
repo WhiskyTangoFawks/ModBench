@@ -59,9 +59,15 @@ describe('a mod\'s manifest from its files', () => {
     ]);
   });
 
-  it.each(['not a url', 'ftp://example.com/M.7z', 'file:///etc/passwd'])('names a direct URL of %j with no host, as the manifest\'s schema takes an address only', (directUrl) => {
-    expect(built({}, { installationFile: download('M.7z', {}, { directUrl }) }).manifest.packages).toEqual([
+  it('names a direct URL the schema refuses with no host', () => {
+    expect(built({}, { installationFile: download('M.7z', {}, { directUrl: 'not a url' }) }).manifest.packages).toEqual([
       { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
+    ]);
+  });
+
+  it('names a direct URL of any scheme as the host, as the schema takes any URI', () => {
+    expect(built({}, { installationFile: download('M.7z', {}, { directUrl: 'ftp://example.com/M.7z' }) }).manifest.packages).toEqual([
+      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z', host: { url: 'ftp://example.com/M.7z' } },
     ]);
   });
 
