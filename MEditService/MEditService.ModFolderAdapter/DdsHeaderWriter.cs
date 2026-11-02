@@ -3,7 +3,7 @@ using System.Text;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>The header of a single 2D texture, laid out as DirectXTex writes it: the legacy header where DirectXTex has a pixel format
+/// <summary>The header of a single 2D texture or a cubemap, laid out as DirectXTex writes it: the legacy header where DirectXTex has a pixel format
 /// for the DXGI format, the DX10 extension where it has none.</summary>
 internal static class DdsHeaderWriter
 {
@@ -26,6 +26,7 @@ internal static class DdsHeaderWriter
     private const uint TextureCaps = 0x1000;
     private const uint ComplexCaps = 0x8;
     private const uint MipmapCaps = 0x400000;
+    private const uint CubemapWithAllFaces = 0xFE00;
     private const uint Texture2D = DdsHeader.Texture2D;
 
     private sealed record PixelFormat(uint Flags, uint Code = 0, uint Bits = 0, uint Red = 0, uint Green = 0, uint Blue = 0, uint AlphaMask = 0);
@@ -67,7 +68,7 @@ internal static class DdsHeaderWriter
         [115] = new(Rgba, 0, 16, 0xF00, 0xF0, 0xF, 0xF000),
     };
 
-    public static byte[] Write(ushort width, ushort height, byte mips, byte dxgiFormat)
+    public static byte[] Write(ushort width, ushort height, byte mips, byte dxgiFormat, bool isCubemap)
     {
         var (flag, pitchOrSize) = PitchOrLinearSize(width, height, dxgiFormat);
         var pixelFormat = Legacy.GetValueOrDefault(dxgiFormat);
@@ -87,6 +88,7 @@ internal static class DdsHeaderWriter
             Put(header, 84, Cc("DX10"));
             Put(header, MainLength, dxgiFormat);
             Put(header, MainLength + 4, Texture2D);
+            Put(header, MainLength + 8, isCubemap ? DdsHeader.CubeMapMisc : 0);
             Put(header, MainLength + 12, 1);
         }
         else
@@ -100,7 +102,8 @@ internal static class DdsHeaderWriter
             Put(header, 104, pixelFormat.AlphaMask);
         }
 
-        Put(header, 108, TextureCaps | (mips > 1 ? ComplexCaps | MipmapCaps : 0));
+        Put(header, 108, TextureCaps | (mips > 1 ? ComplexCaps | MipmapCaps : 0) | (isCubemap ? ComplexCaps : 0));
+        Put(header, 112, isCubemap ? CubemapWithAllFaces : 0);
         return header;
     }
 

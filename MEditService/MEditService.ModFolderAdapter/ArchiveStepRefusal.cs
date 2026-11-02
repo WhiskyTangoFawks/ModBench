@@ -25,9 +25,6 @@ public enum ArchiveRefusal
 
     /// <summary>Two entries of the archive differ only in case, so a file an unpack takes names neither alone.</summary>
     EntriesAmbiguous,
-
-    /// <summary>A texture an unpack takes is a cubemap, whose cubemap flag the unpacked DDS header would drop.</summary>
-    CubemapNotUnpackable,
 }
 
 public sealed record ArchiveStepRefusal(ArchiveRefusal Reason, string Message);
