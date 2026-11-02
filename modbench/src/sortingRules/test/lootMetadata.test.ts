@@ -165,4 +165,22 @@ describe('rulesReader', () => {
 
     expect([read(filesOf({ userlist: text('plugins: []\n') })) === first, read(filesOf({ userlist: text('plugins:\n  - name: A.esp\n') })) === first]).toEqual([true, false]);
   });
+
+  it('reads a plugin\'s group and the groups, each with the line of each group it loads after', () => {
+    const { entries, groups, problems } = readRules(filesOf({ masterlist: text(`groups:
+  - name: default
+  - name: late
+    after: [default, early]
+plugins:
+  - name: A.esp
+    group: late
+`) }));
+
+    expect(problems).toEqual([]);
+    expect(entries).toEqual([expect.objectContaining({ group: 'late' })]);
+    expect(groups).toEqual([
+      { name: 'default', after: [] },
+      { name: 'late', after: [{ name: 'default', source: { file: 'masterlist', line: 3 } }, { name: 'early', source: { file: 'masterlist', line: 3 } }] },
+    ]);
+  });
 });

@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import type { LootEntry, LootFile } from './lootMetadata';
+import type { LootEntry, LootFile, LootGroup, RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
 
@@ -57,10 +57,47 @@ function judgePlugin(
   return [...requirements, ...incompatibilities, ...loadAfters, ...messages];
 }
 
+const DEFAULT_GROUP = 'default';
+
+// Each group `group` loads after, through the groups between, with the statement of the first step toward it.
+function groupsBefore(group: string, afterOf: ReadonlyMap<string, LootGroup['after']>): Map<string, RuleSource> {
+  const reached = new Map<string, RuleSource>();
+  const queue = (afterOf.get(group) ?? []).map((step) => ({ ...step, first: step.source }));
+  for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
+    if (reached.has(step.name) || step.name === group) continue;
+    reached.set(step.name, step.first);
+    queue.push(...(afterOf.get(step.name) ?? []).map((next) => ({ ...next, first: step.first })));
+  }
+  return reached;
+}
+
+// One entry for each plugin that loads before a plugin of a group its own loads after, naming the nearest.
+function judgeGroups(order: readonly PluginRef[], entries: readonly LootEntry[], groups: readonly LootGroup[]): BrokenRule[] {
+  const afterOf = new Map<string, LootGroup['after']>();
+  for (const { name, after } of groups) afterOf.set(name, [...afterOf.get(name) ?? [], ...after]);
+  const groupOf = (plugin: PluginRef): string =>
+    entries.findLast((entry) => entry.group !== undefined && entry.matches(plugin.filename))?.group ?? DEFAULT_GROUP;
+  const groupsOfOrder = order.map(groupOf);
+  return order.flatMap((plugin, index): BrokenRule[] => {
+    const group = groupsOfOrder[index] ?? DEFAULT_GROUP;
+    const before = groupsBefore(group, afterOf);
+    const nearest = groupsOfOrder.findIndex((other, at) => at > index && before.has(other));
+    const target = order[nearest];
+    const earlier = groupsOfOrder[nearest];
+    const source = earlier === undefined ? undefined : before.get(earlier);
+    if (target === undefined || earlier === undefined || source === undefined) return [];
+    return [{
+      rule: 'group', level: 'info', plugins: [plugin, target], source,
+      reason: `"${plugin.filename}" is in the group "${group}", which loads after the group "${earlier}", and loads before "${target.filename}", of that group.`,
+    }];
+  });
+}
+
 /** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages and
  *  conditions that apply. A rule whose condition cannot be evaluated is a Warning, never skipped. */
 export function judgeLoot(
-  order: readonly PluginRef[], entries: readonly LootEntry[], isPresent: (filename: string) => boolean,
+  order: readonly PluginRef[],
+  { entries, groups, isPresent }: { entries: readonly LootEntry[]; groups: readonly LootGroup[]; isPresent: (filename: string) => boolean },
 ): BrokenRule[] {
-  return order.flatMap((_, index) => judgePlugin(order, index, entries, isPresent));
+  return [...order.flatMap((_, index) => judgePlugin(order, index, entries, isPresent)), ...judgeGroups(order, entries, groups)];
 }

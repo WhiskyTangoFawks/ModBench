@@ -37,8 +37,14 @@ interface LootMessage {
   source: RuleSource;
 }
 
+export interface LootGroup {
+  name: string;
+  after: { name: string; source: RuleSource }[];
+}
+
 export interface LootEntry {
   name: string;
+  group?: string;
   matches: (filename: string) => boolean;
   req: LootFile[];
   inc: LootFile[];
@@ -99,6 +105,7 @@ function contentOf(content: unknown, subs: unknown): string | undefined {
 
 class FileReader {
   readonly entries: LootEntry[] = [];
+  readonly groups: LootGroup[] = [];
   readonly problems: RuleFileProblem[] = [];
   private lineOf: (node: unknown) => number = () => 0;
 
@@ -118,7 +125,8 @@ class FileReader {
     }
     if (document.errors.length > 0 || this.source === undefined) return;
     const plugins = document.get('plugins', true);
-    if (!isSeq(plugins)) return;
+    const groups = document.get('groups', true);
+    if (!isSeq(plugins) && !isSeq(groups)) return;
     // One conversion of the whole document: converting each entry alone resolves its anchors again, and takes seconds on a masterlist.
     let converted: unknown;
     try {
@@ -126,8 +134,23 @@ class FileReader {
     } catch (err) {
       return this.problem(undefined, err instanceof Error ? err.message : String(err));
     }
-    const plain = isRecord(converted) && Array.isArray(converted.plugins) ? converted.plugins : [];
-    plugins.items.forEach((item, index) => this.entry(item, plain[index]));
+    const plainOf = (key: string): unknown[] => (isRecord(converted) && Array.isArray(converted[key]) ? converted[key] : []);
+    const plainPlugins = plainOf('plugins');
+    const plainGroups = plainOf('groups');
+    if (isSeq(groups)) groups.items.forEach((item, index) => this.group(item, plainGroups[index]));
+    if (isSeq(plugins)) plugins.items.forEach((item, index) => this.entry(item, plainPlugins[index]));
+  }
+
+  private group(node: unknown, plain: unknown): void {
+    const line = this.lineOf(node);
+    if (!isRecord(plain)) return;
+    const name = stringOf(plain.name);
+    if (name === undefined) return this.problem(line, 'A group has no name.');
+    const after = this.items(node, plain, 'after').flatMap(({ value, line: at }) => {
+      const source = this.located(at);
+      return typeof value === 'string' && source !== undefined ? [{ name: value, source }] : [];
+    });
+    this.groups.push({ name, after });
   }
 
   // A line after the substituted prelude moves back to the line it has in the masterlist file.
@@ -144,8 +167,9 @@ class FileReader {
     if (name === undefined) return this.problem(line, 'A plugin entry has no name.');
     const matches = this.matcher(name, line);
     if (matches === undefined) return;
+    const group = stringOf(plain.group);
     this.entries.push({
-      name, matches,
+      name, matches, ...group === undefined ? {} : { group },
       req: this.files(node, plain, 'req'), inc: this.files(node, plain, 'inc'), after: this.files(node, plain, 'after'),
       msg: this.messages(node, plain),
     });
@@ -227,7 +251,7 @@ function readRuleFile(name: RuleFileName, file: SortingRuleFile, source: RuleSou
   return reader;
 }
 
-function readRules(files: SortingRuleFiles): { entries: LootEntry[]; problems: RuleFileProblem[] } {
+function readRules(files: SortingRuleFiles): { entries: LootEntry[]; groups: LootGroup[]; problems: RuleFileProblem[] } {
   const prelude = readRuleFile('prelude', files.prelude, undefined);
   const substituted = files.masterlist.kind === 'text' && files.prelude.kind === 'text'
     ? withPrelude(files.masterlist.text, files.prelude.text)
@@ -236,6 +260,7 @@ function readRules(files: SortingRuleFiles): { entries: LootEntry[]; problems: R
   const userlist = readRuleFile('userlist', files.userlist, 'userlist');
   return {
     entries: [...masterlist.entries, ...userlist.entries],
+    groups: [...masterlist.groups, ...userlist.groups],
     problems: [...prelude.problems, ...masterlist.problems, ...userlist.problems],
   };
 }
@@ -243,6 +268,7 @@ function readRules(files: SortingRuleFiles): { entries: LootEntry[]; problems: R
 export interface ReadRules {
   files: SortingRuleFiles;
   entries: LootEntry[];
+  groups: LootGroup[];
   problems: RuleFileProblem[];
 }
 
