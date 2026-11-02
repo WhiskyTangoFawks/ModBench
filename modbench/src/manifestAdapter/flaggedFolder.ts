@@ -1,7 +1,10 @@
 // formats/manifest.md, `flags`: a plugin the manifest flags is its package's copy once its flags are cleared back.
 
 import { join } from 'node:path';
-import type { FolderFile, FolderValue } from '../repositoriesLib/statusValues';
+import { errorMessage } from '../ports/errorMessage';
+import type { FolderFile, FolderValue, StatusValues } from '../repositoriesLib/statusValues';
+import type { ManifestAt } from './manifestFiles';
+import type { ModAt } from './modStatus';
 import type { Manifest } from './manifest';
 
 /** A plugin's bytes with some of its flags flipped: the values those flags then hold, and the hash of the bytes. */
@@ -44,4 +47,17 @@ export async function flagVariantsApplied(
     files.set(pathInFolder, { ...file, read });
   }
   return { ...folder, files };
+}
+
+/** `values` with the plugins of the manifest `at` holds flagged read as their package's copies, or unreadable when mEdit cannot
+ *  read them. */
+export async function statusValuesFlagged(
+  mod: ModAt, { read }: ManifestAt, values: StatusValues, variantsOf: () => Promise<FlagVariantsOf>,
+): Promise<StatusValues> {
+  if (values.kind !== 'read' || read === undefined || 'refused' in read || read.manifest.flags.size === 0) return values;
+  try {
+    return { ...values, folder: await flagVariantsApplied(read.manifest, mod.folder, values.folder, await variantsOf()) };
+  } catch (err) {
+    return { kind: 'unreadable', reason: errorMessage(err) };
+  }
 }
