@@ -91,27 +91,31 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(7u)]
-    [InlineData(8u)]
-    public void ACompressedGeneralBa2OfAnyVersion_UnpacksTheInflatedBytes(uint version)
+    [InlineData(2u, false)]
+    [InlineData(7u, true)]
+    [InlineData(8u, true)]
+    public void ACompressedGeneralBa2OfAnyVersion_UnpacksTheInflatedBytes(uint version, bool versionPatched)
     {
         With(Meshes, Mesh);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: true), Meshes);
-        SetVersion(archive, version);
+        var archive = Packed(new Ba2Variant(versionPatched ? 1 : version, Ba2Contents.General, Compressed: true), Meshes);
+        if (versionPatched) SetVersion(archive, version);
 
         var files = Unpacked(GameRelease.Fallout4, archive, Meshes);
 
         Assert.Equal(Mesh, Read(Assert.Single(files)));
     }
 
-    [Fact]
-    public void AStarfieldTexturesBa2WhoseCompressionIsLz4_UnpacksTheInflatedPixels()
+    [Theory]
+    [InlineData(1u)]
+    [InlineData(2u)]
+    [InlineData(3u)]
+    public void ATexturesBa2OfEveryWrittenVersion_UnpacksTheInflatedPixels_ALz4OneIncluded(uint version)
     {
         var dds = Dds.Dxt1(width: 16, height: 16, mips: 3);
         With("textures/a_d.dds", dds.File);
-        var archive = Packed(new Ba2Variant(3, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds");
+        var archive = Packed(new Ba2Variant(version, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds");
 
-        var files = Unpacked(GameRelease.Starfield, archive, "textures/a_d.dds");
+        var files = Unpacked(GameRelease.Fallout4, archive, "textures/a_d.dds");
 
         Assert.Equal(dds.Pixels, Read(Assert.Single(files))[^dds.Pixels.Length..]);
     }
@@ -132,14 +136,16 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(1u)]
-    [InlineData(7u)]
-    [InlineData(8u)]
-    public void ATexturesBa2_RefusesItsCubemap_NamingOnlyIt(uint version)
+    [InlineData(1u, false)]
+    [InlineData(2u, false)]
+    [InlineData(3u, false)]
+    [InlineData(7u, true)]
+    [InlineData(8u, true)]
+    public void ATexturesBa2_RefusesItsCubemap_NamingOnlyIt(uint version, bool versionPatched)
     {
         With("textures/flat.dds", Dds.Dxt1(8, 8, 1).File).With("textures/Sky.dds", Dds.CubemapDxt1(8, 8).File);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), "textures/flat.dds", "textures/Sky.dds");
-        SetVersion(archive, version);
+        var archive = Packed(new Ba2Variant(versionPatched ? 1 : version, Ba2Contents.Textures, Compressed: true), "textures/flat.dds", "textures/Sky.dds");
+        if (versionPatched) SetVersion(archive, version);
 
         var refusal = Refused(GameRelease.Fallout4, archive, "textures/flat.dds", "textures/sky.dds");
 

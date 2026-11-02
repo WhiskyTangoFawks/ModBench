@@ -13,7 +13,7 @@ internal static class Ba2Oracle
     public static int WabbajackHeaderLength(uint version, string _) => version switch { 2 => 32, 3 => 36, _ => 24 };
 
     public static int CreationsForgeHeaderLength(uint version, string type) =>
-        type == "DX10" && version is 3 or 7 or 8 ? 36 : version is 2 or 3 ? 32 : 24;
+        type == "DX10" && version == 3 ? 36 : version is 2 or 3 ? 32 : 24;
 
     public static Dictionary<string, byte[]> Read(byte[] ba2, Func<uint, string, int> headerLength)
     {
