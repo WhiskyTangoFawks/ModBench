@@ -37,6 +37,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => inner.ClaimOf(pluginPath, gameRelease);
 
+    public virtual Answer<string, PluginFailure> SetLoadFlags(string pluginPath, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease) =>
+        inner.SetLoadFlags(pluginPath, flags, gameRelease);
+
     public virtual Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
         inner.RepairsOf(pluginPath, gameRelease);
 

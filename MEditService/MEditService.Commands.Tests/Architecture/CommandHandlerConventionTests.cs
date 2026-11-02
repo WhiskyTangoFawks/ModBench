@@ -35,6 +35,10 @@ public sealed class CommandHandlerConventionTests
         typeof(NewRepository),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateRefused),
+        typeof(PluginFileFlagRefusal),
+        typeof(PluginFileFlagRefused),
+        typeof(PluginFileFlagsSet),
+        typeof(PluginFileFlagsToSet),
         typeof(PluginToRepair),
         typeof(PutLoadOrderApplied),
         typeof(PutLoadOrderRefusal),
@@ -46,6 +50,7 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceChanges),
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
+        typeof(SetPluginFileFlagsResult),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

@@ -75,7 +75,7 @@ describe('sourceCommands build', () => {
   });
 
   it('keeps each exclusion the manifest records whose file the folder does not hold (mods.md, A source mod, story 2)', async () => {
-    const recording: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: ['docs'], ignore: [], files: new Map([['docs/readme.txt', 'AAAAAAAAAAA=']]) };
+    const recording: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: ['docs'], ignore: [], flags: new Map(), files: new Map([['docs/readme.txt', 'AAAAAAAAAAA=']]) };
     await writeManifestIn(folderOf('ModA'), recording);
     const client = new InMemoryMEditClient();
     buildingEach(client);
@@ -312,7 +312,7 @@ describe('sourceCommands build, in mod order', () => {
 
   it('sends no loose file a pack step packed to the trash that its manifest ignores (The manifest, story 11)', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'pack', archives: [{ path: 'ModA.ba2', files: ['textures'] }] }] }));
-    await writeManifestIn(folderOf('ModA'), { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: ['Textures/a.dds'], files: new Map() });
+    await writeManifestIn(folderOf('ModA'), { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: ['Textures/a.dds'], flags: new Map(), files: new Map() });
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), packed: ['Textures/a.dds', 'Textures/b.dds'] }], refused: [] }));
     const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
@@ -405,7 +405,7 @@ describe('sourceCommands initSourceMod', () => {
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).initSourceMod(['ModA'], { commit: true });
 
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
-    expect(await manifestIn(folder)).toEqual({ manifest: { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], files: new Map() } });
+    expect(await manifestIn(folder)).toEqual({ manifest: { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], flags: new Map(), files: new Map() } });
   });
 
   it.each([[true, 'committed'], [false, 'initialized']])('given commit %s, names a mod whose manifest could not name its repository as %s, never as what did not happen', async (commit, done) => {

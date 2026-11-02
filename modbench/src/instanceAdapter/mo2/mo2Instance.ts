@@ -87,6 +87,8 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
     originFileHash: hashes.originFileHash,
+    flaggedHash: hashes.flaggedHash,
+    keepFlaggedHash: hashes.keepFlaggedHash,
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),

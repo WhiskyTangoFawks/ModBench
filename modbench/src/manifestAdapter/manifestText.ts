@@ -38,7 +38,10 @@ const packageObject = (pkg: ManifestPackage): object => {
 const block = (key: string, open: string, close: string, lines: readonly string[]): string[] =>
   (lines.length === 0 ? [] : [`${JSON.stringify(key)}:${open}\n${lines.join(',\n')}\n${close}`]);
 
-export function manifestText({ packages, exclude, ignore, files }: Manifest): string {
+const flagsText = (set: Readonly<Record<string, boolean>>): string =>
+  `{${Object.keys(set).sort(ordinalIgnoreCaseThenOrdinal).map((name) => `${JSON.stringify(name)}:${JSON.stringify(set[name])}`).join(',')}}`;
+
+export function manifestText({ packages, exclude, ignore, flags, files }: Manifest): string {
   const ordered = [...packages].sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || ordinalIgnoreCaseThenOrdinal(nameOf(a), nameOf(b)));
   const paths = [...files.keys()].sort(ordinalIgnoreCaseThenOrdinal);
   const members = [
@@ -46,6 +49,7 @@ export function manifestText({ packages, exclude, ignore, files }: Manifest): st
     ...block('packages', '[', ']', ordered.map((pkg) => JSON.stringify(packageObject(pkg)))),
     ...block('exclude', '[', ']', [...exclude].sort(ordinalIgnoreCaseThenOrdinal).map((path) => JSON.stringify(path))),
     ...block('ignore', '[', ']', [...ignore].sort(ordinalIgnoreCaseThenOrdinal).map((path) => JSON.stringify(path))),
+    ...block('flags', '{', '}', [...flags.keys()].sort(ordinalIgnoreCaseThenOrdinal).map((path) => `${JSON.stringify(path)}:${flagsText(flags.get(path) ?? {})}`)),
     ...block('files', '{', '}', paths.map((path) => `${JSON.stringify(path)}:${JSON.stringify(files.get(path) ?? null)}`)),
   ];
   return `{\n${members.join(',\n')}\n}\n`;

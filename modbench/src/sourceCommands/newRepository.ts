@@ -101,7 +101,7 @@ export async function newRepositoryOf(
     { downloadedFiles, ...own === undefined ? {} : { installationFile: own }, ...read.game === undefined ? {} : { game: read.game } },
     all.filter(({ path }) => !compiled.has(path)), [], held);
   const notAssets = new Set([...recorded.sources.keys(), ...compiled]);
-  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], ignore: [], files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))) };
+  const sourceManifest: Manifest = { packages: recorded.manifest.packages, exclude: [], ignore: [], flags: new Map(), files: new Map([...recorded.manifest.files].filter(([path]) => recorded.sources.has(path))) };
   const copied = [...new Set(all.map(({ path }) => path).filter((path) => !compiled.has(path)).map((path) => path.split('/')[0] ?? path))].sort();
   const taken = takenBySourceFolder(copied, manifestNameOf(sourceFolder));
   if (taken !== undefined) return { refusal: taken };
@@ -150,7 +150,7 @@ async function folderLinkedOrWhy(adapter: LinkAdapter, mod: string, { repository
     const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) }, ignore);
     if ('why' in files) return files.why;
     const manifest: Manifest = {
-      packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: exclusionsOfFiles(value.exclude, files.keys()), ignore, files,
+      packages: [{ kind: 'repository', name: basename(repository.sourceFolder) }], exclude: exclusionsOfFiles(value.exclude, files.keys()), ignore, flags: new Map(), files,
     };
     const notRestored = await sourceFolderRestoredFrom({ adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, repository.sourceFolder, { folder, manifest });
     if (notRestored !== undefined) return `its source folder could not be restored from its manifest: ${notRestored}`;

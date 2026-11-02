@@ -140,6 +140,7 @@ export function buildManifest(
     ],
     exclude,
     ignore: held?.ignore ?? [],
+    flags: new Map([...held?.flags ?? []].filter(([path]) => files.some((file) => file.path === path))),
     files: new Map(files.map(({ path, hash }) => [path, hash])),
   };
   const packageFiles = [

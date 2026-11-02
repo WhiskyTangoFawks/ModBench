@@ -53,6 +53,23 @@ const withIgnore = (
   + '}\n'
 );
 
+const withFlags = (
+  '{\n'
+  + '"version":1,\n'
+  + '"packages":[\n'
+  + '{"kind":"installationFile","name":"a.7z","size":1,"hash":"AAAAAAAAAAA="}\n'
+  + '],\n'
+  + '"flags":{\n'
+  + '"Mod.esp":{"Master":false,"Small":true},\n'
+  + '"real/Other.esl":{"Master":true}\n'
+  + '},\n'
+  + '"files":{\n'
+  + '"Mod.esp":"BBBBBBBBBBA=",\n'
+  + '"real/Other.esl":"AAAAAAAAAAA="\n'
+  + '}\n'
+  + '}\n'
+);
+
 const builtSourceMod = (
   '{\n'
   + '"version":1,\n'
@@ -73,6 +90,7 @@ describe('a manifest the adapter reads and writes', () => {
     ['the example formats/manifest.md gives', specExample],
     ['every kind of package but a repository, and exclusions', everyKindAndExclusion],
     ['ignored paths, between exclusions and files', withIgnore],
+    ['flags, between ignore and files, with each plugin\'s flags by name', withFlags],
     ['a built source mod, with a file a step makes', builtSourceMod],
     ['a manifest with no member but its version', noMember],
   ])('round-trips %s byte for byte', (_name, text) => {
@@ -95,6 +113,7 @@ describe('a manifest the adapter reads and writes', () => {
       ],
       exclude: ['b', 'A'],
       ignore: ['d', 'C'],
+      flags: new Map(),
       files: new Map([['b', H1], ['B', H1], ['A', H2], ['a', H2]]),
     };
     expect(manifestText(manifest)).toBe(
@@ -111,7 +130,7 @@ describe('a manifest the adapter reads and writes', () => {
 
   it('reads any text the schema accepts, whatever its spacing and order', () => {
     const read = readManifest(`{ "files": { "a.esp": "${H1}" }, "version": 1 }`);
-    expect(read).toEqual({ manifest: { packages: [], exclude: [], ignore: [], files: new Map([['a.esp', H1]]) } });
+    expect(read).toEqual({ manifest: { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.esp', H1]]) } });
   });
 });
 
@@ -149,6 +168,11 @@ describe('a manifest the adapter refuses', () => {
     ['{"version":1,"ignore":["../a"]}', "its manifest names '../a', which is not a path in the folder"],
     [`{"version":1,"ignore":["a.esp"],"files":{"a.esp":"${H1}"}}`, "its manifest ignores 'a.esp', which is one of its files or a folder above one"],
     [`{"version":1,"ignore":["docs"],"files":{"docs/a.txt":"${H1}"}}`, "its manifest ignores 'docs', which is one of its files or a folder above one"],
+    [`{"version":1,"flags":{"a.esp":{"Master":true}}}`, "its manifest flags 'a.esp', which is none of its files"],
+    [`{"version":1,"flags":{"a.txt":{"Master":true}},"files":{"a.txt":"${H1}"}}`, "its manifest flags 'a.txt', which is no plugin"],
+    [`{"version":1,"flags":{"a.esp":{}},"files":{"a.esp":"${H1}"}}`, "its manifest cannot be read at its flags of 'a.esp'"],
+    [`{"version":1,"flags":{"a.esp":{"Master":1}},"files":{"a.esp":"${H1}"}}`, "its manifest cannot be read at its flags of 'a.esp'"],
+    [`{"version":1,"packages":[{"kind":"repository","name":"Mod"}],"flags":{"a.esp":{"Master":true}},"files":{"a.esp":"${H1}"}}`, "its manifest flags 'a.esp' beside the repository 'Mod'"],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}"},{"kind":"installationFile","name":"A.zip","size":2,"hash":"${H2}"}]}`, "its manifest names the installation file 'A.zip' twice"],
     ['{"version":1,"packages":[{"kind":"gameFolder"},{"kind":"gameFolder"}]}', 'its manifest names the game folder twice'],
     ['{"version":1,"packages":[{"kind":"repository","name":"Mod"},{"kind":"gameFolder"}]}', "its manifest names the repository 'Mod' beside another package"],

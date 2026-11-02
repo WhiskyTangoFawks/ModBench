@@ -122,6 +122,7 @@ try
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapSubmoduleEndpoints();
+    app.MapPluginFileEndpoints();
     app.MapNotificationEndpoints();
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();

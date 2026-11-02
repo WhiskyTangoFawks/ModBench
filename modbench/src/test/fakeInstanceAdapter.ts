@@ -1,3 +1,4 @@
+import type { PluginFlags } from '../repositoriesLib/statusValues';
 import { basename, join } from 'node:path';
 import { isManifestPath } from '../repositoriesLib/manifestPath';
 import { textHash } from '../instanceAdapter/fileContents/contentDigest';
@@ -68,6 +69,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
 export const md5Of = (name: string): string => `md5-of-${name}`;
 
 export type AdapterCall =
+  | { readonly verb: 'keepFlaggedHash'; readonly hash: string; readonly flags: PluginFlags; readonly flaggedHash: string }
   | { readonly verb: 'changeModOrder'; readonly profile: string; readonly changes: readonly ModOrderChange[] }
   | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
@@ -106,8 +108,13 @@ export type WriteVerb = AdapterCall['verb'];
 export const refusing = (verb: WriteVerb, message: string): NonNullable<InstanceAnswers['refusals']> =>
   (call) => (call.verb === verb ? message : undefined);
 
+/** The key of `InstanceAnswers.flaggedHashes`: the package copy's hash and the flags. */
+export const flaggedKey = (hash: string, flags: PluginFlags): string => JSON.stringify([hash, Object.entries(flags).sort(([a], [b]) => (a < b ? -1 : 1))]);
+
 /** What a test fixes of the instance beside its reading. */
 export interface InstanceAnswers {
+  /** The hash of a plugin once restore set the flags in its package copy, by the copy's hash and `flaggedKey`. */
+  flaggedHashes?: ReadonlyMap<string, string>;
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
@@ -268,6 +275,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let current = reading;
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
+  const flaggedHashes = new Map(answers.flaggedHashes);
   const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
   const listeners = new Set<() => void>();
   let readings = 0;
@@ -406,6 +414,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
+    flaggedHash: (hash, flags) => Promise.resolve(flaggedHashes.get(flaggedKey(hash, flags))),
+    keepFlaggedHash: (hash, flags, flaggedHash) => write({ verb: 'keepFlaggedHash', hash, flags, flaggedHash }, () => { flaggedHashes.set(flaggedKey(hash, flags), flaggedHash); }),
     originFileHash: (path) => {
       hashed.push(path);
       return answer(answers.hashes?.get(path), path);

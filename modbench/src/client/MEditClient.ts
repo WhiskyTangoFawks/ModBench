@@ -197,6 +197,12 @@ export type Submodule = components['schemas']['SubmoduleRequest'];
  *  by that folder, with why. */
 export type SubmodulesCloned = components['schemas']['CloneSubmodulesResult'];
 
+/** Each plugin file whose load flags were set, with the hash of what was written, and each not set, by its path. */
+export type PluginFilesFlagged = components['schemas']['SetPluginFileFlagsResult'];
+
+/** A plugin file, by its absolute path, with each load flag to set (true) or clear (false). */
+export type PluginFileToFlag = components['schemas']['PluginFileFlagsToSet'];
+
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAt = components['schemas']['RecordAt'];
@@ -257,6 +263,8 @@ export interface MEditClient {
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;
   // ADR-0022: each submodule cloned at its pin, or named with why it was not.
   cloneSubmodules(submodules: readonly Submodule[]): Promise<SubmodulesCloned | WriteRefused>;
+  // ADR-0022: each file's load flags set or cleared in place, no other byte changed.
+  setPluginFileFlags(gameRelease: string, files: readonly PluginFileToFlag[]): Promise<PluginFilesFlagged | WriteRefused>;
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).

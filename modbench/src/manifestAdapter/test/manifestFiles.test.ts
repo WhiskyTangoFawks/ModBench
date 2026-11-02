@@ -7,7 +7,7 @@ import { BUILD_FILE } from '../../wire/sourceMod';
 import { buildFileIn, buildFileText, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 
-const manifest: Manifest = { packages: [], exclude: [], ignore: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
+const manifest: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
 
 let root: string;
 let folder: string;

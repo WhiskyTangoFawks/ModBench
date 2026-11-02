@@ -35,7 +35,7 @@ export async function sourceFolderValueOver(
   return folderValueOver({ ...reads, filesIn }, folder);
 }
 
-type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule'>;
+type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule' | 'flaggedHash'>;
 
 // None when the game folder is not found.
 async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<FileRead<HashedPath[] | undefined>> {
@@ -60,8 +60,13 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
     for (const name of asked.installationFiles) downloadedFiles.set(name, await reads.downloadedFile(name));
     const gameFiles: FileRead<HashedPath[] | undefined> = asked.gameFiles === undefined ? { kind: 'read', answer: [] } : await gameFilesOver(reads, folder, asked.gameFiles);
     if (gameFiles.kind === 'unreadable') return { kind: 'unreadable', reason: gameFiles.reason };
+    const flaggedHashes = new Map<string, string>();
+    for (const { path, hash, flags } of asked.flagged ?? []) {
+      const flaggedHash = await reads.flaggedHash(hash, flags);
+      if (flaggedHash !== undefined) flaggedHashes.set(path, flaggedHash);
+    }
     const repositoryHosted = asked.repository !== undefined && !('lacks' in await reads.submodule(asked.repository));
-    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, repositoryHosted };
+    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryHosted };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
   }

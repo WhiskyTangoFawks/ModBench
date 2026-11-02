@@ -1,5 +1,6 @@
 // spec/formats/manifest-1.schema.json and the rules manifest.md adds, read from any text the schema accepts.
 
+import { isPluginFile } from '../tables/pluginFile';
 import { isUnderAny } from './folderPaths';
 import { MANIFEST_VERSION, type Manifest, type ManifestPackage, type ManifestRead } from './manifest';
 import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
@@ -134,6 +135,21 @@ function ignoreOf(value: unknown, files: ReadonlyMap<string, unknown>): string[]
   return ignore;
 }
 
+function flagsOf(value: unknown, files: ReadonlyMap<string, unknown>, repository: ManifestPackage | undefined): Map<string, Record<string, boolean>> {
+  const flags = new Map<string, Record<string, boolean>>();
+  for (const [path, set] of Object.entries(objectOf(FILE, value, 'its flags'))) {
+    pathOf(path);
+    if (repository !== undefined) throw new Unreadable(`its ${FILE} flags '${path}' beside the repository '${repository.kind === 'repository' ? repository.name : ''}'`);
+    if (!files.has(path)) throw new Unreadable(`its ${FILE} flags '${path}', which is none of its files`);
+    if (!isPluginFile(path)) throw new Unreadable(`its ${FILE} flags '${path}', which is no plugin`);
+    const where = `its flags of '${path}'`;
+    const members = Object.entries(objectOf(FILE, set, where));
+    if (members.length === 0 || members.some(([, on]) => typeof on !== 'boolean')) throw at(where);
+    flags.set(path, Object.fromEntries(members.map(([name, on]) => [name, on === true])));
+  }
+  return flags;
+}
+
 function manifestOf(value: unknown): Manifest {
   if (isObject(value) && !Object.hasOwn(value, 'version')) {
     throw new OlderFormat(`its ${FILE} is in a format before version ${MANIFEST_VERSION}, and Modbench reads only version ${MANIFEST_VERSION}`);
@@ -142,12 +158,14 @@ function manifestOf(value: unknown): Manifest {
   if (root.version !== MANIFEST_VERSION) {
     throw new Unreadable(`its ${FILE} is version ${JSON.stringify(root.version)}, and Modbench reads only version ${MANIFEST_VERSION}`);
   }
-  known(root, undefined, ['version', 'packages', 'exclude', 'ignore', 'files']);
+  known(root, undefined, ['version', 'packages', 'exclude', 'ignore', 'flags', 'files']);
   const packages = Object.hasOwn(root, 'packages') ? packagesOf(root.packages) : [];
   const files = Object.hasOwn(root, 'files') ? filesOf(root.files, packages.some(({ kind }) => kind === 'repository')) : new Map<string, string | null>();
   return {
     packages, exclude: Object.hasOwn(root, 'exclude') ? excludeOf(root.exclude, files) : [],
-    ignore: Object.hasOwn(root, 'ignore') ? ignoreOf(root.ignore, files) : [], files,
+    ignore: Object.hasOwn(root, 'ignore') ? ignoreOf(root.ignore, files) : [],
+    flags: Object.hasOwn(root, 'flags') ? flagsOf(root.flags, files, packages.find(({ kind }) => kind === 'repository')) : new Map(),
+    files,
   };
 }
 

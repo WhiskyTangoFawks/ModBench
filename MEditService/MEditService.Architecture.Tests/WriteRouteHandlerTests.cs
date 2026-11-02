@@ -31,6 +31,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/build", typeof(BuildModHandler), "Build"),
         ("POST", "/init-source-mod", typeof(InitSourceModHandler), "InitSourceMod"),
         ("POST", "/clone-submodules", typeof(CloneSubmodulesHandler), "CloneSubmodules"),
+        ("POST", "/plugin-files/set-flags", typeof(SetPluginFileFlagsHandler), "SetPluginFileFlags"),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

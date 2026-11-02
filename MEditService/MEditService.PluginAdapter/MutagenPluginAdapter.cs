@@ -108,6 +108,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
+    public Answer<string, PluginFailure> SetLoadFlags(string pluginPath, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease) =>
+        PluginFailure.Answer(() => PluginLoadFlags.Set(pluginPath, flags, gameRelease));
+
     public Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
         PluginFailure.Answer(() => PluginRepair.Preview(File.ReadAllBytes(pluginPath), gameRelease));
 

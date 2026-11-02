@@ -21,7 +21,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
+  'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom'>;
@@ -29,7 +29,7 @@ type Adapter = Pick<InstanceAdapter,
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
 export interface RestoreDeps {
-  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   readonly adapter: Adapter;
   readonly nexus: Pick<Nexus, 'download'>;
   readonly trash: MoveToTrash;
@@ -131,11 +131,17 @@ async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile
 
 /** What restoring one folder from its packages asks of the instance. */
 export type FolderRestoreAdapter = Pick<InstanceAdapter,
-  'gameRelease' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'sourceFolderValue'
+  'gameRelease' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'sourceFolderValue'
   | 'folderValue' | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
 
 interface FolderPass {
-  readonly deps: { readonly adapter: FolderRestoreAdapter; readonly nexus: RestoreDeps['nexus']; readonly trash: MoveToTrash };
+  readonly deps: {
+    readonly adapter: FolderRestoreAdapter;
+    /** Absent for a manifest that sets no flags. */
+    readonly client?: Pick<MEditClient, 'setPluginFileFlags'>;
+    readonly nexus: RestoreDeps['nexus'];
+    readonly trash: MoveToTrash;
+  };
   readonly game: NamedGameFolder | string;
   readonly options: Options;
 }
@@ -239,10 +245,11 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
 async function restoreFromPackages(
   pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>, through?: ModFolder,
 ): Promise<Answer> {
-  const { adapter } = pass.deps;
+  const { adapter, client } = pass.deps;
+  if (client === undefined && manifest.flags.size > 0) return { refusal: skipped('its manifest sets flags, which need mEdit') };
   let against: FolderAgainst;
   try {
-    against = folderAgainst(manifest, await valueOf(folder));
+    against = folderAgainst(manifest, await valueOf(folder), await flaggedHashesOf(adapter, manifest));
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
@@ -259,10 +266,40 @@ async function restoreFromPackages(
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
+  const flagged = client === undefined ? undefined : await flagsSet({ adapter, client }, manifest, folder, writes.map(({ path }) => path));
+  if (flagged !== undefined) return { refusal: notFinished(flagged) };
   const trashed = [...moved, ...against.namedByNoLine];
   const why = await whyNotTrashed(adapter, pass.deps.trash, folder, trashed);
   if (why !== undefined) return { refusal: notFinished(why) };
   return { landed: { mod, written: writes.map(({ path }) => path), namedByNoLine: against.namedByNoLine } };
+}
+
+// ADR-0022: the hash restore kept for each flagged plugin whose package copy it flagged.
+async function flaggedHashesOf(adapter: Pick<FolderRestoreAdapter, 'flaggedHash'>, manifest: Manifest): Promise<ReadonlyMap<string, string>> {
+  const kept = await Promise.all([...manifest.flags].map(async ([path, flags]) => {
+    const copy = manifest.files.get(path);
+    return typeof copy === 'string' ? [path, await adapter.flaggedHash(copy, flags)] as const : [path, undefined] as const;
+  }));
+  return new Map(kept.flatMap(([path, hash]) => (hash === undefined ? [] : [[path, hash] as const])));
+}
+
+// formats/manifest.md, `flags`: a plugin written from its package is the copy with the manifest's flags set in it, whose hash is kept.
+async function flagsSet(
+  pass: { readonly adapter: FolderRestoreAdapter; readonly client: NonNullable<FolderPass['deps']['client']> }, manifest: Manifest, folder: string, written: readonly string[],
+): Promise<string | undefined> {
+  const flagged = written.flatMap((pathInFolder) => {
+    const path = [...manifest.flags.keys()].find((one) => pass.adapter.pathInFolder(one, manifest.exclude) === pathInFolder);
+    const copy = path === undefined ? undefined : manifest.files.get(path);
+    return path === undefined || typeof copy !== 'string' ? [] : [{ path: join(folder, pathInFolder), copy, flags: manifest.flags.get(path) ?? {} }];
+  });
+  if (flagged.length === 0) return undefined;
+  const answer = await pass.client.setPluginFileFlags(await pass.adapter.gameRelease(), flagged.map(({ path, flags }) => ({ path, flags })));
+  if (isRefused(answer)) return answer.message;
+  for (const { path, copy, flags } of flagged) {
+    const set = answer.applied.find((one) => one.path === path);
+    if (set !== undefined) await pass.adapter.keepFlaggedHash(copy, flags, set.hash);
+  }
+  return answer.refused.length === 0 ? undefined : answer.refused.map(({ item, message }) => `${item}: ${message}`).join('; ');
 }
 
 async function hashesIn(adapter: Adapter, folder: string): Promise<Map<string, string>> {

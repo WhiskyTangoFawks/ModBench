@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FileRead, FoundGameFolder, GamePlace, InstallationFile, InstanceAdapter, OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
-import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, flaggedKey, modFoldersIn, readingFixture, refusing, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { updateManifest, type UpdateManifestStatus } from '../updateManifest';
 
@@ -15,7 +15,7 @@ const HZ = 'ZZZZZZZZZZA=';
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'HHHHHHHHHHA=', entries: [{ path: 'a.nif', hash: HA }] };
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
-const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], files: new Map() };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };
 const holding = (files: Record<string, string>): Manifest['files'] => new Map(Object.entries(files));
 
 let root: string;
@@ -153,7 +153,7 @@ describe('update manifest', () => {
 
     await update(['ModA']);
 
-    expect(await manifestOf('ModA')).toEqual({ manifest: { ...EMPTY, exclude: ['b.esp', 'docs'], ignore: [], files: holding({ 'docs/a.txt': HA, 'b.esp': HB }) } });
+    expect(await manifestOf('ModA')).toEqual({ manifest: { ...EMPTY, exclude: ['b.esp', 'docs'], ignore: [], flags: new Map(), files: holding({ 'docs/a.txt': HA, 'b.esp': HB }) } });
   });
 
   it('leaves out a file its manifest ignores, with the exclusion of it, and keeps the ignore (The manifest, story 11)', async () => {
@@ -163,7 +163,7 @@ describe('update manifest', () => {
     const result = await update(['ModA']);
 
     expect([result.refused, await manifestOf('ModA')]).toEqual([
-      [], { manifest: { ...EMPTY, ignore: ['F4SE/Plugins/BetterConsole.mem', 'logs'], files: holding({ 'a.nif': HA }) } },
+      [], { manifest: { ...EMPTY, ignore: ['F4SE/Plugins/BetterConsole.mem', 'logs'], flags: new Map(), files: holding({ 'a.nif': HA }) } },
     ]);
   });
 
@@ -270,7 +270,7 @@ describe('update manifest', () => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
       const held: Manifest = {
         packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }, { kind: 'installationFile', name: 'Other.7z', size: 5, hash: OTHER.hash }],
-        exclude: [], ignore: [], files: holding({ 'a.nif': HA, 'b.nif': HB }),
+        exclude: [], ignore: [], flags: new Map(), files: holding({ 'a.nif': HA, 'b.nif': HB }),
       };
       const downloads = [INSTALLED, OTHER].filter((file) => !file.path.endsWith(missing));
       const { update, manifestHeld } = await over({
@@ -494,7 +494,7 @@ describe('update manifest', () => {
 
       const { packages, ...rest } = await heldIn(folder);
       expect([result.refused, result.landed.map(({ mod }) => mod), packages.map(({ kind }) => kind), rest]).toEqual([
-        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], ignore: [], files: holding({ 'Data/a.nif': HA }) },
+        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], ignore: [], flags: new Map(), files: holding({ 'Data/a.nif': HA }) },
       ]);
     });
   });
@@ -601,5 +601,78 @@ describe('update manifest', () => {
     await update(['ModA']);
 
     expect(await readdir(join(modsDir, 'ModA'))).toEqual(['ModA.manifest.json']);
+  });
+
+  describe('a plugin its manifest flags (Update manifest, story 5)', () => {
+    const FLAGS = { Small: true };
+    const flagged = (hash: string, held: Partial<Manifest> = {}) => over({
+      files: { ModA: { 'Mod.esp': hash } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]), flaggedHashes: new Map([[flaggedKey(HA, FLAGS), HX]]) },
+    }).then(async (setup) => {
+      await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Mod.esp', FLAGS]]), files: holding({ 'Mod.esp': HA }), ...held });
+      return setup;
+    });
+
+    it('records the package copy\'s hash for the file that holds the bytes restore kept for the copy and the flags, and keeps the flags', async () => {
+      const { update, manifestHeld } = await flagged(HX);
+
+      const result = await update(['ModA']);
+
+      const held = await manifestHeld('ModA');
+      expect([result.landed, held.flags, held.files]).toEqual([
+        [{ mod: 'ModA', manifestWritten: false, notInPackage: [], otherBytes: [] }], new Map([['Mod.esp', FLAGS]]), holding({ 'Mod.esp': HA }),
+      ]);
+    });
+
+    it('records the bytes of a file that holds neither, as any file, and keeps the flags', async () => {
+      const { update, manifestHeld } = await flagged(HZ);
+
+      await update(['ModA']);
+
+      const held = await manifestHeld('ModA');
+      expect([held.flags, held.files]).toEqual([new Map([['Mod.esp', FLAGS]]), holding({ 'Mod.esp': HZ })]);
+    });
+
+    it('refuses the mod, leaving its manifest as it was, naming the plugin, when restore has kept nothing and a package holds none of its bytes', async () => {
+      const { update, manifestHeld } = await over({
+        files: { ModA: { 'Mod.esp': HZ }, ModB: { 'b.nif': HB } },
+        answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]) },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Mod.esp', FLAGS]]), files: holding({ 'Mod.esp': HA }) });
+
+      const result = await update(['ModA', 'ModB']);
+
+      expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).files]).toEqual([
+        [{ item: 'ModA', reason: "was not updated: 'Mod.esp' is flagged, and its bytes are neither a package's copy nor those restore recorded for its flags, so restore records them on this machine." }],
+        ['ModB'], holding({ 'Mod.esp': HA }),
+      ]);
+    });
+
+    it('records the package copy for a flagged plugin whose bytes are exactly the copy, as its flags are written and not yet restored', async () => {
+      const { update, manifestHeld } = await over({
+        files: { ModA: { 'Mod.esp': HA } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]) },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Mod.esp', FLAGS]]), files: holding({ 'Mod.esp': HA }) });
+
+      const result = await update(['ModA']);
+
+      expect([result.refused, (await manifestHeld('ModA')).files]).toEqual([[], holding({ 'Mod.esp': HA })]);
+    });
+
+    it('drops the flags of a plugin that is gone from the folder, as its manifest names no file it lacks', async () => {
+      const { update, manifestHeld } = await flagged(HX);
+      await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Gone.esp', FLAGS]]), files: holding({ 'Gone.esp': HA }) });
+
+      await update(['ModA']);
+
+      expect((await manifestHeld('ModA')).flags).toEqual(new Map());
+    });
+  });
+
+  it('names no file a plugin renamed from its package\'s entry, which holds its bytes (The manifest, story 9)', async () => {
+    const { update } = await over({
+      files: { ModA: { 'Renamed.esp': HA } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Original.esp', hash: HA }] })]]) },
+    });
+
+    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }]);
   });
 });

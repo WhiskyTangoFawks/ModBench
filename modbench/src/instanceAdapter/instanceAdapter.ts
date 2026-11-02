@@ -10,7 +10,7 @@ import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
-import type { FolderValue, PackagesAsked, Read, StatusValues } from '../repositoriesLib/statusValues';
+import type { FolderValue, PackagesAsked, PluginFlags, Read, StatusValues } from '../repositoriesLib/statusValues';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
@@ -741,6 +741,11 @@ export interface InstanceAdapter {
   /** An origin file's size and hash at the path it is read from, kept in the hash index (ADR-0013). Two files with one
    *  hash hold the same bytes. */
   originFileHash(path: string): Promise<FileRead<HashedFile>>;
+  /** The hash of a plugin whose package copy hashes `hash`, once restore set `flags` in it; none when restore has not, kept in the
+   *  hash index. */
+  flaggedHash(hash: string, flags: PluginFlags): Promise<string | undefined>;
+  /** Keeps `flaggedHash` as the hash of the plugin whose package copy hashes `hash`, once restore set `flags` in it. */
+  keepFlaggedHash(hash: string, flags: PluginFlags, flaggedHash: string): Promise<void>;
   /** Each file below `folder`, a mod's or any folder a manifest builds, by forward-slash path, listed as a mod's files
    *  are; none when the folder is not there. */
   filesIn(folder: string): Promise<readonly string[]>;

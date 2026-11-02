@@ -168,6 +168,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugin-files/set-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sets or clears the named load flags of each plugin file, by its absolute path, in place and changing no other byte, and answers the hash of what it wrote. A file that is no plugin, or a name that is no load flag of the game, leaves its file as it was and is named with why. */
+        post: operations["SetPluginFileFlags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/stream": {
         parameters: {
             query?: never;
@@ -1434,6 +1451,23 @@ export interface components {
             origin: string;
             text: string;
         };
+        /** @enum {string} */
+        PluginFileFlagRefusal: "None" | "NotAPlugin" | "UnknownFlag";
+        PluginFileFlagRefused: {
+            item: string;
+            refusal: components["schemas"]["PluginFileFlagRefusal"];
+            message: string;
+        };
+        PluginFileFlagsSet: {
+            path: string;
+            hash: string;
+        };
+        PluginFileFlagsToSet: {
+            path: string;
+            flags: {
+                [key: string]: boolean;
+            };
+        };
         PluginIndexedState: {
             state: components["schemas"]["PluginIndexing"];
             reason?: string | null;
@@ -1657,6 +1691,14 @@ export interface components {
             reached: boolean;
             /** Format: int64 */
             sequence: number;
+        };
+        SetPluginFileFlagsRequest: {
+            gameRelease: string;
+            files: components["schemas"]["PluginFileFlagsToSet"][];
+        };
+        SetPluginFileFlagsResult: {
+            applied: components["schemas"]["PluginFileFlagsSet"][];
+            refused: components["schemas"]["PluginFileFlagRefused"][];
         };
         SourceMove: {
             from: string;
@@ -2163,6 +2205,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloneSubmodulesResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SetPluginFileFlags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPluginFileFlagsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPluginFileFlagsResult"];
                 };
             };
             /** @description Bad Request */

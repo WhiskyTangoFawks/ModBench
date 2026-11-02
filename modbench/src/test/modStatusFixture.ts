@@ -12,5 +12,5 @@ export const RECORDED_HASH = 'AAAAAAAAAAA=';
 /** Writes into `folder` the manifest named for it, naming each of `paths` and no package. */
 export async function manifestedIn(folder: string, paths: readonly string[] = []): Promise<void> {
   await mkdir(folder, { recursive: true });
-  await writeManifestIn(folder, { packages: [], exclude: [], ignore: [], files: new Map(paths.map((path) => [path, RECORDED_HASH])) });
+  await writeManifestIn(folder, { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map(paths.map((path) => [path, RECORDED_HASH])) });
 }
