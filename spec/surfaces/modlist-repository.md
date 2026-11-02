@@ -26,7 +26,7 @@ A mod's installation files are the downloaded files the mod was installed from. 
 5. A manifest to name each of its folder's own files that git does not hold, and each of its packages, even a file no package holds or a package with no host. Each such file and package is a problem (Status, story 2), so nothing a clone cannot rebuild drops out of the manifest. Cites: Never silently wrong
 6. A manifest I open to show each value's meaning on hover, and to mark a hand edit its schema refuses as I type, as VS Code does for any JSON file with a schema. Cites: Existing tools; formats/manifest.md
 7. Each package to name its version when one is known, so an upgrade reads in a git diff as the versions it moves between.
-8. A plugin's flags I change to need no source mod. Cites: ADR-0022
+8. To flag a plugin by setting its flags in its manifest and restoring, so a flag needs no source mod. Cites: ADR-0022
 9. A plugin I rename to need no source mod. Cites: ADR-0022
 10. Each package's host taken from its downloaded file's own metadata, never the mod's, so stale mod metadata never names a host the file did not come from. Cites: Never silently wrong
 11. A file in a mod I ignore, such as one the game rewrites on every run, neither recorded nor touched, so it never reads as changed: update manifest and init source mod leave it out, status never reads it as differing, and restore and build neither write nor trash it. Cites: commands.md, One identity
@@ -69,7 +69,6 @@ As a user, I want:
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
 5. A mod refused, and its manifest left as it was, when a package its manifest names is missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong
 6. Each file of a mod to come from whichever downloaded file holds its bytes, so an installation file the mod manager names that is missing or unreadable never refuses the mod. Cites: Status, story 7
-7. Update manifest to record each change to how the game loads a file that it finds in the folder. Cites: ADR-0022; Existing tools
 
 ## Restore from manifest
 
