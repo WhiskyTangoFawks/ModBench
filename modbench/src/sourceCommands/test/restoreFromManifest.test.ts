@@ -95,7 +95,7 @@ describe('restore from manifest', () => {
 
     const outcome = await restore(['ModA', 'ModB']);
 
-    expect([outcome.refused, outcome.landed.map(({ mod }) => mod), writes(fake.calls).map((call) => Reflect.get(call, 'folder'))]).toEqual([
+    expect([outcome.refused, outcome.landed.map(({ mod }) => mod), writes(fake.calls).map((call) => ('folder' in call ? call.folder : undefined))]).toEqual([
       [{ item: 'ModA', reason: 'was skipped: git holds its whole folder.' }], ['ModB'], [folderOf('ModB'), folderOf('ModB')],
     ]);
   });
