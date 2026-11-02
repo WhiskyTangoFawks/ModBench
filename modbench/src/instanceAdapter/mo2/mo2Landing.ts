@@ -13,13 +13,13 @@ import { isManifestPath } from '../../repositoriesLib/manifestPath';
 import { modMetaFileIn, modsDir, stagingPrefix } from './layout';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { folderHolding, metaGameOfInstance, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
+import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from '../instanceReading';
 import { releaseRoot } from '../gameFolder/releaseRoot';
 import { fomodLanding, type FomodEngine } from '../fomodInstaller/fomodInstaller';
 import { conditionFacts } from '../fomodInstaller/conditionFacts';
 
-type Land = (root: string, gameName: string) => Promise<void>;
+type Land = (root: string, gameRelease: string) => Promise<void>;
 
 // A key the packages do not supply keeps the carried meta's own value.
 function keysOver(keys: MetaIni, carried: MetaIni, gameName: string): OwnedMetaKeys {
@@ -49,7 +49,7 @@ async function settleInto(folder: string, root: string, metaText: string): Promi
   await write(modMetaFileIn(folder), metaText);
 }
 
-const landNewMod = (context: Mo2Context, mod: string): Land => async (root, gameName) => {
+const landNewMod = (context: Mo2Context, mod: string): Land => async (root, gameRelease) => {
   const folder = newModFolder(context, mod);
   await refuseFolderTaken(context, { kind: 'mod', name: mod }, folder);
   await ensureDir(modsDir(context.instanceRoot));
@@ -60,7 +60,7 @@ const landNewMod = (context: Mo2Context, mod: string): Land => async (root, game
     throw err;
   }
   try {
-    await settleInto(folder, root, writeMetaIni({ gameName }));
+    await settleInto(folder, root, writeMetaIni({ gameName: gameRelease }));
   } catch (err) {
     await remove(folder);
     throw err;
@@ -168,11 +168,11 @@ export function mo2Landing(
         nexusFileStatus: first?.fileCategory, installedFileKeys: installedFileKeys.length === 0 ? undefined : installedFileKeys,
       });
       const carried = await get(modMetaFileIn(folder), '');
-      const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), await metaGameOfInstance(context)));
+      const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), (await source.settings()).gameRelease));
       if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
     },
     install: async (installed, target, trash, answer) => {
-      const gameName = await metaGameOfInstance(context);
+      const { gameRelease } = await source.settings();
       const claimed = await claim(target);
       if (claimed === undefined) return { landed: false };
       try {
@@ -189,7 +189,7 @@ export function mo2Landing(
             const land = claimed.holding === undefined
               ? landNewMod(context, target.name)
               : landUpgrade(target.name, claimed.holding.path, trash);
-            await land(landing.root, gameName);
+            await land(landing.root, gameRelease);
             return landing.fomod === undefined ? { landed: true as const } : { landed: true as const, fomod: landing.fomod };
           });
           await remove(staging);
