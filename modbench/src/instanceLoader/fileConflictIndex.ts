@@ -10,6 +10,9 @@ export const OVERWRITE_LABEL = 'Overwrite';
 
 export const originLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_LABEL);
 
+/** A key one origin has and no other. */
+export const originKey = (origin: FileOrigin): string => (origin.kind === 'mod' ? `mod/${origin.name}` : origin.kind);
+
 export const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean =>
   a.kind === 'mod' ? b.kind === 'mod' && a.name === b.name : a.kind === b.kind;
 

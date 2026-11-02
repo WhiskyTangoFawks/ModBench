@@ -13,7 +13,7 @@ public sealed record BuildResult(IReadOnlyList<ModBuilt> Applied, IReadOnlyList<
 public sealed record ModBuilt(
     string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
     IReadOnlyList<ArchiveRefused> ArchivesRefused, string? Failure, bool Uncommitted, bool Unpushed,
-    IReadOnlyList<MadeFile> Made, IReadOnlyList<string> Packed, IReadOnlyList<string> Replaced, IReadOnlyList<string> Ignored);
+    IReadOnlyList<MadeFile> Made, IReadOnlyList<string> Packed, IReadOnlyList<ReplacedTree> Replaced, IReadOnlyList<string> Ignored);
 
 /// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>
 public sealed record ArchiveRefused(string Item, ArchiveRefusal Refusal, string Message) : IItemRefused<ArchiveRefusal>

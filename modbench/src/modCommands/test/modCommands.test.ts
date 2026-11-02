@@ -444,6 +444,15 @@ describe('markFiles', () => {
       landed: [marked], refused: [{ item: gone, reason: '"gone.dds" is gone from disk.' }, { item: refused, reason: 'permission denied' }],
     } });
   });
+
+  it('names a file gone from disk by its own path, the mod manager\'s mark left out', async () => {
+    const { commands } = over(FIXTURE_ORDER, {}, FILES);
+    const gone = fileOf('Harder VATS', `Textures/gone.dds${MARK}`);
+
+    const outcome = await commands.markFiles([gone], 'Included');
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: gone, reason: '"Textures/gone.dds" is gone from disk.' }] } });
+  });
 });
 
 describe('changePublisherTag (publishing.md, Publisher tags, story 2)', () => {

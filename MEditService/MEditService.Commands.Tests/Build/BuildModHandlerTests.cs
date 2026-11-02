@@ -417,7 +417,9 @@ public sealed class BuildModHandlerTests : IDisposable
 
         var decompiled = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])));
 
-        var aside = Path.Combine(SourceFolder, Assert.Single(decompiled.Replaced));
+        var replaced = Assert.Single(decompiled.Replaced);
+        Assert.Equal($"plugin-source/{Plugin}", replaced.Path);
+        var aside = Path.Combine(SourceFolder, replaced.Aside);
         Assert.Equal(Plugin, Path.GetFileName(aside));
         Assert.Equal(before, Directory.GetFiles(aside, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(file => (Path.GetRelativePath(aside, file), File.ReadAllText(file))));
     }

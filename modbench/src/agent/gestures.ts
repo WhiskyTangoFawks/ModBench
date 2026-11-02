@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { Argument } from '../wire/argument';
-import { downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
+import { CONTAINER_NAME, downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, namedByOwnPath, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
 import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
 import type { Deployed } from '../deployment/deployment';
@@ -111,10 +111,10 @@ const CREATE_EMPTY_MOD = gestureInput(
 );
 
 const FILES = gestureInput(
-  'argument: the files, each { mod: { name, kind? } as list_mods names it, path: its path in the mod }',
-  z.object({ argument: z.array(z.object({ mod: ENTRY_NAME, path: z.string() })) }),
-  (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ mod, relativePath }) =>
-    ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath })), {}),
+  'argument: the files, each { mod: { name, kind? } as list_mods names it, Overwrite included, path: its path in the mod }',
+  z.object({ argument: z.array(z.object({ mod: CONTAINER_NAME, path: z.string() })) }),
+  (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ origin, relativePath }) =>
+    ({ kind: 'file', origin, relativePath })), {}),
 );
 
 const PUBLISHER_TAG_ROWS = gestureInput(
@@ -126,7 +126,7 @@ const PUBLISHER_TAG_ROWS = gestureInput(
   (value, { argument, options }) => {
     const mods = modArguments(value, argument.filter(({ path }) => path === undefined).map(({ mod }) => mod));
     const paths = filesAndFoldersNamed(value, argument.flatMap(({ mod, path }) => (path === undefined ? [] : [{ mod, path }])))
-      .map(({ mod, relativePath }): Argument => ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath }));
+      .map(({ origin, relativePath }): Argument => ({ kind: 'file', origin, relativePath }));
     return new AgentCall([...mods, ...paths], options);
   },
 );
@@ -248,8 +248,6 @@ const MOVE_PLUGINS = gestureInput(
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
-const CONTAINER_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'runtimeOutput']).optional() });
-
 const CREATE_PLUGIN = gestureInput(
   'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name }',
   z.object({ argument: z.array(CONTAINER_NAME), options: z.object({ name: z.string() }) }),
@@ -359,6 +357,15 @@ function answerOf(outcome: GestureOutcome) {
     : { refusal: outcome.refusal, detail: outcome.detail };
 }
 
+function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome {
+  if (!outcome.applied) return outcome;
+  const { landed, refused } = outcome.outcome;
+  return {
+    ...outcome,
+    outcome: { landed: landed.map((item) => namedByOwnPath(value, item)), refused: refused.map((one) => ({ ...one, item: namedByOwnPath(value, one.item) })) },
+  };
+}
+
 const toolName = (command: string): string =>
   command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
@@ -369,7 +376,7 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
     const answer = await vscode.commands.executeCommand<GestureOutcome | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
-    const outcome = isDeployed(answer) ? deployAnswered(answer) : answer;
+    const outcome = namedOwn(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
     if (refusal !== undefined) throw new Refusal(refusal, answerOf(outcome));
     if (outcome.applied) partialsIn(outcome).forEach(warn);

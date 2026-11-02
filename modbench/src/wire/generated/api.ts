@@ -1380,7 +1380,7 @@ export interface components {
             unpushed: boolean;
             made: components["schemas"]["MadeFile"][];
             packed: string[];
-            replaced: string[];
+            replaced: components["schemas"]["ReplacedTree"][];
             ignored: string[];
         };
         ModToInitSourceModRequest: {
@@ -1671,6 +1671,10 @@ export interface components {
         RenderedDocument: {
             fileName: string;
             text: string;
+        };
+        ReplacedTree: {
+            aside: string;
+            path: string;
         };
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];

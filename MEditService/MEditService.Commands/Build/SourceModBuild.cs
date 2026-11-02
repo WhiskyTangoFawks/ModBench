@@ -191,7 +191,7 @@ internal sealed class SourceModBuild
         }
 
         var repository = _source.OverFolder(provider, loadOrder.GameRelease);
-        SortedSet<string> replaced = new(StringComparer.Ordinal);
+        SortedSet<ReplacedTree> replaced = new(Comparer<ReplacedTree>.Create((a, b) => string.CompareOrdinal(a.Aside, b.Aside)));
         foreach (var (plugin, source) in decompiled)
         {
             if (!repository.ReplaceSourceMovingAside(plugin.Key, source.Files, source.BinarySha256).Holds(out var aside, out var failure))
@@ -199,7 +199,7 @@ internal sealed class SourceModBuild
                 var why = $"The build stopped at its decompile, as {plugin.Name}'s plugin source could not be written: {failure.Reason}";
                 return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(ModBuildOutcome.Stopped(why) with { Replaced = [.. replaced] });
             }
-            replaced.UnionWith(aside);
+            replaced.UnionWith(aside.Select(tree => new ReplacedTree(tree.Aside, tree.Path)));
         }
         return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], [], null) { Replaced = [.. replaced] });
     }

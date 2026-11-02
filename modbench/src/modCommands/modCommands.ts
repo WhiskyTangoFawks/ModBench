@@ -125,7 +125,7 @@ async function markFiles(adapter: InstanceAdapter, files: readonly OriginFileRef
   const outcome = await selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
     try {
       const marked = await adapter.markOriginFile(file.origin, file.relativePath, mark);
-      if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
+      if (marked.gone) return { applied: false, refusal: goneFromDisk(adapter.ownPath(file.relativePath)) };
       if ('refusal' in marked) return { applied: false, refusal: marked.refusal };
       return { applied: true, wrote: true };
     } catch (err) {

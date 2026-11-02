@@ -1,5 +1,5 @@
 import type { FileOrigin, OriginFile } from '../instanceLoader/instance';
-import { foldPath } from '../instanceLoader/fileConflictIndex';
+import { foldPath, originKey } from '../instanceLoader/fileConflictIndex';
 import type { FileToCompare } from './sameCopies';
 import { present } from '../ports/present';
 
@@ -11,15 +11,19 @@ interface CopiesIn {
   readonly overwriteFiles: readonly CopyFile[];
 }
 
+/** The files an origin holds. */
+export const filesOfOrigin = <File>(
+  value: { readonly filesByMod: ReadonlyMap<string, readonly File[]>; readonly overwriteFiles: readonly File[] }, origin: FileOrigin,
+): readonly File[] => (origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles);
+
 export function copyPathsOf(value: Pick<CopiesIn, 'filesByMod' | 'overwriteFiles'>, origin: FileOrigin): ReadonlyMap<string, string> {
-  const files = origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles;
-  return new Map(files.map((file) => [foldPath(file.relativePath), file.sourcePath]));
+  return new Map(filesOfOrigin(value, origin).map((file) => [foldPath(file.relativePath), file.sourcePath]));
 }
 
 export function copiesToRead(value: CopiesIn, relativePaths: readonly string[]): FileToCompare[] {
   const byOrigin = new Map<string, ReadonlyMap<string, string>>();
   const copyPath = (origin: FileOrigin, relativePath: string): string => {
-    const key = origin.kind === 'mod' ? `mod/${origin.name}` : origin.kind;
+    const key = originKey(origin);
     let paths = byOrigin.get(key);
     if (paths === undefined) {
       paths = copyPathsOf(value, origin);

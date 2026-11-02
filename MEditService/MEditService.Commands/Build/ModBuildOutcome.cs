@@ -53,6 +53,9 @@ public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Te
 /// plugin's or archive's file does not.</summary>
 public sealed record MadeFile(string Path, bool VouchedFor);
 
+/// <summary>A plugin source tree a decompile moved aside: where it now is, and the path it had, both in the source folder.</summary>
+public sealed record ReplacedTree(string Aside, string Path);
+
 /// <summary>A mod whose step ran. Made: each file it made, none after a Failure. Packed: each loose file an archive packs.
 /// Ignored: each file it left unwritten. Uncommitted and Unpushed: its source's.</summary>
 internal sealed record ModBuildOutcome(
@@ -67,7 +70,7 @@ internal sealed record ModBuildOutcome(
 
     public IReadOnlyList<string> Packed { get; init; } = [];
 
-    public IReadOnlyList<string> Replaced { get; init; } = [];
+    public IReadOnlyList<ReplacedTree> Replaced { get; init; } = [];
 
     /// <summary>Each file a step would have made at a path the manifest ignores, by its path in the folder.</summary>
     public IReadOnlyList<string> Ignored { get; init; } = [];

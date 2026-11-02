@@ -372,6 +372,20 @@ describe('the agent server, given an instance value', () => {
       ]);
     });
 
+    it('names a file by its own path, the mod manager\'s mark left out', async () => {
+      const marked = new FakeInstance({
+        ...VALUE, holdsRepository: true,
+        modFolders: [{ kind: 'mod', name: 'Big Rocks', path: '/i/mods/Big Rocks', modName: 'Big Rocks' }],
+        filesByMod: new Map([['Big Rocks', [fileIn('/m', 'Textures/a.dds.mohidden'), fileIn('/m', 'b.nif'), fileIn('/m', 'c.nif.mohidden')]]]),
+      });
+      statusRead.answer = [status('Big Rocks', { differing: ['Textures/a.dds.mohidden'], namedByNoLine: ['c.nif.mohidden', 'b.nif'], gone: ['Gone.nif'] })];
+      const { client } = await clientOf(marked);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([
+        { mods: ['Big Rocks'], differing: ['Textures/a.dds'], namedByNoLine: ['c.nif', 'b.nif'], gone: ['Gone.nif'] },
+      ]);
+    });
+
     it('groups the mods of one status, leaving out each empty member', async () => {
       statusRead.answer = [status('Big Rocks', { noManifest: true }), status('InAnotherProfile', { noManifest: true })];
       const { client } = await clientOf(inRepository);
@@ -541,6 +555,38 @@ describe('the agent server, reading file order conflicts', () => {
     ]);
   });
 
+  it('reads Overwrite as list_mods names it, as the winner of the files it holds', async () => {
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite', kind: 'runtimeOutput' }] })).toMatchObject([
+      { mod: 'Overwrite', enabled: true, wins: [{ file: 'f.esp', over: ['C'] }], loses: [], files: [{ file: 'F.esp', excluded: false, gotten: true }] },
+    ]);
+  });
+
+  describe('a mod named Overwrite', () => {
+    const withOverwriteMod = new FakeInstance({
+      ...CONFLICTED, mods: [...CONFLICTED.mods, { kind: 'mod', name: 'Overwrite', enabled: true }],
+      filesByMod: new Map([...CONFLICTED.filesByMod, ['Overwrite', [fileIn('/m', 'own.txt')]]]),
+    });
+
+    it('is told from Overwrite by its kind, each row holding its own files and the files it wins', async () => {
+      const { client } = await clientOf(withOverwriteMod);
+
+      expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite', kind: 'runtimeOutput' }, { name: 'Overwrite', kind: 'mod' }] })).toMatchObject([
+        { kind: 'runtimeOutput', mod: 'Overwrite', wins: [{ file: 'f.esp', over: ['C'] }], files: [{ file: 'F.esp' }] },
+        { kind: 'mod', mod: 'Overwrite', wins: [], files: [{ file: 'own.txt' }] },
+      ]);
+    });
+
+    it('is refused as a name with no kind, listing each thing it means', async () => {
+      const { client } = await clientOf(withOverwriteMod);
+
+      expect(await call(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite' }] })).toEqual({
+        isError: true, text: '"Overwrite" means more than one thing: mod Overwrite; runtimeOutput Overwrite. Name it with its kind.',
+      });
+    });
+  });
+
   it('says a disabled mod is disabled, so its empty answer is never read as no conflicts', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
@@ -673,6 +719,12 @@ describe('the agent server, resolving names against the instance', () => {
 
     expect(await call(client, 'resolve_instance_names', { files: [{ mod: { name: 'B' }, path: 'a.mem.mohidden' }] }))
       .toEqual({ isError: true, text: 'Nothing is named "a.mem.mohidden" in mod B.' });
+  });
+
+  it('names a file of Overwrite by its path there', async () => {
+    expect(await resolve({ files: [{ mod: { name: 'Overwrite', kind: 'runtimeOutput' }, path: 'f.esp' }] })).toEqual({
+      isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'Overwrite', file: 'F.esp' }] }),
+    });
   });
 
   it('refuses a path the mod has no file at', async () => {
@@ -1342,6 +1394,24 @@ describe('the agent server, running a gesture', () => {
       options: {},
     },
     {
+      name: 'mod_exclude_file carries a file of Overwrite, which list_mods names as a runtimeOutput, by its path there',
+      value: instanceValueFixture({ overwriteFiles: [fileIn('/o', 'Sub/ow.txt')] }),
+      tool: 'mod_exclude_file',
+      args: { argument: [{ mod: { name: 'Overwrite', kind: 'runtimeOutput' }, path: 'sub/OW.txt' }] },
+      command: 'modbench.mod.excludeFile',
+      argument: [{ kind: 'file', origin: { kind: 'runtimeOutput' }, relativePath: 'Sub/ow.txt' }],
+      options: {},
+    },
+    {
+      name: 'mod_exclude_file carries a file of Overwrite named as list_mods names it, with no kind',
+      value: instanceValueFixture({ overwriteFiles: [fileIn('/o', 'Sub/ow.txt')] }),
+      tool: 'mod_exclude_file',
+      args: { argument: [{ mod: { name: 'Overwrite' }, path: 'Sub/ow.txt' }] },
+      command: 'modbench.mod.excludeFile',
+      argument: [{ kind: 'file', origin: { kind: 'runtimeOutput' }, relativePath: 'Sub/ow.txt' }],
+      options: {},
+    },
+    {
       name: 'mod_add_publisher_tag carries a folder the mod manager excludes as the mod has it on disk, named by its own path',
       value: instanceValueFixture({
         mods: [{ kind: 'mod', name: 'B', enabled: true }],
@@ -1512,6 +1582,27 @@ describe('the agent server, running a gesture', () => {
     expect(fired.calls).toEqual([[command, new AgentCall(argument, options)]]);
   });
 
+  describe('a file the mod manager marks excluded', () => {
+    const marked = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'B', enabled: true }],
+      filesByMod: new Map([['B', [fileIn('/m', 'Textures/a.dds.mohidden')]]]),
+    });
+    const ref = (relativePath: string) => ({ origin: mod('B'), relativePath });
+    const OWN = JSON.stringify(ref('Textures/a.dds'));
+
+    it.each([
+      ['landed', { landed: [ref('Textures/a.dds.mohidden')], refused: [] }, `{"landed":[${OWN}],"refused":[]}`],
+      ['refused', { landed: [], refused: [{ item: ref('Textures/a.dds.mohidden'), reason: 'gone' }] }, `{"landed":[],"refused":[{"item":${OWN},"reason":"gone"}]}`],
+    ])('is answered by its own path when %s', async (_state, outcome, text) => {
+      fired.outcome = { applied: true, outcome };
+      const { client } = await served(marked);
+
+      const answer = await call(client, 'mod_include_file', { argument: [{ mod: { name: 'B' }, path: 'Textures/a.dds' }] });
+
+      expect(answer.text).toBe(text);
+    });
+  });
+
   describe('the plugin gestures', () => {
     it('refuses a file name two plugins share, listing both, and a plugin nothing holds', async () => {
       const { client } = await served(PLUGGED);
@@ -1635,6 +1726,30 @@ describe('the agent server, running a gesture', () => {
       await open({ argument: [{ name: 'Gun', plugin: { name, origin } }] }, [{ formKey: '000801:A.esp' }]);
 
       expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ ...gun, plugin: { name, origin } }], { pinned: undefined })]]);
+    });
+
+    it('names a plugin the game loads with no line as list_plugins shows it', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', [{ formKey: '000801:Fallout4.esm', editorId: 'Gun' }]);
+      const noLine = { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' };
+      const { client } = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [noLine] }), mEdit);
+
+      await call(client, 'record_open', { argument: [{ name: 'Gun', plugin: { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN } }] });
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ kind: 'record', formKey: '000801:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN } }], { pinned: undefined })]]);
+    });
+
+    it('names a plugin the game loads with no line that a mod provides, one plugin though both lists hold it', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', [{ formKey: '000801:Cc.esl', editorId: 'Gun' }]);
+      const cc = { name: 'Cc.esl', origin: 'Big Rocks', path: '/m/Cc.esl', line: null, enabled: true, winning: true };
+      const { client } = await clientOf(new FakeInstance({ ...VALUE, plugins: [...VALUE.plugins, cc], pluginsLoadedWithNoLine: [cc] }), mEdit);
+
+      await call(client, 'record_open', { argument: [{ name: 'Gun', plugin: { name: 'Cc.esl' } }] });
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ kind: 'record', formKey: '000801:Cc.esl', plugin: { name: 'Cc.esl', origin: 'Big Rocks' } }], { pinned: undefined })]]);
     });
 
     it('refuses with mEdit\'s listing of the matches a name means, firing nothing', async () => {

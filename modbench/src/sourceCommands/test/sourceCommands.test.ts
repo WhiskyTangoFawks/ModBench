@@ -250,15 +250,18 @@ describe('sourceCommands build, in mod order', () => {
   });
 
   describe('a decompile step (source.md, Build, story 17)', () => {
-    const ASIDE = ['.medit_tmp_1_x/A.esp', '.medit_tmp_1_x/a.ESP'];
+    const ASIDE = [
+      { aside: '.medit_tmp_1_x/A.esp', path: 'plugin-source/A.esp' },
+      { aside: '.medit_tmp_1_x/a.ESP', path: 'plugin-source/a.ESP' },
+    ];
     const decompiling = async (answer: Awaited<ReturnType<InMemoryMEditClient['build']>>) => {
       await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'decompile', paths: ['A.esp', 'B.esp'] }] }));
       const client = new InMemoryMEditClient();
       const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
       const log: unknown[] = [];
-      const adapter = { ...fake.adapter, trashFileIn: (...[folder, path, trash]: Parameters<typeof fake.adapter.trashFileIn>) => {
-        log.push({ trashed: path, in: folder });
-        return fake.adapter.trashFileIn(folder, path, trash);
+      const adapter = { ...fake.adapter, trashFileIn: (...[folder, path, trash, asPath]: Parameters<typeof fake.adapter.trashFileIn>) => {
+        log.push({ trashed: path, in: folder, as: asPath });
+        return fake.adapter.trashFileIn(folder, path, trash, asPath);
       } };
       client.setCommandHandler('build', (mods: readonly BuildMod[]) => {
         log.push({ step: mods[0]?.step });
@@ -268,18 +271,18 @@ describe('sourceCommands build, in mod order', () => {
       return { outcome, log };
     };
 
-    it('has mEdit decompile once, then sends each plugin source folder mEdit moved aside to the trash under its own name', async () => {
+    it('has mEdit decompile once, then sends each plugin source folder mEdit moved aside to the trash as the path it had', async () => {
       const { log } = await decompiling({ landed: [{ ...builtOf('ModA'), replaced: ASIDE }], refused: [] });
 
       expect(log).toEqual([
-        { step: { decompile: ['A.esp', 'B.esp'] } }, ...ASIDE.map((path) => ({ trashed: path, in: SOURCES.ModA })),
+        { step: { decompile: ['A.esp', 'B.esp'] } }, ...ASIDE.map(({ aside, path }) => ({ trashed: aside, in: SOURCES.ModA, as: path })),
       ]);
     });
 
     it('sends what mEdit moved aside to the trash though the decompile then stopped', async () => {
       const { log, outcome } = await decompiling({ landed: [{ ...builtOf('ModA'), replaced: ASIDE, failure: 'The build stopped at its decompile.' }], refused: [] });
 
-      expect([log.slice(1), outcome]).toEqual([ASIDE.map((path) => ({ trashed: path, in: SOURCES.ModA })), { landed: [{ ...landedOf('ModA'), failure: 'The build stopped at its decompile.' }], refused: [] }]);
+      expect([log.slice(1), outcome]).toEqual([ASIDE.map(({ aside, path }) => ({ trashed: aside, in: SOURCES.ModA, as: path })), { landed: [{ ...landedOf('ModA'), failure: 'The build stopped at its decompile.' }], refused: [] }]);
     });
 
     it('sends nothing to the trash and refuses the mod when mEdit refuses it (commands.md, An item that cannot proceed writes nothing)', async () => {

@@ -29,13 +29,14 @@ export class ModProblems {
     const range = new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER);
     const diagnostic = (message: string, severity: vscode.DiagnosticSeverity) => modbenchDiagnostic(range, message, severity);
     const problems = [...statuses.values()].flatMap((read) => {
-      const status = read.unreadable === undefined ? read : this.statuses.of(read.mod);
       const folder = folders.get(read.mod);
-      if (status === undefined || folder === undefined) return [];
+      if (folder === undefined) return [];
+      const lastGood = read.unreadable === undefined ? read : this.statuses.of(read.mod);
+      const unreadable = read.unreadable === undefined ? [] : statusProblems(read, folder);
       const holdsPlugin = this.instance.value.plugins.some(({ origin }) => origin === read.mod);
-      const note = severalPackagesNote(status, holdsPlugin);
+      const note = lastGood && severalPackagesNote(lastGood, holdsPlugin);
       return [
-        ...statusProblems(status, folder).map(({ file, message }): [string, vscode.Diagnostic] => [file, diagnostic(message, vscode.DiagnosticSeverity.Warning)]),
+        ...[...unreadable, ...lastGood ? statusProblems(lastGood, folder) : []].map(({ file, message }): [string, vscode.Diagnostic] => [file, diagnostic(message, vscode.DiagnosticSeverity.Warning)]),
         ...note === undefined ? [] : [[note.file, diagnostic(note.message, vscode.DiagnosticSeverity.Information)] as [string, vscode.Diagnostic]],
       ];
     });

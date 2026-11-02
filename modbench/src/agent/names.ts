@@ -1,8 +1,11 @@
-import { foldPath } from '../instanceLoader/fileConflictIndex';
+import { z } from 'zod';
+import { foldPath, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
-import { sameEntry, type OriginFolder } from '../instanceAdapter/instanceAdapter';
+import { sameEntry, type FileOrigin, type OriginFolder } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { filesOfOrigin } from '../drivingLib/copiesToRead';
+import { present } from '../ports/present';
 import { Refusal } from '../drivingLib/refusal';
 import { originShown, type AgentValue } from './notRestored';
 
@@ -11,39 +14,58 @@ export interface ModName {
   kind?: 'mod' | 'separator';
 }
 
+/** A mod, a separator or Overwrite, as list_mods names it. */
+export const CONTAINER_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator', 'runtimeOutput']).optional() });
+
+export type ContainerName = z.infer<typeof CONTAINER_NAME>;
+
 export interface PluginName {
   name: string;
   origin?: string;
 }
 
 export interface FileName {
-  mod: ModName;
+  mod: ContainerName;
   path: string;
 }
 
 type Entry = InstanceValue['mods'][number];
 
-const asNamed = ({ kind, name }: Entry): string => `${kind} ${name}`;
+export type Container = Entry | { kind: 'runtimeOutput'; name: typeof OVERWRITE_LABEL };
+
+const OVERWRITE: Container = { kind: 'runtimeOutput', name: OVERWRITE_LABEL };
+
+const asNamed = ({ kind, name }: Container): string => `${kind} ${name}`;
 
 type EntryKeys = Pick<InstanceValue, 'mods' | 'entryKey'>;
-type PluginKeys = EntryKeys & Pick<AgentValue, 'plugins' | 'notRestored'>;
+type PluginKeys = EntryKeys & Pick<AgentValue, 'plugins' | 'pluginsLoadedWithNoLine' | 'notRestored'>;
 
 function matchesOf(value: EntryKeys, { name, kind }: ModName): readonly Entry[] {
   return value.mods.filter((entry) => sameEntry(value, entry, { kind: kind ?? entry.kind, name }));
 }
 
-function refusalFor(given: ModName, matches: readonly Entry[]): string | undefined {
+function refusalFor(given: ContainerName, matches: readonly Container[]): string | undefined {
   if (matches.length === 1) return undefined;
   if (matches.length === 0) return `Nothing is named "${given.name}"${given.kind === undefined ? '' : ` as a ${given.kind}`}.`;
   return `"${given.name}" means more than one thing: ${matches.map(asNamed).join('; ')}. Name it with its kind.`;
 }
 
-export function modsNamed(value: EntryKeys, given: readonly ModName[]): Entry[] {
-  const resolved = given.map((one) => ({ one, matches: matchesOf(value, one) }));
+function namedBy<Given extends ContainerName, Found extends Container>(given: readonly Given[], matchesFor: (one: Given) => readonly Found[]): Found[] {
+  const resolved = given.map((one) => ({ one, matches: matchesFor(one) }));
   const refusals = resolved.flatMap(({ one, matches }) => refusalFor(one, matches) ?? []);
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
   return resolved.flatMap(({ matches }) => matches);
 }
+
+export const modsNamed = (value: EntryKeys, given: readonly ModName[]): Entry[] => namedBy(given, (one) => matchesOf(value, one));
+
+/** Each mod, separator or Overwrite named as list_mods names it; a name with no kind that a mod and Overwrite share is refused. */
+export const containersNamed = (value: EntryKeys, given: readonly ContainerName[]): Container[] =>
+  namedBy(given, ({ name, kind }): readonly Container[] => {
+    if (kind === 'runtimeOutput') return [OVERWRITE];
+    const entries = matchesOf(value, { name, kind });
+    return kind === undefined && name === OVERWRITE_LABEL ? [...entries, OVERWRITE] : entries;
+  });
 
 /** Each file name as the Downloads view shows it. */
 export function downloadedFilesNamed(downloadedFiles: InstanceValue['downloadedFiles'], given: readonly string[]): string[] {
@@ -60,7 +82,7 @@ interface NamedPath {
 }
 
 export interface FileNamed {
-  mod: string;
+  origin: FileOrigin;
   file: string;
   relativePath: string;
 }
@@ -73,33 +95,57 @@ function pathMatches(own: readonly NamedPath[], path: string): NamedPath[] {
   return exact.length > 0 ? exact : folded;
 }
 
-function fileIn(mod: Entry | undefined, given: FileName, own: readonly NamedPath[]): FileNamed | string {
-  const name = mod?.name ?? given.mod.name;
-  if (mod?.kind !== 'mod') return `"${name}" is a separator; it has no files.`;
+function fileIn(mod: Container, given: FileName, own: readonly NamedPath[]): FileNamed | string {
+  const { name } = mod;
+  if (mod.kind === 'separator') return `"${name}" is a separator; it has no files.`;
   const matches = pathMatches(own, given.path);
   const [only, second] = matches;
   if (only === undefined) return `Nothing is named "${given.path}" in mod ${name}.`;
   if (second !== undefined) return `"${given.path}" means more than one thing in mod ${name}: ${matches.map(({ relativePath }) => relativePath).join('; ')}.`;
-  return { mod: name, file: only.ownPath, relativePath: only.relativePath };
+  return { origin: originOf(mod), file: only.ownPath, relativePath: only.relativePath };
 }
 
 function pathsIn(
-  value: InstanceValue, given: readonly FileName[], heldBy: (mod: string) => readonly NamedPath[],
+  value: InstanceValue, given: readonly FileName[], heldBy: (origin: FileOrigin) => readonly NamedPath[],
 ): FileNamed[] {
-  const mods = modsNamed(value, given.map(({ mod }) => mod));
-  const resolved = given.map((one, at) => fileIn(mods[at], one, heldBy(mods[at]?.name ?? '')));
+  const containers = containersNamed(value, given.map(({ mod }) => mod));
+  const resolved = given.map((one, at) => {
+    const container = present(containers[at], 'a container for each name');
+    return fileIn(container, one, heldBy(originOf(container)));
+  });
   const refusals = resolved.filter((one) => typeof one === 'string');
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
   return resolved.filter((one) => typeof one !== 'string');
 }
 
+export const originOf = (container: Container): FileOrigin => (container.kind === 'runtimeOutput' ? RUNTIME_OUTPUT : modOrigin(container.name));
+
+const foldersOf = (value: InstanceValue, origin: FileOrigin): readonly OriginFolder[] =>
+  (origin.kind === 'mod' ? value.foldersByMod.get(origin.name) ?? [] : value.overwriteFolders);
+
 /** Each file by its path in its mod, with the mod manager's mark left out, in the mod's own casing. */
 export const filesNamed = (value: InstanceValue, given: readonly FileName[]): FileNamed[] =>
-  pathsIn(value, given, (mod) => (value.filesByMod.get(mod) ?? []).map(ownPathOf));
+  pathsIn(value, given, (origin) => filesOfOrigin(value, origin).map(ownPathOf));
 
 /** Each file or folder by its path in its mod, as `filesNamed` answers a file. */
 export const filesAndFoldersNamed = (value: InstanceValue, given: readonly FileName[]): FileNamed[] =>
-  pathsIn(value, given, (mod) => [...value.filesByMod.get(mod) ?? [], ...value.foldersByMod.get(mod) ?? []].map(ownPathOf));
+  pathsIn(value, given, (origin) => [...filesOfOrigin(value, origin), ...foldersOf(value, origin)].map(ownPathOf));
+
+const FILE_ORIGIN = z.union([
+  z.object({ kind: z.literal('mod'), name: z.string() }),
+  z.object({ kind: z.literal('runtimeOutput') }),
+]) satisfies z.ZodType<FileOrigin>;
+
+const FILE_REF = z.looseObject({ origin: FILE_ORIGIN, relativePath: z.string() });
+
+/** A file or folder an answer names by the path the mod holds it at, named by its own path. */
+export function namedByOwnPath(value: InstanceValue, item: unknown): unknown {
+  const parsed = FILE_REF.safeParse(item);
+  if (!parsed.success) return item;
+  const { origin, relativePath } = parsed.data;
+  const held = [...filesOfOrigin(value, origin), ...foldersOf(value, origin)].find((one) => one.relativePath === relativePath);
+  return held === undefined ? item : { ...parsed.data, relativePath: held.includedPath };
+}
 
 const asPlugin = ({ name, origin }: PluginAddress): string => `${name} in ${origin}`;
 
@@ -114,8 +160,11 @@ export function pluginsNamed(value: PluginKeys, given: readonly PluginName[]): P
   const originOf = (origin: string): string => modOfOrigin(value, origin)?.name ?? origin;
   const resolved = given.map((one) => ({
     one,
-    matches: value.plugins.filter((plugin) => pluginNameKey(plugin.name) === pluginNameKey(one.name)
-      && (one.origin === undefined || originShown(value, plugin) === originOf(one.origin))).map(({ name, origin }) => ({ name, origin })),
+    matches: [...new Map(
+      [...value.plugins, ...value.pluginsLoadedWithNoLine ?? []]
+        .filter((plugin) => pluginNameKey(plugin.name) === pluginNameKey(one.name) && (one.origin === undefined || originShown(value, plugin) === originOf(one.origin)))
+        .map(({ name, origin }): [string, PluginAddress] => [exactPluginAddressKey({ name, origin }), { name, origin }]),
+    ).values()],
   }));
   const undecided = new Set(value.notRestored?.undecided.map(pluginNameKey));
   const notRead = (one: PluginName) => (one.origin !== undefined && undecided.has(pluginNameKey(one.name)) ? value.notRestored?.unread : undefined);

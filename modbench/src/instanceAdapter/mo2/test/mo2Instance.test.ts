@@ -2420,6 +2420,86 @@ describe('the MO2 Instance adapter', () => {
       expect(await readdir(source)).toEqual([]);
     });
 
+    describe('trashing a tree set aside, as the path it had', () => {
+      const source = () => join(root, 'source', 'Mod');
+      const ASIDE = '.medit_tmp_aside_x/A.esp';
+      const HAD = 'plugin-source/A.esp';
+      const setAside = async () => {
+        await put(join(source(), '.medit_tmp_aside_x', 'A.esp', 'old.json'));
+        await put(join(source(), 'plugin-source', 'A.esp', 'new.json'));
+      };
+      const held = async () => (await readdir(source(), { recursive: true })).sort();
+      const aside = ['.medit_tmp_aside_x', join('.medit_tmp_aside_x', 'A.esp'), join('.medit_tmp_aside_x', 'A.esp', 'old.json')];
+      const had = ['plugin-source', join('plugin-source', 'A.esp'), join('plugin-source', 'A.esp', 'new.json')];
+
+      it('hands the trash the tree at the path it had, with the tree there now kept, and removes the aside folder it empties', async () => {
+        await setAside();
+        const seen: { path: string; held: string[] }[] = [];
+        const trash: MoveToTrash = async (path) => {
+          seen.push({ path, held: await readdir(path) });
+          await rm(path, { recursive: true });
+        };
+
+        await adapter.trashFileIn(source(), ASIDE, trash, HAD);
+
+        expect([seen, await held()]).toEqual([[{ path: join(source(), HAD), held: ['old.json'] }], had]);
+      });
+
+      it('leaves both trees where they were, and reports the trash\'s error, when the trash refuses', async () => {
+        await setAside();
+
+        await expect(adapter.trashFileIn(source(), ASIDE, () => Promise.reject(new Error('no trash')), HAD)).rejects.toThrow(/^no trash$/);
+
+        expect(await held()).toEqual([...aside, ...had].sort());
+      });
+
+      it('leaves both trees whole, and names the first error and what was not put back, when the trash refuses and the old tree cannot go back', async () => {
+        await setAside();
+        const trash: MoveToTrash = async (path) => {
+          await put(join(path, '..', '..', ASIDE.split('/')[0] ?? '', 'A.esp', 'blocker.txt'));
+          return Promise.reject(new Error('no trash'));
+        };
+
+        const failure = await adapter.trashFileIn(source(), ASIDE, trash, HAD).then(() => undefined, (err: unknown) => err);
+
+        const left = await held();
+        expect([String(failure).includes('no trash; not put back'), left.includes(join(HAD, 'old.json')), left.some((name) => name.endsWith('new.json') && name.includes('.medit_tmp_'))])
+          .toEqual([true, true, true]);
+      });
+
+      it('says the old tree is in the trash, and where the tree that stood there is, when that tree cannot be put back', async () => {
+        await setAside();
+        const trash: MoveToTrash = async (path) => {
+          await rm(path, { recursive: true });
+          await put(join(path, 'blocker.txt'));
+        };
+
+        const why = await adapter.trashFileIn(source(), ASIDE, trash, HAD);
+
+        const kept = (await held()).find((name) => name.endsWith('new.json') && name.includes('.medit_tmp_')) ?? '';
+        expect(why).toContain(`was moved to the trash, but the tree that stood there could not be put back and is at ${join(source(), dirname(kept))}`);
+      });
+
+      it('leaves both trees where they were when the path it had cannot be written', async () => {
+        await put(join(source(), '.medit_tmp_aside_x', 'A.esp', 'old.json'));
+
+        await expect(adapter.trashFileIn(source(), ASIDE, () => Promise.resolve(), 'missing/A.esp')).rejects.toThrow('ENOENT');
+
+        expect(await held()).toEqual(aside.slice().sort());
+      });
+
+      it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) refuses a path it had that a link resolves outside the folder, moving nothing', async () => {
+        await put(join(source(), '.medit_tmp_aside_x', 'A.esp', 'old.json'));
+        await put(join(root, 'outside', 'A.esp', 'other.json'));
+        await symlink(join(root, 'outside'), join(source(), 'linked'));
+        const trash = vi.fn(() => Promise.resolve());
+
+        await expect(adapter.trashFileIn(source(), ASIDE, trash, 'linked/A.esp')).rejects.toThrow(/Not a file or folder of/);
+
+        expect([trash.mock.calls.length, await readdir(join(root, 'outside', 'A.esp'))]).toEqual([0, ['other.json']]);
+      });
+    });
+
     it('removes each folder the trashed file leaves empty, and keeps the mod\'s folder and a folder that holds more', async () => {
       const mod = join(root, 'mods', 'Built');
       await put(join(mod, 'Textures', 'sub', 'a.dds'));

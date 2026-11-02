@@ -199,9 +199,9 @@ internal sealed class SourceRepositoryWrites(
         }
     }
 
-    /// <summary>Moves each of <paramref name="trees"/> into one new folder at the source folder's root, keeping its name, then
-    /// writes the plugin's tree; answers where each now is, after each tree an earlier write left aside.</summary>
-    internal IReadOnlyList<string> ReplaceSourceMovingAside(string pluginFileName, IReadOnlyList<string> trees, IReadOnlyList<TreeFile> files, string binarySha256)
+    /// <summary>Moves each of <paramref name="trees"/> into one new folder at the source folder's root, then writes the
+    /// plugin's tree; answers each tree's place now and path before, after those an earlier write left aside.</summary>
+    internal IReadOnlyList<AsideTree> ReplaceSourceMovingAside(string pluginFileName, IReadOnlyList<string> trees, IReadOnlyList<TreeFile> files, string binarySha256)
     {
         if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
             throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
@@ -223,7 +223,7 @@ internal sealed class SourceRepositoryWrites(
         {
             locator.Forget();
         }
-        return [.. stranded, .. trees.Select(tree => $"{Path.GetFileName(aside)}/{tree}")];
+        return [.. stranded, .. trees.Select(tree => new AsideTree($"{Path.GetFileName(aside)}/{tree}", SourceRepositoryLayout.TreePath(tree)))];
     }
 
     /// <summary>Decompile and repair's commits of the plugin's source alone, the baseline then the repair, each unless the
