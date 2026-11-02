@@ -1,7 +1,7 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { manifestAt, statusValuesFlagged, packagesAskedAt, statusFrom, type FlagVariantsOf, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -41,10 +41,7 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(
-    private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void,
-    private readonly flagVariants: () => Promise<FlagVariantsOf>,
-  ) {}
+  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -98,7 +95,7 @@ export class ModStatuses {
   private async statusOf(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
     const [values, installed] = await Promise.all([this.reads.modValue(mod.folder, packagesAskedAt(manifest)), this.reads.installationFile(mod.name)]);
-    const status = statusFrom(mod, manifest, await statusValuesFlagged(mod, manifest, values, this.flagVariants));
+    const status = statusFrom(mod, manifest, values);
     return installed.kind === 'unreadable' ? { ...status, installationFileProblem: installed.reason } : status;
   }
 

@@ -168,23 +168,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugin-files/flag-variants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Reads each plugin file, by its absolute path, and answers its bytes with each combination of the game's load flags flipped, fewest flips first: the values the flipped flags then hold, and the xxHash64 of the bytes as a manifest carries it. A file that is no plugin is named with why. */
-        post: operations["PluginFileFlagVariants"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/plugin-files/set-flags": {
         parameters: {
             query?: never;
@@ -1300,12 +1283,6 @@ export interface components {
             value?: unknown;
             checkError?: string | null;
         };
-        FlagVariant: {
-            flags: {
-                [key: string]: boolean;
-            };
-            hash: string;
-        };
         FormKeyResolution: {
             state: components["schemas"]["FormKeyResolutionState"];
             recordType?: string | null;
@@ -1480,18 +1457,6 @@ export interface components {
             item: string;
             refusal: components["schemas"]["PluginFileFlagRefusal"];
             message: string;
-        };
-        PluginFileFlagVariants: {
-            path: string;
-            variants: components["schemas"]["FlagVariant"][];
-        };
-        PluginFileFlagVariantsRequest: {
-            gameRelease: string;
-            paths: string[];
-        };
-        PluginFileFlagVariantsResult: {
-            applied: components["schemas"]["PluginFileFlagVariants"][];
-            refused: components["schemas"]["PluginFileFlagRefused"][];
         };
         PluginFileFlagsSet: {
             path: string;
@@ -2240,39 +2205,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloneSubmodulesResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    PluginFileFlagVariants: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PluginFileFlagVariantsRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginFileFlagVariantsResult"];
                 };
             };
             /** @description Bad Request */

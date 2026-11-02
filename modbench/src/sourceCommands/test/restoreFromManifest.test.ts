@@ -8,7 +8,7 @@ import { writeManifestIn, type Manifest, type ManifestPackage } from '../../mani
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
-import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, flaggedKey, modFoldersIn, pluginFilesHeld, readingFixture, refusing, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
@@ -630,39 +630,73 @@ describe('restore from manifest', () => {
 
   describe('a plugin its manifest flags (Restore from manifest, story 1)', () => {
     const PLUGIN_7Z: InstallationFile = { ...DOWNLOADED, entries: [{ path: 'Mod.esp', hash: HA }] };
-    const flagged = { files: { ModA: { 'Mod.esp': HA } }, manifests: { ModA: fromTheZip({ 'Mod.esp': HA }, { flags: new Map([['Mod.esp', { Small: true }]]) }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(PLUGIN_7Z)]]) } };
-    const variantsOfTheFile = (flags: Record<string, boolean>) => ({ applied: [{ path: join(modsDir, 'ModA', 'Mod.esp'), variants: [{ flags, hash: HA }] }], refused: [] });
+    const FLAGS = { Small: true };
+    const setup = (onDisk: string, recorded: ReadonlyMap<string, string> = new Map()): Setup => ({
+      files: { ModA: { 'Mod.esp': onDisk } }, manifests: { ModA: fromTheZip({ 'Mod.esp': HA }, { flags: new Map([['Mod.esp', FLAGS]]) }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(PLUGIN_7Z)]]), flaggedHashes: recorded },
+    });
+    const flagsSetBy = (client: InMemoryMEditClient, hash: string) => client.setCommandResult('setPluginFileFlags', { applied: [{ path: join(folderOf('ModA'), 'Mod.esp'), hash }], refused: [] });
+    const setCalls = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'setPluginFileFlags');
 
-    it('takes the package\'s copy and sets the flags in it when the file does not carry them', async () => {
-      const { restore, client, fake } = await over(flagged);
-      client.setCommandResult('pluginFileFlagVariants', variantsOfTheFile({ Small: true }));
-      client.setCommandResult('setPluginFileFlags', { applied: [{ path: join(folderOf('ModA'), 'Mod.esp'), hash: HC }], refused: [] });
+    it('takes the package\'s copy, sets the flags in it and keeps the hash of the result for the copy and the flags', async () => {
+      const { restore, client, fake } = await over(setup(HA));
+      flagsSetBy(client, HC);
 
       const outcome = await restore(['ModA']);
 
-      expect([outcome.landed.map(({ written }) => written), writes(fake.calls).map(({ verb }) => verb), client.calls.filter(({ method }) => method === 'setPluginFileFlags')]).toEqual([
+      expect([outcome.landed.map(({ written }) => written), writes(fake.calls).map(({ verb }) => verb), setCalls(client), fake.calls.filter(({ verb }) => verb === 'keepFlaggedHash')]).toEqual([
         [['Mod.esp']], ['writeFilesIn', 'writeInstalledFrom'],
-        [{ method: 'setPluginFileFlags', args: ['Fallout4', [{ path: join(folderOf('ModA'), 'Mod.esp'), flags: { Small: true } }]] }],
+        [{ method: 'setPluginFileFlags', args: ['Fallout4', [{ path: join(folderOf('ModA'), 'Mod.esp'), flags: FLAGS }]] }],
+        [{ verb: 'keepFlaggedHash', hash: HA, flags: FLAGS, flaggedHash: HC }],
       ]);
     });
 
-    it('leaves the file alone when it carries the flags and is the package\'s copy without them', async () => {
-      const { restore, client, fake } = await over(flagged);
-      client.setCommandResult('pluginFileFlagVariants', variantsOfTheFile({ Small: false }));
+    it('leaves the file alone, asking mEdit nothing, when it holds the bytes kept for the copy and the flags', async () => {
+      const { restore, client, fake } = await over(setup(HC, new Map([[flaggedKey(HA, FLAGS), HC]])));
 
       const outcome = await restore(['ModA']);
 
-      expect([outcome.landed.map(({ written }) => written), writes(fake.calls).map(({ verb }) => verb), client.calls.map(({ method }) => method)]).toEqual([
-        [[]], ['writeInstalledFrom'], ['pluginFileFlagVariants'],
+      expect([outcome.landed.map(({ written }) => written), writes(fake.calls).map(({ verb }) => verb), client.calls]).toEqual([[[]], ['writeInstalledFrom'], []]);
+    });
+
+    it('takes the copy again when the file holds other bytes than those kept', async () => {
+      const { restore, client } = await over(setup(EDITED, new Map([[flaggedKey(HA, FLAGS), HC]])));
+      flagsSetBy(client, HC);
+
+      expect((await restore(['ModA'])).landed.map(({ written }) => written)).toEqual([['Mod.esp']]);
+    });
+
+    it('takes the copy when restore has kept nothing for the copy and the flags, even when the file holds the copy\'s bytes', async () => {
+      const { restore, client } = await over(setup(HA));
+      flagsSetBy(client, HC);
+
+      expect((await restore(['ModA'])).landed.map(({ written }) => written)).toEqual([['Mod.esp']]);
+    });
+
+    it('refuses the mod as not finished, naming every plugin mEdit refused, and keeps no hash', async () => {
+      const second = { ...MOD_7Z };
+      const { restore, client, fake } = await over({
+        files: { ModA: { 'Mod.esp': HA, 'Two.esp': HB } },
+        manifests: { ModA: fromTheZip({ 'Mod.esp': HA, 'Two.esp': HB }, { flags: new Map([['Mod.esp', FLAGS], ['Two.esp', FLAGS]]), packages: [second] }) },
+        answers: { downloadedFiles: new Map([['ModA.7z', read({ ...DOWNLOADED, entries: [{ path: 'Mod.esp', hash: HA }, { path: 'Two.esp', hash: HB }] })]]) },
+      });
+      client.setCommandResult('setPluginFileFlags', { applied: [], refused: [
+        { item: join(folderOf('ModA'), 'Mod.esp'), refusal: 'NotAPlugin', message: 'it is no plugin' },
+        { item: join(folderOf('ModA'), 'Two.esp'), refusal: 'UnknownFlag', message: "'Small' is no load flag" },
+      ] });
+
+      const outcome = await restore(['ModA']);
+
+      expect([outcome.refused, fake.calls.some(({ verb }) => verb === 'keepFlaggedHash')]).toEqual([
+        [{ item: 'ModA', reason: `was not finished: ${join(folderOf('ModA'), 'Mod.esp')}: it is no plugin; ${join(folderOf('ModA'), 'Two.esp')}: 'Small' is no load flag. Restoring it again finishes it.` }], false,
       ]);
     });
 
-    it('refuses the mod as not finished when the flags could not be set', async () => {
-      const { restore, client } = await over(flagged);
-      client.setCommandResult('pluginFileFlagVariants', variantsOfTheFile({ Small: true }));
-      client.setCommandResult('setPluginFileFlags', { applied: [], refused: [{ item: join(folderOf('ModA'), 'Mod.esp'), refusal: 'NotAPlugin', message: 'it is no plugin' }] });
+    it('refuses the mod as not finished when the call to mEdit is refused', async () => {
+      const { restore, client } = await over(setup(HA));
+      client.setCommandResult('setPluginFileFlags', { refused: true, message: 'mEdit is gone' });
 
-      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not finished: it is no plugin. Restoring it again finishes it.' }]);
+      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not finished: mEdit is gone. Restoring it again finishes it.' }]);
     });
   });
 

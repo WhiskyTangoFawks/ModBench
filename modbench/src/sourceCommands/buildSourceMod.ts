@@ -74,7 +74,7 @@ function sourceModManifest(mod: SourceModToBuild, files: ReadonlyMap<string, str
 // source.md, Build, story 20: each file whose bytes its manifest does not record, which no build can make again.
 async function unrecordedIn(adapter: Adapter, mod: SourceModToBuild): Promise<string[]> {
   const files = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-  const against = folderAgainst({ files, exclude: mod.exclude, ignore: mod.ignore }, await adapter.folderValue(mod.folder));
+  const against = folderAgainst({ files, exclude: mod.exclude, ignore: mod.ignore, flags: new Map() }, await adapter.folderValue(mod.folder));
   return [...against.files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : [])), ...against.namedByNoLine];
 }
 

@@ -22,18 +22,6 @@ public sealed class PluginFileFlagsApiTests : HostedTests
     }
 
     [Fact]
-    public async Task AFilesVariants_AreItsBytesWithTheLoadFlagsFlipped()
-    {
-        var path = PluginWritten(small: false);
-
-        var response = await Client.PostAsJsonAsync("/plugin-files/flag-variants", new { gameRelease = "Fallout4", paths = new[] { path } });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var answered = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
-        Assert.Equal(3, answered.GetProperty("variants").GetArrayLength());
-    }
-
-    [Fact]
     public async Task SettingAFlag_WritesItInPlace_AndAnUnknownFlagLeavesItsFileAsItWas()
     {
         var path = PluginWritten(small: false);
@@ -48,9 +36,20 @@ public sealed class PluginFileFlagsApiTests : HostedTests
         Assert.Equal("UnknownFlag", refused.GetProperty("refusal").GetString());
     }
 
+    [Fact]
+    public async Task AFileThatIsNoPlugin_IsNamedWithWhy_AndLeftAsItWas()
+    {
+        var path = Path.Combine(_root, "Not.esp");
+        File.WriteAllBytes(path, new byte[64]);
+
+        var set = await Client.PostAsJsonAsync("/plugin-files/set-flags", new { gameRelease = "Fallout4", files = new[] { new { path, flags = new Dictionary<string, bool> { ["Small"] = true } } } });
+
+        var refused = Assert.Single((await set.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal(("NotAPlugin", new byte[64]), (refused.GetProperty("refusal").GetString(), File.ReadAllBytes(path)));
+    }
+
     [Theory]
-    [InlineData("""{"gameRelease": "Fallout4", "paths": []}""", "/plugin-files/flag-variants")]
-    [InlineData("""{"gameRelease": "Nowhere", "paths": ["/x"]}""", "/plugin-files/flag-variants")]
+    [InlineData("""{"gameRelease": "Nowhere", "files": [{"path": "/x", "flags": {"Small": true}}]}""", "/plugin-files/set-flags")]
     [InlineData("""{"gameRelease": "Fallout4", "files": [{"path": "/x", "flags": {}}]}""", "/plugin-files/set-flags")]
     public async Task ARequestThatIsNotWhole_Is400(string body, string route) =>
         Assert.Equal(HttpStatusCode.BadRequest, (await Client.PostJson(route, body)).StatusCode);

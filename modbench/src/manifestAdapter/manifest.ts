@@ -1,4 +1,5 @@
 // spec/formats/manifest.md, version 1: the manifest as its schema states it.
+import type { PluginFlags } from '../repositoriesLib/statusValues';
 
 export interface NexusFile {
   readonly game: string;
@@ -24,7 +25,7 @@ export interface Manifest {
   readonly ignore: readonly string[];
   /** Each plugin whose header flags the manifest sets apart from its package's copy, by its path, with each flag it sets (true)
    *  or clears (false). */
-  readonly flags: ReadonlyMap<string, Readonly<Record<string, boolean>>>;
+  readonly flags: ReadonlyMap<string, PluginFlags>;
   /** Each file by its path, with the hash of its bytes before the flags; null for a file a build step makes. */
   readonly files: ReadonlyMap<string, string | null>;
 }

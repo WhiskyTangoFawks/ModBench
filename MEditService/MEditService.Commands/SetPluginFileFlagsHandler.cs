@@ -1,9 +1,28 @@
+using System.Text.Json.Serialization;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.PluginAdapter;
 using Mutagen.Bethesda;
 
-namespace MEditService.Commands.Build;
+namespace MEditService.Commands;
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PluginFileFlagRefusal
+{
+    None,
+
+    /// <summary>The file could not be read or written as a plugin.</summary>
+    NotAPlugin,
+
+    /// <summary>A name is no load flag of the game.</summary>
+    UnknownFlag,
+}
+
+/// <summary>A plugin file whose flags were not set, by its path, and why.</summary>
+public sealed record PluginFileFlagRefused(string Item, PluginFileFlagRefusal Refusal, string Message) : IItemRefused<PluginFileFlagRefusal>
+{
+    object IItemRefused<PluginFileFlagRefusal>.Item => Item;
+}
 
 /// <summary>A plugin file whose load flags were set, by its path, with the hash of what was written.</summary>
 public sealed record PluginFileFlagsSet(string Path, string Hash);

@@ -1,12 +1,11 @@
 // spec/formats/manifest-1.schema.json and the rules manifest.md adds, read from any text the schema accepts.
 
+import { isPluginFile } from '../tables/pluginFile';
 import { isUnderAny } from './folderPaths';
 import { MANIFEST_VERSION, type Manifest, type ManifestPackage, type ManifestRead } from './manifest';
 import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
 const FILE = 'manifest';
-
-const PLUGIN = /\.(?:esp|esm|esl)$/i;
 
 const HASH = /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/;
 const NEXUS_GAME = /^[a-z0-9]+$/;
@@ -142,7 +141,7 @@ function flagsOf(value: unknown, files: ReadonlyMap<string, unknown>, repository
     pathOf(path);
     if (repository !== undefined) throw new Unreadable(`its ${FILE} flags '${path}' beside the repository '${repository.kind === 'repository' ? repository.name : ''}'`);
     if (!files.has(path)) throw new Unreadable(`its ${FILE} flags '${path}', which is none of its files`);
-    if (!PLUGIN.test(path)) throw new Unreadable(`its ${FILE} flags '${path}', which is no plugin`);
+    if (!isPluginFile(path)) throw new Unreadable(`its ${FILE} flags '${path}', which is no plugin`);
     const where = `its flags of '${path}'`;
     const members = Object.entries(objectOf(FILE, set, where));
     if (members.length === 0 || members.some(([, on]) => typeof on !== 'boolean')) throw at(where);

@@ -19,6 +19,7 @@ export const EXTRACTION_PREFIX = 'entries-';
 const SETTLED_AFTER_MS = 2_000;
 
 type Kind = 'origin' | 'game' | 'downloadedFile';
+type LineKind = Kind | 'flagged';
 
 interface Kept {
   readonly stamp: FileStamp;
@@ -34,13 +35,13 @@ const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
 const lineOf = (kind: Kind, path: string, stamp: FileStamp, hashed: HashedDownloadedFile): string =>
   `${JSON.stringify([kind, path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs), hashed.hash, ...hashed.entries.flatMap((entry) => [entry.path, entry.hash])])}\n`;
 
-type Line = [Kind, string, string, string, string, string, ...string[]];
+type Line = [LineKind, string, string, string, string, string, ...string[]];
 
 const isLine = (fields: unknown): fields is Line =>
   Array.isArray(fields) && fields.length >= 6 && fields.length % 2 === 0 && fields.every((field) => typeof field === 'string')
-  && (fields[0] === 'origin' || fields[0] === 'game' || fields[0] === 'downloadedFile');
+  && (fields[0] === 'origin' || fields[0] === 'game' || fields[0] === 'downloadedFile' || fields[0] === 'flagged');
 
-function keptAt(line: string): { kind: Kind; path: string; stamp: FileStamp; read: FileRead<HashedDownloadedFile> } | undefined {
+function keptAt(line: string): { kind: LineKind; path: string; stamp: FileStamp; read: FileRead<HashedDownloadedFile> } | undefined {
   try {
     const fields: unknown = JSON.parse(line);
     if (!isLine(fields)) return undefined;
@@ -76,7 +77,7 @@ interface DownloadedFilesHashed {
 
 /** The adapter's hashes, its index in `folder`, which it alone writes; a downloaded file's entries are hashed from
  *  its extraction there. */
-export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
+export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash'> {
   /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the record index (ADR-0013). */
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
   /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the hash index. */
@@ -90,6 +91,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
   const indexFile = join(folder, INDEX_FILE);
   const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), downloadedFile: new Map() };
   let loaded: Promise<void> | undefined;
+  const flagged = new Map<string, string>();
   let unwritten: string | undefined;
 
   // The record index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
@@ -97,6 +99,10 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     for (const line of text.split('\n')) {
       const known = keptAt(line);
       if (known === undefined) continue;
+      if (known.kind === 'flagged') {
+        flagged.set(known.path, known.read.kind === 'read' ? known.read.answer.hash : '');
+        continue;
+      }
       kept[known.kind].set(known.path, { stamp: known.stamp, hashed: Promise.resolve(known.read) });
     }
   }, () => undefined));
@@ -206,7 +212,21 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
     return read.kind === 'read' ? { kind: 'read', answer: { size: read.answer.size, hash: read.answer.hash } } : read;
   };
 
+  // A flagged plugin's hash follows from its copy's bytes and the flags, so it holds whatever the file system does.
+  const flaggedKey = (hash: string, flags: Readonly<Record<string, boolean>>): string =>
+    JSON.stringify([hash, Object.entries(flags).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))]);
+
   return {
+    flaggedHash: async (hash, flags) => {
+      await load();
+      return flagged.get(flaggedKey(hash, flags));
+    },
+    keepFlaggedHash: async (hash, flags, flaggedHash) => {
+      await load();
+      const key = flaggedKey(hash, flags);
+      flagged.set(key, flaggedHash);
+      await ensureDir(folder).then(() => append(indexFile, `${JSON.stringify(['flagged', key, '0', '0', '0', flaggedHash])}\n`)).catch((err: unknown) => { unwritten = errorMessage(err); });
+    },
     originFileHash: (path) => hashAlone('origin', path),
     gameFileHash: (path) => hashAlone('game', path),
     downloadedFileHash: (path) => hashOf('downloadedFile', path),

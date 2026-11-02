@@ -19,6 +19,7 @@ let downloadedHash: Map<string, string>;
 let gameFiles: HashedPath[] | undefined;
 let repositoryHosted: boolean;
 let exclude: string[];
+let flaggedHashes: Map<string, string>;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-status-'));
@@ -30,6 +31,7 @@ beforeEach(async () => {
   gameFiles = [];
   repositoryHosted = true;
   exclude = [];
+  flaggedHashes = new Map();
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -52,7 +54,7 @@ async function valuesHashingEachFileAsItsText(manifest: ManifestAt, ignoresCase:
     downloadedFiles: new Map(asked.installationFiles.map((name) => [name, {
       kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? PACK, entries },
     }])),
-    gameFiles, repositoryHosted,
+    gameFiles, flaggedHashes, repositoryHosted,
   };
 }
 
@@ -284,5 +286,22 @@ describe('a mod\'s status against its manifest', () => {
     if (read === undefined || !('refused' in read)) throw new Error('expected a refusal');
 
     expect(read.refused).toMatch(/^a file could not be read: ENOTDIR/);
+  });
+
+  describe('a plugin its manifest flags (Status, story 8)', () => {
+    const flagged = manifest({ 'Mod.esp': HELLO }, { flags: new Map([['Mod.esp', { Small: true }]]) });
+
+    it.each([
+      ['the hash restore recorded for the copy and the flags', new Map([['Mod.esp', EDITED]]), EDITED, []],
+      ['the package\'s own bytes, which carry no flags', new Map([['Mod.esp', EDITED]]), HELLO, ['Mod.esp']],
+      ['other bytes than restore recorded', new Map([['Mod.esp', EDITED]]), PACK, ['Mod.esp']],
+      ['any bytes while restore has recorded none', new Map<string, string>(), EDITED, ['Mod.esp']],
+    ])('holds its bytes with %s, so differs as %j', async (_what, recorded, onDisk, differing) => {
+      await manifested(flagged);
+      await write('Mod.esp', onDisk);
+      flaggedHashes = recorded;
+
+      expect((await status()).differing).toEqual(differing);
+    });
   });
 });

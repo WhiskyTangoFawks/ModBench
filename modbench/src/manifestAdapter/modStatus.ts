@@ -76,7 +76,9 @@ export interface FolderAgainst {
 
 /** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system does.
  *  Of two files at one own path, the one the exclusion fits is its. Ignored files are out. */
-export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore'>, folder: FolderValue): FolderAgainst {
+export function folderAgainst(
+  manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore' | 'flags'>, folder: FolderValue, flaggedHashes: ReadonlyMap<string, string> = new Map(),
+): FolderAgainst {
   const present = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
   const ignored = present.filter(([, file]) => isUnderAny(manifest.ignore, file.path));
   const held = present.filter((entry) => !ignored.includes(entry));
@@ -90,7 +92,8 @@ export function folderAgainst(manifest: Pick<Manifest, 'files' | 'exclude' | 'ig
     if (pathInFolder === undefined || file === undefined) return { path, hash };
     claimed.add(pathInFolder);
     if (hash === null) return { path, hash, pathInFolder };
-    return { path, hash, pathInFolder, holdsItsBytes: file.excluded === excluded && file.read.kind === 'read' && file.read.answer.hash === hash };
+    const expected = manifest.flags.has(path) ? flaggedHashes.get(path) : hash;
+    return { path, hash, pathInFolder, holdsItsBytes: file.excluded === excluded && file.read.kind === 'read' && file.read.answer.hash === expected };
   });
   return {
     files, namedByNoLine: ordered(held.flatMap(([pathInFolder]) => (claimed.has(pathInFolder) ? [] : [pathInFolder]))),
@@ -137,7 +140,7 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   if (values.kind === 'notAsked') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;
-  const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder);
+  const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder, values.flaggedHashes);
   const held = packagesHeld(manifest, values);
   return {
     ...nothing(mod.name, { manifestFile: file, packages: manifest.packages }),

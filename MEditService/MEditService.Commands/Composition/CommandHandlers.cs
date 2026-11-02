@@ -157,8 +157,6 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CloneSubmodulesHandler(sp.GetRequiredService<ISourceAdapter>()));
 
-        services.AddSingleton(sp => new PluginFileFlagVariantsHandler(sp.GetRequiredService<IPluginAdapter>()));
-
         services.AddSingleton(sp => new SetPluginFileFlagsHandler(sp.GetRequiredService<IPluginAdapter>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(

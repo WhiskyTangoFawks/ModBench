@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,7 +31,7 @@ function over(held: Partial<Manifest> | undefined, files: Record<string, string>
     fake,
     run: async (files_: readonly FileToIgnore[], ignore: boolean) => {
       if (held !== undefined) await writeManifestIn(folder, { ...EMPTY, ...held });
-      return ignoreFiles({ adapter: fake.adapter, client: new InMemoryMEditClient() }, files_, ignore);
+      return ignoreFiles({ adapter: fake.adapter }, files_, ignore);
     },
     manifest: async () => {
       const read = await manifestIn(folder);

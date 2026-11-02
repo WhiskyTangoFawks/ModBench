@@ -6,8 +6,6 @@ import type { Depot, GameFileTaken, InstallationFile, InstanceAdapter } from '..
 export interface HashedModFile {
   readonly path: string;
   readonly hash: string;
-  /** The flags the file's plugin sets apart from its package's copy, when its hash is the copy's. */
-  readonly flags?: Readonly<Record<string, boolean>>;
 }
 
 /** A place of the game: the game files a mod's files may be, and the Steam app and depots it records as installed. */
@@ -108,12 +106,6 @@ const rankedPlaces = (game: GameHeld | undefined, files: readonly HashedModFile[
   .sort((a, b) => b.count - a.count || Number(b.place.steamApp !== undefined) - Number(a.place.steamApp !== undefined) || a.at - b.at)
   .map(({ place }) => place);
 
-/** The hash of every file the sources' packages hold. */
-export const packageHashesOf = ({ installationFile, game, downloadedFiles }: ManifestSources): ReadonlySet<string> => new Set([
-  ...[...installationFile === undefined ? [] : [installationFile], ...downloadedFiles].flatMap(({ file }) => file.entries.map(({ hash }) => hash)),
-  ...(game?.places ?? []).flatMap((place) => place.files.map(({ hash }) => hash)),
-]);
-
 /** A folder's manifest from its files, `exclude` naming the paths it excludes: each file's bytes taken from its installation
  *  file, then the game's places, then another downloaded file. */
 export function buildManifest(
@@ -148,7 +140,7 @@ export function buildManifest(
     ],
     exclude,
     ignore: held?.ignore ?? [],
-    flags: new Map(files.flatMap(({ path, flags }) => (flags === undefined ? [] : [[path, flags] as const]))),
+    flags: new Map([...held?.flags ?? []].filter(([path]) => files.some((file) => file.path === path))),
     files: new Map(files.map(({ path, hash }) => [path, hash])),
   };
   const packageFiles = [

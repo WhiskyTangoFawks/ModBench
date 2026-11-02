@@ -45,6 +45,7 @@ describe('a mod as a value', () => {
     ...reads(['a.esp']),
     downloadedFile: () => Promise.resolve({ kind: 'read' as const, answer: undefined }),
     gamePlaces: () => Promise.resolve([]),
+    flaggedHash: () => Promise.resolve(undefined),
     gameFilesTakenBy: () => Promise.resolve({ kind: 'read' as const, answer: { gameFiles: [], notes: [] } }),
     submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : { lacks: 'no submodule' }),
   };
@@ -60,6 +61,15 @@ describe('a mod as a value', () => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] });
 
     expect(value).toMatchObject({ kind: 'read', gameFiles: undefined });
+  });
+
+  it('holds the hash the hash index kept for each flagged plugin asked for, and none for a plugin it kept none for', async () => {
+    const kept = (hash: string): Promise<string | undefined> => Promise.resolve(hash === 'AAAAAAAAAAA=' ? 'KKKKKKKKKKA=' : undefined);
+    const value = await modValueOver({ ...modReads, flaggedHash: kept }, '/mods/Mod', {
+      installationFiles: [], flagged: [{ path: 'a.esp', hash: 'AAAAAAAAAAA=', flags: { Small: true } }, { path: 'b.esp', hash: 'BBBBBBBBBBA=', flags: { Small: true } }],
+    });
+
+    expect(value).toMatchObject({ kind: 'read', flaggedHashes: new Map([['a.esp', 'KKKKKKKKKKA=']]) });
   });
 
   it.each([['Hosted', true], ['Local', false]])('says whether the repository %s is a submodule', async (repository, hosted) => {
