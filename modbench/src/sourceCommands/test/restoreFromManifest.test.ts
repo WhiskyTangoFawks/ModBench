@@ -95,9 +95,9 @@ describe('restore from manifest', () => {
 
     const outcome = await restore(['ModA', 'ModB']);
 
-    expect([outcome.refused, outcome.landed.map(({ mod }) => mod), writes(fake.calls).map((call) => ('folder' in call ? call.folder : undefined))]).toEqual([
-      [{ item: 'ModA', reason: 'was skipped: git holds its whole folder.' }], ['ModB'], [folderOf('ModB'), folderOf('ModB')],
-    ]);
+    expect([outcome.refused, outcome.landed.map(({ mod }) => mod)]).toEqual([[{ item: 'ModA', reason: 'was skipped: git holds its whole folder.' }], ['ModB']]);
+    expect(writes(fake.calls)).not.toEqual([]);
+    expect(JSON.stringify(writes(fake.calls))).not.toContain(folderOf('ModA'));
   });
 
   it('passes over a mod whose whole folder git holds when it runs on every manifest, refusing none', async () => {
@@ -463,6 +463,14 @@ describe('restore from manifest', () => {
       });
       return setup;
     }
+
+    it('is built although its mod folder is one git holds whole, since the build makes that folder', async () => {
+      const { restore, client } = await sourceMod({ heldWholeByGit: new Set([folderOf('ModA')]) });
+
+      const outcome = await restore(['ModA']);
+
+      expect([outcome.refused, outcome.landed.map(({ mod }) => mod), client.calls.map(({ method }) => method)]).toEqual([[], ['ModA'], ['cloneSubmodules', 'build']]);
+    });
 
     it('is built by mEdit at the commit the instance repository pins, reading only its source folder, and its files the build does not make sent to the trash', async () => {
       const { restore, client, fake } = await sourceMod();

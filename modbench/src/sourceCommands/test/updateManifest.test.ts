@@ -374,6 +374,16 @@ describe('update manifest', () => {
       expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await manifestIn(SOURCE())]).toEqual([['ModA'], [], undefined, undefined]);
     });
 
+    it('is passed over, not refused, though its mod folder is one git holds whole, whether named as a mod or on every mod', async () => {
+      const held = { ...GIT_HOLDS(), heldWholeByGit: new Set([join(modsDir, 'ModB')]) };
+      const { update } = await among({ 'extra.nif': HX }, held, SOURCE_FILES);
+
+      const named = await update(['ModB']);
+      const every = await update(['ModB'], {}, [], true);
+
+      expect([named.refused, every.refused]).toEqual([[], []]);
+    });
+
     it('has its source folder recorded in a manifest of its own, naming no file git holds, when named as a source folder', async () => {
       const { update, manifestOf } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
 

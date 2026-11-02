@@ -15,7 +15,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
-import { modsHeldWhole } from './heldWhole';
+import { setAsideHeldWhole } from './heldWhole';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
@@ -460,17 +460,19 @@ export async function restoreFromManifest(
   const { adapter } = deps;
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(adapter);
   const notClonedYet = await submodulesCloned(deps, options.onProgress);
-  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const order = await adapter.modOrder();
+  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const ordered = await inModOrder(adapter, namesOf(asked, others));
   const { folders, refused: refusedFolder, notSearched } = await foldersCompared(adapter, ordered, others, sourceMods);
   const refusedNames = new Set(refusedFolder.map(({ item }) => item));
-  const heldWhole = await modsHeldWhole(adapter, ordered.filter((mod) => folders.isMod(mod) && sourceMods.folderOf(mod) === undefined && !refusedNames.has(mod)));
-  const mods = ordered.filter((mod) => !refusedNames.has(mod) && !heldWhole.has(mod));
+  const heldWhole = await setAsideHeldWhole(adapter, ordered.filter((mod) => !refusedNames.has(mod)), order.modFolders, {
+    takes: (mod) => folders.isMod(mod) && sourceMods.folderOf(mod) === undefined, everyMod: everyManifest, reason: skipped('git holds its whole folder'),
+  });
+  const mods = heldWhole.rest;
   const pass = await passOver(deps, folders, sourceMods, options);
 
   const landed: ModRestored[] = [];
-  const refusedHeldWhole = everyManifest ? [] : [...heldWhole].map((item) => ({ item, reason: skipped('git holds its whole folder') }));
-  const refused: ItemRefusal<string>[] = [...notClonedYet, ...refusedFolder, ...refusedHeldWhole, ...everyManifest ? [] : notSearched];
+  const refused: ItemRefusal<string>[] = [...notClonedYet, ...refusedFolder, ...heldWhole.refused, ...everyManifest ? [] : notSearched];
   const pending: string[] = [];
   const notIndexed = new Map<string, string>();
   for (const [at, mod] of mods.entries()) {

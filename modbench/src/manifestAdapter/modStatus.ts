@@ -51,10 +51,7 @@ const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
 /** A mod whose whole folder git holds: git's, so it lists nothing. */
 export const heldWholeStatus = (mod: string): ModStatus => nothing(mod, { heldWhole: true });
 
-/** A mod whose status could not be read, for `why`. */
-export const unreadableStatus = (mod: string, why: string): ModStatus => nothing(mod, { unreadable: why });
-
-const ordered =(paths: Iterable<string>): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const ordered = (paths: Iterable<string>): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 const folded = (path: string): string => path.toLowerCase();
 

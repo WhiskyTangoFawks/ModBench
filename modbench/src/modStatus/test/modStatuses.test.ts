@@ -149,14 +149,38 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     expect([asked, hashed]).toEqual([[], []]);
   });
 
-  it('shows the last good status and says why when git cannot say what it holds', async () => {
-    const mod = await folderOf('ModA', { 'mine.txt': '' });
-    const statuses = new ModStatuses({ ...instance, foldersHeldWhole: () => Promise.reject(new Error('git is gone')) }, (line) => { logged.push(line); });
+
+  it('still warns of the installation file the mod manager names for a folder git holds whole (Status, story 7)', async () => {
+    const mod = await folderOf('ModA');
+    heldWhole = new Set([mod]);
+    installationFiles = new Map([['ModA', { kind: 'unreadable', reason: 'this machine does not hold A.7z, the file it is installed from' }]]);
+    const statuses = statusesLogging();
 
     statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    const held = (await statuses.current()).get('ModA');
+
+    expect([held?.heldWhole, held?.installationFileProblem]).toEqual([true, 'this machine does not hold A.7z, the file it is installed from']);
+  });
+
+  it('keeps the last good statuses and says in one sentence why when git cannot say what it holds, once in the Output', async () => {
+    const [first, second] = [await folderOf('ModA', { 'mine.txt': '' }), await folderOf('ModB', { 'mine.txt': '' })];
+    let gitFails = false;
+    const statuses = new ModStatuses({
+      ...instance, foldersHeldWhole: (folders) => (gitFails ? Promise.reject(new Error('git is gone')) : instance.foldersHeldWhole(folders)),
+    }, (line) => { logged.push(line); });
+    const value = valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', first), folder('mod', 'ModB', second)]);
+    statuses.derive(value);
+    await statuses.current();
+    gitFails = true;
+
+    statuses.derive(value);
+    await statuses.current();
+    statuses.derive(value);
     await statuses.current();
 
-    expect(statuses.message()).toBe('Showing the last good read: the status of "ModA" could not be read: git could not say which folders it holds: git is gone.');
+    expect([statuses.of('ModA')?.noManifest, statuses.message(), logged]).toEqual([
+      true, 'Showing the last good read: git could not say which folders it holds: git is gone.', ['[modList] Git could not say which folders it holds: git is gone'],
+    ]);
   });
 
   it('derives no status while the instance holds no repository', async () => {

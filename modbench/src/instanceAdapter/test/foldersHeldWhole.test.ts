@@ -23,29 +23,21 @@ async function instanceIgnoring(ignoreList: string, files: readonly string[]): P
 
 const WHITELIST = '/*\n!/.gitignore\n!/mods/\n/mods/*\n!/mods/*/\n/mods/*/*\n!/mods/*/*.manifest.json\n';
 const FILES = ['mods/Held/a.esp', 'mods/Held/meta.ini', 'mods/Held/textures/b.dds', 'mods/Kept/a.esp', 'mods/Kept/meta.ini'];
+const LETS_IN_HELD = '!/mods/Held/**\n';
 
 describe('the folders git holds whole', () => {
-  it('names a folder the ignore list lets in by hand and not one it leaves out', async () => {
-    await instanceIgnoring(`${WHITELIST}!/mods/Held/**\n`, FILES);
-    const held = await foldersHeldWhole(root, [join(root, 'mods/Held'), join(root, 'mods/Kept')]);
-    expect([...held]).toEqual([join(root, 'mods/Held')]);
-  });
+  it.each([
+    ['a folder the ignore list lets in by hand', true, LETS_IN_HELD, [], 'mods/Held'],
+    ['a folder the ignore list leaves out', false, LETS_IN_HELD, [], 'mods/Kept'],
+    ['a folder let in whose subfolder is ignored', false, `${LETS_IN_HELD}/mods/Held/textures/\n`, [], 'mods/Held'],
+    ['a folder git tracks though the ignore list would leave it out', true, '', ['add', '-f', 'mods/Kept'], 'mods/Kept'],
+    ['a folder git tracks in part', false, '', ['add', '-f', 'mods/Kept/a.esp'], 'mods/Kept'],
+    ['a folder outside the instance', false, LETS_IN_HELD, [], '../elsewhere'],
+  ])('reads %s, held: %s', async (_case, held, ignoreList, git, folder) => {
+    await instanceIgnoring(`${WHITELIST}${ignoreList}`, FILES);
+    if (git.length > 0) execFileSync('git', git, { cwd: root });
 
-  it('reads a folder as not held when only its subfolder is ignored', async () => {
-    await instanceIgnoring(`${WHITELIST}!/mods/Held/**\n/mods/Held/textures/\n`, FILES);
-    expect([...await foldersHeldWhole(root, [join(root, 'mods/Held')])]).toEqual([]);
-  });
-
-  it('reads a folder git tracks as held although the ignore list would leave it out', async () => {
-    await instanceIgnoring(WHITELIST, FILES);
-    execFileSync('git', ['add', '-f', 'mods/Kept'], { cwd: root });
-    expect([...await foldersHeldWhole(root, [join(root, 'mods/Kept')])]).toEqual([join(root, 'mods/Kept')]);
-  });
-
-  it('reads a folder git tracks in part as not held, since the rest of it is left out', async () => {
-    await instanceIgnoring(WHITELIST, FILES);
-    execFileSync('git', ['add', '-f', 'mods/Kept/a.esp'], { cwd: root });
-    expect([...await foldersHeldWhole(root, [join(root, 'mods/Kept')])]).toEqual([]);
+    expect([...await foldersHeldWhole(root, [join(root, folder)])]).toEqual(held ? [join(root, folder)] : []);
   });
 
   it('holds none while the instance holds no repository', async () => {
