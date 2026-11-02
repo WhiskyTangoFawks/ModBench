@@ -1728,6 +1728,30 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ ...gun, plugin: { name, origin } }], { pinned: undefined })]]);
     });
 
+    it('names a plugin the game loads with no line as list_plugins shows it', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', [{ formKey: '000801:Fallout4.esm', editorId: 'Gun' }]);
+      const noLine = { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' };
+      const { client } = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [noLine] }), mEdit);
+
+      await call(client, 'record_open', { argument: [{ name: 'Gun', plugin: { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN } }] });
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ kind: 'record', formKey: '000801:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN } }], { pinned: undefined })]]);
+    });
+
+    it('names a plugin the game loads with no line that a mod provides, one plugin though both lists hold it', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setQueryAnswer('resolveNames', [{ formKey: '000801:Cc.esl', editorId: 'Gun' }]);
+      const cc = { name: 'Cc.esl', origin: 'Big Rocks', path: '/m/Cc.esl', line: null, enabled: true, winning: true };
+      const { client } = await clientOf(new FakeInstance({ ...VALUE, plugins: [...VALUE.plugins, cc], pluginsLoadedWithNoLine: [cc] }), mEdit);
+
+      await call(client, 'record_open', { argument: [{ name: 'Gun', plugin: { name: 'Cc.esl' } }] });
+
+      expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ kind: 'record', formKey: '000801:Cc.esl', plugin: { name: 'Cc.esl', origin: 'Big Rocks' } }], { pinned: undefined })]]);
+    });
+
     it('refuses with mEdit\'s listing of the matches a name means, firing nothing', async () => {
       const listing = '"Gun" means more than one thing: record 000801:A.esp (Gun); record 000802:B.esp (Gun).';
       const { answer } = await open({ argument: [{ name: 'Gun' }] }, { failed: 'refused', refusal: listing });

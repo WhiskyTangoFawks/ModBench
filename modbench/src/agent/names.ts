@@ -3,7 +3,7 @@ import { foldPath, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanc
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { sameEntry, type FileOrigin, type OriginFolder } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { filesOfOrigin } from '../drivingLib/copiesToRead';
 import { present } from '../ports/present';
 import { Refusal } from '../drivingLib/refusal';
@@ -38,7 +38,7 @@ const OVERWRITE: Container = { kind: 'runtimeOutput', name: OVERWRITE_LABEL };
 const asNamed = ({ kind, name }: Container): string => `${kind} ${name}`;
 
 type EntryKeys = Pick<InstanceValue, 'mods' | 'entryKey'>;
-type PluginKeys = EntryKeys & Pick<AgentValue, 'plugins' | 'notRestored'>;
+type PluginKeys = EntryKeys & Pick<AgentValue, 'plugins' | 'pluginsLoadedWithNoLine' | 'notRestored'>;
 
 function matchesOf(value: EntryKeys, { name, kind }: ModName): readonly Entry[] {
   return value.mods.filter((entry) => sameEntry(value, entry, { kind: kind ?? entry.kind, name }));
@@ -160,8 +160,11 @@ export function pluginsNamed(value: PluginKeys, given: readonly PluginName[]): P
   const originOf = (origin: string): string => modOfOrigin(value, origin)?.name ?? origin;
   const resolved = given.map((one) => ({
     one,
-    matches: value.plugins.filter((plugin) => pluginNameKey(plugin.name) === pluginNameKey(one.name)
-      && (one.origin === undefined || originShown(value, plugin) === originOf(one.origin))).map(({ name, origin }) => ({ name, origin })),
+    matches: [...new Map(
+      [...value.plugins, ...value.pluginsLoadedWithNoLine ?? []]
+        .filter((plugin) => pluginNameKey(plugin.name) === pluginNameKey(one.name) && (one.origin === undefined || originShown(value, plugin) === originOf(one.origin)))
+        .map(({ name, origin }): [string, PluginAddress] => [exactPluginAddressKey({ name, origin }), { name, origin }]),
+    ).values()],
   }));
   const undecided = new Set(value.notRestored?.undecided.map(pluginNameKey));
   const notRead = (one: PluginName) => (one.origin !== undefined && undecided.has(pluginNameKey(one.name)) ? value.notRestored?.unread : undefined);
