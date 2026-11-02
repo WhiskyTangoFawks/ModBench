@@ -734,7 +734,7 @@ describe('the agent server, resolving names against the instance', () => {
   });
 
   it('refuses a mod named with no name', async () => {
-    expect(await resolve({ files: [{ mod: { kind: 'mod' }, path: 'f.esp' }] })).toMatchObject({ isError: true, text: expect.stringContaining('needs a name') });
+    expect(await resolve({ files: [{ mod: { kind: 'mod' }, path: 'f.esp' }] })).toMatchObject({ isError: true, text: expect.stringContaining('needs a name') as unknown });
   });
 
   it('refuses a path the mod has no file at', async () => {
