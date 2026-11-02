@@ -599,6 +599,8 @@ describe('a gesture the agent runs', () => {
     const block = present(result.content[0], 'a content block');
     return { isError: result.isError === true, text: block.type === 'text' ? block.text : '' };
   };
+  const standingOf = async (name: string) =>
+    CallToolResultSchema.parse(await agent.callTool({ name })).content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
   const agentModEnabled = async (): Promise<unknown> => {
     const read = await callTool('list_mods');
     const mods: unknown = read.isError ? undefined : JSON.parse(read.text);
@@ -618,13 +620,6 @@ describe('a gesture the agent runs', () => {
     await agent.close();
     writeFileSync(modlistPath, original);
     rmSync(modDir, { recursive: true, force: true });
-  });
-
-  it('answers every read beside the words the status bar says of mEdit', async () => {
-    const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
-
-    const standing = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
-    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), `no line says what mEdit is: ${JSON.stringify(standing)}`);
   });
 
   it('writes as the user\'s does, and answers once the agent\'s next read sees the change', async () => {
@@ -686,17 +681,12 @@ describe('a gesture the agent runs', () => {
     }
   });
 
-  it('answers beside the line the Mods view shows when it has no mods, which no other view says', async () => {
-    rmSync(modDir, { recursive: true, force: true });
-    writeFileSync(modlistPath, '');
+  it('carries the sorting rules\' line on a plugin read and on no record read', async () => {
+    const isMasterlistLine = (line: string) => line.startsWith('No masterlist');
 
-    const standing = await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
-      const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
-      const lines = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
-      return lines.some((line) => line.startsWith('No mods or separators.')) && lines;
-    });
+    await waitFor('the sorting rules\' line beside list_plugins', async () => (await standingOf('list_plugins')).some(isMasterlistLine));
 
-    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
+    assert.deepStrictEqual((await standingOf('read_record')).filter(isMasterlistLine), []);
   });
 
   it('reads what the Plugins view\'s row shows of a plugin once mEdit has read it', async () => {

@@ -14,7 +14,7 @@ import { nexusRowInFocusedView, selectionInFocusedView } from '../drivingLib/inF
 import type { FocusedView } from '../drivingLib/focusedView';
 import { errorMessage } from '../ports/errorMessage';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
-import { linesOf, messageLine } from '../drivingLib/messageLine';
+import { messageLine } from '../drivingLib/messageLine';
 import { joinSyncMessages, type SyncMessage } from '../drivingLib/syncFailureReport';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
@@ -90,8 +90,8 @@ interface ModsView extends vscode.Disposable {
   copyValue: CopyValueAdapter;
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
-  /** The lines the view's message line shows, for the agent. */
-  messages(): string[];
+  /** The lines that bear on a read of the mods, for the agent, without the instance's own. */
+  standingLines(): string[];
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -202,7 +202,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
-    messages: () => linesOf(viewMessage()),
+    standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
     dispose: () => { disposable.dispose(); },
   };
 }

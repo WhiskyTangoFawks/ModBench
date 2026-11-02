@@ -111,8 +111,7 @@ interface InstanceSide {
   copyReads?: CopyReads;
   pluginsShown?: PluginsShown;
   toolbox: ToolboxView;
-  /** The lines the Downloads, Toolbox and Mods views show on their message lines. */
-  viewMessages: () => string[];
+  modsLines: () => string[];
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
 }
@@ -126,7 +125,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolbox: own(createToolboxView({ instance: undefined })),
-    viewMessages: () => [],
+    modsLines: () => [],
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };
@@ -238,7 +237,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   return {
     instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
-    viewMessages: () => [...downloads.messages(), ...toolbox.messages(), ...mods.messages()],
+    modsLines: () => mods.standingLines(),
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
@@ -331,7 +330,7 @@ function start(context: vscode.ExtensionContext): void {
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
   });
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { messages: () => [...plugins.mEditStanding.messages(), ...views.viewMessages(), ...sourceLanguage.messages()] }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,

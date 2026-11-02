@@ -4,14 +4,14 @@ import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import type { StandingMessages } from '../drivingLib/mEditState';
 import type { CopyReads } from '../drivingLib/sameCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
-import type { InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
+import type { Source } from './source';
 import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
 import { GESTURE_TOOLS } from './gestures';
@@ -37,7 +37,7 @@ export interface AgentServerOptions {
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
-  standing: StandingMessages;
+  standing: Record<Exclude<Source, 'instance'>, () => readonly string[]>;
   pluginsShown: PluginsShown | undefined;
   reporter: Reporter;
   log: Log;
@@ -58,7 +58,7 @@ function currentValue(instance: Instance) {
 
 const textBlock = (text: string) => ({ type: 'text' as const, text });
 
-// The messages every view of the instance shows, beside each answer as a block of their own.
+// The standing lines of the sources the tool reads, each beside the answer as a block of its own.
 async function answer(log: Log, standing: () => string[], name: string, work: () => unknown) {
   try {
     return { content: [textBlock(JSON.stringify(await work())), ...standing().map(textBlock)] };
@@ -104,22 +104,25 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingMessages, pluginsShown, log }: OpenOptions): McpServer {
+const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'sourceLanguage'];
+
+function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
-  const standing = () => [...new Set(standingMessages.messages())];
-  for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
+  const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
+  const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
+  for (const read of INSTANCE_READS) register(server, log, reading(...read.reads), { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
-  register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
-  register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
-  register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
-  register(server, log, standing, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
-  register(server, log, standing, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
-  register(server, log, standing, READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
-  register(server, log, standing, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
-  register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
-  register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, standing, { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
+  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
+  register(server, log, reading('instance', 'modList'), { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
+  register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
+  register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
+  register(server, log, reading(...RECORD_READS), RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
+  register(server, log, reading(...RECORD_READS), READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
+  register(server, log, reading(...RECORD_READS), LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
+  register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
+  for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
+  register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
+  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
   return server;
 }
 
