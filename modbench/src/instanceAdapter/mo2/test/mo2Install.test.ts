@@ -67,7 +67,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
-      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\n');
+      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout4\n');
       assertOnlyChanged(before, await snapshotTree(root), new Set([...PAYLOAD, 'meta.ini'].map((file) => `mods/${MOD}/${file}`)));
     });
 

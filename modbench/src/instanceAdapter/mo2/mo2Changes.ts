@@ -64,6 +64,12 @@ function markIn(text: string, mark: DownloadedFileMark): string {
   }
 }
 
+async function metaGameOfDomainOrThrow(context: Mo2Context, domain: string): Promise<string> {
+  const game = await metaGameOfDomain(context, domain);
+  if (game === undefined) throw new Error(`Modbench has no game for the Nexus game '${domain}'`);
+  return game;
+}
+
 const pluginOrderIn = (text: string): PluginEntry[] => firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept;
 
 async function putDownloadedFile(
@@ -72,7 +78,7 @@ async function putDownloadedFile(
   if (basename(name) !== name || name === '..') throw new Error(`'${name}' is not a file name`);
   const downloadsDir = await currentDownloadsDir(context);
   const file = downloadedFilePath(downloadsDir, name);
-  const gameName = await metaGameOfDomain(context, info.game);
+  const gameName = await metaGameOfDomainOrThrow(context, info.game);
   return withLock(file, async () => {
     if (await exists(file)) throw new Error(`'${name}' is already in the downloads folder`);
     await ensureDir(downloadsDir);
@@ -166,7 +172,7 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     async writeNexusFileInfo(name, info) {
       const held = await heldDownloadedFile(context, name);
       if (held === undefined) return { gone: true };
-      const gameName = await metaGameOfDomain(context, info.game);
+      const gameName = await metaGameOfDomainOrThrow(context, info.game);
       const { wrote } = await spliceDownloadedFileMeta(held.downloadsDir, name, (text) => setNexusFileInfoInText(text, info, gameName));
       return { gone: false, wrote };
     },
