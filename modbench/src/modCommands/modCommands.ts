@@ -155,7 +155,7 @@ async function changePublisherTag(
   adapter: InstanceAdapter, change: PublisherTagChange, tagName: string, rows: readonly PublisherTagRow[],
 ): Promise<SelectionResult<PublisherTagRow>> {
   const tag = adapter.publisherTags.find(({ name }) => name === tagName);
-  if (tag === undefined) return { applied: false, refusal: `The publisher declares no publisher tag "${tagName}". It declares ${adapter.publisherTags.map(({ name }) => name).join(', ')}.` };
+  if (tag === undefined) return { applied: false, refusal: `The publisher declares no publisher tag "${tagName}". It declares ${adapter.publisherTags.map(({ name }) => `"${name}"`).join(', ')}.` };
   try {
     const resolved = await Promise.all(rows.map(async (row) => ({ row, path: await publisherTagPath(adapter, tag, row) })));
     const asked = resolved.flatMap(({ row, path }) => (typeof path === 'string' ? [{ row, path }] : []));
