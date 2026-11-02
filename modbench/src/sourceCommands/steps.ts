@@ -5,7 +5,7 @@ import type { ScriptHost } from '../ports/scriptHost';
 import type { HostTasks } from '../ports/tasks';
 
 /** The folders a step runs between: the source folder it reads its script from, and the mod's folder it runs in. */
-export interface StepFolders {
+interface StepFolders {
   readonly sourceFolder: string;
   readonly folder: string;
 }

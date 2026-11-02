@@ -7,8 +7,7 @@ import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import type { StepFolders } from '../steps';
-import { manifestIn, writeManifestIn, type BuildStep, type Manifest, type RunStep, type TaskStep } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, writeManifestIn, type BuildStep, type Manifest, type TaskStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import type { ModToInitSourceMod } from '../../client';
@@ -196,9 +195,9 @@ describe('sourceCommands build, in mod order', () => {
     const tasks = recordingTasks(['Patch']);
     const logging = {
       ...tasks,
-      whyStepFailed: async (ran: RunStep, folders: StepFolders) => {
-        log.push(`step in ${folders.folder === folderOf('ModB') ? 'ModB' : folders.folder} ${await recorded('ModB') === undefined ? 'before' : 'after'} its manifest`);
-        return tasks.whyStepFailed(ran, folders);
+      whyStepFailed: async (...ran: Parameters<typeof tasks.whyStepFailed>) => {
+        log.push(`step in ${ran[1].folder === folderOf('ModB') ? 'ModB' : ran[1].folder} ${await recorded('ModB') === undefined ? 'before' : 'after'} its manifest`);
+        return tasks.whyStepFailed(...ran);
       },
     };
 
