@@ -13,15 +13,15 @@ public static class ArchiveUnpacker
         try
         {
             var cubemaps = Ba2Cubemaps.In(archiveAt);
+            var cube = files.Where(file => cubemaps.Contains(file)).ToList();
+            if (cube.Count > 0)
+                return new ArchiveStepRefusal(ArchiveRefusal.CubemapNotUnpackable, $"{string.Join(" and ", cube.Select(file => $"'{file}'"))} is a cubemap, and Mutagen's extraction drops its cubemap flag.");
+
             var entries = Archive.CreateReader(release, archiveAt).Files
                 .ToLookup(entry => entry.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
             var missing = files.Where(file => !entries.Contains(file)).ToList();
             if (missing.Count > 0)
                 return new ArchiveStepRefusal(ArchiveRefusal.FileNotInArchive, $"'{archiveAt}' holds no {string.Join(" or ", missing.Select(file => $"'{file}'"))}.");
-
-            var cube = files.Where(file => cubemaps.Contains(file)).ToList();
-            if (cube.Count > 0)
-                return new ArchiveStepRefusal(ArchiveRefusal.CubemapNotUnpackable, $"{string.Join(" and ", cube.Select(file => $"'{file}'"))} is a cubemap, and Mutagen's extraction drops its cubemap flag.");
 
             // Mutagen's AsStream throws on a compressed general BA2 entry.
             unpacked = [.. files.Select(file => new ArchiveFile(file, () => new MemoryStream(entries[file].First().GetBytes())))];

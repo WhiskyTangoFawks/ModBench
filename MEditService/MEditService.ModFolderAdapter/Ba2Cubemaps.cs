@@ -3,7 +3,7 @@ using System.Text;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>The cubemap flag of each texture of a BA2, which Mutagen's reader does not expose.</summary>
-public static class Ba2Cubemaps
+internal static class Ba2Cubemaps
 {
     private const int FileHeaderLength = 24;
     private const int ChunkLength = 24;

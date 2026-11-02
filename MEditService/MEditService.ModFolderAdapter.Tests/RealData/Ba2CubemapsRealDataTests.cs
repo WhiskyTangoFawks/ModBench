@@ -16,14 +16,19 @@ public sealed class Ba2CubemapsRealDataTests
         return rows;
     }
 
-    [SmokeTheory("scan the installed game's texture archives for cubemaps")]
+    [SmokeTheory("unpack from the installed game's own texture archives")]
     [MemberData(nameof(InstalledGames))]
-    public void TheTextureArchivesOfAnInstalledGame_AreScannedWithoutThrowing_AndHoldACubemap(GameRelease release)
+    public void EveryTextureOfAnInstalledGamesArchives_IsAskedFor_AndNoArchiveIsUnreadable_AndACubemapIsRefused(GameRelease release)
     {
         Assert.True(new GameLocator().TryGetDataDirectory(release, out var data));
 
-        var cubemaps = Directory.EnumerateFiles(data.Path, "*Textures*.ba2").SelectMany(Ba2Cubemaps.In).ToList();
+        var refusals = Directory.EnumerateFiles(data.Path, "*Textures*.ba2").Select(archive =>
+        {
+            var textures = Mutagen.Bethesda.Archives.Archive.CreateReader(release, archive).Files.Select(file => file.Path.Replace('\\', '/')).ToList();
+            return ArchiveUnpacker.Unpack(release, archive, textures, out _);
+        }).ToList();
 
-        Assert.NotEmpty(cubemaps);
+        Assert.DoesNotContain(refusals, refusal => refusal?.Reason == ArchiveRefusal.ArchiveUnreadable);
+        Assert.Contains(refusals, refusal => refusal?.Reason == ArchiveRefusal.CubemapNotUnpackable);
     }
 }

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.ModFolderAdapter.Tests;
 
@@ -23,40 +24,53 @@ public sealed class Ba2CubemapsTests : IDisposable
         return Path.Combine(_scratch, Archive);
     }
 
-    [Theory]
-    [InlineData(1u, false)]
-    [InlineData(2u, true)]
-    [InlineData(3u, true)]
-    public void ATexturesBa2_NamesItsCubemapsAmongItsTextures(uint version, bool compressed)
-    {
-        Assert.Equal(["textures/sky.dds"], Ba2Cubemaps.In(Textures(version, compressed)));
-    }
-
-    [Theory]
-    [InlineData(7u)]
-    [InlineData(8u)]
-    public void ATexturesBa2OfTheNextGenUpdate_ReadsAsFallout4sFirstVersionDoes(uint version)
+    private string TexturesOfVersion(uint version)
     {
         var archive = Textures(1, compressed: false);
         var bytes = File.ReadAllBytes(archive);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), version);
         File.WriteAllBytes(archive, bytes);
+        return archive;
+    }
 
-        Assert.Equal(["textures/sky.dds"], Ba2Cubemaps.In(archive));
+    private static ArchiveStepRefusal Unpacking(string archive, params string[] files) =>
+        Assert.IsType<ArchiveStepRefusal>(ArchiveUnpacker.Unpack(GameRelease.Fallout4, archive, files, out _));
+
+    [Theory]
+    [InlineData(1u, false)]
+    [InlineData(2u, true)]
+    [InlineData(3u, true)]
+    public void ATexturesBa2_RefusesItsCubemap(uint version, bool compressed)
+    {
+        var refusal = Unpacking(Textures(version, compressed), "textures/sky.dds");
+
+        Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
+    }
+
+    [Theory]
+    [InlineData(1u, false)]
+    [InlineData(2u, true)]
+    public void ATexturesBa2_UnpacksTheTextureBesideItsCubemap(uint version, bool compressed)
+    {
+        Assert.Null(ArchiveUnpacker.Unpack(GameRelease.Fallout4, Textures(version, compressed), ["textures/flat.dds"], out _));
+    }
+
+    [Theory]
+    [InlineData(7u)]
+    [InlineData(8u)]
+    public void ATexturesBa2OfTheNextGenUpdate_RefusesItsCubemapAsFallout4sFirstVersionDoes(uint version)
+    {
+        var refusal = Unpacking(TexturesOfVersion(version), "textures/sky.dds");
+
+        Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
     }
 
     [Fact]
     public void ATexturesBa2OfAVersionWhoseLayoutIsNotKnown_IsRefusedNamingTheVersion()
     {
-        var archive = Textures(1, compressed: false);
-        var bytes = File.ReadAllBytes(archive);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), 4);
-        File.WriteAllBytes(archive, bytes);
+        var refusal = Unpacking(TexturesOfVersion(4), "textures/flat.dds");
 
-        var refusal = ArchiveUnpacker.Unpack(Mutagen.Bethesda.GameRelease.Fallout4, archive, ["textures/flat.dds"], out var unpacked);
-
-        Assert.Empty(unpacked);
-        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, Assert.IsType<ArchiveStepRefusal>(refusal).Reason);
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
         Assert.Contains("version 4", refusal.Message);
     }
 }
