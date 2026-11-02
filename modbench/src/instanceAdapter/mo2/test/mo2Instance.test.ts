@@ -1879,13 +1879,13 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(metaOf(PATCH), 'utf8')).toContain(CHROME);
         });
 
-        it('writes the instance\'s own spelling of its game for a domain the instance\'s game has', async () => {
+        it("writes MO2's short name for the instance's game for a domain the instance's game has", async () => {
           await writeFile(join(root, INI), (await readFile(join(root, INI), 'utf8')).replace(/gameName=.*/, 'gameName=Fallout 4 VR'));
           await holding(`[General]\r\ngameName=SkyrimSE\r\n`);
 
           await adapter.writeModMetadata(PATCH, { installationFile: { name: 'P.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }, TRASH);
 
-          expect(await readFile(metaOf(PATCH), 'utf8')).toContain('gameName=Fallout 4 VR');
+          expect(await readFile(metaOf(PATCH), 'utf8')).toContain('gameName=Fallout4VR');
         });
 
         it('writes nothing for metadata that says nothing', async () => {

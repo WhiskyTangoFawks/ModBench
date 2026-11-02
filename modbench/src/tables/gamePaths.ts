@@ -149,14 +149,12 @@ export function gameReleaseForGame(gameName: string): string | undefined {
   return RELEASE_BY_GAME_NAME.get(gameName);
 }
 
-// Mutagen's release name for a game as a mod's metadata spells it: as the settings do, or as the release is named,
-// which is the mod manager's short name for most. `undefined` when the table holds none.
+// Mutagen's release name for a game as a mod's metadata spells it: as the settings do, or as its short name. `undefined` when the table holds none.
 function gameReleaseForMetaGame(gameName: string): string | undefined {
-  return gameReleaseForGame(gameName) ?? Object.keys(GAME_PATHS).find((release) => release.toLowerCase() === gameName.toLowerCase());
+  return gameReleaseForGame(gameName) ?? Object.keys(GAME_PATHS).find((release) => shortNameOfRelease(release).toLowerCase() === gameName.toLowerCase());
 }
 
-/** The first release whose Nexus domain is `domain`; `undefined` when the table holds none. */
-export function gameReleaseForNexusDomain(domain: string): string | undefined {
+function gameReleaseForNexusDomain(domain: string): string | undefined {
   return Object.keys(GAME_PATHS).find((release) => GAME_PATHS[release]?.nexusSlug === domain);
 }
 
@@ -181,9 +179,15 @@ export function nexusDomainsForGame(gameName: string): string[] {
   return domains.filter((domain, i) => domains.indexOf(domain) === i);
 }
 
+/** The mod manager's short name for a release: the `gameName` of a mod's or a downloaded file's metadata. */
+export const shortNameOfRelease = (release: string): string => release;
+
 /** The short name a downloaded file's metadata gives a game on Nexus's `domain`; `undefined` when the tables hold none. */
 export function shortNameForNexusDomain(domain: string): string | undefined {
-  return gameReleaseForNexusDomain(domain) ?? Object.keys(NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES).find((name) => NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[name] === domain);
+  const release = gameReleaseForNexusDomain(domain);
+  return release === undefined
+    ? Object.keys(NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES).find((name) => NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[name] === domain)
+    : shortNameOfRelease(release);
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —
