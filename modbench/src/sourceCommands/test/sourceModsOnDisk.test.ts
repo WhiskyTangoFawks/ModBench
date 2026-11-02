@@ -278,6 +278,23 @@ describe('build over an instance on disk', () => {
       .toEqual([{ 'b.nif': 'OZFIfvr0kjo=', 'textures/c.dds': 'RNWYjJS3keA=', 'made.dds': null, 'Mod.esp': 'QnTauWK5/T8=' }, [], ['old.log', 'run.log']]);
   });
 
+  describe('an archive a pack step makes (source.md, Build, story 3)', () => {
+    const ARCHIVE = [{ path: 'Mod - Main.ba2', vouchedFor: true }];
+
+    it.each([
+      ['a file a task made', ['meshes/a.nif'], { 'Mod - Main.ba2': null }],
+      ['a file a task made, named in another case', ['MESHES/A.nif'], { 'Mod - Main.ba2': null }],
+      ['no file a task made', ['b.nif'], { 'Mod - Main.ba2': expect.any(String) as unknown }],
+    ])('records by its path alone an archive that packs %s, whose bytes follow the task', async (_, packs, expected) => {
+      const pack: BuildStep = { kind: 'pack', archives: [{ path: 'Mod - Main.ba2', files: packs }] };
+      const { build, recorded } = await aSourceMod({ steps: [STEP, pack] }, ARCHIVE, async () => { await put('mods/Mod/meshes/a.nif', 'made'); });
+
+      await build();
+
+      expect(Object.fromEntries((await recorded())?.files ?? [])).toMatchObject(expected);
+    });
+  });
+
   describe('over a file of mine mEdit or a step replaces or removes (source.md, Build, story 20)', () => {
     const builtAgain = async () => {
       await put('mods/Mod/Mod.esp', 'built again');

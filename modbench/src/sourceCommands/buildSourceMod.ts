@@ -172,6 +172,14 @@ async function stepRan(deps: BuildDeps, mod: SourceModToBuild, step: RunStep, ma
   return failed;
 }
 
+// Build, story 3: an archive packing a file a run made holds bytes that follow the run, so it is recorded by its path alone.
+function packedByARun(archives: readonly { readonly path: string; readonly files: readonly string[] }[], made: ReadonlyMap<string, Made>): Set<string> {
+  const ran = [...made].filter(([, how]) => how === 'byARun').map(([path]) => path.toLowerCase());
+  const packsARun = ({ files }: { readonly files: readonly string[] }): boolean =>
+    files.some((file) => ran.includes(file.toLowerCase()));
+  return new Set(archives.filter(packsARun).map(({ path }) => path.toLowerCase()));
+}
+
 const wireStep = (step: Exclude<BuildStep, RunStep>): BuildMod['step'] =>
   ('archives' in step ? { [step.kind]: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
 
@@ -226,7 +234,8 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
       if (at > 0) return ran(`The build stopped at its step ${at + 1}: ${why.replace(/\.$/, '')}.`);
       return isRefused(built) ? built : refusedAs(mod.name, why);
     }
-    for (const { path, vouchedFor } of built.made) made.set(path, vouchedFor ? 'vouched' : 'leftAsItWas');
+    const packsARun = step.kind === 'pack' ? packedByARun(step.archives, made) : new Set<string>();
+    for (const { path, vouchedFor } of built.made) made.set(path, packsARun.has(path.toLowerCase()) ? 'byARun' : vouchedFor ? 'vouched' : 'leftAsItWas');
     outcome = joined(outcome, built, step.kind === 'unpack');
     const notTrashed = await whyAsideNotTrashed(deps, mod, built);
     if (notTrashed !== undefined) return ran(`The build stopped at its step ${at + 1}, as ${notTrashed}.`);
