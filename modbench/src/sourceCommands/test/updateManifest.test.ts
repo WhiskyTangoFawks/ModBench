@@ -66,6 +66,24 @@ async function heldIn(folder: string): Promise<Manifest> {
 }
 
 describe('update manifest', () => {
+  it('refuses a mod whose whole folder git holds, naming why, and leaves its manifest as it was (Update manifest, story 1)', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } }, answers: { heldWholeByGit: new Set([join(modsDir, 'ModA')]) } });
+
+    const result = await update(['ModA', 'ModB']);
+
+    expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModA')]).toEqual([
+      ['ModB'], [{ item: 'ModA', reason: 'was not updated: git holds its whole folder.' }], undefined,
+    ]);
+  });
+
+  it('passes over a mod whose whole folder git holds when it runs on every mod, refusing none', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } }, answers: { heldWholeByGit: new Set([join(modsDir, 'ModA')]) } });
+
+    const result = await update(['ModA', 'ModB'], {}, [], true);
+
+    expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModA')]).toEqual([['ModB'], [], undefined]);
+  });
+
   it('writes each mod\'s manifest from its folder, naming each file no package holds (The manifest, story 5)', async () => {
     const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } } });
 

@@ -1,7 +1,8 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { errorMessage } from '../ports/errorMessage';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -41,7 +42,7 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void) {}
+  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole'>, private readonly log: (line: string) => void) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -84,12 +85,22 @@ export class ModStatuses {
     try {
       for (let value = this.waiting; value !== undefined; value = this.waiting) {
         this.waiting = undefined;
-        const statuses = value.holdsRepository ? await Promise.all(modsAt(value).map((mod) => this.statusOf(mod))) : [];
+        const statuses = value.holdsRepository ? await this.statusesOf(modsAt(value)) : [];
         this.hold(new Map(statuses.map((status) => [status.mod, status])));
       }
     } finally {
       this.deriving = false;
     }
+  }
+
+  private async statusesOf(mods: readonly ModAt[]): Promise<ModStatus[]> {
+    let held: ReadonlySet<string>;
+    try {
+      held = await this.reads.foldersHeldWhole(mods.map(({ folder }) => folder));
+    } catch (err) {
+      return mods.map(({ name }) => unreadableStatus(name, `git could not say which folders it holds: ${errorMessage(err)}`));
+    }
+    return Promise.all(mods.map((mod) => (held.has(mod.folder) ? heldWholeStatus(mod.name) : this.statusOf(mod))));
   }
 
   private async statusOf(mod: ModAt): Promise<ModStatus> {

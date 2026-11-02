@@ -22,6 +22,8 @@ export interface ModStatus {
   /** Each package its manifest names. */
   readonly packages: readonly ManifestPackage[];
   readonly noManifest: boolean;
+  /** Git holds the mod's whole folder, so no manifest judges it. */
+  readonly heldWhole?: true;
   readonly differing: readonly string[];
   readonly namedByNoLine: readonly string[];
   /** The files the folder holds that its manifest ignores, by the paths the folder holds them at. */
@@ -46,7 +48,13 @@ export interface ModStatus {
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
   ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
 
-const ordered = (paths: Iterable<string>): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+/** A mod whose whole folder git holds: git's, so it lists nothing. */
+export const heldWholeStatus = (mod: string): ModStatus => nothing(mod, { heldWhole: true });
+
+/** A mod whose status could not be read, for `why`. */
+export const unreadableStatus = (mod: string, why: string): ModStatus => nothing(mod, { unreadable: why });
+
+const ordered =(paths: Iterable<string>): string[] => [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 const folded = (path: string): string => path.toLowerCase();
 

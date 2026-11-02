@@ -122,6 +122,8 @@ export interface InstanceAnswers {
   folderFiles?: ReadonlyMap<string, readonly string[]>;
   /** The files git holds in a source folder, by the folder. */
   heldByGit?: ReadonlyMap<string, readonly string[]>;
+  /** The mod folders whose whole git holds. */
+  heldWholeByGit?: ReadonlySet<string>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -422,6 +424,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
     folderValue: (folder) => folderValueOver(adapter, folder),
+    foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true))),
     sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,

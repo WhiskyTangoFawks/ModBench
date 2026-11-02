@@ -9,7 +9,7 @@ import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolder
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceRepositories' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
+  'sourceRepositories' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
   | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'flaggedHash' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
@@ -223,6 +223,13 @@ async function submodulesWritten(
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
+// ADR-0022: a folder git holds whole is git's, so no manifest records it.
+async function modsHeldWhole(adapter: Adapter, mods: readonly string[]): Promise<ReadonlySet<string>> {
+  const folders = await Promise.all(mods.map(async (mod) => [mod, await adapter.modFolderPath(mod)] as const));
+  const held = await adapter.foldersHeldWhole(folders.flatMap(([, folder]) => (folder === undefined ? [] : [folder])));
+  return new Set(folders.flatMap(([mod, folder]) => (folder !== undefined && held.has(folder) ? [mod] : [])));
+}
+
 /** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceModsToRecord`, or every one when
  *  `everyMod`. A source mod's own folder is its build's. */
 export async function updateManifest(
@@ -244,9 +251,11 @@ export async function updateManifest(
     read.push(answer.read);
     notes.push(...answer.notes.map((note) => ({ mod, note })));
   };
+  const heldWhole = await modsHeldWhole(adapter, [...new Set(mods)].filter((mod) => sourceMods.folderOf(mod) === undefined));
   for (const mod of new Set(namesOf(mods, others))) {
     if (signal?.aborted) break;
-    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) passedOver.push(mod);
+    if (heldWhole.has(mod)) { if (!everyMod) refused.push({ item: mod, reason: 'was not updated: git holds its whole folder.' }); }
+    else if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) passedOver.push(mod);
     else await record(mod, () => readMod(adapter, mod, folders, game));
   }
   for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {

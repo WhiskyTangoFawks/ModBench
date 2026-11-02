@@ -764,6 +764,8 @@ export interface InstanceAdapter {
   /** `folderValue` of a source folder, less the files git holds there and git's own: its manifest names the rest. Rejects
    *  when git cannot list the folder. */
   sourceFolderValue(folder: string): Promise<FolderValue>;
+  /** The `folders` whose whole git holds: none of their files is ignored and untracked. Rejects when git cannot list the instance. */
+  foldersHeldWhole(folders: readonly string[]): Promise<ReadonlySet<string>>;
   /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`. */
   modValue(folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
   /** The path a folder holds the file at `path` at, while `exclude` names the paths the modlist excludes. */
