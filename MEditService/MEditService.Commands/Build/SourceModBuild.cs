@@ -3,6 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Build;
@@ -27,7 +28,7 @@ internal sealed class SourceModBuild
     {
         if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
         var loadOrder = _loadOrder.Require();
-        if (!_source.SourceToBuild(mod.SourceFolder, mod.Step is BuildStep.Copy copy ? copy.Paths : []).Holds(out var source, out var unread))
+        if (!_source.SourceToBuild(mod.SourceFolder, PathsRead(mod.Step)).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
 
         var written = new FolderWrite(_modFolders, mod.Folder, mod.Exclude, mod.Ignore, instance.ExclusionMark);
@@ -36,6 +37,7 @@ internal sealed class SourceModBuild
             BuildStep.Copy => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(Copied(source.Files, written)),
             BuildStep.Compile compile => ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(await CompiledAsync(loadOrder, mod, compile.Plugins, written)),
             BuildStep.Pack pack => Packed(mod, pack.Archives, instance.Archives, written),
+            BuildStep.Unpack unpack => Unpacked(mod, unpack.Archives, loadOrder.GameRelease, written),
             BuildStep.Decompile decompile => await DecompiledAsync(loadOrder, mod, decompile),
             _ => throw new ArgumentOutOfRangeException(nameof(mod), mod.Step, "A build file names no other built-in step."),
         };
@@ -43,6 +45,13 @@ internal sealed class SourceModBuild
             ? ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(outcome with { Uncommitted = source.Uncommitted, Unpushed = source.Unpushed })
             : ran;
     }
+
+    private static IReadOnlyList<string> PathsRead(BuildStep step) => step switch
+    {
+        BuildStep.Copy copy => copy.Paths,
+        BuildStep.Unpack unpack => [.. unpack.Archives.Select(archive => archive.Path)],
+        _ => [],
+    };
 
     private static ModBuildOutcome Copied(IReadOnlyList<FileToCopy> files, FolderWrite written)
     {
@@ -120,6 +129,49 @@ internal sealed class SourceModBuild
             else refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, refusal.Reason, $"'{archive.Path}' was not packed: {refusal.Message}"));
         }
         return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Packed = takenOut, Ignored = ignored });
+    }
+
+    // An archive that cannot give every file it is asked for writes none of them.
+    private ItemAnswer<BuildRefusal, ModBuildOutcome> Unpacked(
+        ModToBuild mod, IReadOnlyList<ArchiveToUnpack> archives, GameRelease release, FolderWrite written)
+    {
+        List<ItemRefused<string, ArchiveRefusal>> refused = [];
+        List<(string Path, bool Vouched)> made = [];
+        List<string> ignored = [];
+        try
+        {
+            foreach (var archive in archives)
+            {
+                if (ArchiveUnpacker.Unpack(release, _source.FileIn(mod.SourceFolder, archive.Path), archive.Files, out var files) is { } why)
+                {
+                    refused.Add(new ItemRefused<string, ArchiveRefusal>(archive.Path, why.Reason, $"'{archive.Path}' was not unpacked: {why.Message}"));
+                    continue;
+                }
+
+                foreach (var file in files)
+                {
+                    if (written.Ignores(file.Path))
+                    {
+                        ignored.Add(file.Path);
+                        continue;
+                    }
+
+                    written.Write(file.Path, output =>
+                    {
+                        using var content = file.Open();
+                        content.CopyTo(output);
+                    });
+                    made.Add((written.PathOf(file.Path), true));
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(
+                ModBuildOutcome.Stopped($"The build stopped at its unpack, as a file could not be read or written: {e.Message}"));
+        }
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(
+            new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Ignored = [.. ignored.Order(StringComparer.Ordinal)] });
     }
 
     private static IArchiveVariant VariantOf(ArchiveToPack archive, ArchiveVariants variants) =>

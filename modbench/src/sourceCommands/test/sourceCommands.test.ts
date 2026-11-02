@@ -54,7 +54,7 @@ const buildingEach = (client: InMemoryMEditClient): void => {
 describe('sourceCommands build', () => {
   it('hands mEdit each built-in step of each mod\'s build file in order, one call each, with the source folder that builds it, its folder, what its folder excludes, the exclusion mark and the release\'s archive variants', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [
-      { kind: 'decompile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures'] }, COMPILE, { kind: 'pack', archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] },
+      { kind: 'decompile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures'] }, COMPILE, { kind: 'pack', archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }, { kind: 'unpack', archives: [{ path: 'Base.ba2', files: ['b.nif'] }] },
     ] }));
     const client = new InMemoryMEditClient();
     buildingEach(client);
@@ -69,6 +69,7 @@ describe('sourceCommands build', () => {
       { method: 'build', args: [[{ ...modA, step: { copy: ['textures'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { compile: ['A.esp'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { pack: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] } }], facts] },
+      { method: 'build', args: [[{ ...modA, step: { unpack: [{ path: 'Base.ba2', files: ['b.nif'] }] } }], facts] },
       { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], ignore: [], step: { compile: ['A.esp'] } }], facts] },
     ]);
   });

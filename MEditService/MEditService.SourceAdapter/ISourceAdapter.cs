@@ -66,7 +66,7 @@ public interface ISourceAdapter
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);
 
-    /// <summary>What a build step copies of <paramref name="copied"/>, each a file or a folder in <paramref name="sourceFolder"/>,
+    /// <summary>What a build step reads of <paramref name="copied"/>, each a file or a folder in <paramref name="sourceFolder"/>,
     /// as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied);
 

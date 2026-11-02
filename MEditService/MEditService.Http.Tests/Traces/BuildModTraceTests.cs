@@ -103,6 +103,9 @@ public sealed class BuildModTraceTests : HostedTests
 
     private const string Copy = "\"step\": {\"copy\": [\"a.nif\"]}";
 
+    private static string UnpackStep(string step) =>
+        $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {{{step}}}}}], \"exclusionMark\": \".mohidden\"}}";
+
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
@@ -113,6 +116,9 @@ public sealed class BuildModTraceTests : HostedTests
         { "a step naming no path", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"copy\": []}}], \"exclusionMark\": \".mohidden\"}" },
         { "a compile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"compile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
         { "a decompile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"decompile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },        { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"pack\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}}], \"exclusionMark\": \".mohidden\"}" },
+        { "an unpack beside a pack", UnpackStep("\"pack\": [{\"path\": \"Main.ba2\", \"files\": [\"a.nif\"]}], \"unpack\": [{\"path\": \"Main.ba2\", \"files\": [\"a.nif\"]}]") },
+        { "an unpack naming no file", UnpackStep("\"unpack\": [{\"path\": \"Main.ba2\", \"files\": []}]") },
+        { "an unpack of a file outside the folder", UnpackStep("\"unpack\": [{\"path\": \"Main.ba2\", \"files\": [\"../a.nif\"]}]") },
         {
             "a variant both a BA2 and a BSA",
             $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", {Copy}}}], \"exclusionMark\": \".mohidden\", " +

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>Why an archive of a build was not packed (ADR-0019); it stays as it was.</summary>
+/// <summary>Why an archive of a build was not packed or unpacked (ADR-0019); it stays as it was.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ArchiveRefusal
 {
@@ -16,6 +16,15 @@ public enum ArchiveRefusal
 
     /// <summary>A file it takes could not be read, or the archive could not be written.</summary>
     NotWritten,
+
+    /// <summary>The archive is in a format Mutagen's reader cannot read.</summary>
+    ArchiveUnreadable,
+
+    /// <summary>A file an unpack takes is not an entry of the archive.</summary>
+    FileNotInArchive,
+
+    /// <summary>A texture an unpack takes is a cubemap, whose flag Mutagen's extraction drops.</summary>
+    CubemapNotUnpackable,
 }
 
 public sealed record PackRefusal(ArchiveRefusal Reason, string Message);

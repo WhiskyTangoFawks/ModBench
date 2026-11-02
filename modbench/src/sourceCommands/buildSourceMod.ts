@@ -173,7 +173,7 @@ async function stepRan(deps: BuildDeps, mod: SourceModToBuild, step: RunStep, ma
 }
 
 const wireStep = (step: Exclude<BuildStep, RunStep>): BuildMod['step'] =>
-  (step.kind === 'pack' ? { pack: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
+  ('archives' in step ? { [step.kind]: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
 
 type StepBuilt = BuildOutcome['landed'][number];
 
