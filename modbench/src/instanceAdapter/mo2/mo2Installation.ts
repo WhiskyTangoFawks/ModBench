@@ -171,8 +171,8 @@ export function mo2Installation(
       if (!(await exists(path))) return { kind: 'read', answer: undefined };
       const hashed = await downloadedFileHash(path);
       if (hashed.kind === 'unreadable') return hashed;
-      const { note: _note, ...host } = await pageOfDownloadedFile(context, dirname(path), name);
-      return { kind: 'read', answer: { path, ...hashed.answer, ...host } };
+      const { page, directUrl } = await pageOfDownloadedFile(context, dirname(path), name);
+      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page }, ...directUrl === undefined ? {} : { directUrl } } };
     },
 
     downloadedFileHolding: async ({ size, hash }) => {
