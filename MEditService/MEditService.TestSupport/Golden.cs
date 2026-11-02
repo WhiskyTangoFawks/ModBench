@@ -37,10 +37,30 @@ public static class Golden
         Assert.Fail($"Golden '{name}' differs from {path}:\n{FirstDifference(expected, actual)}");
     }
 
-    // The caller's own file (CallerFilePath), two levels up from any TestProject/Subfolder/File.cs,
-    // reaches this project's sibling TestData — the one committed copy every test project shares.
-    private static string GoldenDirectory(string callerFile) =>
-        Path.Combine(Path.GetDirectoryName(callerFile) ?? throw new InvalidOperationException($"Expected '{callerFile}' to have a parent directory."), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
+    public static void VerifyBytes(string name, byte[] actual, [CallerFilePath] string here = "")
+    {
+        var path = Path.Combine(GoldenDirectory(here), name);
+        if (Environment.GetEnvironmentVariable(UpdateVariable) == "1")
+        {
+            File.WriteAllBytes(path, actual);
+            return;
+        }
+
+        Assert.True(File.Exists(path),
+            $"No golden at {path}. Capture it deliberately with {UpdateVariable}=1 and review the file before committing.");
+        Assert.True(File.ReadAllBytes(path).AsSpan().SequenceEqual(actual), $"Golden '{name}' differs from {path}: the archive's bytes changed.");
+    }
+
+    // The nearest ancestor of the caller's own file that holds this project's sibling TestData, the one committed copy every test project shares.
+    private static string GoldenDirectory(string callerFile)
+    {
+        for (var directory = Path.GetDirectoryName(callerFile); directory is not null; directory = Path.GetDirectoryName(directory))
+        {
+            var goldens = Path.Combine(directory, "MEditService.TestSupport", "TestData", "goldens");
+            if (Directory.Exists(goldens)) return goldens;
+        }
+        throw new InvalidOperationException($"No MEditService.TestSupport/TestData/goldens above '{callerFile}'.");
+    }
 
     private static string Canonical(object? value)
     {
