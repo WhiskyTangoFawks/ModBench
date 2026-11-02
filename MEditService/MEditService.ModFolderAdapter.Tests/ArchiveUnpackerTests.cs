@@ -90,6 +90,87 @@ public sealed class ArchiveUnpackerTests : IDisposable
         Assert.Equal(dds.Pixels, Read(Assert.Single(files))[^dds.Pixels.Length..]);
     }
 
+    [Theory]
+    [InlineData(7u)]
+    [InlineData(8u)]
+    public void ACompressedGeneralBa2OfAnyVersion_UnpacksTheInflatedBytes(uint version)
+    {
+        With(Meshes, Mesh);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: true), Meshes);
+        SetVersion(archive, version);
+
+        var files = Unpacked(GameRelease.Fallout4, archive, Meshes);
+
+        Assert.Equal(Mesh, Read(Assert.Single(files)));
+    }
+
+    [Fact]
+    public void AStarfieldTexturesBa2WhoseCompressionIsLz4_UnpacksTheInflatedPixels()
+    {
+        var dds = Dds.Dxt1(width: 16, height: 16, mips: 3);
+        With("textures/a_d.dds", dds.File);
+        var archive = Packed(new Ba2Variant(3, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds");
+
+        var files = Unpacked(GameRelease.Starfield, archive, "textures/a_d.dds");
+
+        Assert.Equal(dds.Pixels, Read(Assert.Single(files))[^dds.Pixels.Length..]);
+    }
+
+    [Fact]
+    public void ATextureBa2_UnpacksADdsWhoseHeaderCarriesTheEntrysSizeMipsAndFormat()
+    {
+        With("textures/a_d.dds", Dds.Dxt1(width: 16, height: 8, mips: 3).File);
+        With("textures/b_d.dds", Dds.Bc7(width: 8, height: 8).File);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), "textures/a_d.dds", "textures/b_d.dds");
+
+        var files = Unpacked(GameRelease.Fallout4, archive, "textures/a_d.dds", "textures/b_d.dds");
+
+        var dxt1 = Read(files[0]);
+        Assert.Equal((8u, 16u, 3u, "DXT1"), (U32(dxt1, 12), U32(dxt1, 16), U32(dxt1, 28), Encoding.ASCII.GetString(dxt1, 84, 4)));
+        var bc7 = Read(files[1]);
+        Assert.Equal((8u, 8u, 1u, "DX10", 98u), (U32(bc7, 12), U32(bc7, 16), U32(bc7, 28), Encoding.ASCII.GetString(bc7, 84, 4), U32(bc7, 128)));
+    }
+
+    [Theory]
+    [InlineData(1u)]
+    [InlineData(7u)]
+    [InlineData(8u)]
+    public void ATexturesBa2_RefusesItsCubemap_NamingOnlyIt(uint version)
+    {
+        With("textures/flat.dds", Dds.Dxt1(8, 8, 1).File).With("textures/Sky.dds", Dds.CubemapDxt1(8, 8).File);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), "textures/flat.dds", "textures/Sky.dds");
+        SetVersion(archive, version);
+
+        var refusal = Refused(GameRelease.Fallout4, archive, "textures/flat.dds", "textures/sky.dds");
+
+        Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
+        Assert.Contains("textures/sky.dds", refusal.Message);
+        Assert.DoesNotContain("textures/flat.dds", refusal.Message);
+        Assert.Single(Unpacked(GameRelease.Fallout4, archive, "textures/flat.dds"));
+    }
+
+    [Fact]
+    public void ABa2OfAVersionNoneReads_RefusesItAsUnreadable()
+    {
+        With(Meshes, Mesh);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: false), Meshes);
+        SetVersion(archive, 4);
+
+        var refusal = Refused(GameRelease.Fallout4, archive, Meshes);
+
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
+        Assert.Contains("version 4", refusal.Message);
+    }
+
+    private static uint U32(byte[] bytes, int at) => BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at));
+
+    private static void SetVersion(string archive, uint version)
+    {
+        var bytes = File.ReadAllBytes(archive);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), version);
+        File.WriteAllBytes(archive, bytes);
+    }
+
     [Fact]
     public void AFileTheArchiveLacks_RefusesTheArchiveNamingIt()
     {
@@ -111,19 +192,6 @@ public sealed class ArchiveUnpackerTests : IDisposable
         var refusal = Refused(GameRelease.Fallout4, archive, "meshes/a.nif");
 
         Assert.Equal(ArchiveRefusal.EntriesAmbiguous, refusal.Reason);
-    }
-
-    [Fact]
-    public void ATextureMutagenCannotRebuildTheHeaderOf_RefusesTheArchiveInsteadOfThrowingAtTheWrite()
-    {
-        var unsupported = Dds.Bc7(8, 8).File;
-        BinaryPrimitives.WriteUInt32LittleEndian(unsupported.AsSpan(128), 10);
-        With("textures/odd.dds", unsupported);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: false), "textures/odd.dds");
-
-        var refusal = Refused(GameRelease.Fallout4, archive, "textures/odd.dds");
-
-        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
     }
 
     [Fact]
