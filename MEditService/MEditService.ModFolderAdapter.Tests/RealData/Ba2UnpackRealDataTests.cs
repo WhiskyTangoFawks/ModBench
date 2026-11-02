@@ -12,7 +12,7 @@ public sealed class Ba2UnpackRealDataTests
     private const int ExtendedHeaderLength = 148;
     private const int MipCountAt = 28;
     private const int CapsAt = 108;
-    private const int CapsLength = 4;
+    private const int HeaderFieldLength = 4;
     private const int TextureChunkLength = 24;
     private const int Caps2At = 112;
     private const int MiscFlagsAt = 136;
@@ -110,16 +110,16 @@ public sealed class Ba2UnpackRealDataTests
         if (isCubemap && !CarriesTheCubeFlags(written, headerLength)) return "a cubemap without the cube caps and all six faces";
         foreach (var header in new[] { ours, theirs })
         {
-            if (mips == 1 || isCubemap) Array.Clear(header, CapsAt, CapsLength);
+            if (mips == 1 || isCubemap) Array.Clear(header, CapsAt, HeaderFieldLength);
             if (isCubemap)
             {
-                Array.Clear(header, Caps2At, CapsLength);
-                if (headerLength == ExtendedHeaderLength) Array.Clear(header, MiscFlagsAt, CapsLength);
+                Array.Clear(header, Caps2At, HeaderFieldLength);
+                if (headerLength == ExtendedHeaderLength) Array.Clear(header, MiscFlagsAt, HeaderFieldLength);
             }
             if (BinaryPrimitives.ReadUInt32LittleEndian(written.AsSpan(PixelFormatFlagsAt)) == UncompressedRgb)
             {
                 BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(FlagsAt), BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(FlagsAt)) & ~(PitchFlag | LinearSizeFlag));
-                Array.Clear(header, PitchOrLinearSizeAt, CapsLength);
+                Array.Clear(header, PitchOrLinearSizeAt, HeaderFieldLength);
             }
         }
 

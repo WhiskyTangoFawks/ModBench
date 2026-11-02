@@ -194,7 +194,7 @@ public sealed class ArchiveUnpackerTests : IDisposable
         var cubemap = Dds.CubemapDxt1(8, 8);
         With("textures/Sky.dds", cubemap.File);
         var archive = Packed(new Ba2Variant(packedVersion, Ba2Contents.Textures, Compressed: true), "textures/Sky.dds");
-        if (archiveVersion != packedVersion) SetVersion(archive, archiveVersion);
+        SetVersion(archive, archiveVersion);
 
         var sky = Read(Assert.Single(Unpacked(GameRelease.Fallout4, archive, "textures/sky.dds")));
 
