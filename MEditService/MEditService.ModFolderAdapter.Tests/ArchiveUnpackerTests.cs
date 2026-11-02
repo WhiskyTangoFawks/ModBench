@@ -54,11 +54,11 @@ public sealed class ArchiveUnpackerTests : IDisposable
         return unpacked;
     }
 
-    private static PackRefusal Refused(GameRelease release, string archive, params string[] files)
+    private static ArchiveStepRefusal Refused(GameRelease release, string archive, params string[] files)
     {
         var refusal = ArchiveUnpacker.Unpack(release, archive, files, out var unpacked);
         Assert.Empty(unpacked);
-        return Assert.IsType<PackRefusal>(refusal);
+        return Assert.IsType<ArchiveStepRefusal>(refusal);
     }
 
     [Fact]

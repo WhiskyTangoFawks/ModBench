@@ -27,4 +27,4 @@ public enum ArchiveRefusal
     CubemapNotUnpackable,
 }
 
-public sealed record PackRefusal(ArchiveRefusal Reason, string Message);
+public sealed record ArchiveStepRefusal(ArchiveRefusal Reason, string Message);

@@ -1,36 +1,54 @@
-using System.Buffers.Binary;
 using System.Text;
 
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>The cubemap flag of each texture of a BA2, which Mutagen's reader does not expose.</summary>
-internal static class Ba2Cubemaps
+public static class Ba2Cubemaps
 {
-    private const int HeaderLength = 24;
-    private const int EntryLength = 24;
+    private const int FileHeaderLength = 24;
+    private const int ChunkLength = 24;
     private const int ChunkCountAt = 13;
-    private const int ChunkLengthAt = 14;
-    private const int CubemapAt = 22;
+    private const int FlagsAt = 22;
+    private const int EntryHeadLength = 24;
+    private const byte CubemapFlag = 0x01;
 
-    /// <summary>The forward-slash path of each cubemap in the archive at <paramref name="archiveAt"/>, in any case; none for
-    /// an archive that is no texture BA2.</summary>
-    internal static HashSet<string> In(string archiveAt)
+    /// <summary>The forward-slash path of each cubemap in the archive, in any case; none for an archive that is no texture
+    /// BA2. Throws <see cref="InvalidDataException"/> for a texture BA2 of a version whose layout is not known.</summary>
+    public static HashSet<string> In(string archiveAt)
     {
         HashSet<string> cubemaps = new(StringComparer.OrdinalIgnoreCase);
-        var bytes = File.ReadAllBytes(archiveAt);
-        if (bytes.Length < HeaderLength || !bytes.AsSpan(0, 4).SequenceEqual("BTDX"u8) || !bytes.AsSpan(8, 4).SequenceEqual("DX10"u8)) return cubemaps;
+        using var file = File.OpenRead(archiveAt);
+        using var reader = new BinaryReader(file, Encoding.UTF8);
+        if (file.Length < FileHeaderLength || !reader.ReadBytes(4).AsSpan().SequenceEqual("BTDX"u8)) return cubemaps;
 
-        var version = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(4));
-        var count = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(12));
-        var names = (int)BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(16));
-        var at = HeaderLength + version switch { 2 => 8, 3 => 12, _ => 0 };
+        var version = reader.ReadUInt32();
+        if (!reader.ReadBytes(4).AsSpan().SequenceEqual("DX10"u8)) return cubemaps;
+
+        var firstEntry = FileHeaderLength + version switch
+        {
+            1 or 7 or 8 => 0,
+            2 => 8,
+            3 => 12,
+            _ => throw new InvalidDataException($"its texture BA2 is version {version}, whose layout Modbench does not know"),
+        };
+        var count = reader.ReadUInt32();
+        var nameTable = reader.ReadInt64();
+        if (nameTable <= 0 || nameTable >= file.Length) return cubemaps;
+
+        List<bool> isCubemap = [];
+        file.Position = firstEntry;
         for (var entry = 0; entry < count; entry++)
         {
-            var isCubemap = bytes[at + CubemapAt] != 0;
-            at += EntryLength + bytes[at + ChunkCountAt] * BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(at + ChunkLengthAt));
-            var length = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(names));
-            if (isCubemap) cubemaps.Add(Encoding.UTF8.GetString(bytes, names + 2, length).Replace('\\', '/'));
-            names += 2 + length;
+            var head = reader.ReadBytes(EntryHeadLength);
+            isCubemap.Add((head[FlagsAt] & CubemapFlag) != 0);
+            file.Position += head[ChunkCountAt] * ChunkLength;
+        }
+
+        file.Position = nameTable;
+        foreach (var cube in isCubemap)
+        {
+            var name = Encoding.UTF8.GetString(reader.ReadBytes(reader.ReadUInt16()));
+            if (cube) cubemaps.Add(name.Replace('\\', '/'));
         }
         return cubemaps;
     }

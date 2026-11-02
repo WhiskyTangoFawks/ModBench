@@ -121,7 +121,7 @@ internal sealed class SourceModBuild
         {
             var at = written.PathOf(archive.Path);
             var refusal = variants is null
-                ? new PackRefusal(ArchiveRefusal.VariantNotWritten, "Modbench packs no archive for this game.")
+                ? new ArchiveStepRefusal(ArchiveRefusal.VariantNotWritten, "Modbench packs no archive for this game.")
                 : packer.Pack(mod.Folder, at, [.. archive.Files.Zip(loose, (file, path) => new ArchiveFile(file, () => _modFolders.OpenFile(mod.Folder, path)))],
                     VariantOf(archive, variants));
             made.Add((at, refusal is null));

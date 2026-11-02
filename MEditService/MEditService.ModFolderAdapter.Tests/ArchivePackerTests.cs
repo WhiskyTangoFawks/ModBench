@@ -48,7 +48,7 @@ public sealed class ArchivePackerTests : IDisposable
 
     public void Dispose() => _scratch.Dispose();
 
-    private (byte[]? Archive, PackRefusal? Refusal) Pack(IArchiveVariant variant, params string[] files)
+    private (byte[]? Archive, ArchiveStepRefusal? Refusal) Pack(IArchiveVariant variant, params string[] files)
     {
         var modFolder = Path.Combine(_scratch, Mod);
         var refusal = new ArchivePacker(new ModFolderRepository())
@@ -64,11 +64,11 @@ public sealed class ArchivePackerTests : IDisposable
         return Assert.IsType<byte[]>(archive);
     }
 
-    private PackRefusal Refused(IArchiveVariant variant, params string[] files)
+    private ArchiveStepRefusal Refused(IArchiveVariant variant, params string[] files)
     {
         var (archive, refusal) = Pack(variant, files);
         Assert.Null(archive);
-        return Assert.IsType<PackRefusal>(refusal);
+        return Assert.IsType<ArchiveStepRefusal>(refusal);
     }
 
     private ArchivePackerTests WithBytes(string path, byte[] bytes) => WithStream(path, () => new MemoryStream(bytes));
