@@ -186,10 +186,10 @@ plugins:
     ]);
   });
 
-  it('reports an after item that is no name, on its line, and reads no edge for it', () => {
+  it('reports an after item that is not a name, on its line, and reads no edge for it', () => {
     const { groups, problems } = readRules(filesOf({ masterlist: text('groups:\n  - name: default\n  - name: late\n    after: [default, {x: 1}]\n') }));
 
-    expect(problems).toEqual([{ file: 'masterlist', line: 3, text: 'An entry of "after" has no name.' }]);
+    expect(problems).toEqual([{ file: 'masterlist', line: 3, text: 'An entry of "after" is not a name.' }]);
     expect(groups.flatMap(({ after }) => after.map(({ name }) => name))).toEqual(['default']);
   });
 
@@ -232,10 +232,10 @@ plugins:
     expect(groups.map(({ name, after }) => [name, after.map((step) => step.name)])).toEqual([['a', []], ['b', []], ['c', ['a']]]);
   });
 
-  it('reports a plugin group that is no name, on its line', () => {
+  it('reports a plugin group that is not a name, on its line', () => {
     const { entries, problems } = readRules(filesOf({ masterlist: text('plugins:\n  - name: A.esp\n    group: [late]\n') }));
 
-    expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'A plugin\'s group is no name.' }]);
+    expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'A plugin\'s group is not a name.' }]);
     expect(entries[0]?.group).toBeUndefined();
   });
 

@@ -153,7 +153,7 @@ class FileReader {
     const after = this.items(node, plain, 'after').flatMap(({ value, line: at }) => {
       const source = this.located(at);
       if (typeof value === 'string') return source === undefined ? [] : [{ name: value, source }];
-      this.problem(at, 'An entry of "after" has no name.');
+      this.problem(at, 'An entry of "after" is not a name.');
       return [];
     });
     this.groups.push({ name, after });
@@ -187,7 +187,7 @@ class FileReader {
     const line = groupNode === undefined ? entryLine : this.lineOf(groupNode);
     const name = stringOf(plain.group);
     if (name === undefined) {
-      this.problem(line, 'A plugin\'s group is no name.');
+      this.problem(line, 'A plugin\'s group is not a name.');
       return undefined;
     }
     const source = this.located(line);
