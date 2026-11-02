@@ -1704,7 +1704,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(
             join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOADED_FILE}\r\n${installedFiles}`,
           );
-          return expectKind(await adapter.modMetadata('Unofficial Fallout 4 Patch'), 'read').answer?.installationFile?.page;
+          return expectKind(await adapter.modMetadata('Unofficial Fallout 4 Patch'), 'read').answer.installationFile?.page;
         };
 
         it('answers, for a meta read through the reading, the page of the file whose mod id is not the meta\'s own', async () => {
