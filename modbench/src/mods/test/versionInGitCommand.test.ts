@@ -105,16 +105,24 @@ describe('modbench.mod.versionInGit', () => {
     expect(onCommitted).toHaveBeenCalledOnce();
   });
 
-  it('offers not committing first, and hands mEdit the pick', async () => {
-    picking({ commit: false });
+  it('offers not committing first', async () => {
+    const commands = versionInGitCommands();
+    const { handler } = invokeInitSourceMod(commands);
+
+    await handler(row(FIRST));
+
+    expect(showQuickPick.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ commit: false }), expect.objectContaining({ commit: true })]);
+  });
+
+  it.each([true, false])('hands mEdit the pick to commit: %s', async (commit) => {
+    picking({ commit });
     const commands = versionInGitCommands();
     commands.answers({ landed: [modA([FIRST])], refused: [] });
     const { handler } = invokeInitSourceMod(commands);
 
     await handler(row(FIRST));
 
-    expect(showQuickPick.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ commit: false }), expect.objectContaining({ commit: true })]);
-    expect(commands.commits()).toEqual([false]);
+    expect(commands.commits()).toEqual([commit]);
   });
 
   it('inits nothing and writes nothing on Esc at the pick', async () => {
