@@ -36,8 +36,9 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         Assert.Equal(["npc_/A.esp/000002.json"], FilesUnderRoot());
         var moved = Assert.Single(aside);
-        Assert.Equal(Plugin, moved.Split('/')[^1]);
-        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(_modFolder, moved, "npc_", "A.esp", "000001.json")));
+        Assert.Equal(Plugin, moved.Aside.Split('/')[^1]);
+        Assert.Equal("plugin-source/A.esp", moved.Path);
+        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(_modFolder, moved.Aside, "npc_", "A.esp", "000001.json")));
         Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
     }
 
@@ -45,7 +46,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public void ATreeMovedAside_OutlivesALeftoverSweepOnceMEditRestarts()
     {
         var aside = Assert.Single(Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value());
-        var afterARestart = TempLeftover.AsIfItsWriterExited(Path.Combine(_modFolder, aside.Split('/')[0]));
+        var afterARestart = TempLeftover.AsIfItsWriterExited(Path.Combine(_modFolder, aside.Aside.Split('/')[0]));
 
         TempName.RemoveLeftovers(_modFolder);
 
@@ -61,7 +62,8 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         Assert.Equal(2, aside.Count);
         Assert.Equal(earlier, aside[0]);
-        Assert.True(Directory.Exists(Path.Combine(_modFolder, aside[1])));
+        Assert.Equal("plugin-source/A.esp", aside[0].Path);
+        Assert.True(Directory.Exists(Path.Combine(_modFolder, aside[1].Aside)));
     }
 
     [PosixFact]
@@ -72,7 +74,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 
         var aside = Repository.ReplaceSourceMovingAside(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Value();
 
-        Assert.Equal([Plugin, "a.ESP"], aside.Select(path => path.Split('/')[^1]));
+        Assert.Equal([Plugin, "a.ESP"], aside.Select(tree => tree.Aside.Split('/')[^1]));
         Assert.Equal([Plugin], Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source")).Select(Path.GetFileName));
     }
 

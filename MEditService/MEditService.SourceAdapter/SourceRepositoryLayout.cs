@@ -85,12 +85,16 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     /// <summary>A new folder at the source folder's root to move trees aside into.</summary>
     internal static string NewAsideFolderIn(string sourceFolder) => Path.Combine(sourceFolder, AsideStart + Path.GetRandomFileName());
 
-    /// <summary>What each folder at the source folder's root that holds trees moved aside holds, else the folder itself, by
-    /// its forward-slash path in the source folder.</summary>
-    internal static IReadOnlyList<string> AsideIn(string sourceFolder) =>
+    /// <summary>The path in the source folder of the tree folder named <paramref name="treeName"/>, forward-slashed.</summary>
+    internal static string TreePath(string treeName) => $"{RootFolderName}/{treeName}";
+
+    /// <summary>What each folder at the source folder's root that holds trees moved aside holds, else the folder itself (which
+    /// has no path to return to).</summary>
+    internal static IReadOnlyList<AsideTree> AsideIn(string sourceFolder) =>
         [.. Directory.EnumerateDirectories(sourceFolder, AsideStart + "*").Order(StringComparer.Ordinal).SelectMany(aside =>
-            Directory.EnumerateFileSystemEntries(aside).Order(StringComparer.Ordinal).Select(entry => Path.GetRelativePath(sourceFolder, entry).Replace('\\', '/'))
-                .DefaultIfEmpty(Path.GetFileName(aside)))];
+            Directory.EnumerateFileSystemEntries(aside).Order(StringComparer.Ordinal)
+                .Select(entry => new AsideTree(Path.GetRelativePath(sourceFolder, entry).Replace('\\', '/'), TreePath(Path.GetFileName(entry))))
+                .DefaultIfEmpty(new AsideTree(Path.GetFileName(aside), Path.GetFileName(aside))))];
 
     /// <summary>Each folder of the mod's plugin source spelled as <paramref name="pluginFileName"/> without case.</summary>
     internal static IReadOnlyList<string> TreesNamedIn(string sourceFolder, string pluginFileName) =>

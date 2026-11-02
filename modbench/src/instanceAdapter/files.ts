@@ -385,6 +385,34 @@ export async function undoAll(undos: readonly Undo[], err: unknown): Promise<unk
   return new Error(`${errorMessage(err)}; not put back: ${failures.join('; ')}`);
 }
 
+/** Trashes the folder at `file` as the path `at`; what `at` holds stands aside. A failure puts each back and
+ *  rejects with the first error. Answers why when the trash succeeded but that tree could not be put back. */
+export async function trashedAs(file: string, at: string, trash: MoveToTrash): Promise<string | undefined> {
+  if (at === file) return trash(file).then(() => undefined);
+  const kept = `${ownTempPrefix(dirname(at), 'kept')}_${randomBytes(6).toString('hex')}`;
+  const undos: Undo[] = [];
+  let stoodAside = false;
+  try {
+    if (await exists(at)) {
+      await rename(at, kept);
+      stoodAside = true;
+      undos.unshift(() => rename(kept, at));
+    }
+    await rename(file, at);
+    undos.unshift(() => rename(at, file));
+    await trash(at);
+  } catch (err) {
+    throw await undoAll(undos, err);
+  }
+  if (!stoodAside) return undefined;
+  try {
+    await rename(kept, at);
+    return undefined;
+  } catch (err) {
+    return `'${at}' was moved to the trash, but the tree that stood there could not be put back and is at ${kept}: ${errorMessage(err)}`;
+  }
+}
+
 /** What `read` answers, or why it could not, rather than failing whatever asked. */
 export async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<T>> {
   try {

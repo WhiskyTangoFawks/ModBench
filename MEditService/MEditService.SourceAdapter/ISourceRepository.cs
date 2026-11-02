@@ -99,8 +99,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256);
 
     /// <summary>As <see cref="ReplaceSourceFrom"/>, but each tree folder named for the plugin, in any case, is first moved
-    /// aside whole, keeping its name. Answers each one's forward-slash path in the source folder.</summary>
-    Answer<IReadOnlyList<string>, SourceFailure> ReplaceSourceMovingAside(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256);
+    /// aside whole. Answers each one's path now and the path it had, in the source folder.</summary>
+    Answer<IReadOnlyList<AsideTree>, SourceFailure> ReplaceSourceMovingAside(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256);
 
     /// <summary>The plugin's source alone committed on the checked-out branch as <paramref name="baseline"/>, then
     /// <paramref name="repaired"/>, all or nothing, each unless the branch holds it. The last-compile ref then names

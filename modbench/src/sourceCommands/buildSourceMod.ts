@@ -79,10 +79,12 @@ async function unrecordedIn(adapter: Adapter, mod: SourceModToBuild): Promise<st
 }
 
 /** Why one of `paths` in `folder` could not be moved to the trash, or a folder that left empty removed, if one could not. */
-export async function whyNotTrashed(adapter: Pick<InstanceAdapter, 'trashFileIn'>, trash: MoveToTrash, folder: string, paths: readonly string[]): Promise<string | undefined> {
+export async function whyNotTrashed(
+  adapter: Pick<InstanceAdapter, 'trashFileIn'>, trash: MoveToTrash, folder: string, paths: readonly string[], asPath: (path: string) => string | undefined = () => undefined,
+): Promise<string | undefined> {
   for (const path of paths) {
     try {
-      const emptied = await adapter.trashFileIn(folder, path, trash);
+      const emptied = await adapter.trashFileIn(folder, path, trash, asPath(path));
       if (emptied !== undefined) return emptied;
     } catch (err) {
       return `'${path}' could not be moved to the trash: ${errorMessage(err)}`;
@@ -199,7 +201,8 @@ async function builtByMEdit(deps: BuildDeps, mod: SourceModToBuild, pass: BuildP
 // the loose files a pack packed, goes to the trash.
 async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { replaced, packed }: StepBuilt): Promise<string | undefined> {
   const packedNotIgnored = (packed ?? []).filter((path) => !isUnderAny(mod.ignore, deps.adapter.ownPath(path)));
-  return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packedNotIgnored);
+  const pathsHad = new Map((replaced ?? []).map(({ aside, path }) => [aside, path]));
+  return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, [...pathsHad.keys()], (aside) => pathsHad.get(aside)) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packedNotIgnored);
 }
 
 const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt, unpacking: boolean): ModBuilt => ({

@@ -3,7 +3,7 @@
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { ensureDir, exists, factsOf, realPathIfThere, remove, removeIfEmpty, rename, undoAll, withLock, type Undo } from '../files';
+import { ensureDir, exists, factsOf, realPathIfThere, remove, removeIfEmpty, rename, trashedAs, undoAll, withLock, type Undo } from '../files';
 import { ownPathOf, pathInFolderOf } from '../excludedPaths';
 import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName, overwriteDir } from './layout';
@@ -27,6 +27,13 @@ async function topmostMissing(folder: string): Promise<string | undefined> {
   let missing: string | undefined;
   for (let up = folder; !(await exists(up)); up = dirname(up)) missing = up;
   return missing;
+}
+
+async function staysIn(folder: string, path: string): Promise<boolean> {
+  const real = await realPathIfThere(path) ?? await realPathIfThere(dirname(path));
+  if (real === undefined) return true;
+  const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
+  return !isAbsolute(inFolder) && inFolder.split(sep)[0] !== '..';
 }
 
 export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
@@ -59,15 +66,15 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       });
     },
 
-    async trashFileIn(folder, relativePath, trash) {
+    async trashFileIn(folder, relativePath, trash, asPath) {
       const file = fileUnder(folder, relativePath);
       const outside = new Error(`Not a file or folder of "${folder}": "${relativePath}"`);
-      if (file === undefined) throw outside;
-      const real = await realPathIfThere(file);
-      if (real === undefined) return undefined;
-      const inFolder = relative(await realPathIfThere(folder) ?? folder, real);
-      if (isAbsolute(inFolder) || inFolder.split(sep)[0] === '..') throw outside;
-      await trash(file);
+      const trashedAt = asPath === undefined ? file : fileUnder(folder, asPath);
+      if (file === undefined || trashedAt === undefined) throw outside;
+      if (await realPathIfThere(file) === undefined) return undefined;
+      if (!(await staysIn(folder, file)) || !(await staysIn(folder, trashedAt))) throw outside;
+      const notPutBack = await trashedAs(file, trashedAt, trash);
+      if (notPutBack !== undefined) return notPutBack;
       const above = relativePath.split('/').slice(0, -1);
       try {
         while (above.length > 0 && await removeIfEmpty(fileInFolder(folder, above.join('/')))) above.pop();

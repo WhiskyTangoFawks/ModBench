@@ -170,7 +170,7 @@ type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRef
   refused: readonly ItemRefusal<PluginAddress>[];
   archivesRefused: readonly (ItemRefusal<string> & { readonly unpacking?: true })[];
   packed?: readonly string[];
-  replaced?: readonly string[];
+  replaced?: readonly components['schemas']['ReplacedTree'][];
   ignored?: readonly string[];
   failure?: string;
   uncommitted?: true;

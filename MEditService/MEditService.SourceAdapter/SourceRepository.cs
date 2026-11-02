@@ -338,8 +338,8 @@ internal sealed class SourceRepository : ISourceRepository
             Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
         });
 
-    public Answer<IReadOnlyList<string>, SourceFailure> ReplaceSourceMovingAside(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
-        SourceFailure.Answer<IReadOnlyList<string>>(() =>
+    public Answer<IReadOnlyList<AsideTree>, SourceFailure> ReplaceSourceMovingAside(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
+        SourceFailure.Answer<IReadOnlyList<AsideTree>>(() =>
         {
             RefuseInASession();
             _ = TreeNameFor(plugin);
