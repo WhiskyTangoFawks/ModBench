@@ -139,8 +139,7 @@ function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
   };
 }
 
-// ADR-0022: restore sets a plugin's flags, so the file holds its package copy's bytes with them, whose hash the index kept. A file the
-// index knows nothing of is refused unless a package holds its bytes, as Modbench cannot tell what else it is.
+// ADR-0022: restore flags a plugin, so the file holds its copy with them, whose hash the index kept. Without it, only a package's bytes are known.
 async function packageCopiesOf(
   adapter: Adapter, held: Manifest | undefined, files: readonly HashedModFile[], packageHolds: (hash: string) => boolean,
 ): Promise<{ readonly files: HashedModFile[] } | { readonly unknown: string }> {
