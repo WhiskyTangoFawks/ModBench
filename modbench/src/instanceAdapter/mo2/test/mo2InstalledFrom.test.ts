@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
+import type { InstalledPackage } from '../../instanceAdapter';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -20,7 +21,7 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     if (hostMeta !== undefined) await writeFile(join(root, 'downloads', `${name}.meta`), hostMeta);
   };
   let inTrash: string[];
-  const write = (...packages: string[]): Promise<void> => adapterOver(root).writeInstalledFrom(modFolder(), packages, async (path) => {
+  const write = (...packages: (string | InstalledPackage)[]): Promise<void> => adapterOver(root).writeInstalledFrom(modFolder(), packages.map((one) => (typeof one === 'string' ? { name: one } : one)), async (path) => {
     inTrash.push(await readFile(path, 'utf8'));
     await rm(path);
   });
@@ -38,7 +39,7 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     await download('First.7z', '[General]\nmodID=111\nfileID=222\nversion=2.0\nfileCategory=3\n');
     await download('Second.7z', '[General]\nmodID=333\nfileID=444\n');
 
-    await write('First.7z', 'Second.7z');
+    await write({ name: 'First.7z', version: '2.0' }, 'Second.7z');
 
     const text = await meta();
     expect(text).toContain('installationFile=First.7z');
@@ -52,8 +53,17 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     expect(text).toContain('size=2');
   });
 
-  it('keeps each value the packages do not know, and every key it does not own', async () => {
-    await download('Bare.7z', '[General]\n');
+  it.each([
+    ['the newest of the packages', ['1.5', '2.0', '1.0'], 'version=2.0'],
+    ['the only one a package names', [undefined, '1.5'], 'version=1.5'],
+  ])('writes %s as the mod\'s version', async (_, versions, expected) => {
+    await write(...versions.map((version, at) => ({ name: `P${at}.7z`, ...version === undefined ? {} : { version } })));
+
+    expect(await meta()).toContain(expected);
+  });
+
+  it('keeps the version the mod carried when no package names one, and every key it does not own', async () => {
+    await download('Bare.7z', '[General]\nversion=9.9\n');
 
     await write('Bare.7z');
 

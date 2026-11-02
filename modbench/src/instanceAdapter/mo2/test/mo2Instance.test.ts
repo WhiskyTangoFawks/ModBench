@@ -2107,6 +2107,12 @@ describe('the MO2 Instance adapter', () => {
         expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' }] });
       });
 
+      it('gives a file the version its metadata names', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\nversion=1.2.3\r\n');
+
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ version: '1.2.3' }] });
+      });
+
       it('says which game a file comes from when the registry has no Nexus domain for it, and names no page', async () => {
         await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=EnderalSE\r\nmodID=7\r\n');
 

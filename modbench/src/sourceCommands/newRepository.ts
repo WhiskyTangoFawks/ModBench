@@ -15,7 +15,7 @@ import { isPluginAtRoot } from '../tables/pluginFile';
 import { heldManifestIn } from './heldManifest';
 import { gameFilesOf, gameHeld, gameToHand, NONE_HELD, type GameToHand } from './gameFolderFacts';
 import { sourceFolderRestoredFrom, type FolderRestoreAdapter, type RestoreDeps } from './restoreFromManifest';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, hostedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
@@ -91,7 +91,7 @@ export async function newRepositoryOf(
   const read = await modRead(adapter, mod, game);
   if ('refusal' in read) return read;
   const { sourceFolder, folder, held } = read;
-  const installationFile = read.installationFile === undefined ? undefined : hostedBy(read.installationFile, await downloadedRow(adapter, read.installationFile));
+  const installationFile = read.installationFile === undefined ? undefined : describedBy(read.installationFile, await downloadedRow(adapter, read.installationFile));
   const ignore = held?.ignore ?? [];
   const all = await hashed(adapter, folder, notMetadata(adapter, await adapter.filesIn(folder)).filter((path) => !isUnderAny(ignore, path)));
   if ('refusal' in all) return all;

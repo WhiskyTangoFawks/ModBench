@@ -97,7 +97,7 @@ describe('restore from manifest', () => {
     expect(writes(fake.calls)).toEqual([
       { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'b.nif', from: entry('b.nif') }, { path: 'c.nif', from: entry('Data/c.nif') }] },
       { verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'mine.txt' },
-      { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] },
+      { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA.7z' }] },
     ]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['b.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], refused: [] });
   });
@@ -111,7 +111,7 @@ describe('restore from manifest', () => {
 
     const outcome = await restore(['ModA']);
 
-    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] }]);
+    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA.7z' }] }]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: [], namedByNoLine: [] }], refused: [] });
   });
 
@@ -124,7 +124,19 @@ describe('restore from manifest', () => {
 
     await restore(['ModA']);
 
-    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA-patch.7z', 'ModA.7z'] }]);
+    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA-patch.7z' }, { name: 'ModA.7z' }] }]);
+  });
+
+  it('hands the metadata the version each installation file of the manifest names', async () => {
+    const second = { ...MOD_7Z, name: 'ModA-patch.7z' };
+    const { restore, fake } = await over({
+      files: { ModA: { 'a.nif': HA } }, manifests: { ModA: fromTheZip({ 'a.nif': HA }, { packages: [{ ...MOD_7Z, packageVersion: '1.0' }, second] }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)], ['ModA-patch.7z', read({ ...DOWNLOADED, path: '/downloads/ModA-patch.7z' })]]) },
+    });
+
+    await restore(['ModA']);
+
+    expect(writes(fake.calls)).toEqual([{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA-patch.7z' }, { name: 'ModA.7z', version: '1.0' }] }]);
   });
 
   it('refuses a mod whose metadata could not be written, as not finished', async () => {
@@ -147,7 +159,7 @@ describe('restore from manifest', () => {
     expect(writes(fake.calls)).toEqual([
       { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'b.nif.mohidden', from: { kind: 'entry', downloadedFile: '/downloads/ModA.7z', entry: 'b.nif' } }] },
       { verb: 'trashFileIn', folder: folderOf('ModA'), relativePath: 'b.nif' },
-      { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: ['ModA.7z'] },
+      { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA.7z' }] },
     ]);
   });
 

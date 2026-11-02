@@ -479,7 +479,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     const adapter = adapterOver(root, { installationFileReader: fakeInstallationFileReader(['Mod.esp', ...ASSETS]) });
     expect(await adapter.install({ kind: 'archive', path: join(root, 'downloads', 'Mod.7z') }, { kind: 'new', name: 'Mod' }, (path) => rm(path)))
       .toEqual({ landed: true });
-    await adapter.writeInstalledFrom(join(root, 'mods', 'Mod'), ['Mod.7z'], (path) => rm(path));
+    await adapter.writeInstalledFrom(join(root, 'mods', 'Mod'), [{ name: 'Mod.7z' }], (path) => rm(path));
     if (ignore.length > 0) await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore, flags: new Map(), files: new Map() });
     for (const path of ignore) await put(`mods/Mod/${path}`, 'the game wrote this');
     const client = new InMemoryMEditClient();

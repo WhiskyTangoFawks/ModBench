@@ -42,9 +42,9 @@ export function nexusFileOf(adapter: Pick<InstanceAdapter, 'nexusFileAt'>): (pag
 
 const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-/** The installation file with the host its downloaded file's own metadata gives, none when that gives none, never the mod's. */
-export const hostedBy = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page' | 'directUrl'> | undefined): InstallationFile => ({
-  ...file, page: downloaded?.page, directUrl: downloaded?.directUrl,
+/** The installation file with the host and version its downloaded file's own metadata gives, none when that gives none, never the mod's. */
+export const describedBy = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page' | 'directUrl' | 'version'> | undefined): InstallationFile => ({
+  ...file, page: downloaded?.page, directUrl: downloaded?.directUrl, version: downloaded?.version,
 });
 
 const isId = (id: number): boolean => Number.isInteger(id) && id >= 1;
@@ -54,7 +54,7 @@ export const downloadedFileOf = (file: InstallationFile, nexusFileOf: (page: str
   const named = file.page === undefined ? undefined : nexusFileOf(file.page);
   const nexus = named !== undefined && isId(named.mod) && isId(named.file) ? named : undefined;
   const host = nexus !== undefined ? { nexus } : file.directUrl !== undefined && isAddress(file.directUrl) ? { url: file.directUrl } : undefined;
-  return { file, package: { kind: 'installationFile', name: basename(file.path), size: file.size, hash: file.hash, ...host === undefined ? {} : { host } } };
+  return { file, package: { kind: 'installationFile', name: basename(file.path), ...file.version ? { packageVersion: file.version } : {}, size: file.size, hash: file.hash, ...host === undefined ? {} : { host } } };
 };
 
 /** One per file name, the first by hash. */

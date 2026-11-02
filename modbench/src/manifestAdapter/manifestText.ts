@@ -20,9 +20,9 @@ const nameOf = (pkg: ManifestPackage): string => ('name' in pkg ? pkg.name : '')
 const packageObject = (pkg: ManifestPackage): object => {
   switch (pkg.kind) {
     case 'installationFile': {
-      const { name, size, hash, host } = pkg;
+      const { name, packageVersion, size, hash, host } = pkg;
       const hosted = host === undefined ? undefined : 'url' in host ? { url: host.url } : { nexus: { game: host.nexus.game, mod: host.nexus.mod, file: host.nexus.file } };
-      return { kind: pkg.kind, name, size, hash, ...hosted === undefined ? {} : { host: hosted } };
+      return { kind: pkg.kind, name, ...packageVersion === undefined ? {} : { packageVersion }, size, hash, ...hosted === undefined ? {} : { host: hosted } };
     }
     case 'gameFolder': {
       const steam = pkg.host?.steam;

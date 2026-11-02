@@ -40,26 +40,29 @@ const exactly = (members: Json, keys: readonly string[], where: string): void =>
 };
 
 function installationFileOf(members: Json, where: string, part: string): ManifestPackage {
-  known(members, part, ['kind', 'name', 'size', 'hash', 'host']);
+  known(members, part, ['kind', 'name', 'packageVersion', 'size', 'hash', 'host']);
   const name = textOf(FILE, required(FILE, members, 'name', where), where);
   if (name === '') throw at(where);
+  const packageVersion = Object.hasOwn(members, 'packageVersion') ? textOf(FILE, members.packageVersion, where) : undefined;
+  if (packageVersion === '') throw at(where);
   const size = countOf(required(FILE, members, 'size', where), 0, where);
   const hash = matching(required(FILE, members, 'hash', where), HASH, where);
-  if (!Object.hasOwn(members, 'host')) return { kind: 'installationFile', name, size, hash };
+  const file = { kind: 'installationFile' as const, name, ...packageVersion === undefined ? {} : { packageVersion }, size, hash };
+  if (!Object.hasOwn(members, 'host')) return file;
   if (isObject(members.host) && Object.hasOwn(members.host, 'url')) {
     if (Object.keys(members.host).length !== 1) throw at(where);
     const url = textOf(FILE, members.host.url, where);
     if (!isAddress(url)) throw at(where);
-    return { kind: 'installationFile', name, size, hash, host: { url } };
+    return { ...file, host: { url } };
   }
   const nexus = hostOf(members.host, 'nexus', where);
   exactly(nexus, ['game', 'mod', 'file'], where);
-  const file = {
+  const nexusFile = {
     game: matching(required(FILE, nexus, 'game', where), NEXUS_GAME, where),
     mod: countOf(required(FILE, nexus, 'mod', where), 1, where),
     file: countOf(required(FILE, nexus, 'file', where), 1, where),
   };
-  return { kind: 'installationFile', name, size, hash, host: { nexus: file } };
+  return { ...file, host: { nexus: nexusFile } };
 }
 
 function gameFolderOf(members: Json, where: string, part: string): ManifestPackage {

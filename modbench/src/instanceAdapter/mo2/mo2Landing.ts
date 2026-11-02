@@ -2,6 +2,7 @@
 // contents. An upgrade keeps its folder, so every watcher armed on it survives the release.
 
 import { dirname } from 'node:path';
+import { newestVersion } from './codecs/versionInfo';
 import { effectiveModId } from './codecs/nexusFileName';
 import { type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../fileContents/installationFileReader';
@@ -155,15 +156,15 @@ export function mo2Landing(
 
   return {
     writeInstalledFrom: async (folder, packages, trash) => {
-      const [installationFileName] = packages;
+      const [{ name: installationFileName } = { name: undefined }] = packages;
       if (installationFileName === undefined) return;
       const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
       const downloaded = listed.kind === 'listed' ? listed.files ?? [] : [];
-      const metas = packages.map((name) => downloaded.find((file) => file.name === name)?.meta);
+      const metas = packages.map(({ name }) => downloaded.find((file) => file.name === name)?.meta);
       const [first] = metas;
       const installedFileKeys = metas.flatMap((meta) => meta?.installedKey ?? []);
       const keys = metaIniOf({
-        nexusId: effectiveModId(first?.modID, installationFileName), version: first?.version, installationFileName,
+        nexusId: effectiveModId(first?.modID, installationFileName), version: newestVersion(packages.flatMap(({ version }) => version ?? [])), installationFileName,
         nexusFileStatus: first?.fileCategory, installedFileKeys: installedFileKeys.length === 0 ? undefined : installedFileKeys,
       });
       const carried = await get(modMetaFileIn(folder), '');
