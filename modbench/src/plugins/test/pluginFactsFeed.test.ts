@@ -140,6 +140,17 @@ describe('PluginFactsFeed', () => {
     expect([feed.rows.icon(A), feed.rows.description(A), feed.rows.tooltipLines(A).at(-1)]).toEqual([undefined, undefined, 'Info: Read the page.']);
   });
 
+  it('judges a group order within the master flag\'s partitions: an ungrouped master loading after a plugin of a later group is not broken', async () => {
+    const rules = rulesOf(filesWith('groups:\n  - name: default\n  - {name: fixes, after: [default]}\nplugins:\n  - {name: A.esp, group: fixes}\n'));
+    const master = { name: 'M.esm', origin: 'SomeMod' };
+    const { feed, client, sortingInfo } = feedOver({ shownPlugins: () => [A, master], activePlugins: () => [A, master], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held(), held({ name: 'M.esm', isMaster: true })]);
+
+    await feed.reconciled([]);
+
+    expect(sortingInfo.items.flat()).toEqual([]);
+  });
+
   it('publishes a rule the userlist states on its line in the userlist', async () => {
     const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n'), ['B.esp']);
     const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules });

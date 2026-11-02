@@ -165,4 +165,86 @@ describe('rulesReader', () => {
 
     expect([read(filesOf({ userlist: text('plugins: []\n') })) === first, read(filesOf({ userlist: text('plugins:\n  - name: A.esp\n') })) === first]).toEqual([true, false]);
   });
+
+  it('reads a plugin\'s group and the groups, each with the line of each group it loads after', () => {
+    const { entries, groups, problems } = readRules(filesOf({ masterlist: text(`groups:
+  - name: default
+  - name: early
+  - name: late
+    after: [default, early]
+plugins:
+  - name: A.esp
+    group: late
+`) }));
+
+    expect(problems).toEqual([]);
+    expect(entries).toEqual([expect.objectContaining({ group: { name: 'late', source: { file: 'masterlist', line: 7 } } })]);
+    expect(groups).toEqual([
+      { name: 'default', after: [] },
+      { name: 'early', after: [] },
+      { name: 'late', after: [{ name: 'default', source: { file: 'masterlist', line: 4 } }, { name: 'early', source: { file: 'masterlist', line: 4 } }] },
+    ]);
+  });
+
+  it('reports an after item that is not a name, on its line, and reads no edge for it', () => {
+    const { groups, problems } = readRules(filesOf({ masterlist: text('groups:\n  - name: default\n  - name: late\n    after: [default, {x: 1}]\n') }));
+
+    expect(problems).toEqual([{ file: 'masterlist', line: 3, text: 'An entry of "after" is not a name.' }]);
+    expect(groups.flatMap(({ after }) => after.map(({ name }) => name))).toEqual(['default']);
+  });
+
+  it('reports a group item that is no mapping, on its line', () => {
+    expect(readRules(filesOf({ masterlist: text('groups:\n  - late\n') })).problems).toEqual([{ file: 'masterlist', line: 1, text: 'A group is not a mapping.' }]);
+  });
+
+  it('reports an after naming a group no file declares, in the file and on the line that states it, and reads no edge for it', () => {
+    const { groups, problems } = readRules(filesOf({
+      masterlist: text('groups:\n  - name: late\n    after: [ghost]\n'),
+      userlist: text('groups:\n  - name: late\n    after: [phantom]\n'),
+    }));
+
+    expect(problems).toEqual([
+      { file: 'userlist', line: 2, text: 'The group "late" loads after "phantom", which no file declares.' },
+      { file: 'masterlist', line: 2, text: 'The group "late" loads after "ghost", which no file declares.' },
+    ]);
+    expect(groups.flatMap(({ after }) => after)).toEqual([]);
+  });
+
+  it('declares the default group whatever the files hold, and a group the other file declares', () => {
+    const { problems } = readRules(filesOf({
+      masterlist: text('groups:\n  - name: late\n'),
+      userlist: text('groups:\n  - name: early\n    after: [default, late]\n'),
+    }));
+
+    expect(problems).toEqual([]);
+  });
+
+  it('reports a plugin whose group no file declares, on the line of its group', () => {
+    const { problems } = readRules(filesOf({ masterlist: text('plugins:\n  - name: A.esp\n    group: ghost\n') }));
+
+    expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'This plugin belongs to the group "ghost", which does not exist.' }]);
+  });
+
+  it('reports groups that load after each other in a cycle, naming it on the line that closes it, and reads no edge of the cycle', () => {
+    const { groups, problems } = readRules(filesOf({ masterlist: text('groups:\n  - {name: a, after: [b]}\n  - {name: b, after: [a]}\n  - {name: c, after: [a]}\n') }));
+
+    expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'The groups load after each other in a cycle: a after b after a.' }]);
+    expect(groups.map(({ name, after }) => [name, after.map((step) => step.name)])).toEqual([['a', []], ['b', []], ['c', ['a']]]);
+  });
+
+  it('reports a plugin group that is not a name, on its line', () => {
+    const { entries, problems } = readRules(filesOf({ masterlist: text('plugins:\n  - name: A.esp\n    group: [late]\n') }));
+
+    expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'A plugin\'s group is not a name.' }]);
+    expect(entries[0]?.group).toBeUndefined();
+  });
+
+  it('reads a group the two files state once, its userlist afters first', () => {
+    const { groups } = readRules(filesOf({
+      masterlist: text('groups:\n  - {name: early}\n  - {name: aside}\n  - {name: late, after: [early]}\n'),
+      userlist: text('groups:\n  - {name: late, after: [aside]}\n'),
+    }));
+
+    expect(groups.filter(({ name }) => name === 'late').map(({ after }) => after.map((step) => step.name))).toEqual([['aside', 'early']]);
+  });
 });
