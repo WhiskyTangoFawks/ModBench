@@ -131,7 +131,6 @@ internal sealed class SourceModBuild
         return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome([], [], refused, null) { Made = MadeOf(made), Packed = takenOut, Ignored = ignored });
     }
 
-    // An archive that cannot give every file it is asked for writes none of them.
     private ItemAnswer<BuildRefusal, ModBuildOutcome> Unpacked(
         ModToBuild mod, IReadOnlyList<ArchiveToUnpack> archives, GameRelease release, FolderWrite written)
     {

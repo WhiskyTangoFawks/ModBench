@@ -289,6 +289,16 @@ describe('sourceCommands build, in mod order', () => {
     });
   });
 
+  it.each([['pack', {}], ['unpack', { unpacking: true }]] as const)('marks an archive a %s step refused by the step that refused it', async (kind, marked) => {
+    await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind, archives: [{ path: 'Base.ba2', files: ['a.nif'] }] }] }));
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), archivesRefused: [{ item: 'Base.ba2', reason: 'it cannot be read' }] }], refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect(outcome.landed[0]?.archivesRefused).toEqual([{ item: 'Base.ba2', reason: 'it cannot be read', ...marked }]);
+  });
+
   it('sends each loose file a pack step packed to the trash (source.md, Build, stories 2 and 20)', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'pack', archives: [{ path: 'ModA.ba2', files: ['textures/a.dds'] }] }] }));
     const client = new InMemoryMEditClient();

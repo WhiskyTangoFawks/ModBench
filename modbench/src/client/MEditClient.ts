@@ -168,7 +168,7 @@ export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
 // The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
 type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed' | 'packed' | 'replaced' | 'ignored'> & {
   refused: readonly ItemRefusal<PluginAddress>[];
-  archivesRefused: readonly ItemRefusal<string>[];
+  archivesRefused: readonly (ItemRefusal<string> & { readonly unpacking?: true })[];
   packed?: readonly string[];
   replaced?: readonly string[];
   ignored?: readonly string[];

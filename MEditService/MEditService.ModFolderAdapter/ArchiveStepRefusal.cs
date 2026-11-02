@@ -23,6 +23,9 @@ public enum ArchiveRefusal
     /// <summary>A file an unpack takes is not an entry of the archive.</summary>
     FileNotInArchive,
 
+    /// <summary>Two entries of the archive differ only in case, so a file an unpack takes names neither alone.</summary>
+    EntriesAmbiguous,
+
     /// <summary>A texture an unpack takes is a cubemap, whose flag Mutagen's extraction drops.</summary>
     CubemapNotUnpackable,
 }

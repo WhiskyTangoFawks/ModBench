@@ -11,6 +11,13 @@ public sealed record Dds(byte[] File, byte[] Pixels)
 
     public static Dds Dxt1(int width, int height, int mips) => Of(width, height, mips, "DXT1", dxgi: null, blockBytes: 8);
 
+    public static Dds CubemapDxt1(int width, int height)
+    {
+        var cubemap = Dxt1(width, height, 1);
+        Put(cubemap.File, 112, 0x200);
+        return cubemap;
+    }
+
     public static Dds Bc7(int width, int height) => Of(width, height, 1, "DX10", dxgi: 98, blockBytes: 16);
 
     private static Dds Of(int width, int height, int mips, string fourCc, uint? dxgi, int blockBytes)

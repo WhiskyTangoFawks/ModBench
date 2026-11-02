@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using ModFolder = MEditService.ModFolderAdapter;
 using static MEditService.Http.Tests.TestSupport.Wire;
 
 namespace MEditService.Http.Tests.Traces;
@@ -101,7 +102,25 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
     }
 
-    private const string Copy = "\"step\": {\"copy\": [\"a.nif\"]}";
+    [Fact]
+    public async Task BuildingAModWithAnArchiveToUnpack_WritesTheFileFromTheArchiveOfItsSourceFolderIntoItsFolder()
+    {
+        await LoadedWithOneModFolderAndCompiledPlugin();
+        var refusal = new ModFolder.ArchivePacker(new ModFolder.ModFolderRepository()).Pack(
+            Client.SourceFolderSentFor(Origin), "Base.ba2", [new ModFolder.ArchiveFile("meshes/a.nif", () => new MemoryStream("mesh"u8.ToArray()))],
+            new ModFolder.Ba2Variant(1, ModFolder.Ba2Contents.General, Compressed: false));
+        Assert.Null(refusal);
+
+        var answer = await Answer(await Client.Build(
+            [(Origin, _builtFolder)], new { unpack = new[] { new { path = "Base.ba2", files = new[] { "meshes/a.nif" } } } }));
+
+        var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
+        Assert.Empty(built.GetProperty("archivesRefused").EnumerateArray());
+        Assert.Equal(["meshes/a.nif"], built.GetProperty("made").EnumerateArray().Select(file => file.GetProperty("path").GetString()));
+        Assert.Equal("mesh", File.ReadAllText(Path.Combine(_builtFolder, "meshes", "a.nif")));
+    }
+
+    private const string Copy ="\"step\": {\"copy\": [\"a.nif\"]}";
 
     private static string UnpackStep(string step) =>
         $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {{{step}}}}}], \"exclusionMark\": \".mohidden\"}}";

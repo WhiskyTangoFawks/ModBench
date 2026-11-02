@@ -12,13 +12,12 @@ public static class ArchiveUnpacker
         unpacked = [];
         try
         {
-            var cubemaps = Ba2Layout.In(archiveAt);
-            var cube = files.Where(file => cubemaps.Contains(file)).ToList();
+            var layout = Ba2Layout.Read(archiveAt);
+            var cube = files.Where(file => layout.Cubemaps.Contains(file)).ToList();
             if (cube.Count > 0)
                 return new ArchiveStepRefusal(ArchiveRefusal.CubemapNotUnpackable, $"{string.Join(" and ", cube.Select(file => $"'{file}'"))} is a cubemap, and Mutagen's extraction drops its cubemap flag.");
-
-            if (Ba2Layout.WhyMutagenMisreads(archiveAt) is { } misread)
-                return new ArchiveStepRefusal(ArchiveRefusal.ArchiveUnreadable, $"'{archiveAt}' could not be read: {misread}.");
+            if (layout.Refusal is { } notRead)
+                return notRead with { Message = $"'{archiveAt}' could not be read: {notRead.Message}." };
 
             var entries = Archive.CreateReader(release, archiveAt).Files
                 .ToLookup(entry => entry.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
@@ -26,9 +25,12 @@ public static class ArchiveUnpacker
             if (missing.Count > 0)
                 return new ArchiveStepRefusal(ArchiveRefusal.FileNotInArchive, $"'{archiveAt}' holds no {string.Join(" or ", missing.Select(file => $"'{file}'"))}.");
 
+            var ambiguous = files.Select(file => entries[file].ToList()).FirstOrDefault(named => named.Count > 1);
+            if (ambiguous is not null)
+                return new ArchiveStepRefusal(ArchiveRefusal.EntriesAmbiguous, $"'{archiveAt}' holds {string.Join(" and ", ambiguous.Select(entry => $"'{entry.Path}'"))}, which are one file without regard to case.");
+
             // Mutagen's AsStream throws on a compressed general BA2 entry.
-            var read = files.Select(file => new ArchiveFile(file, MemoryOf(entries[file].First().GetBytes()))).ToList();
-            unpacked = read;
+            unpacked = [.. files.Select(file => new ArchiveFile(file, MemoryOf(entries[file].Single().GetBytes())))];
             return null;
         }
         catch (Exception e) when (e is not (OperationCanceledException or OutOfMemoryException))

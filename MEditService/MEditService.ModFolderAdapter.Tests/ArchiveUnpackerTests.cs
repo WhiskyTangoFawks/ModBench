@@ -41,13 +41,6 @@ public sealed class ArchiveUnpackerTests : IDisposable
         return whole.ToArray();
     }
 
-    private static byte[] Cubemap()
-    {
-        var cube = Dds.Dxt1(8, 8, 1).File;
-        BinaryPrimitives.WriteUInt32LittleEndian(cube.AsSpan(112), 0x200);
-        return cube;
-    }
-
     private static IReadOnlyList<ArchiveFile> Unpacked(GameRelease release, string archive, params string[] files)
     {
         Assert.Null(ArchiveUnpacker.Unpack(release, archive, files, out var unpacked));
@@ -110,27 +103,14 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Fact]
-    public void ACubemapTexture_RefusesTheArchiveNamingIt()
+    public void TwoEntriesThatNameOneFileWithoutRegardToCase_RefuseTheArchiveNamingBoth()
     {
-        With("textures/sky.dds", Cubemap()).With("textures/flat.dds", Dds.Dxt1(8, 8, 1).File);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: false), "textures/flat.dds", "textures/sky.dds");
+        With("Meshes/A.nif", Mesh).With("meshes/a.nif", Script);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: false), "Meshes/A.nif", "meshes/a.nif");
 
-        var refusal = Refused(GameRelease.Fallout4, archive, "textures/flat.dds", "textures/sky.dds");
+        var refusal = Refused(GameRelease.Fallout4, archive, "meshes/a.nif");
 
-        Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
-        Assert.Contains("textures/sky.dds", refusal.Message);
-        Assert.DoesNotContain("textures/flat.dds", refusal.Message);
-    }
-
-    [Fact]
-    public void AFlatTextureBesideACubemap_UnpacksWhenOnlyItIsAskedFor()
-    {
-        With("textures/sky.dds", Cubemap()).With("textures/flat.dds", Dds.Dxt1(8, 8, 1).File);
-        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: false), "textures/flat.dds", "textures/sky.dds");
-
-        var files = Unpacked(GameRelease.Fallout4, archive, "textures/flat.dds");
-
-        Assert.Single(files);
+        Assert.Equal(ArchiveRefusal.EntriesAmbiguous, refusal.Reason);
     }
 
     [Fact]

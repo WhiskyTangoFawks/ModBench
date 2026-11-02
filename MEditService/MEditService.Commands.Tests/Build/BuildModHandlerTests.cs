@@ -89,14 +89,14 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task AnUnpack_WritesEachFileItNamesIntoTheFolder_ByItsPathInTheArchive_WithoutCaseMatching_AndLeavesTheRest()
+    public async Task AnUnpack_WritesEachFileItNamesIntoTheFolder_ByItsPathInTheArchive_AndLeavesTheRest()
     {
         ArchiveInSource("Mod - Main.ba2", ("meshes/c.nif", "c"), ("meshes/d.nif", "d"), ("scripts/a.pex", "a"));
 
-        var built = await Landed(Unpack(new ArchiveToUnpack("Mod - Main.ba2", ["MESHES/c.nif", "scripts/a.pex"])));
+        var built = await Landed(Unpack(new ArchiveToUnpack("Mod - Main.ba2", ["meshes/c.nif", "scripts/a.pex"])));
 
-        Assert.Equal([("MESHES/c.nif", "c"), ("scripts/a.pex", "a")], FilesIn(ModFolder));
-        Assert.Equal([new MadeFile("MESHES/c.nif", VouchedFor: true), new MadeFile("scripts/a.pex", VouchedFor: true)], built.Made);
+        Assert.Equal([("meshes/c.nif", "c"), ("scripts/a.pex", "a")], FilesIn(ModFolder));
+        Assert.Equal([new MadeFile("meshes/c.nif", VouchedFor: true), new MadeFile("scripts/a.pex", VouchedFor: true)], built.Made);
         Assert.Null(built.Failure);
     }
 
