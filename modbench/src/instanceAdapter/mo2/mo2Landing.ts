@@ -13,7 +13,7 @@ import { isManifestPath } from '../../repositoriesLib/manifestPath';
 import { modMetaFileIn, modsDir, stagingPrefix } from './layout';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
+import { folderHolding, metaGameOfInstance, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from '../instanceReading';
 import { releaseRoot } from '../gameFolder/releaseRoot';
 import { fomodLanding, type FomodEngine } from '../fomodInstaller/fomodInstaller';
@@ -168,11 +168,11 @@ export function mo2Landing(
         nexusFileStatus: first?.fileCategory, installedFileKeys: installedFileKeys.length === 0 ? undefined : installedFileKeys,
       });
       const carried = await get(modMetaFileIn(folder), '');
-      const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), (await source.settings()).gameName));
+      const metaText = setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried), await metaGameOfInstance(context)));
       if (metaText !== carried) await writeTrashing(modMetaFileIn(folder), metaText, trash);
     },
     install: async (installed, target, trash, answer) => {
-      const { gameName } = await source.settings();
+      const gameName = await metaGameOfInstance(context);
       const claimed = await claim(target);
       if (claimed === undefined) return { landed: false };
       try {

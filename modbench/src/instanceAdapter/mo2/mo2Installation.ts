@@ -3,7 +3,7 @@
 import { entryNamed } from './codecs/modlistText';
 import { stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute } from 'node:path';
-import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/gamePaths';
+import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, ignoreSkippedLink, readOrReason, withLock, write, writeTrashing } from '../files';
@@ -14,7 +14,7 @@ import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata, NexusMod
 import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
 import { parseDownloadedFileMeta } from './codecs/downloads';
 import { effectiveModId } from './codecs/nexusFileName';
-import { currentDownloadsDir, folderHolding, newModFolder, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, folderHolding, newModFolder, metaGameOfDomainIfAny, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
 import { downloadedFileNames, readMetaIni } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
 
@@ -56,17 +56,12 @@ async function factsOfDownloadedFile(context: Mo2Context, downloadsDir: string, 
   }
 }
 
-async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promise<string | undefined> {
-  const instanceGame = readGameName(await get(settingsFile(instanceRoot)));
-  return nexusDomainForMetaGame(instanceGame) === domain ? instanceGame : gameReleaseForNexusDomain(domain);
-}
-
 type MetadataPlan = { readonly unwritable: string } | { readonly file: string; readonly held: string; readonly changes: Partial<OwnedMetaKeys> };
 
 async function pageChanges(carried: MetaIni, page: string, context: Mo2Context): Promise<Partial<OwnedMetaKeys> | { readonly unwritable: string }> {
   const nexus = parseNexusPage(page);
   if (nexus === undefined) return { unwritable: `its page '${page}' is not a Nexus page, the only host MO2's metadata holds` };
-  const gameName = await metaGameFor(nexus.game, context);
+  const gameName = await metaGameOfDomainIfAny(context, nexus.game);
   if (gameName === undefined) return { unwritable: `its page names the Nexus game '${nexus.game}', which Modbench has no game for` };
   const carriedFile = installedFileOf(carried);
   const sameFile = nexus.fileId === undefined ? carriedFile === undefined : carriedFile?.fileId === nexus.fileId && carriedFile.nexusId === nexus.modId;

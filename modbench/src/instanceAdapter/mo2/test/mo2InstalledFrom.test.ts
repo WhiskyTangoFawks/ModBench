@@ -73,6 +73,14 @@ describe('writing a mod\'s metadata from its packages through the MO2 Instance a
     expect(text).toContain('installationFile=Bare.7z');
   });
 
+  it('writes MO2\'s short name for the instance game into a mod that carries none', async () => {
+    await writeFile(join(modFolder(), 'meta.ini'), '[General]\nversion=1.0\n');
+
+    await write('Gone.7z');
+
+    expect(await meta()).toContain('gameName=Fallout4\n');
+  });
+
   it('names a package outside the downloads folder and records no host for it', async () => {
     await write('Gone.7z');
 

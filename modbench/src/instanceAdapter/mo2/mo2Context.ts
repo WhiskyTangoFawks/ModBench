@@ -43,10 +43,23 @@ export async function nexusDomainsOfInstance(context: Mo2Context): Promise<strin
   return domains;
 }
 
-/** The game a downloaded file's metadata names for Nexus's `domain`: the instance's game when it is on that domain; rejects when no game is. */
-export async function metaGameOfDomain(context: Mo2Context, domain: string): Promise<string> {
+/** The game a mod's or a downloaded file's metadata names for the instance's own game: MO2's short name for it. */
+export async function metaGameOfInstance(context: Mo2Context): Promise<string> {
+  const gameName = await instanceGameName(context);
+  const release = gameReleaseForGame(gameName);
+  if (release === undefined) throw new Error(`Modbench has no game for '${gameName}'`);
+  return release;
+}
+
+/** The game metadata names for Nexus's `domain`: the instance's game when it is on that domain; `undefined` when no game is. */
+export async function metaGameOfDomainIfAny(context: Mo2Context, domain: string): Promise<string | undefined> {
   const release = gameReleaseForGame(await instanceGameName(context));
-  const game = release !== undefined && nexusDomainForMetaGame(release) === domain ? release : shortNameForNexusDomain(domain);
+  return release !== undefined && nexusDomainForMetaGame(release) === domain ? release : shortNameForNexusDomain(domain);
+}
+
+/** The game a downloaded file's metadata names for Nexus's `domain`; rejects when no game is. */
+export async function metaGameOfDomain(context: Mo2Context, domain: string): Promise<string> {
+  const game = await metaGameOfDomainIfAny(context, domain);
   if (game === undefined) throw new Error(`Modbench has no game for the Nexus game '${domain}'`);
   return game;
 }
