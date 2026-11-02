@@ -7,7 +7,6 @@ import type { ManifestAt } from './manifestFiles';
 import type { ModAt } from './modStatus';
 import type { Manifest } from './manifest';
 
-/** A plugin's bytes with some of its flags flipped: the values those flags then hold, and the hash of the bytes. */
 interface FlagVariant {
   readonly flags: Readonly<Record<string, boolean>>;
   readonly hash: string;
