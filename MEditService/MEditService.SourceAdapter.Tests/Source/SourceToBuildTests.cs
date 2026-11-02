@@ -42,7 +42,7 @@ public sealed class SourceToBuildTests : IDisposable
 
         var failure = TestAdapters.Source().SourceToBuild(_sourceFolder, ["textures"]).Stopped();
 
-        Assert.Equal($"'{_sourceFolder}' holds no 'textures' to copy.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
+        Assert.Equal($"'{_sourceFolder}' holds no 'textures' to build from.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
     }
 
     [Theory]

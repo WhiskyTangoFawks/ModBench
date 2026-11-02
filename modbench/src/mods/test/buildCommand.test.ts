@@ -303,5 +303,13 @@ describe('modbench.mod.build', () => {
       ] });
       expect(reporter.reports).toEqual([]);
     });
+
+    it('names an archive an unpack refused as unpacked, not packed', async () => {
+      const { handler } = registered({ landed: [{ ...built('ModA', [], []), archivesRefused: [{ item: 'Base.ba2', reason: 'it holds a cubemap', unpacking: true }] }], refused: [] });
+
+      const answered = await handler(calling('ModA'));
+
+      expect(answered).toMatchObject({ applied: true, partial: [{ message: 'Could not unpack "Base.ba2" in "ModA".', detail: 'it holds a cubemap', severity: 'log' }] });
+    });
   });
 });

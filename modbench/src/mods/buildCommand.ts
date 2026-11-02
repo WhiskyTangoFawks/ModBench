@@ -166,7 +166,7 @@ function namedBuilt(mods: readonly { mod: string }[], message: { one: string; ma
 function refusedInMods(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ mod, refused, archivesRefused }) => [
     ...refused.map(({ item, reason }) => ({ message: `Could not build "${pluginRowName(item)}" in "${mod}".`, detail: reason, severity: 'log' as const })),
-    ...archivesRefused.map(({ item, reason }) => ({ message: `Could not pack "${item}" in "${mod}".`, detail: reason, severity: 'log' as const })),
+    ...archivesRefused.map(({ item, reason, unpacking }) => ({ message: `Could not ${unpacking === true ? 'unpack' : 'pack'} "${item}" in "${mod}".`, detail: reason, severity: 'log' as const })),
   ]);
 }
 

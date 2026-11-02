@@ -31,10 +31,16 @@ public abstract record BuildStep
 
     /// <summary>Each archive packed from the loose files of the mod's folder.</summary>
     public sealed record Pack(IReadOnlyList<ArchiveToPack> Archives) : BuildStep;
+
+    /// <summary>Each archive in the source folder unpacked into the mod's folder, a file at a time.</summary>
+    public sealed record Unpack(IReadOnlyList<ArchiveToUnpack> Archives) : BuildStep;
 }
 
 /// <summary>An archive by its path in the mod folder, and the loose files it packs there.</summary>
 public sealed record ArchiveToPack(string Path, IReadOnlyList<string> Files);
+
+/// <summary>An archive by its path in the source folder, and the files it unpacks, by their paths in the archive and in the mod folder.</summary>
+public sealed record ArchiveToUnpack(string Path, IReadOnlyList<string> Files);
 
 /// <summary>The instance's facts a build needs: the mod manager's exclusion mark, and the archive variants, none when the
 /// per-release table names none.</summary>

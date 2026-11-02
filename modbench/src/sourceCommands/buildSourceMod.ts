@@ -173,7 +173,7 @@ async function stepRan(deps: BuildDeps, mod: SourceModToBuild, step: RunStep, ma
 }
 
 const wireStep = (step: Exclude<BuildStep, RunStep>): BuildMod['step'] =>
-  (step.kind === 'pack' ? { pack: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
+  ('archives' in step ? { [step.kind]: step.archives.map(({ path, files }) => ({ path, files: [...files] })) } : { [step.kind]: [...step.paths] });
 
 type StepBuilt = BuildOutcome['landed'][number];
 
@@ -194,8 +194,9 @@ async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { repl
   return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, replaced ?? []) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packedNotIgnored);
 }
 
-const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt): ModBuilt => ({
-  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused], archivesRefused: [...outcome.archivesRefused, ...archivesRefused],
+const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt, unpacking: boolean): ModBuilt => ({
+  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused],
+  archivesRefused: [...outcome.archivesRefused, ...unpacking ? archivesRefused.map((archive) => ({ ...archive, unpacking: true as const })) : archivesRefused],
   ...ignored === undefined && outcome.ignored === undefined ? {} : { ignored: [...outcome.ignored ?? [], ...ignored ?? []] },
   ...uncommitted === true ? { uncommitted } : {}, ...unpushed === true ? { unpushed } : {},
 });
@@ -226,7 +227,7 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
       return isRefused(built) ? built : refusedAs(mod.name, why);
     }
     for (const { path, vouchedFor } of built.made) made.set(path, vouchedFor ? 'vouched' : 'leftAsItWas');
-    outcome = joined(outcome, built);
+    outcome = joined(outcome, built, step.kind === 'unpack');
     const notTrashed = await whyAsideNotTrashed(deps, mod, built);
     if (notTrashed !== undefined) return ran(`The build stopped at its step ${at + 1}, as ${notTrashed}.`);
     const stopped = whyStoppedAfter(built, at, mod.buildFile.steps.length);

@@ -52,8 +52,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public string FileIn(string sourceFolder, string path) => Path.Combine(sourceFolder, path);
 
-    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied) =>
-        SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder, copied));
+    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> read) =>
+        SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder, read));
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) =>
         SourceFailure.Answer(() => Submodules.CommitAtHead(submodule, cancel));

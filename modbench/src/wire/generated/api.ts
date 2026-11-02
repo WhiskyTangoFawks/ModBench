@@ -918,7 +918,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
+        ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten" | "ArchiveUnreadable" | "FileNotInArchive" | "EntriesAmbiguous" | "CubemapNotUnpackable";
         ArchiveRefused: {
             item: string;
             refusal: components["schemas"]["ArchiveRefusal"];
@@ -978,6 +978,7 @@ export interface components {
             compile?: string[] | null;
             copy?: string[] | null;
             pack?: components["schemas"]["ArchiveRequest"][] | null;
+            unpack?: components["schemas"]["ArchiveRequest"][] | null;
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];

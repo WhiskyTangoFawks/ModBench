@@ -114,23 +114,28 @@ internal sealed record BuildModRequest(
 /// <summary>One built-in step of a build file: exactly one of its members, each naming at least one path.</summary>
 internal sealed record BuildStepRequest(
     IReadOnlyList<string>? Decompile = null, IReadOnlyList<string>? Compile = null, IReadOnlyList<string>? Copy = null,
-    IReadOnlyList<ArchiveRequest>? Pack = null)
+    IReadOnlyList<ArchiveRequest>? Pack = null, IReadOnlyList<ArchiveRequest>? Unpack = null)
 {
     internal const string NotOneStep =
-        "Every mod names one step: a decompile, a compile, a copy or a pack, each of at least one path, each plugin at the root.";
+        "Every mod names one step: a decompile, a compile, a copy, a pack or an unpack, each of at least one path, each plugin at the root.";
 
-    internal BuildStep? ToStep() => (Decompile, Compile, Copy, Pack) switch
+    internal BuildStep? ToStep() => (Decompile, Compile, Copy, Pack, Unpack) switch
     {
-        ([_, ..] decompile, null, null, null) when AtTheRoot(decompile) => new BuildStep.Decompile(decompile),
-        (null, [_, ..] compile, null, null) when AtTheRoot(compile) => new BuildStep.Compile(compile),
-        (null, null, [_, ..] copy, null) => new BuildStep.Copy(copy),
-        (null, null, null, [_, ..] pack) when pack.All(archive => archive.Files is [_, ..]) =>
+        ([_, ..] decompile, null, null, null, null) when AtTheRoot(decompile) => new BuildStep.Decompile(decompile),
+        (null, [_, ..] compile, null, null, null) when AtTheRoot(compile) => new BuildStep.Compile(compile),
+        (null, null, [_, ..] copy, null, null) => new BuildStep.Copy(copy),
+        (null, null, null, [_, ..] pack, null) when pack.All(archive => archive.Files is [_, ..]) =>
             new BuildStep.Pack([.. pack.Select(archive => new ArchiveToPack(archive.Path, archive.Files))]),
+        (null, null, null, null, [_, ..] unpack) when unpack.All(archive => archive.Files is [_, ..]) =>
+            new BuildStep.Unpack([.. unpack.Select(archive => new ArchiveToUnpack(archive.Path, archive.Files))]),
         _ => null,
     };
 
     internal IEnumerable<string?> Paths() =>
-        [.. Decompile ?? [], .. Compile ?? [], .. Copy ?? [], .. (Pack ?? []).SelectMany(archive => (IEnumerable<string?>)[archive.Path, .. archive.Files ?? []])];
+        [.. Decompile ?? [], .. Compile ?? [], .. Copy ?? [], .. ArchivePaths(Pack), .. ArchivePaths(Unpack)];
+
+    private static IEnumerable<string?> ArchivePaths(IReadOnlyList<ArchiveRequest>? archives) =>
+        (archives ?? []).SelectMany(archive => (IEnumerable<string?>)[archive.Path, .. archive.Files ?? []]);
 
     private static bool AtTheRoot(IReadOnlyList<string?> plugins) => plugins.All(plugin => plugin?.Contains('/', StringComparison.Ordinal) == false);
 }

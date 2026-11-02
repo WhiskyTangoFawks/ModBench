@@ -89,6 +89,56 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AnUnpack_WritesEachFileItNamesIntoTheFolder_ByItsPathInTheArchive_AndLeavesTheRest()
+    {
+        ArchiveInSource("Mod - Main.ba2", ("meshes/c.nif", "c"), ("meshes/d.nif", "d"), ("scripts/a.pex", "a"));
+
+        var built = await Landed(Unpack(new ArchiveToUnpack("Mod - Main.ba2", ["meshes/c.nif", "scripts/a.pex"])));
+
+        Assert.Equal([("meshes/c.nif", "c"), ("scripts/a.pex", "a")], FilesIn(ModFolder));
+        Assert.Equal([new MadeFile("meshes/c.nif", VouchedFor: true), new MadeFile("scripts/a.pex", VouchedFor: true)], built.Made);
+        Assert.Null(built.Failure);
+    }
+
+    [Fact]
+    public async Task AnUnpack_LeavesUnwrittenEachFileTheManifestIgnores_AnsweringIt_AndExcludesWhatTheFolderExcludes()
+    {
+        ArchiveInSource("Mod - Main.ba2", ("meshes/c.nif", "c"), ("meshes/d.nif", "d"), ("logs/run.log", "log"));
+        WriteInFolder("logs/run.log", "the game wrote this");
+
+        var built = await Landed(Unpack(new ArchiveToUnpack("Mod - Main.ba2", ["meshes/c.nif", "meshes/d.nif", "logs/run.log"])) with { Ignore = ["logs"], Exclude = ["meshes/d.nif"] });
+
+        Assert.Equal(["logs/run.log"], built.Ignored);
+        Assert.Equal([("logs/run.log", "the game wrote this"), ("meshes/c.nif", "c"), ("meshes/d.nif.excluded", "d")], FilesIn(ModFolder));
+    }
+
+    [Fact]
+    public async Task AnUnpack_WritesNothingOfAnArchiveThatLacksAFile_NamingTheArchiveAsRefused_AndUnpacksTheRest()
+    {
+        ArchiveInSource("Mod - Main.ba2", ("meshes/c.nif", "c"));
+        ArchiveInSource("Mod - Extra.ba2", ("meshes/d.nif", "d"));
+
+        var built = await Landed(Unpack(new ArchiveToUnpack("Mod - Main.ba2", ["meshes/c.nif", "meshes/none.nif"]), new ArchiveToUnpack("Mod - Extra.ba2", ["meshes/d.nif"])));
+
+        var refused = Assert.Single(built.ArchivesRefused);
+        Assert.Equal(("Mod - Main.ba2", ArchiveRefusal.FileNotInArchive), (refused.Item, refused.Refusal));
+        Assert.Equal([("meshes/d.nif", "d")], FilesIn(ModFolder));
+    }
+
+    [Fact]
+    public async Task AnUnpack_RefusesTheModNamingAnArchiveTheSourceFolderLacks_WritingNothing()
+    {
+        WriteSource(("notes.txt", "n"));
+
+        var result = await Build(Unpack(new ArchiveToUnpack("Mod - Main.ba2", ["meshes/c.nif"])));
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(BuildRefusal.SourceUnreadable, refused.Refusal);
+        Assert.Contains("Mod - Main.ba2", refused.Message);
+        Assert.False(Directory.Exists(ModFolder));
+    }
+
+    [Fact]
     public async Task ACompile_LeavesUncompiledAPluginTheManifestIgnores_AnsweringIt()
     {
         await InitializedWithALocalizedPlugin();
@@ -149,7 +199,7 @@ public sealed class BuildModHandlerTests : IDisposable
         var refused = Assert.Single((await Build(Copy("meshes", "textures"))).Refused);
 
         Assert.Equal(
-            (BuildRefusal.SourceUnreadable, $"'{SourceFolder}' holds no 'textures' to copy."), (refused.Refusal, refused.Message));
+            (BuildRefusal.SourceUnreadable, $"'{SourceFolder}' holds no 'textures' to build from."), (refused.Refusal, refused.Message));
         Assert.False(Directory.Exists(ModFolder));
     }
 
@@ -434,6 +484,16 @@ public sealed class BuildModHandlerTests : IDisposable
     private ModToBuild Copy(params string[] paths) => new(ModName, SourceFolder, ModFolder, new BuildStep.Copy(paths));
 
     private ModToBuild Compile() => new(ModName, SourceFolder, ModFolder, new BuildStep.Compile([Plugin]));
+
+    private ModToBuild Unpack(params ArchiveToUnpack[] archives) => new(ModName, SourceFolder, ModFolder, new BuildStep.Unpack(archives));
+
+    private void ArchiveInSource(string path, params (string Path, string Text)[] files)
+    {
+        var refusal = new ArchivePacker(new ModFolderRepository()).Pack(
+            SourceFolder, path, [.. files.Select(file => new ArchiveFile(file.Path, () => new MemoryStream(Encoding.UTF8.GetBytes(file.Text))))],
+            new Ba2Variant(1, Ba2Contents.General, Compressed: false));
+        Assert.Null(refusal);
+    }
 
     private ModToBuild Pack(params ArchiveToPack[] archives) => new(ModName, SourceFolder, ModFolder, new BuildStep.Pack(archives));
 

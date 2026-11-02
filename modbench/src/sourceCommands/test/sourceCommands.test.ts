@@ -54,7 +54,7 @@ const buildingEach = (client: InMemoryMEditClient): void => {
 describe('sourceCommands build', () => {
   it('hands mEdit each built-in step of each mod\'s build file in order, one call each, with the source folder that builds it, its folder, what its folder excludes, the exclusion mark and the release\'s archive variants', async () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [
-      { kind: 'decompile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures'] }, COMPILE, { kind: 'pack', archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] },
+      { kind: 'decompile', paths: ['A.esp'] }, { kind: 'copy', paths: ['textures'] }, COMPILE, { kind: 'pack', archives: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] }, { kind: 'unpack', archives: [{ path: 'Base.ba2', files: ['b.nif'] }] },
     ] }));
     const client = new InMemoryMEditClient();
     buildingEach(client);
@@ -69,6 +69,7 @@ describe('sourceCommands build', () => {
       { method: 'build', args: [[{ ...modA, step: { copy: ['textures'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { compile: ['A.esp'] } }], facts] },
       { method: 'build', args: [[{ ...modA, step: { pack: [{ path: 'ModA - Main.ba2', files: ['a.nif'] }] } }], facts] },
+      { method: 'build', args: [[{ ...modA, step: { unpack: [{ path: 'Base.ba2', files: ['b.nif'] }] } }], facts] },
       { method: 'build', args: [[{ name: 'ModB', sourceFolder: SOURCES.ModB, folder: folderOf('ModB'), exclude: [], ignore: [], step: { compile: ['A.esp'] } }], facts] },
     ]);
   });
@@ -286,6 +287,16 @@ describe('sourceCommands build, in mod order', () => {
 
       expect([outcome, log]).toEqual([{ landed: [], refused: [{ item: 'ModA', reason: 'was not built: A.esp does not round-trip.' }] }, [{ step: { decompile: ['A.esp', 'B.esp'] } }]]);
     });
+  });
+
+  it.each([['pack', {}], ['unpack', { unpacking: true }]] as const)('marks an archive a %s step refused by the step that refused it', async (kind, marked) => {
+    await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind, archives: [{ path: 'Base.ba2', files: ['a.nif'] }] }] }));
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), archivesRefused: [{ item: 'Base.ba2', reason: 'it cannot be read' }] }], refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect('landed' in outcome ? outcome.landed[0]?.archivesRefused : undefined).toEqual([{ item: 'Base.ba2', reason: 'it cannot be read', ...marked }]);
   });
 
   it('sends each loose file a pack step packed to the trash (source.md, Build, stories 2 and 20)', async () => {

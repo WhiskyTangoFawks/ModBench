@@ -77,7 +77,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public string FileIn(string sourceFolder, string path) => throw Unreached();
 
-    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> copied) => throw Unreached();
+    public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> read) => throw Unreached();
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => throw Unreached();
 

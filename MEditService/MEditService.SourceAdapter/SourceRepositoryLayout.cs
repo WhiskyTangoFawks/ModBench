@@ -60,7 +60,7 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
             var at = Path.Combine(sourceFolder, path);
             if (File.Exists(at)) files.Add(FileOf(at));
             else if (Directory.Exists(at)) files.AddRange(Directory.EnumerateFiles(at, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(FileOf));
-            else throw SourceStopException.Unreadable($"'{sourceFolder}' holds no '{path}' to copy.");
+            else throw SourceStopException.Unreadable($"'{sourceFolder}' holds no '{path}' to build from.");
         }
         return [.. files.Where(file => !TempName.HoldsTemp(file.Path)).DistinctBy(file => file.Path, StringComparer.Ordinal)];
     }

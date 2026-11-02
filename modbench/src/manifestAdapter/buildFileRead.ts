@@ -5,7 +5,7 @@ import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parse
 
 const FILE = 'build file';
 
-const KINDS = ['decompile', 'compile', 'copy', 'pack', 'task', 'script', 'defaultScript'] as const;
+const KINDS = ['decompile', 'compile', 'copy', 'pack', 'unpack', 'task', 'script', 'defaultScript'] as const;
 
 const known = (members: Json, part: string | undefined, keys: readonly string[]): void => { knownIn(FILE, members, part, keys); };
 
@@ -48,7 +48,7 @@ const scriptOf = (where: string, step: string, members: Json): ScriptStep | Defa
   return { kind: 'script', script, args };
 };
 
-// formats/build-file.md: no two archives of one pack step pack one path.
+// formats/build-file.md: no two archives of one pack or unpack step pack or unpack one path.
 const archivesOf = (where: string, step: string, value: unknown): ManifestArchive[] => {
   const archives = Object.entries(objectOf(FILE, value, where)).map(([path, files]) => ({ path, files: stringsOf(FILE, files, where) }));
   if (archives.length === 0) throw unreadable(FILE, where, 'it names no archive');
@@ -83,7 +83,7 @@ const stepOf = (index: number, line: unknown): BuildStep => {
   if (kind === 'task') return taskOf(where, step, members);
   if (kind === 'script' || kind === 'defaultScript') return scriptOf(where, step, members);
   known(members, step, [kind]);
-  if (kind === 'pack') return { kind, archives: archivesOf(where, step, members.pack) };
+  if (kind === 'pack' || kind === 'unpack') return { kind, archives: archivesOf(where, step, members[kind]) };
   const paths = pathsOf(where, step, members[kind]);
   const inAFolder = kind === 'copy' ? undefined : paths.find((path) => path.includes('/'));
   if (inAFolder !== undefined) throw unreadable(FILE, where, `it names '${inAFolder}', which is not a plugin at the root`);

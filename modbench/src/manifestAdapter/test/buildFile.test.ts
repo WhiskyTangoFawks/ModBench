@@ -37,6 +37,12 @@ describe('a build file the adapter reads and refuses', () => {
     });
   });
 
+  it('reads an unpack step as the archives of the source folder with the files each unpacks', () => {
+    expect(read('{"version":1,"steps":[{"unpack":{"Main.ba2":["meshes/a.nif","b.nif"]}}]}')).toEqual({
+      buildFile: { steps: [{ kind: 'unpack', archives: [{ path: 'Main.ba2', files: ['meshes/a.nif', 'b.nif'] }] }] },
+    });
+  });
+
   it('reads a script step by its path in the source folder and a default script step by its name, each with its arguments', () => {
     expect(read('{"version":1,"steps":[{"script":"scripts/fix.py","args":["A.esp"]},{"defaultScript":"clean","args":["B.esp"]},{"script":"x.py"},{"defaultScript":"clean"}]}')).toEqual({
       buildFile: {
@@ -54,7 +60,7 @@ describe('a build file the adapter reads and refuses', () => {
 
   it('reads back the text it writes', () => {
     const buildFile: BuildFile = {
-      steps: [{ kind: 'copy', paths: ['textures', 'a.ini'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'pack', archives: [{ path: 'a.ba2', files: ['x.nif'] }] }, { kind: 'task', task: 'T', args: ['x'] },
+      steps: [{ kind: 'copy', paths: ['textures', 'a.ini'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'pack', archives: [{ path: 'a.ba2', files: ['x.nif'] }] }, { kind: 'unpack', archives: [{ path: 'b.ba2', files: ['y.nif'] }] }, { kind: 'task', task: 'T', args: ['x'] },
         { kind: 'script', script: 'fix.py', args: ['A.esp'] }, { kind: 'defaultScript', name: 'clean', args: [] }],
     };
 
@@ -76,7 +82,10 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"version":1,"steps":[{"script":"a.py","args":[1]}]}', 'its build file cannot be read at its step 1'],
     ['{"version":1,"steps":[{"script":"a.py","page":"https://example.com"}]}', "its build file's step 1 holds 'page', which Modbench does not read"],
     ['{"version":1,"steps":[{"script":"a.py","defaultScript":"clean"}]}', "its build file cannot be read at its step 1: it names both 'script' and 'defaultScript'"],
-    ['{"version":1,"steps":[{"unpack":{"a.ba2":["x.nif"]}}]}', "its build file's step 1 holds 'unpack', which Modbench does not read"],
+    ['{"version":1,"steps":[{"unpack":{}}]}', 'its build file cannot be read at its step 1: it names no archive'],
+    ['{"version":1,"steps":[{"unpack":{"a.ba2":["../x"]}}]}', "its build file's step 1 names '../x'"],
+    ['{"version":1,"steps":[{"unpack":{"a.ba2":["x.nif"],"b.ba2":["x.nif"]}}]}', "its build file's step 1 names 'x.nif' in both 'a.ba2' and 'b.ba2'"],
+    ['{"version":1,"steps":[{"unpack":{"a.ba2":["x.nif"]},"pack":{"b.ba2":["y.nif"]}}]}', "its build file cannot be read at its step 1: it names both 'pack' and 'unpack'"],
     ['{"version":1,"steps":[{"copy":["a"],"compile":["A.esp"]}]}', "its build file cannot be read at its step 1: it names both 'compile' and 'copy'"],
     ['{"version":1,"steps":[{"copy":["a"],"args":[]}]}', "its build file's step 1 holds 'args', which Modbench does not read"],
     ['{"version":1,"steps":[{"copy":[]}]}', 'its build file cannot be read at its step 1: it names no path'],

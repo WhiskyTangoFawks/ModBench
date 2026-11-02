@@ -4,9 +4,9 @@ namespace MEditService.SourceAdapter;
 /// changes no commit holds. Unpushed: its remote, as last fetched, lacks HEAD.</summary>
 public sealed record SourceToBuild(IReadOnlyList<FileToCopy> Files, bool Uncommitted = false, bool Unpushed = false)
 {
-    internal static SourceToBuild In(string sourceFolder, IReadOnlyList<string> copied)
+    internal static SourceToBuild In(string sourceFolder, IReadOnlyList<string> read)
     {
-        var files = SourceRepositoryLayout.FilesAt(sourceFolder, copied);
+        var files = SourceRepositoryLayout.FilesAt(sourceFolder, read);
         if (TwinsIn(files.Select(file => file.Path)) is { } twins)
             throw SourceStopException.Unreadable($"'{sourceFolder}' holds {twins}.");
         var remote = Submodules.RemoteOf(sourceFolder);

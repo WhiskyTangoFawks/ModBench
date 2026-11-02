@@ -4,6 +4,7 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using static MEditService.Http.Tests.TestSupport.Wire;
+using ModFolder = MEditService.ModFolderAdapter;
 
 namespace MEditService.Http.Tests.Traces;
 
@@ -101,7 +102,28 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Equal("BTDX", System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(_builtFolder, "Main.ba2")), 0, 4));
     }
 
+    [Fact]
+    public async Task BuildingAModWithAnArchiveToUnpack_WritesTheFileFromTheArchiveOfItsSourceFolderIntoItsFolder()
+    {
+        await LoadedWithOneModFolderAndCompiledPlugin();
+        var refusal = new ModFolder.ArchivePacker(new ModFolder.ModFolderRepository()).Pack(
+            Client.SourceFolderSentFor(Origin), "Base.ba2", [new ModFolder.ArchiveFile("meshes/a.nif", () => new MemoryStream("mesh"u8.ToArray()))],
+            new ModFolder.Ba2Variant(1, ModFolder.Ba2Contents.General, Compressed: false));
+        Assert.Null(refusal);
+
+        var answer = await Answer(await Client.Build(
+            [(Origin, _builtFolder)], new { unpack = new[] { new { path = "Base.ba2", files = new[] { "meshes/a.nif" } } } }));
+
+        var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
+        Assert.Empty(built.GetProperty("archivesRefused").EnumerateArray());
+        Assert.Equal(["meshes/a.nif"], built.GetProperty("made").EnumerateArray().Select(file => file.GetProperty("path").GetString()));
+        Assert.Equal("mesh", File.ReadAllText(Path.Combine(_builtFolder, "meshes", "a.nif")));
+    }
+
     private const string Copy = "\"step\": {\"copy\": [\"a.nif\"]}";
+
+    private static string UnpackStep(string step) =>
+        $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {{{step}}}}}], \"exclusionMark\": \".mohidden\"}}";
 
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
@@ -113,6 +135,9 @@ public sealed class BuildModTraceTests : HostedTests
         { "a step naming no path", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"copy\": []}}], \"exclusionMark\": \".mohidden\"}" },
         { "a compile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"compile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },
         { "a decompile of a plugin in a folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"decompile\": [\"a/b.esp\"]}}], \"exclusionMark\": \".mohidden\"}" },        { "an archive's file outside the folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {\"pack\": [{\"path\": \"Main.ba2\", \"files\": [\"/a.nif\"]}]}}], \"exclusionMark\": \".mohidden\"}" },
+        { "an unpack beside a pack", UnpackStep("\"pack\": [{\"path\": \"Main.ba2\", \"files\": [\"a.nif\"]}], \"unpack\": [{\"path\": \"Main.ba2\", \"files\": [\"a.nif\"]}]") },
+        { "an unpack naming no file", UnpackStep("\"unpack\": [{\"path\": \"Main.ba2\", \"files\": []}]") },
+        { "an unpack of a file outside the folder", UnpackStep("\"unpack\": [{\"path\": \"Main.ba2\", \"files\": [\"../a.nif\"]}]") },
         {
             "a variant both a BA2 and a BSA",
             $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", {Copy}}}], \"exclusionMark\": \".mohidden\", " +

@@ -33,7 +33,7 @@ export type RunStep = TaskStep | ScriptStep | DefaultScriptStep;
 /** A built-in step names paths: a copy's in the source folder, and a decompile's or a compile's of plugins at the root. */
 export type BuildStep =
   | { readonly kind: 'decompile' | 'compile' | 'copy'; readonly paths: readonly string[] }
-  | { readonly kind: 'pack'; readonly archives: readonly ManifestArchive[] }
+  | { readonly kind: 'pack' | 'unpack'; readonly archives: readonly ManifestArchive[] }
   | RunStep;
 
 export interface BuildFile {
@@ -46,7 +46,7 @@ export type BuildFileRead = { readonly buildFile: BuildFile } | { readonly refus
 
 const lineOf = (step: BuildStep): Record<string, unknown> => {
   switch (step.kind) {
-    case 'pack': return { pack: Object.fromEntries(step.archives.map(({ path, files }) => [path, files])) };
+    case 'pack': case 'unpack': return { [step.kind]: Object.fromEntries(step.archives.map(({ path, files }) => [path, files])) };
     case 'task': return { task: step.task, ...step.args.length === 0 ? {} : { args: step.args }, ...step.page === undefined ? {} : { page: step.page } };
     case 'script': return { script: step.script, ...step.args.length === 0 ? {} : { args: step.args } };
     case 'defaultScript': return { defaultScript: step.name, ...step.args.length === 0 ? {} : { args: step.args } };
