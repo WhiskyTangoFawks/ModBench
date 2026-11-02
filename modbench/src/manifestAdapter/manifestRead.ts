@@ -2,6 +2,7 @@
 
 import { isPluginFile } from '../tables/pluginFile';
 import { isUnderAny } from './folderPaths';
+import { isAddress } from './manifestPackages';
 import { MANIFEST_VERSION, type Manifest, type ManifestPackage, type ManifestRead } from './manifest';
 import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, required, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
@@ -45,6 +46,12 @@ function installationFileOf(members: Json, where: string, part: string): Manifes
   const size = countOf(required(FILE, members, 'size', where), 0, where);
   const hash = matching(required(FILE, members, 'hash', where), HASH, where);
   if (!Object.hasOwn(members, 'host')) return { kind: 'installationFile', name, size, hash };
+  if (isObject(members.host) && Object.hasOwn(members.host, 'url')) {
+    if (Object.keys(members.host).length !== 1) throw at(where);
+    const url = textOf(FILE, members.host.url, where);
+    if (!isAddress(url)) throw at(where);
+    return { kind: 'installationFile', name, size, hash, host: { url } };
+  }
   const nexus = hostOf(members.host, 'nexus', where);
   exactly(nexus, ['game', 'mod', 'file'], where);
   const file = {

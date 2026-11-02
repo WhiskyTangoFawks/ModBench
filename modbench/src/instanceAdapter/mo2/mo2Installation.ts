@@ -39,13 +39,14 @@ async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise
 }
 
 // The page of a downloaded file on its host, from its metadata, else its name; an unreadable metadata costs the page alone.
-async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; note?: string }> {
+async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; directUrl?: string; note?: string }> {
   try {
     const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+    const directUrl = meta.directURL === undefined ? {} : { directUrl: meta.directURL };
     const modId = effectiveModId(meta.modID, name);
-    if (modId === undefined) return {};
+    if (modId === undefined) return directUrl;
     const domain = nexusDomainForMetaGame(meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot))));
-    return domain === undefined ? {} : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }) };
+    return domain === undefined ? directUrl : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...directUrl };
   } catch (err) {
     return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
   }
@@ -170,8 +171,8 @@ export function mo2Installation(
       if (!(await exists(path))) return { kind: 'read', answer: undefined };
       const hashed = await downloadedFileHash(path);
       if (hashed.kind === 'unreadable') return hashed;
-      const { page } = await pageOfDownloadedFile(context, dirname(path), name);
-      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page } } };
+      const { note: _note, ...host } = await pageOfDownloadedFile(context, dirname(path), name);
+      return { kind: 'read', answer: { path, ...hashed.answer, ...host } };
     },
 
     downloadedFileHolding: async ({ size, hash }) => {
@@ -205,8 +206,8 @@ export function mo2Installation(
       const { downloadsDir, names } = listed.answer;
       const hashed = await downloadedFilesHashed(names.map((name) => downloadedFilePath(downloadsDir, name)), options);
       const paged = await Promise.all(hashed.files.map(async (file) => {
-        const { page, note } = await pageOfDownloadedFile(context, downloadsDir, basename(file.path));
-        return { file: { ...file, page }, notes: note === undefined ? [] : [note] };
+        const { note, page, directUrl } = await pageOfDownloadedFile(context, downloadsDir, basename(file.path));
+        return { file: { ...file, page, directUrl }, notes: note === undefined ? [] : [note] };
       }));
       return { files: paged.map(({ file }) => file), notes: [...hashed.notes, ...paged.flatMap(({ notes }) => notes)] };
     },

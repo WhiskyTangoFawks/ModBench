@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { filesNoPackageHolds, ordinal, type Manifest, type ManifestPackage, type NexusFile } from '../manifestAdapter/manifestAdapter';
+import { filesNoPackageHolds, isAddress, ordinal, type Manifest, type ManifestPackage, type NexusFile } from '../manifestAdapter/manifestAdapter';
 import type { Depot, GameFileTaken, InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** A file of a folder by its own path, with its hash. */
@@ -42,17 +42,19 @@ export function nexusFileOf(adapter: Pick<InstanceAdapter, 'nexusFileAt'>): (pag
 
 const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-/** The installation file with the page its downloaded file's own metadata gives, else the page it has. */
-export const pagedFrom = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page'> | undefined): InstallationFile =>
-  (downloaded?.page === undefined ? file : { ...file, page: downloaded.page });
+/** The installation file with the host its downloaded file's own metadata gives, none when that gives none, never the mod's. */
+export const hostedBy = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page' | 'directUrl'> | undefined): InstallationFile => ({
+  ...file, page: downloaded?.page, directUrl: downloaded?.directUrl,
+});
 
 const isId = (id: number): boolean => Number.isInteger(id) && id >= 1;
 
-/** The downloaded file as a package, its host the one `nexusFileOf` reads from its page. */
+/** The downloaded file as a package, its host the Nexus file `nexusFileOf` reads from its page, else its direct URL. */
 export const downloadedFileOf = (file: InstallationFile, nexusFileOf: (page: string) => NexusFile | undefined): DownloadedFile => {
   const named = file.page === undefined ? undefined : nexusFileOf(file.page);
   const nexus = named !== undefined && isId(named.mod) && isId(named.file) ? named : undefined;
-  return { file, package: { kind: 'installationFile', name: basename(file.path), size: file.size, hash: file.hash, ...nexus === undefined ? {} : { host: { nexus } } } };
+  const host = nexus !== undefined ? { nexus } : file.directUrl !== undefined && isAddress(file.directUrl) ? { url: file.directUrl } : undefined;
+  return { file, package: { kind: 'installationFile', name: basename(file.path), size: file.size, hash: file.hash, ...host === undefined ? {} : { host } } };
 };
 
 /** One per file name, the first by hash. */

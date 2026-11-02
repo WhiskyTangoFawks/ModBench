@@ -2113,6 +2113,12 @@ describe('the MO2 Instance adapter', () => {
         expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
       });
 
+      it('gives a file the direct URL its metadata names, whether or not it names a Nexus file', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ndirectURL=https://f4se.silverlock.org/beta/f4se_0_06_23.7z\r\n');
+
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' }] });
+      });
+
       it('costs a file its page alone, saying why, when its metadata cannot be read', async () => {
         await rm(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
         await mkdir(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));

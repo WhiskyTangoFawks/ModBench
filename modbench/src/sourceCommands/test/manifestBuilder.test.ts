@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InstallationFile } from '../../instanceAdapter/instanceAdapter';
 import type { Manifest, NexusFile } from '../../manifestAdapter/manifestAdapter';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, type GameHeld, type GamePlaceHeld, type HashedModFile } from '../manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, hostedBy, type GameHeld, type GamePlaceHeld, type HashedModFile } from '../manifestBuilder';
 
 const NEXUS: NexusFile = { game: 'fallout4', mod: 1, file: 2 };
 const onNexus = (page: string): NexusFile | undefined => (page === 'nexus:1' ? NEXUS : undefined);
@@ -45,6 +45,30 @@ describe('a mod\'s manifest from its files', () => {
     expect(built({}, { installationFile: download('M.7z', {}, { page: 'nexus:mod-only' }) }).manifest.packages).toEqual([
       { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
     ]);
+  });
+
+  it('names an installation file\'s direct URL as its host when its page names no Nexus file', () => {
+    expect(built({}, { installationFile: download('F4SE.7z', {}, { directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' }) }).manifest.packages).toEqual([
+      { kind: 'installationFile', name: 'F4SE.7z', size: 10, hash: 'hash of F4SE.7z', host: { url: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' } },
+    ]);
+  });
+
+  it('names the Nexus file as the host of a file whose metadata names both a Nexus file and a direct URL', () => {
+    expect(built({}, { installationFile: download('M.7z', {}, { page: 'nexus:1', directUrl: 'https://example.com/M.7z' }) }).manifest.packages).toEqual([
+      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z', host: { nexus: NEXUS } },
+    ]);
+  });
+
+  it.each(['not a url', 'ftp://example.com/M.7z', 'file:///etc/passwd'])('names a direct URL of %j with no host, as the manifest\'s schema takes an address only', (directUrl) => {
+    expect(built({}, { installationFile: download('M.7z', {}, { directUrl }) }).manifest.packages).toEqual([
+      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
+    ]);
+  });
+
+  it('takes the host from the downloaded file alone, never the mod\'s page', () => {
+    const modsFile = download('F4SE.7z', {}, { page: 'nexus:1' });
+    const downloaded = download('F4SE.7z', {}, { directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' });
+    expect(hostedBy(modsFile, downloaded)).toEqual({ ...modsFile, page: undefined, directUrl: downloaded.directUrl });
   });
 
   it.each([

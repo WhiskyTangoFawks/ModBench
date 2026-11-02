@@ -7,5 +7,5 @@ export { manifestText, ordinal } from './manifestText';
 export { buildFileIn, manifestAt, manifestIn, manifestNameOf, packagesAskedAt, writeManifestIn } from './manifestFiles';
 export { exclusionsOf, exclusionsOfFiles, isUnderAny, ownFilesOf } from './folderPaths';
 export { installationFileLack } from './packageLack';
-export { repositoryOf } from './manifestPackages';
+export { isAddress, repositoryOf } from './manifestPackages';
 export { sourceModsOf, type SourceMods } from './sourceMods';

@@ -23,7 +23,7 @@ const everyKindAndExclusion = (
   + '"version":1,\n'
   + '"packages":[\n'
   + '{"kind":"installationFile","name":"a.7z","size":1,"hash":"AAAAAAAAAAA="},\n'
-  + '{"kind":"installationFile","name":"B.7z","size":2,"hash":"BBBBBBBBBBA="},\n'
+  + '{"kind":"installationFile","name":"B.7z","size":2,"hash":"BBBBBBBBBBA=","host":{"url":"https://f4se.silverlock.org/beta/f4se_0_06_23.7z"}},\n'
   + '{"kind":"gameFolder","host":{"steam":{"app":377160,"depots":{"377161":"11","1234567":"22"}}}}\n'
   + '],\n'
   + '"exclude":[\n'
@@ -179,6 +179,9 @@ describe('a manifest the adapter refuses', () => {
     ['{"version":1,"packages":[{"kind":"installationFile","name":"A.zip"}]}', 'its manifest cannot be read at its package 1'],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","page":"x"}]}`, "its manifest's package 1 holds 'page', which Modbench does not read"],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{"nexus":{"game":"Fallout 4","mod":1,"file":1}}}]}`, 'its manifest cannot be read at its package 1'],
+    [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{"url":"not an address"}}]}`, 'its manifest cannot be read at its package 1'],
+    [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{"url":"ftp://example.com/A.zip"}}]}`, 'its manifest cannot be read at its package 1'],
+    [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{"url":"https://example.com/A.zip","nexus":{"game":"fallout4","mod":1,"file":1}}}]}`, 'its manifest cannot be read at its package 1'],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{}}]}`, 'its manifest cannot be read at its package 1'],
     ['{"version":1,"packages":[{"kind":"gameFolder","host":{"steam":{"app":0}}}]}', 'its manifest cannot be read at its package 1'],
     ['{"version":1,"packages":[{"kind":"gameFolder","host":{"steam":{"app":1,"depots":{"a":"1"}}}}]}', 'its manifest cannot be read at its package 1'],
