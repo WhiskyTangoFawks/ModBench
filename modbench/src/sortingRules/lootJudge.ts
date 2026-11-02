@@ -71,7 +71,7 @@ function groupsBefore(group: string, afterOf: ReadonlyMap<string, LootGroup['aft
   return reached;
 }
 
-// One entry for each plugin that loads before a plugin of a group its own loads after, naming the nearest.
+// One entry for each plugin that loads before a plugin of a group its own loads after, naming the last, the one a move after keeps the rule for.
 function judgeGroups(order: readonly PluginRef[], entries: readonly LootEntry[], groups: readonly LootGroup[]): BrokenRule[] {
   const afterOf = new Map<string, LootGroup['after']>();
   for (const { name, after } of groups) afterOf.set(name, [...afterOf.get(name) ?? [], ...after]);
@@ -81,9 +81,9 @@ function judgeGroups(order: readonly PluginRef[], entries: readonly LootEntry[],
   return order.flatMap((plugin, index): BrokenRule[] => {
     const group = groupsOfOrder[index] ?? DEFAULT_GROUP;
     const before = groupsBefore(group, afterOf);
-    const nearest = groupsOfOrder.findIndex((other, at) => at > index && before.has(other));
-    const target = order[nearest];
-    const earlier = groupsOfOrder[nearest];
+    const last = groupsOfOrder.findLastIndex((other, at) => at > index && before.has(other));
+    const target = order[last];
+    const earlier = groupsOfOrder[last];
     const source = earlier === undefined ? undefined : before.get(earlier);
     if (target === undefined || earlier === undefined || source === undefined) return [];
     return [{

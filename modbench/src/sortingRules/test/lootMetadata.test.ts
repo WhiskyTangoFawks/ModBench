@@ -169,6 +169,7 @@ describe('rulesReader', () => {
   it('reads a plugin\'s group and the groups, each with the line of each group it loads after', () => {
     const { entries, groups, problems } = readRules(filesOf({ masterlist: text(`groups:
   - name: default
+  - name: early
   - name: late
     after: [default, early]
 plugins:
@@ -180,7 +181,22 @@ plugins:
     expect(entries).toEqual([expect.objectContaining({ group: 'late' })]);
     expect(groups).toEqual([
       { name: 'default', after: [] },
-      { name: 'late', after: [{ name: 'default', source: { file: 'masterlist', line: 3 } }, { name: 'early', source: { file: 'masterlist', line: 3 } }] },
+      { name: 'early', after: [] },
+      { name: 'late', after: [{ name: 'default', source: { file: 'masterlist', line: 4 } }, { name: 'early', source: { file: 'masterlist', line: 4 } }] },
     ]);
+  });
+
+  it('reports, on its line, a group after that is no name, and one naming a group no file declares, and reads no edge for it', () => {
+    const { groups, problems } = readRules(filesOf({
+      masterlist: text('groups:\n  - name: default\n  - name: late\n    after: [default, ghost, {x: 1}]\n'),
+      userlist: text('groups:\n  - name: late\n    after: [phantom, default]\n'),
+    }));
+
+    expect(problems).toEqual([
+      { file: 'masterlist', line: 3, text: 'An entry of "after" has no name.' },
+      { file: 'masterlist', line: 3, text: 'The group "late" loads after "ghost", which no file declares.' },
+      { file: 'userlist', line: 2, text: 'The group "late" loads after "phantom", which no file declares.' },
+    ]);
+    expect(groups.flatMap(({ after }) => after.map(({ name }) => name))).toEqual(['default', 'default']);
   });
 });

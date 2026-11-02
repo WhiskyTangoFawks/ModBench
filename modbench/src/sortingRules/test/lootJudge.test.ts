@@ -117,7 +117,7 @@ plugins:
   - {name: L2.esp, group: late}
 `;
 
-    it('breaks, at Info, a plugin that loads before a plugin of a group its own loads after, naming the first of them', () => {
+    it('breaks, at Info, a plugin that loads before a plugin of a group its own loads after, naming the last of them', () => {
       expect(judged(['L.esp', 'E.esp'], groups)).toEqual([{
         rule: 'group', level: 'info', plugins: [at('L.esp'), at('E.esp')], source: { file: 'masterlist', line: 5 },
         reason: '"L.esp" is in the group "late", which loads after the group "early", and loads before "E.esp", of that group.',
@@ -131,7 +131,7 @@ plugins:
     it('names one plugin for each plugin, however many it loads before', () => {
       const broken = judged(['L.esp', 'L2.esp', 'E.esp', 'E2.esp'], `${groups}  - {name: E2.esp, group: early}\n`);
 
-      expect(broken.map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['L.esp', 'E.esp'], ['L2.esp', 'E.esp']]);
+      expect(broken.map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['L.esp', 'E2.esp'], ['L2.esp', 'E2.esp']]);
     });
 
     it('follows a group\'s after through the groups between', () => {

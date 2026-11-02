@@ -148,7 +148,9 @@ class FileReader {
     if (name === undefined) return this.problem(line, 'A group has no name.');
     const after = this.items(node, plain, 'after').flatMap(({ value, line: at }) => {
       const source = this.located(at);
-      return typeof value === 'string' && source !== undefined ? [{ name: value, source }] : [];
+      if (typeof value === 'string') return source === undefined ? [] : [{ name: value, source }];
+      this.problem(at, 'An entry of "after" has no name.');
+      return [];
     });
     this.groups.push({ name, after });
   }
@@ -258,10 +260,20 @@ function readRules(files: SortingRuleFiles): { entries: LootEntry[]; groups: Loo
     : undefined;
   const masterlist = readRuleFile('masterlist', files.masterlist, 'masterlist', substituted);
   const userlist = readRuleFile('userlist', files.userlist, 'userlist');
+  const declared = new Set([...masterlist.groups, ...userlist.groups].map(({ name }) => name));
+  const dangling: RuleFileProblem[] = [];
+  const groups = [...masterlist.groups, ...userlist.groups].map(({ name, after }) => ({
+    name,
+    after: after.filter((step) => {
+      if (declared.has(step.name)) return true;
+      dangling.push({ file: step.source.file, line: step.source.line, text: `The group "${name}" loads after "${step.name}", which no file declares.` });
+      return false;
+    }),
+  }));
   return {
     entries: [...masterlist.entries, ...userlist.entries],
-    groups: [...masterlist.groups, ...userlist.groups],
-    problems: [...prelude.problems, ...masterlist.problems, ...userlist.problems],
+    groups,
+    problems: [...prelude.problems, ...masterlist.problems, ...userlist.problems, ...dangling],
   };
 }
 
