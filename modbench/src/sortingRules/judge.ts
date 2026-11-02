@@ -17,7 +17,7 @@ export interface PluginRef {
 }
 
 export interface BrokenRule {
-  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'message' | 'condition';
+  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'group' | 'message' | 'condition';
   level: RuleLevel;
   plugins: PluginRef[];
   reason: string;

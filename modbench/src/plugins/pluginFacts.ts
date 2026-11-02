@@ -1,7 +1,6 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { judge, type BrokenRule } from '../sortingRules/judge';
-import { judgeLoot } from '../sortingRules/lootJudge';
-import type { LootEntry } from '../sortingRules/lootMetadata';
+import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
@@ -23,14 +22,13 @@ export interface PluginStatus {
   tooltipLine: string;
 }
 
-/** LOOT's rules and where the files they apply to are present, as the sorting rules judge them. */
-export interface LootRules {
-  readonly entries: readonly LootEntry[];
-  readonly isPresent: (filename: string) => boolean;
+function lootPartition({ master, blueprint }: { master: boolean; blueprint: boolean }): LootPartition {
+  if (!master) return 'nonMasters';
+  return blueprint ? 'blueprintMasters' : 'masters';
 }
 
 // No metadata: only the game's own sorting rules are judged.
-const NO_LOOT_RULES: LootRules = { entries: [], isPresent: () => true };
+const NO_LOOT_RULES: LootRules = { entries: [], groups: [], isPresent: () => true };
 
 export type StatusIcon = 'error' | 'warning';
 
@@ -222,7 +220,11 @@ export class PluginFacts {
         const read = address && this.reads.get(address);
         return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
       }),
-      ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), loot.entries, loot.isPresent),
+      ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), loot, (filename) => {
+        const address = addressOf.get(filename.toLowerCase());
+        const read = address && this.reads.get(address);
+        return read && lootPartition(read);
+      }),
     ];
     this.broken = broken;
     this.sorting = new ByPluginAddress<BrokenRule[]>();

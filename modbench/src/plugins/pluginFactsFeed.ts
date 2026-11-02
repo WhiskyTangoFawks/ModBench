@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { PluginFacts, type LootRules, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
+import { PluginFacts, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
+import type { LootRules } from '../sortingRules/lootJudge';
 import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
 
