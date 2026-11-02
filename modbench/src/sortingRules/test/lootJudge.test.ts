@@ -182,6 +182,20 @@ plugins:
       expect(broken).toEqual([]);
     });
 
+    it('takes the entry that names the plugin over an entry that is a regular expression, wherever the regular expression sits', () => {
+      const broken = judged(['L.esp', 'E.esp'], `groups:
+  - name: default
+  - {name: early, after: [default]}
+  - {name: late, after: [early]}
+plugins:
+  - {name: 'L.*', group: late}
+  - {name: L.esp, group: early}
+  - {name: E.esp, group: early}
+`);
+
+      expect(broken).toEqual([]);
+    });
+
     it('points the rule at a userlist edge on its path', () => {
       const broken = judged(['L.esp', 'D.esp'], `${groups}  - {name: D.esp}\n`, ['L.esp', 'D.esp'], 'groups:\n  - {name: early, after: [default]}\n');
 

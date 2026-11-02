@@ -204,8 +204,8 @@ plugins:
     }));
 
     expect(problems).toEqual([
-      { file: 'masterlist', line: 2, text: 'The group "late" loads after "ghost", which no file declares.' },
       { file: 'userlist', line: 2, text: 'The group "late" loads after "phantom", which no file declares.' },
+      { file: 'masterlist', line: 2, text: 'The group "late" loads after "ghost", which no file declares.' },
     ]);
     expect(groups.flatMap(({ after }) => after)).toEqual([]);
   });
@@ -230,5 +230,21 @@ plugins:
 
     expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'The groups load after each other in a cycle: a after b after a.' }]);
     expect(groups.map(({ name, after }) => [name, after.map((step) => step.name)])).toEqual([['a', []], ['b', []], ['c', ['a']]]);
+  });
+
+  it('reports a plugin group that is no name, on its line', () => {
+    const { entries, problems } = readRules(filesOf({ masterlist: text('plugins:\n  - name: A.esp\n    group: [late]\n') }));
+
+    expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'A plugin\'s group is no name.' }]);
+    expect(entries[0]?.group).toBeUndefined();
+  });
+
+  it('reads a group the two files state once, its userlist afters first', () => {
+    const { groups } = readRules(filesOf({
+      masterlist: text('groups:\n  - {name: early}\n  - {name: aside}\n  - {name: late, after: [early]}\n'),
+      userlist: text('groups:\n  - {name: late, after: [aside]}\n'),
+    }));
+
+    expect(groups.filter(({ name }) => name === 'late').map(({ after }) => after.map((step) => step.name))).toEqual([['aside', 'early']]);
   });
 });

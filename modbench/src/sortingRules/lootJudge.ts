@@ -73,8 +73,6 @@ interface Placed {
   partition: LootPartition;
 }
 
-const isUserEdge = ({ source }: LootGroup['after'][number]): boolean => source.file === 'userlist';
-
 function groupsBefore(group: string, afterOf: ReadonlyMap<string, LootGroup['after']>): Map<string, RuleSource> {
   const reached = new Map<string, RuleSource>();
   const queue = (afterOf.get(group) ?? []).map((step) => ({ ...step, stated: step.source }));
@@ -89,16 +87,17 @@ function groupsBefore(group: string, afterOf: ReadonlyMap<string, LootGroup['aft
 
 function groupOf(plugin: PluginRef, entries: readonly LootEntry[]): string {
   const stating = entries.filter((entry) => entry.group !== undefined && entry.matches(plugin.filename));
-  const chosen = stating.find((entry) => entry.group?.source.file === 'userlist') ?? stating[0];
+  const chosen = stating.find((entry) => entry.group?.source.file === 'userlist' && entry.exact)
+    ?? stating.find((entry) => entry.group?.source.file === 'userlist')
+    ?? stating.find((entry) => entry.exact)
+    ?? stating[0];
   return chosen?.group?.name ?? DEFAULT_GROUP;
 }
 
 function judgeGroups(
   order: readonly PluginRef[], { entries, groups }: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
 ): BrokenRule[] {
-  const afterOf = new Map<string, LootGroup['after']>();
-  for (const { name, after } of groups) afterOf.set(name, [...afterOf.get(name) ?? [], ...after]);
-  for (const [name, after] of afterOf) afterOf.set(name, [...after.filter(isUserEdge), ...after.filter((step) => !isUserEdge(step))]);
+  const afterOf = new Map(groups.map(({ name, after }) => [name, after]));
   const beforeOf = new Map<string, Map<string, RuleSource>>();
   const before = (group: string): Map<string, RuleSource> => {
     const known = beforeOf.get(group) ?? groupsBefore(group, afterOf);
