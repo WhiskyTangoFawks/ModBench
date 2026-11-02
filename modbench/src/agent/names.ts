@@ -131,6 +131,22 @@ export const filesNamed = (value: InstanceValue, given: readonly FileName[]): Fi
 export const filesAndFoldersNamed = (value: InstanceValue, given: readonly FileName[]): FileNamed[] =>
   pathsIn(value, given, (origin) => [...filesOfOrigin(value, origin), ...foldersOf(value, origin)].map(ownPathOf));
 
+const FILE_ORIGIN = z.union([
+  z.object({ kind: z.literal('mod'), name: z.string() }),
+  z.object({ kind: z.literal('runtimeOutput') }),
+]) satisfies z.ZodType<FileOrigin>;
+
+const FILE_REF = z.looseObject({ origin: FILE_ORIGIN, relativePath: z.string() });
+
+/** A file or folder an answer names by the path the mod holds it at, named by its own path. */
+export function namedByOwnPath(value: InstanceValue, item: unknown): unknown {
+  const parsed = FILE_REF.safeParse(item);
+  if (!parsed.success) return item;
+  const { origin, relativePath } = parsed.data;
+  const held = [...filesOfOrigin(value, origin), ...foldersOf(value, origin)].find((one) => one.relativePath === relativePath);
+  return held === undefined ? item : { ...parsed.data, relativePath: held.includedPath };
+}
+
 const asPlugin = ({ name, origin }: PluginAddress): string => `${name} in ${origin}`;
 
 function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAddress[], notRead: string | undefined): string | undefined {

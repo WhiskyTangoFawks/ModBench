@@ -372,6 +372,20 @@ describe('the agent server, given an instance value', () => {
       ]);
     });
 
+    it('names a file by its own path, the mod manager\'s mark left out', async () => {
+      const marked = new FakeInstance({
+        ...VALUE, holdsRepository: true,
+        modFolders: [{ kind: 'mod', name: 'Big Rocks', path: '/i/mods/Big Rocks', modName: 'Big Rocks' }],
+        filesByMod: new Map([['Big Rocks', [fileIn('/m', 'Textures/a.dds.mohidden'), fileIn('/m', 'b.nif'), fileIn('/m', 'c.nif.mohidden')]]]),
+      });
+      statusRead.answer = [status('Big Rocks', { differing: ['Textures/a.dds.mohidden'], namedByNoLine: ['c.nif.mohidden', 'b.nif'], gone: ['Gone.nif'] })];
+      const { client } = await clientOf(marked);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([
+        { mods: ['Big Rocks'], differing: ['Textures/a.dds'], namedByNoLine: ['c.nif', 'b.nif'], gone: ['Gone.nif'] },
+      ]);
+    });
+
     it('groups the mods of one status, leaving out each empty member', async () => {
       statusRead.answer = [status('Big Rocks', { noManifest: true }), status('InAnotherProfile', { noManifest: true })];
       const { client } = await clientOf(inRepository);
@@ -1566,6 +1580,27 @@ describe('the agent server, running a gesture', () => {
     await call(client, tool, args);
 
     expect(fired.calls).toEqual([[command, new AgentCall(argument, options)]]);
+  });
+
+  describe('a file the mod manager marks excluded', () => {
+    const marked = instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'B', enabled: true }],
+      filesByMod: new Map([['B', [fileIn('/m', 'Textures/a.dds.mohidden')]]]),
+    });
+    const ref = (relativePath: string) => ({ origin: mod('B'), relativePath });
+    const OWN = JSON.stringify(ref('Textures/a.dds'));
+
+    it.each([
+      ['landed', { landed: [ref('Textures/a.dds.mohidden')], refused: [] }, `{"landed":[${OWN}],"refused":[]}`],
+      ['refused', { landed: [], refused: [{ item: ref('Textures/a.dds.mohidden'), reason: 'gone' }] }, `{"landed":[],"refused":[{"item":${OWN},"reason":"gone"}]}`],
+    ])('is answered by its own path when %s', async (_state, outcome, text) => {
+      fired.outcome = { applied: true, outcome };
+      const { client } = await served(marked);
+
+      const answer = await call(client, 'mod_include_file', { argument: [{ mod: { name: 'B' }, path: 'Textures/a.dds' }] });
+
+      expect(answer.text).toBe(text);
+    });
   });
 
   describe('the plugin gestures', () => {
