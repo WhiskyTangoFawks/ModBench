@@ -2,7 +2,6 @@
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import { heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
-import { errorMessage } from '../ports/errorMessage';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -98,7 +97,7 @@ export class ModStatuses {
     try {
       held = await this.reads.foldersHeldWhole(mods.map(({ folder }) => folder));
     } catch (err) {
-      return mods.map(({ name }) => unreadableStatus(name, `git could not say which folders it holds: ${errorMessage(err)}`));
+      return mods.map(({ name }) => unreadableStatus(name, `git could not say which folders it holds: ${err instanceof Error ? err.message : String(err)}`));
     }
     return Promise.all(mods.map(async (mod) => (held.has(mod.folder) ? heldWholeStatus(mod.name) : this.statusOf(mod))));
   }
