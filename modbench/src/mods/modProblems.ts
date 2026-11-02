@@ -31,7 +31,8 @@ export class ModProblems {
     const problems = [...statuses.values()].flatMap((read) => {
       const folder = folders.get(read.mod);
       if (folder === undefined) return [];
-      const lastGood = read.unreadable === undefined ? read : this.statuses.of(read.mod);
+      const manifestRefused = read.unreadable !== undefined && read.manifestFile !== undefined;
+      const lastGood = read.unreadable === undefined ? read : manifestRefused ? undefined : this.statuses.of(read.mod);
       const unreadable = read.unreadable === undefined ? [] : statusProblems(read, folder);
       const holdsPlugin = this.instance.value.plugins.some(({ origin }) => origin === read.mod);
       const note = lastGood && severalPackagesNote(lastGood, holdsPlugin);
