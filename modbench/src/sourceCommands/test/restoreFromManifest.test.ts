@@ -245,14 +245,14 @@ describe('restore from manifest', () => {
     const { restore } = await over({ files: { ModA: {} } });
     await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{\n"files": []\n}\n');
 
-    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was skipped: its manifest is in a format before version 1, and Modbench reads only version 1.' }]);
+    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: its manifest is in a format before version 1, and Modbench reads only version 1." }]);
   });
 
   it('skips a mod whose manifest cannot be read, naming where', async () => {
     const { restore } = await over({ files: { ModA: {} } });
     await writeFile(join(folderOf('ModA'), 'ModA.manifest.json'), '{');
 
-    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was skipped: its manifest cannot be read at line 1.' }]);
+    expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: its manifest is not valid JSON at line 1: Expected property name or '}' in JSON at position 1." }]);
   });
 
   it.each<[string, InstanceAnswers['refusals'], string]>([
@@ -552,7 +552,7 @@ describe('restore from manifest', () => {
       const { restore, client } = await sourceMod();
       client.setCommandResult('cloneSubmodules', { applied: [], refused: [{ item: source(), refusal: 'NotCloned', message: 'its remote holds no commit abc' }] });
 
-      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was skipped: its submodule could not be cloned or read: its remote holds no commit abc.' }]);
+      expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: "was skipped: its submodule could not be cloned or read: its remote holds no commit abc." }]);
     });
 
     it('is not finished when its build left a plugin as it was', async () => {

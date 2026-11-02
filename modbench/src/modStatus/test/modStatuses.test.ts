@@ -205,16 +205,17 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(value);
     const read = (await statuses.current()).get('ModA');
     const whileUnreadable = [statuses.of('ModA')?.noManifest, statuses.message()];
-    await writeFile(join(mod, 'ModA.manifest.json'), '<<<<<<< HEAD\n\n');
+    await writeFile(join(mod, 'ModA.manifest.json'), '<<<<<<< HEAD\n');
     statuses.derive(value);
     await statuses.current();
     await writeManifestIn(mod, EMPTY);
     statuses.derive(value);
     await statuses.current();
 
+    const WHY = 'its manifest is not valid JSON at line 1: Unexpected token \'<\', "<<<<<<< HEAD\n" is not valid JSON';
     expect([read?.unreadable, ...whileUnreadable, statuses.message(), statuses.of('ModA')?.noManifest, logged]).toEqual([
-      'its manifest cannot be read at line 1', true, 'Showing the last good read: the status of "ModA" could not be read: its manifest cannot be read at line 1.',
-      undefined, false, ['[modList] The status of "ModA" could not be read: its manifest cannot be read at line 1'],
+      WHY, true, `Showing the last good read: the status of "ModA" could not be read: ${WHY}.`,
+      undefined, false, [`[modList] The status of "ModA" could not be read: ${WHY}`],
     ]);
   });
 });

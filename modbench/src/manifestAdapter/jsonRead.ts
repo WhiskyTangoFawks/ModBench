@@ -77,7 +77,7 @@ export function parsed<T>(text: string, file: string, of: (value: unknown) => T)
     return { read: of(JSON.parse(text)) };
   } catch (problem) {
     if (problem instanceof Unreadable) return { refused: problem.message };
-    if (problem instanceof SyntaxError) return { refused: `its ${file} cannot be read${lineOf(problem, text)}` };
+    if (problem instanceof SyntaxError) return { refused: `its ${file} is not valid JSON${lineOf(problem, text)}: ${problem.message.replace(/ \(line \d+ column \d+\)$/, '')}` };
     throw problem;
   }
 }

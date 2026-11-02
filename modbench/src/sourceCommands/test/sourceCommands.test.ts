@@ -91,7 +91,7 @@ describe('sourceCommands build', () => {
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
-    expect([client.calls, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: 'was not built: its manifest cannot be read at line 1.' }] }]);
+    expect([client.calls, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: "was not built: its manifest is not valid JSON at line 1: Expected property name or '}' in JSON at position 1." }] }]);
   });
 
   it('saves each mod\'s source folder, and refuses a mod whose file VS Code leaves unsaved, naming the file, while the rest build', async () => {
