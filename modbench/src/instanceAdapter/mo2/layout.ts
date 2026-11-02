@@ -173,6 +173,9 @@ export const REPOSITORY_WATCH_GLOB = GIT_DIR;
 /** The repository's config and pre-push hook, where git init's path filter and push check are written. */
 export const REPOSITORY_SET_UP_WATCH_GLOB = `${GIT_DIR}/{config,hooks/pre-push}`;
 
+/** What decides the folders git holds whole: its ignore lists and its index of tracked files. */
+export const HELD_BY_GIT_WATCH_GLOB = `{.gitignore,${GIT_DIR}/index,${GIT_DIR}/info/exclude}`;
+
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
 export const MODS_GLOB = `${MODS}/**`;

@@ -4,6 +4,7 @@ import { exclusionsOfFiles, isUnderAny, ownFilesOf, sourceModsOf, writeManifestI
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { heldManifestIn } from './heldManifest';
+import { modsHeldWhole } from './heldWhole';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
@@ -222,13 +223,6 @@ async function submodulesWritten(
 }
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
-
-// ADR-0022: a folder git holds whole is git's, so no manifest records it.
-async function modsHeldWhole(adapter: Adapter, mods: readonly string[]): Promise<ReadonlySet<string>> {
-  const folders = await Promise.all(mods.map(async (mod) => [mod, await adapter.modFolderPath(mod)] as const));
-  const held = await adapter.foldersHeldWhole(folders.flatMap(([, folder]) => (folder === undefined ? [] : [folder])));
-  return new Set(folders.flatMap(([mod, folder]) => (folder !== undefined && held.has(folder) ? [mod] : [])));
-}
 
 /** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceModsToRecord`, or every one when
  *  `everyMod`. A source mod's own folder is its build's. */

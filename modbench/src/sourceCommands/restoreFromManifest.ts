@@ -15,6 +15,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
+import { modsHeldWhole } from './heldWhole';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
@@ -24,7 +25,7 @@ type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
-  | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom'>;
+  | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
@@ -463,11 +464,13 @@ export async function restoreFromManifest(
   const ordered = await inModOrder(adapter, namesOf(asked, others));
   const { folders, refused: refusedFolder, notSearched } = await foldersCompared(adapter, ordered, others, sourceMods);
   const refusedNames = new Set(refusedFolder.map(({ item }) => item));
-  const mods = ordered.filter((mod) => !refusedNames.has(mod));
+  const heldWhole = await modsHeldWhole(adapter, ordered.filter((mod) => folders.isMod(mod) && sourceMods.folderOf(mod) === undefined && !refusedNames.has(mod)));
+  const mods = ordered.filter((mod) => !refusedNames.has(mod) && !heldWhole.has(mod));
   const pass = await passOver(deps, folders, sourceMods, options);
 
   const landed: ModRestored[] = [];
-  const refused: ItemRefusal<string>[] = [...notClonedYet, ...refusedFolder, ...everyManifest ? [] : notSearched];
+  const refusedHeldWhole = everyManifest ? [] : [...heldWhole].map((item) => ({ item, reason: skipped('git holds its whole folder') }));
+  const refused: ItemRefusal<string>[] = [...notClonedYet, ...refusedFolder, ...refusedHeldWhole, ...everyManifest ? [] : notSearched];
   const pending: string[] = [];
   const notIndexed = new Map<string, string>();
   for (const [at, mod] of mods.entries()) {

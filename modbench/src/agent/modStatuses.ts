@@ -5,7 +5,7 @@ import { Refusal } from '../drivingLib/refusal';
 import { modOrigin } from '../instanceLoader/fileConflictIndex';
 import { filesOfOrigin } from '../drivingLib/copiesToRead';
 
-const LEFT_OUT = new Set<string>(['mod', 'manifestFile', 'packages', 'ignored', 'ignoreEntries'] satisfies (keyof ModStatus)[]);
+const LEFT_OUT = new Set<string>(['mod', 'heldWhole', 'manifestFile', 'packages', 'ignored', 'ignoreEntries'] satisfies (keyof ModStatus)[]);
 
 const HELD_AT_FOLDER_PATHS = new Set<string>(['differing', 'namedByNoLine'] satisfies (keyof ModStatus)[]);
 

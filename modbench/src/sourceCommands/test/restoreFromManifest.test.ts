@@ -84,6 +84,30 @@ const writes = (calls: readonly AdapterCall[]): AdapterCall[] =>
   calls.filter(({ verb }) => ['writeFilesIn', 'trashFileIn', 'writeInstalledFrom'].includes(verb));
 
 describe('restore from manifest', () => {
+  const heldWholeSetup = () => over({
+    files: { ModA: { 'a.nif': EDITED }, ModB: { 'a.nif': EDITED } },
+    manifests: { ModA: fromTheZip({ 'a.nif': HA }), ModB: fromTheZip({ 'a.nif': HA }) },
+    answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), heldWholeByGit: new Set([folderOf('ModA')]) },
+  });
+
+  it('refuses a mod whose whole folder git holds and leaves its files alone, since no manifest records the rest of it', async () => {
+    const { restore, fake } = await heldWholeSetup();
+
+    const outcome = await restore(['ModA', 'ModB']);
+
+    expect([outcome.refused, outcome.landed.map(({ mod }) => mod), writes(fake.calls).map((call) => Reflect.get(call, 'folder'))]).toEqual([
+      [{ item: 'ModA', reason: 'was skipped: git holds its whole folder.' }], ['ModB'], [folderOf('ModB'), folderOf('ModB')],
+    ]);
+  });
+
+  it('passes over a mod whose whole folder git holds when it runs on every manifest, refusing none', async () => {
+    const { deps } = await heldWholeSetup();
+
+    const outcome = await restoreFromManifest(deps, ['ModA', 'ModB'], {}, true, []);
+
+    expect([outcome.refused, outcome.landed.map(({ mod }) => mod)]).toEqual([[], ['ModB']]);
+  });
+
   it('writes each file whose bytes differ or that is gone from the entry of its bytes, wherever its package holds it, and sends each file it does not name to the trash', async () => {
     const { restore, fake } = await over({
       files: { ModA: { 'a.nif': HA, 'b.nif': EDITED, 'mine.txt': 'M' } },

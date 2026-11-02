@@ -42,6 +42,12 @@ describe('the folders git holds whole', () => {
     expect([...await foldersHeldWhole(root, [join(root, 'mods/Kept')])]).toEqual([join(root, 'mods/Kept')]);
   });
 
+  it('reads a folder git tracks in part as not held, since the rest of it is left out', async () => {
+    await instanceIgnoring(WHITELIST, FILES);
+    execFileSync('git', ['add', '-f', 'mods/Kept/a.esp'], { cwd: root });
+    expect([...await foldersHeldWhole(root, [join(root, 'mods/Kept')])]).toEqual([]);
+  });
+
   it('holds none while the instance holds no repository', async () => {
     root = await mkdtemp(join(tmpdir(), 'modbench-held-whole-'));
     expect([...await foldersHeldWhole(root, [join(root, 'mods/Held')])]).toEqual([]);

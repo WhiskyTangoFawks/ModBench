@@ -996,6 +996,16 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
+    it.each(['.gitignore', '.git/index', '.git/info/exclude'])('hears a change to %s, which decides the folders git holds whole', (inside) => {
+      let signals = 0;
+      managerOver(root).subscribe(() => { signals++; });
+      const entry = live().find((w) => w.base === root && matchesGlob(inside, w.pattern));
+
+      entry?.fireChange(join(root, inside));
+
+      expect(signals).toBe(1);
+    });
+
     it('arms nothing until someone listens, and disarms when the last listener leaves', () => {
       const watched = managerOver(root);
       expect(live()).toEqual([]);
