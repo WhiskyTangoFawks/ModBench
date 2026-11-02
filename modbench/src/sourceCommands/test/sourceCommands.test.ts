@@ -296,7 +296,7 @@ describe('sourceCommands build, in mod order', () => {
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
-    expect(outcome.landed[0]?.archivesRefused).toEqual([{ item: 'Base.ba2', reason: 'it cannot be read', ...marked }]);
+    expect('landed' in outcome ? outcome.landed[0]?.archivesRefused : undefined).toEqual([{ item: 'Base.ba2', reason: 'it cannot be read', ...marked }]);
   });
 
   it('sends each loose file a pack step packed to the trash (source.md, Build, stories 2 and 20)', async () => {

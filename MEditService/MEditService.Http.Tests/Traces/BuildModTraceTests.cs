@@ -3,8 +3,8 @@ using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using ModFolder = MEditService.ModFolderAdapter;
 using static MEditService.Http.Tests.TestSupport.Wire;
+using ModFolder = MEditService.ModFolderAdapter;
 
 namespace MEditService.Http.Tests.Traces;
 
@@ -120,7 +120,7 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Equal("mesh", File.ReadAllText(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
-    private const string Copy ="\"step\": {\"copy\": [\"a.nif\"]}";
+    private const string Copy = "\"step\": {\"copy\": [\"a.nif\"]}";
 
     private static string UnpackStep(string step) =>
         $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", \"step\": {{{step}}}}}], \"exclusionMark\": \".mohidden\"}}";
