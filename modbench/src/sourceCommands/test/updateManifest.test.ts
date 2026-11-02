@@ -643,7 +643,7 @@ describe('update manifest', () => {
       expect((await manifestHeld('ModA')).files).toEqual(holding({ 'Mod.esp': HA }));
     });
 
-    it('drops the flags of a plugin that is no longer in the folder, as its manifest names no file it lacks', async () => {
+    it('drops the flags of a plugin that is gone from the folder, as its manifest names no file it lacks', async () => {
       const { update, manifestHeld } = await flagged(HX);
       await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Gone.esp', FLAGS]]), files: holding({ 'Gone.esp': HA }) });
 

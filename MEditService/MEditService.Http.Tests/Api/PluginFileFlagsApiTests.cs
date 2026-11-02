@@ -45,7 +45,8 @@ public sealed class PluginFileFlagsApiTests : HostedTests
         var set = await Client.PostAsJsonAsync("/plugin-files/set-flags", new { gameRelease = "Fallout4", files = new[] { new { path, flags = new Dictionary<string, bool> { ["Small"] = true } } } });
 
         var refused = Assert.Single((await set.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        Assert.Equal(("NotAPlugin", new byte[64]), (refused.GetProperty("refusal").GetString(), File.ReadAllBytes(path)));
+        Assert.Equal("NotAPlugin", refused.GetProperty("refusal").GetString());
+        Assert.Equal(new byte[64], File.ReadAllBytes(path));
     }
 
     [Theory]
