@@ -94,7 +94,7 @@ The xEdit Messages tab is not a surface: failures and wrong states go where comm
 | Editor, Referenced By | VS Code's References view | - | opened by the gesture |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Mods, the FOMOD installer | an editor tab | - | opened by install |
-| Source | the Explorer, an editor tab, and Source Control | - | opened by the user, or by init source mod |
+| Source | the Explorer, an editor tab, and Source Control | - | opened by the user, or by version in git |
 | Modlist repository, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself.
@@ -144,14 +144,14 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | uninstall | writes | `modbench.mod.uninstall` | mods | force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list | Send each mod's folder to the trash, and remove the mod from mod order. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](mods-fomod.md)); install anyway, for a FOMOD that names a missing file | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
-| init source mod | writes | `modbench.mod.initSourceMod` | mods | commit to main | none | Make a mod a source mod: a repository that holds its source. | decompile-and-commit |
+| version in git | writes | `modbench.mod.versionInGit` | mods | where: a source mod in a new repository, a source mod in the modlist repository, or the mod's whole folder in the modlist repository; commit | none | Put a mod's work under git. | decompile-and-commit |
 | build | writes | `modbench.mod.build` | mods, or none for every source mod | - | none | Write a source mod's folder as its build file says, and record it in its manifest. | build-mod |
 | update manifest | writes | `modbench.mod.updateManifest` | mods, separators or source folders, or none for every manifest | - | none | Record each folder in its manifest. | update-manifest |
 | restore from manifest | writes | `modbench.mod.restoreFromManifest` | mods or separators, or none for every manifest | - | none | Make each folder what its manifest says, building each source mod's. | restore-from-manifest |
 | check for updates | writes | `modbench.mod.checkForUpdates` | mods or separators, or none for every mod | - | MO2 mod list | Ask Nexus for the newest version of each mod, and write it in the mod's metadata. | - |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. | none |
-| open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's repository in VS Code's Explorer. | none |
+| open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's source folder in VS Code's Explorer. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. | none |
 | open conflicts | reads | `modbench.mod.openConflicts` | mod | - | MO2 Information dialog, Conflicts tab | Open a mod's conflict table in an editor tab. | open-conflicts |
 | compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
@@ -221,5 +221,5 @@ Commands Modbench runs itself. No user starts them, so they have no gesture. The
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | The Instance loader recomputed the instance value ([load-instance](../../docs/traces/load-instance.d2)) | writes | `modbench.instance.putLoadOrder` | snapshot: the instance value mEdit edits against ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)) | - | none | Hand mEdit the whole snapshot at every recompute. | index-load-order |
-| The active profile's mod order disagrees with the mods, each what its manifest says where it has one ([ADR-0022](../adr/0022-git-versions-how-each-folder-is-made-not-the-folder.md)) | writes | `modbench.mod.sync` | - | - | MO2 refresh | Add a line for each mod that has none, and drop each line whose mod is gone. | update-load-order-file |
+| The active profile's mod order disagrees with the mods, each what its manifest says where it has one ([ADR-0022](../adr/0022-git-holds-what-the-user-chooses-a-manifest-rebuilds-the-rest.md)) | writes | `modbench.mod.sync` | - | - | MO2 refresh | Add a line for each mod that has none, and drop each line whose mod is gone. | update-load-order-file |
 | The active profile's `plugins.txt` disagrees with the plugins provided: each plugin the game can load, and each an enabled mod's manifest names | writes | `modbench.plugin.sync` | - | - | MO2 refresh | Add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. | update-load-order-file |

@@ -8,4 +8,4 @@ The build file serves [ADR-0027](../adr/0027-a-build-file-builds-a-source-mods-f
 
 ## Who writes it
 
-Modbench writes only the first build file (plugins.md, Init source mod, story 2), and never rewrites one.
+Modbench writes only the first build file (plugins.md, Version in git, story 2), and never rewrites one.

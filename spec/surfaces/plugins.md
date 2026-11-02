@@ -1,6 +1,6 @@
 # Plugins
 
-The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../out-of-scope/mo2.md) and [xedit.md](../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](commands.md) under Plugin and Record, `init source mod` under Mod, and Every view. What every view shares is in [common.md](common.md).
+The Plugins surface shows the plugin order and, beneath each plugin, its records. It is one tree over two templates: its plugin rows follow MO2's plugin list ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), and the records beneath them follow xEdit's navigator ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs, [mo2.md](../out-of-scope/mo2.md) and [xedit.md](../out-of-scope/xedit.md) say why. Its gestures are in [commands.md](commands.md) under Plugin and Record, `version in git` under Mod, and Every view. What every view shares is in [common.md](common.md).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -159,7 +159,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a compiled plugin) · load after… · create record… · init source mod… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
+| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a compiled plugin) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record, Menus and keys, story 4) · copy… · copy value · delete (Menus and keys, story 4) |
@@ -171,7 +171,7 @@ As a user, I want:
 1. Each menu item to act as the gesture's Argument in the catalog says. Cites: commands.md, Argument
 2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it, which highlights its related rows (The highlight). Cites: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Cites: mods.md
-4. The gestures that edit a plugin's records absent on a plugin with no plugin source and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Init source mod, or decompile, is on its row. Cites: No dead entries
+4. The gestures that edit a plugin's records absent on a plugin with no plugin source and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Version in git, or decompile, is on its row. Cites: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Cites: catalog `copy value`; [editor-fields.md](editor-fields.md)
 
 ## Drag and drop
@@ -198,17 +198,17 @@ As a user, I want:
 6. The new plugin empty: a header with no records and no masters, flagged as its extension means.
 7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Cites: GLOSSARY.md, Source mod
 
-### Init source mod
+### Version in git
 
 As a user, I want:
 
-1. One pick, of whether to commit to main, with not committing first. While it runs, the view's message line names the mod and the phase. Cites: catalog `init source mod`
-2. The repository to track the plugin source, the mod's assets, the build file, the manifest and `.gitignore`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
-3. When I pick it, one commit to main, `Init <mod>`, holding what story 2 tracks.
+1. One pick of where git holds the mod, then one of whether to commit, with not committing first. While it runs, the view's message line names the mod and the phase. Cites: catalog `version in git`; modlist-repository.md, The repository, story 7
+2. Git to track, of a source mod's source folder, the plugin source, the mod's assets, the build file, the manifest and `.gitignore`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
+3. When I pick it, a commit, `Init <mod>`, of only what version in git put under git.
 4. Each file's line endings kept as written.
-5. An init source mod that refuses any plugin to write nothing and leave no repository, naming each refused plugin and why.
+5. Version in git that refuses any plugin to write nothing, naming each refused plugin and why.
 6. A mod that holds no plugin to become a source mod of its assets.
-7. Init to show me the source in the Explorer when it lands, since I work on it there. Cites: source.md
+7. A source mod to show me its source in the Explorer when it lands, since I work on it there. Cites: source.md
 
 ### Decompile
 

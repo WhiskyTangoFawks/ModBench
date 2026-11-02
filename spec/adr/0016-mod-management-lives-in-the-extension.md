@@ -4,7 +4,7 @@ Record editing is split across the extension and the C# service. Mod Management 
 
 ## Consequences
 
-- mEdit interprets no manifest. The extension hands build and init what they need as values, and the files a commit must hold as bytes. Each reads what it is handed only to write it, and answers with what it made. The extension records a source mod's manifest from that answer.
+- mEdit interprets no manifest. The extension hands build and version in git what they need as values, and the files a commit must hold as bytes. Each reads what it is handed only to write it, and answers with what it made. The extension records a source mod's manifest from that answer.
 
 ## Alternatives rejected
 

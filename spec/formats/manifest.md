@@ -1,6 +1,6 @@
 # Manifest
 
-A manifest restores its folder from its packages ([ADR-0022](../adr/0022-git-versions-how-each-folder-is-made-not-the-folder.md)). Its schema is [manifest-1.schema.json](manifest-1.schema.json).
+A manifest restores its folder from its packages ([ADR-0022](../adr/0022-git-holds-what-the-user-chooses-a-manifest-rebuilds-the-rest.md)). Its schema is [manifest-1.schema.json](manifest-1.schema.json).
 
 ## Rules the schema cannot state
 
@@ -13,7 +13,7 @@ A manifest restores its folder from its packages ([ADR-0022](../adr/0022-git-ver
 
 ## Who writes it
 
-Modbench writes every manifest (modlist-repository.md, Update manifest; source.md, Build; plugins.md, Init source mod) but its `flags`, which the user writes.
+Modbench writes every manifest (modlist-repository.md, Update manifest; source.md, Build; plugins.md, Version in git) but its `flags`, which the user writes.
 
 ## Canonical text
 

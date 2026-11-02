@@ -1,6 +1,6 @@
 # A build file builds a source mod's folder from its source folder
 
-A source mod's build file says how its build makes the mod's folder from the source folder, and nothing else. The source folder's manifest restores what packages hold ([ADR-0022](0022-git-versions-how-each-folder-is-made-not-the-folder.md)), so each file has one job and one owner: the author owns the build file, and Modbench owns every manifest.
+A source mod's build file says how its build makes the mod's folder from the source folder, and nothing else. The source folder's manifest restores what packages hold ([ADR-0022](0022-git-holds-what-the-user-chooses-a-manifest-rebuilds-the-rest.md)), so each file has one job and one owner: the author owns the build file, and Modbench owns every manifest.
 
 ## Consequences
 
