@@ -18,7 +18,7 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     (manifestFile === undefined ? [] : messages.map((message) => ({ file: manifestFile, message })));
   return [
     ...installation,
-    ...onManifest(status.unreadable === undefined ? [] : [`Its manifest cannot be read: ${status.unreadable}.`]),
+    ...onManifest(status.unreadable === undefined ? [] : [`${status.unreadable.charAt(0).toUpperCase()}${status.unreadable.slice(1)}.`]),
     ...onFiles(status.differing, 'Differs from its manifest.'),
     ...onFiles(status.namedByNoLine, 'No line of the mod\'s manifest names this file.'),
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),

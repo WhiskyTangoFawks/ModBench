@@ -93,7 +93,7 @@ describe('a mod\'s status against its manifest', () => {
     await write('mine.txt', 'mine');
     await write('mod.manifest.json', '<<<<<<< HEAD\n');
 
-    expect(await status()).toEqual(nothing({ unreadable: 'its manifest cannot be read at line 1', manifestFile: join(folder, 'mod.manifest.json') }));
+    expect(await status()).toEqual(nothing({ unreadable: "its manifest is not valid JSON at line 1: Unexpected token '<', \"<<<<<<< HEAD\n\" is not valid JSON", manifestFile: join(folder, 'mod.manifest.json') }));
   });
 
   it('is unreadable, naming both versions, when its manifest is of the format before version 1', async () => {

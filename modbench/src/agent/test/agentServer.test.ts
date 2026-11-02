@@ -727,6 +727,16 @@ describe('the agent server, resolving names against the instance', () => {
     });
   });
 
+  it('names a file of Overwrite by the origin a gesture reply gives it, which carries no name', async () => {
+    expect(await resolve({ files: [{ mod: { kind: 'runtimeOutput' }, path: 'f.esp' }] })).toEqual({
+      isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'Overwrite', file: 'F.esp' }] }),
+    });
+  });
+
+  it('refuses a mod named with no name', async () => {
+    expect(await resolve({ files: [{ mod: { kind: 'mod' }, path: 'f.esp' }] })).toMatchObject({ isError: true, text: expect.stringContaining('needs a name') as unknown });
+  });
+
   it('refuses a path the mod has no file at', async () => {
     expect(await resolve({ files: [{ mod: { name: 'B' }, path: 'meshes/none.nif' }] })).toEqual({ isError: true, text: 'Nothing is named "meshes/none.nif" in mod B.' });
   });

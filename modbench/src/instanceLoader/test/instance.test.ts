@@ -202,7 +202,7 @@ describe('Instance — the value', () => {
 
     await instance.refresh().finally(() => rm(mods, { recursive: true }));
 
-    expect(logs).toContain(`[instance] ${join(mods, 'Harder VATS')} builds from no repository, as its manifest cannot be read at line 1.`);
+    expect(logs).toContain(`[instance] ${join(mods, 'Harder VATS')} builds from no repository, as its manifest is not valid JSON at line 1: Expected property name or '}' in JSON at position 1.`);
   });
 
   it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build names', async () => {

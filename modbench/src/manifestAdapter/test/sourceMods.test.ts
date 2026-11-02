@@ -81,7 +81,7 @@ describe('sourceModsOf', () => {
 
     const linked = await sourceModsOf([mod], new Map([['Mod', source('Mod')]]), key);
 
-    expect([linked.folderOf('Mod'), linked.notes]).toEqual([undefined, [`${mod.path} builds from no repository, as its manifest cannot be read at line 1.`]]);
+    expect([linked.folderOf('Mod'), linked.notes]).toEqual([undefined, [`${mod.path} builds from no repository, as its manifest is not valid JSON at line 1: Expected property name or '}' in JSON at position 1.`]]);
   });
 
   it('says a folder that cannot be read builds from no repository', async () => {

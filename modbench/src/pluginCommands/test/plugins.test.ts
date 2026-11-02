@@ -304,7 +304,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       order: ['Base.esp', 'Unrestored.esp'], provided: ['Base.esp', 'New.esp'], repository: { manifests: { Provider: [], Unrestored: 'unreadable' } },
     });
 
-    expect(result).toEqual({ applied: false, refusal: 'the status of "Unrestored" could not be read: its manifest cannot be read at line 1' });
+    expect(result).toEqual({ applied: false, refusal: "the status of \"Unrestored\" could not be read: its manifest is not valid JSON at line 1: Unexpected token '<', \"<<<<<<< HEAD\n\" is not valid JSON" });
     expect(handedChanges(fake)).toEqual([]);
   });
 
