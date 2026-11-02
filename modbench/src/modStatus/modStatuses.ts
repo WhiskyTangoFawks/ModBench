@@ -1,7 +1,7 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -52,7 +52,8 @@ export class ModStatuses {
     this.derivation = this.deriveWhileWaiting();
   }
 
-  /** The statuses derived from the latest value handed, each as read, an unreadable one too. */
+  /** The statuses derived from the latest value handed, each as read, an unreadable one too. While git cannot say which folders it
+   *  holds, every mod's status is unreadable with that reason. */
   async current(): Promise<ReadonlyMap<string, ModStatus>> {
     await this.derivation;
     return this.derived;
@@ -68,11 +69,12 @@ export class ModStatuses {
   }
 
   message(): string | undefined {
-    const sentences = [
-      ...this.gitFailure === undefined ? [] : [`git could not say which folders it holds: ${this.gitFailure}.`],
-      ...[...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`),
-    ];
-    return sentences.length === 0 ? undefined : `Showing the last good read: ${sentences.join(' ')}`;
+    if (this.gitFailure !== undefined) {
+      const why = `git could not say which folders it holds: ${this.gitFailure}.`;
+      return this.shown.size === 0 ? `The statuses could not be read: ${why}` : `Showing the last good read: ${why}`;
+    }
+    if (this.unreadable.size === 0) return undefined;
+    return `Showing the last good read: ${[...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`).join(' ')}`;
   }
 
   onMessageChanged(listener: () => void): Listening {
@@ -90,7 +92,11 @@ export class ModStatuses {
         this.waiting = undefined;
         const mods = value.holdsRepository ? modsAt(value) : [];
         const heldWhole = await this.heldWholeAmong(mods);
-        if (heldWhole === undefined) continue;
+        if (heldWhole === undefined) {
+          this.derived = new Map(mods.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
+          for (const listener of this.changed) listener();
+          continue;
+        }
         const statuses = await Promise.all(mods.map((mod) => this.statusOf(mod, heldWhole.has(mod.folder))));
         this.hold(new Map(statuses.map((status) => [status.mod, status])));
       }
@@ -99,7 +105,7 @@ export class ModStatuses {
     }
   }
 
-  // Git failing leaves every status as it was, with one sentence for all of them.
+  // Git failing leaves the last good statuses shown, and says why once for all of them.
   private setGitFailure(why: string | undefined): void {
     if (this.gitFailure === why) return;
     this.gitFailure = why;

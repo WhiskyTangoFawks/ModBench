@@ -1,7 +1,7 @@
 export type * from './manifest';
 export * from './buildFile';
 export {
-  filesNoPackageHolds, folderAgainst, heldWholeStatus, statusFrom, type FolderAgainst, type ModAt, type ModStatus,
+  filesNoPackageHolds, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FolderAgainst, type ModAt, type ModStatus,
 } from './modStatus';
 export { manifestText, ordinal } from './manifestText';
 export { buildFileIn, manifestAt, manifestIn, manifestNameOf, packagesAskedAt, writeManifestIn } from './manifestFiles';

@@ -183,6 +183,35 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     ]);
   });
 
+  it('marks every mod\'s status unreadable with the reason while git cannot say what it holds, and reads clean again once it can', async () => {
+    const mod = await folderOf('ModA', { 'mine.txt': '' });
+    let gitFails = true;
+    const statuses = new ModStatuses({
+      ...instance, foldersHeldWhole: (folders) => (gitFails ? Promise.reject(new Error('git is gone')) : instance.foldersHeldWhole(folders)),
+    }, (line) => { logged.push(line); });
+    const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]);
+
+    statuses.derive(value);
+    const failing = (await statuses.current()).get('ModA')?.unreadable;
+    gitFails = false;
+    statuses.derive(value);
+    const recovered = (await statuses.current()).get('ModA');
+
+    expect([failing, recovered?.unreadable, recovered?.noManifest, statuses.message()]).toEqual([
+      'git could not say which folders it holds: git is gone', undefined, true, undefined,
+    ]);
+  });
+
+  it('says the statuses could not be read, not a last good read, when git fails at the first derive', async () => {
+    const mod = await folderOf('ModA', { 'mine.txt': '' });
+    const statuses = new ModStatuses({ ...instance, foldersHeldWhole: () => Promise.reject(new Error('git is gone')) }, (line) => { logged.push(line); });
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    await statuses.current();
+
+    expect([statuses.message(), statuses.of('ModA')]).toEqual(['The statuses could not be read: git could not say which folders it holds: git is gone.', undefined]);
+  });
+
   it('derives no status while the instance holds no repository', async () => {
     const mod = await folderOf('ModA');
     const statuses = statusesLogging();
