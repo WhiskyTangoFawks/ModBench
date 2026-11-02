@@ -20,6 +20,13 @@ public sealed record Dds(byte[] File, byte[] Pixels)
 
     public static Dds Bc7(int width, int height) => Of(width, height, 1, "DX10", dxgi: 98, blockBytes: 16);
 
+    public static Dds CubemapBc7(int width, int height)
+    {
+        var cubemap = Bc7(width, height);
+        Put(cubemap.File, HeaderEnd + 8, 0x4);
+        return cubemap;
+    }
+
     private static Dds Of(int width, int height, int mips, string fourCc, uint? dxgi, int blockBytes)
     {
         var pixels = Enumerable.Range(0, mips)

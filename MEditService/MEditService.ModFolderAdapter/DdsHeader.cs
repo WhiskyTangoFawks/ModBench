@@ -12,7 +12,7 @@ internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte M
     private const uint LuminanceFlag = 0x20000;
     private const uint CubeMapCaps = 0x200;
     private const uint VolumeCaps = 0x200000;
-    private const uint CubeMapMisc = 0x4;
+    internal const uint CubeMapMisc = 0x4;
     internal const uint Texture2D = 3;
 
     private static readonly Dictionary<string, byte> FormatOfFourCc = new()
