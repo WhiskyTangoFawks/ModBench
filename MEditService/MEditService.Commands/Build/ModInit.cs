@@ -89,7 +89,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
     private static ItemAnswer<InitSourceModRefusal, IReadOnlyList<PluginAddress>> Refused(InitSourceModRefusal refusal, string message) =>
         ItemAnswer<InitSourceModRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
 
-    // The adapter writes nothing when any of it fails (plugins.md, Init source mod, story 5).
+    // The adapter writes nothing when any of it fails (plugins.md, Version in git, story 5).
     private SourceFailure? Commit(
         string sourceFolder, List<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> verified, byte[] buildFile,
         List<FileToCopy> assets, RepairedInInit? repair, RootFile? manifest, IReadOnlyList<string>? ignored, bool commit)

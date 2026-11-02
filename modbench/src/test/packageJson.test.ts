@@ -237,8 +237,8 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
     ]);
   });
 
-  it('ticks the init source mod step when a source mod exists (story 3)', () => {
-    expect(steps.find(({ id }) => id === 'initSourceMod')?.completionEvents).toEqual([`onContext:${ANY_SOURCE_MOD_KEY} == true`]);
+  it('ticks the version in git step when a source mod exists (story 3)', () => {
+    expect(steps.find(({ id }) => id === 'versionInGit')?.completionEvents).toEqual([`onContext:${ANY_SOURCE_MOD_KEY} == true`]);
   });
 
   it('links each step only to commands that exist', () => {
@@ -691,7 +691,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const DISABLE_ENTRY: [string, string] = ['modbench.plugin.disable', '2_change'];
   const RENAME_ENTRY: [string, string] = ['modbench.plugin.rename', '2_change'];
   const CREATE_RECORD_ENTRY: [string, string] = ['modbench.record.create', '3_create'];
-  const INIT_SOURCE_MOD_ENTRY: [string, string] = ['modbench.mod.initSourceMod', '4_sourceControl'];
+  const VERSION_IN_GIT_ENTRY: [string, string] = ['modbench.mod.versionInGit', '4_sourceControl'];
   const DECOMPILE_ENTRY: [string, string] = ['modbench.plugin.decompile', '4_sourceControl'];
   const COPY_RECORD_ENTRY: [string, string] = ['modbench.record.copy', '5_copy'];
   const DELETE_RECORD_ENTRY: [string, string] = ['modbench.record.delete', '6_destroy'];
@@ -699,12 +699,12 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const containerKinds = ['record', 'worldspace', 'cell'];
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
-    ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled inOverwrite nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
     ['plugin enabled nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
     ['pluginImplicit', [REVEAL_ENTRY, COPY_VALUE_ENTRY]],
@@ -907,23 +907,23 @@ describe('package.json record grid keys, as editor.md\'s Menus and keys and its 
     });
 });
 
-describe('package.json init source mod\'s palette entry', () => {
+describe('package.json version in git\'s palette entry', () => {
   const MODS = { focusedView: 'modbench.modList', ...inInstance, 'modbench.mod.holdsNonSourceMod': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' };
   const PLUGINS = { focusedView: 'modbench.pluginListTree', ...inInstance, 'modbench.plugin.allInNonSourceMod': true, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' };
 
-  it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what init source mod acts on', () => {
-    expect(paletteOffers('modbench.mod.initSourceMod', MODS)).toBe(true);
-    expect(paletteOffers('modbench.mod.initSourceMod', PLUGINS)).toBe(true);
+  it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what version in git acts on', () => {
+    expect(paletteOffers('modbench.mod.versionInGit', MODS)).toBe(true);
+    expect(paletteOffers('modbench.mod.versionInGit', PLUGINS)).toBe(true);
   });
 
   it('is not in the palette when the last selection was made in the other view', () => {
-    expect(paletteOffers('modbench.mod.initSourceMod', { ...MODS, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' })).toBe(false);
-    expect(paletteOffers('modbench.mod.initSourceMod', { ...PLUGINS, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' })).toBe(false);
+    expect(paletteOffers('modbench.mod.versionInGit', { ...MODS, 'modbench.mod.sourceGestureRowsIn': 'modbench.pluginListTree' })).toBe(false);
+    expect(paletteOffers('modbench.mod.versionInGit', { ...PLUGINS, 'modbench.mod.sourceGestureRowsIn': 'modbench.modList' })).toBe(false);
   });
 
-  it('is not in the palette when the focused view holds nothing to init source mod', () => {
-    expect(paletteOffers('modbench.mod.initSourceMod', without(MODS, 'modbench.mod.holdsNonSourceMod'))).toBe(false);
-    expect(paletteOffers('modbench.mod.initSourceMod', without(PLUGINS, 'modbench.plugin.allInNonSourceMod'))).toBe(false);
+  it('is not in the palette when the focused view holds nothing to version in git', () => {
+    expect(paletteOffers('modbench.mod.versionInGit', without(MODS, 'modbench.mod.holdsNonSourceMod'))).toBe(false);
+    expect(paletteOffers('modbench.mod.versionInGit', without(PLUGINS, 'modbench.plugin.allInNonSourceMod'))).toBe(false);
   });
 });
 
@@ -964,7 +964,7 @@ describe('package.json record tab menus', () => {
       ['modbench.record.removeElement', '2_change'],
       ['modbench.record.moveElementUp', '2_change'],
       ['modbench.record.moveElementDown', '2_change'],
-      ['modbench.mod.initSourceMod', '4_sourceControl'],
+      ['modbench.mod.versionInGit', '4_sourceControl'],
       ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.mod.build', '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
@@ -986,7 +986,7 @@ describe('package.json record tab menus', () => {
     ['a cell with something to copy', { webviewSection: 'cell', copyText: 'x' }, ['modbench.copyValue']],
     ['a cell with nothing to copy', { webviewSection: 'cell' }, []],
     ['the column of a plugin in a non-source mod', { webviewSection: 'recordHeader', inMod: 'nonSourceMod', editable: false },
-      [REFERENCED_BY, 'modbench.mod.initSourceMod', RECORD_COPY]],
+      [REFERENCED_BY, 'modbench.mod.versionInGit', RECORD_COPY]],
     ['the column of a plugin in a source mod that is not editable', { webviewSection: 'recordHeader', inMod: 'sourceMod', editable: false },
       [REFERENCED_BY, DECOMPILE, BUILD, RECORD_COPY]],
     ['the column of an editable plugin', { webviewSection: 'recordHeader', inMod: 'sourceMod', editable: true },
@@ -1174,7 +1174,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.separator.add', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
       ['modbench.mod.install', '3_create'],
-      ['modbench.mod.initSourceMod', '4_sourceControl'],
+      ['modbench.mod.versionInGit', '4_sourceControl'],
       [UPDATE_MANIFEST, '4_sourceControl'],
       [RESTORE_FROM_MANIFEST, '4_sourceControl'],
       ['modbench.copyValue', '5_copy'],
@@ -1209,7 +1209,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const ADD_SEPARATOR_ENTRY: [string, string] = ['modbench.separator.add', '3_create'];
   const CREATE_EMPTY_ENTRY: [string, string] = ['modbench.mod.createEmpty', '3_create'];
   const INSTALL_ENTRY: [string, string] = ['modbench.mod.install', '3_create'];
-  const INIT_SOURCE_MOD_ENTRY: [string, string] = ['modbench.mod.initSourceMod', '4_sourceControl'];
+  const VERSION_IN_GIT_ENTRY: [string, string] = ['modbench.mod.versionInGit', '4_sourceControl'];
   const COPY_VALUE_ENTRY: [string, string] = ['modbench.copyValue', '5_copy'];
   const UNINSTALL_ROW_ENTRY: [string, string] = ['modbench.mod.uninstall', '6_destroy'];
   const ENABLE_ENTRY: [string, string] = ['modbench.mod.enable', '2_change'];
@@ -1221,11 +1221,11 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const menus: [contextValue: string, entries: [string, string][]][] = [
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: true })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' })), [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, VIEW_ON_NEXUS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled holdsPlugin nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled holdsPlugin nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod disabled sourceMod', [OPEN_FOLDER_ENTRY, OPEN_SOURCE_ENTRY, OPEN_CONFLICTS_ENTRY, ENABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     ['mod enabled holdsPlugin', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
-    ['mod enabled nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, INIT_SOURCE_MOD_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
+    ['mod enabled nonSourceMod', [OPEN_FOLDER_ENTRY, OPEN_CONFLICTS_ENTRY, DISABLE_ENTRY, MOVE_ENTRY, RENAME_ENTRY, ...modCreation, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY, UNINSTALL_ROW_ENTRY]],
     [contextOf(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, [])), [MOVE_ENTRY, ADD_SEPARATOR_ENTRY, ['modbench.separator.rename', '3_create'], COPY_VALUE_ENTRY, ['modbench.separator.delete', '6_destroy']]],
     [contextOf(new OverwriteNode([], 'MO2')), [OPEN_FOLDER_ENTRY]],
     ['file', [OPEN_FOLDER_ENTRY, COPY_VALUE_ENTRY]],

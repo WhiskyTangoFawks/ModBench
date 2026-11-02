@@ -32,7 +32,7 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod], () => false).selectionToggle).toBe('enable');
   });
 
-  it('the palette\'s init source mod sees a selection that holds a mod with no repository, whether or not it provides a plugin', () => {
+  it('the palette\'s version in git sees a selection that holds a mod with no repository, whether or not it provides a plugin', () => {
     const noPlugin = new ModNode({ kind: 'mod', name: 'Settings', enabled: true }, { holdsPlugin: false, sourceMod: false });
     const sourceMod = new ModNode({ kind: 'mod', name: 'SourceMod', enabled: true }, { holdsPlugin: true, sourceMod: true });
     expect(modsKeyContext([enabledMod, noPlugin], byRow).holdsNonSourceMod).toBe(true);

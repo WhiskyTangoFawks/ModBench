@@ -394,7 +394,7 @@ describe('the Mods tree\'s rows', () => {
     expect(disabled.contextValue).toBe('mod disabled nonSourceMod');
   });
 
-  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which init source mod reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
+  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it holds a repository, which version in git reads on a mod with a plugin and no repository and build reads on a mod with one', async () => {
     const value = instanceValueFixture({
       mods: [mod('Patch'), mod('Textures'), mod('SourceMod')],
       listedSourceMods: new Set(['SourceMod']),

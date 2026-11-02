@@ -27,10 +27,10 @@ interface SourceCommandsDeps {
   trash: MoveToTrash;
 }
 
-/** A mod's progress through init source mod, reading its files here before mEdit's phases. */
+/** A mod's progress through version in git, reading its files here before mEdit's phases. */
 export type InitProgress = Omit<InitSourceModProgress, 'phase'> & { phase?: InitSourceModProgress['phase'] | 'ReadingFiles' };
 
-/** What init source mod answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
+/** What version in git answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
 export type InitializedSourceMod = InitSourceModOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>

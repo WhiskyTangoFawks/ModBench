@@ -375,7 +375,7 @@ describe('sourceCommands initSourceMod', () => {
     client.setCommandHandler('initSourceMod', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [], refused: [] }); });
     return { client, handed };
   };
-  it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and a build file that copies every other file by the file or folder at the root holding it, then compiles each plugin (plugins.md, Init source mod, story 2)', async () => {
+  it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and a build file that copies every other file by the file or folder at the root holding it, then compiles each plugin (plugins.md, Version in git, story 2)', async () => {
     const { client, handed } = committing();
     const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
     const adapter = modsAt({
@@ -399,7 +399,7 @@ describe('sourceCommands initSourceMod', () => {
     expect([handed, outcome.refused]).toEqual([[], [{ item: 'ModA', reason: `its '${path.split('/')[0] ?? path}' is where its source folder holds its own` }]]);
   });
 
-  it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, init source mod)', async () => {
+  it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, version in git)', async () => {
     const folder = folderOf('ModA');
     const client = new InMemoryMEditClient();
     client.setCommandHandler('initSourceMod', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
@@ -476,7 +476,7 @@ describe('sourceCommands initSourceMod', () => {
     expect([handed[0]?.repository.assets, outcome.refused]).toEqual([['scripts/b.pex'], []]);
   });
 
-  it.each([true, false])('hands mEdit the mod\'s folder and, given commit %s, that commit (plugins.md, Init source mod, stories 1 and 3)', async (commit) => {
+  it.each([true, false])('hands mEdit the mod\'s folder and, given commit %s, that commit (plugins.md, Version in git, stories 1 and 3)', async (commit) => {
     const { client, handed } = committing();
 
     await sourceCommands({ client, adapter: modsAt(hashed({ 'a.ini': 'I' })), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })

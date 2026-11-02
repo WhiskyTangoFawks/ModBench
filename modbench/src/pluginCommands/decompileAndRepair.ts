@@ -1,5 +1,5 @@
 // Decompile and repair (source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod with
-// no repository is handed the one init source mod would make.
+// no repository is handed the one version in git would make.
 
 import { isRefused, type MEditClient, type NewRepository, type PluginAddress, type PluginToRepair } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
@@ -14,7 +14,7 @@ interface MadeRepository {
   readonly repository: NewRepository;
 }
 
-/** The repository init source mod makes for a mod, and each committed mod's folder linked to the one made for it:
+/** The repository version in git makes for a mod, and each committed mod's folder linked to the one made for it:
  *  why not, by the mod. */
 export interface NewRepositories {
   readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
@@ -27,7 +27,7 @@ interface DecompileAndRepairAccess {
   readonly newRepositories: NewRepositories;
 }
 
-// source.md, Decompile and repair, story 4: a mod with no repository gets one, as init source mod makes it.
+// source.md, Decompile and repair, story 4: a mod with no repository gets one, as version in git makes it.
 async function toRepair(
   { adapter, newRepositories }: Omit<DecompileAndRepairAccess, 'client'>, plugins: readonly PluginAddress[],
 ): Promise<{ readonly plugins: PluginToRepair[]; readonly refused: ItemRefusal<PluginAddress>[]; readonly made: ReadonlyMap<string, MadeRepository> }> {

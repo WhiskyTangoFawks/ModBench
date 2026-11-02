@@ -33,7 +33,7 @@ import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
-import { registerInitSourceModCommand } from './initSourceModCommand';
+import { registerVersionInGitCommand } from './versionInGitCommand';
 import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
@@ -49,9 +49,9 @@ interface SourceGestureDeps {
   commands: SourceCommands;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
-  /** The Plugins view's message line, where init source mod says its phase when fired from there. */
+  /** The Plugins view's message line, where version in git says its phase when fired from there. */
   say: (message: string | undefined) => void;
-  /** Registers the source mods' repositories once an init source mod landed. */
+  /** Registers the source mods' repositories once a version in git landed. */
   registerRepositories: () => Promise<void>;
 }
 
@@ -217,8 +217,8 @@ function registerSourceGestures(
   const { commands, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
-    registerInitSourceModCommand({
-      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories,
+    registerVersionInGitCommand({
+      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.versionInGit'), onCommitted: registerRepositories,
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({

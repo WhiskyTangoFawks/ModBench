@@ -143,7 +143,7 @@ export type { PluginAddress };
 
 type InitializedMod = components['schemas']['InitializedMod'];
 
-/** Init source mod's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+/** Version in git's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
 export interface InitSourceModOutcome {
   landed: readonly InitializedMod[];
   refused: readonly ItemRefusal<string>[];
@@ -153,7 +153,7 @@ export interface InitSourceModOutcome {
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
-/** A mod to init source mod, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
+/** A mod to version in git, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
 export type ModToInitSourceMod = components['schemas']['ModToInitSourceModRequest'];
 
 /** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
@@ -187,7 +187,7 @@ export interface BuildOutcome {
 // Where a modlist gesture is: the mod it works on, none once it ends, and how many mods it has done of how many.
 type ModlistProgress = components['schemas']['ModlistProgress'];
 
-/** A mod's progress through init source mod: its place in the selection and the step it is at. */
+/** A mod's progress through version in git: its place in the selection and the step it is at. */
 export type InitSourceModProgress = ModlistProgress & { phase?: components['schemas']['InitSourceModPhase'] | null };
 
 /** A source mod's repository as the instance repository pins it: the folder git checks it out in, the pin and its branch. */

@@ -27,7 +27,7 @@ interface LoadedPanel {
   editableSet: Set<ColumnKey> | null;
   // Each column that has a status, as the host derived it.
   columnStatuses: Readonly<Record<string, ColumnStatus>>;
-  // The repository state of each origin that names a mod, which a column header offers init source mod or decompile on.
+  // The repository state of each origin that names a mod, which a column header offers version in git or decompile on.
   modsByOrigin: Record<string, ModRepository>;
   // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
   // answer reads as "not computed", never as "settled", or a status-fetch blip would render a

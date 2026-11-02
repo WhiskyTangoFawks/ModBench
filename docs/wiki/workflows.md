@@ -46,7 +46,7 @@ Clone the modlist repository: the clone is the instance folder. Log in to Nexus,
 
 ## Source mods
 
-Init Source Mod puts any mod under git. It makes a repository in `source/` that holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit to `main` when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
+Version in Git puts any mod under git. It makes a repository in `source/` that holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit to `main` when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
 
 The build file is yours: Modbench writes the first one and never rewrites it. Build makes the mod folder exactly what the build file makes, and records it in a manifest in the mod folder, like any other mod's. When a build comes out differently on another machine, from a tool or the load order, the manifest changes and Source Control shows it.
 
@@ -76,7 +76,7 @@ Another author's mod is theirs, so you never edit it in place. Keep it installed
 
 Prefer a standard patch: a plugin of your own that holds only your edits, which needs no vendored workflow. When you need the whole plugin, the vendored workflow keeps your edits apart from each release:
 
-1. Create an empty mod for your patch. Copy the author's plugin into it in the Explorer, then run Init Source Mod and commit. `main` now holds their plugin as it shipped.
+1. Create an empty mod for your patch. Copy the author's plugin into it in the Explorer, then run Version in Git and commit. `main` now holds their plugin as it shipped.
 2. Make a branch, and edit on it. Run Build Mod. Your plugin has the author's file name, so it wins the file conflict and overrides theirs.
 3. When the author releases an update, upgrade their mod as you would any other. Switch to `main`, copy the new plugin into your mod's folder, decompile it, and commit. Then merge `main` into your branch, where each conflict lands in one record's file, and build.
 

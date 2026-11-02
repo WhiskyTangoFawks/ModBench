@@ -61,8 +61,8 @@ public sealed class NonCompiledPluginReadOnlyTests
 
         Assert.NotEqual(initable.Refusal, notInitable.Refusal);
         Assert.DoesNotContain("patch", initable.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Init source mod", notInitable.Message, StringComparison.Ordinal);
-        Assert.Contains("Init source mod its mod", initable.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("version in git", notInitable.Message, StringComparison.Ordinal);
+        Assert.Contains("version in git on its mod", initable.Message, StringComparison.Ordinal);
     }
 
     [Fact]
