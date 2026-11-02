@@ -283,7 +283,6 @@ describe('build over an instance on disk', () => {
 
     it.each([
       ['a file a task made', ['meshes/a.nif'], { 'Mod - Main.ba2': null }],
-      ['a file a task made, named by its folder', ['meshes'], { 'Mod - Main.ba2': null }],
       ['a file a task made, named in another case', ['MESHES/A.nif'], { 'Mod - Main.ba2': null }],
       ['no file a task made', ['b.nif'], { 'Mod - Main.ba2': expect.any(String) as unknown }],
     ])('records by its path alone an archive that packs %s, whose bytes follow the task', async (_, packs, expected) => {

@@ -176,7 +176,7 @@ async function stepRan(deps: BuildDeps, mod: SourceModToBuild, step: RunStep, ma
 function packedByARun(archives: readonly { readonly path: string; readonly files: readonly string[] }[], made: ReadonlyMap<string, Made>): Set<string> {
   const ran = [...made].filter(([, how]) => how === 'byARun').map(([path]) => path.toLowerCase());
   const packsARun = ({ files }: { readonly files: readonly string[] }): boolean =>
-    files.some((file) => ran.some((path) => path === file.toLowerCase() || path.startsWith(`${file.toLowerCase()}/`)));
+    files.some((file) => ran.includes(file.toLowerCase()));
   return new Set(archives.filter(packsARun).map(({ path }) => path.toLowerCase()));
 }
 
