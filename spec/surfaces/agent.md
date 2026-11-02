@@ -69,4 +69,4 @@ As a user, I want:
 1. A request from my agent that fails or is refused, in whole or in part, to give my agent the reason for each item. Cites: common.md, Reporting; ADR-0019
 2. A request from my agent never to open a picker, a prompt or a confirmation. A request that leaves out an Option the gesture needs is refused, and the refusal names the Option. Cites: commands.md, The entry point supplies what it knows
 3. My agent to get each gesture's outcome, so its next step builds on what landed.
-4. A refusal that a gesture clears to name that gesture, such as init source mod for a plugin with no plugin source. Cites: Any agent, story 6
+4. A refusal that a gesture clears to name that gesture, such as version in git for a plugin with no plugin source. Cites: Any agent, story 6

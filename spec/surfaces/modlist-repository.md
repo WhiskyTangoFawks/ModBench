@@ -9,11 +9,12 @@ Each story cites what decides it. A story that cites nothing is owned here.
 As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Cites: ADR-0022
-2. The repository to hold what a clone needs to rebuild my instance, and nothing else.
+2. The repository to hold what a clone needs to rebuild my instance.
 3. A clone that runs with no edit on any machine, Windows or Linux. Modbench makes the paths in the files the repository holds by default portable, with no step of mine. Cites: Windows and Linux alike
 4. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Cites: Existing tools
 5. A push never to publish a modlist a clone cannot fetch. Cites: Never silently wrong
 6. My name and accounts never to reach a remote.
+7. A mod, or a source mod's source, versioned in this repository with no repository of its own. Cites: ADR-0022; Respect the user
 
 ## The manifest
 
@@ -29,18 +30,18 @@ A mod's installation files are the downloaded files the mod was installed from. 
 8. To flag a plugin by setting its flags in its manifest and restoring, so a flag needs no source mod. Cites: ADR-0022
 9. A plugin I rename to need no source mod. Cites: ADR-0022
 10. Each package's host taken from its downloaded file's own metadata, never the mod's, so stale mod metadata never names a host the file did not come from. Cites: Never silently wrong
-11. A file in a mod I ignore, such as one the game rewrites on every run, neither recorded nor touched, so it never reads as changed: update manifest and init source mod leave it out, status never reads it as differing, and restore and build neither write nor trash it. Cites: commands.md, One identity
+11. A file in a mod I ignore, such as one the game rewrites on every run, neither recorded nor touched, so it never reads as changed: update manifest and version in git leave it out, status never reads it as differing, and restore and build neither write nor trash it. Cites: commands.md, One identity
 
 ## Status
 
 As a user, I want:
 
-1. Each mod and file in a mod to say, while the instance has a repository, differs when it differs from its manifest, or no manifest when it has none, so a change I make to a mod's files reaches the commit. Cites: Never silently wrong
+1. Each mod and file in a mod to say, while the instance has a repository, differs when it differs from its manifest, or no manifest when it has none and git does not hold its whole folder, so a change I make to a mod's files reaches the commit. Cites: Never silently wrong
 2. Each state in which my modlist would not rebuild my instance as it is, on any machine, in the Problems panel while it holds, on the file it concerns, so nothing I leave unfinished goes unseen. Cites: common, Reporting; Never silently wrong
 3. Status to cost only what changed since Modbench last read it on this machine, and a clone to read a file as differing only when its bytes do. Cites: ADR-0003
-4. The Mods view's badge to count the mods that differ or have no manifest. Cites: VS Code's view badge
+4. The Mods view's badge to count the mods that say differs or no manifest. Cites: VS Code's view badge
 5. A file a clone cannot rebuild to say why: a package holds a file of its name with other bytes, or no package holds its bytes. Cites: Never silently wrong
-6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and points at init source mod. Cites: mods.md, What install does, story 3; Respect the user
+6. A mod whose manifest names more than one package as Information in the Problems panel. It names the packages, says that an upgrade replaces the files of every one, and points at version in git. Cites: mods.md, What install does, story 3; Respect the user
 7. An installation file the mod manager names that is missing or unreadable as a Warning in the Problems panel, naming the file and which of the two. Modbench never repairs the name. Cites: common, Reporting; Never silently wrong; Respect the user
 8. A file whose manifest changes how the game loads it not to read as differing when that change is its only difference. Cites: ADR-0022
 
@@ -63,7 +64,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. An update manifest gesture that records a folder in its manifest, and creates the manifest when the folder has none: a mod's folder, or a source mod's source folder. It leaves a source mod's own folder to build, which records it. Cites: ADR-0022; ADR-0027
+1. An update manifest gesture that records a folder git does not hold whole in its manifest, and creates the manifest when the folder has none: a mod's folder, or a source mod's source folder. It leaves a source mod's own folder to build, which records it. Cites: ADR-0022; ADR-0027
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.

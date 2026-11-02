@@ -74,7 +74,7 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: LOOT group, category
 
 ## Source mod
-A mod whose folder is a build artifact: the build writes it from the mod's repository in the source folder. With a remote, the repository is a submodule of the instance's repository. It follows one git workflow.
+A mod whose folder is a build artifact: the build writes it from its source folder. It follows one git workflow.
 
 Avoid: tracked mod (git's tracked is a file in the index)
 
