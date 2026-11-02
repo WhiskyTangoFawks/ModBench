@@ -1,7 +1,7 @@
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
 import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
-import type { Source } from './agentServer';
+import type { Source } from './source';
 import type { PluginsTxtWhere } from '../deployment/pluginsTxtPlace';
 
 /** The deployment the Toolbox shows: its folder, and where deploy writes plugins.txt for a game and that folder. */

@@ -211,7 +211,7 @@ export class PluginsTreeProvider
     ].filter((line) => line !== undefined);
   }
 
-  /** What the sorting rules say, which the agent reads with the problems and the plugins' statuses only. */
+  /** What the sorting rules say. */
   sortingRuleLines(): string[] {
     return this.instance.sequence === 0 ? [] : sortingRuleFileLines(this.rules);
   }

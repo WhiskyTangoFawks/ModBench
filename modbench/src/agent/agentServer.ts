@@ -11,6 +11,7 @@ import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
+import type { Source } from './source';
 import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
 import { GESTURE_TOOLS } from './gestures';
@@ -27,9 +28,6 @@ import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { PROBLEMS } from './problems';
-
-// Where a standing line comes from. A reply carries the lines of the sources its tool reads, and no others.
-export type Source = 'instance' | 'mEdit' | 'plugins' | 'sortingRules' | 'modList' | 'sourceLanguage';
 
 export interface AgentServerOptions {
   port: number;
