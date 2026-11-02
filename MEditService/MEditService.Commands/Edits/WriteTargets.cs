@@ -134,7 +134,7 @@ internal sealed class WriteTargets(
             : RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotCompiledPlugin,
                 $"{plugin.Name} is not a compiled plugin, so it is read-only. " +
-                "Init source mod its mod once to start editing.");
+                "Run version in git on its mod to start editing.");
 
     private static RecordEditResult RefuseSourceUnreadable(PluginAddress plugin) =>
         RecordEditResult.Refused(

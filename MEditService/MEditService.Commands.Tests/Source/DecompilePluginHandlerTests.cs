@@ -161,7 +161,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInSourceMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.Contains($"init source mod on {NonSourceModName}", refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"version in git on {NonSourceModName}", refused.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", NonSourceModName, "", new PluginProvider.FromMod(NonSourceModName, _nonSourceMod, _nonSourceMod), Line: null, PluginStrings.None)));
     }
 

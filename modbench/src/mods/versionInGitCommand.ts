@@ -24,11 +24,11 @@ export interface VersionInGitDeps {
   pluginsView: string;
 }
 
-type InitializedSourceMod = GestureResult<InitSourceModOutcome['landed'][number], string>;
+type VersionedInGit = GestureResult<InitSourceModOutcome['landed'][number], string>;
 
-interface InitOptions { readonly commit: boolean }
+interface VersionInGitOptions { readonly commit: boolean }
 
-type InitGiven = ModsGiven & InitOptions;
+type VersionInGitGiven = ModsGiven & VersionInGitOptions;
 
 // plugins.md, Version in git, story 1: not committing comes first.
 async function pickWhetherToCommit(): Promise<boolean | undefined> {
@@ -41,26 +41,26 @@ async function pickWhetherToCommit(): Promise<boolean | undefined> {
 /** commands.md, `version in git`: the mods of Mods rows, plugin rows, a column header, or the palette's
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
 export function registerVersionInGitCommand(deps: VersionInGitDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
-  const gesture: AgentGesture<unknown, InitGiven, InitializedSourceMod, InitOptions> = {
+  const gesture: AgentGesture<unknown, VersionInGitGiven, VersionedInGit, VersionInGitOptions> = {
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const commit = targets.mods.length === 0 ? false : await pickWhetherToCommit();
       return commit === undefined ? undefined : { ...targets, commit, invokedFrom: viewOf(entry.selection, deps.pluginsView) };
     },
     fromAgent: ({ argument, options }) => ({ ...givenByAgent(argument), commit: options.commit }),
-    run: ({ mods, commit, invokedFrom }) => initSourceMods(deps, mods, commit, invokedFrom),
-    report: (result, { mods, refusedRows }) => reportInitialized(deps.reporter, result, mods, refusedRows),
+    run: ({ mods, commit, invokedFrom }) => versionModsInGit(deps, mods, commit, invokedFrom),
+    report: (result, { mods, refusedRows }) => reportVersioned(deps.reporter, result, mods, refusedRows),
   };
   return registerAgentGesture('modbench.mod.versionInGit', paletteSelection, gesture, isClickedRow);
 }
 
-async function initSourceMods(
+async function versionModsInGit(
   { progressIn, instance, commands, onCommitted }: VersionInGitDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
-): Promise<InitializedSourceMod> {
+): Promise<VersionedInGit> {
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   const progress = progressIn(invokedFrom);
-  const result = await runWritingGesture(invokedFrom, instance, async (): Promise<InitializedSourceMod> => {
+  const result = await runWritingGesture(invokedFrom, instance, async (): Promise<VersionedInGit> => {
     try {
       progress.say(versionInGitProgressMessage(firstMod, undefined));
       const result = await commands.initSourceMod(mods, {
@@ -92,8 +92,8 @@ async function showInExplorer(folder: string | undefined, mod: string): Promise<
   }
 }
 
-function reportInitialized(
-  reporter: Reporter, result: InitializedSourceMod, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
+function reportVersioned(
+  reporter: Reporter, result: VersionedInGit, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
 ): void {
   if (!result.applied) { reporter.report('error', result.refusal); return; }
   reportPartial(reporter, result.partial);
@@ -105,7 +105,7 @@ function reportInitialized(
   }
 }
 
-interface InitSourceModReport {
+interface VersionInGitReport {
   refused: InitSourceModOutcome['refused'];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
@@ -113,14 +113,14 @@ interface InitSourceModReport {
 
 // commands.md, "each item lands on its own": one notification naming each refused mod and each
 // refused plugin.
-function reportRefused(reporter: Reporter, modCount: number, report: InitSourceModReport): void {
+function reportRefused(reporter: Reporter, modCount: number, report: VersionInGitReport): void {
   const counts = [
     ...(report.refused.length > 0 ? [`${report.refused.length} of ${modCount} mods`] : []),
     ...(report.refusedPlugins.length > 0
       ? [`${report.refusedPlugins.length} of ${report.plugins.length + report.refusedPlugins.length} plugins`]
       : []),
   ];
-  reporter.selectionOutcome(`Could not version in git for ${counts.join(' and ')}.`, {
+  reporter.selectionOutcome(`Could not put ${counts.join(' and ')} under git.`, {
     landed: report.plugins.map(pluginRowName),
     refused: [
       ...report.refusedPlugins,

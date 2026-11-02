@@ -218,7 +218,7 @@ function registerSourceGestures(
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
     registerVersionInGitCommand({
-      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.initSourceMod'), onCommitted: registerRepositories,
+      progressIn: (view) => ({ say: view === MODS_KEY_ARGS.view ? sayInMods : say }), instance, commands, reporter: reporterFor('mod.versionInGit'), onCommitted: registerRepositories,
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({
