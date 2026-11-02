@@ -49,7 +49,7 @@ async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, n
     const domain = nexusDomainForMetaGame(game);
     if (domain !== undefined) return { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...directUrl };
     return meta.directURL === undefined
-      ? { note: `${name} comes from '${game}', a game whose host the instance adapter has no page on, so its manifest names no host` }
+      ? { note: `${name} comes from '${game}', a game the instance adapter has no Nexus page for` }
       : directUrl;
   } catch (err) {
     return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
