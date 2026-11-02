@@ -3,7 +3,7 @@ using System.Text;
 namespace MEditService.ModFolderAdapter;
 
 /// <summary>The cubemap flag of each texture of a BA2, which Mutagen's reader does not expose.</summary>
-internal static class Ba2Cubemaps
+internal static class Ba2Layout
 {
     private const int FileHeaderLength = 24;
     private const int ChunkLength = 24;
@@ -11,6 +11,22 @@ internal static class Ba2Cubemaps
     private const int FlagsAt = 22;
     private const int EntryHeadLength = 24;
     private const byte CubemapFlag = 0x01;
+
+    /// <summary>Why Mutagen's reader misreads the BA2, else null: it misreads a texture BA2 of version 8 and any of
+    /// version 7, and reads a general BA2 of version 8 correctly.</summary>
+    public static string? WhyMutagenMisreads(string archiveAt)
+    {
+        using var file = File.OpenRead(archiveAt);
+        using var reader = new BinaryReader(file, Encoding.UTF8);
+        if (file.Length < FileHeaderLength || !reader.ReadBytes(4).AsSpan().SequenceEqual("BTDX"u8)) return null;
+
+        var version = reader.ReadUInt32();
+        var textures = reader.ReadBytes(4).AsSpan().SequenceEqual("DX10"u8);
+        if (version != 7 && !(version == 8 && textures)) return null;
+
+        var kind = textures ? "texture" : "general";
+        return $"its {kind} BA2 is version {version}, which Mutagen's reader misreads";
+    }
 
     /// <summary>The forward-slash path of each cubemap in the archive, in any case; none for an archive that is no texture
     /// BA2. Throws <see cref="InvalidDataException"/> for a texture BA2 of a version whose layout is not known.</summary>

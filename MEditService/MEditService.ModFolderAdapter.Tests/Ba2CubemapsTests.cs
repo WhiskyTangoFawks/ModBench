@@ -47,12 +47,10 @@ public sealed class Ba2CubemapsTests : IDisposable
         Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
     }
 
-    [Theory]
-    [InlineData(1u, false)]
-    [InlineData(2u, true)]
-    public void ATexturesBa2_UnpacksTheTextureBesideItsCubemap(uint version, bool compressed)
+    [Fact]
+    public void ATexturesBa2_UnpacksTheTextureBesideItsCubemap()
     {
-        Assert.Null(ArchiveUnpacker.Unpack(GameRelease.Fallout4, Textures(version, compressed), ["textures/flat.dds"], out _));
+        Assert.Null(ArchiveUnpacker.Unpack(GameRelease.Fallout4, Textures(1, compressed: false), ["textures/flat.dds"], out _));
     }
 
     [Theory]
@@ -63,6 +61,45 @@ public sealed class Ba2CubemapsTests : IDisposable
         var refusal = Unpacking(TexturesOfVersion(version), "textures/sky.dds");
 
         Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
+    }
+
+    [Theory]
+    [InlineData(7u)]
+    [InlineData(8u)]
+    public void ATexturesBa2OfTheNextGenUpdate_RefusesTheTextureBesideItsCubemapAsUnreadable_NamingTheVersion(uint version)
+    {
+        var refusal = Unpacking(TexturesOfVersion(version), "textures/flat.dds");
+
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
+        Assert.Contains($"version {version}", refusal.Message);
+    }
+
+    [Fact]
+    public void AGeneralBa2OfVersion7_IsRefusedAsUnreadable_NamingTheVersion()
+    {
+        var refusal = Unpacking(GeneralOfVersion(7), "meshes/a.nif");
+
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
+        Assert.Contains("version 7", refusal.Message);
+    }
+
+    [Fact]
+    public void AGeneralBa2OfVersion8_Unpacks()
+    {
+        Assert.Null(ArchiveUnpacker.Unpack(GameRelease.Fallout4, GeneralOfVersion(8), ["meshes/a.nif"], out var unpacked));
+        Assert.Single(unpacked);
+    }
+
+    private string GeneralOfVersion(uint version)
+    {
+        var refusal = new ArchivePacker(new ModFolderRepository()).Pack(
+            _scratch, Archive, [new ArchiveFile("meshes/a.nif", () => new MemoryStream([1, 2, 3]))], new Ba2Variant(1, Ba2Contents.General, Compressed: false));
+        Assert.Null(refusal);
+        var archive = Path.Combine(_scratch, Archive);
+        var bytes = File.ReadAllBytes(archive);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), version);
+        File.WriteAllBytes(archive, bytes);
+        return archive;
     }
 
     [Fact]

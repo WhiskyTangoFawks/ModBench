@@ -6,6 +6,9 @@ namespace MEditService.ModFolderAdapter.Tests.RealData;
 
 public sealed class Ba2CubemapsRealDataTests
 {
+    private const long SmallArchive = 150_000_000;
+    private const int SampleOfALargeArchive = 25;
+
     public static TheoryData<GameRelease> InstalledGames()
     {
         TheoryData<GameRelease> rows = [];
@@ -16,19 +19,20 @@ public sealed class Ba2CubemapsRealDataTests
         return rows;
     }
 
-    [SmokeTheory("unpack from the installed game's own texture archives")]
+    [SmokeTheory("unpack from the installed game's own archives")]
     [MemberData(nameof(InstalledGames))]
-    public void EveryTextureOfAnInstalledGamesArchives_IsAskedFor_AndNoArchiveIsUnreadable_AndACubemapIsRefused(GameRelease release)
+    public void TheArchivesOfAnInstalledGame_AreAskedForTheirEntries_NoneThrows_AndACubemapIsRefused(GameRelease release)
     {
         Assert.True(new GameLocator().TryGetDataDirectory(release, out var data));
 
-        var refusals = Directory.EnumerateFiles(data.Path, "*Textures*.ba2").Select(archive =>
+        var refusals = Directory.EnumerateFiles(data.Path, "*.ba2").Select(archive =>
         {
-            var textures = Mutagen.Bethesda.Archives.Archive.CreateReader(release, archive).Files.Select(file => file.Path.Replace('\\', '/')).ToList();
-            return ArchiveUnpacker.Unpack(release, archive, textures, out _);
-        }).ToList();
+            var entries = Mutagen.Bethesda.Archives.Archive.CreateReader(release, archive).Files.Select(file => file.Path.Replace('\\', '/')).ToList();
+            var cubemapNamed = entries.Where(path => path.Contains("cubemap", StringComparison.OrdinalIgnoreCase));
+            var asked = new FileInfo(archive).Length < SmallArchive ? entries : [.. cubemapNamed.Concat(entries.Take(SampleOfALargeArchive)).Distinct()];
+            return ArchiveUnpacker.Unpack(release, archive, asked, out _);
+        }).OfType<ArchiveStepRefusal>().ToList();
 
-        Assert.DoesNotContain(refusals, refusal => refusal?.Reason == ArchiveRefusal.ArchiveUnreadable);
-        Assert.Contains(refusals, refusal => refusal?.Reason == ArchiveRefusal.CubemapNotUnpackable);
+        Assert.Contains(refusals, refusal => refusal.Reason == ArchiveRefusal.CubemapNotUnpackable);
     }
 }

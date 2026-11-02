@@ -12,10 +12,13 @@ public static class ArchiveUnpacker
         unpacked = [];
         try
         {
-            var cubemaps = Ba2Cubemaps.In(archiveAt);
+            var cubemaps = Ba2Layout.In(archiveAt);
             var cube = files.Where(file => cubemaps.Contains(file)).ToList();
             if (cube.Count > 0)
                 return new ArchiveStepRefusal(ArchiveRefusal.CubemapNotUnpackable, $"{string.Join(" and ", cube.Select(file => $"'{file}'"))} is a cubemap, and Mutagen's extraction drops its cubemap flag.");
+
+            if (Ba2Layout.WhyMutagenMisreads(archiveAt) is { } misread)
+                return new ArchiveStepRefusal(ArchiveRefusal.ArchiveUnreadable, $"'{archiveAt}' could not be read: {misread}.");
 
             var entries = Archive.CreateReader(release, archiveAt).Files
                 .ToLookup(entry => entry.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
@@ -24,12 +27,15 @@ public static class ArchiveUnpacker
                 return new ArchiveStepRefusal(ArchiveRefusal.FileNotInArchive, $"'{archiveAt}' holds no {string.Join(" or ", missing.Select(file => $"'{file}'"))}.");
 
             // Mutagen's AsStream throws on a compressed general BA2 entry.
-            unpacked = [.. files.Select(file => new ArchiveFile(file, () => new MemoryStream(entries[file].First().GetBytes())))];
+            var read = files.Select(file => new ArchiveFile(file, MemoryOf(entries[file].First().GetBytes()))).ToList();
+            unpacked = read;
             return null;
         }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException or NotImplementedException or ArgumentException or OverflowException)
+        catch (Exception e) when (e is not (OperationCanceledException or OutOfMemoryException))
         {
             return new ArchiveStepRefusal(ArchiveRefusal.ArchiveUnreadable, $"'{archiveAt}' could not be read: {e.Message}");
         }
     }
+
+    private static Func<Stream> MemoryOf(byte[] bytes) => () => new MemoryStream(bytes);
 }

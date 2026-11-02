@@ -134,6 +134,19 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Fact]
+    public void ATextureMutagenCannotRebuildTheHeaderOf_RefusesTheArchiveInsteadOfThrowingAtTheWrite()
+    {
+        var unsupported = Dds.Bc7(8, 8).File;
+        BinaryPrimitives.WriteUInt32LittleEndian(unsupported.AsSpan(128), 10);
+        With("textures/odd.dds", unsupported);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: false), "textures/odd.dds");
+
+        var refusal = Refused(GameRelease.Fallout4, archive, "textures/odd.dds");
+
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
+    }
+
+    [Fact]
     public void AFileThatIsNoArchive_RefusesItAsUnreadable()
     {
         var notAnArchive = Path.Combine(_scratch, "Mod - Main.ba2");
