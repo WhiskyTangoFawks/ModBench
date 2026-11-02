@@ -32,6 +32,7 @@ internal static class GitInit
         var git = new SourceRepositoryGit(sourceFolder);
         try
         {
+            journal.CreateDirectory(sourceFolder);
             WriteEachPlugin(sourceFolder, plugins, journal);
             foreach (var asset in assets)
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);

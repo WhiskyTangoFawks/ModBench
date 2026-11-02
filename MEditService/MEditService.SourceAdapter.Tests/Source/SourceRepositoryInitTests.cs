@@ -67,6 +67,16 @@ public sealed class SourceRepositoryInitTests : IDisposable
     }
 
     [Fact]
+    public void AModWithNoFiles_InitsInASourceFolderThatDoesNotExistYet()
+    {
+        Directory.Delete(_sourceFolder);
+
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
+
+        Assert.Equal([".gitignore", "build.json"], PathsIn("main"));
+    }
+
+    [Fact]
     public void EachAsset_IsCommittedWithItsExactBytes()
     {
         byte[] bytes = [0x44, 0x44, 0x53, 0x20, 0x00, 0xFF, 0x0D, 0x0A];
