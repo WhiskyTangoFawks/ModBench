@@ -202,7 +202,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
-    messages: () => linesOf(viewMessage()),
+    messages: () => linesOf(messageLine(provider.standingMessage(), modSync.message(), statusMessage())),
     dispose: () => { disposable.dispose(); },
   };
 }

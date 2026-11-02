@@ -398,12 +398,14 @@ describe('the Mods view says the phase of an init source mod fired from it', () 
     const running = new Promise<{ landed: []; refused: [] }>((resolve) => { release = () => { resolve({ landed: [], refused: [] }); }; });
     const deps = otherDeps();
     const sourceGestures = { ...deps.sourceGestures, commands: { ...deps.sourceGestures.commands, initSourceMod: () => running } };
-    const { view } = createModsView({ ...deps, sourceGestures, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const mods = createModsView({ ...deps, sourceGestures, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const { view } = mods;
     const handler = present(h.state.commands.get('modbench.mod.initSourceMod'), 'the init source mod command createModsView registers');
 
     const fired = handler(new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true }));
 
     await waitForMessage(view, (m) => m === 'Initializing source mod "Source mod Patch Mod"…', 'the phase line');
+    expect(mods.messages()).toEqual([]);
     release();
     await fired;
     await waitForMessage(view, (m) => m === undefined, 'the line given back');
@@ -449,7 +451,7 @@ describe('the Mods view says when the list is empty', () => {
     await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message alone');
   });
 
-  it('gives the agent the line it shows, sync\'s refusal included', async () => {
+  it('gives the agent sync\'s refusal, and leaves out the empty-list line the view shows beside it', async () => {
     const instance = new FakeInstance(listing([]), SEQUENCE_NOT_READ_YET);
     const { modSync } = modSyncAnswering(() => Promise.resolve({ applied: false as const, refusal: '/instance/mods does not exist' }));
     const mods = createModsView({ ...otherDeps(), instance, modSync });
@@ -460,7 +462,7 @@ describe('the Mods view says when the list is empty', () => {
     await modSync.run();
     await waitForMessage(view, (m) => m === `${NO_MODS} modlist.txt is not synced: /instance/mods does not exist.`, 'both messages');
 
-    expect(mods.messages()).toEqual([view.message]);
+    expect(mods.messages()).toEqual(['modlist.txt is not synced: /instance/mods does not exist.']);
   });
 });
 

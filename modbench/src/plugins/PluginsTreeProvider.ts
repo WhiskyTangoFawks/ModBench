@@ -192,9 +192,10 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** For the agent, a missing masterlist is left out: nothing it can do changes with it. */
+  /** For the agent, a missing masterlist, an empty list and a record filter that matches nothing are
+   *  left out: a read already shows them, and nothing it can do changes with them. */
   viewMessage(forAgent = false): string | undefined {
-    return messageLine(this.firstHeldMessage(), this.standingMessage(forAgent));
+    return messageLine(this.firstHeldMessage(forAgent), this.standingMessage(forAgent));
   }
 
   standingMessage(forAgent = false): string | undefined {
@@ -207,12 +208,14 @@ export class PluginsTreeProvider
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows
   // (States 1), a record filter matching nothing (States 5): the first that holds.
-  private firstHeldMessage(): string | undefined {
+  private firstHeldMessage(forAgent: boolean): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
-    return this.facts.rows.indexFailureMessage()
+    const indexFailure = this.facts.rows.indexFailureMessage();
+    if (forAgent) return indexFailure;
+    return indexFailure
       ?? (this.lastBuildHadNoRows ? NO_PLUGINS_MESSAGE : undefined)
       ?? (this.recordFilterSource === undefined ? undefined : this.facts.rows.noRecordMatchMessage(this.recordFilterSource));
   }

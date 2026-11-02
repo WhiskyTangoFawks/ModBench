@@ -686,17 +686,6 @@ describe('a gesture the agent runs', () => {
     }
   });
 
-  it('answers beside the line the Mods view shows when it has no mods, which no other view says', async () => {
-    rmSync(modDir, { recursive: true, force: true });
-    writeFileSync(modlistPath, '');
-
-    await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
-      const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
-      const lines = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
-      return lines.some((line) => line.startsWith('No mods or separators.')) && lines;
-    });
-  });
-
   it('reads what the Plugins view\'s row shows of a plugin once mEdit has read it', async () => {
     const originalPlugins = readFileSync(pluginsTxtPath, 'utf8');
     const gameFolder = gameFolderHolding('medit-agent-plugins-', ['TestMod.esp']);

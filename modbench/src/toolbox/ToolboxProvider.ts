@@ -123,7 +123,11 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   }
 
   viewMessage(): string | undefined {
-    return this.gesture ?? (this.deps.instance && messageLine(...instanceMessages(this.deps.instance)));
+    return this.gesture ?? this.standingMessage();
+  }
+
+  standingMessage(): string | undefined {
+    return this.deps.instance && messageLine(...instanceMessages(this.deps.instance));
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

@@ -915,10 +915,11 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   describe('given no lines and no locked plugins', () => {
     it('says so, and shows no row', async () => {
-      const { rows } = await shown(found());
+      const { rows, plugins } = await shown(found());
 
       await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message');
       expect(await rows()).toEqual([]);
+      expect(plugins.messages()).toEqual([]);
     });
   });
 
@@ -995,13 +996,13 @@ describe('the Plugins view\'s message line and name filter', () => {
       expect(plugins.messages()).toEqual([]);
     });
 
-    it('gives the agent the line it shows, read by the same function', async () => {
+    it('gives the agent the sync message, and leaves out the record filter\'s no-match line the view shows beside it', async () => {
       const { sync, plugins } = await refusedView('armor.sql');
 
       await sync.refuse(SYNC_REASON);
       await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
 
-      expect(plugins.messages()).toEqual([`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`]);
+      expect(plugins.messages()).toEqual([SYNC_MESSAGE]);
     });
 
     it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {

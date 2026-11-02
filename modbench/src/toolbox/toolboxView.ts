@@ -19,7 +19,7 @@ export function createToolboxView(deps: ToolboxViewDeps): ToolboxView {
   const subscriptions = [provider, view, provider.onDidChangeTreeData(showMessage)];
   return {
     say: (message) => { provider.say(message); },
-    messages: () => linesOf(provider.viewMessage()),
+    messages: () => linesOf(provider.standingMessage()),
     dispose: () => { vscode.Disposable.from(...subscriptions).dispose(); },
   };
 }

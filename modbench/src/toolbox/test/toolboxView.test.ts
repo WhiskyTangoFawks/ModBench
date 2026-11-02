@@ -35,7 +35,7 @@ describe('the Toolbox view', () => {
     expect([id, during, view.message]).toEqual(['modbench.toolbox', 'Update manifest — reading…', undefined]);
   });
 
-  it('gives the agent the line it shows, a gesture\'s phase in place of the instance\'s lines', () => {
+  it('leaves a gesture\'s phase out of the agent\'s lines', () => {
     const toolbox = createToolboxView({ instance: undefined });
     const { view } = present(h.created.at(-1), 'the created tree view');
     const shown = () => [view.message, toolbox.messages()];
@@ -45,7 +45,7 @@ describe('the Toolbox view', () => {
     toolbox.say(undefined);
 
     expect([during, shown()]).toEqual([
-      ['Update manifest — reading…', ['Update manifest — reading…']],
+      ['Update manifest — reading…', []],
       [undefined, []],
     ]);
   });
