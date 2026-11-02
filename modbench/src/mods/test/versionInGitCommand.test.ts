@@ -20,7 +20,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture } from '../../test/fakeInstanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 
-const MODS = mkdtempSync(join(tmpdir(), 'init-source-mod-mods-'));
+const MODS = mkdtempSync(join(tmpdir(), 'version-in-git-mods-'));
 for (const mod of ['ModA', 'ModB', 'ModC']) mkdirSync(join(MODS, mod));
 afterAll(() => { rmSync(MODS, { recursive: true, force: true }); });
 
@@ -90,7 +90,7 @@ describe('modbench.mod.versionInGit', () => {
     };
   }
 
-  it('on a plugin row, versions the plugin in git\'s mod after the one pick', async () => {
+  it('on a plugin row, puts the plugin\'s mod under git after the one pick', async () => {
     const commands = versionInGitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, onCommitted, reporter } = invokeVersionInGit(commands);
@@ -125,7 +125,7 @@ describe('modbench.mod.versionInGit', () => {
     expect(commands.commits()).toEqual([false]);
   });
 
-  it('versions nothing in git and writes nothing on Esc at the pick', async () => {
+  it('puts nothing under git and writes nothing on Esc at the pick', async () => {
     picking(undefined);
     const commands = versionInGitCommands();
     const { handler, onCommitted, reporter } = invokeVersionInGit(commands);
@@ -135,7 +135,7 @@ describe('modbench.mod.versionInGit', () => {
     expect([commands.sent(), reporter.reports, reporter.landings, onCommitted.mock.calls.length]).toEqual([[], [], [], 0]);
   });
 
-  it('ends the gesture on a read the Instance loader makes after the version in git, and clears its message line', async () => {
+  it('ends the gesture on a read the Instance loader makes after version in git, and clears its message line', async () => {
     const commands = versionInGitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
     const { handler, said } = invokeVersionInGit(commands);
@@ -148,7 +148,7 @@ describe('modbench.mod.versionInGit', () => {
     expect(said.at(-1)).toBeUndefined();
   });
 
-  it('on selected Mods rows, versions every mod in git in one call under the Mods view\'s bar', async () => {
+  it('on selected Mods rows, puts every mod under git in one call under the Mods view\'s bar', async () => {
     const commands = versionInGitCommands();
     commands.answers({ landed: [modA([FIRST, SECOND]), modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeVersionInGit(commands);
@@ -161,7 +161,7 @@ describe('modbench.mod.versionInGit', () => {
     expect(reporter.landings).toEqual(['2 mods are source mods.']);
   });
 
-  it('from the palette, versions the mod in git of a Plugins selection', async () => {
+  it('from the palette, puts the mod of a Plugins selection under git', async () => {
     const commands = versionInGitCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
     const { handler, reporter } = invokeVersionInGit(commands, undefined, () => [row(OTHER)]);
@@ -241,7 +241,7 @@ describe('modbench.mod.versionInGit', () => {
     expect(onCommitted).toHaveBeenCalledOnce();
   });
 
-  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and versions the rest in git', async () => {
+  it('never sends an origin that is not a mod as a mod name: refuses that plugin as not in a mod and puts the rest under git', async () => {
     const commands = versionInGitCommands();
     commands.answers({ landed: [modB([OTHER])], refused: [] });
     const { handler, onCommitted, reporter } = invokeVersionInGit(commands);
@@ -314,7 +314,7 @@ describe('modbench.mod.versionInGit', () => {
     const calling = (...mods: string[]) => callingWith({ commit: true }, ...mods);
     const callingWith = (options: { commit: boolean }, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
 
-    it('versions the mod in gits given, never the selection, reporting nothing, and answers the outcome', async () => {
+    it('puts the mods given under git, never the selection, reporting nothing, and answers the outcome', async () => {
       const commands = versionInGitCommands();
       const outcome = { landed: [modB([OTHER])], refused: [{ item: 'ModC', reason: 'its name gives it no source folder' }] };
       commands.answers(outcome);
