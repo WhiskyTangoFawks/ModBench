@@ -180,9 +180,15 @@ export function nexusDomainsForGame(gameName: string): string[] {
   return domains.filter((domain, i) => domains.indexOf(domain) === i);
 }
 
+/** The mod manager's short name for a release: the `gameName` of a mod's or a downloaded file's metadata. */
+export const shortNameOfRelease = (release: string): string => release;
+
 /** The short name a downloaded file's metadata gives a game on Nexus's `domain`; `undefined` when the tables hold none. */
 export function shortNameForNexusDomain(domain: string): string | undefined {
-  return gameReleaseForNexusDomain(domain) ?? Object.keys(NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES).find((name) => NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[name] === domain);
+  const release = gameReleaseForNexusDomain(domain);
+  return release === undefined
+    ? Object.keys(NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES).find((name) => NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[name] === domain)
+    : shortNameOfRelease(release);
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —

@@ -14,7 +14,7 @@ import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata, NexusMod
 import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
 import { parseDownloadedFileMeta } from './codecs/downloads';
 import { effectiveModId } from './codecs/nexusFileName';
-import { currentDownloadsDir, folderHolding, newModFolder, metaGameOfDomainIfAny, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, folderHolding, newModFolder, metaGameOfDomain, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
 import { downloadedFileNames, readMetaIni } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
 
@@ -61,7 +61,7 @@ type MetadataPlan = { readonly unwritable: string } | { readonly file: string; r
 async function pageChanges(carried: MetaIni, page: string, context: Mo2Context): Promise<Partial<OwnedMetaKeys> | { readonly unwritable: string }> {
   const nexus = parseNexusPage(page);
   if (nexus === undefined) return { unwritable: `its page '${page}' is not a Nexus page, the only host MO2's metadata holds` };
-  const gameName = await metaGameOfDomainIfAny(context, nexus.game);
+  const gameName = await metaGameOfDomain(context, nexus.game);
   if (gameName === undefined) return { unwritable: `its page names the Nexus game '${nexus.game}', which Modbench has no game for` };
   const carriedFile = installedFileOf(carried);
   const sameFile = nexus.fileId === undefined ? carriedFile === undefined : carriedFile?.fileId === nexus.fileId && carriedFile.nexusId === nexus.modId;

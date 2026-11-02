@@ -1,7 +1,7 @@
 // What every part of MO2's implementation shares: the instance root, the two resolvers over one
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
-import { gameReleaseForGame, nexusDomainForMetaGame, nexusDomainsForGame, shortNameForNexusDomain } from '../../tables/gamePaths';
+import { gameReleaseForGame, nexusDomainForMetaGame, nexusDomainsForGame, shortNameForNexusDomain, shortNameOfRelease } from '../../tables/gamePaths';
 import { readGameName } from './codecs/modOrganizerIni';
 import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -43,17 +43,11 @@ export async function nexusDomainsOfInstance(context: Mo2Context): Promise<strin
   return domains;
 }
 
-/** The game metadata names for Nexus's `domain`: the instance's game when it is on that domain; `undefined` when no game is. */
-export async function metaGameOfDomainIfAny(context: Mo2Context, domain: string): Promise<string | undefined> {
+/** The game a mod's or a downloaded file's metadata names for Nexus's `domain`: the instance's game when it is on that domain; `undefined` when no game is. */
+export async function metaGameOfDomain(context: Mo2Context, domain: string): Promise<string | undefined> {
   const release = gameReleaseForGame(await instanceGameName(context));
-  return release !== undefined && nexusDomainForMetaGame(release) === domain ? release : shortNameForNexusDomain(domain);
-}
-
-/** The game a downloaded file's metadata names for Nexus's `domain`; rejects when no game is. */
-export async function metaGameOfDomain(context: Mo2Context, domain: string): Promise<string> {
-  const game = await metaGameOfDomainIfAny(context, domain);
-  if (game === undefined) throw new Error(`Modbench has no game for the Nexus game '${domain}'`);
-  return game;
+  const shortName = release === undefined ? undefined : shortNameOfRelease(release);
+  return shortName !== undefined && nexusDomainForMetaGame(shortName) === domain ? shortName : shortNameForNexusDomain(domain);
 }
 
 /** The mod folders as entries; the reserved overwrite name holds none. */
