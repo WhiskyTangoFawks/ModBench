@@ -632,15 +632,30 @@ describe('update manifest', () => {
       expect([held.flags, held.files]).toEqual([new Map([['Mod.esp', FLAGS]]), holding({ 'Mod.esp': HZ })]);
     });
 
-    it('leaves the hash its manifest records while restore has kept none for the copy and the flags', async () => {
+    it('refuses the mod, leaving its manifest as it was, naming the plugin, when restore has kept nothing and a package holds none of its bytes', async () => {
       const { update, manifestHeld } = await over({
-        files: { ModA: { 'Mod.esp': HZ } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]) },
+        files: { ModA: { 'Mod.esp': HZ }, ModB: { 'b.nif': HB } },
+        answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]) },
       });
       await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Mod.esp', FLAGS]]), files: holding({ 'Mod.esp': HA }) });
 
-      await update(['ModA']);
+      const result = await update(['ModA', 'ModB']);
 
-      expect((await manifestHeld('ModA')).files).toEqual(holding({ 'Mod.esp': HA }));
+      expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).files]).toEqual([
+        [{ item: 'ModA', reason: "was not updated: 'Mod.esp' is flagged, and its bytes are neither a package's copy nor those restore recorded for its flags, so restore records them on this machine." }],
+        ['ModB'], holding({ 'Mod.esp': HA }),
+      ]);
+    });
+
+    it('records the package copy for a flagged plugin whose bytes are exactly the copy, as its flags are written and not yet restored', async () => {
+      const { update, manifestHeld } = await over({
+        files: { ModA: { 'Mod.esp': HA } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]) },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Mod.esp', FLAGS]]), files: holding({ 'Mod.esp': HA }) });
+
+      const result = await update(['ModA']);
+
+      expect([result.refused, (await manifestHeld('ModA')).files]).toEqual([[], holding({ 'Mod.esp': HA })]);
     });
 
     it('drops the flags of a plugin that is gone from the folder, as its manifest names no file it lacks', async () => {

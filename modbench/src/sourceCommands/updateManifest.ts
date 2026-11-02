@@ -139,16 +139,21 @@ function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
   };
 }
 
-// ADR-0022: restore sets a plugin's flags, so the file holds its package copy's bytes with them, whose hash the index kept. A file
-// the index knows nothing of keeps the hash its manifest records.
-async function packageCopiesOf(adapter: Adapter, held: Manifest | undefined, files: readonly HashedModFile[]): Promise<HashedModFile[]> {
-  return Promise.all(files.map(async (file) => {
+// ADR-0022: restore sets a plugin's flags, so the file holds its package copy's bytes with them, whose hash the index kept. A file the
+// index knows nothing of is refused unless a package holds its bytes, as Modbench cannot tell what else it is.
+async function packageCopiesOf(
+  adapter: Adapter, held: Manifest | undefined, files: readonly HashedModFile[], packageHolds: (hash: string) => boolean,
+): Promise<{ readonly files: HashedModFile[] } | { readonly unknown: string }> {
+  const copies: HashedModFile[] = [];
+  for (const file of files) {
     const flags = held?.flags.get(file.path);
     const copy = held?.files.get(file.path);
-    if (flags === undefined || typeof copy !== 'string') return file;
+    if (flags === undefined || typeof copy !== 'string') { copies.push(file); continue; }
     const flagged = await adapter.flaggedHash(copy, flags);
-    return flagged === undefined || flagged === file.hash ? { ...file, hash: copy } : file;
-  }));
+    if (flagged === undefined && !packageHolds(file.hash)) return { unknown: file.path };
+    copies.push(flagged === file.hash ? { ...file, hash: copy } : file);
+  }
+  return { files: copies };
 }
 
 async function updateMod(
@@ -176,9 +181,13 @@ async function updateMod(
   const installationFile = own === undefined ? undefined
     : downloadedFileOf(pagedFrom(own, downloadedFiles.find(({ package: pkg }) => pkg.name === basename(own.path))?.file), nexusFileOf(adapter));
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
+  const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
+    .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
+  const copies = await packageCopiesOf(adapter, held, files, packageHolds);
+  if ('unknown' in copies) return refusal(`'${copies.unknown}' is flagged, and its bytes are neither a package's copy nor those restore recorded for its flags, so restore records them on this machine.`);
   const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
-    await packageCopiesOf(adapter, held, files), exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
+    copies.files, exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
   const recorded = only === undefined ? built : { ...built, manifest: laidOver(held, built.manifest) };
   let written: boolean;
   try {
