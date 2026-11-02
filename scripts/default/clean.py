@@ -12,7 +12,6 @@ INITIALLY_DISABLED_FLAG = 0x800
 PLACED_REFERENCE_TYPES = ('refr', 'pgre', 'pmis', 'achr', 'acre', 'parw', 'pbar', 'pbea', 'pcon', 'pfla', 'phzd')
 NAVMESH_TYPE = 'navm'
 FLAGS_FIELD = 'MajorRecordFlagsRaw'
-TELEPORT_FIELD = 'TeleportDestination'
 IDENTICAL_TO_MASTER = 'IdenticalToMaster'
 UNDERGROUND_Z = '-30000'
 OPPOSITE_OF_PARENT = ['SetEnableStateToOppositeOfParent']
@@ -100,8 +99,6 @@ def _undelete_and_disable(plugin: medit.Plugin) -> list[str]:
         if not raw & PERSISTENT_FLAG:
             position_path = _position_path(record_type)
             medit.edit(plugin, form_key, 'set', position_path, _underground(_member(record, position_path)))
-        if TELEPORT_FIELD in record:
-            medit.edit(plugin, form_key, 'set', TELEPORT_FIELD, None)
         medit.edit(plugin, form_key, 'set', 'EnableParent', {'Reference': player, 'Flags': OPPOSITE_OF_PARENT})
     return [form_key for form_key, _, _ in undeletable]
 
