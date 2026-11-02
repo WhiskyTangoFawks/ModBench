@@ -195,9 +195,9 @@ describe('sourceCommands build, in mod order', () => {
     const tasks = recordingTasks(['Patch']);
     const logging = {
       ...tasks,
-      whyStepFailed: async (ran: TaskStep, folder: string) => {
-        log.push(`step in ${folder === folderOf('ModB') ? 'ModB' : folder} ${await recorded('ModB') === undefined ? 'before' : 'after'} its manifest`);
-        return tasks.whyStepFailed(ran, folder);
+      whyStepFailed: async (...ran: Parameters<typeof tasks.whyStepFailed>) => {
+        log.push(`step in ${ran[1].folder === folderOf('ModB') ? 'ModB' : ran[1].folder} ${await recorded('ModB') === undefined ? 'before' : 'after'} its manifest`);
+        return tasks.whyStepFailed(...ran);
       },
     };
 
@@ -216,7 +216,7 @@ describe('sourceCommands build, in mod order', () => {
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks, trash: vi.fn() }).build(['ModA']);
 
-    expect([tasks.runs.map(({ step }) => step.task), client.calls]).toEqual([['First'], []]);
+    expect([tasks.runs.map(({ step }) => step), client.calls]).toEqual([[{ kind: 'task', task: 'First', args: [] }], []]);
     expect(outcome).toEqual({ landed: [{ ...landedOf('ModA'), failure: "The build stopped as its step 'First' exited with code 1." }], refused: [] });
   });
 

@@ -1,11 +1,11 @@
 // spec/formats/build-file-1.schema.json, read from any text the schema accepts.
 
-import { BUILD_FILE_VERSION, type BuildFile, type BuildFileRead, type BuildStep, type ManifestArchive, type TaskStep } from './buildFile';
+import { BUILD_FILE_VERSION, type BuildFile, type BuildFileRead, type BuildStep, type DefaultScriptStep, type ManifestArchive, type ScriptStep, type TaskStep } from './buildFile';
 import { arrayOf, isObject, isPathInTheFolder, known as knownIn, objectOf, parsed, stringsOf, textOf, unreadable, Unreadable, type Json } from './jsonRead';
 
 const FILE = 'build file';
 
-const KINDS = ['decompile', 'compile', 'copy', 'pack', 'task'] as const;
+const KINDS = ['decompile', 'compile', 'copy', 'pack', 'task', 'script', 'defaultScript'] as const;
 
 const known = (members: Json, part: string | undefined, keys: readonly string[]): void => { knownIn(FILE, members, part, keys); };
 
@@ -32,6 +32,20 @@ const taskOf = (where: string, step: string, members: Json): TaskStep => {
   const page = textOf(FILE, members.page, where);
   if (!URL.canParse(page)) throw unreadable(FILE, where, 'its page is not a URI');
   return { kind: 'task', task, args, page };
+};
+
+const scriptOf = (where: string, step: string, members: Json): ScriptStep | DefaultScriptStep => {
+  const args = Object.hasOwn(members, 'args') ? stringsOf(FILE, members.args, where) : [];
+  if (Object.hasOwn(members, 'defaultScript')) {
+    known(members, step, ['defaultScript', 'args']);
+    const name = textOf(FILE, members.defaultScript, where);
+    if (name === '') throw unreadable(FILE, where, 'it names no default script');
+    return { kind: 'defaultScript', name, args };
+  }
+  known(members, step, ['script', 'args']);
+  const script = textOf(FILE, members.script, where);
+  inTheFolder(step, [script]);
+  return { kind: 'script', script, args };
 };
 
 // formats/build-file.md: no two archives of one pack step pack one path.
@@ -67,6 +81,7 @@ const stepOf = (index: number, line: unknown): BuildStep => {
   }
   if (other !== undefined) throw unreadable(FILE, where, `it names both '${kind}' and '${other}'`);
   if (kind === 'task') return taskOf(where, step, members);
+  if (kind === 'script' || kind === 'defaultScript') return scriptOf(where, step, members);
   known(members, step, [kind]);
   if (kind === 'pack') return { kind, archives: archivesOf(where, step, members.pack) };
   const paths = pathsOf(where, step, members[kind]);

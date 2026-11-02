@@ -37,13 +37,25 @@ describe('a build file the adapter reads and refuses', () => {
     });
   });
 
+  it('reads a script step by its path in the source folder and a default script step by its name, each with its arguments', () => {
+    expect(read('{"version":1,"steps":[{"script":"scripts/fix.py","args":["A.esp"]},{"defaultScript":"clean","args":["B.esp"]},{"script":"x.py"},{"defaultScript":"clean"}]}')).toEqual({
+      buildFile: {
+        steps: [
+          { kind: 'script', script: 'scripts/fix.py', args: ['A.esp'] }, { kind: 'defaultScript', name: 'clean', args: ['B.esp'] },
+          { kind: 'script', script: 'x.py', args: [] }, { kind: 'defaultScript', name: 'clean', args: [] },
+        ],
+      },
+    });
+  });
+
   it('reads a build file that holds only its version', () => {
     expect(read('{"version":1}')).toEqual({ buildFile: { steps: [] } });
   });
 
   it('reads back the text it writes', () => {
     const buildFile: BuildFile = {
-      steps: [{ kind: 'copy', paths: ['textures', 'a.ini'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'pack', archives: [{ path: 'a.ba2', files: ['x.nif'] }] }, { kind: 'task', task: 'T', args: ['x'] }],
+      steps: [{ kind: 'copy', paths: ['textures', 'a.ini'] }, { kind: 'compile', paths: ['A.esp'] }, { kind: 'pack', archives: [{ path: 'a.ba2', files: ['x.nif'] }] }, { kind: 'task', task: 'T', args: ['x'] },
+        { kind: 'script', script: 'fix.py', args: ['A.esp'] }, { kind: 'defaultScript', name: 'clean', args: [] }],
     };
 
     expect(read(buildFileText(buildFile))).toEqual({ buildFile });
@@ -58,7 +70,12 @@ describe('a build file the adapter reads and refuses', () => {
     ['{"version":1,"archives":{"a.ba2":["x.nif"]}}', "its build file holds 'archives', which Modbench does not read"],
     ['{"version":1,"exclude":[]}', "its build file holds 'exclude', which Modbench does not read"],
     ['{"version":1,"steps":[{"copy":["a"]},{}]}', 'its build file cannot be read at its step 2: it names no step'],
-    ['{"version":1,"steps":[{"script":"clean.py"}]}', "its build file's step 1 holds 'script', which Modbench does not read"],
+    ['{"version":1,"steps":[{"script":"../clean.py"}]}', "its build file's step 1 names '../clean.py', which is not a path in the folder"],
+    ['{"version":1,"steps":[{"script":7}]}', 'its build file cannot be read at its step 1'],
+    ['{"version":1,"steps":[{"defaultScript":""}]}', 'its build file cannot be read at its step 1: it names no default script'],
+    ['{"version":1,"steps":[{"script":"a.py","args":[1]}]}', 'its build file cannot be read at its step 1'],
+    ['{"version":1,"steps":[{"script":"a.py","page":"https://example.com"}]}', "its build file's step 1 holds 'page', which Modbench does not read"],
+    ['{"version":1,"steps":[{"script":"a.py","defaultScript":"clean"}]}', "its build file cannot be read at its step 1: it names both 'script' and 'defaultScript'"],
     ['{"version":1,"steps":[{"unpack":{"a.ba2":["x.nif"]}}]}', "its build file's step 1 holds 'unpack', which Modbench does not read"],
     ['{"version":1,"steps":[{"copy":["a"],"compile":["A.esp"]}]}', "its build file cannot be read at its step 1: it names both 'compile' and 'copy'"],
     ['{"version":1,"steps":[{"copy":["a"],"args":[]}]}', "its build file's step 1 holds 'args', which Modbench does not read"],

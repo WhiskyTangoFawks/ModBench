@@ -42,7 +42,7 @@ import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import type { PluginsTxtPlaceOf } from './toolbox/ToolboxProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import { hostGit } from './hostGit';
-import { hostTasks } from './tasks';
+import { hostTasks, scriptHostIn } from './tasks';
 import { stepTasks } from './sourceCommands/steps';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
@@ -173,7 +173,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, reporterFor));
   const commands = instanceCommands({ adapter, client, instanceRoot });
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks: stepTasks(hostTasks) });
+  const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
+  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
@@ -195,7 +196,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks: stepTasks(hostTasks), trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),

@@ -8,16 +8,33 @@ export interface TaskStep {
   readonly page?: string;
 }
 
+/** A step the Modbench script at `script`, a path in the source folder, runs (source.md, Build, story 16). */
+export interface ScriptStep {
+  readonly kind: 'script';
+  readonly script: string;
+  readonly args: readonly string[];
+}
+
+/** A step the default Modbench script `name` runs (scripts.md, Default scripts). */
+export interface DefaultScriptStep {
+  readonly kind: 'defaultScript';
+  readonly name: string;
+  readonly args: readonly string[];
+}
+
 export interface ManifestArchive {
   readonly path: string;
   readonly files: readonly string[];
 }
 
+/** A step that runs outside mEdit: a user task, or a Modbench script. */
+export type RunStep = TaskStep | ScriptStep | DefaultScriptStep;
+
 /** A built-in step names paths: a copy's in the source folder, and a decompile's or a compile's of plugins at the root. */
 export type BuildStep =
   | { readonly kind: 'decompile' | 'compile' | 'copy'; readonly paths: readonly string[] }
   | { readonly kind: 'pack'; readonly archives: readonly ManifestArchive[] }
-  | TaskStep;
+  | RunStep;
 
 export interface BuildFile {
   readonly steps: readonly BuildStep[];
@@ -31,6 +48,8 @@ const lineOf = (step: BuildStep): Record<string, unknown> => {
   switch (step.kind) {
     case 'pack': return { pack: Object.fromEntries(step.archives.map(({ path, files }) => [path, files])) };
     case 'task': return { task: step.task, ...step.args.length === 0 ? {} : { args: step.args }, ...step.page === undefined ? {} : { page: step.page } };
+    case 'script': return { script: step.script, ...step.args.length === 0 ? {} : { args: step.args } };
+    case 'defaultScript': return { defaultScript: step.name, ...step.args.length === 0 ? {} : { args: step.args } };
     case 'decompile': case 'compile': case 'copy': return { [step.kind]: step.paths };
   }
 };

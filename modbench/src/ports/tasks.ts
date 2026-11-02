@@ -13,6 +13,8 @@ export interface HostTasks<Task, ProcessTask extends Task, ShellCommandTask exte
   readonly withShellArgs: (task: ShellCommandTask, args: readonly string[], cwd: string) => Task;
   /** The task with every setting it holds, running in `cwd`. */
   readonly withShellLine: (task: ShellLineTask, cwd: string) => Task;
+  /** A task of the extension's own that runs `command` with `args` in `cwd`, which no one picks from Run Task. */
+  readonly scriptTask: (label: string, command: string, args: readonly string[], cwd: string) => Task;
   readonly execute: (task: Task) => PromiseLike<Run>;
   readonly onProcessEnd: (listener: (run: Run, exitCode: number | undefined) => void) => { dispose(): void };
   readonly onEnd: (listener: (run: Run) => void) => { dispose(): void };

@@ -266,6 +266,18 @@ describe('build over an instance on disk', () => {
     expect([(await recorded())?.ignore, pathsIn(await recorded())]).toEqual([['logs'], ['Mod.esp', 'b.nif', 'textures/c.dds']]);
   });
 
+  it('records by its path alone each file a script step makes, and neither records nor sends to the trash one at a path its manifest ignores (source.md, Build, stories 3 and 19)', async () => {
+    const script: BuildStep = { kind: 'script', script: 'fix.py', args: [] };
+    const { build, recorded, trashed } = await aSourceMod({ steps: [COMPILE, script] }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); await put('mods/Mod/logs/run.log', 'the script wrote this'); });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['logs'], files: new Map() });
+    await put('mods/Mod/logs/old.log', 'mine');
+
+    await build();
+
+    expect([Object.fromEntries((await recorded())?.files ?? []), trashed, await readdir(join(root, 'mods', 'Mod', 'logs'))])
+      .toEqual([{ 'b.nif': 'OZFIfvr0kjo=', 'textures/c.dds': 'RNWYjJS3keA=', 'made.dds': null, 'Mod.esp': 'QnTauWK5/T8=' }, [], ['old.log', 'run.log']]);
+  });
+
   describe('over a file of mine mEdit or a step replaces or removes (source.md, Build, story 20)', () => {
     const builtAgain = async () => {
       await put('mods/Mod/Mod.esp', 'built again');

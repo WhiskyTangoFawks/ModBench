@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import type { HostTasks } from './ports/tasks';
+import { defaultScriptIn } from './agent/defaultScripts';
+import { selectedInterpreter } from './agent/pythonInterpreter';
+import type { ScriptHost } from './ports/scriptHost';
 
 type ProcessTask = vscode.Task & { readonly execution: vscode.ProcessExecution };
 type ShellCommandTask = vscode.Task & {
@@ -29,7 +32,11 @@ export const hostTasks: HostTasks<vscode.Task, ProcessTask, ShellCommandTask, Sh
   withShellArgs: (task, args, cwd) => rebuilt(
     task, new vscode.ShellExecution(task.execution.command, [...task.execution.args, ...args], { ...task.execution.options, cwd })),
   withShellLine: (task, cwd) => rebuilt(task, new vscode.ShellExecution(task.execution.commandLine, { ...task.execution.options, cwd })),
+  scriptTask: (label, command, args, cwd) => new vscode.Task({ type: 'modbench.script' }, vscode.TaskScope.Workspace, label, 'Modbench', new vscode.ProcessExecution(command, [...args], { cwd })),
   execute: (task) => vscode.tasks.executeTask(task),
   onProcessEnd: (listener) => vscode.tasks.onDidEndTaskProcess((event) => { listener(event.execution, event.exitCode); }),
   onEnd: (listener) => vscode.tasks.onDidEndTask((event) => { listener(event.execution); }),
 };
+
+export const scriptHostIn = (extensionUri: vscode.Uri): ScriptHost =>
+  ({ interpreter: selectedInterpreter, defaultScript: defaultScriptIn(vscode.Uri.joinPath(extensionUri, 'scripts', 'default')) });
