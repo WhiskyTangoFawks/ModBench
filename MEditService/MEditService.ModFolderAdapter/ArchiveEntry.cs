@@ -1,3 +1,3 @@
 namespace MEditService.ModFolderAdapter;
 
-internal sealed record ArchiveEntry(string Path, bool IsCubemap, Func<byte[]> Read);
+internal sealed record ArchiveEntry(string Path, Func<byte[]> Read);

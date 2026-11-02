@@ -21,10 +21,6 @@ public static class ArchiveUnpacker
             if (ambiguous is not null)
                 return new ArchiveStepRefusal(ArchiveRefusal.EntriesAmbiguous, $"'{archiveAt}' holds {string.Join(" and ", ambiguous.Select(entry => $"'{entry.Path}'"))}, which are one file without regard to case.");
 
-            var cube = files.Where(file => entries[file].Single().IsCubemap).ToList();
-            if (cube.Count > 0)
-                return new ArchiveStepRefusal(ArchiveRefusal.CubemapNotUnpackable, $"{string.Join(" and ", cube.Select(file => $"'{file}'"))} is a cubemap, and its DDS header would drop the cubemap flag.");
-
             unpacked = [.. files.Select(file => new ArchiveFile(file, MemoryOf(entries[file].Single().Read())))];
             return null;
         }
@@ -37,7 +33,7 @@ public static class ArchiveUnpacker
     private static IEnumerable<ArchiveEntry> EntriesOf(GameRelease release, string archiveAt) =>
         Ba2Archive.IsBa2(archiveAt)
             ? Ba2Archive.Read(archiveAt)
-            : Archive.CreateReader(release, archiveAt).Files.Select(entry => new ArchiveEntry(entry.Path.Replace('\\', '/'), false, entry.GetBytes));
+            : Archive.CreateReader(release, archiveAt).Files.Select(entry => new ArchiveEntry(entry.Path.Replace('\\', '/'), entry.GetBytes));
 
     private static Func<Stream> MemoryOf(byte[] bytes) => () => new MemoryStream(bytes);
 }
