@@ -17,7 +17,7 @@ public enum ArchiveRefusal
     /// <summary>A file it takes could not be read, or the archive could not be written.</summary>
     NotWritten,
 
-    /// <summary>The archive is in a format Mutagen's reader cannot read.</summary>
+    /// <summary>The archive is in a format Modbench's readers cannot read.</summary>
     ArchiveUnreadable,
 
     /// <summary>A file an unpack takes is not an entry of the archive.</summary>
@@ -26,7 +26,7 @@ public enum ArchiveRefusal
     /// <summary>Two entries of the archive differ only in case, so a file an unpack takes names neither alone.</summary>
     EntriesAmbiguous,
 
-    /// <summary>A texture an unpack takes is a cubemap, whose flag Mutagen's extraction drops.</summary>
+    /// <summary>A texture an unpack takes is a cubemap, whose cubemap flag the unpacked DDS header would drop.</summary>
     CubemapNotUnpackable,
 }
 

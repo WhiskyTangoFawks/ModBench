@@ -11,17 +11,8 @@ internal static class Ba2Writer
     private const uint GeneralFlags = 0x00100100;
     private const uint Unaligned = 0xBAADF00D;
     private const byte TileMode = 8;
-    private const ushort TextureChunkLength = 24;
-    private const uint Lz4Compression = 3;
 
     private static readonly uint[] CrcTable = [.. Enumerable.Range(0, 256).Select(Row)];
-
-    private enum Codec
-    {
-        None,
-        Zlib,
-        Lz4Block,
-    }
 
     public static void Write(Stream output, Ba2Variant variant, IReadOnlyList<PackedFile> files)
     {
@@ -53,23 +44,23 @@ internal static class Ba2Writer
         names.Write((uint)files.Count);
         names.Write((ulong)nameTable);
         if (variant.Version is 2 or 3) names.Write(1ul);
-        if (variant.Version == 3) names.Write(Lz4Compression);
+        if (variant.Version == 3) names.Write(Ba2Format.Lz4Compression);
         names.Flush();
         entries.WriteTo(output);
     }
 
     public static bool Writes(Ba2Variant variant) => CodecOf(variant) is not null;
 
-    private static Codec? CodecOf(Ba2Variant variant) =>
+    private static Ba2Codec? CodecOf(Ba2Variant variant) =>
         (variant.Version, variant.Contents, variant.Compressed) switch
         {
-            (1 or 2, _, false) => Codec.None,
-            (1 or 2, _, true) => Codec.Zlib,
-            (3, Ba2Contents.Textures, true) => Codec.Lz4Block,
+            (1 or 2, _, false) => Ba2Codec.None,
+            (1 or 2, _, true) => Ba2Codec.Zlib,
+            (3, Ba2Contents.Textures, true) => Ba2Codec.Lz4Block,
             _ => null,
         };
 
-    private static void WriteGeneral(Stream output, BinaryWriter entry, PackedFile file, Codec codec)
+    private static void WriteGeneral(Stream output, BinaryWriter entry, PackedFile file, Ba2Codec codec)
     {
         using var content = file.Open();
         var offset = output.Position;
@@ -77,12 +68,12 @@ internal static class Ba2Writer
         WriteIdentity(entry, file);
         entry.Write(GeneralFlags);
         entry.Write((ulong)offset);
-        entry.Write(codec == Codec.None ? 0u : stored);
+        entry.Write(codec == Ba2Codec.None ? 0u : stored);
         entry.Write(whole);
         entry.Write(Unaligned);
     }
 
-    private static void WriteTexture(Stream output, BinaryWriter entry, PackedFile file, Codec codec)
+    private static void WriteTexture(Stream output, BinaryWriter entry, PackedFile file, Ba2Codec codec)
     {
         using var content = file.Open();
         var header = DdsHeader.Read(content, file.Source);
@@ -94,7 +85,7 @@ internal static class Ba2Writer
         WriteIdentity(entry, file);
         entry.Write((byte)0);
         entry.Write((byte)1);
-        entry.Write(TextureChunkLength);
+        entry.Write(Ba2Format.TextureChunkLength);
         entry.Write(header.Height);
         entry.Write(header.Width);
         entry.Write(header.Mips);
@@ -102,23 +93,23 @@ internal static class Ba2Writer
         entry.Write((byte)(header.IsCubeMap ? 1 : 0));
         entry.Write(TileMode);
         entry.Write((ulong)offset);
-        entry.Write(codec == Codec.None ? 0u : stored);
+        entry.Write(codec == Ba2Codec.None ? 0u : stored);
         entry.Write(whole);
         entry.Write((ushort)0);
         entry.Write((ushort)(header.Mips - 1));
         entry.Write(Unaligned);
     }
 
-    private static (uint Stored, uint Whole) Store(Stream output, Stream content, long length, Codec codec)
+    private static (uint Stored, uint Whole) Store(Stream output, Stream content, long length, Ba2Codec codec)
     {
         var start = output.Position;
         switch (codec)
         {
-            case Codec.Zlib:
+            case Ba2Codec.Zlib:
                 using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
                     content.CopyTo(zlib);
                 break;
-            case Codec.Lz4Block:
+            case Ba2Codec.Lz4Block:
                 var raw = new byte[length];
                 content.ReadExactly(raw);
                 var block = new byte[LZ4Codec.MaximumOutputSize(raw.Length)];

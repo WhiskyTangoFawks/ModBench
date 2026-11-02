@@ -5,15 +5,15 @@ namespace MEditService.ModFolderAdapter;
 
 internal sealed record DdsHeader(int Length, ushort Width, ushort Height, byte Mips, byte DxgiFormat, bool IsCubeMap)
 {
-    private const int MainLength = 128;
-    private const int ExtensionLength = 20;
-    private const uint FourCcFlag = 0x4;
+    internal const int MainLength = 128;
+    internal const int ExtensionLength = 20;
+    internal const uint FourCcFlag = 0x4;
     private const uint RgbFlag = 0x40;
     private const uint LuminanceFlag = 0x20000;
     private const uint CubeMapCaps = 0x200;
     private const uint VolumeCaps = 0x200000;
     private const uint CubeMapMisc = 0x4;
-    private const uint Texture2D = 3;
+    internal const uint Texture2D = 3;
 
     private static readonly Dictionary<string, byte> FormatOfFourCc = new()
     {
