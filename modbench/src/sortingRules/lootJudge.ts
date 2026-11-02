@@ -121,9 +121,8 @@ function judgeGroups(
   });
 }
 
-/** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages and
- *  conditions that apply. A rule whose condition cannot be evaluated is a Warning, never skipped. `partitionOf`
- *  is `undefined` for a plugin whose master flag is not yet read, and its group is not judged. */
+/** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages that apply.
+ *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread. */
 export function judgeLoot(
   order: readonly PluginRef[], rules: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
 ): BrokenRule[] {
