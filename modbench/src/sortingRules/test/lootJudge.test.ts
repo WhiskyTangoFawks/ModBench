@@ -145,14 +145,18 @@ plugins:
       expect(pairs(judged(order, groups + extra))).toEqual(expected);
     });
 
-    it('ends on groups that name each other, and breaks the order that suits one of them', () => {
-      expect(pairs(judged(['A.esp', 'B.esp'], `groups:
+    it('judges no group through the groups that load after each other, and judges the edges outside the cycle', () => {
+      const cycle = `groups:
   - {name: a, after: [b]}
   - {name: b, after: [a]}
+  - {name: c, after: [a]}
 plugins:
   - {name: A.esp, group: a}
   - {name: B.esp, group: b}
-`))).toEqual([['A.esp', 'B.esp']]);
+  - {name: C.esp, group: c}
+`;
+
+      expect([pairs(judged(['A.esp', 'B.esp'], cycle)), pairs(judged(['C.esp', 'A.esp', 'B.esp'], cycle))]).toEqual([[], [['C.esp', 'A.esp']]]);
     });
 
     it('holds the order of groups within each of masters, blueprint masters and the rest, never across them', () => {
@@ -191,9 +195,9 @@ plugins:
     });
 
     it('breaks a plugin by a group the userlist gives an after', () => {
-      const broken = judged(['E.esp', 'L.esp'], groups, ['E.esp', 'L.esp'], 'groups:\n  - {name: early, after: [late]}\n');
+      const broken = judged(['E.esp', 'S.esp'], groups, ['E.esp', 'S.esp'], 'groups:\n  - {name: aside}\n  - {name: early, after: [aside]}\nplugins:\n  - {name: S.esp, group: aside}\n');
 
-      expect(broken.map(({ plugins, source }) => [plugins[0]?.filename, source])).toEqual([['E.esp', { file: 'userlist', line: 1 }]]);
+      expect(broken.map(({ plugins, source }) => [plugins[0]?.filename, source])).toEqual([['E.esp', { file: 'userlist', line: 2 }]]);
     });
 
     it('takes the group a userlist entry states over the masterlist\'s', () => {

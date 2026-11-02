@@ -225,9 +225,10 @@ plugins:
     expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'This plugin belongs to the group "ghost", which does not exist.' }]);
   });
 
-  it('reports the groups that load after each other in a cycle, naming it, on the line that closes it', () => {
-    const { problems } = readRules(filesOf({ masterlist: text('groups:\n  - {name: a, after: [b]}\n  - {name: b, after: [a]}\n') }));
+  it('reports groups that load after each other in a cycle, naming it on the line that closes it, and reads no edge of the cycle', () => {
+    const { groups, problems } = readRules(filesOf({ masterlist: text('groups:\n  - {name: a, after: [b]}\n  - {name: b, after: [a]}\n  - {name: c, after: [a]}\n') }));
 
     expect(problems).toEqual([{ file: 'masterlist', line: 2, text: 'The groups load after each other in a cycle: a after b after a.' }]);
+    expect(groups.map(({ name, after }) => [name, after.map((step) => step.name)])).toEqual([['a', []], ['b', []], ['c', ['a']]]);
   });
 });

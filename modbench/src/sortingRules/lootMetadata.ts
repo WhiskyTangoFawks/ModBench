@@ -269,7 +269,7 @@ function readRules(files: SortingRuleFiles): { entries: LootEntry[]; groups: Loo
   const allEntries = [...masterlist.entries, ...userlist.entries];
   const declared = new Set([DEFAULT_GROUP, ...allGroups.map(({ name }) => name)]);
   const unsound: RuleFileProblem[] = [];
-  const groups = allGroups.map(({ name, after }) => ({
+  const declaredGroups = allGroups.map(({ name, after }) => ({
     name,
     after: after.filter((step) => {
       if (declared.has(step.name)) return true;
@@ -277,17 +277,31 @@ function readRules(files: SortingRuleFiles): { entries: LootEntry[]; groups: Loo
       return false;
     }),
   }));
+  const groups = withoutCycles(declaredGroups);
   for (const { group } of allEntries) {
     if (group !== undefined && !declared.has(group.name)) {
       unsound.push({ file: group.source.file, line: group.source.line, text: `This plugin belongs to the group "${group.name}", which does not exist.` });
     }
   }
-  unsound.push(...groupCycles(groups));
+  unsound.push(...groupCycles(declaredGroups));
   return {
     entries: allEntries,
     groups,
     problems: [...prelude.problems, ...masterlist.problems, ...userlist.problems, ...unsound],
   };
+}
+
+// An edge is in a cycle when its group is reachable from the group it names.
+function withoutCycles(groups: readonly LootGroup[]): LootGroup[] {
+  const afterOf = new Map<string, LootGroup['after']>();
+  for (const { name, after } of groups) afterOf.set(name, [...afterOf.get(name) ?? [], ...after]);
+  const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
+    if (from === target) return true;
+    if (seen.has(from)) return false;
+    seen.add(from);
+    return (afterOf.get(from) ?? []).some((step) => reaches(step.name, target, seen));
+  };
+  return groups.map(({ name, after }) => ({ name, after: after.filter((step) => !reaches(step.name, name)) }));
 }
 
 function groupCycles(groups: readonly LootGroup[]): RuleFileProblem[] {
