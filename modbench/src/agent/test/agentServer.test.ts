@@ -541,6 +541,38 @@ describe('the agent server, reading file order conflicts', () => {
     ]);
   });
 
+  it('reads Overwrite as list_mods names it, as the winner of the files it holds', async () => {
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite', kind: 'runtimeOutput' }] })).toMatchObject([
+      { mod: 'Overwrite', enabled: true, wins: [{ file: 'f.esp', over: ['C'] }], loses: [], files: [{ file: 'F.esp', excluded: false, gotten: true }] },
+    ]);
+  });
+
+  describe('a mod named Overwrite', () => {
+    const withOverwriteMod = new FakeInstance({
+      ...CONFLICTED, mods: [...CONFLICTED.mods, { kind: 'mod', name: 'Overwrite', enabled: true }],
+      filesByMod: new Map([...CONFLICTED.filesByMod, ['Overwrite', [fileIn('/m', 'own.txt')]]]),
+    });
+
+    it('is told from Overwrite by its kind, each row holding its own files and the files it wins', async () => {
+      const { client } = await clientOf(withOverwriteMod);
+
+      expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite', kind: 'runtimeOutput' }, { name: 'Overwrite', kind: 'mod' }] })).toMatchObject([
+        { kind: 'runtimeOutput', mod: 'Overwrite', wins: [{ file: 'f.esp', over: ['C'] }], files: [{ file: 'F.esp' }] },
+        { kind: 'mod', mod: 'Overwrite', wins: [], files: [{ file: 'own.txt' }] },
+      ]);
+    });
+
+    it('is refused as a name with no kind, listing each thing it means', async () => {
+      const { client } = await clientOf(withOverwriteMod);
+
+      expect(await call(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite' }] })).toEqual({
+        isError: true, text: '"Overwrite" means more than one thing: mod Overwrite; runtimeOutput Overwrite. Name it with its kind.',
+      });
+    });
+  });
+
   it('says a disabled mod is disabled, so its empty answer is never read as no conflicts', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
@@ -673,6 +705,12 @@ describe('the agent server, resolving names against the instance', () => {
 
     expect(await call(client, 'resolve_instance_names', { files: [{ mod: { name: 'B' }, path: 'a.mem.mohidden' }] }))
       .toEqual({ isError: true, text: 'Nothing is named "a.mem.mohidden" in mod B.' });
+  });
+
+  it('names a file of Overwrite by its path there', async () => {
+    expect(await resolve({ files: [{ mod: { name: 'Overwrite', kind: 'runtimeOutput' }, path: 'f.esp' }] })).toEqual({
+      isError: false, text: JSON.stringify({ downloads: [], files: [{ mod: 'Overwrite', file: 'F.esp' }] }),
+    });
   });
 
   it('refuses a path the mod has no file at', async () => {
@@ -1339,6 +1377,24 @@ describe('the agent server, running a gesture', () => {
       args: { argument: [{ mod: { name: 'B' }, path: 'F4SE/Plugins/BetterConsole.mem' }] },
       command: 'modbench.mod.includeFile',
       argument: [{ kind: 'file', origin: mod('B'), relativePath: 'F4SE/Plugins/BetterConsole.mem.mohidden' }],
+      options: {},
+    },
+    {
+      name: 'mod_exclude_file carries a file of Overwrite, which list_mods names as a runtimeOutput, by its path there',
+      value: instanceValueFixture({ overwriteFiles: [fileIn('/o', 'Sub/ow.txt')] }),
+      tool: 'mod_exclude_file',
+      args: { argument: [{ mod: { name: 'Overwrite', kind: 'runtimeOutput' }, path: 'sub/OW.txt' }] },
+      command: 'modbench.mod.excludeFile',
+      argument: [{ kind: 'file', origin: { kind: 'runtimeOutput' }, relativePath: 'Sub/ow.txt' }],
+      options: {},
+    },
+    {
+      name: 'mod_exclude_file carries a file of Overwrite named as list_mods names it, with no kind',
+      value: instanceValueFixture({ overwriteFiles: [fileIn('/o', 'Sub/ow.txt')] }),
+      tool: 'mod_exclude_file',
+      args: { argument: [{ mod: { name: 'Overwrite' }, path: 'Sub/ow.txt' }] },
+      command: 'modbench.mod.excludeFile',
+      argument: [{ kind: 'file', origin: { kind: 'runtimeOutput' }, relativePath: 'Sub/ow.txt' }],
       options: {},
     },
     {

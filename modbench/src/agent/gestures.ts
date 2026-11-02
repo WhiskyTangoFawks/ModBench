@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { Argument } from '../wire/argument';
-import { downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
+import { CONTAINER_NAME, downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
 import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
 import type { Deployed } from '../deployment/deployment';
@@ -111,10 +111,10 @@ const CREATE_EMPTY_MOD = gestureInput(
 );
 
 const FILES = gestureInput(
-  'argument: the files, each { mod: { name, kind? } as list_mods names it, path: its path in the mod }',
-  z.object({ argument: z.array(z.object({ mod: ENTRY_NAME, path: z.string() })) }),
-  (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ mod, relativePath }) =>
-    ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath })), {}),
+  'argument: the files, each { mod: { name, kind? } as list_mods names it, Overwrite included, path: its path in the mod }',
+  z.object({ argument: z.array(z.object({ mod: CONTAINER_NAME, path: z.string() })) }),
+  (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ origin, relativePath }) =>
+    ({ kind: 'file', origin, relativePath })), {}),
 );
 
 const PUBLISHER_TAG_ROWS = gestureInput(
@@ -126,7 +126,7 @@ const PUBLISHER_TAG_ROWS = gestureInput(
   (value, { argument, options }) => {
     const mods = modArguments(value, argument.filter(({ path }) => path === undefined).map(({ mod }) => mod));
     const paths = filesAndFoldersNamed(value, argument.flatMap(({ mod, path }) => (path === undefined ? [] : [{ mod, path }])))
-      .map(({ mod, relativePath }): Argument => ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath }));
+      .map(({ origin, relativePath }): Argument => ({ kind: 'file', origin, relativePath }));
     return new AgentCall([...mods, ...paths], options);
   },
 );
@@ -247,8 +247,6 @@ const MOVE_PLUGINS = gestureInput(
   z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ drop: DROP }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
-
-const CONTAINER_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'runtimeOutput']).optional() });
 
 const CREATE_PLUGIN = gestureInput(
   'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name }',
