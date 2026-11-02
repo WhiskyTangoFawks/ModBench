@@ -5,8 +5,6 @@ namespace MEditService.ModFolderAdapter;
 
 public static class ArchiveUnpacker
 {
-    private sealed record Entry(string Path, bool IsCubemap, Func<byte[]> Read);
-
     /// <summary>Each of <paramref name="files"/>, by its forward-slash path and without regard to case, out of the archive at
     /// <paramref name="archiveAt"/>; the refusal when any is not unpacked.</summary>
     public static ArchiveStepRefusal? Unpack(GameRelease release, string archiveAt, IReadOnlyList<string> files, out IReadOnlyList<ArchiveFile> unpacked)
@@ -36,10 +34,10 @@ public static class ArchiveUnpacker
         }
     }
 
-    private static IEnumerable<Entry> EntriesOf(GameRelease release, string archiveAt) =>
+    private static IEnumerable<ArchiveEntry> EntriesOf(GameRelease release, string archiveAt) =>
         Ba2Archive.IsBa2(archiveAt)
-            ? Ba2Archive.Read(archiveAt).Select(entry => new Entry(entry.Path, entry.IsCubemap, entry.Read))
-            : Archive.CreateReader(release, archiveAt).Files.Select(entry => new Entry(entry.Path.Replace('\\', '/'), false, entry.GetBytes));
+            ? Ba2Archive.Read(archiveAt)
+            : Archive.CreateReader(release, archiveAt).Files.Select(entry => new ArchiveEntry(entry.Path.Replace('\\', '/'), false, entry.GetBytes));
 
     private static Func<Stream> MemoryOf(byte[] bytes) => () => new MemoryStream(bytes);
 }

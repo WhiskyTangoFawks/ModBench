@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using K4os.Compression.LZ4;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -9,6 +10,11 @@ public sealed class ArchiveUnpackerTests : IDisposable
 {
     private const string Meshes = "Meshes/Actors/A.nif";
     private const string Scripts = "scripts/a.pex";
+    private const int HeaderLengthOfVersion3 = 36;
+    private const int GeneralEntryAt = 24;
+    private const int GeneralEntryLength = 36;
+    private const int RecordedSizeAt = 28;
+    private const uint Lz4Compression = 3;
 
     private static readonly byte[] Mesh = Encoding.ASCII.GetBytes(new string('n', 4000));
     private static readonly byte[] Script = Encoding.ASCII.GetBytes("Scriptname A");
@@ -90,26 +96,68 @@ public sealed class ArchiveUnpackerTests : IDisposable
         Assert.Equal(dds.Pixels, Read(Assert.Single(files))[^dds.Pixels.Length..]);
     }
 
-    [Theory]
-    [InlineData(2u, false)]
-    [InlineData(7u, true)]
-    [InlineData(8u, true)]
-    public void ACompressedGeneralBa2OfAnyVersion_UnpacksTheInflatedBytes(uint version, bool versionPatched)
+    [Fact]
+    public void ACompressedGeneralVersion2Ba2_UnpacksTheInflatedBytes()
     {
         With(Meshes, Mesh);
-        var archive = Packed(new Ba2Variant(versionPatched ? 1 : version, Ba2Contents.General, Compressed: true), Meshes);
-        if (versionPatched) SetVersion(archive, version);
+        var archive = Packed(new Ba2Variant(2, Ba2Contents.General, Compressed: true), Meshes);
 
-        var files = Unpacked(GameRelease.Fallout4, archive, Meshes);
-
-        Assert.Equal(Mesh, Read(Assert.Single(files)));
+        Assert.Equal(Mesh, Read(Assert.Single(Unpacked(GameRelease.Starfield, archive, Meshes))));
     }
 
     [Theory]
-    [InlineData(1u)]
+    [InlineData(7u)]
+    [InlineData(8u)]
+    public void ACompressedGeneralBa2OfAFallout4Version_UnpacksTheInflatedBytes(uint version)
+    {
+        With(Meshes, Mesh);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: true), Meshes);
+        SetVersion(archive, version);
+
+        Assert.Equal(Mesh, Read(Assert.Single(Unpacked(GameRelease.Fallout4, archive, Meshes))));
+    }
+
+    [Fact]
+    public void AGeneralVersion3Ba2WhoseCompressionIsLz4_UnpacksTheInflatedBytes()
+    {
+        var archive = Path.Combine(_scratch, "Mod - Main.ba2");
+        File.WriteAllBytes(archive, GeneralVersion3Lz4(Meshes, Mesh));
+
+        Assert.Equal(Mesh, Read(Assert.Single(Unpacked(GameRelease.Starfield, archive, Meshes))));
+    }
+
+    [Fact]
+    public void AZlibEntryThatInflatesPastItsRecordedSize_RefusesTheArchiveInsteadOfTruncatingTheFile()
+    {
+        With(Meshes, Mesh);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.General, Compressed: true), Meshes);
+        var bytes = File.ReadAllBytes(archive);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(GeneralEntryAt + RecordedSizeAt), (uint)Mesh.Length - 1);
+        File.WriteAllBytes(archive, bytes);
+
+        var refusal = Refused(GameRelease.Fallout4, archive, Meshes);
+
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
+    }
+
+    [Fact]
+    public void ATextureOfADxgiFormatNoDdsHeaderIsWrittenFor_RefusesTheArchiveInsteadOfWritingAWrongHeader()
+    {
+        var unknown = Dds.Bc7(8, 8).File;
+        BinaryPrimitives.WriteUInt32LittleEndian(unknown.AsSpan(128), 200);
+        With("textures/odd.dds", unknown);
+        var archive = Packed(new Ba2Variant(1, Ba2Contents.Textures, Compressed: false), "textures/odd.dds");
+
+        var refusal = Refused(GameRelease.Fallout4, archive, "textures/odd.dds");
+
+        Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
+        Assert.Contains("DXGI format 200", refusal.Message);
+    }
+
+    [Theory]
     [InlineData(2u)]
     [InlineData(3u)]
-    public void ATexturesBa2OfEveryWrittenVersion_UnpacksTheInflatedPixels_ALz4OneIncluded(uint version)
+    public void ATexturesBa2OfVersion2And3_UnpacksTheInflatedPixels_TheLz4OneIncluded(uint version)
     {
         var dds = Dds.Dxt1(width: 16, height: 16, mips: 3);
         With("textures/a_d.dds", dds.File);
@@ -136,17 +184,31 @@ public sealed class ArchiveUnpackerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(1u, false)]
-    [InlineData(2u, false)]
-    [InlineData(3u, false)]
-    [InlineData(7u, true)]
-    [InlineData(8u, true)]
-    public void ATexturesBa2_RefusesItsCubemap_NamingOnlyIt(uint version, bool versionPatched)
+    [InlineData(1u)]
+    [InlineData(2u)]
+    [InlineData(3u)]
+    public void AWrittenTexturesBa2_RefusesItsCubemap_NamingOnlyIt(uint version) =>
+        AssertRefusesOnlyTheCubemap(CubemapArchive(version));
+
+    [Theory]
+    [InlineData(7u)]
+    [InlineData(8u)]
+    public void AFallout4TexturesBa2_RefusesItsCubemap_NamingOnlyIt(uint version)
+    {
+        var archive = CubemapArchive(1);
+        SetVersion(archive, version);
+
+        AssertRefusesOnlyTheCubemap(archive);
+    }
+
+    private string CubemapArchive(uint version)
     {
         With("textures/flat.dds", Dds.Dxt1(8, 8, 1).File).With("textures/Sky.dds", Dds.CubemapDxt1(8, 8).File);
-        var archive = Packed(new Ba2Variant(versionPatched ? 1 : version, Ba2Contents.Textures, Compressed: true), "textures/flat.dds", "textures/Sky.dds");
-        if (versionPatched) SetVersion(archive, version);
+        return Packed(new Ba2Variant(version, Ba2Contents.Textures, Compressed: true), "textures/flat.dds", "textures/Sky.dds");
+    }
 
+    private static void AssertRefusesOnlyTheCubemap(string archive)
+    {
         var refusal = Refused(GameRelease.Fallout4, archive, "textures/flat.dds", "textures/sky.dds");
 
         Assert.Equal(ArchiveRefusal.CubemapNotUnpackable, refusal.Reason);
@@ -166,6 +228,34 @@ public sealed class ArchiveUnpackerTests : IDisposable
 
         Assert.Equal(ArchiveRefusal.ArchiveUnreadable, refusal.Reason);
         Assert.Contains("version 4", refusal.Message);
+    }
+
+    private static byte[] GeneralVersion3Lz4(string path, byte[] content)
+    {
+        var block = new byte[LZ4Codec.MaximumOutputSize(content.Length)];
+        var stored = LZ4Codec.Encode(content, block, LZ4Level.L09_HC);
+        var entriesAt = HeaderLengthOfVersion3;
+        var dataAt = entriesAt + GeneralEntryLength;
+        using var archive = new MemoryStream();
+        using var writer = new BinaryWriter(archive);
+        writer.Write("BTDX"u8);
+        writer.Write(3u);
+        writer.Write("GNRL"u8);
+        writer.Write(1u);
+        writer.Write((ulong)(dataAt + stored));
+        writer.Write(1ul);
+        writer.Write(Lz4Compression);
+        writer.Write(new byte[12]);
+        writer.Write(0u);
+        writer.Write((ulong)dataAt);
+        writer.Write((uint)stored);
+        writer.Write((uint)content.Length);
+        writer.Write(0xBAADF00Du);
+        writer.Write(block, 0, stored);
+        var name = Encoding.UTF8.GetBytes(path);
+        writer.Write((ushort)name.Length);
+        writer.Write(name);
+        return archive.ToArray();
     }
 
     private static uint U32(byte[] bytes, int at) => BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at));
