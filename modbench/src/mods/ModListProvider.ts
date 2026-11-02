@@ -56,6 +56,7 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
     mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
     facts?.holdsPlugin === true && 'holdsPlugin', facts !== undefined && (facts.sourceMod ? 'sourceMod' : 'nonSourceMod'),
     facts?.holdsPublisherTag === true && 'holdsPublisherTag',
+    facts?.status?.heldWhole === true && 'heldWhole',
   ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
 }

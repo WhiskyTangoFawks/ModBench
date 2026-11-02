@@ -131,6 +131,17 @@ describe('a file row says ignored when its manifest ignores it, and its menu key
   });
 });
 
+describe('a mod whose whole folder git holds (mods.md, Menus and keys: Mod menu)', () => {
+  it('says so in its row\'s context, and says no manifest nor differs', async () => {
+    const { provider } = providerOver([status('ModA', { heldWhole: true }), status('ModB')]);
+    const [held, other] = [await row(provider, 'ModA'), await row(provider, 'ModB')];
+
+    expect([held.contextValue, other.contextValue, held.description, provider.badge()]).toEqual([
+      expect.stringMatching(/\bheldWhole\b/), expect.not.stringMatching(/heldWhole/), '1.0', undefined,
+    ]);
+  });
+});
+
 describe('the view\'s badge counts the mods that differ or have no manifest (mods.md, The view)', () => {
   it('counts them while the instance holds a repository', () => {
     const { provider } = providerOver([status('ModA', { noManifest: true }), status('ModB', { gone: ['a.nif'] }), status('ModC')]);

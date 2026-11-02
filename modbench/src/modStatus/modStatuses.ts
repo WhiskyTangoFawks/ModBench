@@ -1,7 +1,7 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -35,13 +35,14 @@ export class ModStatuses {
   private derived: ReadonlyMap<string, ModStatus> = new Map();
   private readonly shown = new Map<string, ModStatus>();
   private readonly unreadable = new Map<string, string>();
+  private gitFailure: string | undefined;
   private waiting: StatusSource | undefined;
   private deriving = false;
   private derivation: Promise<void> = Promise.resolve();
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void) {}
+  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole'>, private readonly log: (line: string) => void) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -51,7 +52,8 @@ export class ModStatuses {
     this.derivation = this.deriveWhileWaiting();
   }
 
-  /** The statuses derived from the latest value handed, each as read, an unreadable one too. */
+  /** The statuses derived from the latest value handed, each as read, an unreadable one too. While git cannot say which folders it
+   *  holds, every mod's status is unreadable with that reason. */
   async current(): Promise<ReadonlyMap<string, ModStatus>> {
     await this.derivation;
     return this.derived;
@@ -67,6 +69,10 @@ export class ModStatuses {
   }
 
   message(): string | undefined {
+    if (this.gitFailure !== undefined) {
+      const why = `git could not say which folders it holds: ${this.gitFailure}.`;
+      return this.shown.size === 0 ? `The statuses could not be read: ${why}` : `Showing the last good read: ${why}`;
+    }
     if (this.unreadable.size === 0) return undefined;
     return `Showing the last good read: ${[...this.unreadable].map(([mod, why]) => `the status of "${mod}" could not be read: ${why}.`).join(' ')}`;
   }
@@ -84,7 +90,14 @@ export class ModStatuses {
     try {
       for (let value = this.waiting; value !== undefined; value = this.waiting) {
         this.waiting = undefined;
-        const statuses = value.holdsRepository ? await Promise.all(modsAt(value).map((mod) => this.statusOf(mod))) : [];
+        const mods = value.holdsRepository ? modsAt(value) : [];
+        const heldWhole = await this.heldWholeAmong(mods);
+        if (heldWhole === undefined) {
+          this.derived = new Map(mods.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
+          for (const listener of this.changed) listener();
+          continue;
+        }
+        const statuses = await Promise.all(mods.map((mod) => this.statusOf(mod, heldWhole.has(mod.folder))));
         this.hold(new Map(statuses.map((status) => [status.mod, status])));
       }
     } finally {
@@ -92,10 +105,35 @@ export class ModStatuses {
     }
   }
 
-  private async statusOf(mod: ModAt): Promise<ModStatus> {
+  // Git failing leaves the last good statuses shown, and says why once for all of them.
+  private setGitFailure(why: string | undefined): void {
+    if (this.gitFailure === why) return;
+    this.gitFailure = why;
+    if (why !== undefined) this.log(`[modList] Git could not say which folders it holds: ${why}`);
+    for (const listener of this.messageChanged) listener();
+  }
+
+  private async heldWholeAmong(mods: readonly ModAt[]): Promise<ReadonlySet<string> | undefined> {
+    try {
+      const held = await this.reads.foldersHeldWhole(mods.map(({ folder }) => folder));
+      this.setGitFailure(undefined);
+      return held;
+    } catch (err) {
+      this.setGitFailure(err instanceof Error ? err.message : String(err));
+      return undefined;
+    }
+  }
+
+  private async statusAgainstManifest(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
-    const [values, installed] = await Promise.all([this.reads.modValue(mod.folder, packagesAskedAt(manifest)), this.reads.installationFile(mod.name)]);
-    const status = statusFrom(mod, manifest, values);
+    return statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest)));
+  }
+
+  // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
+  private async statusOf(mod: ModAt, heldWhole: boolean): Promise<ModStatus> {
+    const [status, installed] = await Promise.all([
+      heldWhole ? heldWholeStatus(mod.name) : this.statusAgainstManifest(mod), this.reads.installationFile(mod.name),
+    ]);
     return installed.kind === 'unreadable' ? { ...status, installationFileProblem: installed.reason } : status;
   }
 

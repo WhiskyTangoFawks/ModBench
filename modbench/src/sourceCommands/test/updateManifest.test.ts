@@ -66,6 +66,24 @@ async function heldIn(folder: string): Promise<Manifest> {
 }
 
 describe('update manifest', () => {
+  it('refuses a mod whose whole folder git holds, naming why, and leaves its manifest as it was (Update manifest, story 1)', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } }, answers: { heldWholeByGit: new Set([join(modsDir, 'ModA')]) } });
+
+    const result = await update(['ModA', 'ModB']);
+
+    expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModA')]).toEqual([
+      ['ModB'], [{ item: 'ModA', reason: 'was not updated: git holds its whole folder.' }], undefined,
+    ]);
+  });
+
+  it('passes over a mod whose whole folder git holds when it runs on every mod, refusing none', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } }, answers: { heldWholeByGit: new Set([join(modsDir, 'ModA')]) } });
+
+    const result = await update(['ModA', 'ModB'], {}, [], true);
+
+    expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModA')]).toEqual([['ModB'], [], undefined]);
+  });
+
   it('writes each mod\'s manifest from its folder, naming each file no package holds (The manifest, story 5)', async () => {
     const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } } });
 
@@ -354,6 +372,16 @@ describe('update manifest', () => {
       const result = await update(['ModA', 'ModB']);
 
       expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await manifestIn(SOURCE())]).toEqual([['ModA'], [], undefined, undefined]);
+    });
+
+    it('is passed over, not refused, though its mod folder is one git holds whole, whether named as a mod or on every mod', async () => {
+      const held = { ...GIT_HOLDS(), heldWholeByGit: new Set([join(modsDir, 'ModB')]) };
+      const { update } = await among({ 'extra.nif': HX }, held, SOURCE_FILES);
+
+      const named = await update(['ModB']);
+      const every = await update(['ModB'], {}, [], true);
+
+      expect([named.refused, every.refused]).toEqual([[], []]);
     });
 
     it('has its source folder recorded in a manifest of its own, naming no file git holds, when named as a source folder', async () => {

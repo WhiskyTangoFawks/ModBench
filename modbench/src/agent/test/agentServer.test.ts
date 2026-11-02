@@ -404,6 +404,13 @@ describe('the agent server, given an instance value', () => {
       expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'] }]);
     });
 
+    it('groups a mod whose whole folder git holds with those that match their manifests, adding no member of its own', async () => {
+      statusRead.answer = [status('Big Rocks', { heldWhole: true }), status('InAnotherProfile')];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks', 'InAnotherProfile'] }]);
+    });
+
     it('leaves out the packages of a mod made from several, which list_problems gives as a note', async () => {
       const packages = [{ kind: 'installationFile' as const, name: 'a.7z', size: 1, hash: 'h' }, { kind: 'gameFolder' as const }];
       statusRead.answer = [status('Big Rocks', { packages })];
