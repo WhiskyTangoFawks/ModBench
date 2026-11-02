@@ -124,3 +124,7 @@ export function isUpdateAvailable(version: string | undefined, newest: string | 
   const latest = parse(newest ?? '');
   return latest.valid && isBefore(parse(version ?? ''), latest);
 }
+
+/** The version of `versions` that orders after every other, the first of equals; none when there are none. */
+export const newestVersion = (versions: readonly string[]): string | undefined =>
+  versions.reduce<string | undefined>((newest, version) => (newest === undefined || isUpdateAvailable(newest, version) ? version : newest), undefined);

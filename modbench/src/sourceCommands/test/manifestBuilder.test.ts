@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InstallationFile } from '../../instanceAdapter/instanceAdapter';
 import type { Manifest, NexusFile } from '../../manifestAdapter/manifestAdapter';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, hostedBy, type GameHeld, type GamePlaceHeld, type HashedModFile } from '../manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, describedBy, type GameHeld, type GamePlaceHeld, type HashedModFile } from '../manifestBuilder';
 
 const NEXUS: NexusFile = { game: 'fallout4', mod: 1, file: 2 };
 const onNexus = (page: string): NexusFile | undefined => (page === 'nexus:1' ? NEXUS : undefined);
@@ -71,10 +71,25 @@ describe('a mod\'s manifest from its files', () => {
     ]);
   });
 
+  it('names the version the downloaded file\'s metadata gives, and none when it gives none', () => {
+    const versioned = downloadedFileOf(download('M.7z', {}, { version: '1.2' }), () => undefined).package;
+    const unversioned = downloadedFileOf(download('M.7z', {}, {}), () => undefined).package;
+    expect([versioned, unversioned]).toEqual([
+      { kind: 'installationFile', name: 'M.7z', packageVersion: '1.2', size: 10, hash: 'hash of M.7z' },
+      { kind: 'installationFile', name: 'M.7z', size: 10, hash: 'hash of M.7z' },
+    ]);
+  });
+
+  it('takes the version from the downloaded file alone, never the mod\'s', () => {
+    const modsFile = download('F4SE.7z', {}, { version: '1.0' });
+    expect(describedBy(modsFile, download('F4SE.7z', {}, {})).version).toBeUndefined();
+    expect(describedBy(modsFile, download('F4SE.7z', {}, { version: '2.0' })).version).toBe('2.0');
+  });
+
   it('takes the host from the downloaded file alone, never the mod\'s page', () => {
     const modsFile = download('F4SE.7z', {}, { page: 'nexus:1' });
     const downloaded = download('F4SE.7z', {}, { directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' });
-    expect(hostedBy(modsFile, downloaded)).toEqual({ ...modsFile, page: undefined, directUrl: downloaded.directUrl });
+    expect(describedBy(modsFile, downloaded)).toEqual({ ...modsFile, page: undefined, directUrl: downloaded.directUrl });
   });
 
   it.each([

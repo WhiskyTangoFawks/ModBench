@@ -5,7 +5,7 @@ import { textHash } from '../instanceAdapter/fileContents/contentDigest';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -100,7 +100,7 @@ export type AdapterCall =
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly fomod?: FomodAnswer }
-  | { readonly verb: 'writeInstalledFrom'; readonly folder: string; readonly packages: readonly string[] };
+  | { readonly verb: 'writeInstalledFrom'; readonly folder: string; readonly packages: readonly InstalledPackage[] };
 
 export type WriteVerb = AdapterCall['verb'];
 

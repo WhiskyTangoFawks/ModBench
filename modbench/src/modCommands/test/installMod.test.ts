@@ -114,9 +114,9 @@ describe('installMod', () => {
 
   it.each([
     ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, []],
-    ['an installation file', INSTALLATION_FILE, INSTALLATION_FILE, ['Freshly-1-0.7z']],
-    ['a downloaded file', DOWNLOADED_FILE, { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['Freshly-1-0.7z']],
-    ['an archive that is a downloaded file', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['Freshly-1-0.7z']],
+    ['an installation file', INSTALLATION_FILE, INSTALLATION_FILE, [{ name: 'Freshly-1-0.7z' }]],
+    ['a downloaded file', DOWNLOADED_FILE, { kind: 'archive', path: DOWNLOADED_FILE_PATH }, [{ name: 'Freshly-1-0.7z', version: '3.0.0' }]],
+    ['an archive that is a downloaded file', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, { kind: 'archive', path: DOWNLOADED_FILE_PATH }, [{ name: 'Freshly-1-0.7z', version: '3.0.0' }]],
   ] as const)('installs %s, then has the adapter write the mod\'s metadata from the packages it names', async (_, installed, handed, packages) => {
     const { calls } = await install(installed);
 

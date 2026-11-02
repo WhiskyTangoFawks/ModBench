@@ -384,10 +384,10 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
 
 // modlist-repository.md, The manifest, story 3: the mod's metadata is written from its packages as install writes it.
 async function metadataRefusal(pass: Pass, folder: string, manifest: Manifest): Promise<{ readonly refusal: string } | undefined> {
-  const names = manifest.packages.filter(isInstallationFile).map(({ name }) => name);
-  if (names.length === 0) return undefined;
+  const packages = manifest.packages.filter(isInstallationFile).map(({ name, packageVersion }) => ({ name, ...packageVersion === undefined ? {} : { version: packageVersion } }));
+  if (packages.length === 0) return undefined;
   try {
-    await pass.deps.adapter.writeInstalledFrom(folder, names, pass.deps.trash);
+    await pass.deps.adapter.writeInstalledFrom(folder, packages, pass.deps.trash);
     return undefined;
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };

@@ -455,6 +455,12 @@ export interface HashedDownloadedFile extends HashedFile {
   readonly entries: readonly { readonly path: string; readonly hash: string }[];
 }
 
+/** A downloaded file a mod is installed from, by name, with the version known for it. */
+export interface InstalledPackage {
+  readonly name: string;
+  readonly version?: string;
+}
+
 /** A downloaded file the mod manager records a mod as installed from, with its hashes. */
 export interface InstallationFile extends HashedDownloadedFile {
   readonly path: string;
@@ -462,6 +468,8 @@ export interface InstallationFile extends HashedDownloadedFile {
   readonly page?: string;
   /** The address the file was downloaded from outside its host's pages, the downloaded file's own metadata's. */
   readonly directUrl?: string;
+  /** The version the downloaded file's own metadata records. */
+  readonly version?: string;
 }
 
 interface MetadataInstallationFile {
@@ -835,9 +843,9 @@ export interface InstanceAdapter {
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own, trashing each file an
    *  upgrade replaces or removes. Rejects with why: a new folder goes; an upgrade stays. */
   install(installed: InstallPackage, target: InstallTarget, trash: MoveToTrash, fomod?: FomodAnswer): Promise<InstallOutcome>;
-  /** Writes the metadata of the mod in `folder` from its packages, each a downloaded file by name: the first is the installation
-   *  file, and every one's Nexus mod and file are recorded. Other values stay. */
-  writeInstalledFrom(folder: string, packages: readonly string[], trash: MoveToTrash): Promise<void>;
+  /** Writes the metadata of the mod in `folder` from its packages: the first is the installation file, every one's Nexus mod and
+   *  file are recorded, and the version is the newest the packages name. Other values stay. */
+  writeInstalledFrom(folder: string, packages: readonly InstalledPackage[], trash: MoveToTrash): Promise<void>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

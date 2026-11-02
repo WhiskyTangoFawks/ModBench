@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type {
-  FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, DownloadedFile,
+  FomodAnswer, FomodLanded, InstallOutcome, InstallPackage, InstallTarget, InstalledPackage, InstanceAdapter, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { modNameTakenRefusal, newNameRefusal } from './nameRefusals';
@@ -36,9 +36,9 @@ async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise
   return { extracted: { kind: 'archive', path: file.path }, file };
 }
 
-const packagesOf = (installed: ModPackage, file: DownloadedFile | undefined): string[] => {
-  if (file !== undefined) return [file.name];
-  return installed.kind === 'archive' ? [basename(installed.path)] : [];
+const packagesOf = (installed: ModPackage, file: DownloadedFile | undefined): InstalledPackage[] => {
+  if (file !== undefined) return [{ name: file.name, ...file.meta?.version ? { version: file.meta.version } : {} }];
+  return installed.kind === 'archive' ? [{ name: basename(installed.path) }] : [];
 };
 
 // The folder can appear or vanish between the caller's decision and the install, as the mod
@@ -61,7 +61,7 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
 
 // A new mod whose metadata could not be written is sent to the trash with its folder, so a failed install leaves none behind; an
 // upgrade stays, as it does when it fails part way.
-async function metadataWritten(adapter: InstanceAdapter, folder: string, packages: readonly string[], target: InstallTarget, trash: MoveToTrash): Promise<void> {
+async function metadataWritten(adapter: InstanceAdapter, folder: string, packages: readonly InstalledPackage[], target: InstallTarget, trash: MoveToTrash): Promise<void> {
   try {
     await adapter.writeInstalledFrom(folder, packages, trash);
   } catch (err) {

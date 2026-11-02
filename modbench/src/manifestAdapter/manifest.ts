@@ -14,7 +14,7 @@ interface SteamApp {
 }
 
 export type ManifestPackage =
-  | { readonly kind: 'installationFile'; readonly name: string; readonly size: number; readonly hash: string; readonly host?: { readonly nexus: NexusFile } | { readonly url: string } }
+  | { readonly kind: 'installationFile'; readonly name: string; readonly packageVersion?: string; readonly size: number; readonly hash: string; readonly host?: { readonly nexus: NexusFile } | { readonly url: string } }
   | { readonly kind: 'gameFolder'; readonly host?: { readonly steam: SteamApp } }
   | { readonly kind: 'repository'; readonly name: string };
 

@@ -23,7 +23,7 @@ const everyKindAndExclusion = (
   + '"version":1,\n'
   + '"packages":[\n'
   + '{"kind":"installationFile","name":"a.7z","size":1,"hash":"AAAAAAAAAAA="},\n'
-  + '{"kind":"installationFile","name":"B.7z","size":2,"hash":"BBBBBBBBBBA=","host":{"url":"ftp://f4se.silverlock.org/beta/f4se_0_06_23.7z"}},\n'
+  + '{"kind":"installationFile","name":"B.7z","packageVersion":"1.2.3","size":2,"hash":"BBBBBBBBBBA=","host":{"url":"ftp://f4se.silverlock.org/beta/f4se_0_06_23.7z"}},\n'
   + '{"kind":"gameFolder","host":{"steam":{"app":377160,"depots":{"377161":"11","1234567":"22"}}}}\n'
   + '],\n'
   + '"exclude":[\n'
@@ -177,6 +177,8 @@ describe('a manifest the adapter refuses', () => {
     ['{"version":1,"packages":[{"kind":"gameFolder"},{"kind":"gameFolder"}]}', 'its manifest names the game folder twice'],
     ['{"version":1,"packages":[{"kind":"repository","name":"Mod"},{"kind":"gameFolder"}]}', "its manifest names the repository 'Mod' beside another package"],
     ['{"version":1,"packages":[{"kind":"installationFile","name":"A.zip"}]}', 'its manifest cannot be read at its package 1'],
+    [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","packageVersion":"","size":1,"hash":"${H1}"}]}`, 'its manifest cannot be read at its package 1'],
+    [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","packageVersion":2,"size":1,"hash":"${H1}"}]}`, 'its manifest cannot be read at its package 1'],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","page":"x"}]}`, "its manifest's package 1 holds 'page', which Modbench does not read"],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{"nexus":{"game":"Fallout 4","mod":1,"file":1}}}]}`, 'its manifest cannot be read at its package 1'],
     [`{"version":1,"packages":[{"kind":"installationFile","name":"A.zip","size":1,"hash":"${H1}","host":{"url":"not an address"}}]}`, 'its manifest cannot be read at its package 1'],
