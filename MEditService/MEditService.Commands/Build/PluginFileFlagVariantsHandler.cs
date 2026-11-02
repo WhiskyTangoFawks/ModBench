@@ -3,7 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.PluginAdapter;
 using Mutagen.Bethesda;
 
-namespace MEditService.Commands;
+namespace MEditService.Commands.Build;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PluginFileFlagRefusal

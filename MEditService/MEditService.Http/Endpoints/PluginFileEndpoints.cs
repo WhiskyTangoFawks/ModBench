@@ -1,4 +1,4 @@
-using MEditService.Commands;
+using MEditService.Commands.Build;
 
 namespace MEditService.Http.Endpoints;
 

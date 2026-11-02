@@ -3,7 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.PluginAdapter;
 using Mutagen.Bethesda;
 
-namespace MEditService.Commands;
+namespace MEditService.Commands.Build;
 
 /// <summary>A plugin file whose load flags were set, by its path, with the hash of what was written.</summary>
 public sealed record PluginFileFlagsSet(string Path, string Hash);
