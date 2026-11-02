@@ -15,9 +15,15 @@ export interface ModName {
 }
 
 /** A mod, a separator or Overwrite, as list_mods names it. */
-export const CONTAINER_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator', 'runtimeOutput']).optional() });
+export const CONTAINER_NAME = z
+  .object({ name: z.string().optional(), kind: z.enum(['mod', 'separator', 'runtimeOutput']).optional() })
+  .refine(({ name, kind }) => name !== undefined || kind === 'runtimeOutput', { message: 'A mod or separator needs a name.', path: ['name'] })
+  .transform(({ name, kind }): ContainerName => ({ name: name ?? OVERWRITE_LABEL, ...(kind === undefined ? {} : { kind }) }));
 
-export type ContainerName = z.infer<typeof CONTAINER_NAME>;
+export interface ContainerName {
+  name: string;
+  kind?: 'mod' | 'separator' | 'runtimeOutput';
+}
 
 export interface PluginName {
   name: string;
