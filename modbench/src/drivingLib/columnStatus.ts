@@ -38,13 +38,13 @@ export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, { o
   if (copy.isInOverwrite) {
     return {
       label: '(read-only)',
-      reason: 'Overwrite is not a mod; move the plugin into a mod and init source mod that mod.',
+      reason: 'Overwrite is not a mod; move the plugin into a mod and version in git that mod.',
     };
   }
   if (plugin?.isCompiledPlugin !== true) {
     return {
       label: '(read-only)',
-      reason: '“Init Source Mod”, or “Decompile Plugin” in a source mod, in this header’s menu, '
+      reason: '“Version in Git”, or “Decompile Plugin” in a source mod, in this header’s menu, '
         + 'makes it editable.',
     };
   }

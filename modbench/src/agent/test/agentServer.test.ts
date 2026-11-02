@@ -915,7 +915,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
     expect(answered).toMatchObject([
-      { status: { label: '(read-only)', reason: expect.stringContaining('Init Source Mod') as unknown } },
+      { status: { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
       { status: { label: '(read-only)', reason: 'The game’s plugins are not edited.' } },
     ]);
   });

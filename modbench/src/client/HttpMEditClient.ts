@@ -421,7 +421,7 @@ class HttpMEditClient implements MEditClient {
     const unsubscribe = options.onProgress ? this.notifications.onNotification('init-source-mod-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
-        verb: 'init source mod', noun: 'mod', items: mods.map((mod) => mod.name),
+        verb: 'version in git', noun: 'mod', items: mods.map((mod) => mod.name),
         op: (counted) => `initSourceMod(${counted})`,
         post: () => this.apiClient.POST('/init-source-mod', { body: { mods: [...mods] } }),
         outcome: selectionOutcome,

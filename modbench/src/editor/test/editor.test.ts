@@ -1046,7 +1046,7 @@ describe('what a record tab\'s webview posts', () => {
       expect(loadAnswered(tab)).toEqual([{
         type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
         loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null,
-        columnStatuses: { 'A.esp': { label: '(read-only)', reason: expect.stringContaining('Init Source Mod') as unknown } },
+        columnStatuses: { 'A.esp': { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
       }]);
       expect(comparisonsAsked(mEdit)).toEqual([[GUN, undefined]]);
     });

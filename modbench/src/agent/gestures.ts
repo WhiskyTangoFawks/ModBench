@@ -289,7 +289,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.disable', MODS],
   ['modbench.mod.move', MOVE_MODS],
   ['modbench.mod.uninstall', UNINSTALL],
-  ['modbench.mod.initSourceMod', INIT_SOURCE_MOD],
+  ['modbench.mod.versionInGit', INIT_SOURCE_MOD],
   ['modbench.mod.build', BUILD],
   ['modbench.mod.rename', RENAME_MOD],
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],

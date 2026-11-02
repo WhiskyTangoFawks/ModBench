@@ -520,13 +520,13 @@ describe('a mod installed from an installation file, then decompiled and committ
     return { manifest: read.manifest, status: await status() };
   }
 
-  it('reads as its manifest says right after init source mod, which records the folder as it is (GLOSSARY, Manifest)', async () => {
+  it('reads as its manifest says right after version in git, which records the folder as it is (GLOSSARY, Manifest)', async () => {
     const { status } = await anInstalledModDecompiled();
 
     expect(await status()).toMatchObject({ noManifest: false, differing: [], namedByNoLine: [], gone: [], notInPackage: [], packagesLacking: [] });
   });
 
-  it('hands mEdit its source folder\'s manifest, which names the files its installation file yields and no asset, and a build file that copies them and compiles its plugin, and writes those files into the source folder at their own paths (plugins.md, Init source mod, story 2)', async () => {
+  it('hands mEdit its source folder\'s manifest, which names the files its installation file yields and no asset, and a build file that copies them and compiles its plugin, and writes those files into the source folder at their own paths (plugins.md, Version in git, story 2)', async () => {
     const { handed } = await anInstalledModDecompiled();
 
     const [sent] = handed;
@@ -587,7 +587,7 @@ describe('a mod installed from an installation file, then decompiled and committ
   });
 });
 
-describe('init source mod over an instance on disk', () => {
+describe('version in git over an instance on disk', () => {
   async function aModWithItsManifest(manifest: Partial<Manifest> = {}) {
     root = await mkdtemp(join(tmpdir(), 'modbench-init-'));
     await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
@@ -630,7 +630,7 @@ describe('init source mod over an instance on disk', () => {
   });
 });
 
-describe('init source mod of a mod several downloaded files yield, over an instance on disk', () => {
+describe('version in git of a mod several downloaded files yield, over an instance on disk', () => {
   const YIELDS: Record<string, readonly string[]> = {
     'Alpha-100-1.zip': ['alpha.txt'], 'Beta-100-2.zip': ['beta.txt'], 'Gamma-200-1.zip': ['gamma.txt'], 'Delta-200-2.zip': ['delta.txt'],
   };

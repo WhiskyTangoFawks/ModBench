@@ -51,7 +51,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [result, setResult] = useState<CompareResult | null>(null);
   const [gone, setGone] = useState<{ records: string[]; copiesLacking: string[] } | null>(null);
   // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
-  // not heard from /plugins offers no editing, build or init source mod (commands.md, No dead entries).
+  // not heard from /plugins offers no editing, build or version in git (commands.md, No dead entries).
   const [editableSet, setEditableSet] = useState<Set<ColumnKey> | null>(null);
   const [columnStatuses, setColumnStatuses] = useState<Readonly<Record<string, ColumnStatus>>>({});
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});

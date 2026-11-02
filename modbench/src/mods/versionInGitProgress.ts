@@ -1,8 +1,8 @@
 import type { InitProgress } from '../sourceCommands/sourceCommands';
 
 /** A progress with no phase is the gesture between steps. */
-export function initSourceModProgressMessage(mod: string, phase: InitProgress['phase']): string {
-  const doing = `Initializing source mod "${mod}"`;
+export function versionInGitProgressMessage(mod: string, phase: InitProgress['phase']): string {
+  const doing = `Version in git "${mod}"`;
   switch (phase) {
     case 'Parsing':
       return `${doing} — parsing…`;

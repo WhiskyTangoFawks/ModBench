@@ -392,7 +392,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   });
 });
 
-describe('the Mods view says the phase of an init source mod fired from it', () => {
+describe('the Mods view says the phase of a version in git fired from it', () => {
   it('says the mod and the phase on its own message line while it runs, gives the agent no phase line, and takes the line back when it lands', async () => {
     let release = () => undefined;
     const running = new Promise<{ landed: []; refused: [] }>((resolve) => { release = () => { resolve({ landed: [], refused: [] }); }; });
@@ -400,11 +400,11 @@ describe('the Mods view says the phase of an init source mod fired from it', () 
     const sourceGestures = { ...deps.sourceGestures, commands: { ...deps.sourceGestures.commands, initSourceMod: () => running } };
     const mods = createModsView({ ...deps, sourceGestures, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     const { view } = mods;
-    const handler = present(h.state.commands.get('modbench.mod.initSourceMod'), 'the init source mod command createModsView registers');
+    const handler = present(h.state.commands.get('modbench.mod.versionInGit'), 'the version in git command createModsView registers');
 
     const fired = handler(new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true }));
 
-    await waitForMessage(view, (m) => m === 'Initializing source mod "Source mod Patch Mod"…', 'the phase line');
+    await waitForMessage(view, (m) => m === 'Version in git "Source mod Patch Mod"…', 'the phase line');
     expect(mods.standingLines()).toEqual([]);
     release();
     await fired;

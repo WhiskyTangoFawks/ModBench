@@ -108,19 +108,19 @@ describe('the Problems panel follows Mod status (modlist-repository.md, Status, 
         "Made from several packages. An upgrade replaces the files of every one of the 2 packages: installation file 'A.7z', the game folder.", DiagnosticSeverity.Information]]); });
     });
 
-    it('points at init source mod when the mod holds a plugin', async () => {
+    it('points at version in git when the mod holds a plugin', async () => {
       const { collection } = over([packaged('ModA', several)], [{ name: 'A.esp', path: `${FOLDER}/A.esp`, origin: 'ModA', line: 0, enabled: true, winning: true }]);
 
-      await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Init Source Mod/); });
+      await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Version in Git/); });
     });
 
-    it('points at init source mod for a disabled mod\'s plugin, which the plugin list holds unlisted and not winning', async () => {
+    it('points at version in git for a disabled mod\'s plugin, which the plugin list holds unlisted and not winning', async () => {
       const { collection } = over([packaged('ModA', several)], [{ name: 'A.esp', path: `${FOLDER}/A.esp`, origin: 'ModA', line: null, enabled: false, winning: false }]);
 
-      await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Init Source Mod/); });
+      await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)[0]?.[0]).toMatch(/Version in Git/); });
     });
 
-    it('points at no init source mod for a source mod, which the gesture is not offered on', async () => {
+    it('points at no version in git for a source mod, which the gesture is not offered on', async () => {
       const source = { manifestFile, packages: [{ kind: 'repository' as const, name: 'src' }, { kind: 'gameFolder' as const }] };
       const { collection } = over([packaged('ModA', source)], [{ name: 'A.esp', path: `${FOLDER}/A.esp`, origin: 'ModA', line: 0, enabled: true, winning: true }]);
 

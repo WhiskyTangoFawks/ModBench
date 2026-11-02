@@ -72,7 +72,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     ])('%s', reads);
   });
 
-  describe('init source mod sees a selection of plugins in mods with no repository, every one', () => {
+  describe('version in git sees a selection of plugins in mods with no repository, every one', () => {
     it.each<Case>([
       ['two in mods with no repository', () => [nonCompiledPlugin, alsoNonCompiledPlugin], { allInNonSourceMod: true }],
       ['one beside a plugin in a source mod', () => [nonCompiledPlugin, compilable], { allInNonSourceMod: false }],

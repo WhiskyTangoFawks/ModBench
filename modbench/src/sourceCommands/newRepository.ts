@@ -1,4 +1,4 @@
-// commands.md, init source mod: a repository holding the mod's plugin source, a build file, and as its assets only the
+// commands.md, version in git: a repository holding the mod's plugin source, a build file, and as its assets only the
 // files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
@@ -22,7 +22,7 @@ type Adapter = Pick<InstanceAdapter,
   | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
   & FolderRestoreAdapter;
 
-/** The repository a mod's init source mod makes. */
+/** The repository a mod's version in git makes. */
 export interface MadeRepository {
   readonly modFolder: string;
   readonly repository: NewRepository;
@@ -83,7 +83,7 @@ export async function downloadedPackagesOf(
   return { files: downloadedFilesOf(files, nexusFileOf(adapter)), notes };
 }
 
-/** The repository init source mod makes for `mod`, as decompile and repair does for a mod with none: a manifest of
+/** The repository version in git makes for `mod`, as decompile and repair does for a mod with none: a manifest of
  *  what its packages give, its assets, and a build file that builds its folder back. */
 export async function newRepositoryOf(
   adapter: Adapter, mod: string, game: GameToHand, downloadedFiles: readonly DownloadedFile[],
@@ -135,7 +135,7 @@ type LinkAdapter = Pick<Adapter, 'modFolderPath' | 'metadataFilesInModFolder' | 
 
 // The source folder is new, and the installation file a mod was made from is on this machine.
 const replacesNothing: MoveToTrash = (path) => Promise.reject(new Error(`'${path}' is in the source folder already`));
-const downloadsNothing: RestoreDeps['nexus'] = { download: () => Promise.resolve({ found: false, reason: 'init source mod downloads nothing' }) };
+const downloadsNothing: RestoreDeps['nexus'] = { download: () => Promise.resolve({ found: false, reason: 'version in git downloads nothing' }) };
 
 // The mod is a source mod once its folder's manifest names its repository, recording the folder as its build would.
 // ADR-0022: the source folder's manifest writes what a package yields.
@@ -174,7 +174,7 @@ export async function foldersNotLinked(
   return notLinked;
 }
 
-/** The repository init source mod makes for each mod decompile and repair asks for, read as the instance is now. */
+/** The repository version in git makes for each mod decompile and repair asks for, read as the instance is now. */
 export const newRepositoriesOver = (adapter: Adapter): {
   readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
   readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
