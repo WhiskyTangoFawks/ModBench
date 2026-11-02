@@ -28,12 +28,27 @@ FLAGS = 'MajorRecordFlagsRaw'
 
 
 class Created:
+    """A resend built before a plugin joined the list but sent after mEdit wrote it would be the snapshot the next read
+    waits for, and would not name the plugin; the lock keeps a resend from straddling a creation."""
+
     def __init__(self) -> None:
         self.enabled: list[medit.Plugin] = []
         self.disabled: list[medit.Plugin] = []
+        self.lock = threading.Lock()
+
+    def create(self, name: str, origin: str, active: bool) -> medit.Plugin:
+        with self.lock:
+            plugin = medit.create_plugin(name, origin)
+            (self.enabled if active else self.disabled).append(plugin)
+            return plugin
 
 
 def resend_with(fixture: Fixture, created: Created) -> None:
+    with created.lock:
+        send_load_order(fixture, created)
+
+
+def send_load_order(fixture: Fixture, created: Created) -> None:
     enabled = [plugin_entry(fixture.instance, plugin, len(PLUGINS) + at) for at, plugin in enumerate(created.enabled)]
     disabled = [plugin_entry(fixture.instance, plugin, None) for plugin in created.disabled]
     call('PUT', fixture.url + '/load-order', {
@@ -78,9 +93,7 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
 
     @classmethod
     def enabled(cls, name: str | None = None) -> medit.Plugin:
-        plugin = medit.create_plugin(name or f'MBDevClean{next(cls.names)}.esp', CONDITIONS.origin)
-        cls.created.enabled.append(plugin)
-        return plugin
+        return cls.created.create(name or f'MBDevClean{next(cls.names)}.esp', CONDITIONS.origin, active=True)
 
     def keys_of(self, plugin: medit.Plugin) -> set[str]:
         return {row['form_key'] for row in medit.select(f"SELECT form_key FROM records WHERE plugin = '{plugin.name}'")}
@@ -171,8 +184,7 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
     def test_reads_the_base_of_the_master_in_the_load_order_not_of_a_plugin_of_the_same_name_that_is_not_active(self) -> None:
         master = self.enabled()
         _, reference = self.cell_and_reference_in(master)
-        inactive = medit.create_plugin(master.name, PATCH.origin)
-        self.created.disabled.append(inactive)
+        inactive = self.created.create(master.name, PATCH.origin, active=False)
         self.cell_and_reference_in(inactive)
         medit.edit(inactive, reference, 'set', 'Base', ITEM_A)
         override = self.enabled()
@@ -191,8 +203,7 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(medit.read(plugin, navmesh)[FLAGS], DELETED)
 
     def test_refuses_a_plugin_that_is_not_active(self) -> None:
-        inactive = medit.create_plugin('MBDevCleanInactive.esp', CONDITIONS.origin)
-        self.created.disabled.append(inactive)
+        inactive = self.created.create('MBDevCleanInactive.esp', CONDITIONS.origin, active=False)
         with self.assertRaisesRegex(medit.MEditError, 'is not active'):
             clean(inactive)
 
