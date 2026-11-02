@@ -69,7 +69,6 @@ As a user, I want:
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
 5. A mod refused, and its manifest left as it was, when a package its manifest names is missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong
 6. Each file of a mod to come from whichever downloaded file holds its bytes, so an installation file the mod manager names that is missing or unreadable never refuses the mod. Cites: Status, story 7
-7. Update manifest to record each change to how the game loads a file that it finds in the folder. Cites: ADR-0022; Existing tools
 
 ## Restore from manifest
 
