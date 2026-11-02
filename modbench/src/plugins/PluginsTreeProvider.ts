@@ -23,7 +23,7 @@ import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { fileIsPresent } from '../instanceLoader/fileIsPresent';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
-import { sortingRuleFilesMessage } from './sortingRuleFilesMessage';
+import { sortingRuleFilesMessage, unreadRuleFilesMessage } from './sortingRuleFilesMessage';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
@@ -192,14 +192,16 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  viewMessage(): string | undefined {
-    return messageLine(this.firstHeldMessage(), this.standingMessage());
+  /** For the agent, a missing masterlist is left out: nothing it can do changes with it. */
+  viewMessage(forAgent = false): string | undefined {
+    return messageLine(this.firstHeldMessage(), this.standingMessage(forAgent));
   }
 
-  standingMessage(): string | undefined {
+  standingMessage(forAgent = false): string | undefined {
+    const sortingRuleFiles = forAgent ? unreadRuleFilesMessage : sortingRuleFilesMessage;
     return messageLine(
       managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)),
-      this.instance.sequence === 0 ? undefined : sortingRuleFilesMessage(this.rules),
+      this.instance.sequence === 0 ? undefined : sortingRuleFiles(this.rules),
     );
   }
 

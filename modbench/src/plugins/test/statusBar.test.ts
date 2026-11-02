@@ -91,16 +91,21 @@ describe('the status bar, one item saying what mEdit is doing', () => {
     expect(theItem().text).toBe('$(plug) mEdit: Running');
   });
 
-  it.each([
-    ['before the snapshot is indexed', undefined, 'mEdit is Running'],
-    ['once it is indexed', 2, 'mEdit is Ready (2 plugins)'],
-  ] as const)('tells the agent the same words %s', (_case, ready, text) => {
+  it('tells the agent mEdit\'s state while the snapshot is not indexed', () => {
     const client = new InMemoryMEditClient();
     client.setStatus('running');
     const bar = createStatusBar(client, reporterFor);
-    if (ready !== undefined) bar.ready(ready);
 
-    expect(bar.standing()).toBe(text);
+    expect(bar.standing()).toBe('mEdit is Running');
+  });
+
+  it('tells the agent nothing once the snapshot is indexed', () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('running');
+    const bar = createStatusBar(client, reporterFor);
+    bar.ready(2);
+
+    expect(bar.standing()).toBeUndefined();
   });
 
   it('does nothing on a click', () => {

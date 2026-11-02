@@ -1116,6 +1116,12 @@ describe('PluginsTreeProvider — the message line takes the first message that 
     expect(makeTree([A_ROW()], { instance: noMasterlist([A_ROW()]) }).tree.viewMessage()).toMatch(/No masterlist.*update masterlist/);
   });
 
+  it('leaves the missing masterlist out of the message it gives the agent', () => {
+    const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: ABSENT_SORTING_RULE_FILES });
+
+    expect(makeTree([A_ROW()], { instance }).tree.viewMessage(true)).toBeUndefined();
+  });
+
   it('judges the last reconcile\'s order again when the instance\'s sorting rule files change', async () => {
     const instance = new FakeInstance(valueOf([A_ROW()]));
     const errors: (readonly PluginProblem[])[] = [];

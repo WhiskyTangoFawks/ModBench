@@ -172,7 +172,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   );
   return {
     view, nameFilter,
-    messages: () => [viewMessage(), tree.facts.rows.heldElsewhereMessage()].filter((message) => message !== undefined),
+    messages: () => [messageLine(tree.viewMessage(true), sync.message()), tree.facts.rows.heldElsewhereMessage()].filter((message) => message !== undefined),
     pluginsShown: tree.facts.rows,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },

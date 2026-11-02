@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
+import { ABSENT_SORTING_RULE_FILES } from '../../instanceAdapter/instanceAdapter';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri,
 } from '../../test/vscodeMock';
@@ -984,6 +985,15 @@ describe('the Plugins view\'s message line and name filter', () => {
       await applyFilter(client, recordFilter);
       return { ...result, sync };
     }
+
+    it('leaves a missing masterlist out of the lines it gives the agent, while the view shows it', async () => {
+      const value = { ...found('TestMod.esp'), sortingRuleFiles: ABSENT_SORTING_RULE_FILES };
+      const { plugins, instance } = await shown(found('TestMod.esp'));
+
+      instance.publish(value);
+      await waitForMessage(treeViews.view(), (m) => /No masterlist/.test(m ?? ''), 'the masterlist message');
+      expect(plugins.messages()).toEqual([]);
+    });
 
     it('gives the agent the line it shows, read by the same function', async () => {
       const { sync, plugins } = await refusedView('armor.sql');

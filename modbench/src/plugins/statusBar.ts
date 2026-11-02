@@ -10,8 +10,8 @@ export interface StatusBar extends vscode.Disposable {
   ready(activePlugins: number): void;
   /** While the snapshot is not indexed. */
   showMEditState(): void;
-  /** The words the item shows, without its icon. */
-  standing(): string;
+  /** The words the item shows, without its icon, while the snapshot is not indexed. */
+  standing(): string | undefined;
 }
 
 export function createStatusBar(
@@ -42,7 +42,7 @@ export function createStatusBar(
   return {
     ready: (activePlugins) => { indexedActivePlugins = activePlugins; show(); },
     showMEditState: showStatus,
-    standing: () => `mEdit is ${mEditState(client.status, indexedActivePlugins).state}`,
+    standing: () => indexedActivePlugins === undefined ? `mEdit is ${mEditState(client.status, undefined).state}` : undefined,
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); item.dispose(); },
   };
 }

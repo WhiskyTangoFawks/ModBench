@@ -60,7 +60,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   const recordWrite = recordWriteOver(PLUGINS_KEY_ARGS.view, deps.facts, client);
   let viewMessages: () => string[] = () => [];
   return {
-    mEditStanding: { messages: () => [statusBar.standing(), ...viewMessages()] },
+    mEditStanding: { messages: () => [statusBar.standing(), ...viewMessages()].filter((message) => message !== undefined) },
     onInstance: ({ syncPlugins, ...instanceDeps }) => {
       const syncing = pluginSyncOn({ instance: instanceDeps.instance, syncPlugins, channel });
       const syncCommand = registerPluginSyncCommand(syncing.pluginSync);

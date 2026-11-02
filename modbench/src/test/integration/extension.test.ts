@@ -620,11 +620,11 @@ describe('a gesture the agent runs', () => {
     rmSync(modDir, { recursive: true, force: true });
   });
 
-  it('answers every read beside the words the status bar says of mEdit', async () => {
+  it('answers a read without the status bar\'s words once mEdit is ready', async () => {
     const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
 
     const standing = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
-    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), `no line says what mEdit is: ${JSON.stringify(standing)}`);
+    assert.ok(!standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
   });
 
   it('writes as the user\'s does, and answers once the agent\'s next read sees the change', async () => {
@@ -690,13 +690,11 @@ describe('a gesture the agent runs', () => {
     rmSync(modDir, { recursive: true, force: true });
     writeFileSync(modlistPath, '');
 
-    const standing = await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
+    await waitFor('the Mods view\'s empty-list line beside an answer', async () => {
       const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
       const lines = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
       return lines.some((line) => line.startsWith('No mods or separators.')) && lines;
     });
-
-    assert.ok(standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
   });
 
   it('reads what the Plugins view\'s row shows of a plugin once mEdit has read it', async () => {
