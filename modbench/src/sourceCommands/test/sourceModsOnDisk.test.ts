@@ -118,7 +118,7 @@ describe('build over an instance on disk', () => {
     await build();
 
     expect(await recorded()).toEqual({
-      packages: [REPOSITORY], exclude: [], ignore: [],
+      packages: [REPOSITORY], exclude: [], ignore: [], flags: new Map(),
       files: new Map([['b.nif', 'OZFIfvr0kjo='], ['Mod.esp', 'QnTauWK5/T8='], ['textures/c.dds', 'RNWYjJS3keA=']]),
     });
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], gone: [], notInPackage: [], otherBytes: [], noHost: ["repository 'Mod'"] });
@@ -243,7 +243,7 @@ describe('build over an instance on disk', () => {
 
   it('leaves a file its manifest ignores in the folder, neither sent to the trash nor recorded, and keeps the ignore (The manifest, story 11)', async () => {
     const { build, status, recorded, trashed, sent } = await aSourceMod();
-    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['F4SE/Plugins/Game.mem', 'logs'], files: new Map() });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['F4SE/Plugins/Game.mem', 'logs'], flags: new Map(), files: new Map() });
     await put('mods/Mod/F4SE/Plugins/Game.mem', 'the game wrote this');
     await put('mods/Mod/logs/run.log', 'a run');
     await put('mods/Mod/mine.txt', 'mine');
@@ -258,7 +258,7 @@ describe('build over an instance on disk', () => {
 
   it('records no line for a file a step makes at a path its manifest ignores, and still lands (The manifest, story 11)', async () => {
     const { build, recorded } = await aSourceMod({}, [...MADE, { path: 'logs/run.log', vouchedFor: true }]);
-    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['logs'], files: new Map() });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['logs'], flags: new Map(), files: new Map() });
 
     const outcome = await build();
 
@@ -269,7 +269,7 @@ describe('build over an instance on disk', () => {
   it('records by its path alone each file a script step makes, and neither records nor sends to the trash one at a path its manifest ignores (source.md, Build, stories 3 and 19)', async () => {
     const script: BuildStep = { kind: 'script', script: 'fix.py', args: [] };
     const { build, recorded, trashed } = await aSourceMod({ steps: [COMPILE, script] }, MADE, async () => { await put('mods/Mod/made.dds', 'made'); await put('mods/Mod/logs/run.log', 'the script wrote this'); });
-    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['logs'], files: new Map() });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: ['logs'], flags: new Map(), files: new Map() });
     await put('mods/Mod/logs/old.log', 'mine');
 
     await build();
@@ -394,7 +394,7 @@ describe('what build sends to the trash, over an instance on disk (source.md, Bu
 
   it('sends my copy of each file in a folder whose manifest names no file yet, but the mod manager\'s, when mEdit writes it', async () => {
     const { build, inTrash } = await aSourceMod();
-    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: [], files: new Map() });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: [], flags: new Map(), files: new Map() });
     await put('mods/Mod/Mod.esp', 'decompiled from');
 
     await build();
@@ -447,7 +447,7 @@ describe('build over an instance on disk, of a file mEdit left as it was, which 
 
   it('records one line for a file a step now makes, though its last manifest recorded its bytes', async () => {
     const { build, recorded } = await aSourceMod(WITH_STEP, MADE, async () => { await put('mods/Mod/Mod - Main.ba2', 'made'); });
-    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: [], files: new Map([['Mod - Main.ba2', 'QnTauWK5/T8=']]) });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [REPOSITORY], exclude: [], ignore: [], flags: new Map(), files: new Map([['Mod - Main.ba2', 'QnTauWK5/T8=']]) });
 
     await build();
 
@@ -480,7 +480,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await adapter.install({ kind: 'archive', path: join(root, 'downloads', 'Mod.7z') }, { kind: 'new', name: 'Mod' }, (path) => rm(path)))
       .toEqual({ landed: true });
     await adapter.writeInstalledFrom(join(root, 'mods', 'Mod'), ['Mod.7z'], (path) => rm(path));
-    if (ignore.length > 0) await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore, files: new Map() });
+    if (ignore.length > 0) await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore, flags: new Map(), files: new Map() });
     for (const path of ignore) await put(`mods/Mod/${path}`, 'the game wrote this');
     const client = new InMemoryMEditClient();
     const handed: ModToInitSourceMod[] = [];
@@ -506,7 +506,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     const restoreSourceFolder = async (): Promise<string | undefined> => {
       const folder = join(root, 'mods', 'Mod');
       const held = await manifestIn(folder);
-      const manifest = held !== undefined && !('refused' in held) ? held.manifest : { packages: [], exclude: [], ignore: [], files: new Map<string, string | null>() };
+      const manifest = held !== undefined && !('refused' in held) ? held.manifest : { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map<string, string | null>() };
       return sourceFolderRestoredFrom({ adapter, nexus: { download: () => Promise.reject(new Error('no download')) }, trash: (path) => rm(path) }, 'Mod', join(root, 'source', 'Mod'), { folder, manifest });
     };
     return { adapter, commands, trashed, handed, manifestText, restoreSourceFolder, status: () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') }) };
@@ -565,7 +565,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     ];
     const before = await manifests();
 
-    const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
+    const outcome = await updateManifest({ adapter, client: new InMemoryMEditClient() }, ['Mod'], {}, [], false, []);
 
     expect([await manifests(), outcome.refused]).toEqual([before, []]);
   });
@@ -595,7 +595,7 @@ describe('init source mod over an instance on disk', () => {
     await put('mods/Mod/meta.ini', '[General]\r\n');
     await put('mods/Mod/Mod.esp', 'plugin');
     await put('mods/Mod/a.nif', 'mine');
-    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore: [], files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
+    await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
     const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
     return { client, initSourceMod: () => commands.initSourceMod(['Mod'], { commit: true }) };

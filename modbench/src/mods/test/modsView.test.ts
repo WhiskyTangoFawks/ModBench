@@ -107,7 +107,7 @@ const otherDeps = () => ({
   commands: modCommands(fakeInstanceAdapter().adapter), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), downloadsView: 'modbench.downloads', channel: { warn: () => undefined },
   focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
-  statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
+  statuses: new ModStatuses(foldersHoldingNothing(), () => undefined, () => Promise.reject(new Error('no flags are read'))),
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }),
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
@@ -558,7 +558,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
   });
 
   it('counts each mod Mod status derives with no manifest', async () => {
-    const statuses = new ModStatuses(foldersHoldingNothing(), () => undefined);
+    const statuses = new ModStatuses(foldersHoldingNothing(), () => undefined, () => Promise.reject(new Error('no flags are read')));
     const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingModA), ...noSync(), statuses });
 
     statuses.derive(holdingModA);
@@ -572,7 +572,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     const folder = join(root, 'ModA');
     await manifestedIn(folder);
     const holdingManifested = instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')], modFolders: [{ kind: 'mod', name: 'ModA', path: folder, modName: 'ModA' }] });
-    const statuses = new ModStatuses(foldersHoldingNothing(() => Promise.reject(new Error('EACCES'))), () => undefined);
+    const statuses = new ModStatuses(foldersHoldingNothing(() => Promise.reject(new Error('EACCES'))), () => undefined, () => Promise.reject(new Error('no flags are read')));
     const { view } = createModsView({ ...otherDeps(), instance: new FakeInstance(holdingManifested), ...noSync(), statuses });
 
     statuses.derive(holdingManifested);

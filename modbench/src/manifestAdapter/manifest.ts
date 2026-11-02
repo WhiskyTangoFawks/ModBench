@@ -22,7 +22,10 @@ export interface Manifest {
   readonly exclude: readonly string[];
   /** The paths in the folder that the manifest neither records nor restores. */
   readonly ignore: readonly string[];
-  /** Each file by its path, with its hash; null for a file a build step makes. */
+  /** Each plugin whose header flags the manifest sets apart from its package's copy, by its path, with each flag it sets (true)
+   *  or clears (false). */
+  readonly flags: ReadonlyMap<string, Readonly<Record<string, boolean>>>;
+  /** Each file by its path, with the hash of its bytes before the flags; null for a file a build step makes. */
   readonly files: ReadonlyMap<string, string | null>;
 }
 

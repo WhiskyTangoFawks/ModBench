@@ -2,7 +2,7 @@
 // Instance adapter; a source mod rebuilt by mEdit from its repository, a submodule at the commit the instance repository pins.
 
 import { basename, join } from 'node:path';
-import { isRefused, type MEditClient } from '../client';
+import { flagVariantsThrough, isRefused, type MEditClient } from '../client';
 import type { InstallationFile, InstanceAdapter, OtherManifest, PackageFile, Submodule } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileIn, exclusionsOf, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
@@ -12,6 +12,7 @@ import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
+import { flagVariantsApplied } from '../manifestAdapter/manifestAdapter';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
@@ -29,7 +30,7 @@ type Adapter = Pick<InstanceAdapter,
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
 export interface RestoreDeps {
-  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'pluginFileFlagVariants' | 'setPluginFileFlags' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   readonly adapter: Adapter;
   readonly nexus: Pick<Nexus, 'download'>;
   readonly trash: MoveToTrash;
@@ -135,7 +136,13 @@ export type FolderRestoreAdapter = Pick<InstanceAdapter,
   | 'folderValue' | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
 
 interface FolderPass {
-  readonly deps: { readonly adapter: FolderRestoreAdapter; readonly nexus: RestoreDeps['nexus']; readonly trash: MoveToTrash };
+  readonly deps: {
+    readonly adapter: FolderRestoreAdapter;
+    /** Absent for a manifest that sets no flags. */
+    readonly client?: Pick<MEditClient, 'pluginFileFlagVariants' | 'setPluginFileFlags'>;
+    readonly nexus: RestoreDeps['nexus'];
+    readonly trash: MoveToTrash;
+  };
   readonly game: NamedGameFolder | string;
   readonly options: Options;
 }
@@ -239,10 +246,12 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
 async function restoreFromPackages(
   pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>, through?: ModFolder,
 ): Promise<Answer> {
-  const { adapter } = pass.deps;
+  const { adapter, client } = pass.deps;
+  if (client === undefined && manifest.flags.size > 0) return { refusal: skipped('its manifest sets flags, which need mEdit') };
   let against: FolderAgainst;
   try {
-    against = folderAgainst(manifest, await valueOf(folder));
+    const value = await valueOf(folder);
+    against = folderAgainst(manifest, client === undefined ? value : await flagVariantsApplied(manifest, folder, value, flagVariantsThrough(client, await adapter.gameRelease())));
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
@@ -259,10 +268,25 @@ async function restoreFromPackages(
   } catch (err) {
     return { refusal: notFinished(errorMessage(err)) };
   }
+  const flagged = client === undefined ? undefined : await flagsSet({ adapter, client }, manifest, folder, writes.map(({ path }) => path));
+  if (flagged !== undefined) return { refusal: notFinished(flagged) };
   const trashed = [...moved, ...against.namedByNoLine];
   const why = await whyNotTrashed(adapter, pass.deps.trash, folder, trashed);
   if (why !== undefined) return { refusal: notFinished(why) };
   return { landed: { mod, written: writes.map(({ path }) => path), namedByNoLine: against.namedByNoLine } };
+}
+
+// formats/manifest.md, `flags`: a plugin written from its package is the copy with the manifest's flags set in it.
+async function flagsSet(
+  pass: { readonly adapter: FolderRestoreAdapter; readonly client: NonNullable<FolderPass['deps']['client']> }, manifest: Manifest, folder: string, written: readonly string[]): Promise<string | undefined> {
+  const files = written.flatMap((pathInFolder) => {
+    const flags = [...manifest.flags].find(([path]) => pass.adapter.pathInFolder(path, manifest.exclude) === pathInFolder)?.[1];
+    return flags === undefined ? [] : [{ path: join(folder, pathInFolder), flags }];
+  });
+  if (files.length === 0) return undefined;
+  const answer = await pass.client.setPluginFileFlags(await pass.adapter.gameRelease(), files);
+  if (isRefused(answer)) return answer.message;
+  return answer.refused[0]?.message;
 }
 
 async function hashesIn(adapter: Adapter, folder: string): Promise<Map<string, string>> {

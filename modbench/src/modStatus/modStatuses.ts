@@ -1,7 +1,9 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { flagVariantsApplied, manifestAt, packagesAskedAt, statusFrom, type FlagVariantsOf, type ManifestAt, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import type { StatusValues } from '../repositoriesLib/statusValues';
+import { errorMessage } from '../ports/errorMessage';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -41,7 +43,10 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void) {}
+  constructor(
+    private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile'>, private readonly log: (line: string) => void,
+    private readonly flagVariants: () => Promise<FlagVariantsOf>,
+  ) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -95,8 +100,18 @@ export class ModStatuses {
   private async statusOf(mod: ModAt): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
     const [values, installed] = await Promise.all([this.reads.modValue(mod.folder, packagesAskedAt(manifest)), this.reads.installationFile(mod.name)]);
-    const status = statusFrom(mod, manifest, values);
+    const status = statusFrom(mod, manifest, await this.flagsApplied(mod, manifest, values));
     return installed.kind === 'unreadable' ? { ...status, installationFileProblem: installed.reason } : status;
+  }
+
+  // A plugin the manifest flags is read as its package's copy, which mEdit's reading of its header decides.
+  private async flagsApplied(mod: ModAt, { read }: ManifestAt, values: StatusValues): Promise<StatusValues> {
+    if (values.kind !== 'read' || read === undefined || 'refused' in read || read.manifest.flags.size === 0) return values;
+    try {
+      return { ...values, folder: await flagVariantsApplied(read.manifest, mod.folder, values.folder, await this.flagVariants()) };
+    } catch (err) {
+      return { kind: 'unreadable', reason: errorMessage(err) };
+    }
   }
 
   private hold(derived: ReadonlyMap<string, ModStatus>): void {

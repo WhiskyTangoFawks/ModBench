@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +9,7 @@ import { ignoreFiles, type FileToIgnore } from '../ignoreFiles';
 
 const HA = 'AAAAAAAAAAA=';
 const HB = 'BBBBBBBBBBA=';
-const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], files: new Map() };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };
 const MEM = 'F4SE/Plugins/BetterConsole.mem';
 
 let root: string;
@@ -31,7 +32,7 @@ function over(held: Partial<Manifest> | undefined, files: Record<string, string>
     fake,
     run: async (files_: readonly FileToIgnore[], ignore: boolean) => {
       if (held !== undefined) await writeManifestIn(folder, { ...EMPTY, ...held });
-      return ignoreFiles({ adapter: fake.adapter }, files_, ignore);
+      return ignoreFiles({ adapter: fake.adapter, client: new InMemoryMEditClient() }, files_, ignore);
     },
     manifest: async () => {
       const read = await manifestIn(folder);
@@ -51,7 +52,7 @@ describe('ignore file', () => {
     const outcome = await run([fileOf('ModA', MEM)], true);
 
     expect(outcome).toEqual({ landed: [fileOf('ModA', MEM)], refused: [] });
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], flags: new Map(), files: new Map([['a.nif', HA]]) });
   });
 
   it('refuses a mod with no manifest, naming it, and writes none', async () => {
@@ -79,18 +80,18 @@ describe('ignore file, of a mod installed from an installation file', () => {
 
     await run([fileOf('ModA', MEM)], true);
 
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], files: new Map([['a.nif', HA]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: [MEM], flags: new Map(), files: new Map([['a.nif', HA]]) });
   });
 });
 
 describe('unignore file', () => {
   it('removes the file from the ignore and records its line alone, not another changed file of the mod', async () => {
-    const { run, manifest } = over({ ignore: [MEM, 'logs'], files: new Map([['a.nif', HA]]) }, { [MEM]: HB, 'a.nif': HB, 'new.nif': HA });
+    const { run, manifest } = over({ ignore: [MEM, 'logs'], flags: new Map(), files: new Map([['a.nif', HA]]) }, { [MEM]: HB, 'a.nif': HB, 'new.nif': HA });
 
     const outcome = await run([fileOf('ModA', MEM)], false);
 
     expect(outcome.landed).toEqual([fileOf('ModA', MEM)]);
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], files: new Map([['a.nif', HA], [MEM, HB]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], flags: new Map(), files: new Map([['a.nif', HA], [MEM, HB]]) });
   });
 
   it('removes the file from the ignore of a source mod\'s folder and records nothing, since its build records the folder', async () => {
@@ -112,6 +113,6 @@ describe('unignore file', () => {
     expect([outcome.landed, outcome.refused.map(({ item, reason }) => [item.relativePath, reason])]).toEqual([
       [fileOf('ModA', MEM)], [['logs/run.log', "its manifest ignores 'logs', a folder above it"]],
     ]);
-    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], files: new Map([[MEM, HA]]) });
+    expect(await manifest()).toEqual({ ...EMPTY, ignore: ['logs'], flags: new Map(), files: new Map([[MEM, HA]]) });
   });
 });

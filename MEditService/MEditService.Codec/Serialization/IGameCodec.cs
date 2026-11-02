@@ -31,6 +31,10 @@ public interface IGameCodec
     /// <summary>The plugin header bit the game names Blueprint, 0 for a game with none.</summary>
     int BlueprintFlag { get; }
 
+    /// <summary>Each plugin header flag that changes how the game loads the plugin, by Mutagen's name for the game, with its bit.
+    /// The localized flag is not one: it changes how the plugin's strings are stored.</summary>
+    IReadOnlyDictionary<string, int> LoadFlags { get; }
+
     /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
     uint NextObjectIdDefault { get; }
 

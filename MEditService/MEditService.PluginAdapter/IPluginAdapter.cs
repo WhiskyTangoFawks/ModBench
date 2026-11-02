@@ -44,6 +44,14 @@ public interface IPluginAdapter
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
     Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease);
 
+    /// <summary>The plugin file's bytes with each combination of its load flags flipped, fewest flips first: the values the
+    /// flipped flags then hold, and the hash of the bytes.</summary>
+    Answer<IReadOnlyList<FlagVariant>, PluginFailure> FlagVariantsOf(string pluginPath, GameRelease gameRelease);
+
+    /// <summary>Writes the plugin file in place with each flag set or cleared, every other byte as it was; answers the hash
+    /// written. Every name is a load flag of the game.</summary>
+    Answer<string, PluginFailure> SetLoadFlags(string pluginPath, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease);
+
     /// <summary>The malformed-record diagnoses from one fresh read of the file, each with the change that
     /// repairs it, or none.</summary>
     Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease);

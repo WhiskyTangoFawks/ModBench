@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { attachPortOf, createMEditClient, stopMEditClient, type MEditClient } from './client';
+import { attachPortOf, createMEditClient, flagVariantsThrough, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -84,7 +84,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'build' | 'initSourceMod' | 'cloneSubmodules' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'build' | 'initSourceMod' | 'cloneSubmodules' | 'pluginFileFlagVariants' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -175,7 +175,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
   const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
-  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
+  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line), async () => flagVariantsThrough(client, await adapter.gameRelease())));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
     await modStatuses.current();

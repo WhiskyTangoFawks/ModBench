@@ -64,7 +64,7 @@ async function write(path: string, text: string, at = folder): Promise<void> {
 const MOD_ZIP: ManifestPackage = { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } };
 const REPOSITORY: ManifestPackage = { kind: 'repository', name: 'Mod' };
 const manifest = (files: Record<string, string | null>, over: Partial<Manifest> = {}): Manifest =>
-  ({ packages: [MOD_ZIP], exclude: [], ignore: [], files: new Map(Object.entries(files)), ...over });
+  ({ packages: [MOD_ZIP], exclude: [], ignore: [], flags: new Map(), files: new Map(Object.entries(files)), ...over });
 
 const manifested = (held: Manifest): Promise<void> => write('mod.manifest.json', manifestText(held));
 

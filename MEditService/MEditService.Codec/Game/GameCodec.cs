@@ -31,6 +31,8 @@ internal sealed class GameCodec : IGameCodec
 
     public int BlueprintFlag => GameSpecifics.BlueprintFlag;
 
+    public IReadOnlyDictionary<string, int> LoadFlags => GameSpecifics.LoadFlags;
+
     public CreationKitShapes CreationKitShapes => GameSpecifics.CreationKitShapes;
 
     public IReadOnlyList<string> TransientTypes(IModGetter plugin) => GameSpecifics.TransientTypes((IGameModGetter)plugin);

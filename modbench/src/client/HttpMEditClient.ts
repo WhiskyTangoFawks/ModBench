@@ -15,7 +15,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type Submodule, type SubmodulesCloned,
+  type Submodule, type SubmodulesCloned, type PluginFileFlagVariants, type PluginFileFlagsSet,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -517,6 +517,24 @@ class HttpMEditClient implements MEditClient {
       op: `cloneSubmodules(${submodules.length})`,
       failMsg: 'Could not clone the submodules the instance repository pins',
       post: () => this.apiClient.POST('/clone-submodules', { body: { submodules: [...submodules] } }),
+    });
+  }
+
+  pluginFileFlagVariants(gameRelease: string, paths: readonly string[]): Promise<PluginFileFlagVariants | WriteRefused> {
+    return this.mutate({
+      op: `pluginFileFlagVariants(${paths.length})`,
+      failMsg: 'Could not read the load flags of the plugin files',
+      post: () => this.apiClient.POST('/plugin-files/flag-variants', { body: { gameRelease, paths: [...paths] } }),
+    });
+  }
+
+  setPluginFileFlags(
+    gameRelease: string, files: readonly { readonly path: string; readonly flags: Readonly<Record<string, boolean>> }[],
+  ): Promise<PluginFileFlagsSet | WriteRefused> {
+    return this.mutate({
+      op: `setPluginFileFlags(${files.length})`,
+      failMsg: 'Could not set the load flags of the plugin files',
+      post: () => this.apiClient.POST('/plugin-files/set-flags', { body: { gameRelease, files: files.map(({ path, flags }) => ({ path, flags: { ...flags } })) } }),
     });
   }
 

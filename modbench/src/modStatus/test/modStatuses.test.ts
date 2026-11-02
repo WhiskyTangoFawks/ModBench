@@ -6,6 +6,7 @@ import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter
 import { modValueOver } from '../../instanceAdapter/modValue';
 import type { Manifest } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
+import type { FlagVariantsOf } from '../../manifestAdapter/manifestAdapter';
 import { ModStatuses, type StatusSource } from '../modStatuses';
 
 let root: string;
@@ -38,7 +39,7 @@ const reads: Parameters<typeof modValueOver>[0] = {
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
 };
 
-const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], files: new Map() };
+const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };
 
 async function folderOf(name: string, files: Record<string, string> = {}): Promise<string> {
   const folder = join(root, 'mods', name);
@@ -64,7 +65,7 @@ const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile'> = {
   },
 };
 
-const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); });
+const statusesLogging = (): ModStatuses => new ModStatuses(instance, (line) => { logged.push(line); }, () => Promise.reject(new Error('no flags are read')));
 
 describe('Mod status, derived from each instance value (mod-status trace)', () => {
   it('derives each listed mod\'s status by its folder\'s mod name, and none for a separator, which has no manifest, or an entry with no folder', async () => {
@@ -215,5 +216,21 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       'its manifest cannot be read at line 1', true, 'Showing the last good read: the status of "ModA" could not be read: its manifest cannot be read at line 1.',
       undefined, false, ['[modList] The status of "ModA" could not be read: its manifest cannot be read at line 1'],
     ]);
+  });
+
+  it('reads a plugin its manifest flags as its package\'s copy, as mEdit reads its header (Status, story 8)', async () => {
+    const mod = await folderOf('ModA', { 'Mod.esp': 'flagged' });
+    await writeManifestIn(mod, { ...EMPTY, flags: new Map([['Mod.esp', { Small: true }]]), files: new Map([['Mod.esp', 'BBBBBBBBBBA=']]) });
+    const copies = (flags: boolean): FlagVariantsOf => (paths) =>
+      Promise.resolve(new Map(paths.map((path) => [path, [{ flags: { Small: flags }, hash: 'BBBBBBBBBBA=' }]])));
+    const statusesOver = (variants: FlagVariantsOf): ModStatuses =>
+      new ModStatuses({ ...instance, modValue: (folder) => modValueOver({ ...reads, originFileHash: () => Promise.resolve({ kind: 'read', answer: { size: 1, hash: 'CCCCCCCCCCA=' } }) }, folder, { installationFiles: [] }) }, () => undefined, () => Promise.resolve(variants));
+
+    const carrying = statusesOver(copies(false));
+    carrying.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    const notCarrying = statusesOver(copies(true));
+    notCarrying.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+
+    expect([(await carrying.current()).get('ModA')?.differing, (await notCarrying.current()).get('ModA')?.differing]).toEqual([[], ['Mod.esp']]);
   });
 });

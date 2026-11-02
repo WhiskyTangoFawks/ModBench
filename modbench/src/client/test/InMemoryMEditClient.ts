@@ -18,7 +18,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'initSourceMod' | 'build' | 'cloneSubmodules' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'initSourceMod' | 'build' | 'cloneSubmodules' | 'pluginFileFlagVariants' | 'setPluginFileFlags' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile' | 'decompileAndRepair';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -322,6 +322,14 @@ export class InMemoryMEditClient implements MEditClient {
 
   cloneSubmodules(...args: Parameters<MEditClient['cloneSubmodules']>): ReturnType<MEditClient['cloneSubmodules']> {
     return this.command('cloneSubmodules', args);
+  }
+
+  pluginFileFlagVariants(...args: Parameters<MEditClient['pluginFileFlagVariants']>): ReturnType<MEditClient['pluginFileFlagVariants']> {
+    return this.command('pluginFileFlagVariants', args);
+  }
+
+  setPluginFileFlags(...args: Parameters<MEditClient['setPluginFileFlags']>): ReturnType<MEditClient['setPluginFileFlags']> {
+    return this.command('setPluginFileFlags', args);
   }
 
   getPlugins(): ReturnType<MEditClient['getPlugins']> { return this.query('getPlugins', []); }

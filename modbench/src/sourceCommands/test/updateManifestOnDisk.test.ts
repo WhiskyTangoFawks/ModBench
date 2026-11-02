@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -31,7 +32,7 @@ async function instanceTakingFromTheGame() {
   await put('Game/Data/b.nif', 'b');
   const gameRoot = join(root, 'Game');
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') } });
-  return { adapter, update: () => updateManifest({ adapter }, ['Mod'], {}, [], false, []) };
+  return { adapter, update: () => updateManifest({ adapter, client: new InMemoryMEditClient() }, ['Mod'], {}, [], false, []) };
 }
 
 describe('update manifest over an instance on disk', () => {
@@ -82,7 +83,7 @@ describe('update manifest over an instance on disk, of a mod whose metadata name
     await put('mods/Mod/meta.ini', '[General]\r\nversion=1.2\r\n');
     await put('mods/Mod/a.nif', 'bytes of a.nif');
     const adapter = adapterOver(root, { installationFileReader: fakeInstallationFileReader(['a.nif']) });
-    await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
+    await updateManifest({ adapter, client: new InMemoryMEditClient() }, ['Mod'], {}, [], false, []);
     const read = await manifestIn(join(root, 'mods', 'Mod'));
     if (read === undefined || 'refused' in read) throw new Error('no manifest');
     return { adapter, manifest: read.manifest };

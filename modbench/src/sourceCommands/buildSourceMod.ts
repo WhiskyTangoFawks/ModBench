@@ -68,7 +68,7 @@ const heldManifest = async (folder: string): Promise<Manifest | undefined> => {
 // A manifest names only the exclusions of the files it names (formats/manifest.md).
 function sourceModManifest(mod: SourceModToBuild, files: ReadonlyMap<string, string | null>): Manifest {
   const exclude = exclusionsOfFiles(mod.exclude, files.keys());
-  return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, ignore: mod.ignore, files };
+  return { packages: [{ kind: 'repository', name: basename(mod.sourceFolder) }], exclude, ignore: mod.ignore, flags: new Map(), files };
 }
 
 // source.md, Build, story 20: each file whose bytes its manifest does not record, which no build can make again.

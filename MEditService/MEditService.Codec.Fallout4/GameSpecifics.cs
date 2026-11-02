@@ -8,6 +8,10 @@ internal static class GameSpecifics
 {
     public const int BlueprintFlag = 0;
 
+    public static IReadOnlyDictionary<string, int> LoadFlags { get; } = Enum.GetValues<Fallout4ModHeader.HeaderFlag>()
+        .Where(flag => flag != Fallout4ModHeader.HeaderFlag.Localized)
+        .ToDictionary(flag => flag.ToString(), flag => (int)flag);
+
     // Proven over every shipped binary: all 823 entry-point effects, all 1,031 weapon templates.
     public static CreationKitShapes CreationKitShapes { get; } = new(
         SubrecordSizes: new Dictionary<(string, string), int>
