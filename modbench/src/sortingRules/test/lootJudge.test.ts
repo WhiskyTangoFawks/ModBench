@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { judgeLoot } from '../lootJudge';
+import { judgeLoot, type LootPartition } from '../lootJudge';
 import { rulesReader, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
@@ -9,11 +9,11 @@ const ABSENT: SortingRuleFile = { path: '/instance/f.yaml', kind: 'absent' };
 const rules = (parts: Partial<SortingRuleFiles>) => readRules({ masterlist: ABSENT, prelude: ABSENT, userlist: ABSENT, ...parts });
 const at = (filename: string) => ({ origin: 'Mod', filename });
 
-const judged = (order: string[], masterlist: string, present: string[] = order, userlist?: string) =>
+const judged = (order: string[], masterlist: string, present: string[] = order, userlist?: string, partitions: Record<string, LootPartition> = {}) =>
   judgeLoot(order.map(at), {
     ...rules({ masterlist: text(masterlist), ...userlist === undefined ? {} : { userlist: text(userlist) } }),
     isPresent: (filename) => present.some((name) => name.toLowerCase() === filename.toLowerCase()),
-  });
+  }, (filename) => partitions[filename] ?? 'nonMasters');
 
 describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
   it('breaks, at Error, a plugin whose requirement is not present, naming its display and detail', () => {
@@ -134,22 +134,60 @@ plugins:
       expect(broken.map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['L.esp', 'E2.esp'], ['L2.esp', 'E2.esp']]);
     });
 
-    it('follows a group\'s after through the groups between', () => {
-      expect(judged(['L.esp', 'D.esp'], `${groups}  - {name: D.esp}\n`).map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['L.esp', 'D.esp']]);
-    });
+    const pairs = (broken: ReturnType<typeof judged>) => broken.map(({ plugins }) => plugins.map(({ filename }) => filename));
 
-    it('puts a plugin with no group in the default group', () => {
-      expect(judged(['E.esp', 'D.esp'], `${groups}  - {name: D.esp}\n`).map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['E.esp', 'D.esp']]);
+    it.each([
+      ['names, for each plugin, the last plugin it loads before however many', ['L.esp', 'L2.esp', 'E.esp', 'E2.esp'], '  - {name: E2.esp, group: early}\n', [['L.esp', 'E2.esp'], ['L2.esp', 'E2.esp']]],
+      ['follows a group\'s after through the groups between', ['L.esp', 'D.esp'], '  - {name: D.esp}\n', [['L.esp', 'D.esp']]],
+      ['puts a plugin with no group in the default group', ['E.esp', 'D.esp'], '  - {name: D.esp}\n', [['E.esp', 'D.esp']]],
+      ['holds a plugin whose group loads after, whatever the order of the others', ['D.esp', 'E.esp', 'L.esp'], '  - {name: D.esp}\n', []],
+    ])('%s', (_, order, extra, expected) => {
+      expect(pairs(judged(order, groups + extra))).toEqual(expected);
     });
 
     it('ends on groups that name each other, and breaks the order that suits one of them', () => {
-      expect(judged(['A.esp', 'B.esp'], `groups:
+      expect(pairs(judged(['A.esp', 'B.esp'], `groups:
   - {name: a, after: [b]}
   - {name: b, after: [a]}
 plugins:
   - {name: A.esp, group: a}
   - {name: B.esp, group: b}
-`).map(({ plugins }) => plugins[0]?.filename)).toEqual(['A.esp']);
+`))).toEqual([['A.esp', 'B.esp']]);
+    });
+
+    it('holds the order of groups within each of masters, blueprint masters and the rest, never across them', () => {
+      const extra = ['L.esm: late', 'E.esm: early', 'LB.esm: late', 'EB.esp: early'].map((entry) => `  - {name: ${entry.split(': ')[0]}, group: ${entry.split(': ')[1]}}\n`).join('');
+      const broken = judged(['L.esm', 'E.esp', 'L.esp', 'E.esm', 'LB.esm', 'EB.esp'], groups + extra, undefined, undefined, {
+        'L.esm': 'masters', 'E.esm': 'masters', 'LB.esm': 'blueprintMasters',
+      });
+
+      expect(pairs(broken)).toEqual([['L.esm', 'E.esm'], ['L.esp', 'EB.esp']]);
+    });
+
+    it('takes the first entry that states a group over the entries after it', () => {
+      const broken = judged(['L.esp', 'E.esp'], `groups:
+  - name: default
+  - {name: early, after: [default]}
+  - {name: late, after: [early]}
+plugins:
+  - {name: L.esp, group: early}
+  - {name: 'L.*', group: late}
+  - {name: E.esp, group: early}
+`);
+
+      expect(broken).toEqual([]);
+    });
+
+    it('points the rule at a userlist edge on its path', () => {
+      const broken = judged(['L.esp', 'D.esp'], `${groups}  - {name: D.esp}\n`, ['L.esp', 'D.esp'], 'groups:\n  - {name: early, after: [default]}\n');
+
+      expect(broken.map(({ source }) => source)).toEqual([{ file: 'userlist', line: 1 }]);
+    });
+
+    it('breaks a group the userlist gives an after to, with no masterlist to declare default', () => {
+      const broken = judged(['E.esp', 'D.esp'], '', ['E.esp', 'D.esp'], 'groups:\n  - {name: early, after: [default]}\nplugins:\n  - {name: E.esp, group: early}\n');
+
+      expect(pairs(broken)).toEqual([['E.esp', 'D.esp']]);
     });
 
     it('breaks a plugin by a group the userlist gives an after', () => {

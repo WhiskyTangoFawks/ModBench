@@ -28,6 +28,9 @@ export interface LootFile {
   source: RuleSource;
 }
 
+/** The group a plugin with none is in; every file declares it. */
+export const DEFAULT_GROUP = 'default';
+
 export type RuleLevel = 'error' | 'warning' | 'info';
 
 interface LootMessage {
@@ -44,7 +47,7 @@ export interface LootGroup {
 
 export interface LootEntry {
   name: string;
-  group?: string;
+  group?: { name: string; source: RuleSource };
   matches: (filename: string) => boolean;
   req: LootFile[];
   inc: LootFile[];
@@ -124,9 +127,6 @@ class FileReader {
       this.problem(line === undefined ? undefined : this.shifted(line - 1, substitution), error.message.split('\n')[0] ?? error.message);
     }
     if (document.errors.length > 0 || this.source === undefined) return;
-    const plugins = document.get('plugins', true);
-    const groups = document.get('groups', true);
-    if (!isSeq(plugins) && !isSeq(groups)) return;
     // One conversion of the whole document: converting each entry alone resolves its anchors again, and takes seconds on a masterlist.
     let converted: unknown;
     try {
@@ -134,16 +134,19 @@ class FileReader {
     } catch (err) {
       return this.problem(undefined, err instanceof Error ? err.message : String(err));
     }
-    const plainOf = (key: string): unknown[] => (isRecord(converted) && Array.isArray(converted[key]) ? converted[key] : []);
-    const plainPlugins = plainOf('plugins');
-    const plainGroups = plainOf('groups');
-    if (isSeq(groups)) groups.items.forEach((item, index) => this.group(item, plainGroups[index]));
-    if (isSeq(plugins)) plugins.items.forEach((item, index) => this.entry(item, plainPlugins[index]));
+    this.eachItem(document, converted, 'groups', (item, plain) => this.group(item, plain));
+    this.eachItem(document, converted, 'plugins', (item, plain) => this.entry(item, plain));
+  }
+
+  private eachItem(document: { get: (key: string, keepScalar: true) => unknown }, converted: unknown, key: string, read: (node: unknown, plain: unknown) => void): void {
+    const list = document.get(key, true);
+    const plain = isRecord(converted) && Array.isArray(converted[key]) ? converted[key] : [];
+    if (isSeq(list)) list.items.forEach((item, index) => read(item, plain[index]));
   }
 
   private group(node: unknown, plain: unknown): void {
     const line = this.lineOf(node);
-    if (!isRecord(plain)) return;
+    if (!isRecord(plain)) return this.problem(line, 'A group is not a mapping.');
     const name = stringOf(plain.name);
     if (name === undefined) return this.problem(line, 'A group has no name.');
     const after = this.items(node, plain, 'after').flatMap(({ value, line: at }) => {
@@ -169,9 +172,11 @@ class FileReader {
     if (name === undefined) return this.problem(line, 'A plugin entry has no name.');
     const matches = this.matcher(name, line);
     if (matches === undefined) return;
-    const group = stringOf(plain.group);
+    const groupName = stringOf(plain.group);
+    const groupNode = isMap(node) ? node.get('group', true) : undefined;
+    const groupSource = this.located(groupNode === undefined ? line : this.lineOf(groupNode));
     this.entries.push({
-      name, matches, ...group === undefined ? {} : { group },
+      name, matches, ...groupName === undefined || groupSource === undefined ? {} : { group: { name: groupName, source: groupSource } },
       req: this.files(node, plain, 'req'), inc: this.files(node, plain, 'inc'), after: this.files(node, plain, 'after'),
       msg: this.messages(node, plain),
     });
@@ -260,21 +265,47 @@ function readRules(files: SortingRuleFiles): { entries: LootEntry[]; groups: Loo
     : undefined;
   const masterlist = readRuleFile('masterlist', files.masterlist, 'masterlist', substituted);
   const userlist = readRuleFile('userlist', files.userlist, 'userlist');
-  const declared = new Set([...masterlist.groups, ...userlist.groups].map(({ name }) => name));
-  const dangling: RuleFileProblem[] = [];
-  const groups = [...masterlist.groups, ...userlist.groups].map(({ name, after }) => ({
+  const allGroups = [...masterlist.groups, ...userlist.groups];
+  const allEntries = [...masterlist.entries, ...userlist.entries];
+  const declared = new Set([DEFAULT_GROUP, ...allGroups.map(({ name }) => name)]);
+  const unsound: RuleFileProblem[] = [];
+  const groups = allGroups.map(({ name, after }) => ({
     name,
     after: after.filter((step) => {
       if (declared.has(step.name)) return true;
-      dangling.push({ file: step.source.file, line: step.source.line, text: `The group "${name}" loads after "${step.name}", which no file declares.` });
+      unsound.push({ file: step.source.file, line: step.source.line, text: `The group "${name}" loads after "${step.name}", which no file declares.` });
       return false;
     }),
   }));
+  for (const { group } of allEntries) {
+    if (group !== undefined && !declared.has(group.name)) {
+      unsound.push({ file: group.source.file, line: group.source.line, text: `This plugin belongs to the group "${group.name}", which does not exist.` });
+    }
+  }
+  unsound.push(...groupCycles(groups));
   return {
-    entries: [...masterlist.entries, ...userlist.entries],
+    entries: allEntries,
     groups,
-    problems: [...prelude.problems, ...masterlist.problems, ...userlist.problems, ...dangling],
+    problems: [...prelude.problems, ...masterlist.problems, ...userlist.problems, ...unsound],
   };
+}
+
+function groupCycles(groups: readonly LootGroup[]): RuleFileProblem[] {
+  const afterOf = new Map<string, LootGroup['after']>();
+  for (const { name, after } of groups) afterOf.set(name, [...afterOf.get(name) ?? [], ...after]);
+  const problems: RuleFileProblem[] = [];
+  const finished = new Set<string>();
+  const walk = (name: string, path: readonly string[]): void => {
+    for (const step of afterOf.get(name) ?? []) {
+      const at = path.indexOf(step.name);
+      if (at !== -1) {
+        problems.push({ file: step.source.file, line: step.source.line, text: `The groups load after each other in a cycle: ${[...path.slice(at), step.name].join(' after ')}.` });
+      } else if (!finished.has(step.name)) walk(step.name, [...path, step.name]);
+    }
+    finished.add(name);
+  };
+  for (const name of afterOf.keys()) if (!finished.has(name)) walk(name, [name]);
+  return problems;
 }
 
 export interface ReadRules {

@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import type { LootEntry, LootFile, LootGroup, RuleSource } from './lootMetadata';
+import { DEFAULT_GROUP, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
 
@@ -57,47 +57,75 @@ function judgePlugin(
   return [...requirements, ...incompatibilities, ...loadAfters, ...messages];
 }
 
-const DEFAULT_GROUP = 'default';
+/** LOOT applies a group's order within one of these, never across: its sort has a graph for each. */
+export type LootPartition = 'masters' | 'blueprintMasters' | 'nonMasters';
 
-// Each group `group` loads after, through the groups between, with the statement of the first step toward it.
+/** LOOT's rules and where the files they apply to are present, as the sorting rules judge them. */
+export interface LootRules {
+  readonly entries: readonly LootEntry[];
+  readonly groups: readonly LootGroup[];
+  readonly isPresent: (filename: string) => boolean;
+}
+
+interface Placed {
+  plugin: PluginRef;
+  group: string;
+  partition: LootPartition;
+}
+
+const isUserEdge = ({ source }: LootGroup['after'][number]): boolean => source.file === 'userlist';
+
 function groupsBefore(group: string, afterOf: ReadonlyMap<string, LootGroup['after']>): Map<string, RuleSource> {
   const reached = new Map<string, RuleSource>();
-  const queue = (afterOf.get(group) ?? []).map((step) => ({ ...step, first: step.source }));
+  const queue = (afterOf.get(group) ?? []).map((step) => ({ ...step, stated: step.source }));
   for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if (reached.has(step.name) || step.name === group) continue;
-    reached.set(step.name, step.first);
-    queue.push(...(afterOf.get(step.name) ?? []).map((next) => ({ ...next, first: step.first })));
+    reached.set(step.name, step.stated);
+    const stated = step.stated.file === 'userlist' ? step.stated : undefined;
+    queue.push(...(afterOf.get(step.name) ?? []).map((next) => ({ ...next, stated: stated ?? (next.source.file === 'userlist' ? next.source : step.stated) })));
   }
   return reached;
 }
 
-// One entry for each plugin that loads before a plugin of a group its own loads after, naming the last, the one a move after keeps the rule for.
-function judgeGroups(order: readonly PluginRef[], entries: readonly LootEntry[], groups: readonly LootGroup[]): BrokenRule[] {
+function groupOf(plugin: PluginRef, entries: readonly LootEntry[]): string {
+  const stating = entries.filter((entry) => entry.group !== undefined && entry.matches(plugin.filename));
+  const chosen = stating.find((entry) => entry.group?.source.file === 'userlist') ?? stating[0];
+  return chosen?.group?.name ?? DEFAULT_GROUP;
+}
+
+function judgeGroups(
+  order: readonly PluginRef[], { entries, groups }: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
+): BrokenRule[] {
   const afterOf = new Map<string, LootGroup['after']>();
   for (const { name, after } of groups) afterOf.set(name, [...afterOf.get(name) ?? [], ...after]);
-  const groupOf = (plugin: PluginRef): string =>
-    entries.findLast((entry) => entry.group !== undefined && entry.matches(plugin.filename))?.group ?? DEFAULT_GROUP;
-  const groupsOfOrder = order.map(groupOf);
-  return order.flatMap((plugin, index): BrokenRule[] => {
-    const group = groupsOfOrder[index] ?? DEFAULT_GROUP;
-    const before = groupsBefore(group, afterOf);
-    const last = groupsOfOrder.findLastIndex((other, at) => at > index && before.has(other));
-    const target = order[last];
-    const earlier = groupsOfOrder[last];
-    const source = earlier === undefined ? undefined : before.get(earlier);
-    if (target === undefined || earlier === undefined || source === undefined) return [];
+  for (const [name, after] of afterOf) afterOf.set(name, [...after.filter(isUserEdge), ...after.filter((step) => !isUserEdge(step))]);
+  const beforeOf = new Map<string, Map<string, RuleSource>>();
+  const before = (group: string): Map<string, RuleSource> => {
+    const known = beforeOf.get(group) ?? groupsBefore(group, afterOf);
+    beforeOf.set(group, known);
+    return known;
+  };
+  const placed = order.flatMap((plugin): Placed[] => {
+    const partition = partitionOf(plugin.filename);
+    return partition === undefined ? [] : [{ plugin, group: groupOf(plugin, entries), partition }];
+  });
+  return placed.flatMap((early, index): BrokenRule[] => {
+    const groupsAfter = before(early.group);
+    const last = placed.slice(index + 1).findLast((other) => other.partition === early.partition && groupsAfter.has(other.group));
+    const source = last === undefined ? undefined : groupsAfter.get(last.group);
+    if (last === undefined || source === undefined) return [];
     return [{
-      rule: 'group', level: 'info', plugins: [plugin, target], source,
-      reason: `"${plugin.filename}" is in the group "${group}", which loads after the group "${earlier}", and loads before "${target.filename}", of that group.`,
+      rule: 'group', level: 'info', plugins: [early.plugin, last.plugin], source,
+      reason: `"${early.plugin.filename}" is in the group "${early.group}", which loads after the group "${last.group}", and loads before "${last.plugin.filename}", of that group.`,
     }];
   });
 }
 
 /** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages and
- *  conditions that apply. A rule whose condition cannot be evaluated is a Warning, never skipped. */
+ *  conditions that apply. A rule whose condition cannot be evaluated is a Warning, never skipped. `partitionOf`
+ *  is `undefined` for a plugin whose master flag is not yet read, and its group is not judged. */
 export function judgeLoot(
-  order: readonly PluginRef[],
-  { entries, groups, isPresent }: { entries: readonly LootEntry[]; groups: readonly LootGroup[]; isPresent: (filename: string) => boolean },
+  order: readonly PluginRef[], rules: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
 ): BrokenRule[] {
-  return [...order.flatMap((_, index) => judgePlugin(order, index, entries, isPresent)), ...judgeGroups(order, entries, groups)];
+  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.isPresent)), ...judgeGroups(order, rules, partitionOf)];
 }
