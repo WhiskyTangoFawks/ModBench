@@ -13,6 +13,11 @@ describe('a mod\'s unfinished states, each on the file it concerns (modlist-repo
     expect(statusProblems(held({}), folder)).toEqual([]);
   });
 
+  it('puts a manifest that cannot be read on the manifest, saying why', () => {
+    expect(statusProblems(held({ unreadable: "its manifest flags 'a.txt', which is no plugin" }), folder))
+      .toEqual([{ file: manifestFile, message: "Its manifest cannot be read: its manifest flags 'a.txt', which is no plugin." }]);
+  });
+
   it('puts a mod with no manifest on its folder, and nothing else', () => {
     expect(statusProblems(status('Mod', { noManifest: true }), folder)).toEqual([{ file: folder, message: 'No manifest.' }]);
   });

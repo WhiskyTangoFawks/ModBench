@@ -136,7 +136,7 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
  *  package to be on this machine. */
 export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {
   if (read === undefined) return nothing(mod.name, { noManifest: true });
-  if ('refused' in read) return nothing(mod.name, { unreadable: read.refused });
+  if ('refused' in read) return nothing(mod.name, { unreadable: read.refused, manifestFile: file });
   if (values.kind === 'notAsked') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;

@@ -93,13 +93,13 @@ describe('a mod\'s status against its manifest', () => {
     await write('mine.txt', 'mine');
     await write('mod.manifest.json', '<<<<<<< HEAD\n');
 
-    expect(await status()).toEqual(nothing({ unreadable: 'its manifest cannot be read at line 1' }));
+    expect(await status()).toEqual(nothing({ unreadable: 'its manifest cannot be read at line 1', manifestFile: join(folder, 'mod.manifest.json') }));
   });
 
   it('is unreadable, naming both versions, when its manifest is of the format before version 1', async () => {
     await write('mod.manifest.json', '{\n"files": []\n}\n');
 
-    expect(await status()).toEqual(nothing({ unreadable: 'its manifest is in a format before version 1, and Modbench reads only version 1' }));
+    expect(await status()).toEqual(nothing({ unreadable: 'its manifest is in a format before version 1, and Modbench reads only version 1', manifestFile: join(folder, 'mod.manifest.json') }));
   });
 
   it('reads a manifest an editor wrote with a byte order mark', async () => {

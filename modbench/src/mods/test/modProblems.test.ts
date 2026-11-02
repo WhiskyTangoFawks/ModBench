@@ -58,6 +58,26 @@ describe('the Problems panel follows Mod status (modlist-repository.md, Status, 
     expect(messagesOn(collection, FOLDER)).toEqual([['No manifest.', DiagnosticSeverity.Warning]]);
   });
 
+  it('shows a warning on the manifest of a mod whose manifest cannot be read, beside the last good read\'s problems', async () => {
+    const manifestFile = `${FOLDER}/MOD.Manifest.json`;
+    const { collection, becomes } = over([packaged('ModA', { noManifest: true })]);
+    await vi.waitFor(() => { expect(collection.has(Uri.file(FOLDER))).toBe(true); });
+
+    becomes([packaged('ModA', { manifestFile, unreadable: 'EACCES' })]);
+
+    await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)).toEqual([['Its manifest cannot be read: EACCES.', DiagnosticSeverity.Warning]]); });
+    expect(messagesOn(collection, FOLDER)).toEqual([['No manifest.', DiagnosticSeverity.Warning]]);
+  });
+
+  it('shows a warning on the manifest of a mod whose manifest has been unreadable since the first read', async () => {
+    const manifestFile = `${FOLDER}/MOD.Manifest.json`;
+    const { collection, becomes } = over([]);
+
+    becomes([packaged('ModA', { manifestFile, unreadable: 'its manifest cannot be read at line 1' })]);
+
+    await vi.waitFor(() => { expect(messagesOn(collection, manifestFile)).toEqual([['Its manifest cannot be read: its manifest cannot be read at line 1.', DiagnosticSeverity.Warning]]); });
+  });
+
   it('shows nothing for a mod whose folder the instance does not hold', async () => {
     const { collection, becomes } = over([]);
 
