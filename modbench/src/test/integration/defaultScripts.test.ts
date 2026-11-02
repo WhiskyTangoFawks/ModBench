@@ -22,7 +22,7 @@ describe('the default scripts a folder holds', () => {
   it('answers the path of a script by its name', async () => {
     const folder = shipped();
 
-    assert.strictEqual(await defaultScriptIn(vscode.Uri.file(folder))('clean'), path.join(folder, 'clean.py'));
+    assert.strictEqual(await defaultScriptIn(vscode.Uri.file(folder))('clean'), vscode.Uri.file(path.join(folder, 'clean.py')).fsPath);
   });
 
   it('answers nothing for a name that is not a script of the folder, though a file of that name is reached through it', async () => {
