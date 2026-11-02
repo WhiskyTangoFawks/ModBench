@@ -11,8 +11,3 @@ const SHOWN: Record<MEditStatus, { icon: string; state: string }> = {
 export function mEditState(status: MEditStatus, indexedActivePlugins: number | undefined): { icon: string; state: string } {
   return indexedActivePlugins === undefined ? SHOWN[status] : { icon: 'check', state: `Ready (${indexedActivePlugins} plugins)` };
 }
-
-/** What the agent reads beside each answer: the words the status bar and each view's message line show. */
-export interface StandingMessages {
-  messages(): readonly string[];
-}

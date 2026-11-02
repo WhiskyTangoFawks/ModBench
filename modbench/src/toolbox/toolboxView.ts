@@ -1,14 +1,11 @@
 import * as vscode from 'vscode';
 import { ToolboxProvider } from './ToolboxProvider';
-import { linesOf } from '../drivingLib/messageLine';
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 export type ToolboxViewDeps = ConstructorParameters<typeof ToolboxProvider>[0];
 
 export interface ToolboxView extends vscode.Disposable {
   say: ToolboxProvider['say'];
-  /** The lines the view's message line shows, for the agent. */
-  messages(): string[];
 }
 
 export function createToolboxView(deps: ToolboxViewDeps): ToolboxView {
@@ -19,7 +16,6 @@ export function createToolboxView(deps: ToolboxViewDeps): ToolboxView {
   const subscriptions = [provider, view, provider.onDidChangeTreeData(showMessage)];
   return {
     say: (message) => { provider.say(message); },
-    messages: () => linesOf(provider.standingMessage()),
     dispose: () => { vscode.Disposable.from(...subscriptions).dispose(); },
   };
 }

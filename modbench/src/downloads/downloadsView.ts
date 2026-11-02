@@ -12,7 +12,6 @@ import {
 import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
 import { ExcludedDownloadedFileDecorationProvider } from './ExcludedDownloadedFileDecorationProvider';
 import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
-import { linesOf } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from './keyContext';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
@@ -31,8 +30,6 @@ interface DownloadsView extends vscode.Disposable {
   view: vscode.TreeView<DownloadsTreeNode>;
   nameFilter: NameFilter;
   copyValue: CopyValueAdapter;
-  /** The lines the view's message line shows, for the agent. */
-  messages(): string[];
 }
 
 /** Rows come from the Instance value alone (ADR-0015). */
@@ -90,7 +87,6 @@ export function createDownloadsView(
   return {
     provider, view, nameFilter,
     copyValue: { text: downloadsCopyValueText(() => view.selection), reporterTag: 'downloadedFile.copyValue' },
-    messages: () => linesOf(provider.viewMessage()),
     dispose: () => { disposable.dispose(); },
   };
 }

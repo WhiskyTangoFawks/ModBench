@@ -69,7 +69,7 @@ const NO_TOOLBOX = {
   game: { name: 'Fallout 4', folder: GAME_FOLDER_NOT_FOUND, versions: { kind: 'unresolved' } },
   gameFolderLinks: 0, holdsRepository: false, deployment: { folder: null },
 };
-const NO_STANDING = { messages: () => [] };
+const NO_STANDING = { mEdit: () => [], plugins: () => [], modList: () => [], sourceLanguage: () => [] };
 const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
@@ -478,24 +478,39 @@ describe('the agent server, given an instance value', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('answers beside the words the status bar and the Plugins view say of mEdit, as they stand at each call', async () => {
-    let said = ['mEdit is Running'];
-    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => said });
-    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+  describe('the standing lines it answers beside', () => {
+    const LAST_GOOD_READ = 'Showing the last good read: the modlist is unreadable';
+    const blocksOf = async (client: Awaited<ReturnType<typeof clientOf>>['client'], tool: string) =>
+      CallToolResultSchema.parse(await client.callTool({ name: tool })).content.map((block) => block.type === 'text' ? block.text : '').slice(1);
 
-    expect((await blocks()).slice(1)).toEqual(['mEdit is Running']);
+    it('are the sources the tool reads, as they stand at each call', async () => {
+      let said = ['modlist.txt is not synced'];
+      const instance = new FakeInstance(VALUE);
+      instance.fail('the modlist is unreadable');
+      const { client } = await clientOf(instance, undefined, undefined, undefined, { ...NO_STANDING, modList: () => said });
 
-    said = ['mEdit is Ready (2 plugins)', 'Indexing failed: the record index threw'];
-    expect((await blocks()).slice(1)).toEqual(said);
-  });
+      expect(await blocksOf(client, 'list_mods')).toEqual([LAST_GOOD_READ, 'modlist.txt is not synced']);
 
-  it('says a line two views show once', async () => {
-    const line = 'MO2 is running, and overwrites your changes when it launches a program or exits.';
-    const { client } = await clientOf(new FakeInstance(VALUE), undefined, undefined, undefined, { messages: () => [line, 'mEdit is Running', line] });
+      said = [];
+      expect(await blocksOf(client, 'list_mods')).toEqual([LAST_GOOD_READ]);
+    });
 
-    const blocks = CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+    it('leave out the sources the tool does not read', async () => {
+      const instance = new FakeInstance(VALUE);
+      instance.fail('the modlist is unreadable');
+      const everyone = { mEdit: () => ['mEdit is Running'], plugins: () => ['No masterlist'], modList: () => ['modlist.txt is not synced'], sourceLanguage: () => ['a source problem'] };
+      const { client } = await clientOf(instance, undefined, undefined, undefined, everyone);
 
-    expect(blocks.slice(1)).toEqual([line, 'mEdit is Running']);
+      expect(await blocksOf(client, 'list_profiles')).toEqual([LAST_GOOD_READ]);
+    });
+
+    it('say a line two sources raise once', async () => {
+      const instance = new FakeInstance(VALUE);
+      instance.fail('the modlist is unreadable');
+      const { client } = await clientOf(instance, undefined, undefined, undefined, { ...NO_STANDING, modList: () => [LAST_GOOD_READ] });
+
+      expect(await blocksOf(client, 'list_mods')).toEqual([LAST_GOOD_READ]);
+    });
   });
 
   it.each([

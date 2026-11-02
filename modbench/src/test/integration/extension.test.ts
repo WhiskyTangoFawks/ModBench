@@ -620,13 +620,6 @@ describe('a gesture the agent runs', () => {
     rmSync(modDir, { recursive: true, force: true });
   });
 
-  it('answers a read without the status bar\'s words once mEdit is ready', async () => {
-    const result = CallToolResultSchema.parse(await agent.callTool({ name: 'list_profiles' }));
-
-    const standing = result.content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
-    assert.ok(!standing.some((line) => line.startsWith('mEdit is ')), JSON.stringify(standing));
-  });
-
   it('writes as the user\'s does, and answers once the agent\'s next read sees the change', async () => {
     const answer = await callTool('mod_enable', { argument: [{ name: 'Agent Mod' }] });
 

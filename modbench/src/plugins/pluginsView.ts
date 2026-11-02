@@ -79,8 +79,8 @@ export interface PluginsView extends vscode.Disposable {
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
   narrator: ReconcileNarrator;
-  /** What the view shows of mEdit's state, for the agent: its message line, and the record index another window holds. */
-  messages: () => string[];
+  /** The lines that bear on a read of the plugins, for the agent. */
+  standingLines: () => string[];
   pluginsShown: PluginsShown;
 }
 
@@ -172,7 +172,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   );
   return {
     view, nameFilter,
-    messages: () => [messageLine(tree.viewMessage(true), sync.message()), tree.facts.rows.heldElsewhereMessage()].filter((message) => message !== undefined),
+    standingLines: () => [...tree.standingLines(), sync.message(), tree.facts.rows.heldElsewhereMessage()].filter((line) => line !== undefined),
     pluginsShown: tree.facts.rows,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },

@@ -18,9 +18,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { present } from '../../ports/present';
-import { NO_DEPLOYMENT_FOLDER } from '../../test/noDeploymentFolder';
-import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { createToolboxView } from '../toolboxView';
 
 describe('the Toolbox view', () => {
@@ -33,31 +30,6 @@ describe('the Toolbox view', () => {
     toolbox.say(undefined);
 
     expect([id, during, view.message]).toEqual(['modbench.toolbox', 'Update manifest — reading…', undefined]);
-  });
-
-  it('leaves a gesture\'s phase out of the agent\'s lines', () => {
-    const toolbox = createToolboxView({ instance: undefined });
-    const { view } = present(h.created.at(-1), 'the created tree view');
-    const shown = () => [view.message, toolbox.messages()];
-
-    toolbox.say('Update manifest — reading…');
-    const during = shown();
-    toolbox.say(undefined);
-
-    expect([during, shown()]).toEqual([
-      ['Update manifest — reading…', []],
-      [undefined, []],
-    ]);
-  });
-
-  it('gives the agent the instance\'s line when no gesture speaks', () => {
-    const instance = new FakeInstance(instanceValueFixture());
-    const toolbox = createToolboxView({ instance, channel: { warn: () => undefined }, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) });
-    const { view } = present(h.created.at(-1), 'the created tree view');
-
-    instance.fail('the modlist is unreadable');
-
-    expect([view.message, toolbox.messages()]).toEqual(['Showing the last good read: the modlist is unreadable', ['Showing the last good read: the modlist is unreadable']]);
   });
 
   it('is a readout: its rows select one at a time and it has no Collapse All (toolbox.md)', () => {

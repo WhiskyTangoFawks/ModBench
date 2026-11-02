@@ -4,10 +4,9 @@ import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import type { StandingMessages } from '../drivingLib/mEditState';
 import type { CopyReads } from '../drivingLib/sameCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
-import type { InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -29,6 +28,9 @@ import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironmen
 import { SELECT_ROWS } from './selectRows';
 import { PROBLEMS } from './problems';
 
+// Where a standing line comes from. A reply carries the lines of the sources its tool reads, and no others.
+type Source = 'instance' | 'mEdit' | 'plugins' | 'modList' | 'sourceLanguage';
+
 export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
@@ -37,7 +39,7 @@ export interface AgentServerOptions {
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
-  standing: StandingMessages;
+  standing: Record<Exclude<Source, 'instance'>, () => readonly string[]>;
   pluginsShown: PluginsShown | undefined;
   reporter: Reporter;
   log: Log;
@@ -58,7 +60,7 @@ function currentValue(instance: Instance) {
 
 const textBlock = (text: string) => ({ type: 'text' as const, text });
 
-// The messages every view of the instance shows, beside each answer as a block of their own.
+// The standing lines of the sources the tool reads, each beside the answer as a block of its own.
 async function answer(log: Log, standing: () => string[], name: string, work: () => unknown) {
   try {
     return { content: [textBlock(JSON.stringify(await work())), ...standing().map(textBlock)] };
@@ -80,11 +82,11 @@ interface Tool<Shape extends z.ZodRawShape> {
 // The SDK refuses an input its schema rejects before the handler runs, with no Output line
 // (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
 function register<Shape extends z.ZodRawShape>(
-  server: McpServer, log: Log, standing: () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+  server: McpServer, log: Log, standing: (tool: string) => () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
   const schema = z.object(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
-  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing, name, () => {
+  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing(name), name, () => {
     return run(parseOrRefuse(schema, args));
   }));
 }
@@ -104,9 +106,27 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingMessages, pluginsShown, log }: OpenOptions): McpServer {
+// What each tool reads. A gesture reads the instance, and a tool absent here reads none of the sources.
+const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins'];
+const READS: Readonly<Record<string, readonly Source[]>> = {
+  list_profiles: ['instance'],
+  list_downloads: ['instance'],
+  list_mods: ['instance', 'modList'],
+  list_mod_statuses: ['instance', 'modList'],
+  list_file_conflicts: ['instance', 'modList'],
+  resolve_instance_names: ['instance', 'modList'],
+  list_plugins: ['instance', 'mEdit', 'plugins', 'sourceLanguage'],
+  resolve_names: RECORD_READS,
+  read_record: RECORD_READS,
+  list_references: RECORD_READS,
+  select_rows: RECORD_READS,
+  ...Object.fromEntries(GESTURE_TOOLS.map(({ name }) => [name, ['instance'] as const])),
+};
+
+function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
-  const standing = () => [...new Set(standingMessages.messages())];
+  const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
+  const standing = (tool: string) => () => [...new Set((READS[tool] ?? []).flatMap((source) => sources[source]()))];
   for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));

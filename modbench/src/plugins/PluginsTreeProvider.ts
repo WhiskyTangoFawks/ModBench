@@ -23,7 +23,7 @@ import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { fileIsPresent } from '../instanceLoader/fileIsPresent';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
-import { sortingRuleFilesMessage, unreadRuleFilesMessage } from './sortingRuleFilesMessage';
+import { sortingRuleFileLines } from './sortingRuleFilesMessage';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
@@ -192,32 +192,44 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** For the agent, a missing masterlist, an empty list and a record filter that matches nothing are
-   *  left out: a read already shows them, and nothing it can do changes with them. */
-  viewMessage(forAgent = false): string | undefined {
-    return messageLine(this.firstHeldMessage(forAgent), this.standingMessage(forAgent));
+  viewMessage(): string | undefined {
+    return messageLine(this.firstHeldMessage(), this.standingMessage());
   }
 
-  standingMessage(forAgent = false): string | undefined {
-    const sortingRuleFiles = forAgent ? unreadRuleFilesMessage : sortingRuleFilesMessage;
+  standingMessage(): string | undefined {
     return messageLine(
       managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)),
-      this.instance.sequence === 0 ? undefined : sortingRuleFiles(this.rules),
+      ...this.ruleFileLines(),
     );
+  }
+
+  /** The lines that bear on a read of the plugins, without the instance's own: the agent's instance lines say those. */
+  standingLines(): string[] {
+    return [
+      this.gameFolderOrIndexFailure(),
+      this.facts.rows.readFailureMessage(),
+      ...this.ruleFileLines(),
+    ].filter((line) => line !== undefined);
+  }
+
+  private ruleFileLines(): string[] {
+    return this.instance.sequence === 0 ? [] : sortingRuleFileLines(this.rules);
   }
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows
   // (States 1), a record filter matching nothing (States 5): the first that holds.
-  private firstHeldMessage(forAgent: boolean): string | undefined {
+  private firstHeldMessage(): string | undefined {
+    return this.gameFolderOrIndexFailure()
+      ?? (this.lastBuildHadNoRows ? NO_PLUGINS_MESSAGE : undefined)
+      ?? (this.recordFilterSource === undefined ? undefined : this.facts.rows.noRecordMatchMessage(this.recordFilterSource));
+  }
+
+  private gameFolderOrIndexFailure(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
-    const indexFailure = this.facts.rows.indexFailureMessage();
-    if (forAgent) return indexFailure;
-    return indexFailure
-      ?? (this.lastBuildHadNoRows ? NO_PLUGINS_MESSAGE : undefined)
-      ?? (this.recordFilterSource === undefined ? undefined : this.facts.rows.noRecordMatchMessage(this.recordFilterSource));
+    return this.facts.rows.indexFailureMessage();
   }
 
   /** The source of the record filter in force, which the no-match message names; undefined while

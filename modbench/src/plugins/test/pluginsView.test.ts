@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
-import { ABSENT_SORTING_RULE_FILES } from '../../instanceAdapter/instanceAdapter';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri,
 } from '../../test/vscodeMock';
@@ -915,11 +914,10 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   describe('given no lines and no locked plugins', () => {
     it('says so, and shows no row', async () => {
-      const { rows, plugins } = await shown(found());
+      const { rows } = await shown(found());
 
       await messageIs(NO_PLUGINS_MESSAGE, 'the empty-list message');
       expect(await rows()).toEqual([]);
-      expect(plugins.messages()).toEqual([]);
     });
   });
 
@@ -987,22 +985,13 @@ describe('the Plugins view\'s message line and name filter', () => {
       return { ...result, sync };
     }
 
-    it('leaves a missing masterlist out of the lines it gives the agent, while the view shows it', async () => {
-      const value = { ...found('TestMod.esp'), sortingRuleFiles: ABSENT_SORTING_RULE_FILES };
-      const { plugins, instance } = await shown(found('TestMod.esp'));
-
-      instance.publish(value);
-      await waitForMessage(treeViews.view(), (m) => /No masterlist/.test(m ?? ''), 'the masterlist message');
-      expect(plugins.messages()).toEqual([]);
-    });
-
-    it('gives the agent the sync message, and leaves out the record filter\'s no-match line the view shows beside it', async () => {
+    it('gives the agent the sync refusal, without the no-match line the view shows beside it', async () => {
       const { sync, plugins } = await refusedView('armor.sql');
 
       await sync.refuse(SYNC_REASON);
       await messageIs(`${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
 
-      expect(plugins.messages()).toEqual([SYNC_MESSAGE]);
+      expect(plugins.standingLines()).toEqual([SYNC_MESSAGE]);
     });
 
     it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
