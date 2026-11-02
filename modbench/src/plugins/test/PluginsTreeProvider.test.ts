@@ -1117,11 +1117,13 @@ describe('PluginsTreeProvider — the message line takes the first message that 
   });
 
   describe('the lines it gives the agent', () => {
-    it('keep the missing masterlist, the view\'s line also saying it', () => {
+    it('hold the missing masterlist apart from the plugins\' own, the view\'s line saying it', () => {
       const instance = new FakeInstance({ ...valueOf([A_ROW()]), sortingRuleFiles: ABSENT_SORTING_RULE_FILES });
       const { tree } = makeTree([A_ROW()], { instance });
 
-      expect([tree.viewMessage(), tree.standingLines()]).toEqual([expect.stringMatching(/No masterlist/), [expect.stringMatching(/^No masterlist/)]]);
+      expect([tree.viewMessage(), tree.standingLines(), tree.sortingRuleLines()]).toEqual([
+        expect.stringMatching(/No masterlist/), [], [expect.stringMatching(/^No masterlist/)],
+      ]);
     });
 
     it('leave out the empty list, which a read of the plugins shows', async () => {

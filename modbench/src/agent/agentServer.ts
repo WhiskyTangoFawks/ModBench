@@ -29,7 +29,7 @@ import { SELECT_ROWS } from './selectRows';
 import { PROBLEMS } from './problems';
 
 // Where a standing line comes from. A reply carries the lines of the sources its tool reads, and no others.
-type Source = 'instance' | 'mEdit' | 'plugins' | 'modList' | 'sourceLanguage';
+export type Source = 'instance' | 'mEdit' | 'plugins' | 'sortingRules' | 'modList' | 'sourceLanguage';
 
 export interface AgentServerOptions {
   port: number;
@@ -82,11 +82,11 @@ interface Tool<Shape extends z.ZodRawShape> {
 // The SDK refuses an input its schema rejects before the handler runs, with no Output line
 // (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
 function register<Shape extends z.ZodRawShape>(
-  server: McpServer, log: Log, standing: (tool: string) => () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+  server: McpServer, log: Log, standing: () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
   const schema = z.object(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
-  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing(name), name, () => {
+  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing, name, () => {
     return run(parseOrRefuse(schema, args));
   }));
 }
@@ -106,40 +106,25 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-// What each tool reads. A gesture reads the instance, and a tool absent here reads none of the sources.
-const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins'];
-const READS: Readonly<Record<string, readonly Source[]>> = {
-  list_profiles: ['instance'],
-  list_downloads: ['instance'],
-  list_mods: ['instance', 'modList'],
-  list_mod_statuses: ['instance', 'modList'],
-  list_file_conflicts: ['instance', 'modList'],
-  resolve_instance_names: ['instance', 'modList'],
-  list_plugins: ['instance', 'mEdit', 'plugins', 'sourceLanguage'],
-  resolve_names: RECORD_READS,
-  read_record: RECORD_READS,
-  list_references: RECORD_READS,
-  select_rows: RECORD_READS,
-  ...Object.fromEntries(GESTURE_TOOLS.map(({ name }) => [name, ['instance'] as const])),
-};
+const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'sourceLanguage'];
 
 function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
-  const standing = (tool: string) => () => [...new Set((READS[tool] ?? []).flatMap((source) => sources[source]()))];
-  for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
+  const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
+  for (const read of INSTANCE_READS) register(server, log, reading(...read.reads), { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
-  register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
-  register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
-  register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
-  register(server, log, standing, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
-  register(server, log, standing, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
-  register(server, log, standing, READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
-  register(server, log, standing, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
-  register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
-  register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, standing, { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
+  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
+  register(server, log, reading('instance', 'modList'), { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
+  register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
+  register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
+  register(server, log, reading(...RECORD_READS), RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
+  register(server, log, reading(...RECORD_READS), READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
+  register(server, log, reading(...RECORD_READS), LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
+  register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
+  for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
+  register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
+  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
   return server;
 }
 

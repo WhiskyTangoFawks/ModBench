@@ -81,6 +81,7 @@ export interface PluginsView extends vscode.Disposable {
   narrator: ReconcileNarrator;
   /** The lines that bear on a read of the plugins, for the agent. */
   standingLines: () => string[];
+  sortingRuleLines: () => string[];
   pluginsShown: PluginsShown;
 }
 
@@ -172,6 +173,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   );
   return {
     view, nameFilter,
+    sortingRuleLines: () => tree.sortingRuleLines(),
     standingLines: () => [...tree.standingLines(), sync.message(), tree.facts.rows.heldElsewhereMessage()].filter((line) => line !== undefined),
     pluginsShown: tree.facts.rows,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,

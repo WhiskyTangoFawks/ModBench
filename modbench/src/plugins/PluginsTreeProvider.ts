@@ -199,7 +199,7 @@ export class PluginsTreeProvider
   standingMessage(): string | undefined {
     return messageLine(
       managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)),
-      ...this.ruleFileLines(),
+      ...this.sortingRuleLines(),
     );
   }
 
@@ -208,11 +208,11 @@ export class PluginsTreeProvider
     return [
       this.gameFolderOrIndexFailure(),
       this.facts.rows.readFailureMessage(),
-      ...this.ruleFileLines(),
     ].filter((line) => line !== undefined);
   }
 
-  private ruleFileLines(): string[] {
+  /** What the sorting rules say, which the agent reads with the problems and the plugins' statuses only. */
+  sortingRuleLines(): string[] {
     return this.instance.sequence === 0 ? [] : sortingRuleFileLines(this.rules);
   }
 

@@ -47,7 +47,7 @@ interface PluginsOnInstance extends vscode.Disposable {
 
 export interface Plugins extends vscode.Disposable {
   /** The lines the agent reads with mEdit's answers and with the plugins. */
-  readonly standing: { mEdit: () => string[]; plugins: () => string[] };
+  readonly standing: { mEdit: () => string[]; plugins: () => string[]; sortingRules: () => string[] };
   /** The Plugins view, over an Instance that was found. */
   onInstance(deps: PluginsInstanceDeps): PluginsOnInstance;
 }
@@ -58,8 +58,9 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   const recordBrowser = new RecordBrowser(client);
   const recordWrite = recordWriteOver(PLUGINS_KEY_ARGS.view, deps.facts, client);
   let pluginLines: () => string[] = () => [];
+  let ruleLines: () => string[] = () => [];
   return {
-    standing: { mEdit: () => [statusBar.standing()].filter((line) => line !== undefined), plugins: () => pluginLines() },
+    standing: { mEdit: () => [statusBar.standing()].filter((line) => line !== undefined), plugins: () => pluginLines(), sortingRules: () => ruleLines() },
     onInstance: ({ syncPlugins, ...instanceDeps }) => {
       const syncing = pluginSyncOn({ instance: instanceDeps.instance, syncPlugins, channel });
       const syncCommand = registerPluginSyncCommand(syncing.pluginSync);
@@ -69,6 +70,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         log: (level, msg) => channel[level](msg),
       });
       pluginLines = view.standingLines;
+      ruleLines = view.sortingRuleLines;
       const editingInPluginsView = editingView({
         narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
         reporterFor,

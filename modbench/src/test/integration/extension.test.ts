@@ -599,6 +599,8 @@ describe('a gesture the agent runs', () => {
     const block = present(result.content[0], 'a content block');
     return { isError: result.isError === true, text: block.type === 'text' ? block.text : '' };
   };
+  const standingOf = async (name: string) =>
+    CallToolResultSchema.parse(await agent.callTool({ name })).content.slice(1).map((block) => (block.type === 'text' ? block.text : ''));
   const agentModEnabled = async (): Promise<unknown> => {
     const read = await callTool('list_mods');
     const mods: unknown = read.isError ? undefined : JSON.parse(read.text);
@@ -677,6 +679,14 @@ describe('a gesture the agent runs', () => {
       rmSync(release, { recursive: true, force: true });
       rmSync(installed, { recursive: true, force: true });
     }
+  });
+
+  it('carries the sorting rules\' line on a plugin read and on no record read', async () => {
+    const isMasterlistLine = (line: string) => line.startsWith('No masterlist');
+
+    await waitFor('the sorting rules\' line beside list_plugins', async () => (await standingOf('list_plugins')).some(isMasterlistLine));
+
+    assert.deepStrictEqual((await standingOf('read_record')).filter(isMasterlistLine), []);
   });
 
   it('reads what the Plugins view\'s row shows of a plugin once mEdit has read it', async () => {
