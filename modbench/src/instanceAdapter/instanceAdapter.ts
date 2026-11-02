@@ -166,6 +166,8 @@ export interface DownloadedFileMeta {
   modName?: string;
   gameName?: string;
   author?: string;
+  /** The address the file was downloaded from outside Nexus; absent when the metadata names none. */
+  directURL?: string;
   /** The key a mod's `installedFileKeys` holds for this file, minted by the adapter; undefined when the metadata names no file. */
   installedKey?: string;
 }
@@ -458,8 +460,8 @@ export interface InstallationFile extends HashedDownloadedFile {
   readonly path: string;
   /** The file's page on its host, a string the Instance adapter formats and the rest keeps opaque. */
   readonly page?: string;
-  /** The game the metadata names when the registry has no Nexus domain for it, so the file carries no page. */
-  readonly unpagedGame?: string;
+  /** The address the file was downloaded from outside its host's pages, the downloaded file's own metadata's. */
+  readonly directUrl?: string;
 }
 
 interface MetadataInstallationFile {

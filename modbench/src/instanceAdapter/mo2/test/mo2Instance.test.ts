@@ -1691,7 +1691,7 @@ describe('the MO2 Instance adapter', () => {
 
         expect(answer).toEqual({
           kind: 'read',
-          answer: { path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] },
+          answer: { path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] },
         });
       });
 
@@ -1704,8 +1704,7 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(
             join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOADED_FILE}\r\n${installedFiles}`,
           );
-          const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
-          return expectKind(answer, 'read').answer?.page;
+          return expectKind(await adapter.modMetadata('Unofficial Fallout 4 Patch'), 'read').answer.installationFile?.page;
         };
 
         it('answers, for a meta read through the reading, the page of the file whose mod id is not the meta\'s own', async () => {
@@ -1718,17 +1717,6 @@ describe('the MO2 Instance adapter', () => {
           const metadata = await adapter.metadataOf(expectKind(present(entry, 'the mod'), 'mod'));
 
           expect(metadata.installationFile?.page).toBe(NEXUS + 'fallout4/mods/9?tab=files&file_id=78');
-        });
-
-        it('names no page for a game the registry has no Nexus domain for, and says which game', async () => {
-          await writeFile(
-            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ngameName=EnderalSE\r\nmodid=4598\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`,
-          );
-
-          const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
-
-          const file = expectKind(answer, 'read').answer;
-          expect([file?.page, file?.unpagedGame]).toEqual([undefined, 'EnderalSE']);
         });
 
         it.each([
@@ -2111,6 +2099,26 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=Fallout4\r\nmodID=7\r\nfileID=78\r\n');
 
         expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78' }] });
+      });
+
+      it('gives a file the direct URL its metadata names, whether or not it names a Nexus file', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ndirectURL=https://f4se.silverlock.org/beta/f4se_0_06_23.7z\r\n');
+
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' }] });
+      });
+
+      it('says which game a file comes from when the registry has no Nexus domain for it, and names no page', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=EnderalSE\r\nmodID=7\r\n');
+
+        const { files, notes } = await hashing().downloadedFilesHashed();
+
+        expect([files[0]?.page, notes]).toEqual([undefined, [expect.stringContaining(`${DOWNLOADED_FILE} comes from 'EnderalSE'`)]]);
+      });
+
+      it('names no unknown game for a file that names a direct URL', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=EnderalSE\r\nmodID=7\r\ndirectURL=https://example.com/a.7z\r\n');
+
+        expect((await hashing().downloadedFilesHashed()).notes).toEqual([]);
       });
 
       it('costs a file its page alone, saying why, when its metadata cannot be read', async () => {

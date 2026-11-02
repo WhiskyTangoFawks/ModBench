@@ -38,6 +38,7 @@ export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMet
     modName: values.get('modName'),
     gameName: values.get('gameName'),
     author: values.get('author'),
+    directURL: values.get('directURL') || undefined,
     installedKey,
   };
   return { meta, hidden: values.get('removed') === 'true' };

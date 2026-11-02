@@ -80,7 +80,7 @@ describe('update manifest', () => {
   it('names the installation file as a package with its file on Nexus as its host, and none of the mod\'s metadata (Query info, story 1)', async () => {
     const page = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
     const { update, manifestOf } = await over({
-      files: { ModA: { 'a.nif': HA } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, page })]]), metadata: new Map([['ModA', { version: '1.2.3' }]]) },
+      files: { ModA: { 'a.nif': HA } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, page })]]), downloadedFilesHashed: { files: [{ ...INSTALLED, page }], notes: [] }, metadata: new Map([['ModA', { version: '1.2.3' }]]) },
     });
 
     const result = await update(['ModA']);
@@ -103,6 +103,23 @@ describe('update manifest', () => {
     expect(await manifestOf('ModA')).toEqual({
       manifest: { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } }], files: holding({ 'a.nif': HA }) },
     });
+  });
+
+  it('names the direct URL of the downloaded file\'s metadata, not the Nexus file the mod\'s metadata names', async () => {
+    const { update, manifestOf } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: {
+        installations: new Map([['ModA', read({ ...INSTALLED, page: 'https://www.nexusmods.com/fallout4/mods/4?tab=files&file_id=5' })]]),
+        downloadedFilesHashed: { files: [{ ...INSTALLED, directUrl: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' }], notes: [] },
+      },
+    });
+
+    await update(['ModA']);
+
+    const held = await manifestOf('ModA');
+    expect(held !== undefined && 'manifest' in held && held.manifest.packages).toEqual([
+      { kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { url: 'https://f4se.silverlock.org/beta/f4se_0_06_23.7z' } },
+    ]);
   });
 
   it.each([
@@ -455,12 +472,6 @@ describe('update manifest', () => {
     expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).packages.map((pkg) => ('name' in pkg ? pkg.name : pkg.kind))]).toEqual([[], ['ModA'], ['ModA-1.0.7z']]);
   });
 
-  it('notes a mod whose installation file comes from a game without a Nexus domain', async () => {
-    const { update } = await over({ answers: { installations: new Map([['ModA', read({ ...INSTALLED, unpagedGame: 'EnderalSE' })]]) } });
-
-    expect((await update(['ModA'])).notes).toEqual([{ mod: 'ModA', note: expect.stringContaining("its installation file comes from 'EnderalSE'") as unknown }]);
-  });
-
   describe('a mod\'s files that its installation file lacks', () => {
     it('are taken from another downloaded file, whose entries the hash index kept, which is named a package', async () => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
@@ -642,8 +653,22 @@ describe('update manifest', () => {
       const result = await update(['ModA', 'ModB']);
 
       expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).files]).toEqual([
-        [{ item: 'ModA', reason: "was not updated: 'Mod.esp' is flagged, and its bytes are neither a package's copy nor those restore recorded for its flags, so restore records them on this machine." }],
+        [{ item: 'ModA', reason: "was not updated: 'Mod.esp' is flagged, and its bytes are neither a package's copy nor those restore recorded for its flags, and restore replaces it with its package's copy, flagged." }],
         ['ModB'], holding({ 'Mod.esp': HA }),
+      ]);
+    });
+
+    it('names every flagged plugin whose bytes it cannot account for', async () => {
+      const { update } = await over({
+        files: { ModA: { 'A.esp': HZ, 'B.esp': HZ, 'C.esp': HA } },
+        answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'A.esp', hash: HA }, { path: 'B.esp', hash: HA }, { path: 'C.esp', hash: HA }] })]]) },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['A.esp', FLAGS], ['B.esp', FLAGS], ['C.esp', FLAGS]]), files: holding({ 'A.esp': HA, 'B.esp': HA, 'C.esp': HA }) });
+
+      const result = await update(['ModA']);
+
+      expect(result.refused).toEqual([
+        { item: 'ModA', reason: "was not updated: 'A.esp', 'B.esp' are flagged, and their bytes are neither a package's copy nor those restore recorded for their flags, and restore replaces them with their packages' copies, flagged." },
       ]);
     });
 

@@ -21,6 +21,11 @@ describe('a downloaded file\'s status read from its .meta', () => {
     expect(meta.author).toBe('SomeAuthor');
   });
 
+  it('reads the direct URL a file was downloaded from, and none when the metadata names none', () => {
+    expect([metaOf('[General]\r\ndirectURL=https://f4se.silverlock.org/beta/f4se_0_06_23.7z\r\n').directURL, metaOf('[General]\r\n').directURL])
+      .toEqual(['https://f4se.silverlock.org/beta/f4se_0_06_23.7z', undefined]);
+  });
+
   it('treats modID=0 as no id, same as an absent modID (Visit-on-Nexus gated off)', () => {
     expect(metaOf('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
   });

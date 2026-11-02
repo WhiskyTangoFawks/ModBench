@@ -29,7 +29,7 @@ const installedFileOf = ({ nexusId, installedFiles = [] }: MetaIni): InstalledFi
   installedFiles.find((file) => file.nexusId === nexusId) ?? installedFiles[0];
 
 // A mod with no game of its own is the instance's game's.
-async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'page' | 'unpagedGame'>> {
+async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise<{ page?: string; unpagedGame?: string }> {
   const file = installedFileOf(meta);
   const modId = file?.nexusId || meta.nexusId;
   if (!modId) return {};
@@ -39,13 +39,18 @@ async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise
 }
 
 // The page of a downloaded file on its host, from its metadata, else its name; an unreadable metadata costs the page alone.
-async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; note?: string }> {
+async function pageOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; directUrl?: string; note?: string }> {
   try {
     const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+    const directUrl = meta.directURL === undefined ? {} : { directUrl: meta.directURL };
     const modId = effectiveModId(meta.modID, name);
-    if (modId === undefined) return {};
-    const domain = nexusDomainForMetaGame(meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot))));
-    return domain === undefined ? {} : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }) };
+    if (modId === undefined) return directUrl;
+    const game = meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot)));
+    const domain = nexusDomainForMetaGame(game);
+    if (domain !== undefined) return { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...directUrl };
+    return meta.directURL === undefined
+      ? { note: `${name} comes from '${game}', a game the instance adapter has no Nexus page for` }
+      : directUrl;
   } catch (err) {
     return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
   }
@@ -158,7 +163,7 @@ export function mo2Installation(
       const path = located.answer;
       if (!(await exists(path))) return { kind: 'unreadable', reason: `this machine does not hold ${installationFileName}, the file it is installed from` };
       const hashed = await downloadedFileHash(path);
-      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...(await nexusPageOf(meta, context)), ...hashed.answer } } : refused(hashed.reason);
+      return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : refused(hashed.reason);
     },
 
     async downloadedFile(name) {
@@ -170,8 +175,8 @@ export function mo2Installation(
       if (!(await exists(path))) return { kind: 'read', answer: undefined };
       const hashed = await downloadedFileHash(path);
       if (hashed.kind === 'unreadable') return hashed;
-      const { page } = await pageOfDownloadedFile(context, dirname(path), name);
-      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page } } };
+      const { page, directUrl } = await pageOfDownloadedFile(context, dirname(path), name);
+      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page }, ...directUrl === undefined ? {} : { directUrl } } };
     },
 
     downloadedFileHolding: async ({ size, hash }) => {
@@ -205,8 +210,8 @@ export function mo2Installation(
       const { downloadsDir, names } = listed.answer;
       const hashed = await downloadedFilesHashed(names.map((name) => downloadedFilePath(downloadsDir, name)), options);
       const paged = await Promise.all(hashed.files.map(async (file) => {
-        const { page, note } = await pageOfDownloadedFile(context, downloadsDir, basename(file.path));
-        return { file: { ...file, page }, notes: note === undefined ? [] : [note] };
+        const { note, page, directUrl } = await pageOfDownloadedFile(context, downloadsDir, basename(file.path));
+        return { file: { ...file, page, directUrl }, notes: note === undefined ? [] : [note] };
       }));
       return { files: paged.map(({ file }) => file), notes: [...hashed.notes, ...paged.flatMap(({ notes }) => notes)] };
     },
