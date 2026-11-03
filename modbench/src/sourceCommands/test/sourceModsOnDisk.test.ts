@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -86,7 +87,7 @@ async function aSourceMod(buildFile: Partial<BuildFile> = {}, made: readonly Mad
     inTrash[inMod] = await readFile(path, 'utf8');
     await rm(path);
   };
-  const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: stepping, trash });
+  const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: stepping, trash });
   const status = async () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
   const recorded = async (): Promise<Manifest | undefined> => {
     const read = await manifestIn(join(root, 'mods', 'Mod'));
@@ -500,7 +501,7 @@ describe('a mod installed from an installation file, then decompiled and committ
       return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...MADE] }], refused: [] };
     });
     const trashed: string[] = [];
-    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
+    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
     expect(await commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true })).toMatchObject({ refused: [] });
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
     const restoreSourceFolder = async (): Promise<string | undefined> => {
@@ -597,7 +598,7 @@ describe('version in git over an instance on disk', () => {
     await put('mods/Mod/a.nif', 'mine');
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
-    const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
+    const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() });
     return { client, versionInGit: () => commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true }) };
   }
 
@@ -656,7 +657,7 @@ describe('version in git of a mod several downloaded files yield, over an instan
     });
     const adapter = adapterOver(root, { installationFileReader: readerOfEachFile });
     const noting = { ...adapter, downloadedFilesHashed: async () => ({ ...await adapter.downloadedFilesHashed(), notes }) };
-    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['Multi'], { where: 'NewRepository', commit: true });
+    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['Multi'], { where: 'NewRepository', commit: true });
     const repository = handed[0]?.sourceFolder;
     const manifest = readManifest(repository?.manifest ?? '');
     assert('manifest' in manifest);

@@ -5,24 +5,30 @@ import { isPluginAtRoot } from '../tables/pluginFile';
 
 const RECHECK_MS = 250;
 
+/** The instance's current load order for mEdit: the snapshot it sends, the reason it sends none, or nothing to send. */
+export type LoadOrderSnapshot = () => { readonly refusal: string } | { readonly plugins: unknown } | undefined;
+
 interface Deps {
   client: Pick<MEditClient, 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter, 'reading'>;
+  loadOrderSnapshot: LoadOrderSnapshot;
 }
+
+const NOTHING_TO_SEND = 'mEdit was handed no load order: the game folder, its plugins or its archives could not be read';
 
 interface Held { readonly mod: string; readonly plugin: PluginAddress }
 type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting' } | { readonly kind: 'failed'; readonly why: string };
-type Standing = { readonly mod: string } & Verdict;
+type Standing = Held & Verdict;
 
 /** Why mEdit's rows are not of each enabled mod's root plugins as on disk, by mod: only a failed read gives one. Waits until every plugin settles or an aborted `signal` ends it (ADR-0003). */
-export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
+export async function whyNotIndexed({ client, adapter, loadOrderSnapshot }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
   const reading = await adapter.reading();
   const held: Held[] = mods.flatMap((mod) => {
     const files = reading.mods.some((entry) => entry.kind === 'mod' && entry.name === mod && entry.enabled) ? reading.modFiles.get(mod) : undefined;
     if (files === undefined) return [];
     return files.files.filter((file) => !file.excluded && isPluginAtRoot(file.relativePath)).map((file) => ({ mod, plugin: { name: file.relativePath, origin: files.origin } }));
   });
-  const standings = (): Promise<Standing[]> => Promise.all(held.map(async ({ mod, plugin }) => ({ mod, ...standingOf(plugin, await client.getPluginIndexing(plugin)) })));
+  const standings = (): Promise<Standing[]> => Promise.all(held.map(async ({ mod, plugin }) => ({ mod, plugin, ...standingOf(plugin, await client.getPluginIndexing(plugin)) })));
   const whyByMod = (now: readonly Standing[]): Map<string, string> => {
     const why = new Map<string, string[]>();
     for (const standing of now) {
@@ -31,9 +37,17 @@ export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly st
     return new Map([...why].map(([mod, whys]) => [mod, whys.join('; ')]));
   };
 
+  const unsent = (now: readonly Standing[]): Standing[] => {
+    const snapshot = loadOrderSnapshot();
+    if (snapshot !== undefined && !('refusal' in snapshot)) return [...now];
+    return now.map((standing): Standing => (standing.kind === 'waiting'
+      ? { ...standing, kind: 'failed', why: `plugin ${standing.plugin.name} (${snapshot === undefined ? NOTHING_TO_SEND : snapshot.refusal})` }
+      : standing));
+  };
+
   for (;;) {
     const next = nextStatusOrRecheck(client, signal);
-    const now = await standings();
+    const now = unsent(await standings());
     if (now.every(({ kind }) => kind !== 'waiting') || signal?.aborted === true) {
       next.cancel();
       return whyByMod(now);
