@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
@@ -224,5 +224,21 @@ describe('nexusDomainsForGame', () => {
 describe('shortNameForNexusDomain', () => {
   it.each([['fallout4', 'Fallout4'], ['skyrim', 'Skyrim'], ['oblivion', undefined]])('names the game on %s as %s', (domain, name) => {
     expect(shortNameForNexusDomain(domain)).toBe(name);
+  });
+});
+
+describe('lootRepositoryOf', () => {
+  it.each([
+    ['Fallout4', 'fallout4'],
+    ['Fallout4VR', 'fallout4vr'],
+    ['SkyrimSE', 'skyrimse'],
+    ['SkyrimVR', 'skyrimvr'],
+    ['Starfield', 'starfield'],
+  ])('names the LOOT repository of %s as %s', (release, repository) => {
+    expect(lootRepositoryOf(release)).toBe(repository);
+  });
+
+  it('names none for a release the table holds no row for', () => {
+    expect(lootRepositoryOf('Oblivion')).toBeUndefined();
   });
 });

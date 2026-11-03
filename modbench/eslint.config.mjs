@@ -325,7 +325,7 @@ export default defineConfig(
     // Every backend call goes through the generated client, so the wire shape stays typed.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
-        ignores: ['src/nexus/**'],
+        ignores: ['src/nexus/**', 'src/lootMetadata/httpLootMetadata.ts'],
         rules: {
             'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through the mEdit client.' }],
         },

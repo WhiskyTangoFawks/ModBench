@@ -19,6 +19,7 @@
     { "path": "./src/downloadedFileCommands" },
     { "path": "./src/client" },
     { "path": "./src/nexus" },
+    { "path": "./src/lootMetadata" },
     { "path": "./src/deployment" },
     { "path": "./src/drivingLib" },
     { "path": "./src/textDocuments" },
