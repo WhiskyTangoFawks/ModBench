@@ -31,7 +31,7 @@ export type PlaceMods = <R>(
 ) => Promise<PlacedMods<R> | WriteRefused>;
 
 interface DecompileAndRepairAccess {
-  readonly adapter: Pick<InstanceAdapter, 'modOrder' | 'sourceRepositories' | 'entryKey'>;
+  readonly adapter: Pick<InstanceAdapter, 'modOrder' | 'sourceModFolders' | 'entryKey'>;
   readonly client: DecompileAndRepairClient;
   readonly placeMods: PlaceMods;
 }
@@ -39,7 +39,7 @@ interface DecompileAndRepairAccess {
 type SourceMods = Awaited<ReturnType<typeof sourceModsOf>>;
 
 async function sourceModsAt({ adapter }: Pick<DecompileAndRepairAccess, 'adapter'>): Promise<SourceMods> {
-  return sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  return sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
 }
 
 const modsOutside = (sourceMods: SourceMods, plugins: readonly PluginAddress[]): string[] =>

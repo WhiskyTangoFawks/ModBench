@@ -4,6 +4,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
+import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
@@ -30,17 +31,6 @@ interface VersionInGitOptions { readonly commit: boolean; readonly where: Versio
 
 type VersionInGitGiven = ModsGiven & VersionInGitOptions;
 
-// commands.md, `version in git`: the modlist repository is a choice only while the instance holds one, and a pick of
-// one choice is not shown.
-async function pickWhere(holdsRepository: boolean): Promise<VersionInGitWhere | undefined> {
-  if (!holdsRepository) return 'NewRepository';
-  const picked = await vscode.window.showQuickPick([
-    { label: 'A source mod in a new repository', where: 'NewRepository' as const },
-    { label: 'A source mod in the modlist repository', where: 'ModlistRepository' as const },
-    { label: 'The mod\'s whole folder in the modlist repository', where: 'WholeFolder' as const },
-  ], { placeHolder: 'Version in git: where git holds the mod' });
-  return picked?.where;
-}
 
 // plugins.md, Version in git, story 1: not committing comes first.
 async function pickWhetherToCommit(): Promise<boolean | undefined> {
@@ -51,7 +41,7 @@ async function pickWhetherToCommit(): Promise<boolean | undefined> {
 }
 
 async function pickOptions(holdsRepository: boolean): Promise<VersionInGitOptions | undefined> {
-  const where = await pickWhere(holdsRepository);
+  const where = await pickWhereGitHolds(holdsRepository, 'Version in git', true);
   const commit = where === undefined ? undefined : await pickWhetherToCommit();
   return where === undefined || commit === undefined ? undefined : { where, commit };
 }

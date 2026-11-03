@@ -41,7 +41,7 @@ describe('decompileAndRepair', () => {
     };
   };
   const commandsOver = (sourceMods: Record<string, string>) =>
-    pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(sourceMods) })).adapter, client, placeMods);
+    pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(sourceMods) })).adapter, client, placeMods);
   const repairIn = (sourceMods: Record<string, string>, force = false, plugins: readonly PluginAddress[] = [MALFORMED], where: SourceModIn = 'NewRepository') =>
     commandsOver(sourceMods).decompileAndRepair(plugins, force, where);
   const sent = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => call.args);

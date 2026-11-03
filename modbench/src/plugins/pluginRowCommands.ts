@@ -104,7 +104,6 @@ export function registerDecompileAndRepairCommand(
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
 }
 
-// The notes become the partial failures an agent is answered, as version in git answers them.
 function partialOf(result: SelectionResult<PluginAddress>): GestureResult<PluginAddress> {
   if (!result.applied) return result;
   const { notes = [], ...applied } = result;

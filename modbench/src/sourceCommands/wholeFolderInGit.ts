@@ -37,9 +37,13 @@ async function foldersToHold(adapter: Adapter, mods: readonly string[]): Promise
   const refused: ItemRefusal<string>[] = [...unheld.refused];
   for (const mod of unheld.rest) {
     const folder = await adapter.modFolderPath(mod);
-    const reason = folder === undefined ? 'its name gives it no folder' : await whyNotWhole(mod, folder, sourceMods);
-    if (reason !== undefined) refused.push({ item: mod, reason });
-    else if (folder !== undefined) folders.set(mod, folder);
+    if (folder === undefined) {
+      refused.push({ item: mod, reason: 'its name gives it no folder' });
+      continue;
+    }
+    const reason = await whyNotWhole(mod, folder, sourceMods);
+    if (reason === undefined) folders.set(mod, folder);
+    else refused.push({ item: mod, reason });
   }
   return { folders, refused };
 }
@@ -63,7 +67,6 @@ async function folderTakenBack(adapter: Pick<Adapter, 'writeHeldWholeLines'>, fo
 
 interface HeldFolder { readonly mod: string; readonly folder: string; readonly held: boolean }
 
-// The reason a held folder is not landed, else undefined; a reason of a folder not held or whose manifest stays takes its line back.
 async function whyNotLanded(
   adapter: Adapter, trash: MoveToTrash, { mod, folder, held }: HeldFolder, commit: boolean, committing: () => void,
 ): Promise<string | undefined> {
