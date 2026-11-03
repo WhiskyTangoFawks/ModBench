@@ -108,7 +108,7 @@ const readBy = (step: BuildStep): { readonly step: BuildFileLack['step']; readon
 };
 
 /** Each path a build file step reads from `sourceFolder` that names nothing there, and why what it cannot read is
- *  unreadable. A plugin source is found in any case, as mEdit finds it. None when the folder holds no build file. */
+ *  unreadable. A plugin source is found in any case, as mEdit finds it. None without a build file. */
 export async function buildFileAgainst(sourceFolder: string): Promise<BuildFileAgainst | undefined> {
   let at: Awaited<ReturnType<typeof buildFileAt>>;
   try {
