@@ -77,7 +77,7 @@ A template is a standalone program. Modbench is not. A gesture leaves this file 
 | Source | Referenced By, Ctrl + click | - | [source.md](source.md) |
 | Agent | - | - | [agent.md](agent.md) |
 | Scripts | Apply Script | - | [scripts.md](scripts.md) |
-| Modlist repository | - | - | [modlist-repository.md](modlist-repository.md) |
+| Instance repository | - | - | [instance-repository.md](instance-repository.md) |
 | Deployment: hardlink | - | - | [deployment-hardlink.md](deployment-hardlink.md) |
 
 The xEdit Messages tab is not a surface: failures and wrong states go where common.md, Reporting says.
@@ -95,7 +95,7 @@ The xEdit Messages tab is not a surface: failures and wrong states go where comm
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Mods, the FOMOD installer | an editor tab | - | opened by install |
 | Source | the Explorer, an editor tab, and Source Control | - | opened by the user, or by version in git |
-| Modlist repository, the manifests | an editor tab, and Source Control | - | opened by the user |
+| Instance repository, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself.
 
@@ -127,7 +127,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 
 ## Modlist
 
-The instance's mods and profiles as git holds them ([modlist-repository.md](modlist-repository.md)).
+The instance's mods and profiles as git holds them ([instance-repository.md](instance-repository.md)).
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
@@ -144,7 +144,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | uninstall | writes | `modbench.mod.uninstall` | mods | force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list | Send each mod's folder to the trash, and remove the mod from mod order. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](mods-fomod.md)); install anyway, for a FOMOD that names a missing file | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
-| version in git | writes | `modbench.mod.versionInGit` | mods | where: a source mod in a new repository, a source mod in the modlist repository, or the mod's whole folder in the modlist repository; commit | none | Put a mod's work under git. | version-in-git |
+| version in git | writes | `modbench.mod.versionInGit` | mods | where: a source mod in a new repository, a source mod in the instance repository, or the mod's whole folder in the instance repository; commit | none | Put a mod's work under git. | version-in-git |
 | build | writes | `modbench.mod.build` | mods, or none for every source mod | - | none | Write a source mod's folder as its build file says, and record it in its manifest. | build-mod |
 | update manifest | writes | `modbench.mod.updateManifest` | mods, separators or source folders, or none for every manifest | - | none | Record each folder in its manifest. | update-manifest |
 | restore from manifest | writes | `modbench.mod.restoreFromManifest` | mods or separators, or none for every manifest | - | none | Make each folder what its manifest says, building each source mod's. | restore-from-manifest |
@@ -177,7 +177,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. | update-load-order-file |
 | create | writes | `modbench.plugin.create` | Overwrite or an enabled mod | name | xEdit navigator | Create an empty plugin. | create-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Read each plugin's bytes into its plugin source in the working tree. | decompile-plugin |
-| decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
+| decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | where: a source mod in a new repository, or a source mod in the instance repository; force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
 | rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a compiled plugin, the files named for it, and its lines. | rename-plugin |

@@ -45,7 +45,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to read everything the views show me of my instance. Cites: toolbox.md; mods.md; plugins.md; downloads.md; modlist-repository.md, Status
+1. My agent to read everything the views show me of my instance. Cites: toolbox.md; mods.md; plugins.md; downloads.md; instance-repository.md, Status
 2. My agent to read each file order conflict: which mod wins each file, and which files each mod loses, as the Mods view and the conflict table show me. Cites: mods.md, Indicators; mods-conflicts.md
 3. My agent to switch my profile as I do (Gestures, story 1). Cites: Respect the user
 4. My agent to deploy, purge and move to Overwrite as I do (Gestures, story 1). Cites: Respect the user

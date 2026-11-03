@@ -16,4 +16,4 @@ A file names its format's version in its `version` member. Modbench reads only t
 
 ## Canonical text
 
-Each document defines one canonical text. Modbench writes only that text, so the same content is the same bytes on every machine, and a diff holds only a change (modlist-repository.md, The manifest, story 2). Modbench reads any text the schema accepts.
+Each document defines one canonical text. Modbench writes only that text, so the same content is the same bytes on every machine, and a diff holds only a change (instance-repository.md, The manifest, story 2). Modbench reads any text the schema accepts.

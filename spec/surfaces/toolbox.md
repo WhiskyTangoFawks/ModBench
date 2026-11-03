@@ -16,7 +16,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder, the game's version, and the script extender's version, or that the game folder holds none, and how many of its files are links, as a deploy into it leaves, which Modbench does not read as the game's own | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
-| Modlist | "no repository", or "repository" ([modlist-repository.md](modlist-repository.md)) | `$(source-control)` | none | none |
+| Modlist | "no repository", or "repository" ([instance-repository.md](instance-repository.md)) | `$(source-control)` | none | none |
 | Deployment | the deployment folder's name, or "no deployment folder" ([deployment-hardlink.md](deployment-hardlink.md)) | `$(rocket)` | the deployment folder, and where deploy writes `plugins.txt` | `open settings`, at the deployment folder's setting |
 
 As a user, I want the game folder to be the one my setting names, else the one the mod manager's configuration names, else the one Modbench finds on this machine.
@@ -33,7 +33,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 |---|---|
 | Title bar | 1: refresh. Overflow: open settings · log in, or log out while logged in. |
 | Profile menu | switch |
-| Modlist menu | as [modlist-repository.md](modlist-repository.md), Menus and keys, places it |
+| Modlist menu | as [instance-repository.md](instance-repository.md), Menus and keys, places it |
 | Deployment menu | inline: deploy. Menu: deploy · purge. |
 | Keys | Enter: the row's gesture, as a click does. |
 
