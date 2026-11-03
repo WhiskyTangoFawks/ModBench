@@ -121,6 +121,22 @@ describe('the FOMOD installer', () => {
     await expect(install(choices)).rejects.toThrow(refusal);
   });
 
+  it('matches a group and an option by the name the installer shows, without the spaces around it', async () => {
+    await release(config(steps(step('Main', group('Pick ', 'SelectExactlyOne',
+      option(' Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option B', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: ['Option A'] }]));
+
+    expect(await filesLanded()).toEqual(['A.esp']);
+  });
+
+  it('refuses a name that two options show alike once the spaces around it are gone', async () => {
+    await release(config(steps(step('Main', group('Pick', 'SelectAny',
+      option('Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option A ', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await expect(install(choose(['Main', { Pick: ['Option A'] }]))).rejects.toThrow('more than one option named "Option A"');
+  });
+
   describe('each option\'s type', () => {
     const notUsableWhileActive = `<plugin name="Not usable here"><description/><files>${file('f/c.esp', 'c.esp')}</files>`
       + '<typeDescriptor><dependencyType><defaultType name="Optional"/><patterns><pattern><dependencies>'

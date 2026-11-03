@@ -84,8 +84,18 @@ const quoted = (names: readonly string[]): string => names.map((name) => `"${nam
 
 const groupsOf = (step: Step): readonly Group[] => step.optionalFileGroups?.group ?? [];
 
+// The installer shows a name without the spaces around it, so a choice names it so.
+const shown = (name: string): string => name.trim();
+
+const sameName = (one: string, other: string): boolean => shown(one) === shown(other);
+
+const refuseAmbiguous = (kind: string, names: readonly string[], where: string): void => {
+  const repeated = names.map(shown).filter((name, i, all) => all.indexOf(name) !== i);
+  if (repeated.length > 0) throw new Error(`${where} has more than one ${kind} named ${quoted([...new Set(repeated)])}, so a choice cannot name one.`);
+};
+
 const groupLine = (group: Group): string =>
-  `group "${group.name}" takes ${TAKES[group.type]} of ${group.options.map((option) => `"${option.name}"${OPTION_TYPES[option.type]}`).join(', ')}`;
+  `group "${shown(group.name)}" takes ${TAKES[group.type]} of ${group.options.map((option) => `"${shown(option.name)}"${OPTION_TYPES[option.type]}`).join(', ')}`;
 
 const stepLines = (step: Step): string => `Step "${step.name}": ${groupsOf(step).map(groupLine).join('; ')}.`;
 
@@ -102,25 +112,27 @@ const holdsPick = (type: types.GroupType, count: number, total: number): boolean
 // The options a group takes for the choice: those named, each required one, and all of a group that takes all.
 function picksFor(step: Step, group: Group, choice: FomodGroupChoice | undefined): readonly Option[] {
   const named = choice?.options ?? [];
-  const unknown = named.filter((name) => !group.options.some((option) => option.name === name));
-  if (unknown.length > 0) throw new Error(`Group "${group.name}" of step "${step.name}" has no option ${quoted(unknown)}. ${stepLines(step)}`);
-  const picked = group.options.filter((option) => named.includes(option.name));
+  refuseAmbiguous('option', group.options.map((option) => option.name), `Group "${shown(group.name)}" of step "${step.name}"`);
+  const unknown = named.filter((name) => !group.options.some((option) => sameName(option.name, name)));
+  if (unknown.length > 0) throw new Error(`Group "${shown(group.name)}" of step "${step.name}" has no option ${quoted(unknown)}. ${stepLines(step)}`);
+  const picked = group.options.filter((option) => named.some((name) => sameName(option.name, name)));
   const unusable = picked.filter((option) => option.type === 'NotUsable');
-  if (unusable.length > 0) throw new Error(`${quoted(unusable.map((option) => option.name))} cannot be picked. ${stepLines(step)}`);
+  if (unusable.length > 0) throw new Error(`${quoted(unusable.map((option) => shown(option.name)))} cannot be picked. ${stepLines(step)}`);
   const picks = group.options.filter((option) => picked.includes(option) || option.type === 'Required' || group.type === 'SelectAll');
   if (!holdsPick(group.type, picks.length, group.options.length)) {
-    throw new Error(`Group "${group.name}" of step "${step.name}" takes ${TAKES[group.type]}, and the choices pick ${picks.length}. ${stepLines(step)}`);
+    throw new Error(`Group "${shown(group.name)}" of step "${step.name}" takes ${TAKES[group.type]}, and the choices pick ${picks.length}. ${stepLines(step)}`);
   }
   return picks;
 }
 
 function answerFor(step: Step, choice: FomodStepChoice): EngineRequest[] {
   const groups = groupsOf(step);
-  const unknown = choice.groups.map(({ group }) => group).filter((name) => !groups.some((group) => group.name === name));
+  refuseAmbiguous('group', groups.map((group) => group.name), `Step "${step.name}"`);
+  const unknown = choice.groups.map(({ group }) => group).filter((name) => !groups.some((group) => sameName(group.name, name)));
   if (unknown.length > 0) throw new Error(`Step "${step.name}" has no group ${quoted(unknown)}. ${stepLines(step)}`);
   const selections = groups.map((group) => ({
     groupId: group.id,
-    optionIds: picksFor(step, group, choice.groups.find((named) => named.group === group.name)).map((option) => option.id),
+    optionIds: picksFor(step, group, choice.groups.find((named) => sameName(named.group, group.name))).map((option) => option.id),
   }));
   return [...selections.map((selection: Selection): EngineRequest => ({ kind: 'select', stepId: step.id, selection })), { kind: 'continue', forward: true, stepId: step.id }];
 }
