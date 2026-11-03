@@ -485,9 +485,8 @@ function pluginsOf(doc: Document): YAMLSeq | undefined {
 
 const distinct = (names: readonly string[]): string[] => names.filter((name, at) => names.findIndex((other) => sameName(other, name)) === at);
 
-/** The userlist's text with each plugin loading after the plugins given, as LOOT writes it. The edit splices the entry it
- *  changes and nothing else, so a comment, an anchor or a spacing stays; the text itself when it holds every rule.
- *  Throws, for a text that is not a map of plugins. */
+/** The userlist's text with each plugin loading after the plugins given. Splices the entry it changes and nothing
+ *  else, so a comment, anchor or spacing stays. Throws for a text that is not a map of plugins. */
 export function addLoadAfter(text: string | undefined, additions: readonly LoadAfter[]): string {
   const source = text ?? '';
   const plugins = pluginsOf(parseDocument(source));
