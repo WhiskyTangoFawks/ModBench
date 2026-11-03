@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs';
 import { access, constants } from 'node:fs/promises';
-import { crc32 } from 'node:zlib';
 import { join, resolve } from 'node:path';
+import { crc32Of } from '../fileContents/contentDigest';
 import { errnoCode } from '../../ports/errno';
 import type { GameFolder } from '../instanceAdapter';
 import { versionResourceOf } from './versionResource';
@@ -14,12 +13,6 @@ export interface DataFileReads {
   /** The File Version or Product Version of a Windows program; `undefined` for one with no version resource. */
   dataFileVersion(path: string, winner: string | undefined, field: 'file' | 'product'): Promise<string | undefined>;
   dataFileReadable(path: string, winner: string | undefined): Promise<boolean>;
-}
-
-async function crc32Of(path: string): Promise<number> {
-  let crc = 0;
-  for await (const chunk of createReadStream(path)) crc = crc32(chunk as Buffer, crc);
-  return crc;
 }
 
 const absent = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';

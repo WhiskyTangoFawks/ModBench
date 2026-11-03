@@ -3,9 +3,9 @@ import { fileReadsOver } from '../fileReadsOver';
 
 describe('fileReadsOver: the Instance adapter\'s reads, at the file mod order provides', () => {
   const adapter = {
-    dataFileChecksum: vi.fn(async () => 7),
-    dataFileVersion: vi.fn(async () => '1.2'),
-    dataFileReadable: vi.fn(async () => true),
+    dataFileChecksum: vi.fn(() => Promise.resolve(7)),
+    dataFileVersion: vi.fn(() => Promise.resolve('1.2')),
+    dataFileReadable: vi.fn(() => Promise.resolve(true)),
   };
   const winners = { get: (path: string) => (path.toLowerCase() === 'meshes/a.nif' ? { winner: '/mods/M/Meshes/a.nif' } : undefined) };
   const reads = fileReadsOver(adapter, () => winners);

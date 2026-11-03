@@ -24,7 +24,7 @@ export function pluginsTreeOver(
     publishSortingInfo: () => undefined,
     publishRuleFiles: () => undefined,
     modStatuses: NO_MOD_STATUSES,
-    fileReads: { checksum: async () => undefined, version: async () => undefined, readable: async () => false },
+    fileReads: { checksum: () => Promise.resolve(undefined), version: () => Promise.resolve(undefined), readable: () => Promise.resolve(false) },
     reporter: recordingReporter(),
     ...overrides,
   });

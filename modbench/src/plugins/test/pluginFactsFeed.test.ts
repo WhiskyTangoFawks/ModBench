@@ -67,7 +67,10 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
   const feed = new PluginFactsFeed({
     client, shownPlugins, activePlugins, rules, lines: activePlugins,
-    fileFacts: async (reads) => (asked?.(reads), { files: () => present, isPresent: (path) => (present.includes(path) ? 'present' : 'absent'), answer: () => undefined }),
+    fileFacts: (reads) => {
+      asked?.(reads);
+      return Promise.resolve({ files: () => present, isPresent: (path) => (present.includes(path) ? 'present' : 'absent'), answer: () => undefined });
+    },
     publishSortingInfo: sortingInfo.push,
     publishRuleFiles: ruleFiles.push,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,

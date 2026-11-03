@@ -15,7 +15,7 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
     root = await mkdtemp(join(tmpdir(), 'data-file-reads-'));
     await mkdir(join(root, 'Data'));
     const found: GameFolder = { kind: 'found', root, dataFolder: join(root, 'Data') };
-    reads = dataFileReads(async () => found);
+    reads = dataFileReads(() => Promise.resolve(found));
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -66,7 +66,7 @@ describe('dataFileReads: what LOOT\'s conditions read of a file', () => {
   });
 
   it('rejects, saying why, for a file of a game folder that was not found', async () => {
-    const lost = dataFileReads(async () => ({ kind: 'notFound', looked: [], setting: 's' }));
+    const lost = dataFileReads(() => Promise.resolve<GameFolder>({ kind: 'notFound', looked: [], setting: 's' }));
 
     await expect(lost.dataFileChecksum('a.swf', undefined)).rejects.toThrow('the game folder was not found');
     await expect(lost.dataFileChecksum('a.swf', '/mod/a.swf')).resolves.toBeUndefined();

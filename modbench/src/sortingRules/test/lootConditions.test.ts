@@ -152,9 +152,9 @@ describe('evaluateCondition: the functions', () => {
 
 describe('readFileFacts: the Instance adapter\'s answers to the reads a condition needs', () => {
   const source = {
-    checksum: async (path: string) => (path === 'locked.swf' ? Promise.reject(new Error('permission denied')) : path === 'a.swf' ? 0xabc : undefined),
-    version: async (path: string, field: 'file' | 'product') => (path === '../G.exe' ? `${field} 1.2` : undefined),
-    readable: async (path: string) => path === '../G.exe',
+    checksum: (path: string) => (path === 'locked.swf' ? Promise.reject(new Error('permission denied')) : Promise.resolve(path === 'a.swf' ? 0xabc : undefined)),
+    version: (path: string, field: 'file' | 'product') => Promise.resolve(path === '../G.exe' ? `${field} 1.2` : undefined),
+    readable: (path: string) => Promise.resolve(path === '../G.exe'),
   };
   const instance: Pick<ConditionFacts, 'files' | 'isPresent'> = { files: () => [], isPresent: () => 'absent' };
 

@@ -2,6 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { crc32 } from 'node:zlib';
 import xxhash from 'xxhash-wasm';
 
 const hasher = xxhash();
@@ -26,6 +27,13 @@ export async function textHash(text: string): Promise<string> {
   const digest = Buffer.alloc(8);
   digest.writeBigUInt64LE((await hasher).h64Raw(Buffer.from(text, 'utf8')));
   return digest.toString('base64');
+}
+
+/** The CRC-32 LOOT's conditions compare. Streamed. */
+export async function crc32Of(path: string): Promise<number> {
+  let crc = 0;
+  await feed(path, (chunk) => { crc = crc32(chunk, crc); });
+  return crc;
 }
 
 /** MD5 in hex, the hash Nexus finds a file by. Streamed. */
