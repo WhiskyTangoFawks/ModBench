@@ -487,11 +487,11 @@ describe('a mod installed from an installation file, then decompiled and committ
     client.setCommandHandler('versionInGit', async ([mod]) => {
       if (mod === undefined) throw new Error('no mod');
       handed.push(mod);
-      await put(`source/Mod/${BUILD_FILE}`, mod.repository.buildFile);
-      await put(`source/Mod/${mod.repository.manifestFile ?? ''}`, mod.repository.manifest ?? '');
+      await put(`source/Mod/${BUILD_FILE}`, mod.sourceFolder.buildFile);
+      await put(`source/Mod/${mod.sourceFolder.manifestFile ?? ''}`, mod.sourceFolder.manifest ?? '');
       const sourceFolder = join(root, 'source', 'Mod');
       execFileSync('git', ['init', '-q', sourceFolder]);
-      execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.repository.manifestFile ?? '']);
+      execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.sourceFolder.manifestFile ?? '']);
       execFileSync('git', ['-C', sourceFolder, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'Init Mod']);
       return { landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] };
     });
@@ -530,9 +530,9 @@ describe('a mod installed from an installation file, then decompiled and committ
     const { handed } = await anInstalledModDecompiled();
 
     const [sent] = handed;
-    const manifest = readManifest(sent?.repository.manifest ?? '');
+    const manifest = readManifest(sent?.sourceFolder.manifest ?? '');
     assert('manifest' in manifest);
-    expect([sent?.repository.manifestFile, sent?.repository.assets, sent?.repository.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.repository.ignored])
+    expect([sent?.sourceFolder.manifestFile, sent?.sourceFolder.assets, sent?.sourceFolder.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.sourceFolder.ignored])
       .toEqual(['Mod.manifest.json', [], '{"version":1,"steps":[\n{"copy":["b.nif","textures"]},\n{"compile":["Mod.esp"]}\n]}\n', ASSETS, ['installationFile'], ASSETS]);
     expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
       .toEqual(['Mod.manifest.json', 'b.nif', 'build.json', 'textures/c.dds']);
@@ -542,7 +542,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     const { handed, status, manifestText } = await anInstalledModDecompiled(['Game.mem']);
 
     const [sent] = handed;
-    expect(sent?.repository.assets).toEqual([]);
+    expect(sent?.sourceFolder.assets).toEqual([]);
     expect(readManifest(await manifestText())).toMatchObject({ manifest: { ignore: ['Game.mem'] } });
     expect(await readFile(join(root, 'mods', 'Mod', 'Game.mem'), 'utf8')).toBe('the game wrote this');
     expect(await status()).toMatchObject({ differing: [], namedByNoLine: [], ignored: ['Game.mem'] });
@@ -612,7 +612,7 @@ describe('version in git over an instance on disk', () => {
     const outcome = await versionInGit();
 
     const [sent] = handed;
-    expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'] });
+    expect(sent?.sourceFolder).toMatchObject({ path: join(root, 'source', 'Mod'), assets: ['a.nif'] });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'Mod.manifest.json', 'a.nif', 'meta.ini']));
     const recorded = await manifestIn(join(root, 'mods', 'Mod'));
@@ -657,7 +657,7 @@ describe('version in git of a mod several downloaded files yield, over an instan
     const adapter = adapterOver(root, { installationFileReader: readerOfEachFile });
     const noting = { ...adapter, downloadedFilesHashed: async () => ({ ...await adapter.downloadedFilesHashed(), notes }) };
     const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['Multi'], { where: 'NewRepository', commit: true });
-    const repository = handed[0]?.repository;
+    const repository = handed[0]?.sourceFolder;
     const manifest = readManifest(repository?.manifest ?? '');
     assert('manifest' in manifest);
     return { outcome, assets: repository?.assets, packages: manifest.manifest.packages.map((pkg) => 'name' in pkg ? pkg.name : pkg.kind).sort(), yielded: pathsIn(manifest.manifest) };

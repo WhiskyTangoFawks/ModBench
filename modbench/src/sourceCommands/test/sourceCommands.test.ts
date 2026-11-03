@@ -386,8 +386,8 @@ describe('sourceCommands versionInGit', () => {
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
 
     const [mod] = handed;
-    expect(mod).toMatchObject({ name: 'ModA', repository: { sourceFolder: '/source/ModA', assets: ['scripts/b.pex'] } });
-    expect(mod?.repository.buildFile).toBe('{"version":1,"steps":[\n{"copy":["scripts","textures"]},\n{"compile":["ModA.esp"]}\n]}\n');
+    expect(mod).toMatchObject({ name: 'ModA', sourceFolder: { path: '/source/ModA', assets: ['scripts/b.pex'] } });
+    expect(mod?.sourceFolder.buildFile).toBe('{"version":1,"steps":[\n{"copy":["scripts","textures"]},\n{"compile":["ModA.esp"]}\n]}\n');
   });
 
   it.each(['build.json', 'Plugin-Source/notes.txt', '.gitignore', '.gitattributes'])('refuses a mod that holds %s, where its source folder holds its own, handing mEdit nothing', async (path) => {
@@ -408,7 +408,7 @@ describe('sourceCommands versionInGit', () => {
       const client = new InMemoryMEditClient();
       const linesWhenSent: unknown[] = [];
       client.setCommandHandler('versionInGit', (mods) => {
-        linesWhenSent.push(sourceFolderLines(fake.calls), mods.map((mod) => mod.in));
+        linesWhenSent.push(sourceFolderLines(fake.calls), mods.map((mod) => mod.sourceFolder.in));
         return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
       });
 
@@ -447,6 +447,38 @@ describe('sourceCommands versionInGit', () => {
             : 'git was not found on PATH. The ignore list still lets in /source/ModA, which no mod was put in: the ignore list is locked',
         });
       });
+
+    it('adds what stays in the ignore list to the reason of the mod it concerns, and of no other', async () => {
+      const [onA, onB] = [hashed({ 'ModA.esp': 'P' }), hashed({ 'ModB.esp': 'Q' }, '/instance/mods/ModB')];
+      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), {
+        folderFiles: new Map([...onA.folderFiles ?? [], ...onB.folderFiles ?? []]), hashes: new Map([...onA.hashes ?? [], ...onB.hashes ?? []]), repositoryOnDisk: true,
+        refusals: (call) => (call.verb === 'writeSourceFolderLines' && !call.held ? 'the ignore list is locked' : undefined),
+      });
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('versionInGit', () => Promise.resolve({
+        landed: [{ mod: 'ModA', plugins: [] }], refused: [{ item: 'ModB', reason: 'its plugin is malformed.' }],
+      }));
+
+      const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA', 'ModB'], inModlist);
+
+      expect(outcome).toMatchObject({
+        refused: [
+          { item: 'ModB', reason: 'its plugin is malformed. The ignore list still lets in /source/ModB, which no mod was put in: the ignore list is locked' },
+          { item: 'ModA', reason: expect.not.stringContaining('ignore list') as unknown },
+        ],
+      });
+    });
+
+    it('leaves out again every source folder, and throws what mEdit threw, when the call fails', async () => {
+      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('versionInGit', () => Promise.reject(new Error('the connection dropped')));
+
+      await expect(sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inModlist))
+        .rejects.toThrow('the connection dropped');
+
+      expect(sourceFolderLines(fake.calls).at(-1)).toEqual({ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: false });
+    });
 
     it('refuses each mod, handing mEdit nothing, when the ignore list cannot let its source folder in', async () => {
       const { client, handed } = committing();
@@ -497,7 +529,7 @@ describe('sourceCommands versionInGit', () => {
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
 
-    expect(handed[0]?.repository.assets).toEqual(['textures/a.dds']);
+    expect(handed[0]?.sourceFolder.assets).toEqual(['textures/a.dds']);
   });
 
   it('commits no asset for a file the game folder holds with its bytes', async () => {
@@ -510,7 +542,7 @@ describe('sourceCommands versionInGit', () => {
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModC'], { where: 'NewRepository', commit: true });
 
-    expect(handed[0]?.repository.assets).toEqual(['scripts/b.pex']);
+    expect(handed[0]?.sourceFolder.assets).toEqual(['scripts/b.pex']);
   });
 
   it.each<[string, { kind: 'unreadable'; reason: string } | { kind: 'read'; answer: { gameFiles: []; notes: string[] } }, string]>([
@@ -543,7 +575,7 @@ describe('sourceCommands versionInGit', () => {
 
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
 
-    expect([handed[0]?.repository.assets, outcome.refused]).toEqual([['scripts/b.pex'], []]);
+    expect([handed[0]?.sourceFolder.assets, outcome.refused]).toEqual([['scripts/b.pex'], []]);
   });
 
   it.each([true, false])('hands mEdit the mod\'s folder and, given commit %s, that commit (plugins.md, Version in git, stories 1 and 3)', async (commit) => {

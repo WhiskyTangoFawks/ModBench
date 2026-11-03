@@ -12,7 +12,7 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
 import { moveOrderRefusal } from './pluginOrder';
-import { decompileAndRepair, type DecompileAndRepairClient, type NewRepositories } from './decompileAndRepair';
+import { decompileAndRepair, type DecompileAndRepairClient, type PlaceMods } from './decompileAndRepair';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
@@ -225,7 +225,7 @@ export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
 
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
 export function pluginCommands({ adapter, client, newRepositories }: {
-  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; newRepositories: NewRepositories;
+  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; newRepositories: PlaceMods;
 }) {
   return {
     setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),

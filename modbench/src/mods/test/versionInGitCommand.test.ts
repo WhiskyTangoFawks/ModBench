@@ -60,7 +60,7 @@ describe('modbench.mod.versionInGit', () => {
     client.setCommandHandler('versionInGit', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
       commits.push(...mods.map((mod) => mod.commit === true));
-      wheres.push(...mods.map((mod) => mod.in));
+      wheres.push(...mods.map((mod) => mod.sourceFolder.in));
       progressListeners.push(options?.onProgress);
       return Promise.resolve(answer);
     });

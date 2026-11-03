@@ -32,7 +32,7 @@ public sealed class CommandHandlerConventionTests
         typeof(EditRecordChanges),
         typeof(ModBuilt),
         typeof(MoveLastWrittenResult),
-        typeof(NewRepository),
+        typeof(SourceFolderContents),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateRefused),
         typeof(PluginFileFlagRefusal),
