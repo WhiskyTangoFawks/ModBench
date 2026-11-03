@@ -11,7 +11,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'flaggedHash' | 'writeSubmodules' | 'writeOtherManifestLines'>;
+  | 'downloadedFilesHashed' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'flaggedHash' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -111,10 +111,8 @@ async function folderMissing(adapter: Adapter, folder: string): Promise<boolean>
 
 type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[] } | { readonly unreadable: string };
 
-async function hashedFilesOf(
-  adapter: Adapter, { folder, isSourceFolder }: Pick<ModToUpdate, 'folder' | 'isSourceFolder'>, ignore: readonly string[],
-): Promise<Hashed> {
-  const value = await (isSourceFolder ? adapter.sourceFolderValue(folder) : adapter.folderValue(folder));
+async function hashedFilesOf(adapter: Adapter, folder: string, ignore: readonly string[]): Promise<Hashed> {
+  const value = await adapter.unheldFolderValue(folder);
   const files = ownFilesOf(value, ignore);
   if ('why' in files) return { unreadable: files.why };
   return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files.keys()) };
@@ -174,7 +172,7 @@ async function updateMod(
 
   let hashed: Hashed;
   try {
-    hashed = await hashedFilesOf(adapter, mod, held?.ignore ?? []);
+    hashed = await hashedFilesOf(adapter, mod.folder, held?.ignore ?? []);
   } catch (err) {
     hashed = { unreadable: `a file could not be read: ${errorMessage(err)}` };
   }

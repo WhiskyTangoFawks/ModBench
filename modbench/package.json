@@ -1635,12 +1635,12 @@
         },
         {
           "command": "modbench.mod.updateManifest",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bnonSourceMod\\b/ && viewItem =~ /^(?!.*\\bheldWhole\\b)/ && modbench.modlist.hasRepository",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bnonSourceMod\\b/ && !(viewItem =~ /\\bheldWhole\\b/) && modbench.modlist.hasRepository",
           "group": "4_sourceControl@3"
         },
         {
           "command": "modbench.mod.restoreFromManifest",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.modlist.hasRepository",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && !(viewItem =~ /\\bheldWhole\\b/) && modbench.modlist.hasRepository",
           "group": "4_sourceControl@4"
         },
         {

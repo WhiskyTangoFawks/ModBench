@@ -20,6 +20,8 @@ beforeEach(async () => {
   hashed = [];
   installationFiles = new Map();
   heldWhole = new Set();
+  heldByGit = new Map();
+  listings = 0;
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -58,14 +60,20 @@ const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<Status
   ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), ...over });
 
 let heldWhole: ReadonlySet<string>;
+let heldByGit: ReadonlyMap<string, readonly string[]>;
+let listings: number;
 let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
 
-const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole'> = {
+const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
   foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => heldWhole.has(folder)))),
+  filesHeldByGit: (folders) => {
+    listings += 1;
+    return Promise.resolve(new Map(folders.map((folder) => [folder, heldByGit.get(folder) ?? []])));
+  },
   installationFile: (mod) => Promise.resolve(installationFiles.get(mod) ?? { kind: 'read', answer: undefined }),
-  modValue: (folder, wanted) => {
+  modValue: (folder, wanted, held) => {
     asked.push(basename(folder));
-    return modValueOver(reads, folder, wanted);
+    return modValueOver(reads, folder, wanted, held);
   },
 };
 
@@ -86,6 +94,19 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
 
     expect([...derived.keys()]).toEqual(['ModA']);
     expect(derived.get('ModA')?.namedByNoLine).toEqual(['mine.txt']);
+  });
+
+  it('reads no file git holds as one its manifest does not name, with one listing of what git holds for every mod (Status, stories 1 and 3)', async () => {
+    const [first, second] = [await folderOf('ModA', { 'mine.txt': '', 'config.ini': '' }), await folderOf('ModB', { 'b.ini': '' })];
+    await writeManifestIn(first, EMPTY);
+    await writeManifestIn(second, EMPTY);
+    heldByGit = new Map([[first, ['config.ini']], [second, ['b.ini']]]);
+    const statuses = statusesLogging();
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', first), folder('mod', 'ModB', second)]));
+    const derived = await statuses.current();
+
+    expect([derived.get('ModA')?.namedByNoLine, derived.get('ModB')?.namedByNoLine, listings]).toEqual([['mine.txt'], [], 1]);
   });
 
   it('carries the packages its manifest names', async () => {
@@ -203,9 +224,12 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     ]);
   });
 
-  it('says the statuses could not be read, not a last good read, when git fails at the first derive', async () => {
+  it.each([
+    ['which folders it holds whole', { foldersHeldWhole: () => Promise.reject(new Error('git is gone')) }],
+    ['which files it holds', { filesHeldByGit: () => Promise.reject(new Error('git is gone')) }],
+  ])('says the statuses could not be read, not a last good read, when git fails at the first derive to say %s', async (_what, failing) => {
     const mod = await folderOf('ModA', { 'mine.txt': '' });
-    const statuses = new ModStatuses({ ...instance, foldersHeldWhole: () => Promise.reject(new Error('git is gone')) }, (line) => { logged.push(line); });
+    const statuses = new ModStatuses({ ...instance, ...failing }, (line) => { logged.push(line); });
 
     statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
     await statuses.current();

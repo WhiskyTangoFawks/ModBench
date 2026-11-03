@@ -1046,8 +1046,8 @@ describe('package.json git init, update manifest and restore from manifest follo
       .toEqual([[[UPDATE_MANIFEST, group], [RESTORE_FROM_MANIFEST, group]], []]);
   });
 
-  it('offers restore from manifest alone on a mod row whose whole folder git holds', () => {
-    expect(onRow('modbench.modList', 'mod enabled nonSourceMod heldWhole', hasRepository)).toEqual([[RESTORE_FROM_MANIFEST, '4_sourceControl']]);
+  it('offers neither update manifest nor restore from manifest on a mod row whose whole folder git holds', () => {
+    expect(onRow('modbench.modList', 'mod enabled nonSourceMod heldWhole', hasRepository)).toEqual([]);
   });
 
   it('offers restore from manifest alone on a source mod row, whose own folder its build records', () => {

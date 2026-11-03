@@ -126,6 +126,20 @@ describe('restore from manifest', () => {
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['b.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], refused: [] });
   });
 
+  it('sends to the trash no file git holds in a mod\'s folder, which its manifest does not name (The manifest, story 5)', async () => {
+    const { restore, fake } = await over({
+      files: { ModA: { 'a.nif': HA, 'config.ini': 'C' } },
+      manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), heldByGit: new Map([[folderOf('ModA'), ['config.ini']]]) },
+    });
+
+    const outcome = await restore(['ModA']);
+
+    expect([writes(fake.calls), outcome.landed]).toEqual([
+      [{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA.7z' }] }], [{ mod: 'ModA', written: [], namedByNoLine: [] }],
+    ]);
+  });
+
   it('writes and sends to the trash nothing of a file its manifest ignores, whatever its bytes (The manifest, story 11)', async () => {
     const { restore, fake } = await over({
       files: { ModA: { 'a.nif': HA, 'Game.mem': EDITED, 'logs/run.log': 'L' } },
@@ -526,7 +540,7 @@ describe('restore from manifest', () => {
 
       it('is skipped, naming why, and not built, when git cannot list its source folder', async () => {
         const { restore, client, deps } = await sourceMod({}, [], sourceHolds);
-        Object.assign(deps.adapter, { sourceFolderValue: () => Promise.reject(new Error('fatal: not a git repository')) });
+        Object.assign(deps.adapter, { unheldFolderValue: () => Promise.reject(new Error('fatal: not a git repository')) });
 
         const outcome = await restore(['ModA']);
 

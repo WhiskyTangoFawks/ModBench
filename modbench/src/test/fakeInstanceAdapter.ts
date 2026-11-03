@@ -12,7 +12,7 @@ import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
-import { folderValueOver, modValueOver, sourceFolderValueOver } from '../instanceAdapter/modValue';
+import { folderValueOver, modValueOver, unheldFolderValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { addLoadAfter, type LoadAfter } from '../sortingRules/lootMetadata';
 import { READ_SORTING_RULE_FILES } from './readSortingRuleFiles';
@@ -129,7 +129,7 @@ export interface InstanceAnswers {
   dataFiles?: ReadonlyMap<string, { checksum?: number; version?: string; readable?: boolean }>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
   folderFiles?: ReadonlyMap<string, readonly string[]>;
-  /** The files git holds in a source folder, by the folder. */
+  /** The files git holds in a folder, by the folder. */
   heldByGit?: ReadonlyMap<string, readonly string[]>;
   /** The mod folders whose whole git holds. */
   heldWholeByGit?: ReadonlySet<string>;
@@ -450,8 +450,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     foldersHeldWhole: (folders) => Promise.resolve(new Set(
       folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),
     )),
-    sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
-    modValue: (folder, asked) => modValueOver(adapter, folder, asked),
+    filesHeldByGit: (folders) => Promise.resolve(new Map(folders.map((folder) => [folder, answers.heldByGit?.get(folder) ?? []]))),
+    unheldFolderValue: (folder) => unheldFolderValueOver(adapter, answers.heldByGit?.get(folder) ?? [], folder),
+    modValue: (folder, asked, heldByGit) => modValueOver(adapter, folder, asked, heldByGit),
     textHash,
     dataFileChecksum: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.checksum }),
     dataFileVersion: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.version }),

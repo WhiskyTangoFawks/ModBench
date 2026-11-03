@@ -781,14 +781,18 @@ export interface InstanceAdapter extends DataFileReads {
   filesIn(folder: string): Promise<readonly string[]>;
   /** `folder`'s files by their own paths, each with its hash kept in the hash index, and the paths the manager excludes. */
   folderValue(folder: string): Promise<FolderValue>;
-  /** `folderValue` of a source folder, less the files git holds there and git's own: its manifest names the rest. Rejects
-   *  when git cannot list the folder. */
-  sourceFolderValue(folder: string): Promise<FolderValue>;
+  /** `folderValue` less git's own and each file git holds: one it tracks, or a new one it does not ignore. Its manifest
+   *  names the rest. Rejects when git cannot list a folder a repository holds. */
+  unheldFolderValue(folder: string): Promise<FolderValue>;
   /** The `folders` git holds whole: a new file in one would not be ignored and no file in it is. Not one outside the
    *  instance or through a symlink; none without a repository. Rejects when git cannot list the instance. */
   foldersHeldWhole(folders: readonly string[]): Promise<ReadonlySet<string>>;
-  /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`. */
-  modValue(folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
+  /** The files git holds in each of `folders`, by path in it: tracked, or new and not ignored. None outside the instance
+   *  or through a symlink, unless the folder is a repository. */
+  filesHeldByGit(folders: readonly string[]): Promise<ReadonlyMap<string, readonly string[]>>;
+  /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`, less the
+   *  files git holds there. */
+  modValue(folder: string, asked: PackagesAsked | undefined, heldByGit: readonly string[]): Promise<StatusValues>;
   /** The path a folder holds the file at `path` at, while `exclude` names the paths the modlist excludes. */
   pathInFolder(path: string, exclude: readonly string[]): string;
   /** The file's own path, without the mark the manager reads as excluded, which a manifest's path never carries. */

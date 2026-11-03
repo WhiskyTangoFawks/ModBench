@@ -1385,21 +1385,16 @@ it('answers the game files the files below any folder of the instance may be, no
   expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'Data/a.nif', hash: 'Mr+EvxoNp0I=', pathInFolder: 'Data/a.nif' }], notes: [] } });
 });
 
-describe('a source folder\'s value', () => {
-  it('lists the files git does not hold, a tracked file with an uncommitted edit and git\'s own not among them', async () => {
-    root = await mkdtemp(join(tmpdir(), 'modbench-mo2-sourcefolder-'));
-    const folder = join(root, 'source', 'Mod A');
-    await mkdir(folder, { recursive: true });
-    await writeFile(join(folder, 'plugin.json'), 'one');
-    await writeFile(join(folder, '.gitignore'), 'tool.dll\n');
-    execFileSync('git', ['init', '--quiet'], { cwd: folder });
-    execFileSync('git', ['add', '--', 'plugin.json', '.gitignore'], { cwd: folder });
-    await writeFile(join(folder, 'plugin.json'), 'two');
-    await writeFile(join(folder, 'tool.dll'), 'dll');
-    await writeFile(join(folder, 'extra.nif'), 'nif');
+describe('the value of a folder\'s files git does not hold', () => {
+  it('lists a mod folder\'s files the instance repository ignores, a file it lets in not among them', async () => {
+    root = await mkdtemp(join(tmpdir(), 'modbench-mo2-modfolder-'));
+    await put('.gitignore', '/mods/*\n!/mods/ModA/\n/mods/ModA/*\n!/mods/ModA/config.ini\n');
+    await put('mods/ModA/config.ini');
+    await put('mods/ModA/a.nif');
+    runGit('init', '--quiet');
 
-    const { files } = await adapterOver(root).sourceFolderValue(folder);
+    const { files } = await adapterOver(root).unheldFolderValue(join(root, 'mods', 'ModA'));
 
-    expect([...files.keys()].sort()).toEqual(['extra.nif', 'tool.dll']);
+    expect([...files.keys()]).toEqual(['a.nif']);
   });
 });

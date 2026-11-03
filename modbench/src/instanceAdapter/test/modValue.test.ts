@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { folderValueOver, modValueOver, sourceFolderValueOver } from '../modValue';
+import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
 
 const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
 
@@ -39,13 +39,13 @@ describe('a folder as a value', () => {
   });
 });
 
-describe('a source folder as a value', () => {
-  it('holds only the files git neither holds nor owns, so its manifest names no attributes file version in git leaves untracked', async () => {
-    const { files } = await sourceFolderValueOver(
-      reads(['.git/config', '.gitattributes', '.gitignore', 'build.json', 'textures/a.dds']), () => Promise.resolve(['.gitignore', 'build.json']), '/source/Mod',
+describe('a folder\'s files git does not hold as a value', () => {
+  it('holds only the files git neither holds nor owns, an attributes file git does not hold among them', async () => {
+    const { files } = await unheldFolderValueOver(
+      reads(['.git/config', '.gitattributes', '.gitignore', 'build.json', 'textures/a.dds']), ['.gitignore', 'build.json'], '/source/Mod',
     );
 
-    expect([...files.keys()]).toEqual(['textures/a.dds']);
+    expect([...files.keys()]).toEqual(['.gitattributes', 'textures/a.dds']);
   });
 });
 
@@ -62,14 +62,14 @@ describe('a mod as a value', () => {
   };
 
   it('holds each downloaded file asked for', async () => {
-    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: ['Mod.zip'] });
+    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: ['Mod.zip'] }, []);
 
     if (value.kind !== 'read') throw new Error('expected the values to read');
     expect([...value.downloadedFiles.keys()]).toEqual(['Mod.zip']);
   });
 
   it('reads no game file when the game folder is not found', async () => {
-    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] });
+    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] }, []);
 
     expect(value).toMatchObject({ kind: 'read', gameFiles: undefined });
   });
@@ -78,20 +78,20 @@ describe('a mod as a value', () => {
     const kept = (hash: string): Promise<string | undefined> => Promise.resolve(hash === 'AAAAAAAAAAA=' ? 'KKKKKKKKKKA=' : undefined);
     const value = await modValueOver({ ...modReads, flaggedHash: kept }, '/mods/Mod', {
       installationFiles: [], flagged: [{ path: 'a.esp', hash: 'AAAAAAAAAAA=', flags: { Small: true } }, { path: 'b.esp', hash: 'BBBBBBBBBBA=', flags: { Small: true } }],
-    });
+    }, []);
 
     expect(value).toMatchObject({ kind: 'read', flaggedHashes: new Map([['a.esp', 'KKKKKKKKKKA=']]) });
   });
 
   it.each([['Hosted', true], ['Tracked', true], ['Local', false]])('says whether a clone gets the repository %s: a submodule, or a source folder the instance repository tracks', async (repository, hosted) => {
-    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository });
+    const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository }, []);
 
     expect(value).toMatchObject({ kind: 'read', repositoryHosted: hosted });
   });
 
   it('reads and hashes no file of a folder when no manifest is asked for', async () => {
     const hashed: string[] = [];
-    const value = await modValueOver({ ...modReads, originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } }, '/mods/Mod', undefined);
+    const value = await modValueOver({ ...modReads, originFileHash: (path: string) => { hashed.push(path); return modReads.originFileHash(path); } }, '/mods/Mod', undefined, []);
 
     expect([value.kind, hashed]).toEqual(['notAsked', []]);
   });
@@ -99,11 +99,11 @@ describe('a mod as a value', () => {
   it('is unreadable, saying why, when the game files cannot be read', async () => {
     const reading = { ...modReads, gamePlaces: () => Promise.resolve([PLACE]), gameFilesTakenBy: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
 
-    expect(await modValueOver(reading, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] })).toEqual({ kind: 'unreadable', reason: 'EACCES' });
+    expect(await modValueOver(reading, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] }, [])).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });
 
   it('is unreadable, saying why, when a read rejects', async () => {
-    const value = await modValueOver({ ...modReads, filesIn: () => Promise.reject(new Error('EACCES')) }, '/mods/Mod', { installationFiles: [] });
+    const value = await modValueOver({ ...modReads, filesIn: () => Promise.reject(new Error('EACCES')) }, '/mods/Mod', { installationFiles: [] }, []);
 
     expect(value).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });
