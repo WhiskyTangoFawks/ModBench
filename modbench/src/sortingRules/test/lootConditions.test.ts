@@ -114,6 +114,12 @@ describe('evaluateCondition: the functions', () => {
       .toEqual([true, false, false]);
   });
 
+  it('reads the hexadecimal of checksum() in either case', () => {
+    const world = { answers: { 'checksum:A.esp': 0x6ffe25b7 } };
+
+    expect([value('checksum("A.esp", 6ffe25b7)', world), value('checksum("A.esp", 6FfE25B7)', world)]).toEqual([true, true]);
+  });
+
   it('reads readable() as the Instance adapter answers', () => {
     expect([value('readable("../G.exe")', { answers: { 'readable:../G.exe': true } }), value('readable("../G.exe")', { answers: { 'readable:../G.exe': false } })])
       .toEqual([true, false]);
