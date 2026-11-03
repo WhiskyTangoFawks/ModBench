@@ -6,6 +6,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 
 const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
+const PREMIUM_KEY = 'modbench.nexus.premium';
 
 interface NexusCommandDeps {
   commands: NexusLogin;
@@ -43,6 +44,7 @@ export function registerNexusCommands({ commands, nexus, reporterFor }: NexusCom
   const markLoggedIn = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('setContext', LOGGED_IN_KEY, await nexus.loggedIn());
+      await vscode.commands.executeCommand('setContext', PREMIUM_KEY, await nexus.premium());
     } catch (err) {
       reporter.report('error', 'Could not read whether you are logged in to Nexus.', errorMessage(err));
     }

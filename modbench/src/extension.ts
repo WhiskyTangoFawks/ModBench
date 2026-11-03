@@ -46,6 +46,7 @@ import { hostTasks, scriptHostIn } from './tasks';
 import { stepTasks } from './sourceCommands/steps';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
+import { downloadOver } from './downloadedFileCommands/download';
 import { queryInfoOver } from './downloadedFileCommands/queryInfo';
 import { checkForUpdatesOver } from './modCommands/checkForUpdates';
 import { createHttpNexus } from './nexus/httpNexus';
@@ -191,7 +192,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     fileReads: fileReadsOver(adapter, () => instance.value.files),
   }));
   const downloads = own(createDownloadsView({
-    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
+    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), download: downloadOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
   }));
   const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, (folder) => adapter.nonSteamPrefix(folder));
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);

@@ -3110,6 +3110,18 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.downloadedFileQuery('manual.zip')).toMatchObject({ kind: 'read', answer: { games: ['skyrimspecialedition', 'skyrim'] } });
       });
 
+      it('names the Nexus games of the instance\'s game, in order', async () => {
+        await writeFile(join(root, INI), '[General]\r\ngameName=Skyrim Special Edition\r\nselected_profile=@ByteArray(Default)\r\n');
+
+        expect(await adapter.nexusGames()).toEqual(['skyrimspecialedition', 'skyrim']);
+      });
+
+      it('has no Nexus game for an instance whose game Nexus has no domain for', async () => {
+        await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
+
+        await expect(adapter.nexusGames()).rejects.toThrow("Nexus has no game for 'Morrowind'");
+      });
+
       it('refuses to query an instance whose game Nexus has no domain for', async () => {
         await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
 
@@ -3148,6 +3160,12 @@ describe('the MO2 Instance adapter', () => {
           await adapter.putDownloadedFile('fetched.7z', theBytes(), { hash: HASH_OF_THE_BYTES, info });
 
           expect(await metaOf('fetched.7z')).not.toMatch(/removed|installed/);
+        });
+
+        it('puts any bytes when no hash is asked for', async () => {
+          expect(await adapter.putDownloadedFile('fetched.7z', theBytes(), { info })).toEqual({ put: true });
+
+          expect(await readFile(join(downloadsFolder(), 'fetched.7z'), 'utf8')).toBe('the bytes');
         });
 
         it('puts nothing when the bytes have another hash', async () => {

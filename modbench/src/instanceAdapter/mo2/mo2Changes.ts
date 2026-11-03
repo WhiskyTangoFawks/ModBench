@@ -75,7 +75,7 @@ async function metaGameOfDomainOrThrow(context: Mo2Context, domain: string): Pro
 const pluginOrderIn = (text: string): PluginEntry[] => firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept;
 
 async function putDownloadedFile(
-  context: Mo2Context, name: string, bytes: AsyncIterable<Uint8Array>, { hash, info }: { readonly hash: string; readonly info: NexusFileInfo },
+  context: Mo2Context, name: string, bytes: AsyncIterable<Uint8Array>, { hash, info }: { readonly hash?: string; readonly info: NexusFileInfo },
 ): Promise<{ readonly put: boolean }> {
   if (basename(name) !== name || name === '..') throw new Error(`'${name}' is not a file name`);
   const downloadsDir = await currentDownloadsDir(context);
@@ -84,7 +84,7 @@ async function putDownloadedFile(
   return withLock(file, async () => {
     if (await exists(file)) throw new Error(`'${name}' is already in the downloads folder`);
     await ensureDir(downloadsDir);
-    if (!(await putStreamedIf(file, bytes, async (temp) => (await digestOf(temp)) === hash))) return { put: false };
+    if (!(await putStreamedIf(file, bytes, async (temp) => hash === undefined || (await digestOf(temp)) === hash))) return { put: false };
     try {
       const metadata = downloadedFileMetadataPath(downloadsDir, name);
       await withLock(metadata, () => write(metadata, setNexusFileInfoInText('', info, gameName)));

@@ -118,7 +118,7 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash, downloadedFilesHashed }: Pick<HashIndex, 'downloadedFileHash' | 'downloadedFilesHashed'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFileHolding' | 'downloadedFilesHashed' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFileHolding' | 'downloadedFilesHashed' | 'nexusFileAt' | 'nexusGames' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -212,6 +212,8 @@ export function mo2Installation(
     },
 
     nexusFileAt: parseNexusPage,
+
+    nexusGames: () => nexusDomainsOfInstance(context),
 
     downloadedFileQuery: (name) => readOrReason(async () => {
       if (basename(name) !== name || name === '..') return undefined;

@@ -383,6 +383,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return Promise.resolve({ files: [...files, ...hashed], notes });
     },
     nexusFileAt: parseNexusPage,
+    nexusGames: () => Promise.resolve(['fallout4']),
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);
       if (reason !== undefined) return Promise.resolve({ kind: 'unreadable', reason });
@@ -494,8 +495,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       const chunks: Uint8Array[] = [];
       for await (const chunk of bytes) chunks.push(chunk);
       const text = Buffer.concat(chunks).toString();
-      if (text !== hash) return { put: false };
-      putHashedAsTheirText.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
+      if (hash !== undefined && text !== hash) return { put: false };
+      putHashedAsTheirText.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash: hash ?? text, entries: [] } });
       return { put: true };
     },
     copyDownloadedFile: (from, name) =>
