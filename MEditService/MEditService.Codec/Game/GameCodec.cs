@@ -1,9 +1,11 @@
+using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
+using Mutagen.Bethesda.Strings;
 using Noggog;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -63,10 +65,15 @@ internal sealed class GameCodec : IGameCodec
         return clone;
     }
 
-    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized)
     {
-        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)) return record;
+        var type = record.GetType();
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)
+            && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
+            return record;
         var copy = record.DeepCopy();
+        Targets.ForEach(copy, DefaultTargetAsRead);
+        if (!localized) StringHolders.ForEach(copy, InDefaultLanguage);
         switch (copy)
         {
             case Cell cell:
@@ -97,6 +104,36 @@ internal sealed class GameCodec : IGameCodec
         }
         GameSpecifics.Normalize(copy);
         return copy;
+    }
+
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();
+
+    private static PropertyInfo[] StringProperties(Type type) => StringPropertiesByType.GetOrAdd(type, declaring =>
+        [.. declaring.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite && p.PropertyType == typeof(TranslatedString))]);
+
+    private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
+
+    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
+
+    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
+    // empty reference.
+    private static void DefaultTargetAsRead(object node)
+    {
+        var radius = (LocationTargetRadius)node;
+        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
+            radius.Target = new LocationTarget();
+    }
+
+    // A plugin that is not localized writes a string's one text and never its language, so its reread
+    // holds that text in the language the read gives.
+    private static void InDefaultLanguage(object holder)
+    {
+        foreach (var property in StringProperties(holder.GetType()))
+        {
+            if (property.GetValue(holder) is TranslatedString held && held.ToList() is [var (_, text)])
+                property.SetValue(holder, new TranslatedString(TranslatedString.DefaultLanguage, text));
+        }
     }
 
     internal static void ZeroTopicGroupFields(DialogTopic topic)

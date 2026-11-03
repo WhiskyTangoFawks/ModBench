@@ -161,7 +161,7 @@ internal sealed class PluginCompileService(
         {
             if (!repository.RelativePathOf(plugin, drop.Record).Holds(out var file, out var unread)) return SourceDoesNotParse(plugin, unread);
             var held = file ?? throw new InvalidOperationException($"Expected the tree this compile read to hold {drop.Record.FormKey}'s document.");
-            named.Add($"in {held}, {string.Join(", ", drop.Paths.Select(path => $"'{path}'"))}");
+            named.Add($"in {held}, '{drop.Field}'");
         }
         return PluginCompileOutcome.Refused(
             CompileRefusal.SourceValueDropped,

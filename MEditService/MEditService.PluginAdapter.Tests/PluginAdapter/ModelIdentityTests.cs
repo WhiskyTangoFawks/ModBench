@@ -303,6 +303,18 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
+    public async Task DivergenceFrom_WhenTheTextOfAStringInAPluginNotLocalizedDiffers_NamesIt()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var door = mod.Doors.AddNew("Door");
+        door.Name = "Door";
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        recompiled.Doors.Add(new Door(door.FormKey, Fallout4Release.Fallout4) { EditorID = "Door", Name = "Gate" });
+
+        Assert.Contains("field 'Name' changed", await DivergenceAsync(mod, recompiled), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DivergenceFrom_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence_BecauseNpcMorphsIsAnOrderedListSoAReorderIsARealContentChangeNotDictionaryEnumerationOrderEvenThoughNpcMorphIsExactlyKeyAndValue()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);

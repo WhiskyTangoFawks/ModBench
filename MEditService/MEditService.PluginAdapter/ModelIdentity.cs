@@ -47,42 +47,46 @@ internal static class ModelIdentity
     private static ILoquiObjectGetter? HeaderOf(IModGetter mod) =>
         mod.GetType().GetProperty("ModHeader")?.GetValue(mod) as ILoquiObjectGetter;
 
-    // The first record, in the original's GRUP order, that does not survive a round trip, naming the
-    // field the mask disagrees on, else the codec document path that differs; null when none differs.
+    // The first record, in the original's GRUP order, that does not survive a round trip, else the
+    // first the recompile produced that the original never had; null when none differs.
     private static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
-        var game = GameCodecs.For(recompiled.GameRelease);
-        var originalFormKeys = new HashSet<FormKey>();
-        foreach (var (originalRecord, recompiledRecord) in Paired(original.EnumerateMajorRecords(), recompiled))
+        if (RecordDivergences(original.EnumerateMajorRecords(), recompiled).FirstOrDefault() is ({ } record, var field))
         {
-            originalFormKeys.Add(originalRecord.FormKey);
+            return new Divergence(record.GetType().Name, record.FormKey, record.EditorID, field is null
+                ? "is missing from the recompiled plugin."
+                : $"differs after being recompiled from its own plugin source — field '{field}' changed.");
+        }
+
+        var originalFormKeys = original.EnumerateMajorRecords().Select(r => r.FormKey).ToHashSet();
+        return recompiled.EnumerateMajorRecords().FirstOrDefault(r => !originalFormKeys.Contains(r.FormKey)) is { } added
+            ? new Divergence(added.GetType().Name, added.FormKey, added.EditorID,
+                "is present in the recompiled plugin but not present in the original.")
+            : null;
+    }
+
+    /// <summary>Each <paramref name="original"/> record that does not survive into <paramref name="recompiled"/>,
+    /// with the field the mask disagrees on, else the codec document path that differs; a null field
+    /// is a record <paramref name="recompiled"/> lacks.</summary>
+    public static IEnumerable<(IMajorRecordGetter Record, string? Field)> RecordDivergences(
+        IEnumerable<IMajorRecordGetter> original, IModGetter recompiled)
+    {
+        var game = GameCodecs.For(recompiled.GameRelease);
+        foreach (var (originalRecord, recompiledRecord) in Paired(original, recompiled))
+        {
             if (recompiledRecord is null)
             {
-                return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
-                    "is missing from the recompiled plugin.");
+                yield return (originalRecord, null);
+                continue;
             }
 
-            var changed = FirstDifference(originalRecord, recompiledRecord, original.GameRelease) is null
+            var changed = FirstDifference(originalRecord, recompiledRecord, recompiled.GameRelease) is null
                 ? null
-                : FirstDifference(game.NormalizeEncoding(originalRecord), game.NormalizeEncoding(recompiledRecord), original.GameRelease);
-            if (changed != null)
-            {
-                return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
-                    $"differs after being recompiled from its own plugin source — field '{changed}' changed.");
-            }
+                : FirstDifference(
+                    game.NormalizeEncoding(originalRecord, recompiled.UsingLocalization),
+                    game.NormalizeEncoding(recompiledRecord, recompiled.UsingLocalization), recompiled.GameRelease);
+            if (changed != null) yield return (originalRecord, changed);
         }
-
-        // The other direction — a record the recompile produced that the original never had.
-        foreach (var recompiledRecord in recompiled.EnumerateMajorRecords())
-        {
-            if (!originalFormKeys.Contains(recompiledRecord.FormKey))
-            {
-                return new Divergence(recompiledRecord.GetType().Name, recompiledRecord.FormKey, recompiledRecord.EditorID,
-                    "is present in the recompiled plugin but not present in the original.");
-            }
-        }
-
-        return null;
     }
 
     // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
@@ -99,70 +103,6 @@ internal static class ModelIdentity
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
         return original.Select(record => (record, recompiledByFormKey.GetValueOrDefault(record.FormKey)));
     }
-
-    /// <summary>Each <paramref name="held"/> record with every document path whose value <paramref name="written"/>
-    /// lacks. A value read back in another form, a union of another kind included, is Mutagen's to decide.</summary>
-    public static IReadOnlyList<(IMajorRecordGetter Record, IReadOnlyList<string> Paths)> FindDrops(
-        IReadOnlyList<(IMajorRecordGetter Record, string Text)> held, IModGetter written)
-    {
-        var game = GameCodecs.For(written.GameRelease);
-        var drops = new List<(IMajorRecordGetter, IReadOnlyList<string>)>();
-        foreach (var ((record, writtenRecord), text) in Paired(held.Select(h => h.Record), written).Zip(held.Select(h => h.Text)))
-        {
-            var recompiled = writtenRecord
-                ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {record.FormKey}.");
-            if (string.Equals(text, RecordTextCodec.SerializeToText(recompiled, written.GameRelease), StringComparison.Ordinal)) continue;
-
-            var normalized = game.NormalizeEncoding(record);
-            var heldText = ReferenceEquals(normalized, record) ? text : RecordTextCodec.SerializeToText(normalized, written.GameRelease);
-            var writtenText = RecordTextCodec.SerializeToText(game.NormalizeEncoding(recompiled), written.GameRelease);
-            if (string.Equals(heldText, writtenText, StringComparison.Ordinal)) continue;
-
-            using var heldDoc = System.Text.Json.JsonDocument.Parse(heldText);
-            using var writtenDoc = System.Text.Json.JsonDocument.Parse(writtenText);
-            var paths = new List<string>();
-            CollectAbsences(heldDoc.RootElement, writtenDoc.RootElement, path: "", paths);
-            if (paths.Count > 0) drops.Add((record, paths));
-        }
-        return drops;
-    }
-
-    private static void CollectAbsences(System.Text.Json.JsonElement held, System.Text.Json.JsonElement? written, string path, List<string> absent)
-    {
-        if (held.ValueKind == System.Text.Json.JsonValueKind.Array && written is null)
-        {
-            for (var index = 0; index < held.GetArrayLength(); index++) absent.Add($"{path}[{index}]");
-            return;
-        }
-        if (written is not { } present)
-        {
-            absent.Add(path);
-            return;
-        }
-        switch (held.ValueKind)
-        {
-            case System.Text.Json.JsonValueKind.Object when present.ValueKind == System.Text.Json.JsonValueKind.Object:
-                if (KindOf(held) != KindOf(present)) return;
-                foreach (var member in held.EnumerateObject())
-                {
-                    var memberPath = path.Length == 0 ? member.Name : $"{path}.{member.Name}";
-                    CollectAbsences(member.Value, present.TryGetProperty(member.Name, out var found) ? found : null, memberPath, absent);
-                }
-                return;
-            case System.Text.Json.JsonValueKind.Array when present.ValueKind == System.Text.Json.JsonValueKind.Array:
-                var presentItems = present.EnumerateArray().ToList();
-                var index = 0;
-                foreach (var item in held.EnumerateArray())
-                {
-                    CollectAbsences(item, index < presentItems.Count ? presentItems[index] : null, $"{path}[{index}]", absent);
-                    index++;
-                }
-                return;
-        }
-    }
-
-    private static string? KindOf(System.Text.Json.JsonElement document) =>
-        document.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var kind) ? kind.GetString() : null;
 
     /// <summary>The mod header mask fields Mutagen carries as opaque data, so a corruption is
     /// a real defect. An allow-list, not every field: masters, stats and overridden forms have

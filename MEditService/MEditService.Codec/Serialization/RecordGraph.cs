@@ -21,11 +21,7 @@ public sealed class RecordGraph(Func<Type, bool> picks)
     {
         if (node is null) return;
         var type = node.GetType();
-        if (picks(type))
-        {
-            visit(node);
-            return;
-        }
+        if (picks(type)) visit(node);
         if (node is IEnumerable items and not string)
         {
             foreach (var item in items) Visit(item, holders, visit);
