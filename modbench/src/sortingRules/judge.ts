@@ -88,7 +88,9 @@ function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): Br
   });
 }
 
-/** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first. */
-export function judge(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
-  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf), ...brokenMasterFlags(order, factsOf)];
+/** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first. The game places a plugin it
+ *  loads with no line, so only its masters judge its place. */
+export function judge(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean = () => false): BrokenRule[] {
+  const lines = order.filter((filename) => !loadedWithNoLine(filename));
+  return [...brokenMasters(order, factsOf), ...brokenBlueprints(lines, factsOf), ...brokenMasterFlags(lines, factsOf)];
 }

@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import { distinctReads, evaluateCondition, isFilePresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
+import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
 import { DEFAULT_GROUP, type CleaningData, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
@@ -59,7 +59,7 @@ function guarded(
 }
 
 function judgePlugin(
-  order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts,
+  order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts, lines: readonly PluginRef[],
 ): BrokenRule[] {
   const plugin = order[index];
   if (plugin === undefined) return [];
@@ -74,15 +74,16 @@ function judgePlugin(
     return [{ rule: 'requirement', level: 'error', plugins: [plugin], source: file.source, reason: withDetail(`"${plugin.filename}" requires ${shown(file)}, which is missing.`, file) }];
   }));
   const incompatibilities = filesOf('inc').flatMap((file) => checked(file, 'an incompatibility', (): Judged => {
-    const present = isFilePresent(file.name, facts);
+    const present = isIncompatibilityPresent(file.name, facts);
     if (present.kind === 'unevaluable') return { cannot: present.reason };
     if (!present.value) return [];
     return [{ rule: 'incompatibility', level: 'error', plugins: [plugin], source: file.source, reason: withDetail(`"${plugin.filename}" is incompatible with ${shown(file)}, which is present.`, file) }];
   }));
   const loadAfters = filesOf('after').flatMap((file) => checked(file, 'a load after', (): Judged => {
-    const other = order.findIndex((candidate) => fold(candidate.filename) === fold(file.name));
-    const target = order[other];
-    if (target === undefined || other < index) return [];
+    const own = lines.indexOf(plugin);
+    const other = lines.findIndex((candidate) => fold(candidate.filename) === fold(file.name));
+    const target = lines[other];
+    if (target === undefined || own === -1 || other < own) return [];
     return [{
       rule: 'loadAfter', level: 'warning', plugins: [plugin, target], source: file.source,
       reason: `"${plugin.filename}" loads before ${shown(file)}, and should load after it.`,
@@ -174,11 +175,14 @@ function judgeGroups(
 }
 
 /** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages that apply.
- *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread. */
+ *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread.
+ *  The game places a plugin it loads with no line, so no load after or group holds it to a place. */
 export function judgeLoot(
   order: readonly PluginRef[], rules: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
+  loadedWithNoLine: (filename: string) => boolean,
 ): BrokenRule[] {
-  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts)), ...judgeGroups(order, rules, partitionOf)];
+  const lines = order.filter(({ filename }) => !loadedWithNoLine(filename));
+  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts, lines)), ...judgeGroups(lines, rules, partitionOf)];
 }
 
 /** The file reads `judgeLoot` needs of `order`: those of every condition on a rule of a plugin in it, and the

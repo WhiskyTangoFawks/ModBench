@@ -125,6 +125,13 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
+  it('judges no rule on the place of a plugin the game loads with no line', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], [A]);
+
+    expect(facts.tooltipLines(A)).not.toContain(MASTER_FLAG_LINE);
+  });
+
   it('keeps the last sorting statuses through a re-read, until a reconcile judges again', () => {
     const facts = new PluginFacts();
     lackingMasters('Ghost.esm')(facts);

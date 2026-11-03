@@ -32,7 +32,7 @@ const judgedIn = (world: World, order: string[], masterlist: string, userlist?: 
   judgeLoot(order.map(at), {
     ...rules({ masterlist: text(masterlist), ...userlist === undefined ? {} : { userlist: text(userlist) } }),
     facts: factsOf(world),
-  }, (filename) => partitions[filename] ?? 'nonMasters');
+  }, (filename) => partitions[filename] ?? 'nonMasters', () => false);
 
 const judged = (order: string[], masterlist: string, present: string[] = order, userlist?: string, partitions: Record<string, LootPartition> = {}) =>
   judgedIn({ present, active: order }, order, masterlist, userlist, partitions);
@@ -56,10 +56,17 @@ describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
   });
 
   it('breaks, at Error, a plugin whose incompatibility is present', () => {
-    expect(judged(['A.esp'], 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n', ['A.esp', 'B.esp'])).toEqual([{
+    expect(judged(['A.esp', 'B.esp'], 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n')).toEqual([{
       rule: 'incompatibility', level: 'error', plugins: [at('A.esp')], source: { file: 'masterlist', line: 2 },
       reason: '"A.esp" is incompatible with "B.esp", which is present.',
     }]);
+  });
+
+  it('counts an incompatible plugin present only while it is active, and any other file while it is present', () => {
+    const masterlist = 'plugins:\n  - name: A.esp\n    inc: [B.esp, C.dll]\n';
+
+    expect(judgedIn({ present: ['A.esp', 'B.esp', 'C.dll'], active: ['A.esp'] }, ['A.esp'], masterlist).map(({ reason }) => reason))
+      .toEqual(['"A.esp" is incompatible with "C.dll", which is present.']);
   });
 
   it('breaks, at Warning, a plugin that loads before a plugin it should load after, naming both', () => {
@@ -146,7 +153,7 @@ describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
     const broken = judgeLoot([at('A.esp')], {
       ...rules({ masterlist: text('plugins:\n  - name: A.esp\n    req: [B.esp]\n') }),
       facts: { ...factsOf({}), isPresent: () => 'unknown' },
-    }, () => 'nonMasters');
+    }, () => 'nonMasters', () => false);
 
     expect(broken.map(({ rule, level, reason }) => [rule, level, reason])).toEqual([
       ['condition', 'warning', '"A.esp": a requirement cannot be evaluated (the game\'s Data folder cannot be listed), so "B.esp" is not checked.'],
@@ -302,6 +309,19 @@ plugins:
     it('takes the group a userlist entry states over the masterlist\'s', () => {
       expect(judged(['L.esp', 'E.esp'], groups, ['L.esp', 'E.esp'], 'plugins:\n  - {name: L.esp, group: default}\n')).toEqual([]);
     });
+  });
+
+  it('judges no group or load after on a plugin the game loads with no line, as the game places it', () => {
+    const masterlist = `groups:
+  - name: default
+  - {name: late, after: [default]}
+plugins:
+  - {name: Creation.esp, group: late, after: [Mod.esp]}
+`;
+    const order = ['Creation.esp', 'Base.esp', 'Mod.esp'];
+
+    expect(judgeLoot(order.map(at), { ...rules({ masterlist: text(masterlist) }), facts: factsOf({ present: order, active: order }) },
+      () => 'nonMasters', (filename) => filename !== 'Mod.esp')).toEqual([]);
   });
 });
 

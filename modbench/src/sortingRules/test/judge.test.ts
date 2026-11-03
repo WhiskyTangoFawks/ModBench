@@ -94,4 +94,20 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
 
     expect(judge(['A.esm', 'B.esp'], facts)).toEqual([]);
   });
+
+  it('judges no blueprint or master flag rule on a plugin the game loads with no line, as the game places it', () => {
+    const facts = factsFrom({
+      'Base.esm': { master: true }, 'Blueprint.esm': { master: true, blueprint: true }, 'Creation.esp': {},
+      'Mod.esm': { master: true }, 'Mod.esp': {},
+    });
+    const noLine = new Set(['Base.esm', 'Blueprint.esm', 'Creation.esp']);
+
+    expect(judge(['Base.esm', 'Blueprint.esm', 'Creation.esp', 'Mod.esm', 'Mod.esp'], facts, (filename) => noLine.has(filename))).toEqual([]);
+  });
+
+  it('breaks a plugin the game loads with no line that loads before its master', () => {
+    const facts = factsFrom({ 'Creation.esm': { master: true, masters: ['Mod.esm'] }, 'Mod.esm': { master: true } });
+
+    expect(judge(['Creation.esm', 'Mod.esm'], facts, (filename) => filename === 'Creation.esm').map(({ rule }) => rule)).toEqual(['master']);
+  });
 });

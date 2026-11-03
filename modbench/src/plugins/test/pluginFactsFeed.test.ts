@@ -208,13 +208,13 @@ describe('PluginFactsFeed', () => {
   });
 
   it('publishes a rule the userlist states on its line in the userlist', async () => {
-    const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n'));
-    const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules, present: ['B.esp'] });
+    const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    req: [B.esp]\n'));
+    const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules });
     client.setQueryAnswer('getPlugins', [held()]);
 
     await feed.reconciled([]);
 
-    expect(ruleFiles.items).toEqual([[{ path: USERLIST, line: 2, level: 'error', text: '"A.esp" is incompatible with "B.esp", which is present.' }]]);
+    expect(ruleFiles.items).toEqual([[{ path: USERLIST, line: 2, level: 'error', text: '"A.esp" requires "B.esp", which is missing.' }]]);
   });
 
   it('judges the order of the last reconcile again when the rules change, and not before one', async () => {

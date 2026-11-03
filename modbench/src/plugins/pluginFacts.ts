@@ -241,13 +241,15 @@ export class PluginFacts {
   private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootInput): void {
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
     const factsOf = this.factsOver(activeOrder);
+    const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
+    const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
     const broken = [
-      ...judge(activeOrder.map(({ name }) => name), factsOf),
+      ...judge(activeOrder.map(({ name }) => name), factsOf, loadedWithNoLine),
       ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), { ...loot, facts: this.conditionFacts(activeOrder, loot.files) }, (filename) => {
         const address = addressOf.get(filename.toLowerCase());
         const read = address && this.reads.get(address);
         return read && lootPartition(read);
-      }),
+      }, loadedWithNoLine),
     ];
     this.broken = broken;
     this.offered = offeredMoves(this.lineOrder.map(({ name }) => name), broken, this.factsOver(this.lineOrder));

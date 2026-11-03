@@ -405,15 +405,14 @@ export interface MetadataTexts {
   readonly prelude: string;
 }
 
-const MASTERLIST_KEYS = ['plugins', 'groups', 'bash_tags', 'globals'];
+const METADATA_KEYS = ['plugins', 'groups', 'bash_tags', 'globals'];
 
 const textFile = (text: string): SortingRuleFile => ({ path: '', kind: 'text', text });
 
-// Whether the text is a map holding a key a masterlist holds, or a sequence for the prelude: a page of HTML parses as YAML too.
-function shapeOf(text: string): 'masterlist' | 'prelude' | undefined {
+// Whether the text is a map holding a key of LOOT's metadata: a page of HTML parses as YAML too.
+function isMetadata(text: string): boolean {
   const { contents } = parseDocument(text);
-  if (isSeq(contents)) return 'prelude';
-  return isMap(contents) && contents.items.some(({ key }) => MASTERLIST_KEYS.includes(String(isScalar(key) ? key.value : key))) ? 'masterlist' : undefined;
+  return isMap(contents) && contents.items.some(({ key }) => METADATA_KEYS.includes(String(isScalar(key) ? key.value : key)));
 }
 
 /** Why the texts do not read as LOOT's masterlist and prelude, or undefined when they do. */
@@ -423,8 +422,8 @@ export function metadataProblem({ masterlist, prelude }: MetadataTexts): string 
     readRuleFile('masterlist', textFile(masterlist), 'masterlist', withPrelude(masterlist, prelude)),
   ].flatMap((file) => file.problems)[0];
   if (read !== undefined) return `The ${read.file} does not read: ${read.text}`;
-  if (shapeOf(masterlist) !== 'masterlist') return 'The masterlist is not LOOT metadata.';
-  if (shapeOf(prelude) !== 'prelude') return 'The prelude is not LOOT metadata.';
+  if (!isMetadata(masterlist)) return 'The masterlist is not LOOT metadata.';
+  if (!isMetadata(prelude)) return 'The prelude is not LOOT metadata.';
   return undefined;
 }
 

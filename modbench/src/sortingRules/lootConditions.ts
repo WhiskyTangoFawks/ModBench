@@ -224,6 +224,12 @@ const activeMatching = (path: string, atLeast: number, facts: ConditionFacts): E
   return 'problem' in matched ? cannot(matched.problem) : yes(matched.found.length >= atLeast);
 };
 
+/** LOOT's own test: an incompatible plugin counts only while it is active. */
+export function isIncompatibilityPresent(path: string, facts: ConditionFacts): Evaluation {
+  const present = isFilePresent(path, facts);
+  return present.kind === 'unevaluable' || !present.value || !PLUGIN.test(path) ? present : activeMatching(path, 1, facts);
+}
+
 type Quoted = { path: string } | Unevaluable;
 
 function quoted(args: readonly Argument[], at: number, name: string): Quoted {
