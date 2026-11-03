@@ -9,7 +9,6 @@ import {
 } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
-import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isPluginAtRoot } from '../tables/pluginFile';
@@ -20,7 +19,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'repositoryOnDisk' | 'writeSourceFolderLines'>
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'repositoryOnDisk' | 'writeSourceModLines'>
   & FolderRestoreAdapter;
 
 /** The source folder version in git makes for a mod, and the repository that holds it. */
@@ -175,21 +174,19 @@ async function foldersNotLinked(
 
 export const NO_INSTANCE_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
 
-async function linesLeftIn(adapter: Pick<Adapter, 'writeSourceFolderLines'>, sourceFolder: string): Promise<string | undefined> {
-  return adapter.writeSourceFolderLines([sourceFolder], false).then(
-    () => undefined, (err: unknown) => `The ignore list still lets in ${sourceFolder}, which no mod was put in: ${errorMessage(err)}`);
-}
-
-/** What placing mods did, each answer by the mod it concerns: no source folder made or held, a landed folder not linked,
- *  ignore-list lines of an unlanded mod that stay. `notes` is what a downloaded file could not give. */
+/** What placing mods did, each answer by the mod it concerns: no source folder made or held, or a landed mod not linked
+ *  or not left out of the instance repository. `notes` is what a downloaded file could not give. */
 export interface PlacedMods<R> {
   readonly outcome: R | WriteRefused;
   readonly notMade: ReadonlyMap<string, string>;
   readonly notLinked: ReadonlyMap<string, string>;
-  readonly notTakenBack: ReadonlyMap<string, string>;
   readonly notes: readonly string[];
-  /** `refused` with what stays in the ignore list added to the reason of each item of a mod it concerns. */
-  readonly withLinesLeft: <T>(refused: readonly ItemRefusal<T>[], modOf: (item: T) => string) => ItemRefusal<T>[];
+}
+
+// A repository of its own would show in the instance repository as a nested one.
+async function leftOutOrWhy(adapter: Pick<Adapter, 'writeSourceModLines'>): Promise<string | undefined> {
+  return adapter.writeSourceModLines().then(
+    () => undefined, (err: unknown) => `the instance repository's ignore list could not leave its repository out: ${errorMessage(err)}`);
 }
 
 interface PlaceRequest {
@@ -198,14 +195,13 @@ interface PlaceRequest {
   readonly onProgress?: (mod: string, modsDone: number, modsTotal: number) => void;
 }
 
-/** The flow of version in git and decompile and repair: a source folder per mod, let into the ignore list when the
- *  instance repository holds it. Lines of mods `landedBy` omits come back out, also on a throw. */
+/** The flow of version in git and decompile and repair: a source folder per mod. One in a new repository is left out of
+ *  the instance repository once it lands. */
 export async function modsPlaced<R>(
   adapter: Adapter, { mods, where, onProgress }: PlaceRequest,
   run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>, landedBy: (outcome: R) => Iterable<string>,
 ): Promise<PlacedMods<R> | WriteRefused> {
-  const inInstanceRepository = where === 'InstanceRepository';
-  if (inInstanceRepository && !(await adapter.repositoryOnDisk())) return { refused: true, message: NO_INSTANCE_REPOSITORY };
+  if (where === 'InstanceRepository' && !(await adapter.repositoryOnDisk())) return { refused: true, message: NO_INSTANCE_REPOSITORY };
   const made = new Map<string, MadeSourceFolder>();
   const notMade = new Map<string, string>();
   let notes: readonly string[] = [];
@@ -221,37 +217,17 @@ export async function modsPlaced<R>(
       else made.set(mod, decided);
     }
   }
-  const takenBack = async (isUnlanded: (mod: string) => boolean): Promise<Map<string, string>> => {
-    const left = new Map<string, string>();
-    for (const [mod, { sourceFolder }] of inInstanceRepository ? made : []) {
-      const why = isUnlanded(mod) ? await linesLeftIn(adapter, sourceFolder.path) : undefined;
-      if (why !== undefined) left.set(mod, why);
+  const outcome = await run(made);
+  const landed = [...new Set(isRefused(outcome) ? [] : landedBy(outcome))];
+  const unfinished = await foldersNotLinked(adapter, made, landed);
+  const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : undefined;
+  if (notLeftOut !== undefined) {
+    for (const mod of landed) {
+      const why = unfinished.get(mod);
+      unfinished.set(mod, why === undefined ? notLeftOut : `${why}; ${notLeftOut}`);
     }
-    return left;
-  };
-  // git adds nothing the ignore list leaves out, so the folders are let in first.
-  const notLetIn = inInstanceRepository && made.size > 0
-    ? await adapter.writeSourceFolderLines([...made.values()].map(({ sourceFolder }) => sourceFolder.path), true).then(() => undefined, errorMessage)
-    : undefined;
-  if (notLetIn !== undefined) {
-    for (const mod of made.keys()) notMade.set(mod, notLetIn);
-    made.clear();
   }
-  let outcome: R | WriteRefused;
-  try {
-    outcome = await run(made);
-  } catch (err) {
-    const left = await takenBack(() => true);
-    throw left.size === 0 ? err : new Error(`${errorMessage(err)} ${[...left.values()].join(' ')}`, { cause: err });
-  }
-  const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
-  const notTakenBack = await takenBack((mod) => !landed.has(mod));
-  const notLinked = isRefused(outcome) ? new Map<string, string>() : await foldersNotLinked(adapter, made, [...landed]);
-  const withLinesLeft = <T>(refused: readonly ItemRefusal<T>[], modOf: (item: T) => string): ItemRefusal<T>[] => refused.map((entry) => {
-    const stays = notTakenBack.get(modOf(entry.item));
-    return stays === undefined ? entry : { ...entry, reason: `${entry.reason} ${stays}` };
-  });
-  return { outcome, notMade, notLinked, notTakenBack, notes, withLinesLeft };
+  return { outcome, notMade, notLinked: unfinished, notes };
 }
 
 /** `modsPlaced` bound to one instance, as decompile and repair is handed it. */

@@ -42,6 +42,44 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void UnderAnIgnoreListThatLetsInEverySourceFolder_AnInit_CommitsTheSourceFolderAlone_AndNoChangeOfTheIgnoreList()
+    {
+        CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt();
+
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, heldIn: SourceModIn.InstanceRepository));
+
+        AssertTheInitAtHoldsTheSourceFolderAlone("HEAD");
+    }
+
+    [Fact]
+    public void UnderAnIgnoreListThatLetsInEverySourceFolder_AnInitThenARepair_CommitsTheSourceFolderAloneAsTheInit_AndNoChangeOfTheIgnoreList()
+    {
+        CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt();
+        var repair = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"EditorID\": \"Repaired\"}"u8.ToArray())], "Repair A.esp");
+
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, repair: (A, repair), heldIn: SourceModIn.InstanceRepository));
+
+        AssertTheInitAtHoldsTheSourceFolderAlone("HEAD~1");
+    }
+
+    private void CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt()
+    {
+        File.WriteAllText(Path.Combine(_instance, ".gitignore"), "/*\n!/.gitignore\n!/source/\n/source/*\n!/source/*/\n");
+        Git("add", ".gitignore");
+        Git("commit", "-q", "-m", "Base");
+        File.AppendAllText(Path.Combine(_instance, ".gitignore"), "mine/\n");
+    }
+
+    private void AssertTheInitAtHoldsTheSourceFolderAlone(string revision)
+    {
+        var init = Lines(Git("show", "--name-only", "--format=%s", revision));
+        Assert.Equal($"Init {TestMod.Name}", init[0]);
+        Assert.NotEmpty(init[1..]);
+        Assert.All(init[1..], path => Assert.StartsWith($"source/{TestMod.Name}/", path, StringComparison.Ordinal));
+        Assert.Equal(" M .gitignore", Git("status", "--porcelain", "--", ".gitignore").TrimEnd());
+    }
+
+    [Fact]
     public void AnInitThatCommitsNothing_StagesTheSourceFoldersPaths_AndMovesNoBranch()
     {
         var before = Head();
