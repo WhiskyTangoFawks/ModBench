@@ -164,5 +164,5 @@ public sealed class VersionInGitHandlerTests : IDisposable
     private string[] CommittedAssets() =>
         [.. GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Where(path => path is not (".gitattributes" or ".gitignore" or "build.json") &&!path.StartsWith("plugin-source/", StringComparison.Ordinal))];
+            .Where(path => path is not (".gitattributes" or ".gitignore" or "build.json") && !path.StartsWith("plugin-source/", StringComparison.Ordinal))];
 }

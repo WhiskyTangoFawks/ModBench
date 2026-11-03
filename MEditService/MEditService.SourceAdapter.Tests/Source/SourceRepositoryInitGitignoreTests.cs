@@ -16,7 +16,7 @@ public sealed class SourceRepositoryInitGitignoreTests
         GitProbe.TryRun(Path.Combine(sourceFolder, ".git"), sourceFolder, out _, "check-ignore", path);
 
     [Fact]
-    public void AnInit_TracksExactlyTheGitAttributesTheGitignoreTheBuildFileThePluginSourceAndTheAssets()
+    public void AnInit_TracksExactlyTheGitattributesTheGitignoreTheBuildFileThePluginSourceAndTheAssets()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 

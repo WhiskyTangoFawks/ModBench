@@ -50,7 +50,7 @@ internal static class GitInit
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
             git.BeginInit(journal);
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
-            // plugins.md, Version in git, story 4, whatever the user's git config converts.
+            // Each file keeps its line endings as written, whatever the user's git config converts (plugins.md, Version in git, story 4).
             journal.Write(Path.Combine(sourceFolder, ".gitattributes"), "* -text\n"u8.ToArray());
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
