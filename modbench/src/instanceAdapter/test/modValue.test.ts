@@ -40,12 +40,12 @@ describe('a folder as a value', () => {
 });
 
 describe('a folder\'s files git does not hold as a value', () => {
-  it('holds only the files git neither holds nor owns, so its manifest names no attributes file version in git leaves untracked', async () => {
+  it('holds only the files git neither holds nor owns, an attributes file git does not hold among them', async () => {
     const { files } = await unheldFolderValueOver(
       reads(['.git/config', '.gitattributes', '.gitignore', 'build.json', 'textures/a.dds']), () => Promise.resolve(['.gitignore', 'build.json']), '/source/Mod',
     );
 
-    expect([...files.keys()]).toEqual(['textures/a.dds']);
+    expect([...files.keys()]).toEqual(['.gitattributes', 'textures/a.dds']);
   });
 });
 

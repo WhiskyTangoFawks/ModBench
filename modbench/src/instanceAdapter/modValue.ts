@@ -23,7 +23,7 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
   return { files, exclude: [...exclude], ignoresCase: cased !== undefined && (await reads.fileStamp(join(folder, otherCase(cased)))).kind === 'read' };
 }
 
-const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/') || path === '.gitattributes';
+const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
 
 /** A folder's files that git does not hold, by their own paths: its manifest names those and no others
  *  (instance-repository.md, The manifest, story 5). `heldByGit` lists the files git holds in `folder`. */
