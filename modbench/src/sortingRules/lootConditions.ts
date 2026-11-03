@@ -214,6 +214,16 @@ export function isFilePresent(path: string, facts: ConditionFacts): Evaluation {
   return REGEX_PATH.test(path) ? filesMatching(path, 1, facts) : presence(path, facts);
 }
 
+/** Whether an incompatibility is present as LOOT counts it (validation.cpp, checkInstallValidity): a plugin only while it is active. */
+export function isIncompatibilityPresent(path: string, facts: ConditionFacts): Evaluation {
+  const present = isFilePresent(path, facts);
+  if (present.kind === 'unevaluable' || !present.value) return present;
+  const matched = REGEX_PATH.test(path) ? matching(facts.files().names, path) : { found: [path] };
+  if ('problem' in matched) return cannot(matched.problem);
+  const active = new Set(facts.activePlugins().map(fold));
+  return yes(matched.found.some((file) => !PLUGIN.test(file) || active.has(fold(file))));
+}
+
 function withAnswer(facts: ConditionFacts, read: FileRead, use: (value: ReadValue) => boolean): Evaluation {
   const answer = facts.answer(read);
   return answer.kind === 'unreadable' ? cannot(answer.why) : yes(use(answer.value));

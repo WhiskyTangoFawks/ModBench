@@ -426,7 +426,7 @@ plugins:
 
 describe('metadataProblem: whether texts read as LOOT\'s masterlist and prelude', () => {
   const MASTERLIST = 'plugins:\n  - name: A.esp\n';
-  const PRELUDE = '- &anchor x\n';
+  const PRELUDE = 'common:\n  - &anchor x\nglobals: []\n';
 
   it.each<[string, MetadataTexts, string]>([
     ['a masterlist that is a page of HTML', { masterlist: '<!DOCTYPE html>\n<html><body>Sign in to the network</body></html>\n', prelude: PRELUDE }, 'The masterlist is not LOOT metadata.'],

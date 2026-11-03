@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import { distinctReads, evaluateCondition, isFilePresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
+import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
 import { DEFAULT_GROUP, type CleaningData, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
@@ -74,7 +74,7 @@ function judgePlugin(
     return [{ rule: 'requirement', level: 'error', plugins: [plugin], source: file.source, reason: withDetail(`"${plugin.filename}" requires ${shown(file)}, which is missing.`, file) }];
   }));
   const incompatibilities = filesOf('inc').flatMap((file) => checked(file, 'an incompatibility', (): Judged => {
-    const present = isFilePresent(file.name, facts);
+    const present = isIncompatibilityPresent(file.name, facts);
     if (present.kind === 'unevaluable') return { cannot: present.reason };
     if (!present.value) return [];
     return [{ rule: 'incompatibility', level: 'error', plugins: [plugin], source: file.source, reason: withDetail(`"${plugin.filename}" is incompatible with ${shown(file)}, which is present.`, file) }];

@@ -125,6 +125,14 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
+  it('judges no blueprint rule on a blueprint plugin the game loads with no line', () => {
+    const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    facts.reconciled([held(), held({ ...blueprint, isMaster: true, isBlueprint: true })], [], [blueprint, A], [A]);
+
+    expect(facts.brokenRules()).toEqual([]);
+  });
+
   it('keeps the last sorting statuses through a re-read, until a reconcile judges again', () => {
     const facts = new PluginFacts();
     lackingMasters('Ghost.esm')(facts);

@@ -56,10 +56,24 @@ describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
   });
 
   it('breaks, at Error, a plugin whose incompatibility is present', () => {
-    expect(judged(['A.esp'], 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n', ['A.esp', 'B.esp'])).toEqual([{
+    expect(judged(['A.esp', 'B.esp'], 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n')).toEqual([{
       rule: 'incompatibility', level: 'error', plugins: [at('A.esp')], source: { file: 'masterlist', line: 2 },
       reason: '"A.esp" is incompatible with "B.esp", which is present.',
     }]);
+  });
+
+  it('counts an incompatible plugin present only while it is active, and any other file while it is present', () => {
+    const masterlist = 'plugins:\n  - name: A.esp\n    inc: [B.esp, C.dll]\n';
+
+    expect(judgedIn({ present: ['A.esp', 'B.esp', 'C.dll'], active: ['A.esp'] }, ['A.esp'], masterlist).map(({ reason }) => reason))
+      .toEqual(['"A.esp" is incompatible with "C.dll", which is present.']);
+  });
+
+  it('counts a regular expression incompatibility present while a plugin it matches is active', () => {
+    const masterlist = "plugins:\n  - name: A.esp\n    inc: ['B.*\\.esp']\n";
+    const reasons = (active: string[]) => judgedIn({ present: ['A.esp', 'Bx.esp'], active }, ['A.esp'], masterlist).map(({ reason }) => reason);
+
+    expect([reasons(['A.esp', 'Bx.esp']), reasons(['A.esp'])]).toEqual([['"A.esp" is incompatible with "B.*\\.esp", which is present.'], []]);
   });
 
   it('breaks, at Warning, a plugin that loads before a plugin it should load after, naming both', () => {

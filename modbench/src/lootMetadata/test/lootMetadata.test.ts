@@ -7,7 +7,7 @@ const STARFIELD_MASTERLIST = `${RAW}/starfield/v0.29/masterlist.yaml`;
 const PRELUDE = `${RAW}/prelude/v0.29/prelude.yaml`;
 
 const MASTERLIST_TEXT = 'plugins: []\n';
-const PRELUDE_TEXT = '- &shared x\n';
+const PRELUDE_TEXT = 'common:\n  - &shared x\nglobals: []\n';
 const PAGE_OF_HTML = '<!DOCTYPE html>\n<html><body>Sign in to the network</body></html>\n';
 
 function hosting(files: Record<string, Response | Error>) {
