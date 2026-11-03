@@ -97,7 +97,7 @@ public sealed class HeldPluginsTests
 
         var row = Opened(held)[Key("TestMod.esl")];
         Assert.True(row.IsLight);
-        Assert.False(row.IsMaster);
+        Assert.True(row.IsMaster);
     }
 
     [Fact]
