@@ -47,8 +47,8 @@ public interface IGameCodec
     IReadOnlyList<string> TransientTypes(IModGetter plugin);
 
     /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite is entitled to
-    /// change: group-header-derived fields zeroed, and a worldspace's block levels in one canonical
-    /// order (ADR-0006).</summary>
+    /// change: group-header-derived fields zeroed, a worldspace's block levels in one canonical
+    /// order, and a string of one text in one language (ADR-0006).</summary>
     IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record);
 
     /// <summary>A mod holding <paramref name="plugin"/>'s header and no record, which the whole-mod

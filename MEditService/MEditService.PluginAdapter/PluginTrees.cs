@@ -234,7 +234,7 @@ public sealed class CompiledTree
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly Language _language;
     private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
-    private readonly Lazy<IReadOnlyList<(IMajorRecordGetter Record, PluginDocument Document)>> _documents;
+    private readonly Lazy<IReadOnlyList<PluginDocument>> _documents;
 
     internal CompiledTree(IMod mod, LoadOrderSnapshot loadOrder, Language language)
     {
@@ -244,9 +244,9 @@ public sealed class CompiledTree
         var gameRelease = loadOrder.GameRelease;
         _formKeys = new Lazy<IReadOnlyList<FormKey>>(
             () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
-        _documents = new Lazy<IReadOnlyList<(IMajorRecordGetter, PluginDocument)>>(
-            () => [.. mod.EnumerateMajorRecords().Select(record => ((IMajorRecordGetter)record, new PluginDocument(
-                RecordTypes.For(gameRelease).RecordTypeOf(record), record.FormKey.ToString(), RecordTextCodec.SerializeToText(record, gameRelease))))]);
+        _documents = new Lazy<IReadOnlyList<PluginDocument>>(
+            () => [.. mod.EnumerateMajorRecords().Select(record => new PluginDocument(
+                RecordTypes.For(gameRelease).RecordTypeOf(record), record.FormKey.ToString(), RecordTextCodec.SerializeToText(record, gameRelease)))]);
     }
 
     /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
@@ -260,20 +260,19 @@ public sealed class CompiledTree
     public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
 
     /// <summary>Each record as its own document, under the schema table it belongs to.</summary>
-    public IEnumerable<PluginDocument> Documents() => _documents.Value.Select(held => held.Document);
+    public IEnumerable<PluginDocument> Documents() => _documents.Value;
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
-    /// <summary>Every value of the tree that <paramref name="save"/>'s bytes do not hold.</summary>
+    /// <summary>Each record of the tree that <paramref name="save"/>'s bytes do not hold model-identical (ADR-0006).</summary>
     public IReadOnlyList<DroppedValue> DropsIn(PreparedPluginSave save)
     {
         var written = save.Reread(_mod.ModKey, _loadOrder.GameRelease, _language);
-        var held = _documents.Value.Select(pair => (pair.Record, pair.Document.Text)).ToList();
-        return [.. ModelIdentity.FindDrops(held, written).Select(drop => new DroppedValue(
+        return [.. ModelIdentity.RecordDivergences(_mod.EnumerateMajorRecords(), written).Select(drop => new DroppedValue(
             new RecordIdentity(drop.Record.FormKey.ToString(), RecordTypes.For(_loadOrder.GameRelease).RecordTypeOf(drop.Record), drop.Record.EditorID),
-            drop.Paths))];
+            drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))];
     }
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> for
@@ -298,5 +297,5 @@ public sealed class CompiledTree
     }
 }
 
-/// <summary>A tree's record and each path in its document whose value the plugin written from it lacks.</summary>
-public sealed record DroppedValue(RecordIdentity Record, IReadOnlyList<string> Paths);
+/// <summary>A tree's record and the field whose value the plugin written from it does not hold.</summary>
+public sealed record DroppedValue(RecordIdentity Record, string Field);
