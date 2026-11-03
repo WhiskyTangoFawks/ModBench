@@ -65,7 +65,7 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   const sortingInfo = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
   const feed = new PluginFactsFeed({
-    client, shownPlugins, activePlugins, rules,
+    client, shownPlugins, activePlugins, rules, lines: activePlugins,
     publishSortingInfo: sortingInfo.push,
     publishRuleFiles: ruleFiles.push,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,

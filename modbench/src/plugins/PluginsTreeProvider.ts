@@ -145,6 +145,7 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
+      lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
       publishFailedToRead: options.publishFailedToRead,
@@ -214,6 +215,10 @@ export class PluginsTreeProvider
   /** What the sorting rules say. */
   sortingRuleLines(): string[] {
     return this.instance.sequence === 0 ? [] : sortingRuleFileLines(this.rules);
+  }
+
+  userlistPath(): string {
+    return this.rules.files.userlist.path;
   }
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows

@@ -1106,6 +1106,7 @@ describe('package.json Plugins palette entries', () => {
   describePaletteGate('modbench.pluginListTree', [
     ['modbench.plugin.reveal', { 'modbench.plugin.singlePlugin': true }],
     ['modbench.plugin.rename', { 'modbench.plugin.singleCompiledPlugin': true }],
+    ['modbench.plugin.applySuggestedMove', { 'modbench.plugin.singleSuggestedMove': true }],
     ['modbench.plugin.enable', { 'modbench.plugin.holdsDisabledPlugin': true }],
     ['modbench.plugin.disable', { 'modbench.plugin.holdsEnabledPlugin': true }],
     ['modbench.plugin.move', { 'modbench.plugin.holdsPluginLine': true }],
