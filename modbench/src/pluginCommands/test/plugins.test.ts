@@ -393,10 +393,10 @@ describe('loadAfter', () => {
   it('hands the userlist each plugin with the plugins it loads after', async () => {
     const fake = fakeInstanceAdapter();
 
-    const result = await pluginCommandsWith(fake.adapter).loadAfter(['A.esp', 'B.esp'], ['C.esp']);
+    const result = await pluginCommandsWith(fake.adapter).loadAfter(['A.esp', 'B.esp'], ['C.esp', 'D.esp']);
 
     expect(result).toEqual({ applied: true, wrote: true });
-    expect(fake.calls).toEqual([{ verb: 'changeUserlist', additions: [{ plugin: 'A.esp', after: ['C.esp'] }, { plugin: 'B.esp', after: ['C.esp'] }] }]);
+    expect(fake.calls).toEqual([{ verb: 'changeUserlist', additions: [{ plugin: 'A.esp', after: ['C.esp', 'D.esp'] }, { plugin: 'B.esp', after: ['C.esp', 'D.esp'] }] }]);
   });
 
   it('refuses with the reason the userlist cannot be changed', async () => {
