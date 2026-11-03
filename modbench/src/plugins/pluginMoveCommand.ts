@@ -26,7 +26,6 @@ interface Move {
   readonly drop: PluginsDrop;
 }
 
-/** The write both gestures that move plugins end in. */
 export async function movePlugins(
   commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   plugins: readonly PluginAddress[], drop: PluginsDrop,

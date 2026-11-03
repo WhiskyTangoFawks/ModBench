@@ -10,8 +10,8 @@ interface SuggestedMoveActionsDeps {
 /** plugins.md, Sorting rules, story 5: apply suggested move as a code action on the line of the userlist that states the broken rule. */
 export function suggestedMoveActions({ userlistPath, moves }: SuggestedMoveActionsDeps) {
   return {
-    provideCodeActions(document: { readonly uri: { readonly fsPath: string } }, range: { readonly start: { readonly line: number }; readonly end: { readonly line: number } }): vscode.CodeAction[] {
-      if (document.uri.fsPath !== userlistPath()) return [];
+    provideCodeActions(document: { readonly uri: { toString(): string } }, range: { readonly start: { readonly line: number }; readonly end: { readonly line: number } }): vscode.CodeAction[] {
+      if (document.uri.toString() !== vscode.Uri.file(userlistPath()).toString()) return [];
       return moves().filter(({ rule: { source } }) => source?.file === 'userlist' && source.line >= range.start.line && source.line <= range.end.line)
         .map((move) => {
           const action = new vscode.CodeAction(`Apply suggested move: ${move.rule.reason}`, vscode.CodeActionKind.QuickFix);

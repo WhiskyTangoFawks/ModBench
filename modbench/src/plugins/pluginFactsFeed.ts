@@ -18,8 +18,8 @@ export interface PluginFactsFeedDeps {
   shownPlugins: () => readonly PluginAddress[];
   /** The plugins the game loads, in load order: the order the sorting rules judge. */
   activePlugins: () => readonly PluginAddress[];
-  /** Whether plugins.txt holds a line for the plugin: one the game loads with none cannot move. */
-  holdsLine: (plugin: PluginAddress) => boolean;
+  /** Every plugins.txt line, enabled or not, in load order: the order a move is written into. */
+  lines: () => readonly PluginAddress[];
   /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
   rules: () => LootRules & Pick<ReadRules, 'files' | 'problems'>;
   /** The malformed-plugin scan's other surface, the Problems panel. */
@@ -108,7 +108,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.rules(), this.deps.holdsLine);
+    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.rules(), this.deps.lines());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);

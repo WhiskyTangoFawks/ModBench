@@ -1,9 +1,9 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
-import { judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
+import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
 import { offeredMoves, type OfferedMove } from '../pluginCommands/pluginOrder';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
-import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress } from './pluginAddress';
@@ -122,7 +122,7 @@ export class PluginFacts {
   private broken: BrokenRule[] = [];
   private offered: OfferedMove[] = [];
   private judgedActiveOrder?: readonly PluginAddress[];
-  private holdsLine: (plugin: PluginAddress) => boolean = () => true;
+  private lineOrder: readonly PluginAddress[] = [];
   private sourceUnreadableProblems: readonly SourceUnreadableProblem[] = [];
   private matches?: ByPluginAddress<boolean>;
   private diagnosisTexts = new ByPluginAddress<string[]>();
@@ -169,14 +169,14 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], loot: LootRules = NO_LOOT_RULES, holdsLine: (plugin: PluginAddress) => boolean = () => true): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], loot: LootRules = NO_LOOT_RULES, lines: readonly PluginAddress[] = activeOrder): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.clearOverride();
     this.refreshed(plugins);
     this.judgedActiveOrder = activeOrder;
-    this.holdsLine = holdsLine;
+    this.lineOrder = lines;
     this.judgeSorting(activeOrder, loot);
   }
 
@@ -215,17 +215,21 @@ export class PluginFacts {
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
 
-  // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
-  private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootRules): void {
-    const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
-    const names = activeOrder.map(({ name }) => name);
-    const factsOf: PluginFactsOf = (filename) => {
+  private factsOver(order: readonly PluginAddress[]): PluginFactsOf {
+    const addressOf = new Map(order.map((address) => [address.name.toLowerCase(), address] as const));
+    return (filename) => {
       const address = addressOf.get(filename.toLowerCase());
       const read = address && this.reads.get(address);
       return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
     };
+  }
+
+  // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
+  private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootRules): void {
+    const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
+    const factsOf = this.factsOver(activeOrder);
     const broken = [
-      ...judge(names, factsOf),
+      ...judge(activeOrder.map(({ name }) => name), factsOf),
       ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), loot, (filename) => {
         const address = addressOf.get(filename.toLowerCase());
         const read = address && this.reads.get(address);
@@ -233,13 +237,12 @@ export class PluginFacts {
       }),
     ];
     this.broken = broken;
-    this.offered = offeredMoves(names, broken, factsOf)
-      .filter(({ mover }) => this.holdsLine({ name: mover.filename, origin: mover.origin }));
+    this.offered = offeredMoves(this.lineOrder.map(({ name }) => name), broken, this.factsOver(this.lineOrder));
     this.sorting = new ByPluginAddress<BrokenRule[]>();
     this.sortingNames = [];
     for (const rule of broken) {
-      for (const { origin, filename } of rule.plugins) {
-        const address = { name: filename, origin };
+      for (const ref of rule.plugins) {
+        const address = addressOfRef(ref);
         if (!this.sorting.has(address)) this.sortingNames.push(address);
         this.sorting.append(address, rule);
       }
@@ -256,9 +259,8 @@ export class PluginFacts {
     return this.offered;
   }
 
-  /** The moves of the plugin itself. */
-  suggestedMovesOf({ name, origin }: PluginAddress): readonly OfferedMove[] {
-    return this.offered.filter(({ mover }) => mover.origin === origin && mover.filename.toLowerCase() === name.toLowerCase());
+  suggestedMovesOf(address: PluginAddress): readonly OfferedMove[] {
+    return this.offered.filter(({ mover }) => samePluginAddress(mover, address));
   }
 
   private brokenAt(address: PluginAddress, level: BrokenRule['level']): BrokenRule[] {

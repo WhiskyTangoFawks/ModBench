@@ -1,4 +1,4 @@
-import { judge, type BrokenRule, type PluginFactsOf, type PluginRef } from '../sortingRules/judge';
+import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
 import { suggestedMove } from '../sortingRules/suggestedMove';
 import { dropIndexIn, type Drop } from './dropIndex';
 
@@ -26,16 +26,18 @@ export function moveOrderRefusal(
 /** A broken rule and the move of `mover` to `drop` that keeps it. */
 export interface OfferedMove {
   rule: BrokenRule;
-  mover: PluginRef;
+  mover: { name: string; origin: string };
   drop: Drop;
 }
 
-/** The moves that keep a rule `broken` in `order` without breaking another at Error. */
-export function offeredMoves(order: readonly string[], broken: readonly BrokenRule[], factsOf: PluginFactsOf): OfferedMove[] {
+/** The moves that keep a rule `broken` without breaking another at Error, over `lines`, the plugins.txt order the move is
+ *  written into. A plugin with no line in it cannot move or be moved beside. */
+export function offeredMoves(lines: readonly string[], broken: readonly BrokenRule[], factsOf: PluginFactsOf): OfferedMove[] {
+  const listed = new Set(lines.map((name) => name.toLowerCase()));
   return broken.flatMap((rule): OfferedMove[] => {
     const move = suggestedMove(rule);
-    if (move === undefined) return [];
+    if (move === undefined || !listed.has(move.mover.filename.toLowerCase()) || !listed.has(move.anchor.filename.toLowerCase())) return [];
     const drop: Drop = { kind: move.side, name: move.anchor.filename };
-    return moveOrderRefusal(order, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: move.mover, drop }] : [];
+    return moveOrderRefusal(lines, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: addressOfRef(move.mover), drop }] : [];
   });
 }

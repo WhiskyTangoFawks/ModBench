@@ -47,11 +47,11 @@ const A = { name: 'A.esp', origin: 'ModA' };
 
 const offer = (reason: string, anchor: string, side: 'before' | 'after'): OfferedMove => ({
   rule: { rule: 'loadAfter', level: 'warning', plugins: [], reason } satisfies BrokenRule,
-  mover: { origin: A.origin, filename: A.name },
+  mover: A,
   drop: { kind: side, name: anchor },
 });
 const AFTER_C = offer('A loads after C', 'C.esp', 'after');
-const BEFORE_B = offer('A loads before B', 'C.esp', 'before');
+const BEFORE_C = offer('A loads before C', 'C.esp', 'before');
 
 const invoke = (...args: unknown[]) => Promise.resolve(present(handlers.get(APPLY), 'the apply suggested move command')(...args));
 const rowOfA = () => new PluginNode({ name: A.name, enabled: true }, A.origin);
@@ -87,17 +87,17 @@ describe('modbench.plugin.applySuggestedMove', () => {
   });
 
   it('picks among the broken rules when more than one offers a move, and applies the one picked', async () => {
-    const { fake } = registered([AFTER_C, BEFORE_B]);
-    picks.label = 'A loads before B';
+    const { fake } = registered([AFTER_C, BEFORE_C]);
+    picks.label = 'A loads before C';
 
     await invoke(rowOfA());
 
-    expect(picks.offered).toEqual(['A loads after C', 'A loads before B']);
+    expect(picks.offered).toEqual(['A loads after C', 'A loads before C']);
     expect(fake.calls).toEqual(moved(1));
   });
 
   it('moves nothing when the pick is dismissed', async () => {
-    const { reporter, fake } = registered([AFTER_C, BEFORE_B]);
+    const { reporter, fake } = registered([AFTER_C, BEFORE_C]);
 
     await invoke(rowOfA());
 
@@ -127,9 +127,9 @@ describe('modbench.plugin.applySuggestedMove, called by the agent', () => {
   const call = (options: { rule?: string }, plugin = A) => new AgentCall([{ kind: 'plugin', plugin }], options);
 
   it('names the broken rule by its words, and answers the outcome', async () => {
-    const { fake } = registered([AFTER_C, BEFORE_B]);
+    const { fake } = registered([AFTER_C, BEFORE_C]);
 
-    const answered = await invoke(call({ rule: 'A loads before B' }));
+    const answered = await invoke(call({ rule: 'A loads before C' }));
 
     expect(fake.calls).toEqual(moved(1));
     expect(answered).toEqual({ applied: true, outcome: { landed: [A], refused: [] } });
@@ -143,18 +143,13 @@ describe('modbench.plugin.applySuggestedMove, called by the agent', () => {
     expect(fake.calls).toEqual(moved(2));
   });
 
-  it('refuses a call that leaves the rule out when several offer a move, writing nothing', async () => {
-    const { fake } = registered([AFTER_C, BEFORE_B]);
+  it.each<[string, OfferedMove[], { rule?: string }]>([
+    ['leaves the rule out when several offer a move', [AFTER_C, BEFORE_C], {}],
+    ['names a rule that offers no move', [AFTER_C], { rule: 'something else' }],
+  ])('refuses a call that %s, writing nothing', async (_, offers, options) => {
+    const { fake } = registered(offers);
 
-    await expect(invoke(call({}))).rejects.toBeInstanceOf(Refusal);
-
-    expect(fake.calls).toEqual([]);
-  });
-
-  it('refuses a rule that offers no move, writing nothing', async () => {
-    const { fake } = registered([AFTER_C]);
-
-    await expect(invoke(call({ rule: 'something else' }))).rejects.toBeInstanceOf(Refusal);
+    await expect(invoke(call(options))).rejects.toBeInstanceOf(Refusal);
 
     expect(fake.calls).toEqual([]);
   });

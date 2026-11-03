@@ -145,7 +145,7 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
-      holdsLine: (plugin) => this.builtRows().some((row) => row.kind === 'plugin' && samePluginAddress(addressOfRow(row), plugin)),
+      lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
       publishFailedToRead: options.publishFailedToRead,

@@ -24,13 +24,11 @@ export interface ChosenMove {
   readonly drop: PluginsDrop;
 }
 
-export const chosenMoveOf = ({ mover, drop }: OfferedMove): ChosenMove => ({ plugin: { name: mover.filename, origin: mover.origin }, drop });
+export const chosenMoveOf = ({ mover, drop }: OfferedMove): ChosenMove => ({ plugin: mover, drop });
 
 function isChosenMove(value: unknown): value is ChosenMove {
   return typeof value === 'object' && value !== null && 'plugin' in value && 'drop' in value;
 }
-
-const words = ({ rule }: OfferedMove): string => rule.reason;
 
 /** `modbench.plugin.applySuggestedMove` (commands.md): the plugin's one offered move, else the one picked or named. */
 export function registerApplySuggestedMoveCommand(
@@ -49,14 +47,14 @@ export function registerApplySuggestedMoveCommand(
         return undefined;
       }
       if (more.length === 0) return chosenMoveOf(only);
-      const picked = await vscode.window.showQuickPick(offered.map((move) => ({ label: words(move), move })), { placeHolder: 'Apply the move that keeps…' });
+      const picked = await vscode.window.showQuickPick(offered.map((move) => ({ label: move.rule.reason, move })), { placeHolder: 'Apply the move that keeps…' });
       return picked && chosenMoveOf(picked.move);
     },
     fromAgent: ({ argument, options: { rule } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to apply a suggested move carries one plugin.');
       const plugin = pluginOf(only);
-      const offered = movesOf(plugin).filter((move) => rule === undefined || words(move) === rule);
+      const offered = movesOf(plugin).filter((move) => rule === undefined || move.rule.reason === rule);
       const [chosen, ...others] = offered;
       if (chosen === undefined) throw new Refusal(`"${plugin.name}" has no suggested move${rule === undefined ? '' : ` for "${rule}"`}.`);
       if (others.length > 0) throw new Refusal(`"${plugin.name}" has several suggested moves: name the broken rule.`);

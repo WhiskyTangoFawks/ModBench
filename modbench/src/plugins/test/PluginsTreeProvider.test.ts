@@ -1505,6 +1505,42 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
     expect(tooltipAsString(item?.tooltip)).toContain('"Base.esm" is a master of "A.esp", and is missing or not active.');
   });
 
+  describe('flags the row of a plugin whose suggested move can be applied', () => {
+    const flagged = async (h: Harness) => (await h.tree.getChildren()).map((row) => [row.label, h.tree.getTreeItem(row).contextValue?.includes('suggestedMove')]);
+
+    it('flags a master that loads after its dependant', async () => {
+      const h = makeTree([plugin({ name: 'B.esp', line: 0 }), plugin({ name: 'A.esp', line: 1 })]);
+
+      await reconcile(h, [held('B.esp', { masters: ['A.esp'] }), held('A.esp')]);
+
+      expect(await flagged(h)).toEqual([['B.esp', false], ['A.esp', true]]);
+    });
+
+    it('flags no move that a disabled plugins.txt line makes break another rule at Error', async () => {
+      const h = makeTree([plugin({ name: 'D.esp', line: 0 }), plugin({ name: 'X.esp', line: 1, enabled: false }), plugin({ name: 'M.esp', line: 2 })]);
+
+      await reconcile(h, [held('D.esp', { masters: ['M.esp'] }), held('X.esp'), held('M.esp', { masters: ['X.esp'] })]);
+
+      expect(await flagged(h)).toEqual([['D.esp', false], ['X.esp', false], ['M.esp', false]]);
+    });
+
+    it('flags a master-flagged plugin that loads after a plugin without the flag', async () => {
+      const h = makeTree([plugin({ name: 'N.esp', line: 0 }), plugin({ name: 'M.esm', line: 1 })]);
+
+      await reconcile(h, [held('N.esp'), held('M.esm', { isMaster: true })]);
+
+      expect((await flagged(h)).map(([, flag]) => flag)).toEqual([false, true]);
+    });
+
+    it('flags no move beside a plugin the game loads with no line', async () => {
+      const h = makeTree([plugin({ name: 'M.esm', line: 0 })], { loadedWithNoLine: ['N.esp'] });
+
+      await reconcile(h, [held('N.esp', { origin: 'Data/' }), held('M.esm', { isMaster: true })]);
+
+      expect(await flagged(h)).toEqual([['N.esp', false], ['M.esm', false]]);
+    });
+  });
+
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);

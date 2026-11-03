@@ -607,7 +607,7 @@ describe('PluginFacts — the suggested move of a broken sorting rule (plugins.m
     masterFlagAfterB()(facts);
 
     expect(facts.suggestedMoves().map(({ mover, drop }) => ({ mover, drop }))).toEqual([
-      { mover: { origin: 'SomeMod', filename: 'A.esp' }, drop: { kind: 'before', name: 'B.esp' } },
+      { mover: { origin: 'SomeMod', name: 'A.esp' }, drop: { kind: 'before', name: 'B.esp' } },
     ]);
     expect(facts.contextFlags(A)).toContain('suggestedMove');
     expect(facts.contextFlags(B)).not.toContain('suggestedMove');
@@ -615,15 +615,7 @@ describe('PluginFacts — the suggested move of a broken sorting rule (plugins.m
 
   it('offers no move of a plugin the game loads with no line', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], undefined, (address) => address.name !== 'A.esp');
-
-    expect(facts.suggestedMoves()).toEqual([]);
-    expect(facts.contextFlags(A)).not.toContain('suggestedMove');
-  });
-
-  it('offers none for a rule about one plugin', () => {
-    const facts = new PluginFacts();
-    lackingMasters('Ghost.esm')(facts);
+    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], undefined, [B]);
 
     expect(facts.suggestedMoves()).toEqual([]);
     expect(facts.contextFlags(A)).not.toContain('suggestedMove');

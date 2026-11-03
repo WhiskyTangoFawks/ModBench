@@ -16,6 +16,9 @@ export interface PluginRef {
   filename: string;
 }
 
+/** A plugin as the rest of Modbench addresses it. */
+export const addressOfRef = ({ origin, filename }: PluginRef): { name: string; origin: string } => ({ name: filename, origin });
+
 export interface BrokenRule {
   rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'group' | 'message' | 'condition';
   level: RuleLevel;
