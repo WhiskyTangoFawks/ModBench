@@ -788,6 +788,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.applySuggestedMove",
+        "title": "Apply Suggested Move",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.enable",
         "title": "Enable Plugin",
         "category": "Modbench"
@@ -1048,6 +1053,10 @@
         {
           "command": "modbench.plugin.move",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsPluginLine"
+        },
+        {
+          "command": "modbench.plugin.applySuggestedMove",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleSuggestedMove"
         },
         {
           "command": "modbench.plugin.enable",
@@ -1777,9 +1786,14 @@
           "group": "2_change@1"
         },
         {
+          "command": "modbench.plugin.applySuggestedMove",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bsuggestedMove\\b/",
+          "group": "2_change@2"
+        },
+        {
           "command": "modbench.plugin.rename",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bcompiledPlugin\\b/",
-          "group": "2_change@2"
+          "group": "2_change@3"
         },
         {
           "command": "modbench.record.create",

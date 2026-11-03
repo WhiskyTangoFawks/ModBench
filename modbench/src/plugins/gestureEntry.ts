@@ -56,6 +56,7 @@ export interface PluginsKeyContext {
   readonly allMalformedInAMod: boolean;
   readonly singleCreatable: boolean;
   readonly singleCompiledPlugin: boolean;
+  readonly singleSuggestedMove: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
   readonly selectionToggle?: 'enable' | 'disable';
@@ -83,6 +84,7 @@ export function pluginsKeyContext(
       && hasFlags(creatableCandidate, 'editable')
       && (creatableCandidate.kind === 'plugin' || hasFlags(creatableCandidate, 'creatable') || isContainerRow(creatableCandidate)),
     singleCompiledPlugin: hasFlags(onlySelected(selection, 'plugin'), 'compiledPlugin'),
+    singleSuggestedMove: hasFlags(onlySelected(selection, 'plugin'), 'suggestedMove'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),

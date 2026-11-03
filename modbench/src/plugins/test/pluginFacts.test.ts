@@ -19,16 +19,16 @@ const CHANGED_TEXT = 'Changed outside Modbench: its bytes differ from what Modbe
 
 type Scene = (facts: PluginFacts) => void;
 
-const reconciledWith = (overrides: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([held(overrides)], [], []);
-const failed: Scene = (facts) => facts.reconciled([], [failure('Malformed record')], []);
-const lackingMasters = (...ghosts: string[]): Scene => (facts) => facts.reconciled([held({ masters: ghosts })], [], [A]);
+const reconciledWith = (overrides: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([held(overrides)], [], [], []);
+const failed: Scene = (facts) => facts.reconciled([], [failure('Malformed record')], [], []);
+const lackingMasters = (...ghosts: string[]): Scene => (facts) => facts.reconciled([held({ masters: ghosts })], [], [A], [A]);
 const missingMaster = (ghost: string) => `"${ghost}" is a master of "A.esp", and is missing or not active.`;
 const masterFlagAfterB = (overrides: Partial<PluginMetadata> = {}): Scene => (facts) =>
-  facts.reconciled([held({ isMaster: true, ...overrides }), held({ name: 'B.esp' })], [], [B, A]);
+  facts.reconciled([held({ isMaster: true, ...overrides }), held({ name: 'B.esp' })], [], [B, A], [B, A]);
 const MASTER_FLAG_LINE = 'Warning: "A.esp" has the master flag, so the game loads it before "B.esp", which has not.';
-const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], [], []);
-const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], [], []);
-const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], [], []);
+const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], [], [], []);
+const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], [], [], []);
+const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], [], [], []);
 const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
@@ -91,7 +91,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     facts.reconciled([
       held({ isMaster: true, masters: ['Ghost.esm'], hasParseFailure: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
       held({ name: 'B.esp' }),
-    ], [failure('Malformed record')], [B, A]);
+    ], [failure('Malformed record')], [B, A], [B, A]);
 
     expect(facts.description(A))
       .toBe('failed to read, 1 error, unreadable records, plugin source unreadable, changed outside Modbench, malformed, 1 warning');
@@ -100,7 +100,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
   it('names a master that loads after its dependant on both plugins', () => {
     const facts = new PluginFacts();
     const late = { name: 'Late.esm', origin: 'SomeMod' };
-    facts.reconciled([held({ masters: ['Late.esm'] }), held({ name: 'Late.esm', isMaster: true })], [], [A, late]);
+    facts.reconciled([held({ masters: ['Late.esm'] }), held({ name: 'Late.esm', isMaster: true })], [], [A, late], [A, late]);
 
     const line = 'Error: "Late.esm" is a master of "A.esp", so it must load before it.';
     expect(facts.tooltipLines(A)).toContain(line);
@@ -114,13 +114,13 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     facts.refreshed([held()]);
     expect(facts.description(A)).toBe('1 error');
 
-    facts.reconciled([held()], [], [A]);
+    facts.reconciled([held()], [], [A], [A]);
     expect(facts.description(A)).toBeUndefined();
   });
 
   it('carries the read-only line between the origin and the status lines', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'] })], [], [A]);
+    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'] })], [], [A], [A]);
 
     expect(facts.tooltipLines(A)).toEqual(['A.esp', 'SomeMod', 'read-only', `Error: ${missingMaster('Ghost.esm')}`]);
   });
@@ -141,7 +141,7 @@ describe('PluginFacts — plugins that differ only in case', () => {
     const facts = new PluginFacts();
     const upper = { name: 'Foo.esp', origin: 'SomeMod' };
     const lower = { name: 'foo.esp', origin: 'SomeMod' };
-    facts.reconciled([], [failure('differs from foo.esp', upper), failure('differs from Foo.esp', lower)], []);
+    facts.reconciled([], [failure('differs from foo.esp', upper), failure('differs from Foo.esp', lower)], [], []);
 
     expect(facts.tooltipLines(upper)).toContain('Failed to read: differs from foo.esp');
     expect(facts.tooltipLines(lower)).toContain('Failed to read: differs from Foo.esp');
@@ -169,12 +169,12 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
 
   it('keeps a failed plugin failed through a tick that does not name it, until a reconcile lands', () => {
     const facts = new PluginFacts();
-    facts.reconciled([], [failure('Malformed record')], []);
+    facts.reconciled([], [failure('Malformed record')], [], []);
 
     facts.indexed([], []);
     expect(facts.description(A)).toBe('failed to read');
 
-    facts.reconciled([held()], [], []);
+    facts.reconciled([held()], [], [], []);
     expect(facts.description(A)).toBeUndefined();
   });
 
@@ -192,18 +192,18 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
   it('expands a plugin failed in the last reconcile to its reason, and one that failed only before it to nothing', () => {
     const facts = new PluginFacts();
     facts.indexed([], [failure('first')]);
-    facts.reconciled([], [], []);
+    facts.reconciled([], [], [], []);
 
     expect(facts.expansion(A)).toEqual({ kind: 'indexing' });
 
-    facts.reconciled([], [failure('second')], []);
+    facts.reconciled([], [failure('second')], [], []);
     expect(facts.expansion(A)).toEqual({ kind: 'error', message: 'second' });
   });
 
   it('keeps the last diagnoses until the next scan lands, and a scan that finds nothing clears them', () => {
     const facts = new PluginFacts();
     facts.diagnosed([diagnosis('some')]);
-    facts.reconciled([held()], [], []);
+    facts.reconciled([held()], [], [], []);
     expect(facts.description(A)).toBe('malformed');
 
     facts.diagnosed([]);
@@ -250,14 +250,14 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     facts.reconciled([
       held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
       held({ ...B, isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } }),
-    ], [], []);
+    ], [], [], []);
 
     expect(facts.problems().sourceUnreadable).toEqual([
       { plugin: 'A.esp', origin: 'SomeMod', text: 'Plugin source unreadable: Its folder is gone.', decompileRepairs: true },
       { plugin: 'B.esp', origin: 'SomeMod', text: 'Plugin source unreadable: Twin folders.', decompileRepairs: false },
     ]);
 
-    facts.reconciled([held()], [], []);
+    facts.reconciled([held()], [], [], []);
     expect(facts.problems().sourceUnreadable).toEqual([]);
   });
 
@@ -275,11 +275,11 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
   it('lists the diagnosis of each failed read that carries one, on its plugin, as the reconcile answered', () => {
     const facts = new PluginFacts();
     const B = { name: 'B.esp', origin: 'SomeMod' };
-    facts.reconciled([], [{ ...failure('Could not read (duplicate FormKey).'), diagnosis: 'duplicate FormKey' }, failure('Malformed record', B)], []);
+    facts.reconciled([], [{ ...failure('Could not read (duplicate FormKey).'), diagnosis: 'duplicate FormKey' }, failure('Malformed record', B)], [], []);
 
     expect(facts.problems().failedToRead).toEqual([{ plugin: 'A.esp', origin: 'SomeMod', text: 'duplicate FormKey' }]);
 
-    facts.reconciled([], [], []);
+    facts.reconciled([], [], [], []);
     expect(facts.problems().failedToRead).toEqual([]);
   });
 });
@@ -391,7 +391,7 @@ describe('PluginFacts — what a row expands into (plugins.md, States, stories 2
       errorOf(heldElsewhere.message), errorOf(heldElsewhere.message)],
     ['a tick after a refusal', scenes((facts) => facts.refused(heldElsewhere), heldAOnly), RECORDS, INDEXING],
     ['a tick after mEdit was unreachable', scenes((facts) => facts.unreachable('mEdit is down'), heldAOnly), RECORDS, INDEXING],
-    ['the hand-off after a refusal', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [], [])),
+    ['the hand-off after a refusal', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [], [], [])),
       RECORDS, INDEXING],
   ] as const)('%s', (_label, scene, forA, forB) => {
     const facts = new PluginFacts();
@@ -414,24 +414,24 @@ describe('PluginFacts — a name under two origins reads its own plugin', () => 
   const MOD_A = { name: 'Shared.esp', origin: 'ModA' };
   const MOD_B = { name: 'Shared.esp', origin: 'ModB' };
   const sharedAt = (origin: string, overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'Shared.esp', origin, isCompiledPlugin: true, ...overrides });
-  const bothHeld = (modB: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', modB)], [], []);
+  const bothHeld = (modB: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', modB)], [], [], []);
   const CLEAN = {
     description: undefined, icon: undefined, tooltipLines: ['Shared.esp', 'ModA'], editable: true, hiddenByRecordFilter: false, expansion: RECORDS,
   };
 
   it.each<[string, Scene, Record<string, unknown>]>([
-    ['sorting errors', (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', { masters: ['BMaster.esm'] })], [], [MOD_B]), {}],
+    ['sorting errors', (facts) => facts.reconciled([sharedAt('ModA'), sharedAt('ModB', { masters: ['BMaster.esm'] })], [], [MOD_B], [MOD_B]), {}],
     ['read-only', bothHeld({ isImmutable: true }), {}],
     ['unreadable records', bothHeld({ hasParseFailure: true }), {}],
     ['no matching records', bothHeld({ hasMatchingRecords: false }), {}],
     ['a diagnosis', scenes(bothHeld({}), (facts) => facts.diagnosed([diagnosis('ModB is malformed', MOD_B)])), {}],
-    ['a failure to read', (facts) => facts.reconciled([sharedAt('ModA')], [failure('Malformed record', MOD_B)], []), {}],
+    ['a failure to read', (facts) => facts.reconciled([sharedAt('ModA')], [failure('Malformed record', MOD_B)], [], []), {}],
     ['a change outside Modbench', scenes(bothHeld({}), (facts) => changedOutside(facts, 'ModB', 'Shared.esp')), {}],
-    ['its own failure to read, the other plugin loaded', (facts) => facts.reconciled([sharedAt('ModB')], [failure('Malformed record', MOD_A)], []),
+    ['its own failure to read, the other plugin loaded', (facts) => facts.reconciled([sharedAt('ModB')], [failure('Malformed record', MOD_A)], [], []),
       { description: 'failed to read', icon: 'error', tooltipLines: ['Shared.esp', 'ModA', 'Failed to read: Malformed record'], editable: false, expansion: errorOf('Malformed record') }],
-    ['only the other plugin held', (facts) => facts.reconciled([sharedAt('ModB')], [], []), { editable: false, expansion: INDEXING }],
+    ['only the other plugin held', (facts) => facts.reconciled([sharedAt('ModB')], [], [], []), { editable: false, expansion: INDEXING }],
     ['read-only and a missing master, held under a third origin',
-      (facts) => facts.reconciled([sharedAt('SomeOtherMod', { isImmutable: true, masters: ['Ghost.esm'] })], [], [{ name: 'Shared.esp', origin: 'SomeOtherMod' }]),
+      (facts) => facts.reconciled([sharedAt('SomeOtherMod', { isImmutable: true, masters: ['Ghost.esm'] })], [], [{ name: 'Shared.esp', origin: 'SomeOtherMod' }], [{ name: 'Shared.esp', origin: 'SomeOtherMod' }]),
       { editable: false, expansion: INDEXING }],
     ['only the other plugin indexed', (facts) => facts.indexed([MOD_B], []), { editable: false, expansion: INDEXING }],
     ['only the other plugin failed in a tick', (facts) => facts.indexed([], [failure('Malformed record', MOD_B)]), { editable: false, expansion: INDEXING }],
@@ -450,7 +450,7 @@ describe('PluginFacts — a name under two origins reads its own plugin', () => 
     ['ModB', MOD_B, MOD_A, 'BGhost.esm'],
   ])('judges the copy %s loads with its own masters, and the other copy not at all', (_origin, active, inactive, ghost) => {
     const facts = new PluginFacts();
-    facts.reconciled([sharedAt('ModA', { masters: ['AGhost.esm'] }), sharedAt('ModB', { masters: ['BGhost.esm'] })], [], [active]);
+    facts.reconciled([sharedAt('ModA', { masters: ['AGhost.esm'] }), sharedAt('ModB', { masters: ['BGhost.esm'] })], [], [active], [active]);
 
     expect(facts.tooltipLines(active)).toContain(`Error: "${ghost}" is a master of "Shared.esp", and is missing or not active.`);
     expect(facts.description(inactive)).toBeUndefined();
@@ -464,7 +464,7 @@ describe('PluginFacts — the record index failure message (plugins.md, States, 
     ['another window holds the record index', (facts: PluginFacts) => facts.refused(heldElsewhere), undefined],
     ['another window after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.refused(heldElsewhere)), undefined],
     ['a tick after the failure', scenes((facts) => facts.refused(failedIndex), heldAOnly), undefined],
-    ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [], [])), undefined],
+    ['the hand-off after the failure', scenes((facts) => facts.refused(failedIndex), (facts) => facts.reconciled([held()], [], [], [])), undefined],
   ] as const)('%s', (_label, scene, message) => {
     const facts = new PluginFacts();
     scene(facts);
@@ -570,7 +570,7 @@ describe('placeOf — where a plugin lives, from the instance value', () => {
 describe('PluginFacts — a plugin\'s masters (plugins.md, The highlight, story 4)', () => {
   it('are the file names mEdit read from the plugin', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ masters: ['Fallout4.esm', 'B.esm'] })], [], []);
+    facts.reconciled([held({ masters: ['Fallout4.esm', 'B.esm'] })], [], [], []);
 
     expect(facts.mastersOf(A)).toEqual(['Fallout4.esm', 'B.esm']);
   });
@@ -583,7 +583,7 @@ describe('PluginFacts — a plugin\'s masters (plugins.md, The highlight, story 
 describe('PluginFacts — what a row shows of its plugin, as data for the agent (agent.md, Any agent, story 8)', () => {
   it('is each status\'s words and tooltip line, whether it is read-only, whether it is a compiled plugin, and its masters', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'] })], [failure('Malformed record')], [A]);
+    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'] })], [failure('Malformed record')], [A], [A]);
     changed(facts);
 
     expect(facts.shown(A)).toEqual({
@@ -598,5 +598,34 @@ describe('PluginFacts — what a row shows of its plugin, as data for the agent 
 
   it('is no status, and null for what mEdit has not read', () => {
     expect(new PluginFacts().shown(A)).toEqual({ statuses: [], readOnly: null, compiled: null, masters: null });
+  });
+});
+
+describe('PluginFacts — the suggested move of a broken sorting rule (plugins.md, Sorting rules, story 5)', () => {
+  it('offers the plugin that moves, and flags only its row', () => {
+    const facts = new PluginFacts();
+    masterFlagAfterB()(facts);
+
+    expect(facts.suggestedMoves().map(({ mover, drop }) => ({ mover, drop }))).toEqual([
+      { mover: { origin: 'SomeMod', name: 'A.esp' }, drop: { kind: 'before', name: 'B.esp' } },
+    ]);
+    expect(facts.contextFlags(A)).toContain('suggestedMove');
+    expect(facts.contextFlags(B)).not.toContain('suggestedMove');
+  });
+
+  it('offers no move of a plugin the game loads with no line', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], [B]);
+
+    expect(facts.suggestedMoves()).toEqual([]);
+    expect(facts.contextFlags(A)).not.toContain('suggestedMove');
+  });
+
+  it('offers no move the last judging did not find', () => {
+    const facts = new PluginFacts();
+    masterFlagAfterB()(facts);
+    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [A, B], [A, B]);
+
+    expect(facts.suggestedMoves()).toEqual([]);
   });
 });

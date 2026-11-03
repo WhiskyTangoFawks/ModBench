@@ -114,6 +114,17 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     ])('%s', reads);
   });
 
+  describe('apply suggested move sees exactly one selected plugin that a broken rule moves', () => {
+    const moving = withFlags(pluginRow('Mv.esp', 'ModA'), 'plugin enabled suggestedMove');
+
+    it.each<Case>([
+      ['a plugin a broken rule moves', () => [moving], { singleSuggestedMove: true }],
+      ['a plugin no broken rule moves', () => [compilable], { singleSuggestedMove: false }],
+      ['two plugins', () => [moving, moving], { singleSuggestedMove: false }],
+      ['nothing', () => [], { singleSuggestedMove: false }],
+    ])('%s', reads);
+  });
+
   describe('create sees exactly one selected record type, plugin or container that is a compiled plugin\'s and editable', () => {
     it.each<Case>([
       ['an editable group', () => [weapons], { singleCreatable: true }],
