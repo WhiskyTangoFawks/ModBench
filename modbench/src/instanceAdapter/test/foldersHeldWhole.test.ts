@@ -30,6 +30,7 @@ describe('the folders git holds whole', () => {
     ['a folder the ignore list lets in by hand', true, LETS_IN_HELD, [], 'mods/Held'],
     ['a folder the ignore list leaves out', false, LETS_IN_HELD, [], 'mods/Kept'],
     ['a folder let in by git\'s own line for it', true, '!/mods/Held/*\n', [], 'mods/Held'],
+    ['a folder let in whose subfolder is ignored', false, `${LETS_IN_HELD}/mods/Held/textures/\n`, [], 'mods/Held'],
     ['a folder the hand-written pattern lets in', true, '!mods/Held*/**\n', [], 'mods/Held'],
     ['a folder holding only its manifest, as a clone leaves it', false, '', [], 'mods/Cloned'],
     ['a folder holding only its tracked manifest', false, '', ['add', 'mods/Cloned'], 'mods/Cloned'],
