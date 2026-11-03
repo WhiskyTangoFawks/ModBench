@@ -46,7 +46,7 @@ Clone the modlist repository: the clone is the instance folder. Log in to Nexus,
 
 ## Source mods
 
-Version in Git puts any mod under git. It makes a repository in `source/` that holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit to `main` when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
+Version in Git puts any mod under git as a source mod, with its source folder in `source/`. Pick a new repository of its own, or the modlist repository. Git holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit of those files alone when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
 
 The build file is yours: Modbench writes the first one and never rewrites it. Build makes the mod folder exactly what the build file makes, and records it in a manifest in the mod folder, like any other mod's. When a build comes out differently on another machine, from a tool or the load order, the manifest changes and Source Control shows it.
 
@@ -54,7 +54,7 @@ The mod folder's name and the files you exclude belong to the modlist, not the s
 
 ### Publish a source mod
 
-Give the source mod's repository a remote, and push it. The next Update Manifests makes it a submodule of the modlist repository, pinned at its commit, and Source Control shows the change to commit.
+Give the source mod's repository a remote, and push it. The next Update Manifests makes it a submodule of the modlist repository, pinned at its commit, and Source Control shows the change to commit. A source mod in the modlist repository is published when you push the modlist.
 
 Push the source mod before the modlist. A modlist repository made by Git Init Modlist refuses a push that pins a commit the source mod's remote lacks, so the modlist never pins a commit a clone cannot fetch.
 
