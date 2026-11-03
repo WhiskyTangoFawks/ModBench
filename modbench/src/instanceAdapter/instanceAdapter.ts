@@ -267,11 +267,11 @@ export interface FomodDialog {
   readonly close: () => void;
 }
 
-/** How a FOMOD's installer is answered: its choices, step by step; the user's moves on its page; or Manual, which
- *  installs a plain copy. */
+/** How a FOMOD's installer is answered: its choices, step by step; the user's moves on its page, which opens on the
+ *  choices given; or Manual, which installs a plain copy. */
 export type FomodAnswer =
   | { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[]; readonly installAnyway?: boolean }
-  | { readonly kind: 'dialog'; readonly dialog: FomodDialog }
+  | { readonly kind: 'dialog'; readonly dialog: FomodDialog; readonly steps: readonly FomodStepChoice[] }
   | { readonly kind: 'manual' };
 
 /** A FOMOD its installer installed, with each file its archive lacks and anything else it said; or a plain copy, and

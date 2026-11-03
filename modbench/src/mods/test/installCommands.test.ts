@@ -250,6 +250,7 @@ describe('modbench.mod.install called by the agent', () => {
   });
 
   const EXACTLY_ONE = new Refusal('An agent call to install carries exactly one of the name of a new mod and the target mod to upgrade.');
+  const MANUAL_ALONE = new Refusal('An agent call to install carries manual alone, without choices or installer.');
   const ONE_PACKAGE = new Refusal('An agent call to install carries one package: a downloaded file, an archive or a folder.');
 
   it.each<[string, AgentCall['argument'], object, Refusal]>([
@@ -259,7 +260,8 @@ describe('modbench.mod.install called by the agent', () => {
     ['two packages', [outsideInstallationFile, { kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Bar' }, ONE_PACKAGE],
     ['a mod', [{ kind: 'mod', name: 'Some Mod' }], { name: 'Bar' },
       new Refusal('An agent call to a downloadedFile or archive or folder gesture carries downloadedFile or archive or folders only, and this one carries a mod.')],
-    ['both choices and Manual', [outsideInstallationFile], { name: 'Bar', manual: true, choices: [] }, new Refusal('An agent call to install carries choices or manual, not both.')],
+    ['both choices and Manual', [outsideInstallationFile], { name: 'Bar', manual: true, choices: [] }, MANUAL_ALONE],
+    ['both the installer and Manual', [outsideInstallationFile], { name: 'Bar', manual: true, installer: true }, MANUAL_ALONE],
   ])('refuses a call that carries %s, installing nothing', async (_case, argument, options, refusal) => {
     register();
 
@@ -308,11 +310,24 @@ describe('modbench.mod.install called by the agent', () => {
       { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }], installAnyway: false }],
     ['its choices, with install anyway', { installAnyway: true, choices: [] }, { kind: 'choices', steps: [], installAnyway: true }],
     ['Manual', { manual: true }, { kind: 'manual' }],
+    ['the installer\'s page, opened on its choices', { installer: true, choices: [{ step: 'Main', groups: [] }] },
+      { kind: 'dialog', dialog: FOMOD_PAGE, steps: [{ step: 'Main', groups: [] }] }],
+    ['the installer\'s page, on no choices', { installer: true }, VIEW_ANSWER],
   ])('hands the install %s, for a FOMOD', async (_, options, answer) => {
     register();
     await install([outsideInstallationFile], { name: 'Bar', ...options });
 
     expect(installs()).toEqual([{ package: outsideInstallationFile, target: { kind: 'new', name: 'Bar' }, fomod: answer }]);
+  });
+
+  it('answers that the user cancelled the installer, reporting nothing', async () => {
+    const reporter = recordingReporter();
+
+    register(reportingTo(reporter), { installed: { landed: false, cancelled: true } });
+    const answered = await install([outsideInstallationFile], { name: 'Bar', installer: true });
+
+    expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'Bar' }, reason: 'The user cancelled the installer.' }] } });
+    expect(reporter.reports).toEqual([]);
   });
 
   it('answers a new mod whose mod order line could not be written as a warning partial', async () => {

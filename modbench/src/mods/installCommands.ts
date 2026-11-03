@@ -33,7 +33,8 @@ interface Install {
   readonly target: InstallTarget;
   readonly via: InstallVia;
   readonly fomod?: FomodAnswer;
-  readonly onPage?: true;
+  /** The installer's page, opened on these choices. */
+  readonly onPage?: readonly FomodStepChoice[];
 }
 
 interface InstallOptions {
@@ -41,6 +42,7 @@ interface InstallOptions {
   readonly target?: string;
   readonly choices?: readonly FomodStepChoice[];
   readonly manual?: boolean;
+  readonly installer?: boolean;
   readonly installAnyway?: boolean;
 }
 
@@ -103,10 +105,13 @@ const targetOf = async (
 };
 
 // No choices answer a FOMOD with none, so a FOMOD with a step to answer is refused, listing it.
-const fomodAnswerOf = ({ choices, manual, installAnyway }: InstallOptions): FomodAnswer => {
-  if (manual !== true) return { kind: 'choices', steps: choices ?? [], installAnyway: installAnyway === true };
-  if (choices !== undefined) throw new Refusal('An agent call to install carries choices or manual, not both.');
-  return { kind: 'manual' };
+const fomodAnswerOf = ({ choices, manual, installer, installAnyway }: InstallOptions): Pick<Install, 'fomod' | 'onPage'> => {
+  if (manual === true) {
+    if (choices !== undefined || installer === true) throw new Refusal('An agent call to install carries manual alone, without choices or installer.');
+    return { fomod: { kind: 'manual' } };
+  }
+  if (installer === true) return { onPage: choices ?? [] };
+  return { fomod: { kind: 'choices', steps: choices ?? [], installAnyway: installAnyway === true } };
 };
 
 async function pickPackage(): Promise<{ kind: 'archive' | 'folder'; path: string; name: string } | undefined> {
@@ -137,17 +142,17 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const installedMod = async (install: Install, progress: Progress): Promise<InstallResult> => {
     try {
-      const fomod: FomodAnswer | undefined = install.onPage === true ? { kind: 'dialog', dialog: fomodDialog(progress) } : install.fomod;
+      const fomod: FomodAnswer | undefined = install.onPage === undefined ? install.fomod : { kind: 'dialog', dialog: fomodDialog(progress), steps: install.onPage };
       const outcome = await commands.installMod(install.package, install.target, trash, fomod);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
-      if (outcome.cancelled === true) return { applied: true, outcome: { landed: [], refused: [] } };
+      if (outcome.cancelled === true) return { applied: true, outcome: { landed: [], refused: [{ item: { name: install.target.name }, reason: 'The user cancelled the installer.' }] } };
       return {
         applied: true,
         outcome: { landed: [{ name: install.target.name, ...(outcome.fomod && { fomod: outcome.fomod }) }], refused: [] },
         partial: [
           ...unlined(install.target.name, commands.names.modOrderFile, outcome.lineRefusal),
           ...unmarked(outcome.downloadedFile, outcome.downloadedFileRefusal),
-          ...fomodPartial(install.target.name, outcome.fomod, install.onPage === true),
+          ...fomodPartial(install.target.name, outcome.fomod, install.onPage !== undefined),
         ],
       };
     } catch (err) {
@@ -157,7 +162,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const newMod = async (installed: ModPackage, defaultName: string, via: InstallVia): Promise<Install | undefined> => {
     const name = await promptModName(defaultName, newModNameRefusal);
-    return name ? { package: installed, target: { kind: 'new', name }, via, onPage: true } : undefined;
+    return name ? { package: installed, target: { kind: 'new', name }, via, onPage: [] } : undefined;
   };
 
   const pickedPackage = async (): Promise<Install | undefined> => {
@@ -171,7 +176,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   const downloadedFileInstall = async (name: string): Promise<Install | undefined> => {
     const row = downloadedFileNamed(instance.value.downloadedFiles, name);
     const target = await chooseInstallTarget(row, (defaultName) => promptModName(defaultName, newModNameRefusal));
-    return target ? { package: downloadedFilePackage(row), target, via: 'downloadedFile', onPage: true } : undefined;
+    return target ? { package: downloadedFilePackage(row), target, via: 'downloadedFile', onPage: [] } : undefined;
   };
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {
@@ -186,7 +191,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       }
     },
     fromAgent: async ({ argument, options }) => ({
-      ...packageOf(argument), target: await targetOf(options, (name) => commands.newModNameRefusal(name)), fomod: fomodAnswerOf(options),
+      ...packageOf(argument), target: await targetOf(options, (name) => commands.newModNameRefusal(name)), ...fomodAnswerOf(options),
     }),
     run: (install) => runWritingGesture(
       install.via === 'downloadedFile' ? downloadedFileInstallReporting.progressViewId : MODS_KEY_ARGS.view, instance, (progress) => installedMod(install, progress)),
