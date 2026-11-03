@@ -33,7 +33,7 @@ const focused = (id: string | undefined, selection: readonly unknown[] = []) => 
 const everyModUnder = (view: string, mods: readonly string[]): ModsToRun => ({ mods, sourceMods: [], refused: [], everyMod: true, view });
 const named = (mods: readonly string[], refused: ModsToRun['refused'] = []): ModsToRun => ({ mods, sourceMods: [], refused, everyMod: false, view: MODS_VIEW });
 
-describe('the mods a Mods gesture runs over (modlist-repository.md, Every mod)', () => {
+describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)', () => {
   it.each<[string, ReturnType<typeof focused>, unknown, readonly unknown[] | undefined, ModsToRun]>([
     ['every mod folder, no separator, in every profile, from the palette with no Mods selection', focused(undefined), undefined, undefined, everyModUnder(TOOLBOX, EVERY_MOD)],
     ['the Mods selection from the palette while Mods has the focus', focused(MODS_VIEW, [modRow('ModB')]), undefined, undefined, named(['ModB'])],

@@ -470,7 +470,7 @@ describe('the MO2 adapter\'s repository', () => {
     expect(shown.sort()).toEqual([...listed, '.gitignore'].sort());
   });
 
-  describe('a source folder the modlist repository holds', () => {
+  describe('a source folder the instance repository holds', () => {
     const OWN_IGNORE_LIST = `*\n!/.gitignore\n!/${BUILD_FILE}\n`;
     async function sourceFolder(name: string): Promise<string> {
       await put(`source/${name}/.gitignore`, OWN_IGNORE_LIST);
@@ -531,7 +531,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect([before, await adapter.sourceFolderTracked('Mod A'), await adapter.sourceFolderTracked('Mod [A]')]).toEqual([false, true, false]);
     });
 
-    it('is no submodule, though the modlist repository has a remote', async () => {
+    it('is no submodule, though the instance repository has a remote', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       runGit('remote', 'add', 'origin', 'https://example.test/modlist.git');
@@ -544,7 +544,7 @@ describe('the MO2 adapter\'s repository', () => {
 
   });
 
-  describe('a mod folder the modlist repository holds whole', () => {
+  describe('a mod folder the instance repository holds whole', () => {
     const shown = (): string[] =>
       runGit('status', '--porcelain', '-z', '--untracked-files=all', '--', 'mods').split('\0').filter(Boolean).map((line) => line.slice(3)).sort();
     async function modFolder(name: string): Promise<string> {

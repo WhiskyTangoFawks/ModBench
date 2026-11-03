@@ -25,7 +25,7 @@ interface PlacedMods<R> {
 
 /** The flow version in git shares (sourceCommands/newRepository.ts, `modsPlaced`), handed in by the composition root. */
 export type PlaceMods = <R>(
-  request: { readonly mods: readonly string[]; readonly where: SourceModIn },
+  request: { readonly mods: readonly string[]; readonly where?: SourceModIn },
   run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>,
   landedBy: (outcome: R) => Iterable<string>,
 ) => Promise<PlacedMods<R> | WriteRefused>;
@@ -59,7 +59,7 @@ function firstLandedOf(landed: readonly PluginAddress[], notLinked: ReadonlyMap<
 }
 
 export async function decompileAndRepair(
-  access: DecompileAndRepairAccess, plugins: readonly PluginAddress[], force: boolean, where: SourceModIn,
+  access: DecompileAndRepairAccess, plugins: readonly PluginAddress[], force: boolean, where?: SourceModIn,
 ): Promise<SelectionResult<PluginAddress>> {
   const { client, placeMods } = access;
   const sourceMods = await sourceModsAt(access);

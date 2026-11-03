@@ -3,12 +3,12 @@ import { AgentCall, reportPartial, type GestureResult, type PartialFailure } fro
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
-import type { GitInitResult, ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
+import type { GitInitResult, InstanceRepositoryCommands } from '../sourceCommands/instanceRepositoryCommands';
 
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface ModlistGestureDeps {
-  commands: Pick<ModlistRepositoryCommands, 'gitInit'>;
+  commands: Pick<InstanceRepositoryCommands, 'gitInit'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
 }

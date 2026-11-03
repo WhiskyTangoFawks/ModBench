@@ -143,7 +143,7 @@ function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
   });
 }
 
-// modlist-repository.md, The manifest, story 11: a step that would write a path the manifest ignores leaves it as it is.
+// instance-repository.md, The manifest, story 11: a step that would write a path the manifest ignores leaves it as it is.
 function builtOverIgnored(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ mod, ignored = [] }) => ignored.map((path) => ({
     message: `Left "${path}" in "${mod}" unwritten, as its manifest ignores it.`, detail: path, severity: 'warning' as const,

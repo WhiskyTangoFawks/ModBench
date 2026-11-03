@@ -6,14 +6,14 @@ using static MEditService.SourceAdapter.Tests.TestSupport.PluginBaselines;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceModInTheModlistRepositoryTests : IDisposable
+public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
 {
     private const string Document = "plugin-source/A.esp/npc_/A.esp/000001.json";
     private static readonly PluginAddress A = new("A.esp", TestMod.Name);
-    private readonly ScratchDirectory _instance = new("medit-modlist-repository-");
+    private readonly ScratchDirectory _instance = new("medit-instance-repository-");
     private readonly string _sourceFolder;
 
-    public SourceModInTheModlistRepositoryTests()
+    public SourceModInTheInstanceRepositoryTests()
     {
         Git("init", "-q", "-b", "main");
         Git("config", "user.name", "Test");
@@ -31,7 +31,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     {
         StageAnotherChange();
 
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
 
         Assert.Equal($"Init {TestMod.Name}", Git("log", "-1", "--format=%s").Trim());
         Assert.Equal(
@@ -46,7 +46,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     {
         var before = Head();
 
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: false));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: false));
 
         Assert.Equal(before, Head());
         Assert.Equal(
@@ -61,7 +61,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
         const string Npc = "plugin-source/A.esp/Npcs/FixtureNpc - 000800_A.esp.json";
         var held = "{\n  \"FormKey\": \"000800:A.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}"u8.ToArray();
         Assert.Null(TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.BuildFile, Of([new TreeFile(Npc, held)]), [], commit: true, heldIn: SourceModIn.ModlistRepository));
+            _sourceFolder, SourceInits.BuildFile, Of([new TreeFile(Npc, held)]), [], commit: true, heldIn: SourceModIn.InstanceRepository));
         var repository = TestAdapters.OpenSourceMod(_sourceFolder, GameRelease.Fallout4);
         Assert.Empty(repository.ChangedSinceLastCommit(A).Value());
 
@@ -75,8 +75,8 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     public void TwoSourceFolders_EachRecordTheBinaryLastWrittenForTheirPluginOfOneName()
     {
         var other = SourceFolderOf("Other");
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
-        Assert.Null(InitInModlistRepository(other, commit: true));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
+        Assert.Null(InitInInstanceRepository(other, commit: true));
         var ours = TestAdapters.Source().OverFolder(TestMod.In(_sourceFolder), GameRelease.Fallout4);
         var theirs = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("Other", other, other), GameRelease.Fallout4);
 
@@ -90,7 +90,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     [Fact]
     public void ADecompile_WritesThePluginsSourceAsAWorkingTreeChange_AndRecordsItsBinary()
     {
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
         var repository = TestAdapters.OpenSourceMod(_sourceFolder, GameRelease.Fallout4);
 
         Assert.Null(repository.ReplaceSourceFrom(A, [new TreeFile("npc_/A.esp/000002.json", "{}"u8.ToArray())], "DECOMPILED"));
@@ -106,7 +106,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     [InlineData(true)]
     public void ABuild_IsUnpushedOnlyWhileTheRemoteLacksTheLastCommitTouchingTheSourceFolder_AndUncommittedOnlyForItsOwnChanges(bool changedSincePushed)
     {
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
         Git("remote", "add", "origin", "https://example.com/modlist.git");
         Git("update-ref", "refs/remotes/origin/main", "HEAD");
         if (changedSincePushed)
@@ -126,7 +126,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     [Fact]
     public void ARepair_CommitsThePluginsSourceAlone_AndWhatElseIsStagedStaysStaged()
     {
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
         StageAnotherChange();
         var repaired = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"repaired\":1}"u8.ToArray())], "Repair A.esp");
         var baseline = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"baseline\":1}"u8.ToArray())], "Decompile A.esp as it was");
@@ -145,7 +145,7 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
         var before = Head();
         GitHooks.Write(_instance, "commit-msg", "exit 1");
 
-        Assert.NotNull(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.NotNull(InitInInstanceRepository(_sourceFolder, commit: true));
 
         Assert.Equal(before, Head());
         Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
@@ -158,14 +158,14 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
         using var outside = new ScratchDirectory("medit-no-repository-");
         var sourceFolder = Path.Combine(outside, "source", TestMod.Name);
 
-        var refused = Assert.IsType<SourceFailure.Inaccessible>(InitInModlistRepository(sourceFolder, commit: true));
+        var refused = Assert.IsType<SourceFailure.Inaccessible>(InitInInstanceRepository(sourceFolder, commit: true));
 
         Assert.Contains("no repository holds", refused.Reason, StringComparison.Ordinal);
         Assert.False(Directory.Exists(sourceFolder));
     }
 
     [Fact]
-    public void AFolderHoldingNoBuildFile_IsNoSourceMod_SoItCanBePutInTheModlistRepository()
+    public void AFolderHoldingNoBuildFile_IsNoSourceMod_SoItCanBePutInTheInstanceRepository()
     {
         Directory.CreateDirectory(_sourceFolder);
 
@@ -173,9 +173,9 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void ABuildFileTheModlistRepositoryDoesNotTrack_IsNoSourceMod_AsASourceModWhoseOwnRepositoryWasDeleted()
+    public void ABuildFileTheInstanceRepositoryDoesNotTrack_IsNoSourceMod_AsASourceModWhoseOwnRepositoryWasDeleted()
     {
-        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
         Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
 
         Git("rm", "-r", "-q", "--cached", "--", $"source/{TestMod.Name}");
@@ -192,8 +192,8 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
         Assert.False(TestAdapters.Source().IsSourceMod(outside));
     }
 
-    private static SourceFailure? InitInModlistRepository(string sourceFolder, bool commit) =>
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit, heldIn: SourceModIn.ModlistRepository);
+    private static SourceFailure? InitInInstanceRepository(string sourceFolder, bool commit) =>
+        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit, heldIn: SourceModIn.InstanceRepository);
 
     private string SourceFolderOf(string mod) => Path.Combine(_instance, "source", mod);
 

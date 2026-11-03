@@ -21,7 +21,7 @@ interface EntryNote { readonly note: string; readonly keepsEntry: boolean }
 
 const UNSAFE = 'its remote holds a credential that cannot safely be left out of its URL';
 
-// modlist-repository.md, The repository, story 3: a path or a file URL reaches no other machine.
+// instance-repository.md, The repository, story 3: a path or a file URL reaches no other machine.
 const LOCAL = 'its remote is on this machine alone';
 
 // git's scp-like form, [user@]host:path, whose host is longer than a Windows drive letter, and that form with a password.

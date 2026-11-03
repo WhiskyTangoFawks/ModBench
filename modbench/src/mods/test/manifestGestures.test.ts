@@ -44,11 +44,11 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import type { ModlistRepositoryCommands } from '../../sourceCommands/modlistRepositoryCommands';
+import type { InstanceRepositoryCommands } from '../../sourceCommands/instanceRepositoryCommands';
 
-const updateManifest = vi.fn<ModlistRepositoryCommands['updateManifest']>();
-const restoreFromManifest = vi.fn<ModlistRepositoryCommands['restoreFromManifest']>();
-const otherManifests = vi.fn<ModlistRepositoryCommands['otherManifests']>();
+const updateManifest = vi.fn<InstanceRepositoryCommands['updateManifest']>();
+const restoreFromManifest = vi.fn<InstanceRepositoryCommands['restoreFromManifest']>();
+const otherManifests = vi.fn<InstanceRepositoryCommands['otherManifests']>();
 
 const UPDATE = 'modbench.mod.updateManifest';
 const RESTORE = 'modbench.mod.restoreFromManifest';
@@ -349,7 +349,7 @@ describe('Update manifest', () => {
 });
 
 describe('Restore from manifest', () => {
-  it('restores the selected mods under the Mods view\'s progress (modlist-repository.md, Restore from manifest, story 2)', async () => {
+  it('restores the selected mods under the Mods view\'s progress (instance-repository.md, Restore from manifest, story 2)', async () => {
     restoreFromManifest.mockImplementationOnce(() => { progressSteps.push('restore'); return Promise.resolve({ landed: [], refused: [] }); });
     const { run } = register();
 

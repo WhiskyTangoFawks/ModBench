@@ -12,7 +12,7 @@ import {
 } from '../drivingLib/gestureEntry';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
-import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
+import type { InstanceRepositoryCommands } from '../sourceCommands/instanceRepositoryCommands';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import type { EntryRef, ModCommands, MovePlace, OrderEnd, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
@@ -92,9 +92,9 @@ export function registerFileExclusionCommands(
 }
 
 // modbench.mod.ignoreFile / modbench.mod.unignoreFile: the direction is the command's, as exclude and include are
-// (modlist-repository.md, The manifest, story 11).
+// (instance-repository.md, The manifest, story 11).
 export function registerFileIgnoreCommands(
-  commands: Pick<ModlistRepositoryCommands, 'ignoreFiles'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  commands: Pick<InstanceRepositoryCommands, 'ignoreFiles'>, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const gesture = (ignore: boolean): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef>> => {

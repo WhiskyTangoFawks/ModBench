@@ -118,7 +118,7 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 const BOUND_COMMAND_BOXES = {
     mods: ['modCommands/modCommands', 'modCommands/install'],
     downloads: ['downloadedFileCommands/downloads'],
-    toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
+    toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/instanceRepositoryCommands'],
     plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
 /** Mods reaches the Instance adapter for the installation file extensions install extracts, and for the

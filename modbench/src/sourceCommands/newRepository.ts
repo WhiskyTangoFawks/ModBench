@@ -173,7 +173,7 @@ async function foldersNotLinked(
   return notLinked;
 }
 
-export const NO_MODLIST_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
+export const NO_INSTANCE_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
 
 async function linesLeftIn(adapter: Pick<Adapter, 'writeSourceFolderLines'>, sourceFolder: string): Promise<string | undefined> {
   return adapter.writeSourceFolderLines([sourceFolder], false).then(
@@ -194,22 +194,23 @@ export interface PlacedMods<R> {
 
 interface PlaceRequest {
   readonly mods: readonly string[];
-  readonly where: SourceModIn;
+  readonly where?: SourceModIn;
   readonly onProgress?: (mod: string, modsDone: number, modsTotal: number) => void;
 }
 
 /** The flow of version in git and decompile and repair: a source folder per mod, let into the ignore list when the
- *  modlist repository holds it. Lines of mods `landedBy` omits come back out, also on a throw. */
+ *  instance repository holds it. Lines of mods `landedBy` omits come back out, also on a throw. */
 export async function modsPlaced<R>(
   adapter: Adapter, { mods, where, onProgress }: PlaceRequest,
   run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>, landedBy: (outcome: R) => Iterable<string>,
 ): Promise<PlacedMods<R> | WriteRefused> {
-  const inModlist = where === 'ModlistRepository';
-  if (inModlist && !(await adapter.repositoryOnDisk())) return { refused: true, message: NO_MODLIST_REPOSITORY };
+  const inInstanceRepository = where === 'InstanceRepository';
+  if (inInstanceRepository && !(await adapter.repositoryOnDisk())) return { refused: true, message: NO_INSTANCE_REPOSITORY };
   const made = new Map<string, MadeSourceFolder>();
   const notMade = new Map<string, string>();
   let notes: readonly string[] = [];
   if (mods.length > 0) {
+    if (where === undefined) return { refused: true, message: 'A mod to put under git needs where it is held.' };
     const game = await gameToHand(adapter, await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name })));
     const downloaded = await downloadedPackagesOf(adapter);
     notes = downloaded.notes;
@@ -222,14 +223,14 @@ export async function modsPlaced<R>(
   }
   const takenBack = async (isUnlanded: (mod: string) => boolean): Promise<Map<string, string>> => {
     const left = new Map<string, string>();
-    for (const [mod, { sourceFolder }] of inModlist ? made : []) {
+    for (const [mod, { sourceFolder }] of inInstanceRepository ? made : []) {
       const why = isUnlanded(mod) ? await linesLeftIn(adapter, sourceFolder.path) : undefined;
       if (why !== undefined) left.set(mod, why);
     }
     return left;
   };
   // git adds nothing the ignore list leaves out, so the folders are let in first.
-  const notLetIn = inModlist && made.size > 0
+  const notLetIn = inInstanceRepository && made.size > 0
     ? await adapter.writeSourceFolderLines([...made.values()].map(({ sourceFolder }) => sourceFolder.path), true).then(() => undefined, errorMessage)
     : undefined;
   if (notLetIn !== undefined) {

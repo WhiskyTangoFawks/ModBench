@@ -70,7 +70,7 @@ describe('restore from manifest over an instance on disk', () => {
     expect([outcome.refused, await stampsBelow(join(root, 'mods')), inTrash]).toEqual([[], before, {}]);
   });
 
-  it('writes each file from its package, asking nothing, and sends my copy of each file it replaces and each file no line names to the trash (modlist-repository.md, Restore from manifest, stories 1 and 2)', async () => {
+  it('writes each file from its package, asking nothing, and sends my copy of each file it replaces and each file no line names to the trash (instance-repository.md, Restore from manifest, stories 1 and 2)', async () => {
     const { update, restore, inTrash } = await aModFromADownloadedFileAndTheGameFolder();
     await update();
     const updated = await textsBelow(join(root, 'mods'));

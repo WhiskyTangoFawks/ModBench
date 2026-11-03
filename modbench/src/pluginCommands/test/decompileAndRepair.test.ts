@@ -25,11 +25,11 @@ interface Placing {
 describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
   let placing: Placing;
-  let requests: { readonly mods: readonly string[]; readonly where: SourceModIn }[];
+  let requests: { readonly mods: readonly string[]; readonly where?: SourceModIn }[];
 
   const placeMods: PlaceMods = async (request, run, landedBy) => {
     requests.push(request);
-    const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where } }]));
+    const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where ?? 'NewRepository' } }]));
     if (placing.whole !== undefined) return { refused: true, message: placing.whole };
     const outcome = await run(made);
     const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
@@ -63,9 +63,9 @@ describe('decompileAndRepair', () => {
   });
 
   it('places the mods that are not source mods once each, in the repository it is given (source.md, Decompile and repair, story 4)', async () => {
-    await repairIn({}, true, [MALFORMED, OTHER, { name: 'Second.esp', origin: 'Harbor' }], 'ModlistRepository');
+    await repairIn({}, true, [MALFORMED, OTHER, { name: 'Second.esp', origin: 'Harbor' }], 'InstanceRepository');
 
-    expect(requests).toEqual([{ mods: ['Harbor', 'Quay'], where: 'ModlistRepository' }]);
+    expect(requests).toEqual([{ mods: ['Harbor', 'Quay'], where: 'InstanceRepository' }]);
   });
 
   it('places no mod when every plugin is in a source mod, and hands the plugin alone', async () => {

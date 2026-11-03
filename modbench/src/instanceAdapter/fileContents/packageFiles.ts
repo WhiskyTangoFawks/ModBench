@@ -1,4 +1,4 @@
-// The files a manifest's packages hold, written into the folder it builds (modlist-repository.md, Restore from manifest,
+// The files a manifest's packages hold, written into the folder it builds (instance-repository.md, Restore from manifest,
 // story 1).
 
 import { randomUUID } from 'node:crypto';

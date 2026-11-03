@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the modlist repository it sits in, holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed when asked: in a new repository to main, in the modlist repository only the source folder's paths. A mod lands or is refused whole. Progress is the version-in-git-progress notification. */
+        /** @description Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the instance repository it sits in, holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed when asked: in a new repository to main, in the instance repository only the source folder's paths. A mod lands or is refused whole. Progress is the version-in-git-progress notification. */
         post: operations["VersionInGit"];
         delete?: never;
         options?: never;
@@ -1687,7 +1687,7 @@ export interface components {
             ignored?: string[] | null;
         };
         /** @enum {string} */
-        SourceModIn: "NewRepository" | "ModlistRepository";
+        SourceModIn: "NewRepository" | "InstanceRepository";
         SourceMove: {
             from: string;
             to: string;

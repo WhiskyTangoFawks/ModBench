@@ -5,11 +5,11 @@ import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 import type { Reporter } from '../ports/reporter';
-import type { ModlistRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/modlistRepositoryCommands';
+import type { InstanceRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/instanceRepositoryCommands';
 import type { ModNote, UpdateManifestResult, UpdateManifestStatus } from '../sourceCommands/updateManifest';
 
 export interface ManifestGestureDeps extends ModsToRunDeps {
-  commands: Pick<ModlistRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'otherManifests'>;
+  commands: Pick<InstanceRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'otherManifests'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
@@ -33,14 +33,14 @@ export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disp
   ];
 }
 
-// modlist-repository.md, Every mod, story 1: every manifest is every mod's and every other one in the instance.
+// instance-repository.md, Every mod, story 1: every manifest is every mod's and every other one in the instance.
 const othersOf = ({ commands }: ManifestGestureDeps, everyManifest: boolean): Promise<OtherManifests> =>
   (everyManifest ? commands.otherManifests() : Promise.resolve({ others: [], refused: [] }));
 
 type AgentOutcome<Landed> = GestureResult<Landed, string>;
 type Restored = RestoreResult['landed'];
 
-// modlist-repository.md, Every mod, story 3: progress by mod with Cancel, which stops after the mod in hand. The
+// instance-repository.md, Every mod, story 3: progress by mod with Cancel, which stops after the mod in hand. The
 // Toolbox's message line says what the notification says (Reporting).
 function withProgressAndCancel<T>(
   { say }: ManifestGestureDeps, run: (show: (message: string) => void, signal: AbortSignal) => Promise<T>,
@@ -107,7 +107,7 @@ const gapsOf = (
   otherBytes: landed.flatMap(({ mod, otherBytes }) => otherBytes.map((path) => otherBytesLine(mod, path))),
 });
 
-// modlist-repository.md, Reporting, story 1
+// instance-repository.md, Reporting, story 1
 function reportUpdated(reporter: Reporter, outcome: UpdateManifestResult): void {
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
   const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;

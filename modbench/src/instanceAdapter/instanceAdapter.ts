@@ -619,7 +619,7 @@ export interface InstanceReading extends InstanceGame {
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
   /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
-  /** Every source mod's folder in the source folder, a repository or one the modlist repository holds, by its name. */
+  /** Every source mod's folder in the source folder, a repository or one the instance repository holds, by its name. */
   readonly sourceModFolders: ReadonlyMap<string, string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
@@ -662,7 +662,7 @@ export interface InstanceAdapter extends DataFileReads {
   downloadedFiles(): Promise<DownloadedFiles>;
   /** The downloaded file `path` names, however the path is spelled; undefined when it names none; or why the downloaded files could not be read. */
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
-  /** Every source mod's folder in the source folder now, a repository or one the modlist repository holds, by its name. */
+  /** Every source mod's folder in the source folder now, a repository or one the instance repository holds, by its name. */
   sourceModFolders(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each

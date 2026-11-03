@@ -62,7 +62,7 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
 import { fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
-import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
+import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryCommands';
 import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
@@ -178,7 +178,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(reportSubscriberThrows(instance, reporterFor));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
+  const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
@@ -205,7 +205,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
-    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
+    manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
   }));
   const editing = own(editingFlow({
@@ -220,7 +220,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     commands: masterlistCommands({ adapter, lootMetadata: deps.lootMetadata }), instance, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say, ask, reporter: reporterFor('updateMasterlist'),
   }));
   own(publishRepository(instance, instanceRoot));
-  ownAll(own, registerModlistCommands({ commands: modlist, instance, reporterFor }));
+  ownAll(own, registerModlistCommands({ commands: instanceRepository, instance, reporterFor }));
   own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
   own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
   own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloads.view));

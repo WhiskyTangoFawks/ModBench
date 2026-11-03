@@ -52,9 +52,9 @@ const MODS = gestureInput(
 );
 
 const VERSION_IN_GIT = gestureInput(
-  `${MODS_TAKES}; options: { where: 'NewRepository' for a source mod in a new repository, 'ModlistRepository' for a source mod in the `
-  + `modlist repository, 'WholeFolder' for the mod's whole folder in the modlist repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
-  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ where: z.enum(['NewRepository', 'ModlistRepository', 'WholeFolder']), commit: z.boolean() }) }),
+  `${MODS_TAKES}; options: { where: 'NewRepository' for a source mod in a new repository, 'InstanceRepository' for a source mod in the `
+  + `instance repository, 'WholeFolder' for the mod's whole folder in the instance repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
+  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ where: z.enum(['NewRepository', 'InstanceRepository', 'WholeFolder']), commit: z.boolean() }) }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
 
@@ -239,9 +239,10 @@ const DECOMPILE = gestureInput(
 );
 
 const DECOMPILE_AND_REPAIR = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to repair a plugin whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
-  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
-  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { where?: 'NewRepository' for a source mod in a new repository, 'InstanceRepository' for a source mod in the instance repository, `
+  + `which a request leaves out only when every plugin's mod is a source mod, and is otherwise refused; force?: true to repair a plugin whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
+  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ where: z.enum(['NewRepository', 'InstanceRepository']).optional(), force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { where: options?.where, force: options?.force }),
 );
 
 const DROP = z.union([

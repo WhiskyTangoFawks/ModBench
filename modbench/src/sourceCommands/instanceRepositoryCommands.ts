@@ -15,7 +15,7 @@ export type { OtherManifests, RestoreResult, RestoreStatus } from './restoreFrom
 type Adapter = UpdateManifestDeps['adapter'] & RestoreDeps['adapter'] & Pick<InstanceAdapter,
   'ownPath' | 'checkPushRefusalFree' | 'publisherConfigurationRefusal' | 'writeIgnoreList' | 'removeRepository'>;
 
-interface ModlistRepositoryCommandsDeps extends Omit<RestoreDeps, 'adapter'> {
+interface InstanceRepositoryCommandsDeps extends Omit<RestoreDeps, 'adapter'> {
   readonly adapter: Adapter;
   readonly instanceRoot: string;
   readonly hostGit: HostGit<unknown>;
@@ -40,7 +40,7 @@ async function refusalTakenBack(failure: unknown, undone: readonly TakenBack[]):
  *  own pre-push hook was left in place. */
 export type GitInitResult = CommandResult<{ pathTokensNotWritten?: string; pushRefusalNotWritten?: string }>;
 
-async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryCommandsDeps): Promise<GitInitResult> {
+async function gitInit({ adapter, instanceRoot, hostGit }: InstanceRepositoryCommandsDeps): Promise<GitInitResult> {
   const adopting = await adapter.repositoryOnDisk();
   let takenBack: TakenBack[] = [];
   try {
@@ -80,7 +80,7 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
 }
 
 /** The modlist gestures over the Instance adapter, and mEdit for a source mod's clone and build. */
-export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
+export function instanceRepositoryCommands(deps: InstanceRepositoryCommandsDeps) {
   const { adapter } = deps;
 
   return {
@@ -106,4 +106,4 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
   };
 }
 
-export type ModlistRepositoryCommands = ReturnType<typeof modlistRepositoryCommands>;
+export type InstanceRepositoryCommands = ReturnType<typeof instanceRepositoryCommands>;

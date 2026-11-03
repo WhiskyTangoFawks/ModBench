@@ -4,7 +4,7 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>The git repository holding one source folder (ADR-0007), its own or the modlist repository: whether it is a
+/// <summary>The git repository holding one source folder (ADR-0007), its own or the instance repository: whether it is a
 /// source mod, what it committed, and the refs naming the binary Modbench last wrote.</summary>
 internal abstract class SourceRepositoryGit
 {
@@ -22,7 +22,7 @@ internal abstract class SourceRepositoryGit
     /// <summary>The repository of the source folder's own <c>.git</c>, made yet or not.</summary>
     internal static SourceRepositoryGit Own(string sourceFolder) => new OwnRepository(sourceFolder);
 
-    /// <summary>The modlist repository, the nearest one above the source folder, as git finds it.</summary>
+    /// <summary>The instance repository, the nearest one above the source folder, as git finds it.</summary>
     internal static SourceRepositoryGit Above(string sourceFolder) => new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder);
 
     /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
@@ -56,7 +56,7 @@ internal abstract class SourceRepositoryGit
 
         internal override void FinishInit() => Run("config", $"{InitMarkSection}.{InitMarkKey}", InitDone);
 
-        // The modlist repository pins HEAD.
+        // The instance repository pins HEAD.
         private protected override string SourceCommit() => "HEAD";
     }
 
@@ -70,9 +70,9 @@ internal abstract class SourceRepositoryGit
 
         internal override void BeginInit(WriteJournal journal)
         {
-            if (!Exists) throw SourceStopException.Inaccessible($"no repository holds '{_sourceFolder}', so it cannot be put in the modlist repository");
+            if (!Exists) throw SourceStopException.Inaccessible($"no repository holds '{_sourceFolder}', so it cannot be put in the instance repository");
             var head = HeadCommit();
-            journal.RecordUndo(() => PutBack(head), description: $"what the modlist repository holds of '{_sourceFolder}'");
+            journal.RecordUndo(() => PutBack(head), description: $"what the instance repository holds of '{_sourceFolder}'");
         }
 
         internal override void FinishInit() { }
@@ -235,7 +235,7 @@ internal abstract class SourceRepositoryGit
     internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all", "--", ".").Length > 0;
 
     /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit a clone builds the source folder from:
-    /// HEAD of its own repository, which the modlist repository pins, or the last commit touching it in the modlist repository.</summary>
+    /// HEAD of its own repository, which the instance repository pins, or the last commit touching it in the instance repository.</summary>
     internal bool RemoteHoldsTheSource(string remote)
     {
         if (HeadCommit() is null) return true;

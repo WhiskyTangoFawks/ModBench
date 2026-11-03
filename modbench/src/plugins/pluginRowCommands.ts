@@ -10,6 +10,7 @@ import { registerAgentGesture, reportPartial, type AgentGesture, type GestureRes
 import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins';
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
+import { Refusal } from '../drivingLib/refusal';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
@@ -74,7 +75,7 @@ export interface DecompileAndRepairDeps {
 }
 
 interface DecompileAndRepairGiven extends DecompileGiven {
-  readonly where: SourceModIn;
+  readonly where?: SourceModIn;
 }
 
 /** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
@@ -82,16 +83,21 @@ interface DecompileAndRepairGiven extends DecompileGiven {
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, GestureResult<PluginAddress>, { force?: boolean }> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, GestureResult<PluginAddress>, { force?: boolean; where?: SourceModIn }> = {
     fromView: async (entry, _option, clicked) => {
       const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
       if (plugins.length === 0) return undefined;
-      const where = (await deps.commands.outsideSourceMods(plugins)).length > 0
-        ? await pickWhereGitHolds(deps.instance.value.holdsRepository, 'Decompile and repair')
-        : 'NewRepository';
-      return where === undefined ? undefined : { plugins, force: false, where, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile and repair', replaced) };
+      const needsWhere = (await deps.commands.outsideSourceMods(plugins)).length > 0;
+      const where = needsWhere ? await pickWhereGitHolds(deps.instance.value.holdsRepository, 'Decompile and repair') : undefined;
+      return needsWhere && where === undefined ? undefined : { plugins, force: false, where, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile and repair', replaced) };
     },
-    fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true, where: 'NewRepository' }),
+    fromAgent: async ({ argument, options }) => {
+      const plugins = argument.map(pluginOf);
+      if (options.where === undefined && (await deps.commands.outsideSourceMods(plugins)).length > 0) {
+        throw new Refusal('A mod that is not a source mod needs the option where: NewRepository for a source mod in a new repository, or InstanceRepository for a source mod in the instance repository.');
+      }
+      return { plugins, force: options.force === true, where: options.where };
+    },
     run: async (given) => partialOf(await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
       sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where)))),
     report: (result, { plugins }) => {

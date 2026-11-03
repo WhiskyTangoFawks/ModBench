@@ -22,8 +22,8 @@ public enum SourceModIn
     /// <summary>A repository of its own, made in the source folder.</summary>
     NewRepository,
 
-    /// <summary>The modlist repository, which the source folder sits in.</summary>
-    ModlistRepository,
+    /// <summary>The instance repository, which the source folder sits in.</summary>
+    InstanceRepository,
 }
 
 /// <summary>Puts a mod's source folder under git, with one commit, <c>Init &lt;mod&gt;</c>, of its paths alone when

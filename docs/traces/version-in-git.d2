@@ -45,7 +45,7 @@ http -> client: "each path in the source folder" {class: track}
 client -> sourcecommands: "each path in the source folder" {class: track}
 sourcecommands -> manifestadapter: "the source folder's manifest, as text, at those paths" {class: track}
 manifestadapter -> sourcecommands: "the manifest, as bytes" {class: track}
-sourcecommands -> instanceadapter: "in the modlist repository: let each source folder in" {class: track}
+sourcecommands -> instanceadapter: "in the instance repository: let each source folder in" {class: track}
 instanceadapter -> instance: "the ignore list" {class: track}
 sourcecommands -> client: "version in git: each mod's folder · its assets · its manifest, as bytes · the paths a package yields · the repository" {class: track}
 client -> http: envelope {class: track}
@@ -53,7 +53,7 @@ http -> engine: envelope {class: track}
 engine -> commands: "decompile-plugin, every plugin of the mod" {class: track}
 modfolder -> modfolderadapter: "the assets" {class: track}
 modfolderadapter -> engine: "the assets" {class: track}
-engine -> sourceadapter: "the source folder, in a new repository or the modlist repository, and its first commit when asked: plugin source, assets, the manifest" {class: track}
+engine -> sourceadapter: "the source folder, in a new repository or the instance repository, and its first commit when asked: plugin source, assets, the manifest" {class: track}
 sourceadapter -> source: "the source folder" {class: track}
 engine -> http: "the outcome" {class: track}
 http -> client: "the outcome" {class: track}

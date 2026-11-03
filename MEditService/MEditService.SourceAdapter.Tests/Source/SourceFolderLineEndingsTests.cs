@@ -15,7 +15,7 @@ public sealed class SourceFolderLineEndingsTests : IDisposable
 
     [Theory]
     [InlineData(SourceModIn.NewRepository, "")]
-    [InlineData(SourceModIn.ModlistRepository, "source/TestMod/")]
+    [InlineData(SourceModIn.InstanceRepository, "source/TestMod/")]
     public void UnderAUserConfigThatConvertsLineEndings_EachFileIsCommittedAsWritten_AndTheAttributesThatSayStayUntracked(SourceModIn heldIn, string inRepository)
     {
         var instanceGit = Path.Combine(_instance, ".git");
