@@ -15,7 +15,7 @@ import { pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 
-export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
+export type { DataFolderFiles, DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
 
 /** One plugin file in the snapshot — the boundary object (GLOSSARY.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */

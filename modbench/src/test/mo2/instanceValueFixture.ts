@@ -33,6 +33,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     programVersions: { kind: 'unresolved' },
     gameFolderLinks: 0,
     dataFolderPlugins: { kind: 'unresolved' },
+    dataFolderFiles: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,
     loadOrderSnapshot: undefined,
     overwriteFiles: [],

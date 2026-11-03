@@ -4,7 +4,7 @@ import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
-  type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
+  type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
@@ -31,7 +31,7 @@ export type { GameFolder, ProgramVersion } from '../instanceAdapter/instanceAdap
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -105,6 +105,8 @@ export interface InstanceValue {
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
+  /** Every file the game's Data folder holds, at any depth: presence, never provision. */
+  readonly dataFolderFiles: DataFolderFiles;
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] | undefined;
@@ -246,6 +248,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   programVersions: { kind: 'unresolved' },
   gameFolderLinks: 0,
   dataFolderPlugins: { kind: 'unresolved' },
+  dataFolderFiles: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
   overwriteFiles: [],
@@ -387,7 +390,7 @@ export class Instance implements Subscription {
   }
 
   private tellReading({
-    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderFiles, dataFolderArchives, watchNotes, managerRunning,
     publisherConfiguration, programVersions,
   }: InstanceReading, sourceMods: SourceMods): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
@@ -400,6 +403,7 @@ export class Instance implements Subscription {
     this.tellOnce('watchNotes', watchNotes.map((note) => `[instance] ${note}`), 'warn');
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
+    this.tellOnce('dataFolderFiles', dataFolderFiles.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed whole: ${dataFolderFiles.reason}`] : [], 'warn');
     this.tellOnce('dataFolder', dataFolderPlugins.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`] : [], 'warn');
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
@@ -472,7 +476,7 @@ export class Instance implements Subscription {
     const reading = await adapter.reading();
     const {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
-      creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles,
+      creationClubList: creationClub, dataFolderArchives, dataFolderFiles, runtimeOutput, modFolders, profiles,
     } = reading;
     const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceModFolders, (name) => adapter.entryKey({ kind: 'mod', name }));
     this.tellReading(reading, sourceMods);
@@ -526,6 +530,7 @@ export class Instance implements Subscription {
       programVersions,
       gameFolderLinks: reading.gameFolderLinks,
       dataFolderPlugins,
+      dataFolderFiles,
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
         ? loadOrderSnapshot

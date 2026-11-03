@@ -9,7 +9,7 @@ import {
   SORTING_RULE_FILES_GLOB, SOURCE_GLOB,
 } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
+type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'gameFolderFiles';
 
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {
@@ -22,6 +22,7 @@ function isRepositoryChange(path: string): boolean {
 }
 
 interface Followed {
+  readonly what: FollowedFolder;
   readonly base: string;
   readonly glob: string;
   watch?: Subscription;
@@ -32,6 +33,8 @@ export interface Mo2Watch {
   /** Watches `base` under `glob` for `what` in place of the folder it followed before; undefined
    *  follows none. A watch newly armed signals once, for a change it missed while arming. */
   follow(what: FollowedFolder, base: string | undefined, glob: string): void;
+  /** Whether `gameFolderFiles` may have changed since this last answered, or is not watched. */
+  gameFolderFilesStale(): boolean;
   watchNotes(): string[];
 }
 
@@ -48,21 +51,35 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
   const onSourceChange = (path: string): void => {
     if (isRepositoryChange(path)) changed();
   };
-  const onChangeFor = (glob: string): ((path: string) => void) => (glob === SOURCE_GLOB ? onSourceChange : changed);
+  let gameFolderFilesChanged = true;
+  const gameFolderFilesHeard = (): void => {
+    gameFolderFilesChanged = true;
+    changed();
+  };
+  const onChangeFor = (what: FollowedFolder | undefined, glob: string): ((path: string) => void) => {
+    if (what === 'gameFolderFiles') return gameFolderFilesHeard;
+    return glob === SOURCE_GLOB ? onSourceChange : changed;
+  };
   const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
-  const heldFor = (base: string, glob: string): HeldFolderWatch | undefined => {
+  const heldFor = (base: string, glob: string, what: FollowedFolder | undefined): HeldFolderWatch | undefined => {
     const key = heldKey(base, glob);
-    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange: onChangeFor(glob), holds: isRepositoryChange, onFailure: changed }));
+    if (!held.has(key)) {
+      held.set(key, heldFolderWatchFor(glob, {
+        onChange: onChangeFor(what, glob), holds: isRepositoryChange, onFailure: what === 'gameFolderFiles' ? gameFolderFilesHeard : changed,
+      }));
+    }
     return held.get(key);
   };
-  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, onChangeFor(glob), heldFor(base, glob));
+  const watch = (base: string, glob: string, what?: FollowedFolder): Subscription =>
+    watchFiles(base, glob, onChangeFor(what, glob), heldFor(base, glob, what));
   const armed = (): boolean => listeners.size > 0;
 
   const arm = (): void => {
     fixed = [MODS_GLOB, OVERWRITE_GLOB, SOURCE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, SORTING_RULE_FILES_GLOB, REPOSITORY_WATCH_GLOB, REPOSITORY_SET_UP_WATCH_GLOB, HELD_BY_GIT_WATCH_GLOB]
       .map((glob) => watch(instanceRoot, glob));
     fixed.push(gameFolderChanged(changed));
-    for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);
+    gameFolderFilesChanged = true;
+    for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob, folder.what);
   };
   const disarm = (): void => {
     for (const subscription of fixed) subscription.dispose();
@@ -84,6 +101,12 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       };
     },
 
+    gameFolderFilesStale() {
+      const stale = gameFolderFilesChanged || !armed();
+      gameFolderFilesChanged = false;
+      return stale;
+    },
+
     follow(what, base, glob) {
       const current = followed.get(what);
       if (current?.base === base) return;
@@ -91,12 +114,14 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       if (current) held.delete(heldKey(current.base, current.glob));
       if (base === undefined) {
         followed.delete(what);
+        if (what === 'gameFolderFiles') gameFolderFilesChanged = true;
         return;
       }
-      const next: Followed = { base, glob };
+      const next: Followed = { what, base, glob };
       followed.set(what, next);
+      if (what === 'gameFolderFiles') gameFolderFilesChanged = true;
       if (!armed()) return;
-      next.watch = watch(base, glob);
+      next.watch = watch(base, glob, what);
       changed();
     },
 

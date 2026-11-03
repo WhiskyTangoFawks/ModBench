@@ -14,6 +14,7 @@ const value = instanceValueFixture({
   ],
   pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/', path: '/game/Data/DLCRobot.esm' }],
   dataFolderPlugins: { kind: 'listed', names: new Set(['Fallout4.esm']) },
+  dataFolderFiles: { kind: 'listed', files: new Set(['f4se/plugins/game.dll', 'fallout4 - main.ba2']) },
 });
 
 describe('fileIsPresent: a file the game finds in its Data folder', () => {
@@ -22,6 +23,8 @@ describe('fileIsPresent: a file the game finds in its Data folder', () => {
     ['a plugin a mod provides', 'provided.ESP'],
     ['a plugin the game loads with no line', 'dlcrobot.esm'],
     ['a plugin the Data folder lists', 'FALLOUT4.esm'],
+    ['a file the game folder holds below its Data folder\'s root, in any case, with either slash', 'F4SE\\Plugins\\Game.DLL'],
+    ['an archive the game folder holds', 'Fallout4 - Main.ba2'],
   ])('finds %s', (_name, path) => {
     expect(fileIsPresent(value, path)).toBe(true);
   });

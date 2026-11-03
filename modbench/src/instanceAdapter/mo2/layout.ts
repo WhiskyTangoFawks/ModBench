@@ -192,6 +192,8 @@ export const DOWNLOADS_WATCH_GLOB = '**';
 /** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
 export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;
 
+export const DATA_FOLDER_FILES_GLOB = '**';
+
 /** A profile's own INIs: its settings, and the game INIs it keeps. */
 export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;
 

@@ -5,7 +5,7 @@ import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { ignoreSkippedLink, type SkippedLink } from './files';
 import {
-  filesWinningFirst, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
+  filesWinningFirst, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
   type SortingRuleFiles,
 } from './instanceAdapter';
@@ -49,6 +49,7 @@ export interface ReadingSource extends ArchiveReads {
   modMeta(mod: string, folders: ModFolders | undefined | 'list'): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderPlugins>;
+  gameFolderFiles(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderFiles>;
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
@@ -127,6 +128,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
       creationClubList: await source.creationClubList(gameFolder, gameRelease),
       archiveList: await source.archiveList(profile, gameFolder, gameRelease, ignoreGameLink),
       dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease, ignoreGameLink),
+      dataFolderFiles: await source.gameFolderFiles(gameFolder, ignoreGameLink),
     })),
     source.profiles(skipLink),
     modFoldersRead,

@@ -12,12 +12,12 @@ import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codec
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
-import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
+import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
-import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
-import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
+import type { DataFolderFiles, DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
+import { DATA_FOLDER_FILES_GLOB, DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
@@ -80,6 +80,7 @@ async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
 
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
+  let dataFolderFiles: { listing: DataFolderFiles; links: readonly string[] } | undefined;
   return {
     names: MO2_NAMES,
     modLineKey,
@@ -130,6 +131,23 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     gameFolderPlugins: listDataFolderPlugins,
+
+    // Listed again only when the watch heard the folder change: a walk of every file per read is too dear.
+    async gameFolderFiles(gameFolder, ignoredLink) {
+      const dataFolder = dataFolderOf(gameFolder);
+      watch.follow('gameFolderFiles', dataFolder, DATA_FOLDER_FILES_GLOB);
+      if (!watch.gameFolderFilesStale() && dataFolderFiles !== undefined) {
+        dataFolderFiles.links.forEach(ignoredLink);
+        return dataFolderFiles.listing;
+      }
+      const links: string[] = [];
+      const listing = await listDataFolderFiles(gameFolder, (linkPath) => {
+        links.push(linkPath);
+        ignoredLink(linkPath);
+      });
+      dataFolderFiles = listing.kind === 'listed' ? { listing, links } : undefined;
+      return listing;
+    },
 
     creationClubList: readCreationClubList,
 
