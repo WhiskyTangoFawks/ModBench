@@ -39,7 +39,7 @@ async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise
 }
 
 // The page and version of a downloaded file, from its metadata, else its name; an unreadable metadata costs the page alone.
-async function factsOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; directUrl?: string; version?: string; note?: string }> {
+async function factsOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; directUrl?: string; version?: string; pageUnreadable?: string }> {
   try {
     const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
     const known = { ...meta.directURL === undefined ? {} : { directUrl: meta.directURL }, ...meta.version ? { version: meta.version } : {} };
@@ -47,12 +47,9 @@ async function factsOfDownloadedFile(context: Mo2Context, downloadsDir: string, 
     if (modId === undefined) return known;
     const game = meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot)));
     const domain = nexusDomainForMetaGame(game);
-    if (domain !== undefined) return { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...known };
-    return meta.directURL === undefined
-      ? { ...known, note: `${name} comes from '${game}', a game the instance adapter has no Nexus page for` }
-      : known;
+    return domain === undefined ? known : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...known };
   } catch (err) {
-    return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
+    return { pageUnreadable: errorMessage(err) };
   }
 }
 
@@ -170,8 +167,8 @@ export function mo2Installation(
       if (!(await exists(path))) return { kind: 'read', answer: undefined };
       const hashed = await downloadedFileHash(path);
       if (hashed.kind === 'unreadable') return hashed;
-      const { page, directUrl, version } = await factsOfDownloadedFile(context, dirname(path), name);
-      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page }, ...directUrl === undefined ? {} : { directUrl }, ...version === undefined ? {} : { version } } };
+      const { page, directUrl, version, pageUnreadable } = await factsOfDownloadedFile(context, dirname(path), name);
+      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page }, ...directUrl === undefined ? {} : { directUrl }, ...version === undefined ? {} : { version }, ...pageUnreadable === undefined ? {} : { pageUnreadable } } };
     },
 
     downloadedFileHolding: async ({ size, hash }) => {
@@ -205,10 +202,10 @@ export function mo2Installation(
       const { downloadsDir, names } = listed.answer;
       const hashed = await downloadedFilesHashed(names.map((name) => downloadedFilePath(downloadsDir, name)), options);
       const paged = await Promise.all(hashed.files.map(async (file) => {
-        const { note, page, directUrl, version } = await factsOfDownloadedFile(context, downloadsDir, basename(file.path));
-        return { file: { ...file, page, directUrl, version }, notes: note === undefined ? [] : [note] };
+        const { page, directUrl, version, pageUnreadable } = await factsOfDownloadedFile(context, downloadsDir, basename(file.path));
+        return { ...file, page, directUrl, version, ...pageUnreadable === undefined ? {} : { pageUnreadable } };
       }));
-      return { files: paged.map(({ file }) => file), notes: [...hashed.notes, ...paged.flatMap(({ notes }) => notes)] };
+      return { files: paged, notes: hashed.notes };
     },
 
     nexusFileAt: parseNexusPage,

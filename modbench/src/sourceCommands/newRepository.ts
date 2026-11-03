@@ -26,6 +26,7 @@ type Adapter = Pick<InstanceAdapter,
 export interface MadeSourceFolder {
   readonly modFolder: string;
   readonly sourceFolder: SourceFolderRequest;
+  readonly notes: readonly string[];
 }
 
 function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
@@ -111,6 +112,7 @@ async function sourceFolderOf(
   ];
   return {
     modFolder: folder,
+    notes: recorded.notes,
     sourceFolder: {
       path: sourceFolder, in: heldIn, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText({ steps }),
       manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest), ignored: [...sourceManifest.files.keys()],
@@ -214,7 +216,10 @@ export async function modsPlaced<R>(
       onProgress?.(mod, at, mods.length);
       const decided = await sourceFolderOf(adapter, mod, game, downloaded.files, where);
       if ('refusal' in decided) notMade.set(mod, decided.refusal);
-      else made.set(mod, decided);
+      else {
+        made.set(mod, decided);
+        notes = [...notes, ...decided.notes.map((note) => `${mod}: ${note}`)];
+      }
     }
   }
   const outcome = await run(made);

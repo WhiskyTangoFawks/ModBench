@@ -100,7 +100,7 @@ const takesFromTheGame = (mod: Pick<ModToUpdate, 'game'>): boolean => mod.game?.
 const depotProblemsOf = (game: GameToHand, mods: readonly ModToUpdate[]): readonly string[] =>
   (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.places.flatMap((place) => place.depotProblems));
 
-type Answer = { readonly refusal: string } | { readonly landed: ModUpdated };
+type Answer = { readonly refusal: string } | { readonly landed: ModUpdated; readonly notes: readonly string[] };
 
 const refusal = (why: string): { refusal: string } => ({ refusal: `was not updated: ${why}` });
 
@@ -196,7 +196,7 @@ async function updateMod(
   } catch (err) {
     return refusal(`its manifest could not be written: ${errorMessage(err)}`);
   }
-  return { landed: { mod: mod.name, manifestWritten: written, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes } };
+  return { landed: { mod: mod.name, manifestWritten: written, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes }, notes: recorded.notes };
 }
 
 // instance-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
@@ -282,6 +282,7 @@ export async function updateManifest(
     if (!mod.isSourceFolder) acted.push(mod.name);
     if ('refusal' in answer) { refused.push({ item: mod.name, reason: answer.refusal }); continue; }
     landed.push(answer.landed);
+    notes.push(...answer.notes.map((note) => ({ mod: mod.name, note })));
   }
   const submodules = await submodulesWritten(adapter, everyMod ? 'every' : acted, sourceMods.folders);
   return {
