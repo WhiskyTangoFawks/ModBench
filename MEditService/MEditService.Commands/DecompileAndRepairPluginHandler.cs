@@ -67,7 +67,7 @@ public sealed class DecompileAndRepairPluginHandler
         var (plugin, mod) = (RepairTarget.Diagnosed)target;
         var sourceFolder = mod.SourceFolder ?? item.SourceFolder?.Path;
         if (sourceFolder is null)
-            return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
+            return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} is not a source mod, and the request hands no source folder to make.");
         var inSourceMod = _source.IsSourceMod(sourceFolder);
         var repository = _source.OverFolder(mod with { SourceFolder = sourceFolder }, loadOrder.GameRelease);
         if (inSourceMod && !force && WorkingTreeCheck.Of(repository, plugin.Key, "decompile and repair") is { } workingTree)
@@ -92,13 +92,13 @@ public sealed class DecompileAndRepairPluginHandler
         if (!inSourceMod)
         {
             if (item.SourceFolder is not { } made)
-                return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
+                return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} is not a source mod, and the request hands no source folder to make.");
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
                 loadOrder, new ModToVersionInGit(mod.Name, mod.Folder, made, Commit: true),
                 leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
             if (init is ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
-                return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");
+                return Refused(RefusalOfInit(initRefusal), $"{mod.Name} is not a source mod, and making a source folder for {plugin.Name} was refused: {initMessage}");
             leftOutOfANewSourceFolder.UnionWith(leftOut);
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }

@@ -254,6 +254,6 @@ export async function modsPlaced<R>(
 }
 
 /** `modsPlaced` bound to one instance, as decompile and repair is handed it. */
-export const newRepositoriesOver = (adapter: Adapter) =>
+export const placeModsOver = (adapter: Adapter) =>
   <R>(request: PlaceRequest, run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>, landedBy: (outcome: R) => Iterable<string>) =>
     modsPlaced(adapter, request, run, landedBy);
