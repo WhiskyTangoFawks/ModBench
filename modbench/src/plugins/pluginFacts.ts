@@ -122,6 +122,7 @@ export class PluginFacts {
   private broken: BrokenRule[] = [];
   private offered: OfferedMove[] = [];
   private judgedActiveOrder?: readonly PluginAddress[];
+  private holdsLine: (plugin: PluginAddress) => boolean = () => true;
   private sourceUnreadableProblems: readonly SourceUnreadableProblem[] = [];
   private matches?: ByPluginAddress<boolean>;
   private diagnosisTexts = new ByPluginAddress<string[]>();
@@ -168,13 +169,14 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], loot: LootRules = NO_LOOT_RULES): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], loot: LootRules = NO_LOOT_RULES, holdsLine: (plugin: PluginAddress) => boolean = () => true): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.clearOverride();
     this.refreshed(plugins);
     this.judgedActiveOrder = activeOrder;
+    this.holdsLine = holdsLine;
     this.judgeSorting(activeOrder, loot);
   }
 
@@ -231,7 +233,8 @@ export class PluginFacts {
       }),
     ];
     this.broken = broken;
-    this.offered = offeredMoves(names, broken, factsOf);
+    this.offered = offeredMoves(names, broken, factsOf)
+      .filter(({ mover }) => this.holdsLine({ name: mover.filename, origin: mover.origin }));
     this.sorting = new ByPluginAddress<BrokenRule[]>();
     this.sortingNames = [];
     for (const rule of broken) {
