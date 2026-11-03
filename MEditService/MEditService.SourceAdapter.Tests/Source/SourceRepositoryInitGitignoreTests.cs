@@ -16,14 +16,14 @@ public sealed class SourceRepositoryInitGitignoreTests
         GitProbe.TryRun(Path.Combine(sourceFolder, ".git"), sourceFolder, out _, "check-ignore", path);
 
     [Fact]
-    public void AnInit_TracksExactlyTheGitignoreTheBuildFileThePluginSourceAndTheAssets()
+    public void AnInit_TracksExactlyTheGitattributesTheGitignoreTheBuildFileThePluginSourceAndTheAssets()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
         TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [Plugin], [Asset("meshes/a.nif"), Asset("readme.txt")], commit: true);
 
         Assert.Equal(
-            [".gitignore", "build.json", "meshes/a.nif", "plugin-source/Test.esp/npc_/Test.esp/000001.json", "readme.txt"],
+            [".gitattributes", ".gitignore", "build.json", "meshes/a.nif", "plugin-source/Test.esp/npc_/Test.esp/000001.json", "readme.txt"],
             CommittedPaths(sourceFolder));
     }
 
@@ -72,7 +72,7 @@ public sealed class SourceRepositoryInitGitignoreTests
             sourceFolder, SourceInits.BuildFile, [Plugin], [], true, null, new RootFile("Mod.manifest.json", "{}"u8.ToArray()));
 
         Assert.Equal(
-            [".gitignore", "Mod.manifest.json", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
+            [".gitattributes", ".gitignore", "Mod.manifest.json", "build.json", "plugin-source/Test.esp/npc_/Test.esp/000001.json"],
             CommittedPaths(sourceFolder));
     }
 

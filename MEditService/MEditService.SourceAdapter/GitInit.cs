@@ -50,8 +50,7 @@ internal static class GitInit
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
             git.BeginInit(journal);
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
-            // plugins.md, Version in git, story 4, whatever the user's git config converts. Its own .gitignore leaves it
-            // untracked (story 2), so a clone's endings follow its own config.
+            // Each file keeps its line endings as written, whatever the user's git config converts (plugins.md, Version in git, story 4).
             journal.Write(Path.Combine(sourceFolder, ".gitattributes"), "* -text\n"u8.ToArray());
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
@@ -138,6 +137,7 @@ internal static class GitInit
     private static string GitignoreContent(RootFile? manifest, IReadOnlyList<FileToCopy> assets, IReadOnlyList<string> ignored) =>
         "*\n" +
         "!/.gitignore\n" +
+        "!/.gitattributes\n" +
         $"!/{SourceRepositoryLayout.BuildFileName}\n" +
         Unignored($"{SourceRepositoryLayout.RootFolderName}/") +
         (manifest is null ? "" : $"!/{Escaped(manifest.Name)}\n") +

@@ -38,7 +38,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
 
         Assert.Equal([$"Init {TestMod.Name}"], SubjectsOnMain());
         Assert.Equal(
-            [".gitignore", "build.json", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json", "textures/a.dds"],
+            [".gitattributes", ".gitignore", "build.json", "plugin-source/A.esp/npc_/A.esp/000001.json", "plugin-source/B.esp/npc_/B.esp/000001.json", "textures/a.dds"],
             PathsIn("main"));
     }
 
@@ -73,7 +73,7 @@ public sealed class SourceRepositoryInitTests : IDisposable
 
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [], [], commit: true));
 
-        Assert.Equal([".gitignore", "build.json"], PathsIn("main"));
+        Assert.Equal([".gitattributes", ".gitignore", "build.json"], PathsIn("main"));
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public sealed class SourceFolderLineEndingsTests : IDisposable
     [Theory]
     [InlineData(SourceModIn.NewRepository, "")]
     [InlineData(SourceModIn.InstanceRepository, "source/TestMod/")]
-    public void UnderAUserConfigThatConvertsLineEndings_EachFileIsCommittedAsWritten_AndTheAttributesThatSayStayUntracked(SourceModIn heldIn, string inRepository)
+    public void UnderAUserConfigThatConvertsLineEndings_EachFileIsCommittedAsWritten_WithTheAttributesThatSaySo(SourceModIn heldIn, string inRepository)
     {
         var instanceGit = Path.Combine(_instance, ".git");
         GitProbe.Run(instanceGit, _instance, "init", "-q", "-b", "main");
@@ -31,8 +31,6 @@ public sealed class SourceFolderLineEndingsTests : IDisposable
 
         var (gitDir, workTree) = heldIn == SourceModIn.NewRepository ? (Path.Combine(sourceFolder, ".git"), sourceFolder) : (instanceGit, _instance);
         string Committed(string path) => GitProbe.Run(gitDir, workTree, "cat-file", "-p", $"HEAD:{inRepository}{path}");
-        Assert.Equal([Crlf, Crlf], [Committed("plugin-source/A.esp/npc_/A.esp/000001.json"), Committed("readme.txt")]);
-        Assert.True(File.Exists(Path.Combine(sourceFolder, ".gitattributes")));
-        Assert.DoesNotContain($"{inRepository}.gitattributes", GitProbe.Run(gitDir, workTree, "ls-files").Split('\n'));
+        Assert.Equal([Crlf, Crlf, "* -text\n"], [Committed("plugin-source/A.esp/npc_/A.esp/000001.json"), Committed("readme.txt"), Committed(".gitattributes")]);
     }
 }

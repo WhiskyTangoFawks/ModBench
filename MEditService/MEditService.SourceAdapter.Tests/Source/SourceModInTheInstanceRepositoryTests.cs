@@ -35,7 +35,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
 
         Assert.Equal($"Init {TestMod.Name}", Git("log", "-1", "--format=%s").Trim());
         Assert.Equal(
-            [$"source/{TestMod.Name}/.gitignore", $"source/{TestMod.Name}/build.json", $"source/{TestMod.Name}/{Document}"],
+            [$"source/{TestMod.Name}/.gitattributes", $"source/{TestMod.Name}/.gitignore", $"source/{TestMod.Name}/build.json", $"source/{TestMod.Name}/{Document}"],
             Lines(Git("show", "--name-only", "--format=", "HEAD")));
         Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
         Assert.False(Path.Exists(Path.Combine(_sourceFolder, ".git")));
@@ -50,7 +50,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
 
         Assert.Equal(before, Head());
         Assert.Equal(
-            [$"source/{TestMod.Name}/.gitignore", $"source/{TestMod.Name}/build.json", $"source/{TestMod.Name}/{Document}"],
+            [$"source/{TestMod.Name}/.gitattributes", $"source/{TestMod.Name}/.gitignore", $"source/{TestMod.Name}/build.json", $"source/{TestMod.Name}/{Document}"],
             Lines(Git("diff", "--cached", "--name-only")));
         Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
