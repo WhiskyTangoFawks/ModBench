@@ -1,4 +1,3 @@
-using System.Runtime.Versioning;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -78,12 +77,10 @@ public sealed class CompilePluginRefusalTests : IDisposable
     }
 
     [PosixFact]
-    [UnsupportedOSPlatform("windows")]
     public async Task Compile_WithAFolderOfItsSourceItCannotList_RefusesWithoutPointingAtDecompile()
     {
         var folder = Path.GetDirectoryName(TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity)).Require();
-        var mode = File.GetUnixFileMode(folder);
-        File.SetUnixFileMode(folder, UnixFileMode.None);
+        FileModes.Set(folder, "000");
         try
         {
             var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
@@ -94,7 +91,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         }
         finally
         {
-            File.SetUnixFileMode(folder, mode);
+            FileModes.Set(folder, "700");
         }
     }
 }
