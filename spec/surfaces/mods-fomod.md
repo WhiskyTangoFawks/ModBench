@@ -33,7 +33,7 @@ As a user, I want:
 1. Each group and each option shown and enforced as MO2's installer shows and enforces them. Cites: MO2
 2. The option under the pointer, or with focus, to show its description and image beside the groups, and a click on the image to open it larger. Cites: MO2
 3. Conditions read as MO2 reads them. Cites: MO2; mo2.md, divergences 19 and 20
-4. The author's defaults on every install, an upgrade included. Modbench keeps no choices: the manifest records the files, never how the installer chose them. Cites: MO2; ADR-0022; Minimal by default
+4. The installer to open on the choices the install names, and on the author's defaults elsewhere, an upgrade included. Modbench keeps no choices: the manifest records the files, never how the installer chose them. Cites: MO2; ADR-0022; Minimal by default; commands.md, The entry point supplies what it knows
 
 ## What Install does
 
