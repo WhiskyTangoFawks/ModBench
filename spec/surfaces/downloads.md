@@ -104,6 +104,13 @@ As a user, I want:
 2. A value already in the metadata that Nexus does not know kept, as an upgrade keeps a mod's (mods.md, What install does, story 4). Cites: Never silently wrong
 3. A file Nexus does not know left as it was, and named in the Output (Reporting, story 3). Cites: Never silently wrong
 
+## Download
+
+As a user, I want:
+
+1. The file to land with its metadata as query info writes it (Query info, story 1).
+2. A pick of the mod's files, each with its name, version and category. Cites: commands.md, The entry point supplies what it knows
+
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
