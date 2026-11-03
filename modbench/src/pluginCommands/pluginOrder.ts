@@ -27,7 +27,7 @@ export function moveOrderRefusal(
 export interface OfferedMove {
   rule: BrokenRule;
   mover: { name: string; origin: string };
-  drop: Drop;
+  drop: Extract<Drop, { name: string }>;
 }
 
 /** The moves that keep a rule `broken` without breaking another at Error, over `lines`, the plugins.txt order the move is
@@ -37,7 +37,7 @@ export function offeredMoves(lines: readonly string[], broken: readonly BrokenRu
   return broken.flatMap((rule): OfferedMove[] => {
     const move = suggestedMove(rule);
     if (move === undefined || !listed.has(move.mover.filename.toLowerCase()) || !listed.has(move.anchor.filename.toLowerCase())) return [];
-    const drop: Drop = { kind: move.side, name: move.anchor.filename };
+    const drop = { kind: move.side, name: move.anchor.filename };
     return moveOrderRefusal(lines, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: addressOfRef(move.mover), drop }] : [];
   });
 }

@@ -8,6 +8,23 @@ export interface PluginShown {
   readonly masters: readonly string[] | null;
 }
 
+interface SortingRuleShown {
+  readonly level: 'error' | 'warning' | 'info';
+  readonly reason: string;
+  readonly plugins: readonly { readonly origin: string; readonly filename: string }[];
+}
+
+// `drop` is in load order, as OfferedMove's.
+interface SuggestedMoveShown {
+  readonly rule: SortingRuleShown;
+  readonly mover: PluginAddress;
+  readonly drop: { readonly kind: 'before' | 'after'; readonly name: string };
+}
+
 export interface PluginsShown {
   shown(plugin: PluginAddress): PluginShown;
+  /** No rules before the order is judged is not yet checked, not none broken. */
+  sortingNotJudged(): string | undefined;
+  brokenRules(): readonly SortingRuleShown[];
+  suggestedMoves(): readonly SuggestedMoveShown[];
 }
