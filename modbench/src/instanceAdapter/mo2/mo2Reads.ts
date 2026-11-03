@@ -12,12 +12,12 @@ import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codec
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
-import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
+import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
-import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
+import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
@@ -94,7 +94,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         gameFolder: async () => {
           const managed: ManagerGamePath = { path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease };
           const gameFolder = await resolveGameFolder(managed);
-          watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
+          watch.follow('dataFolder', dataFolderOf(gameFolder), DATA_FOLDER_GLOB);
           const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
           if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');
           else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
@@ -130,6 +130,8 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     gameFolderPlugins: listDataFolderPlugins,
+
+    gameFolderFiles: listDataFolderFiles,
 
     creationClubList: readCreationClubList,
 

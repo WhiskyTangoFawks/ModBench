@@ -209,6 +209,13 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** Every file in the game folder's Data folder, at any depth, by its path in it, lower case; or why
+ *  there is no answer, as for its plugins. */
+export type DataFolderFiles =
+  | { readonly kind: 'listed'; readonly files: ReadonlySet<string> }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** Each plugin the game can load, keyed as it compares names, spelled as the copy it loads: an
  *  enabled mod's or Overwrite's at their root, else the Data folder's; and the enabled mods, by name. */
 export type PluginsProvided =
@@ -599,6 +606,7 @@ export interface InstanceReading extends InstanceGame {
   /** Each INI the game reads that the archive list did not. */
   readonly archiveListNotes: readonly string[];
   readonly dataFolderArchives: DataFolderArchives;
+  readonly dataFolderFiles: DataFolderFiles;
   readonly profiles: readonly string[];
   /** Undefined when there is no folder for mods at all. */
   readonly modFolders: ModFolders | undefined;

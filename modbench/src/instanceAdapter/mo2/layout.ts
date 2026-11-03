@@ -11,7 +11,6 @@ import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { GIT_DIR, ownTempPrefix } from '../files';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import { anyCase, isBareName, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
-import { PLUGIN_EXTENSIONS } from '../../tables/pluginFile';
 import { MANIFEST_SUFFIX } from '../../repositoriesLib/manifestPath';
 
 const PROFILES = 'profiles';
@@ -189,8 +188,8 @@ export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
 
-/** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
-export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;
+/** Everything under the game folder's Data folder, the Data folder its base. */
+export const DATA_FOLDER_GLOB = '**';
 
 /** A profile's own INIs: its settings, and the game INIs it keeps. */
 export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;

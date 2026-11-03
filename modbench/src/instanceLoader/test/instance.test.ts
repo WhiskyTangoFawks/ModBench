@@ -811,6 +811,24 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
   });
 
+  it('tells once while it stands that a folder below the Data folder\'s root could not be listed', async () => {
+    const { instance, warnings } = loader({ gameFolder: GAME_FOLDER, dataFolderFiles: { kind: 'unreadable', reason: 'EACCES' } });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed whole: EACCES']);
+  });
+
+  it('tells one warning, not two, when the Data folder cannot be listed at all', async () => {
+    const unreadable = { kind: 'unreadable', reason: 'EACCES' } as const;
+    const { instance, warnings } = loader({ gameFolder: GAME_FOLDER, dataFolderPlugins: unreadable, dataFolderFiles: unreadable });
+
+    await instance.refresh();
+
+    expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
+  });
+
   it.each<[string, ProgramVersions, string[]]>([
     ['a game program the game folder lacks', { kind: 'found', game: { kind: 'notFound', program: 'Fallout4.exe' }, extender: { kind: 'read', version: '1' } },
       ['[instance] the game\'s version: Fallout4.exe is not in the game folder']],

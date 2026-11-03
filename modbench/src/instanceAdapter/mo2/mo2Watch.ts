@@ -9,7 +9,7 @@ import {
   SORTING_RULE_FILES_GLOB, SOURCE_GLOB,
 } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
+type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
 
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {
