@@ -159,6 +159,12 @@ describe('the agent server, given an instance value', () => {
     expect(client.getInstructions()).toContain('select_rows says which');
   });
 
+  it('tells the client how to read Nexus without a key', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+
+    expect(client.getInstructions()).toContain('https://api.nexusmods.com/v2/graphql');
+  });
+
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
     const held = new Map([['MEDIT_PORT', { value: '5172' }], ['PYTHONPATH', { value: '/ext/scripts' }]]);
     const { client } = await clientOf(new FakeInstance(VALUE), undefined, { forEach: (each) => { held.forEach((mutator, name) => { each(name, mutator); }); } });
