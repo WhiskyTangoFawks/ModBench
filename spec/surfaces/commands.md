@@ -180,7 +180,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | where: a source mod in a new repository, or a source mod in the instance repository; force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
-| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a compiled plugin, the files named for it, and its lines. | rename-plugin |
+| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a plugin, the files named for it, and its lines. | rename-plugin |
 | apply suggested move | writes | `modbench.plugin.applySuggestedMove` | plugin | broken sorting rule: a pick, when more than one offers a move | none | Move a plugin to the nearest place that keeps a broken sorting rule. | update-load-order-file |
 | load after | writes | `modbench.plugin.loadAfter` | plugins | plugins to load after: a pick | LOOT, Edit Metadata, Load After | Add a sorting rule to the userlist that each plugin loads after the picked plugins. | update-load-order-file |
 
