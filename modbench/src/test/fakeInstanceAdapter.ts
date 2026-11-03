@@ -101,7 +101,7 @@ export type AdapterCall =
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
   | { readonly verb: 'writeOtherManifestLines' }
-  | { readonly verb: 'writeSourceFolderLines'; readonly sourceFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'writeSourceModLines' }
   | { readonly verb: 'writeHeldWholeLines'; readonly modFolders: readonly string[]; readonly held: boolean }
   | { readonly verb: 'commitFolder'; readonly folder: string; readonly message: string }
   | { readonly verb: 'refuseUnpublishedPins' }
@@ -428,7 +428,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeSubmodules: (acted) => record({ verb: 'writeSubmodules', acted }, answers.submodules ?? { notes: [], other: [] }),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
-    writeSourceFolderLines: (sourceFolders, held) => record({ verb: 'writeSourceFolderLines', sourceFolders, held }, undefined),
+    writeSourceModLines: () => record({ verb: 'writeSourceModLines' }, undefined),
     writeHeldWholeLines: (modFolders, held) => write({ verb: 'writeHeldWholeLines', modFolders, held }, () => {
       for (const folder of modFolders) {
         if (held) letInByLines.add(folder);

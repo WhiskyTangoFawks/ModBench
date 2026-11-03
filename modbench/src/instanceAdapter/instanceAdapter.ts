@@ -728,8 +728,8 @@ export interface InstanceAdapter extends DataFileReads {
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;
-  /** Makes each source mod of `acted`, or of every one, with a remote a submodule: its `.gitmodules` entry and ignore line.
-   *  Only `every` removes those of a source mod that is gone. `sourceMods`: each repository's folder by its mod. */
+  /** Makes each source mod of `acted`, or of every one, with a remote a submodule by its `.gitmodules` entry, then writes
+   *  the lines `writeSourceModLines` writes. Only `every` removes a gone mod's entry. `sourceMods`: by mod. */
   writeSubmodules(acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>): Promise<SubmoduleReport>;
   /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
    *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
@@ -737,9 +737,9 @@ export interface InstanceAdapter extends DataFileReads {
   /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder. Writes
    *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
   writeOtherManifestLines(): Promise<void>;
-  /** Lets the instance repository hold each source folder of `sourceFolders`, or with `held` false leaves each out. Writes
-   *  nothing without an ignore list; rejects, writing nothing, for a folder outside the source folder or an unpaired marker. */
-  writeSourceFolderLines(sourceFolders: readonly string[], held: boolean): Promise<void>;
+  /** Lets each submodule into the instance repository, and leaves out each other source folder that holds a repository of
+   *  its own. Writes nothing without an ignore list; rejects, writing nothing, for an unpaired marker. */
+  writeSourceModLines(): Promise<void>;
   /** Lets the instance repository hold the files of each mod folder of `modFolders`, or with `held` false leaves them out.
    *  Writes nothing without an ignore list; rejects, writing nothing, for a folder outside the mods folder or an unpaired marker. */
   writeHeldWholeLines(modFolders: readonly string[], held: boolean): Promise<void>;

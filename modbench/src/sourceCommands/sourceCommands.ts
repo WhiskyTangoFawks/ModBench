@@ -21,7 +21,7 @@ interface SourceCommandsDeps {
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceModFolders'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'unheldFolderValue'
-    | 'repositoryOnDisk' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole'>;
+    | 'repositoryOnDisk' | 'writeSourceModLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -163,13 +163,13 @@ async function modsVersionedInGit(
     adapter, { mods, where, onProgress: (mod, modsDone, modsTotal) => onProgress?.({ mod, modsDone, modsTotal, phase: 'ReadingFiles' }) },
     sentOver, (outcome) => outcome.landed.map(({ mod }) => mod));
   if (isRefused(placed)) return placed;
-  const { outcome, notMade, notLinked, notTakenBack, notes } = placed;
-  if (isRefused(outcome)) return { ...outcome, message: [outcome.message, ...notTakenBack.values()].join(' ') };
-  const refused = placed.withLinesLeft([
+  const { outcome, notMade, notLinked, notes } = placed;
+  if (isRefused(outcome)) return outcome;
+  const refused = [
     ...outcome.refused,
     ...[...notMade].map(([item, reason]) => ({ item, reason })),
     ...[...notLinked].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'put under git'}, but ${why}.` })),
-  ], (item) => item);
+  ];
   return { landed: outcome.landed, refused, ...notes.length === 0 ? {} : { notes } };
 }
 

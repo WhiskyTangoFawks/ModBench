@@ -17,7 +17,6 @@ const MADE = { modFolder: '/mods/Harbor', sourceFolder: { path: '/source/Harbor'
 interface Placing {
   notMade: Record<string, string>;
   notLinked: Record<string, string>;
-  notTakenBack: Record<string, string>;
   whole: string | undefined;
   notes: string[];
 }
@@ -33,11 +32,9 @@ describe('decompileAndRepair', () => {
     if (placing.whole !== undefined) return { refused: true, message: placing.whole };
     const outcome = await run(made);
     const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
-    const left = new Map(Object.entries(placing.notTakenBack));
     return {
-      outcome, notMade: new Map(Object.entries(placing.notMade)), notTakenBack: left, notes: placing.notes,
+      outcome, notMade: new Map(Object.entries(placing.notMade)), notes: placing.notes,
       notLinked: new Map(Object.entries(placing.notLinked).filter(([mod]) => landed.has(mod))),
-      withLinesLeft: (refused, modOf) => refused.map((entry) => ({ ...entry, reason: [entry.reason, left.get(modOf(entry.item))].filter(Boolean).join(' ') })),
     };
   };
   const commandsOver = (sourceMods: Record<string, string>) =>
@@ -53,7 +50,7 @@ describe('decompileAndRepair', () => {
   beforeEach(() => {
     client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndRepair', landingEach);
-    placing = { notMade: {}, notLinked: {}, notTakenBack: {}, whole: undefined, notes: [] };
+    placing = { notMade: {}, notLinked: {}, whole: undefined, notes: [] };
     requests = [];
   });
 
@@ -104,23 +101,5 @@ describe('decompileAndRepair', () => {
 
     expect(await repairIn({}, true)).toEqual({ applied: false, refusal: placing.whole });
     expect(sent()).toEqual([]);
-  });
-
-  it('adds what stays in the ignore list to the reason of the plugins of the mod it concerns only', async () => {
-    placing.notTakenBack = { Quay: 'The ignore list still lets in /source/Quay.' };
-    client.setCommandHandler('decompileAndRepair', (plugins) => Promise.resolve({
-      landed: [], refused: plugins.map(({ plugin }) => ({ item: plugin, reason: 'refused.' })),
-    }));
-
-    expect(await repairIn({}, true, [MALFORMED, OTHER])).toEqual({ applied: true, outcome: { landed: [], refused: [
-      { item: MALFORMED, reason: 'refused.' }, { item: OTHER, reason: 'refused. The ignore list still lets in /source/Quay.' },
-    ] } });
-  });
-
-  it('says what stays in the ignore list when mEdit refuses the whole repair', async () => {
-    placing.notTakenBack = { Harbor: 'The ignore list still lets in /source/Harbor.' };
-    client.setCommandHandler('decompileAndRepair', () => Promise.resolve({ refused: true, message: 'mEdit is busy.' }));
-
-    expect(await repairIn({}, true)).toEqual({ applied: false, refusal: 'mEdit is busy. The ignore list still lets in /source/Harbor.' });
   });
 });

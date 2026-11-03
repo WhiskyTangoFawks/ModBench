@@ -13,13 +13,14 @@ import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
-  sourceRootDir, submodulesFile, whitelistIgnoreList, withHeldWholeLines, withOtherManifestLines, withSourceFolderLines, withSourceModLines,
+  sourceRootDir, submodulesFile, whitelistIgnoreList, withHeldWholeLines, withOtherManifestLines, withSourceModLines,
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
+import { sourceRepositoriesOf } from './mo2Submodules';
 
-type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
 
 // A manifest outside the mod folders, by the names of the folders down to it and its own.
 interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
@@ -159,7 +160,7 @@ function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
 function whitelistAfter(ignoreList: string, whitelist: string): string {
   const whitelistLines = whitelist.trimEnd().split('\n');
   const text = ignoreList.replaceAll('\r\n', '\n');
-  const gitLines = (withSourceModLines(text, []) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
+  const gitLines = (withSourceModLines(text, { submodules: [], withoutEntry: [] }) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
   const holdsWhitelist = gitLines.some((_, at) => whitelistLines.every((line, i) => gitLines[at + i] === line));
   if (holdsWhitelist) return '';
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
@@ -180,8 +181,13 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
       const file = ignoreListFile(instanceRoot);
       const existed = await exists(file);
       let appended = '';
+      // The whitelist lets in every source folder, so one with a repository of its own and no entry is left out from the start.
+      const repositories = await sourceRepositoriesOf(instanceRoot);
       await putIfChanged(file, (before) => {
-        appended = whitelistAfter(before, whitelist);
+        const whitelisted = whitelistAfter(before, whitelist);
+        const lines = withSourceModLines('', repositories) ?? '';
+        const sourceModLines = whitelisted === '' || lines.trim() === '' ? '' : lines;
+        appended = whitelisted + (before.includes('\r\n') ? sourceModLines.replaceAll('\n', '\r\n') : sourceModLines);
         return before + appended;
       }, { ifMissing: '' });
       return async () => {
@@ -218,9 +224,6 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     writeOtherManifestLines: () => otherManifestLinesWritten(context),
-
-    writeSourceFolderLines: (sourceFolders, held) =>
-      folderLinesWritten(instanceRoot, sourceRootDir(instanceRoot), sourceFolders, 'source folders', (list, names) => withSourceFolderLines(list, names, held)),
 
     writeHeldWholeLines: (modFolders, held) =>
       folderLinesWritten(instanceRoot, modsDir(instanceRoot), modFolders, 'mod folders held whole', (list, names) => withHeldWholeLines(list, names, held)),
