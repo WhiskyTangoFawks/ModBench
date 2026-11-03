@@ -69,7 +69,7 @@
               "markdown": "walkthrough/getting-started.md"
             },
             "completionEvents": [
-              "onContext:modbench.instance.repositorySetUp == true"
+              "onContext:modbench.modlist.repositorySetUp == true"
             ]
           },
           {
@@ -1098,7 +1098,7 @@
         },
         {
           "command": "modbench.modlist.gitInit",
-          "when": "modbench.folder == instance && !modbench.instance.repositorySetUp"
+          "when": "modbench.folder == instance && !modbench.modlist.repositorySetUp"
         },
         {
           "command": "modbench.mod.updateManifest",
@@ -1475,7 +1475,7 @@
         },
         {
           "command": "modbench.modlist.gitInit",
-          "when": "view == modbench.toolbox && viewItem == modlist && !modbench.instance.repositorySetUp",
+          "when": "view == modbench.toolbox && viewItem == modlist && !modbench.modlist.repositorySetUp",
           "group": "modbench@1"
         },
         {

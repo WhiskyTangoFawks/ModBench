@@ -194,7 +194,7 @@ export interface PlacedMods<R> {
 
 interface PlaceRequest {
   readonly mods: readonly string[];
-  readonly where: SourceModIn;
+  readonly where?: SourceModIn;
   readonly onProgress?: (mod: string, modsDone: number, modsTotal: number) => void;
 }
 
@@ -210,6 +210,7 @@ export async function modsPlaced<R>(
   const notMade = new Map<string, string>();
   let notes: readonly string[] = [];
   if (mods.length > 0) {
+    if (where === undefined) return { refused: true, message: 'A mod to put under git needs where it is held.' };
     const game = await gameToHand(adapter, await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name })));
     const downloaded = await downloadedPackagesOf(adapter);
     notes = downloaded.notes;

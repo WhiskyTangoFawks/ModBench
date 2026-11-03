@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 
 const REPOSITORY_KEY = 'modbench.modlist.hasRepository';
-const SET_UP_KEY = 'modbench.instance.repositorySetUp';
+const SET_UP_KEY = 'modbench.modlist.repositorySetUp';
 const INSTANCE_ROOTS_KEY = 'modbench.modlist.instanceRoots';
 
 /** Tells the menus whether the instance holds a repository and whether git init has set it up, from each value the

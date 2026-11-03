@@ -25,11 +25,11 @@ interface Placing {
 describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
   let placing: Placing;
-  let requests: { readonly mods: readonly string[]; readonly where: SourceModIn }[];
+  let requests: { readonly mods: readonly string[]; readonly where?: SourceModIn }[];
 
   const placeMods: PlaceMods = async (request, run, landedBy) => {
     requests.push(request);
-    const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where } }]));
+    const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where ?? 'NewRepository' } }]));
     if (placing.whole !== undefined) return { refused: true, message: placing.whole };
     const outcome = await run(made);
     const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));

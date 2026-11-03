@@ -40,9 +40,9 @@ describe('publishRepository', () => {
     expect(executeCommand.mock.calls).toEqual([
       ['setContext', 'modbench.modlist.instanceRoots', ['file:///instance']],
       ['setContext', 'modbench.modlist.hasRepository', false],
-      ['setContext', 'modbench.instance.repositorySetUp', false],
+      ['setContext', 'modbench.modlist.repositorySetUp', false],
       ['setContext', 'modbench.modlist.hasRepository', true],
-      ['setContext', 'modbench.instance.repositorySetUp', true],
+      ['setContext', 'modbench.modlist.repositorySetUp', true],
     ]);
   });
 

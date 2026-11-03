@@ -341,7 +341,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
   function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = [], client = new InMemoryMEditClient(), holdsRepository = false) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const repaired: { plugins: readonly PluginAddress[]; force: boolean; where: SourceModIn }[] = [];
+    const repaired: { plugins: readonly PluginAddress[]; force: boolean; where?: SourceModIn }[] = [];
     registerDecompileAndRepairCommand({
       commands: {
         outsideSourceMods,
@@ -367,7 +367,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
     await handler(row(MALFORMED));
 
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: false, where: 'NewRepository' }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
     expect(ask.asked).toEqual([]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'decompile and repair', 'Instance loader: read every file again', 'progress closes',
@@ -387,7 +387,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
       detail: undefined,
       buttons: ['Decompile and repair'],
     }]);
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true, where: 'NewRepository' }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
   });
 
   it('from a Malformed entry\'s link in the Problems panel, repairs the plugin it names, not the selection', async () => {
@@ -405,7 +405,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
     const answered = await handler(new AgentCall([{ kind: 'plugin', plugin: MALFORMED }], { force: true }));
 
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true, where: 'NewRepository' }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [] } });
     expect(ask.asked).toEqual([]);
     expect(reporter.landings).toEqual([]);
@@ -512,7 +512,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
         await handler(calling({}));
 
-        expect(repaired.length).toBe(1);
+        expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
       });
     });
 
