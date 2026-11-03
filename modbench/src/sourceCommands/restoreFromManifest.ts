@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
 import type { InstallationFile, InstanceAdapter, OtherManifest, PackageFile, Submodule } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, writeManifestIn, type BuildFile, type FolderAgainst, type Manifest,
+  buildFileIn, exclusionsOf, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
   type ManifestPackage, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
@@ -348,17 +348,6 @@ async function sourceFolderRestored(
 
 const NO_FILES: FolderValue = { files: new Map(), exclude: [], ignoresCase: false };
 
-// instance-repository.md, Restore from manifest, story 1: the manifest says what the folder becomes, so a build that did
-// not finish leaves it as restore read it.
-async function manifestPutBack(folder: string, manifest: Manifest, refusal: string): Promise<{ readonly refusal: string }> {
-  try {
-    await writeManifestIn(folder, manifest);
-    return { refusal };
-  } catch (err) {
-    return { refusal: `${refusal} Its manifest could not be put back: ${errorMessage(err).replace(/\.$/, '')}.` };
-  }
-}
-
 // ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records.
 async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, pinned: Submodule | undefined): Promise<Answer> {
   const { adapter, client, tasks, trash } = pass.deps;
@@ -376,7 +365,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;
   const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...built.refused.map(({ reason }) => reason), ...built.archivesRefused.map(({ reason }) => reason)];
-  if (leftAsItWas.length > 0) return manifestPutBack(folder, manifest, `was not finished: ${leftAsItWas.map((why) => why.replace(/\.$/, '')).join('; ')}.`);
+  if (leftAsItWas.length > 0) return { refusal: `was not finished: ${leftAsItWas.map((why) => why.replace(/\.$/, '')).join('; ')}.` };
   const recorded = await manifestHeld(folder);
   if (recorded === undefined || 'refusal' in recorded) return { refusal: notFinished(recorded?.refusal ?? 'its build wrote no manifest') };
   let after: Map<string, string>;

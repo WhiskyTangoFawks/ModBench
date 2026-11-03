@@ -249,6 +249,18 @@ describe('sourceCommands build, in mod order', () => {
     expect([outcome, client.calls.length]).toEqual([{ landed: [{ ...landedOf('ModA'), refused, failure: 'The build stopped after its step 1, which refused a file.' }], refused: [] }, 1]);
   });
 
+  it('keeps the manifest line of a plugin its last step refused, which it left as it was (source.md, Build, stories 8 and 10)', async () => {
+    const before: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], flags: new Map(), files: new Map([['A.esp', 'AAAAAAAAAAA=']]) };
+    await writeManifestIn(folderOf('ModA'), before);
+    const client = new InMemoryMEditClient();
+    const refused = [{ item: { name: 'A.esp', origin: 'ModA' }, reason: "A.esp's plugin source is unreadable, so it cannot be compiled." }];
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), refused }], refused: [] }));
+
+    await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect(await recorded('ModA')).toEqual(before);
+  });
+
   describe('a decompile step (source.md, Build, story 17)', () => {
     const ASIDE = [
       { aside: '.medit_tmp_1_x/A.esp', path: 'plugin-source/A.esp' },

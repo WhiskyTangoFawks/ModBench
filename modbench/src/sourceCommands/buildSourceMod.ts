@@ -276,7 +276,10 @@ async function finished(deps: BuildDeps, mod: SourceModToBuild, { outcome, made 
   if (why !== undefined) return { ...withTrashed, failure: await stoppedAs(deps, mod, made, `The build stopped as ${why}.`) };
   try {
     const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
-    await writeManifestIn(mod.folder, sourceModManifest(mod, filesOf(adapter.ownPath, made, folder, previous, mod.ignore)));
+    const files = filesOf(adapter.ownPath, made, folder, previous, mod.ignore);
+    // Build, stories 8 and 10: a file a step refused is left as it was, and so is its line.
+    const leftAFile = outcome.refused.length + outcome.archivesRefused.length > 0;
+    await writeManifestIn(mod.folder, sourceModManifest(mod, leftAFile ? new Map([...previous, ...files]) : files));
     return withTrashed;
   } catch (err) {
     return { ...withTrashed, failure: `The build could not write its manifest: ${errorMessage(err)}` };
