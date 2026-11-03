@@ -23,3 +23,18 @@ export function pluginOrderOf<R extends Placed, N extends PluginAddress>(
   const placed = new Set([...noLineKeys, ...fromLines.map(pluginAddressKey)]);
   return { loadedWithNoLine, fromLines, others: value.plugins.filter((p) => !placed.has(pluginAddressKey(p))) };
 }
+
+/** The order the game loads in. Where the release loads a blueprint plugin after every plugin that
+ *  is not one (`blueprintLoadsLast`), among the blueprint plugins those with no line come before the lines. */
+export function inGameOrder<R>(
+  loadedWithNoLine: readonly R[], lines: readonly R[], isBlueprint: (plugin: R) => boolean, blueprintLoadsLast: boolean,
+): R[] {
+  if (!blueprintLoadsLast) return [...loadedWithNoLine, ...lines];
+  const afterLastOrdinaryLine = lines.findLastIndex((line) => !isBlueprint(line)) + 1;
+  return [
+    ...loadedWithNoLine.filter((plugin) => !isBlueprint(plugin)),
+    ...lines.slice(0, afterLastOrdinaryLine),
+    ...loadedWithNoLine.filter(isBlueprint),
+    ...lines.slice(afterLastOrdinaryLine),
+  ];
+}

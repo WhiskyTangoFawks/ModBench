@@ -66,10 +66,11 @@ function plugin(
 }
 
 function valueOf(
-  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[],
+  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[], blueprintLoadsLast = false,
 ): InstanceValue {
   const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
   return instanceValueFixture({
+    blueprintLoadsLast,
     mods: mods.map((name) => ({ kind: 'mod' as const, name, enabled: true })),
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
     pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => {
@@ -107,10 +108,11 @@ function makeTree(
     publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
     publishSortingErrors: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishSortingErrors'];
     loadedWithNoLine: readonly (string | PluginAddress)[];
+    blueprintLoadsLast: boolean;
     reporter: RecordingReporter;
   }> = {},
 ): Harness {
-  const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
+  const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine, extra.blueprintLoadsLast));
   const client = extra.client ?? browserClient();
   const records = new RecordBrowser(client);
   const tree = pluginsTreeOver(instance, {
@@ -768,6 +770,49 @@ describe('PluginsTreeProvider — the sort direction', () => {
     tree.setFilter('a');
 
     expect(await labelsOf(tree)).toEqual(['AB.esp', 'A.esp']);
+  });
+});
+
+describe('PluginsTreeProvider — a plugin the game loads with no line sits where the game loads it (plugins.md, The tree, story 2)', () => {
+  const BLUEPRINT = 'Blueprint.esm';
+  const lines = () => [
+    plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'Ship.esm', line: 2 }),
+  ];
+  const scene = (blueprintLoadsLast = true) => makeTree(lines(), { loadedWithNoLine: ['Base.esm', BLUEPRINT], blueprintLoadsLast });
+  const facts = [
+    held('Base.esm', { origin: 'Data/' }), held(BLUEPRINT, { origin: 'Data/', isMaster: true, isBlueprint: true }), held('A.esp'), held('B.esp'),
+    held('Ship.esm', { isMaster: true, isBlueprint: true, masters: [BLUEPRINT] }),
+  ];
+  const labelsOf = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => row.label);
+
+  it('draws it after every line that is not a blueprint plugin, and before a blueprint line, once mEdit has read the plugins', async () => {
+    const h = scene();
+    await reconcile(h, facts);
+
+    expect(await labelsOf(h.tree)).toEqual(['Base.esm', 'A.esp', 'B.esp', BLUEPRINT, 'Ship.esm']);
+  });
+
+  it('draws it at the losing end in a release that does not load blueprint plugins last', async () => {
+    const h = scene(false);
+    await reconcile(h, facts);
+
+    expect(await labelsOf(h.tree)).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
+  });
+
+  it('draws it at the losing end until mEdit says it is a blueprint plugin', async () => {
+    expect(await labelsOf(scene().tree)).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
+  });
+
+  it('still takes a drop on it at the losing end of plugins.txt, wherever it is drawn', async () => {
+    const h = scene();
+    await reconcile(h, facts);
+    const row = (await h.tree.getChildren()).find((r) => r.label === BLUEPRINT);
+    const dt = new DataTransfer();
+    h.tree.handleDrag([new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod')], dt, IGNORED_TOKEN);
+
+    await h.tree.handleDrop(row, dt, IGNORED_TOKEN);
+
+    expect(moves()).toEqual([{ names: ['A.esp'], drop: { kind: 'losingEnd' } }]);
   });
 });
 

@@ -5,6 +5,7 @@ import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { inGameOrder } from '../instanceLoader/pluginOrder';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress } from './pluginAddress';
@@ -121,6 +122,8 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
+  private blueprints = '';
+  private blueprintLoadsLast = false;
   private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
@@ -175,7 +178,7 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge, and every plugins.txt line, which a move is written into. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES, blueprintLoadsLast = false): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -183,6 +186,7 @@ export class PluginFacts {
     this.refreshed(plugins);
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
+    this.blueprintLoadsLast = blueprintLoadsLast;
     this.judgeSorting(activeOrder, loot);
   }
 
@@ -190,6 +194,16 @@ export class PluginFacts {
    *  before the first reconcile completes, as the order is not judged before then. */
   rejudged(loot: LootInput): void {
     if (this.judgedActiveOrder !== undefined) this.judgeSorting(this.judgedActiveOrder, loot);
+  }
+
+  /** Whether mEdit has read the plugin, and it is a blueprint plugin. */
+  isBlueprint(plugin: PluginAddress): boolean {
+    return this.reads.get(plugin)?.blueprint === true;
+  }
+
+  /** Which plugins are blueprint plugins, as one value that changes when they do. */
+  blueprintPlugins(): string {
+    return this.blueprints;
   }
 
   /** The active order the last reconcile judged. */
@@ -215,6 +229,7 @@ export class PluginFacts {
       matches.set(p, p.hasMatchingRecords);
     }
     this.reads = reads;
+    this.blueprints = plugins.filter((p) => p.isBlueprint).map(pluginAddressKey).sort().join('\n');
     this.readsByFilename = readOf;
     this.sourceUnreadableProblems = plugins.flatMap((p) => p.pluginSourceUnreadable == null ? [] : [{
       plugin: p.name, origin: p.origin, text: `Plugin source unreadable: ${p.pluginSourceUnreadable.reason}`,
@@ -238,11 +253,14 @@ export class PluginFacts {
   }
 
   // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
-  private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootInput): void {
-    const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
-    const factsOf = this.factsOver(activeOrder);
+  private judgeSorting(treeOrder: readonly PluginAddress[], loot: LootInput): void {
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
+    const activeOrder = inGameOrder(
+      treeOrder.filter(({ name }) => loadedWithNoLine(name)), treeOrder.filter(({ name }) => !loadedWithNoLine(name)), (address) => this.isBlueprint(address), this.blueprintLoadsLast,
+    );
+    const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
+    const factsOf = this.factsOver(activeOrder);
     const broken = [
       ...judge(activeOrder.map(({ name }) => name), factsOf, loadedWithNoLine),
       ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), { ...loot, facts: this.conditionFacts(activeOrder, loot.files) }, (filename) => {

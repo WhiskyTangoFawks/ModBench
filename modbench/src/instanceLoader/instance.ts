@@ -10,7 +10,7 @@ import {
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { modNamesOf } from './modName';
 import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from './downloadedFileRows';
-import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
+import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   ABSENT_SORTING_RULE_FILES, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
@@ -93,6 +93,8 @@ export interface InstanceValue {
   readonly entryKey: (entry: EntryRef) => string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
+  /** The game loads a blueprint plugin after every plugin that is not one. */
+  readonly blueprintLoadsLast: boolean;
   /** The Nexus domain of a game as a mod's or a downloaded file's metadata names it, so a view linking to a mod page holds no
    *  game table; undefined when the tables hold none. */
   readonly nexusDomainOf: (game: string) => string | undefined;
@@ -242,6 +244,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   managerRunning: { kind: 'notRunning' },
   entryKey: (entry) => adapter.entryKey(entry),
   gameName: '',
+  blueprintLoadsLast: false,
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
@@ -526,6 +529,7 @@ export class Instance implements Subscription {
       managerRunning: reading.managerRunning,
       entryKey: (entry) => adapter.entryKey(entry),
       gameName,
+      blueprintLoadsLast: blueprintLoadsLastIn(gameRelease),
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
       programVersions,

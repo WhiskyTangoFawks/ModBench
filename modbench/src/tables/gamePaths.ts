@@ -18,9 +18,10 @@ export interface GamePathInfo {
   readonly steamAppId?: string;
   /** The `steamapps/common/<name>` folder holding the install. Absent alongside `steamAppId`. */
   readonly steamFolderName?: string;
-  /** The game's masters: the plugins it loads with no plugins.txt line, in the order it loads
-   *  them. Mutagen's `Implicits.Listings` for the release. */
+  /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's `Implicits.Listings` order for the release. */
   readonly masters: readonly string[];
+  /** The release loads a blueprint plugin after every plugin that is not one. */
+  readonly blueprintLoadsLast?: true;
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
   /** The folder a mod's script-extender files sit in, under the Data folder. */
@@ -125,7 +126,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
-    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
+    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
   },
@@ -208,8 +209,13 @@ export function programsOf(release: string | undefined): Programs | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.programs;
 }
 
-/** The plugins the game loads with no line (ADR-0013): its masters in the order the game loads
- *  them, none for a release the table holds no row for, then those its Creation Club list names. */
+/** Whether the release loads a blueprint plugin after every plugin that is not one. */
+export function blueprintLoadsLastIn(release: string | undefined): boolean {
+  return (release === undefined ? undefined : GAME_PATHS[release])?.blueprintLoadsLast === true;
+}
+
+/** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's
+ *  listing order (none for an unknown release), then the Creation Club list's. */
 export function loadedWithNoLineOf(release: string | undefined, creationClubList: readonly string[]): readonly string[] {
   const masters = (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
   return [...masters, ...creationClubList];

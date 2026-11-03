@@ -125,12 +125,36 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
-  it('judges no blueprint rule on a blueprint plugin the game loads with no line', () => {
+  it('judges the order the game loads in, where a blueprint plugin it loads with no line comes after the plugins that are not one, and before a blueprint line', () => {
+    const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    const ship = { name: 'Ship.esm', origin: 'SomeMod' };
+    facts.reconciled(
+      [held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...ship, isMaster: true, isBlueprint: true, masters: [blueprint.name] })],
+      [], [blueprint, A, ship], [A, ship], undefined, true,
+    );
+
+    expect(facts.brokenRules()).toEqual([]);
+  });
+
+  it('breaks the blueprint rule on a blueprint line listed before a plugin that is not one, though the blueprint plugin with no line is placed', () => {
+    const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    const ship = { name: 'Ship.esm', origin: 'SomeMod' };
+    facts.reconciled(
+      [held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...ship, isMaster: true, isBlueprint: true })],
+      [], [blueprint, ship, A], [ship, A], undefined, true,
+    );
+
+    expect(facts.brokenRules().map(({ rule }) => rule)).toEqual(['blueprint']);
+  });
+
+  it('judges a blueprint plugin with no line placed first in a release that does not load blueprint plugins last', () => {
     const facts = new PluginFacts();
     const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
     facts.reconciled([held(), held({ ...blueprint, isMaster: true, isBlueprint: true })], [], [blueprint, A], [A]);
 
-    expect(facts.brokenRules()).toEqual([]);
+    expect(facts.brokenRules().map(({ rule }) => rule)).toEqual(['blueprint']);
   });
 
   it('keeps the last sorting statuses through a re-read, until a reconcile judges again', () => {

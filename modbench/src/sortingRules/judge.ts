@@ -59,11 +59,10 @@ function brokenMasters(order: readonly string[], factsOf: PluginFactsOf): Broken
   });
 }
 
-// The game loads a blueprint plugin last, and one it loads with no line has no place in plugins.txt to break.
-function brokenBlueprints(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean): BrokenRule[] {
+function brokenBlueprints(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
   return order.flatMap((blueprint, index): BrokenRule[] => {
     const facts = factsOf(blueprint);
-    if (facts?.blueprint !== true || loadedWithNoLine(blueprint)) return [];
+    if (facts?.blueprint !== true) return [];
     return order.slice(index + 1).flatMap((other): BrokenRule[] => {
       const otherFacts = factsOf(other);
       if (otherFacts?.blueprint !== false) return [];
@@ -92,5 +91,5 @@ function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf, loa
 /** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first.
  *  A rule between two plugins the game loads with no line judges nothing the user owns. */
 export function judge(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean = () => false): BrokenRule[] {
-  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf, loadedWithNoLine), ...brokenMasterFlags(order, factsOf, loadedWithNoLine)];
+  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf), ...brokenMasterFlags(order, factsOf, loadedWithNoLine)];
 }
