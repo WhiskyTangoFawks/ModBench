@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { judgeLoot, type LootPartition } from '../lootJudge';
+import type { ConditionFacts, FileRead } from '../lootConditions';
+import { judgeLoot, readsNamed, type LootPartition } from '../lootJudge';
 import { rulesReader, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
@@ -9,11 +10,32 @@ const ABSENT: SortingRuleFile = { path: '/instance/f.yaml', kind: 'absent' };
 const rules = (parts: Partial<SortingRuleFiles>) => readRules({ masterlist: ABSENT, prelude: ABSENT, userlist: ABSENT, ...parts });
 const at = (filename: string) => ({ origin: 'Mod', filename });
 
-const judged = (order: string[], masterlist: string, present: string[] = order, userlist?: string, partitions: Record<string, LootPartition> = {}) =>
+interface World {
+  present?: string[];
+  active?: string[];
+  answers?: Record<string, string | number | boolean | undefined | Error>;
+}
+
+const factsOf = ({ present = [], active = [], answers = {} }: World): ConditionFacts => ({
+  files: () => ({ names: present, complete: true }),
+  isPresent: (path) => (present.some((name) => name.toLowerCase() === path.toLowerCase()) ? 'present' : 'absent'),
+  activePlugins: () => active,
+  isMaster: () => false,
+  description: () => undefined,
+  answer: ({ kind, path }: FileRead) => {
+    const answer = answers[`${kind}:${path}`];
+    return answer instanceof Error ? { kind: 'unreadable', why: answer.message } : { kind: 'read', value: answer };
+  },
+});
+
+const judgedIn = (world: World, order: string[], masterlist: string, userlist?: string, partitions: Record<string, LootPartition> = {}) =>
   judgeLoot(order.map(at), {
     ...rules({ masterlist: text(masterlist), ...userlist === undefined ? {} : { userlist: text(userlist) } }),
-    isPresent: (filename) => present.some((name) => name.toLowerCase() === filename.toLowerCase()),
+    facts: factsOf(world),
   }, (filename) => partitions[filename] ?? 'nonMasters');
+
+const judged = (order: string[], masterlist: string, present: string[] = order, userlist?: string, partitions: Record<string, LootPartition> = {}) =>
+  judgedIn({ present, active: order }, order, masterlist, userlist, partitions);
 
 describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
   it('breaks, at Error, a plugin whose requirement is not present, naming its display and detail', () => {
@@ -91,17 +113,80 @@ describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
     expect(broken).toHaveLength(1);
   });
 
-  it('breaks, at Warning, a condition it cannot evaluate, instead of skipping what it guards', () => {
-    const broken = judged(['A.esp'], `plugins:
+  it('leaves out what a false condition guards, and applies what a true one guards', () => {
+    const masterlist = `plugins:
   - name: A.esp
     req: [{name: B.esp, condition: 'active("C.esp")'}]
-    msg: [{type: error, content: e, condition: 'file("D.esp")'}]
+    msg: [{type: error, content: e, condition: 'not active("C.esp")'}]
+`;
+
+    expect([
+      judgedIn({ active: ['A.esp', 'C.esp'] }, ['A.esp'], masterlist).map(({ rule }) => rule),
+      judgedIn({ active: ['A.esp'] }, ['A.esp'], masterlist).map(({ rule }) => rule),
+    ]).toEqual([['requirement'], ['message']]);
+  });
+
+  it('breaks, at Warning, a condition it cannot evaluate, saying why, instead of skipping what it guards', () => {
+    const broken = judged(['A.esp'], `plugins:
+  - name: A.esp
+    req: [{name: B.esp, condition: 'frobnicate("C.esp")'}]
 `);
+    const unreadable = judgedIn(
+      { answers: { 'checksum:D.esp': new Error('permission denied') } }, ['A.esp'],
+      `plugins:\n  - name: A.esp\n    after: [{name: B.esp, condition: 'checksum("D.esp", 1)'}]\n`,
+    );
 
     expect(broken.map(({ rule, level, reason }) => [rule, level, reason])).toEqual([
-      ['condition', 'warning', '"A.esp": the condition active("C.esp") on a requirement cannot be evaluated, so "B.esp" is not checked.'],
-      ['condition', 'warning', '"A.esp": the condition file("D.esp") on a message cannot be evaluated, so the message is not shown.'],
+      ['condition', 'warning', '"A.esp": the condition frobnicate("C.esp") on a requirement cannot be evaluated (frobnicate() is not a function Modbench evaluates), so "B.esp" is not checked.'],
     ]);
+    expect(unreadable.map(({ reason }) => reason)).toEqual(['"A.esp": the condition checksum("D.esp", 1) on a load after cannot be evaluated (permission denied), so "B.esp" is not checked.']);
+  });
+
+  it('breaks, at Warning, a requirement whose presence the instance cannot tell, instead of reading it as missing', () => {
+    const broken = judgeLoot([at('A.esp')], {
+      ...rules({ masterlist: text('plugins:\n  - name: A.esp\n    req: [B.esp]\n') }),
+      facts: { ...factsOf({}), isPresent: () => 'unknown' },
+    }, () => 'nonMasters');
+
+    expect(broken.map(({ rule, level, reason }) => [rule, level, reason])).toEqual([
+      ['condition', 'warning', '"A.esp": a requirement cannot be evaluated (the game\'s Data folder cannot be listed), so "B.esp" is not checked.'],
+    ]);
+  });
+
+  describe('LOOT\'s cleaning data', () => {
+    const dirty = (extra: string) => `plugins:\n  - name: A.esp\n    dirty:\n      - {crc: 0x1000, util: 'FO4Edit v4'${extra}}\n`;
+    const crcOf = (crc: number) => ({ answers: { 'checksum:A.esp': crc } });
+
+    it('says at Info that a plugin whose checksum is listed dirty is, in LOOT\'s words', () => {
+      expect(judgedIn(crcOf(0x1000), ['A.esp'], dirty(", itm: 51, udr: 38, nav: 1, detail: 'Clean it.'"))).toEqual([{
+        rule: 'cleaning', level: 'info', plugins: [at('A.esp')], source: { file: 'masterlist', line: 3 },
+        reason: 'FO4Edit v4 found 51 ITM records, 38 deleted references and 1 deleted navmesh. Clean it.',
+      }]);
+    });
+
+    it.each([
+      ['no counts', '', 'FO4Edit v4 found dirty edits.'],
+      ['one count', ', udr: 1', 'FO4Edit v4 found 1 deleted reference.'],
+      ['two counts', ', itm: 2, nav: 3', 'FO4Edit v4 found 2 ITM records and 3 deleted navmeshes.'],
+    ])('words %s', (_, counts, text) => {
+      expect(judgedIn(crcOf(0x1000), ['A.esp'], dirty(counts))[0]?.reason).toBe(text);
+    });
+
+    it('holds a plugin whose checksum is not listed, or whose file is absent', () => {
+      expect([judgedIn(crcOf(0x2000), ['A.esp'], dirty('')), judgedIn({}, ['A.esp'], dirty(''))]).toEqual([[], []]);
+    });
+
+    it('holds cleaning data whose condition is false', () => {
+      expect(judgedIn(crcOf(0x1000), ['A.esp'], dirty(', condition: \'active("B.esp")\''))).toEqual([]);
+    });
+
+    it('breaks, at Warning, when the plugin\'s checksum cannot be read, saying the cleaning data is not checked', () => {
+      const broken = judgedIn({ answers: { 'checksum:A.esp': new Error('permission denied') } }, ['A.esp'], dirty(''));
+
+      expect(broken.map(({ rule, level, reason }) => [rule, level, reason])).toEqual([
+        ['condition', 'warning', '"A.esp": its checksum cannot be read (permission denied), so its cleaning data is not checked.'],
+      ]);
+    });
   });
 
   describe('a group that loads before a group it names', () => {
@@ -217,5 +302,29 @@ plugins:
     it('takes the group a userlist entry states over the masterlist\'s', () => {
       expect(judged(['L.esp', 'E.esp'], groups, ['L.esp', 'E.esp'], 'plugins:\n  - {name: L.esp, group: default}\n')).toEqual([]);
     });
+  });
+});
+
+describe('readsNamed: the file reads the conditions of the plugins in the order need', () => {
+  const entries = rules({ masterlist: text(`plugins:
+  - name: A.esp
+    req: [{name: X.esp, condition: 'readable("../G.exe") and version("../G.exe", >=, "1")'}]
+    msg: [{type: say, content: m, condition: 'checksum("a.swf", 1)'}]
+    dirty: [{crc: 0x1, util: u, condition: 'readable("../G.exe")'}]
+  - name: Other.esp
+    msg: [{type: say, content: m, condition: 'checksum("other.swf", 1)'}]
+`) }).entries;
+
+  it('names each read of a condition on a rule of a plugin in the order once, and the checksum of a plugin with cleaning data', () => {
+    expect(readsNamed([at('A.esp')], entries)).toEqual([
+      { kind: 'readable', path: '../G.exe' },
+      { kind: 'version', path: '../G.exe' },
+      { kind: 'checksum', path: 'a.swf' },
+      { kind: 'checksum', path: 'A.esp' },
+    ]);
+  });
+
+  it('names none for the rules of a plugin outside the order', () => {
+    expect(readsNamed([at('B.esp')], entries)).toEqual([]);
   });
 });

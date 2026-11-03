@@ -18,6 +18,7 @@ import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginsNotRestored } from './pluginsNotRestored';
+import type { FileReads } from '../sortingRules/lootConditions';
 import { isReadFailed } from '../wire/readFailed';
 
 interface Decision<T> {
@@ -217,6 +218,17 @@ async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> 
 
 /** Plugin sync over the active profile. */
 export type PluginSyncRun = () => Promise<PluginSyncResult>;
+
+/** The Instance adapter's file reads, each at the file mod order provides, else the game folder's. */
+export function fileReadsOver(adapter: Pick<InstanceAdapter, 'dataFileChecksum' | 'dataFileVersion' | 'dataFileReadable'>, winners: () => { get: (path: string) => { winner: string } | undefined }): FileReads {
+  const forward = (path: string): string => path.replace(/\\/g, '/');
+  const winnerOf = (path: string): string | undefined => winners().get(path)?.winner;
+  return {
+    checksum: (path) => adapter.dataFileChecksum(forward(path), winnerOf(forward(path))),
+    version: (path, field) => adapter.dataFileVersion(forward(path), winnerOf(forward(path)), field),
+    readable: (path) => adapter.dataFileReadable(forward(path), winnerOf(forward(path))),
+  };
+}
 
 /** `syncPlugins` bound to one instance. */
 export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {

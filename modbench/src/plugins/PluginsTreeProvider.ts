@@ -20,7 +20,8 @@ import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
 import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
-import { fileIsPresent } from '../instanceLoader/fileIsPresent';
+import { filePresence, filesPresent } from '../instanceLoader/filePresence';
+import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import { sortingRuleFileLines } from './sortingRuleFilesMessage';
@@ -43,6 +44,7 @@ export type RecordBrowserFacet = Pick<
 >;
 
 interface PluginsTreeProviderOptions {
+  fileReads: FileReads;
   /** Name, origin, line, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
   /** A row's children. */
@@ -154,7 +156,11 @@ export class PluginsTreeProvider
       publishSortingWarnings: options.publishSortingWarnings,
       publishSortingInfo: options.publishSortingInfo,
       publishRuleFiles: options.publishRuleFiles,
-      rules: () => ({ ...this.rules, isPresent: (filename) => fileIsPresent(this.instanceValue, filename) }),
+      rules: () => this.rules,
+      fileFacts: (reads) => readFileFacts(reads, options.fileReads, {
+        files: () => filesPresent(this.instanceValue),
+        isPresent: (path) => filePresence(this.instanceValue, path),
+      }),
     });
     this.instanceValue = options.instance.value;
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
@@ -165,7 +171,7 @@ export class PluginsTreeProvider
       const rules = this.readRules(value.sortingRuleFiles);
       if (rules !== this.rules) {
         this.rules = rules;
-        this.facts.rulesChanged();
+        void this.facts.rulesChanged();
       }
       this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()));

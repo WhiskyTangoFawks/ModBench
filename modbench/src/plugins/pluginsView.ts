@@ -46,6 +46,8 @@ import type { StatusBar } from './statusBar';
 import { mastersOfPlugins } from './mastersOfPlugins';
 import { modsOfPlugins } from './modsOfPlugins';
 
+import type { FileReads } from '../sortingRules/lootConditions';
+
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
@@ -65,6 +67,8 @@ export interface PluginsViewDeps {
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: SyncMessage;
   modStatuses: LastModStatuses;
+  /** The Instance adapter's reads of the files LOOT's conditions name. */
+  fileReads: FileReads;
   channel: SyncChannel;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporterFor: (tag: string) => Reporter;
@@ -107,6 +111,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     records: recordBrowser,
     client,
     modStatuses: deps.modStatuses,
+    fileReads: deps.fileReads,
     reporter: reporterFor('pluginListTree.drop'),
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
     publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,

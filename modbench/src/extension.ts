@@ -61,7 +61,7 @@ import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
-import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
+import { fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
 import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
@@ -188,6 +188,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(registerModSyncCommand(modSync));
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    fileReads: fileReadsOver(adapter, () => instance.value.files),
   }));
   const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,

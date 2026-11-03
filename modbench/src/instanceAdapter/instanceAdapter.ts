@@ -12,6 +12,7 @@ import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
 import type { FolderValue, PackagesAsked, PluginFlags, Read, StatusValues } from '../repositoriesLib/statusValues';
+import type { DataFileReads } from './gameFolder/dataFileReads';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
@@ -637,7 +638,7 @@ export interface TakenNames {
   readonly modFolders: readonly ModFolder[] | undefined;
 }
 
-export interface InstanceAdapter {
+export interface InstanceAdapter extends DataFileReads {
   /** The whole instance in one generation. A mod order that parses to no entries is read again
    *  after a settle before it is believed: another tool may be half-way through writing it. */
   reading(): Promise<InstanceReading>;

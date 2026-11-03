@@ -32,6 +32,7 @@ import { programRunning } from '../processes';
 import type { FileProblems } from '../../ports/fileProblems';
 import { packageFilesWriter } from '../fileContents/packageFiles';
 import { hashIndex } from '../fileContents/hashIndex';
+import { dataFileReads } from '../gameFolder/dataFileReads';
 import { textHash } from '../fileContents/contentDigest';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
 import { parseModlist } from './codecs/modlistText';
@@ -88,6 +89,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
+    ...dataFileReads(gameFolder),
     originFileHash: hashes.originFileHash,
     flaggedHash: hashes.flaggedHash,
     keepFlaggedHash: hashes.keepFlaggedHash,
