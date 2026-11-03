@@ -1,14 +1,14 @@
 import { errorMessage } from '../ports/errorMessage';
-import { METADATA_BRANCH } from '../sortingRules/lootMetadata';
+import { METADATA_BRANCH, metadataProblem, type MetadataTexts } from '../sortingRules/lootMetadata';
 import { lootRepositoryOf } from '../tables/gamePaths';
 
 const RAW = 'https://raw.githubusercontent.com/loot';
 const PRELUDE_REPOSITORY = 'prelude';
 
-type Fetched = { found: true; masterlist: string; prelude: string } | { found: false; reason: string };
+type Fetched = ({ found: true } & MetadataTexts) | { found: false; reason: string };
 
 export interface LootMetadata {
-  /** The masterlist of the game `release` names and LOOT's prelude, in the metadata version Modbench reads. */
+  /** The masterlist of the game `release` names and LOOT's prelude, in the metadata version Modbench reads; a refusal for texts that do not read as LOOT metadata. */
   fetch: (release: string) => Promise<Fetched>;
 }
 
@@ -32,7 +32,9 @@ export function createLootMetadata({ fetch }: LootMetadataDeps): LootMetadata {
         ]);
         if ('reason' in masterlist) return { found: false, reason: masterlist.reason };
         if ('reason' in prelude) return { found: false, reason: prelude.reason };
-        return { found: true, masterlist: masterlist.text, prelude: prelude.text };
+        const texts = { masterlist: masterlist.text, prelude: prelude.text };
+        const problem = metadataProblem(texts);
+        return problem === undefined ? { found: true, ...texts } : { found: false, reason: problem };
       } catch (err) {
         return { found: false, reason: `Could not reach LOOT: ${errorMessage(err)}` };
       }

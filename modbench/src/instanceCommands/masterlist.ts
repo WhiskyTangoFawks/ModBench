@@ -14,11 +14,19 @@ async function update(adapter: InstanceAdapter, lootMetadata: LootMetadata): Pro
   }
 }
 
+async function uncommitted(adapter: InstanceAdapter): Promise<CommandResult<{ files: readonly string[] }>> {
+  try {
+    return { applied: true, files: await adapter.uncommittedMasterlist() };
+  } catch (err) {
+    return refuse(err);
+  }
+}
+
 /** Update masterlist, bound to one instance. `update` replaces the files whatever git holds of them: asking first is the caller's. */
 export function masterlistCommands({ adapter, lootMetadata }: { adapter: InstanceAdapter; lootMetadata: LootMetadata }) {
   return {
     update: () => update(adapter, lootMetadata),
-    uncommitted: () => adapter.uncommittedMasterlist(),
+    uncommitted: () => uncommitted(adapter),
   };
 }
 

@@ -3,7 +3,7 @@
 
 import { constants } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
 import type { NexusFileInfo } from '../../ports/nexusFileInfo';
 import { firstLines } from '../../loadOrderFileCodec/firstLines';
@@ -15,7 +15,7 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
-import { ensureDir, exists, GIT_DIR, putIfChanged, putStreamedIf, remove, withLock, write } from '../files';
+import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, remove, undoAll, type Undo, withLock, write } from '../files';
 import { git } from '../git';
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
@@ -200,17 +200,31 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       return putIfChanged(sortingRuleFilePaths(instanceRoot).userlist, (before) => addLoadAfter(before, additions), { ifMissing: '' });
     },
 
-    async changeMasterlist({ masterlist, prelude }) {
+    changeMasterlist({ masterlist, prelude }) {
       const paths = sortingRuleFilePaths(instanceRoot);
-      const written = [await putIfChanged(paths.masterlist, () => masterlist, { ifMissing: '' }), await putIfChanged(paths.prelude, () => prelude, { ifMissing: '' })];
-      return { wrote: written.some(({ wrote }) => wrote) };
+      return withLock(paths.masterlist, () => withLock(paths.prelude, async () => {
+        const undos: Undo[] = [];
+        let wrote = false;
+        try {
+          for (const [path, text] of [[paths.masterlist, masterlist], [paths.prelude, prelude]] as const) {
+            const before = (await exists(path)) ? await get(path) : undefined;
+            if (before === text) continue;
+            await write(path, text);
+            undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
+            wrote = true;
+          }
+        } catch (err) {
+          throw await undoAll(undos, err);
+        }
+        return { wrote };
+      }));
     },
 
     async uncommittedMasterlist() {
-      if (!(await exists(join(instanceRoot, GIT_DIR)))) return [];
+      if (!(await isRepository(instanceRoot))) return [];
       const paths = sortingRuleFilePaths(instanceRoot);
       const files = [basename(paths.masterlist), basename(paths.prelude)];
-      const status = await git(instanceRoot, 'status', '--porcelain', '-z', '--', ...files);
+      const status = await git(instanceRoot, 'status', '--porcelain', '-z', '--no-renames', '--', ...files);
       return status.split('\0').filter((entry) => entry !== '').map((entry) => entry.slice(3));
     },
 

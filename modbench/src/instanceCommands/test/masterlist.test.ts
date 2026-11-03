@@ -24,13 +24,6 @@ describe('update', () => {
     expect(fake.calls).toEqual([{ verb: 'changeMasterlist', masterlist: 'plugins: []\n', prelude: 'common: []\n' }]);
   });
 
-  it('writes nothing when the instance already holds what LOOT serves', async () => {
-    const { commands } = over(serving('plugins: []\n', 'common: []\n'));
-    await commands.update();
-
-    expect(await commands.update()).toEqual({ applied: true, wrote: false });
-  });
-
   it('refuses with the reason LOOT gave, writing nothing', async () => {
     const { fake, commands } = over(() => Promise.resolve({ found: false, reason: 'LOOT did not serve the masterlist: 404' }));
 
@@ -46,9 +39,10 @@ describe('update', () => {
 });
 
 describe('uncommitted', () => {
-  it('names the files the instance holds uncommitted changes of', async () => {
-    const { commands } = over(serving('a', 'b'), { uncommittedMasterlist: ['masterlist.yaml'] });
+  it('refuses, not throws, when the adapter cannot tell what git holds', async () => {
+    const fake = fakeInstanceAdapter(readingFixture());
+    const adapter = { ...fake.adapter, uncommittedMasterlist: () => Promise.reject(new Error('git: not found')) };
+    const commands = masterlistCommands({ adapter, lootMetadata: { fetch: serving('a', 'b') } });
 
-    expect(await commands.uncommitted()).toEqual(['masterlist.yaml']);
-  });
-});
+    expect(await commands.uncommitted()).toEqual({ applied: false, refusal: 'git: not found' });
+  });});

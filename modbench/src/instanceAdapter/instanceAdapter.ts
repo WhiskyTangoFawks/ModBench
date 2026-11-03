@@ -4,7 +4,7 @@
 
 import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
-import type { LoadAfter } from '../sortingRules/lootMetadata';
+import type { LoadAfter, MetadataTexts } from '../sortingRules/lootMetadata';
 import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
@@ -815,7 +815,7 @@ export interface InstanceAdapter {
    *  Made when absent; writes nothing for a held rule. Rejects, writing nothing, for a file it cannot read. */
   changeUserlist(additions: readonly LoadAfter[]): Promise<Written>;
   /** Puts the masterlist and the prelude whole, each made when absent and left alone when it already holds the text. */
-  changeMasterlist(files: { readonly masterlist: string; readonly prelude: string }): Promise<Written>;
+  changeMasterlist(files: MetadataTexts): Promise<Written>;
   /** The names of the masterlist and the prelude that git holds uncommitted changes of, a file never committed among them. None in an instance that is not a repository. */
   uncommittedMasterlist(): Promise<readonly string[]>;
 

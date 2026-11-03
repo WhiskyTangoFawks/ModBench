@@ -3238,6 +3238,33 @@ describe('the MO2 Instance adapter', () => {
       expect([await readFile(join(root, 'masterlist.yaml'), 'utf8'), await readFile(join(root, 'prelude.yaml'), 'utf8')]).toEqual(['plugins: []\n', 'common: []\n']);
     });
 
+    it('puts the masterlist back when the prelude cannot be written, so the pair changes together', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'pinned masterlist');
+      await mkdir(join(root, 'prelude.yaml'));
+
+      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' })).rejects.toThrow(/EISDIR/);
+
+      expect(await readFile(join(root, 'masterlist.yaml'), 'utf8')).toBe('pinned masterlist');
+    });
+
+    it('takes the masterlist away again when it was absent and the prelude cannot be written', async () => {
+      await mkdir(join(root, 'prelude.yaml'));
+
+      await expect(adapter.changeMasterlist({ masterlist: 'new masterlist', prelude: 'new prelude' })).rejects.toThrow(/EISDIR/);
+
+      await expect(readFile(join(root, 'masterlist.yaml'), 'utf8')).rejects.toThrow(/ENOENT/);
+    });
+
+    it('names both files of a staged rename between them', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'the same content, long enough for git to see a rename\n');
+      git('init', '-q');
+      git('add', 'masterlist.yaml');
+      git('commit', '-q', '-m', 'pin');
+      git('mv', 'masterlist.yaml', 'prelude.yaml');
+
+      expect([...await adapter.uncommittedMasterlist()].sort()).toEqual(['masterlist.yaml', 'prelude.yaml']);
+    });
+
     it('has no uncommitted change in an instance that is not a repository', async () => {
       await writeFile(join(root, 'masterlist.yaml'), 'a');
 
