@@ -80,6 +80,7 @@ const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Ma
 const sortingRead: { rules: ReturnType<PluginsShown['brokenRules']>[number][]; moves: ReturnType<PluginsShown['suggestedMoves']>[number][]; notJudged?: string } = { rules: [], moves: [] };
 const pluginsShown = {
   shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ,
+  isBlueprint: ({ name }: PluginAddress) => name.startsWith('Blueprint'),
   sortingNotJudged: () => sortingRead.notJudged,
   brokenRules: () => sortingRead.rules,
   suggestedMoves: () => sortingRead.moves,
@@ -295,6 +296,15 @@ describe('the agent server, given an instance value', () => {
       { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true, ...NOT_READ },
       { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true, ...NOT_READ },
       { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ },
+    ] });
+  });
+
+  it('reads a blueprint plugin the game loads with no line after the last line of a plugin that is not one, where the release loads blueprint plugins last', async () => {
+    const noLine = [{ name: 'Starfield.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/g/Starfield.esm' }, { name: 'BlueprintShips-Starfield.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/g/BlueprintShips-Starfield.esm' }];
+    const { client } = await clientOf(new FakeInstance({ ...VALUE, blueprintLoadsLast: true, pluginsLoadedWithNoLine: noLine }));
+
+    expect(await read(client, 'list_plugins')).toMatchObject({ plugins: [
+      { name: 'Starfield.esm' }, { name: 'A.esp' }, { name: 'B.esp' }, { name: 'BlueprintShips-Starfield.esm' },
     ] });
   });
 
