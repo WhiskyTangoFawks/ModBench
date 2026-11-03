@@ -18,8 +18,7 @@ export interface GamePathInfo {
   readonly steamAppId?: string;
   /** The `steamapps/common/<name>` folder holding the install. Absent alongside `steamAppId`. */
   readonly steamFolderName?: string;
-  /** The game's masters: the plugins it loads with no plugins.txt line, in the order it loads
-   *  them. Mutagen's `Implicits.Listings` for the release. */
+  /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's listing order. Mutagen's `Implicits.Listings` for the release. */
   readonly masters: readonly string[];
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
@@ -208,8 +207,9 @@ export function programsOf(release: string | undefined): Programs | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.programs;
 }
 
-/** The plugins the game loads with no line (ADR-0013): its masters in the order the game loads
- *  them, none for a release the table holds no row for, then those its Creation Club list names. */
+/** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's listing
+ *  order, none for a release the table holds no row for, then those its Creation Club list names. The
+ *  order the game loads in is `inGameOrder`'s. */
 export function loadedWithNoLineOf(release: string | undefined, creationClubList: readonly string[]): readonly string[] {
   const masters = (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
   return [...masters, ...creationClubList];
