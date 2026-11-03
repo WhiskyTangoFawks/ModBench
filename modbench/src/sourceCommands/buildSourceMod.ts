@@ -265,7 +265,8 @@ async function stoppedAs(deps: BuildDeps, mod: SourceModToBuild, made: ReadonlyM
   return why === undefined ? failure : `${failure} ${why}`;
 }
 
-// Build, stories 8 and 9: a step that refused a file left it as it was, so the build did not finish and stops as story 10 says.
+// source.md, Build, stories 8 and 9: a step that refused a file left it as it was, so the build did not finish and stops
+// as story 10 says.
 async function recordedAsStopped(deps: BuildDeps, mod: SourceModToBuild, { outcome, made }: Ran): Promise<ModBuilt> {
   const why = await whyNotRecorded(deps, mod, made);
   return why === undefined ? outcome : { ...outcome, failure: why };

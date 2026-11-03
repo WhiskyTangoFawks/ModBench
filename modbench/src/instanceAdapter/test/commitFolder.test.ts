@@ -62,14 +62,14 @@ describe('commitFolder', () => {
     ]);
   });
 
-  it('commits the ignore list whole when no commit holds one, so the commit leaves out what the list leaves out', async () => {
+  it('commits only the lines that let the folder in when no commit holds an ignore list, leaving the rest of it uncommitted', async () => {
     await repository();
     await put('mods/ModA/a.esp');
     await put('.gitignore', '/mods/*/*\n!/mods/ModA/*\n');
 
-    await commitFolder(root, join(root, 'mods', 'ModA'), 'Init ModA', neverCalled);
+    await commitFolder(root, join(root, 'mods', 'ModA'), 'Init ModA', (list) => `${list}!/mods/ModA/*\n`);
 
-    expect([git('show', 'HEAD:.gitignore'), git('status', '--porcelain')]).toEqual(['/mods/*/*\n!/mods/ModA/*', '']);
+    expect([git('show', 'HEAD:.gitignore'), git('status', '--porcelain')]).toEqual(['!/mods/ModA/*', 'M .gitignore']);
   });
 
   it('rejects, committing nothing, when the lines cannot be added to the ignore list as committed', async () => {
