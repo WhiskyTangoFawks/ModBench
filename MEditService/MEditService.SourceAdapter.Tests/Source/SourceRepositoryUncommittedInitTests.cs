@@ -28,7 +28,7 @@ public sealed class SourceRepositoryUncommittedInitTests : IDisposable
     {
         Assert.True(TestAdapters.Source().IsSourceMod(_modFolder));
         Assert.Equal(
-            [".gitignore", "build.json", Was, "textures/a.dds"],
+            [".gitattributes", ".gitignore", "build.json", Was, "textures/a.dds"],
             Git("ls-files").Split('\n', StringSplitOptions.RemoveEmptyEntries));
         Assert.Equal(string.Empty, Git("for-each-ref", "refs/heads"));
     }
@@ -73,7 +73,7 @@ public sealed class SourceRepositoryUncommittedInitTests : IDisposable
         Assert.Equal(string.Empty, Git("for-each-ref", "refs/heads"));
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(_modFolder, Was)));
         Assert.Equal(
-            [".gitignore", "build.json", Was, "textures/a.dds"],
+            [".gitattributes", ".gitignore", "build.json", Was, "textures/a.dds"],
             Git("ls-files").Split('\n', StringSplitOptions.RemoveEmptyEntries));
     }
 
