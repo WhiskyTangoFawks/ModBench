@@ -793,6 +793,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.loadAfter",
+        "title": "Load After…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.enable",
         "title": "Enable Plugin",
         "category": "Modbench"
@@ -1057,6 +1062,10 @@
         {
           "command": "modbench.plugin.applySuggestedMove",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleSuggestedMove"
+        },
+        {
+          "command": "modbench.plugin.loadAfter",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsPluginLine"
         },
         {
           "command": "modbench.plugin.enable",
@@ -1794,6 +1803,11 @@
           "command": "modbench.plugin.rename",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bcompiledPlugin\\b/",
           "group": "2_change@3"
+        },
+        {
+          "command": "modbench.plugin.loadAfter",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
+          "group": "2_change@4"
         },
         {
           "command": "modbench.record.create",

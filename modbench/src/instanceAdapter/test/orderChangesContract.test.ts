@@ -110,6 +110,28 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
     });
   });
 
+  describe('userlist', () => {
+    const userlistOf = async () => (await adapter.reading()).sortingRuleFiles.userlist;
+
+    it('makes the userlist when it is absent, and shows it to the next read', async () => {
+      expect(await adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }])).toEqual({ wrote: true });
+      expect(await userlistOf()).toMatchObject({ kind: 'text', text: 'plugins:\n  - name: B.esp\n    after:\n      - A.esp\n' });
+    });
+
+    it('writes nothing for a rule the userlist holds', async () => {
+      await adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }]);
+      const held = await userlistOf();
+
+      expect(await adapter.changeUserlist([{ plugin: 'b.esp', after: ['a.ESP'] }])).toEqual({ wrote: false });
+      expect(await userlistOf()).toEqual(held);
+    });
+
+    it('makes no userlist for no rule', async () => {
+      expect(await adapter.changeUserlist([])).toEqual({ wrote: false });
+      expect(await userlistOf()).toMatchObject({ kind: 'absent' });
+    });
+  });
+
   describe('plugin order', () => {
     it('refuses a plugin that is not listed, and writes nothing of the batch it was in', async () => {
       await expect(changePlugins({ kind: 'enable', plugin: 'B.esp', enabled: true }, { kind: 'drop', plugin: 'Nope.esp' }))

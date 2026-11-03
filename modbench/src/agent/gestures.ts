@@ -255,6 +255,12 @@ const APPLY_SUGGESTED_MOVE = gestureInput(
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), { rule: options?.rule }),
 );
 
+const LOAD_AFTER = gestureInput(
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { after: the plugins they load after, [{ name, origin? }] as list_plugins shows them }`,
+  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ after: z.array(PLUGIN_NAME) }) }),
+  (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
+);
+
 const CREATE_PLUGIN = gestureInput(
   'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name }',
   z.object({ argument: z.array(CONTAINER_NAME), options: z.object({ name: z.string() }) }),
@@ -320,6 +326,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.decompileAndRepair', DECOMPILE_AND_REPAIR],
   ['modbench.plugin.move', MOVE_PLUGINS],
   ['modbench.plugin.applySuggestedMove', APPLY_SUGGESTED_MOVE],
+  ['modbench.plugin.loadAfter', LOAD_AFTER],
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],
   ['modbench.record.open', OPEN_RECORD],

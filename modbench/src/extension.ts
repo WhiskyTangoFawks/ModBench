@@ -182,7 +182,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    instance, writeRules: (rules) => adapter.changeUserlist(rules), commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
   }));
   const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,

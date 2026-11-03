@@ -4,6 +4,7 @@
 
 import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
+import type { LoadAfter } from '../sortingRules/lootMetadata';
 import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
@@ -805,6 +806,10 @@ export interface InstanceAdapter {
    *  downloads folder holds, writing nothing. */
   copyDownloadedFile(from: string, name: string): Promise<void>;
   selectProfile(profile: string): Promise<Written>;
+  /** Adds to the userlist a rule for each plugin that it loads after each plugin given, as LOOT writes it, and every other
+   *  byte of the file stays. Made when absent; writes nothing for a rule it holds. Rejects, writing nothing, when the
+   *  file cannot be read or is not a map of plugins. */
+  changeUserlist(additions: readonly LoadAfter[]): Promise<Written>;
 
   // Put and rename in mods/.
   /** Refuses a name that is not a bare name, and a folder already there, whatever it holds, matched as the manager matches names. */

@@ -1,4 +1,4 @@
-import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
+import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, stringify, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
 
 type SortingRuleFile = { readonly path: string } & (
   | { readonly kind: 'text'; readonly text: string }
@@ -370,6 +370,11 @@ export interface LoadAfter {
   readonly after: readonly string[];
 }
 
+interface Insertion {
+  readonly at: number;
+  readonly text: string;
+}
+
 const sameName = (a: unknown, b: string): boolean => typeof a === 'string' && a.toLowerCase() === b.toLowerCase();
 
 const nameOf = (item: unknown): unknown => {
@@ -377,36 +382,127 @@ const nameOf = (item: unknown): unknown => {
   return isMap(value) ? value.get('name') : value;
 };
 
-function pluginsOf(doc: Document): YAMLSeq {
+const scalar = (name: string, inFlow: boolean): string =>
+  inFlow && /[[\]{},]/.test(name) ? JSON.stringify(name) : stringify(name).trimEnd();
+
+const startOf = (node: unknown): number => (isNode(node) ? node.range?.[0] : undefined) ?? 0;
+const endOf = (node: unknown): number => (isNode(node) ? node.range?.[1] : undefined) ?? 0;
+
+/** Splices the userlist's text, so every byte an edit does not touch stays as written. */
+class Userlist {
+  private readonly insertions: Insertion[] = [];
+  private readonly eol: string;
+
+  constructor(private readonly text: string) {
+    this.eol = text.includes('\r\n') ? '\r\n' : '\n';
+  }
+
+  result(): string {
+    let out = '';
+    let from = 0;
+    for (const { at, text } of [...this.insertions].sort((a, b) => a.at - b.at)) {
+      out += this.text.slice(from, at) + text;
+      from = at;
+    }
+    return out + this.text.slice(from);
+  }
+
+  get edited(): boolean { return this.insertions.length > 0; }
+
+  private insert(at: number, text: string): void { this.insertions.push({ at, text }); }
+
+  // After the last item, so a space before the closing bracket stays where it was.
+  private insertInFlow(seq: YAMLSeq, text: string): void {
+    const last = seq.items.at(-1);
+    if (last === undefined) this.insert(endOf(seq) - 1, text);
+    else this.insert(endOf(last), `, ${text}`);
+  }
+
+  private lines(indent: number, lines: readonly string[]): string {
+    return lines.map((line) => this.eol + ' '.repeat(indent) + line).join('');
+  }
+
+  private columnOf(offset: number): number { return offset - (this.text.lastIndexOf('\n', offset - 1) + 1); }
+
+  // The end of the line a node ends on, so a comment after it stays with it.
+  private lineEndAfter(node: unknown): number {
+    let end = endOf(node);
+    while (end > 0 && this.text[end - 1] === '\n') end--;
+    const newline = this.text.indexOf('\n', end);
+    const lineEnd = newline < 0 ? this.text.length : newline;
+    return lineEnd > 0 && this.text[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd;
+  }
+
+  private dashColumn(seq: YAMLSeq): number {
+    const first = startOf(seq.items[0]);
+    return this.text.slice(first - this.columnOf(first), first).search(/-\s*$/);
+  }
+
+  appendPlugins(entries: readonly LoadAfter[]): void {
+    const body = entries.flatMap(({ plugin, after }) => [`- name: ${scalar(plugin, false)}`, '  after:', ...after.map((name) => `    - ${scalar(name, false)}`)]);
+    const lead = this.text === '' || this.text.endsWith('\n') ? '' : this.eol;
+    this.insert(this.text.length, `${lead}plugins:${this.lines(2, body)}${this.eol}`);
+  }
+
+  addEntry(plugins: YAMLSeq, { plugin, after }: LoadAfter): void {
+    if (plugins.flow === true) {
+      const flow = `{name: ${scalar(plugin, true)}, after: [${after.map((name) => scalar(name, true)).join(', ')}]}`;
+      this.insertInFlow(plugins, flow);
+      return;
+    }
+    const first = plugins.items[0];
+    const dash = first === undefined ? 2 : this.dashColumn(plugins);
+    const lines = [`- name: ${scalar(plugin, false)}`, '  after:', ...after.map((name) => `    - ${scalar(name, false)}`)];
+    this.insert(first === undefined ? endOf(plugins) : this.lineEndAfter(plugins.items.at(-1)), this.lines(dash, lines));
+  }
+
+  addAfters(entry: YAMLMap, held: unknown, names: readonly string[]): void {
+    if (isSeq(held) && held.flow === true) {
+      this.insertInFlow(held, names.map((name) => scalar(name, true)).join(', '));
+    } else if (isSeq(held)) {
+      const items = names.map((name) => `- ${scalar(name, false)}`);
+      this.insert(this.lineEndAfter(held.items.at(-1)), this.lines(held.items.length > 0 ? this.dashColumn(held) : 0, items));
+    } else if (held !== undefined) {
+      throw new Error('The userlist has an "after" that is not a list.');
+    } else if (entry.flow === true) {
+      this.insert(endOf(entry) - 1, `, after: [${names.map((name) => scalar(name, true)).join(', ')}]`);
+    } else {
+      const key = startOf(entry.items[0]?.key);
+      this.insert(this.lineEndAfter(entry), this.lines(this.columnOf(key), ['after:', ...names.map((name) => `  - ${scalar(name, false)}`)]));
+    }
+  }
+}
+
+function pluginsOf(doc: Document): YAMLSeq | undefined {
   if (doc.errors.length > 0) throw new Error(`The userlist does not parse: ${doc.errors[0]?.message}`);
-  if (doc.contents === null) doc.contents = doc.createNode({});
+  if (doc.contents === null) return undefined;
   if (!isMap(doc.contents)) throw new Error('The userlist is not a map.');
   const plugins = doc.contents.get('plugins', true);
-  if (isSeq(plugins)) return plugins;
-  if (plugins !== undefined && !(isScalar(plugins) && plugins.value === null)) throw new Error('The userlist\'s "plugins" is not a list.');
-  const made = doc.createNode([]) as YAMLSeq;
-  doc.contents.set('plugins', made);
-  return made;
+  if (plugins === undefined) return undefined;
+  if (!isSeq(plugins)) throw new Error('The userlist\'s "plugins" is not a list.');
+  return plugins;
 }
 
-/** Adds the afters the plugin's entry lacks, and answers whether it did. */
-function addAfters(doc: Document, plugins: YAMLSeq, { plugin, after }: LoadAfter): boolean {
-  const entry = plugins.items.find((item): item is YAMLMap => isMap(item) && sameName(nameOf(item), plugin));
-  const held = entry?.get('after', true);
-  const heldNames = isSeq(held) ? held.items.map(nameOf) : [];
-  const missing = after.filter((name) => !heldNames.some((have) => sameName(have, name)));
-  if (missing.length === 0) return false;
-  if (entry === undefined) plugins.add(doc.createNode({ name: plugin, after: missing }));
-  else if (isSeq(held)) for (const name of missing) held.add(doc.createNode(name));
-  else entry.set('after', doc.createNode(missing));
-  return true;
-}
+const distinct = (names: readonly string[]): string[] => names.filter((name, at) => names.findIndex((other) => sameName(other, name)) === at);
 
-/** The userlist's text with each plugin loading after the plugins given, as LOOT writes it. Every other byte stays, so a
- *  comment or an anchor survives; the text itself when it holds every rule. Throws, for a text that is not a map. */
+/** The userlist's text with each plugin loading after the plugins given, as LOOT writes it. The edit splices the entry it
+ *  changes and nothing else, so a comment, an anchor or a spacing stays; the text itself when it holds every rule.
+ *  Throws, for a text that is not a map of plugins. */
 export function addLoadAfter(text: string | undefined, additions: readonly LoadAfter[]): string {
-  const doc = parseDocument(text ?? '');
-  const plugins = pluginsOf(doc);
-  const changes = additions.map((addition) => addAfters(doc, plugins, addition));
-  return changes.some(Boolean) ? doc.toString({ flowCollectionPadding: false }) : text ?? '';
+  const source = text ?? '';
+  const plugins = pluginsOf(parseDocument(source));
+  const userlist = new Userlist(source);
+  const fresh: LoadAfter[] = [];
+  for (const { plugin, after } of additions) {
+    const entries = plugins?.items.filter((item): item is YAMLMap => isMap(item) && sameName(nameOf(item), plugin)) ?? [];
+    const held = entries.flatMap((entry) => { const list = entry.get('after', true); return isSeq(list) ? list.items.map(nameOf) : []; });
+    const missing = distinct(after.filter((name) => !held.some((have) => sameName(have, name))));
+    if (missing.length === 0) continue;
+    const entry = entries[0];
+    if (entry !== undefined) userlist.addAfters(entry, entry.get('after', true), missing);
+    else fresh.push({ plugin, after: missing });
+  }
+  if (plugins === undefined) { if (fresh.length > 0) userlist.appendPlugins(fresh); }
+  else for (const addition of fresh) userlist.addEntry(plugins, addition);
+  return userlist.edited ? userlist.result() : source;
 }

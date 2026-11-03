@@ -18,13 +18,14 @@ import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedF
 import { ensureDir, exists, putIfChanged, putStreamedIf, remove, withLock, write } from '../files';
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
-import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
+import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile, sortingRuleFilePaths } from './layout';
+import { addLoadAfter } from '../../sortingRules/lootMetadata';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
-  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile'>;
+  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
@@ -192,6 +193,10 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
         return { gone: false, metadataLeftBehind: errorMessage(err) };
       }
       return { gone: false };
+    },
+
+    changeUserlist(additions) {
+      return putIfChanged(sortingRuleFilePaths(instanceRoot).userlist, (before) => addLoadAfter(before, additions), { ifMissing: '' });
     },
 
     selectProfile(profile) {

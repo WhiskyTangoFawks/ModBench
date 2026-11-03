@@ -315,6 +315,44 @@ plugins:
     expect(entries[0]?.after.map((file) => file.name)).toEqual(['B.esp', 'C.esp']);
   });
 
+  it('changes only the entry it edits: spacing, a trailing comment and the other entries stay as written', () => {
+    const other = "plugins:\n  - {name: 'X.esp', after: [ Y.esp ]}  # mine\n";
+    const edited = "  - name: A.esp\n    after: [ B.esp ] # why\n";
+
+    const written = addLoadAfter(other + edited, [{ plugin: 'A.esp', after: ['C.esp'] }]);
+
+    expect(written).toBe(other + "  - name: A.esp\n    after: [ B.esp, C.esp ] # why\n");
+  });
+
+  it('adds to a block list after its last item, before a comment on that line', () => {
+    const written = addLoadAfter('plugins:\n  - name: A.esp\n    after:\n      - B.esp # why\n# end\n', [{ plugin: 'A.esp', after: ['C.esp'] }]);
+
+    expect(written).toBe('plugins:\n  - name: A.esp\n    after:\n      - B.esp # why\n      - C.esp\n# end\n');
+  });
+
+  it('keeps the line endings the file uses', () => {
+    const written = addLoadAfter('plugins:\r\n  - name: A.esp\r\n', [{ plugin: 'A.esp', after: ['B.esp'] }]);
+
+    expect(written).toBe('plugins:\r\n  - name: A.esp\r\n    after:\r\n      - B.esp\r\n');
+  });
+
+  it('adds an entry to an empty flow list of plugins', () => {
+    expect(addLoadAfter('plugins: []\n', [{ plugin: 'A.esp', after: ['B.esp'] }])).toBe('plugins: [{name: A.esp, after: [B.esp]}]\n');
+  });
+
+  it('quotes a name YAML would read as something else', () => {
+    const written = addLoadAfter(undefined, [{ plugin: 'A: B.esp', after: ['# C.esp'] }]);
+
+    const { entries } = readRules(filesOf({ userlist: text(written) }));
+
+    expect(entries.map(({ name, after }) => [name, after.map((file) => file.name)])).toEqual([['A: B.esp', ['# C.esp']]]);
+  });
+
+  it('returns the text unchanged for no rule, whatever the text holds', () => {
+    expect(addLoadAfter(undefined, [])).toBe('');
+    expect(addLoadAfter('# only a comment\n', [])).toBe('# only a comment\n');
+  });
+
   it('rejects, writing nothing, a text that is not a YAML map of plugins', () => {
     expect(() => addLoadAfter('- just\n- a list\n', [{ plugin: 'A.esp', after: ['B.esp'] }])).toThrow();
     expect(() => addLoadAfter('plugins: [unclosed', [{ plugin: 'A.esp', after: ['B.esp'] }])).toThrow();

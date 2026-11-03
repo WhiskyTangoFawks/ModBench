@@ -8,6 +8,7 @@
     { "path": "../loadOrderFileCodec" },
     { "path": "../ports" },
     { "path": "../repositoriesLib" },
+    { "path": "../sortingRules" },
     { "path": "../tables" },
     { "path": "../wire" }
   ],

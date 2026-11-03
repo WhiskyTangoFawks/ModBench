@@ -847,6 +847,22 @@ describe('PluginsTreeProvider — the places a move offers are the drops on its 
   });
 });
 
+describe('PluginsTreeProvider — the places a load after offers are the active plugins outside the selection', () => {
+  const treeOf = () => pluginsTreeOver(new FakeInstance(valueOf(
+    ['A.esp', 'B.esp', 'C.esp', 'D.esp'].map((name, line) => plugin({ name, line, enabled: name !== 'C.esp' })), ['Fallout4.esm'],
+  )));
+
+  it('offers each enabled line outside the selection, in the order the view shows them', () => {
+    const tree = treeOf();
+
+    expect(tree.loadAfterPlaces(['B.esp'])).toEqual(['A.esp', 'D.esp']);
+
+    tree.setViewDirection('winningAtTop');
+
+    expect(tree.loadAfterPlaces(['b.ESP'])).toEqual(['D.esp', 'A.esp']);
+  });
+});
+
 describe('PluginsTreeProvider — the locked plugins follow the instance value', () => {
   const LINES = () => [plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/' }), plugin({ name: 'Mod.esp', line: 1 })];
   const shapeOf = async (tree: PluginsTreeProvider) => (await tree.getChildren())

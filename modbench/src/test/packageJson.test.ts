@@ -690,6 +690,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const ENABLE_ENTRY: [string, string] = ['modbench.plugin.enable', '2_change'];
   const DISABLE_ENTRY: [string, string] = ['modbench.plugin.disable', '2_change'];
   const RENAME_ENTRY: [string, string] = ['modbench.plugin.rename', '2_change'];
+  const LOAD_AFTER_ENTRY: [string, string] = ['modbench.plugin.loadAfter', '2_change'];
   const CREATE_RECORD_ENTRY: [string, string] = ['modbench.record.create', '3_create'];
   const VERSION_IN_GIT_ENTRY: [string, string] = ['modbench.mod.versionInGit', '4_sourceControl'];
   const DECOMPILE_ENTRY: [string, string] = ['modbench.plugin.decompile', '4_sourceControl'];
@@ -699,14 +700,14 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const containerKinds = ['record', 'worldspace', 'cell'];
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
-    ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inOverwrite nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, LOAD_AFTER_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inOverwrite nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, COPY_VALUE_ENTRY]],
     ['pluginImplicit', [REVEAL_ENTRY, COPY_VALUE_ENTRY]],
     ['recordType editable creatable', [CREATE_RECORD_ENTRY]],
     ['recordType creatable', []],
@@ -1110,6 +1111,7 @@ describe('package.json Plugins palette entries', () => {
     ['modbench.plugin.enable', { 'modbench.plugin.holdsDisabledPlugin': true }],
     ['modbench.plugin.disable', { 'modbench.plugin.holdsEnabledPlugin': true }],
     ['modbench.plugin.move', { 'modbench.plugin.holdsPluginLine': true }],
+    ['modbench.plugin.loadAfter', { 'modbench.plugin.holdsPluginLine': true }],
     ['modbench.plugin.decompile', { 'modbench.plugin.allInSourceMod': true }],
     ['modbench.plugin.decompileAndRepair', { 'modbench.plugin.allMalformedInAMod': true }],
     ['modbench.record.create', { 'modbench.plugin.singleCreatable': true }],
