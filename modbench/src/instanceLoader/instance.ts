@@ -403,8 +403,9 @@ export class Instance implements Subscription {
     this.tellOnce('watchNotes', watchNotes.map((note) => `[instance] ${note}`), 'warn');
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
-    this.tellOnce('dataFolderFiles', dataFolderFiles.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed whole: ${dataFolderFiles.reason}`] : [], 'warn');
     this.tellOnce('dataFolder', dataFolderPlugins.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`] : [], 'warn');
+    const filesAlone = dataFolderPlugins.kind !== 'unreadable' && dataFolderFiles.kind === 'unreadable';
+    this.tellOnce('dataFolderFiles', filesAlone ? [`[instance] the game's Data folder could not be listed whole: ${dataFolderFiles.reason}`] : [], 'warn');
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');

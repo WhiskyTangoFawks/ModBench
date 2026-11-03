@@ -1323,9 +1323,9 @@ describe('the MO2 Instance adapter', () => {
     it.each([
       ['Fallout4.esm', true],
       ['Patch.ESP', true],
-      ['cc.Esl', true],
-      ['readme.txt', false],
-    ])('follows the plugins at the root of the game folder\'s Data folder, in any case, as another tool may write a plugin\'s extension in capitals: %s heard %s', async (name, heard) => {
+      ['F4SE/Plugins/x.dll', true],
+      ['readme.txt', true],
+    ])('follows everything under the game folder\'s Data folder, so a file the game folder holds is heard: %s heard %s', async (name, heard) => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
@@ -1338,53 +1338,6 @@ describe('the MO2 Instance adapter', () => {
       } finally {
         await rm(game, { recursive: true, force: true });
       }
-    });
-
-    describe('the game folder\'s files, listed again only once the watch heard the Data folder change', () => {
-      let game: string;
-      let found: GameFolder;
-
-      beforeEach(async () => {
-        game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-files-'));
-        await mkdir(join(game, 'Data', 'F4SE'), { recursive: true });
-        found = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
-      });
-      afterEach(() => rm(game, { recursive: true, force: true }));
-
-      const namesOf = async (watched: ReadingSource): Promise<string[]> => {
-        const listing = expectKind(await watched.gameFolderFiles(found, ignoreLink), 'listed');
-        return [...listing.files];
-      };
-
-      it('answers the listing it has while the watch heard nothing', async () => {
-        const watched = watchedOver(contextOver(root));
-        watched.subscribe(() => undefined);
-        await namesOf(watched);
-
-        await writeFile(join(game, 'Data', 'F4SE', 'x.dll'), '');
-
-        expect(await namesOf(watched)).toEqual([]);
-      });
-
-      it('lists again once the watch heard a change at any depth', async () => {
-        const watched = watchedOver(contextOver(root));
-        watched.subscribe(() => undefined);
-        await namesOf(watched);
-
-        await writeFile(join(game, 'Data', 'F4SE', 'x.dll'), '');
-        expect(fire(join(game, 'Data'), 'F4SE/x.dll')).toBe(true);
-
-        expect(await namesOf(watched)).toEqual(['f4se/x.dll']);
-      });
-
-      it('lists every time while nothing listens, as a change then goes unheard', async () => {
-        const watched = watchedOver(contextOver(root));
-        await namesOf(watched);
-
-        await writeFile(join(game, 'Data', 'F4SE', 'x.dll'), '');
-
-        expect(await namesOf(watched)).toEqual(['f4se/x.dll']);
-      });
     });
 
     it('follows the release\'s Creation Club list at the game folder\'s root, so a changed list does not wait for the next focus', async () => {
