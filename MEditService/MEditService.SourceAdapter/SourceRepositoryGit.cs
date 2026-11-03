@@ -1,8 +1,12 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using MEditService.RepositoriesLib;
+
 namespace MEditService.SourceAdapter;
 
 /// <summary>The git repository holding one source folder (ADR-0007), its own or the modlist repository: whether it is a
 /// source mod, what it committed, and the refs naming the binary Modbench last wrote.</summary>
-internal sealed class SourceRepositoryGit
+internal abstract class SourceRepositoryGit
 {
     private const string BinaryTrailer = "Binary-SHA256";
     private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
@@ -12,28 +16,83 @@ internal sealed class SourceRepositoryGit
     private readonly string _workTree;
     private readonly string _gitDir;
 
-    // The source folder's path in the repository's work tree, ending in '/'; empty in a repository of its own.
-    private readonly string _prefix;
-
-    private SourceRepositoryGit(string sourceFolder, string workTree)
-    {
+    private SourceRepositoryGit(string sourceFolder, string workTree) =>
         (_sourceFolder, _workTree, _gitDir) = (sourceFolder, workTree, GitDirOf(workTree));
-        var inWorkTree = Path.GetRelativePath(workTree, sourceFolder);
-        _prefix = inWorkTree == "." ? "" : $"{ToGitPath(inWorkTree)}/";
-    }
 
     /// <summary>The repository of the source folder's own <c>.git</c>, made yet or not.</summary>
-    internal static SourceRepositoryGit Own(string sourceFolder) => new(sourceFolder, sourceFolder);
+    internal static SourceRepositoryGit Own(string sourceFolder) => new OwnRepository(sourceFolder);
 
-    /// <summary>The repository that holds the source folder: its own, else the nearest one above it, as git finds it.</summary>
-    internal static SourceRepositoryGit Holding(string sourceFolder) => new(sourceFolder, WorkTreeHolding(sourceFolder) ?? sourceFolder);
+    /// <summary>The modlist repository, the nearest one above the source folder, as git finds it.</summary>
+    internal static SourceRepositoryGit Above(string sourceFolder) => new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder);
 
-    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists, or one init
-    /// committed nothing in; or, with no <c>.git</c>, holds the build file inside a repository.</summary>
+    /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
+    internal static SourceRepositoryGit Holding(string sourceFolder) => HoldsGit(sourceFolder) ? Own(sourceFolder) : Above(sourceFolder);
+
+    private protected abstract string SourceFolderInWorkTree { get; }
+
+    /// <summary>The pathspec that limits an add or a commit to the source folder.</summary>
+    internal abstract string[] FolderPaths { get; }
+
+    /// <summary>Makes the repository ready to take the source folder's files, undone by <paramref name="journal"/>.</summary>
+    internal abstract void BeginInit(WriteJournal journal);
+
+    /// <summary>Marks an init that took the source folder's files as finished.</summary>
+    internal abstract void FinishInit();
+
+    // The commit a clone builds the source folder from; empty when the repository holds none of it.
+    private protected abstract string SourceCommit();
+
+    private sealed class OwnRepository(string sourceFolder) : SourceRepositoryGit(sourceFolder, sourceFolder)
+    {
+        private protected override string SourceFolderInWorkTree => "";
+
+        internal override string[] FolderPaths => [];
+
+        internal override void BeginInit(WriteJournal journal)
+        {
+            if (!Exists) journal.RecordUndo(() => { if (Exists) Delete(); }, path: GitDirectory);
+            GitInit.CreateRepository(this);
+        }
+
+        internal override void FinishInit() => Run("config", $"{InitMarkSection}.{InitMarkKey}", InitDone);
+
+        // The modlist repository pins HEAD.
+        private protected override string SourceCommit() => "HEAD";
+    }
+
+    private sealed class RepositoryAbove(string sourceFolder, string workTree) : SourceRepositoryGit(sourceFolder, workTree)
+    {
+        private string? _sourceFolderInWorkTree;
+
+        private protected override string SourceFolderInWorkTree => _sourceFolderInWorkTree ??= Run("rev-parse", "--show-prefix").Trim();
+
+        internal override string[] FolderPaths => ["--", "."];
+
+        internal override void BeginInit(WriteJournal journal)
+        {
+            if (!Exists) throw SourceStopException.Inaccessible($"no repository holds '{_sourceFolder}', so it cannot be put in the modlist repository");
+            var head = HeadCommit();
+            journal.RecordUndo(() => PutBack(head), description: $"what the modlist repository holds of '{_sourceFolder}'");
+        }
+
+        internal override void FinishInit() { }
+
+        private protected override string SourceCommit() => Run("log", "-1", "--format=%H", "HEAD", "--", ".").Trim();
+    }
+
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds the build file, and either a repository of its own
+    /// that <see cref="HoldsRepository"/>, or no <c>.git</c> inside a repository whose index holds that build file.</summary>
     internal static bool HoldsSourceMod(string sourceFolder)
     {
-        if (!HoldsGit(sourceFolder))
-            return File.Exists(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName)) && WorkTreeHolding(sourceFolder) is not null;
+        if (!File.Exists(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName))) return false;
+        if (HoldsGit(sourceFolder)) return HoldsRepository(sourceFolder);
+        return WorkTreeAbove(sourceFolder) is { } workTree && TracksBuildFile(sourceFolder, workTree);
+    }
+
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists, or one init
+    /// committed nothing in. Any other <c>.git</c> is <see cref="HoldsAnotherRepository"/>.</summary>
+    internal static bool HoldsRepository(string sourceFolder)
+    {
         var gitDir = GitDirOf(sourceFolder);
         return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || InitFinished(gitDir));
     }
@@ -45,14 +104,26 @@ internal sealed class SourceRepositoryGit
     }
 
     // Read off the file system, not by running git: every read of a compiled plugin asks this.
-    private static string? WorkTreeHolding(string sourceFolder)
+    private static string? WorkTreeAbove(string sourceFolder)
     {
-        if (HoldsGit(sourceFolder)) return sourceFolder;
         for (var folder = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceFolder))); folder is not null; folder = Path.GetDirectoryName(folder))
         {
             if (HoldsGit(folder)) return folder;
         }
         return null;
+    }
+
+    private static readonly ConcurrentDictionary<string, StampGatedMemo<StrongBox<bool>>> s_tracksBuildFile = new(StringComparer.Ordinal);
+
+    // Every read of a compiled plugin asks this, so git is asked again only once the index file changed.
+    private static bool TracksBuildFile(string sourceFolder, string workTree)
+    {
+        var gitDir = GitDirOf(workTree);
+        var folder = Path.GetFullPath(sourceFolder);
+        var memo = s_tracksBuildFile.GetOrAdd(folder, _ => new StampGatedMemo<StrongBox<bool>>(TimeProvider.System));
+        return memo.Of(Path.Combine(gitDir, "index"), () => new StrongBox<bool>(
+            GitCli.TryRun(gitDir, workTree, folder, out var listed, "ls-files", "--", LiteralPathspec(SourceRepositoryLayout.BuildFileName)) && listed.Length > 0))
+            ?.Value ?? false;
     }
 
     internal const string InitMarkSection = "medit";
@@ -124,9 +195,6 @@ internal sealed class SourceRepositoryGit
         Directory.Delete(_gitDir, recursive: true);
     }
 
-    /// <summary>Whether the repository is the source folder's own, rather than one above it.</summary>
-    internal bool IsOwn => _prefix.Length == 0;
-
     // Run in the source folder, so a pathspec is relative to it.
     internal string Run(params string[] args) => GitCli.Run(_gitDir, _workTree, _sourceFolder, args);
 
@@ -171,7 +239,7 @@ internal sealed class SourceRepositoryGit
     internal bool RemoteHoldsTheSource(string remote)
     {
         if (HeadCommit() is null) return true;
-        var source = IsOwn ? "HEAD" : Run("log", "-1", "--format=%H", "HEAD", "--", ".").Trim();
+        var source = SourceCommit();
         return source.Length == 0 || Run("for-each-ref", "--contains", source, "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
     }
 
@@ -207,8 +275,8 @@ internal sealed class SourceRepositoryGit
         {
             // "XY path", the path from the work tree's root: a shorter entry, or one outside the source folder, is one
             // this parse cannot read.
-            if (entry.Length < 4 || !entry[3..].StartsWith(_prefix, StringComparison.Ordinal)) return null;
-            entries.Add((entry[0], entry[(3 + _prefix.Length)..]));
+            if (entry.Length < 4 || !entry[3..].StartsWith(SourceFolderInWorkTree, StringComparison.Ordinal)) return null;
+            entries.Add((entry[0], entry[(3 + SourceFolderInWorkTree.Length)..]));
         }
         return entries;
     }
@@ -305,7 +373,7 @@ internal sealed class SourceRepositoryGit
         if (string.IsNullOrEmpty(plugin))
             throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
 
-        var folder = string.Concat(_prefix.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(segment => $"{EncodeRefComponent(segment)}/"));
+        var folder = string.Concat(SourceFolderInWorkTree.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(segment => $"{EncodeRefComponent(segment)}/"));
         return $"refs/medit/last-compile/{folder}{EncodeRefComponent(plugin)}";
     }
 

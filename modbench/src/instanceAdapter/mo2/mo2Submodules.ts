@@ -10,7 +10,7 @@ import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSub
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
-import { BUILD_FILE } from '../../wire/sourceMod';
+import { sourceFoldersTracked } from './sourceRepositories';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 
@@ -150,7 +150,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
         other.push(`${file} could not be read, so no source mod's entry is changed: ${errorMessage(err)}`);
       }
       for (const [mod, folder] of sourceMods) {
-        // ADR-0022: only a source mod with a repository of its own is a submodule; git would answer the modlist's remote.
+        // ADR-0022
         if ((acted !== 'every' && !acted.includes(mod)) || !(await isRepository(folder))) continue;
         const found = await submoduleOf(folder);
         const name = basename(folder);
@@ -214,10 +214,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
 
     repositoryOnDisk: () => isRepository(instanceRoot),
 
-    async sourceFolderTracked(name) {
-      if (!(await isRepository(instanceRoot))) return false;
-      return (await git(instanceRoot, 'ls-files', '--', `:(literal)${sourceModPath(name)}/${BUILD_FILE}`)).trim() !== '';
-    },
+    sourceFolderTracked: async (name) => (await sourceFoldersTracked(instanceRoot, [name])).has(name),
 
     async removeRepository() {
       if (!(await isRepository(instanceRoot))) return;

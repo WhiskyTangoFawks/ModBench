@@ -68,7 +68,7 @@ internal static class Submodules
             var git = SourceRepositoryGit.Own(submodule.Folder);
             foreach (var (key, value) in GitInit.Settings) git.Run("config", key, value);
             GitInit.EnsureCommitIdentity(git);
-            if (!SourceRepositoryGit.HoldsSourceMod(submodule.Folder) && !git.TryRun(out _, "branch", "--track", "main", $"{Origin}/main"))
+            if (!SourceRepositoryGit.HoldsRepository(submodule.Folder) && !git.TryRun(out _, "branch", "--track", "main", $"{Origin}/main"))
                 throw SourceStopException.Unreadable("its remote has no main, so it is not a source mod's repository");
         }
         catch (SourceStopException) when (Directory.Exists(submodule.Folder))

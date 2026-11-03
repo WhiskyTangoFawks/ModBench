@@ -99,7 +99,22 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
   });
 }
 
-const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
+async function sourceFolderLinesWritten(instanceRoot: string, sourceFolders: readonly string[], held: boolean): Promise<void> {
+  const file = ignoreListFile(instanceRoot);
+  const names = sourceFolders.map((folder) => {
+    const name = relative(sourceRootDir(instanceRoot), folder);
+    if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${sourceRootDir(instanceRoot)}, so the instance repository's ignore list does not name it`);
+    return name;
+  });
+  if (!(await exists(file))) return;
+  await putIfChanged(file, (before) => {
+    const after = withSourceFolderLines(before, names, held);
+    if (after === undefined) throw new Error(`${file} has a marker of the source folders it holds with no match, so their lines are left as they are`);
+    return after;
+  });
+}
+
+const lowerCased =(names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
 function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
@@ -215,20 +230,7 @@ export function mo2Repository(
 
     writeOtherManifestLines: () => otherManifestLinesWritten(context),
 
-    async writeSourceFolderLines(sourceFolders, held) {
-      const file = ignoreListFile(instanceRoot);
-      const names = sourceFolders.map((folder) => {
-        const name = relative(sourceRootDir(instanceRoot), folder);
-        if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${sourceRootDir(instanceRoot)}, so the instance repository's ignore list does not name it`);
-        return name;
-      });
-      if (!(await exists(file))) return;
-      await putIfChanged(file, (before) => {
-        const after = withSourceFolderLines(before, names, held);
-        if (after === undefined) throw new Error(`${file} has a marker of the source folders it holds with no match, so their lines are left as they are`);
-        return after;
-      });
-    },
+    writeSourceFolderLines: (sourceFolders, held) => sourceFolderLinesWritten(instanceRoot, sourceFolders, held),
 
     gameFiles,
 

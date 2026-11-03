@@ -50,6 +50,9 @@ async function gameFilesOver(reads: ModReads, folder: string, paths: readonly st
   return { kind: 'read', answer: files };
 }
 
+const cloneGets = async (reads: ModReads, repository: string): Promise<boolean> =>
+  !('lacks' in await reads.submodule(repository)) || reads.sourceFolderTracked(repository);
+
 /** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. Nothing
  *  of the folder is read when no manifest is `asked` for. */
 export async function modValueOver(reads: ModReads, folder: string, asked: PackagesAsked | undefined): Promise<StatusValues> {
@@ -65,8 +68,7 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
       const flaggedHash = await reads.flaggedHash(hash, flags);
       if (flaggedHash !== undefined) flaggedHashes.set(path, flaggedHash);
     }
-    const repositoryHosted = asked.repository !== undefined
-      && (!('lacks' in await reads.submodule(asked.repository)) || await reads.sourceFolderTracked(asked.repository));
+    const repositoryHosted = asked.repository !== undefined && await cloneGets(reads, asked.repository);
     return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryHosted };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };

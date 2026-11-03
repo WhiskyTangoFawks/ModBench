@@ -54,20 +54,20 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
         if (mods.Any(mod => mod.Commit is null))
             return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksCommit);
-        if (mods.Any(mod => mod.In is null))
-            return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksIn);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsText);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestFileIsAPath))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestFileIsAPath);
+        List<ModToVersionInGit> toVersion = [];
+        foreach (var mod in mods)
+        {
+            if (mod.In is not { } heldIn) return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksIn);
+            toVersion.Add(new ModToVersionInGit(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), heldIn, mod.Commit == true));
+        }
 
-        return await EndpointMapping.Answered(
-            "Version in git", logger,
-            versionInGitHandler.VersionInGitAsync([.. mods.Select(mod => new ModToVersionInGit(
-                mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), mod.In ?? SourceModIn.NewRepository, mod.Commit == true))]),
-            EndpointMapping.Refusal);
+        return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion), EndpointMapping.Refusal);
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).

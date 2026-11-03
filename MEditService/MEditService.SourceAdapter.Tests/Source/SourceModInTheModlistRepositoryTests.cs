@@ -173,6 +173,17 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void ABuildFileTheModlistRepositoryDoesNotTrack_IsNoSourceMod_AsASourceModWhoseOwnRepositoryWasDeleted()
+    {
+        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Assert.True(TestAdapters.Source().IsSourceMod(_sourceFolder));
+
+        Git("rm", "-r", "-q", "--cached", "--", $"source/{TestMod.Name}");
+
+        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
+    }
+
+    [Fact]
     public void ABuildFileInNoRepository_IsNoSourceMod()
     {
         using var outside = new ScratchDirectory("medit-no-repository-");

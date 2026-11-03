@@ -481,7 +481,7 @@ describe('the MO2 adapter\'s repository', () => {
     const shown = (): string[] =>
       runGit('status', '--porcelain', '-z', '--untracked-files=all', '--', 'source').split('\0').filter(Boolean).map((line) => line.slice(3)).sort();
 
-    it('is a source mod\'s folder, and shows git what its own ignore list lets in, and no other source folder', async () => {
+    it('shows git what its own ignore list lets in, and no other source folder, and is a source mod\'s once git tracks its build file', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
@@ -489,9 +489,19 @@ describe('the MO2 adapter\'s repository', () => {
       await sourceFolder('Mod B');
 
       await adapter.writeSourceFolderLines([held], true);
+      const untracked = [...(await adapter.sourceRepositories()).keys()];
+      runGit('add', '-A', '--', 'source');
 
-      expect([...(await adapter.sourceRepositories()).keys()]).toEqual(['Mod A', 'Mod B']);
       expect(shown()).toEqual([`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort());
+      expect([untracked, [...(await adapter.sourceRepositories()).keys()]]).toEqual([[], ['Mod A']]);
+    });
+
+    it('is no source mod\'s with a repository of its own but no build file', async () => {
+      const adapter = await instance();
+      await mkdir(join(root, 'source', 'Mod A'), { recursive: true });
+      execFileSync('git', ['init', '--quiet'], { cwd: join(root, 'source', 'Mod A') });
+
+      expect([...(await adapter.sourceRepositories()).keys()]).toEqual([]);
     });
 
     it('leaves out a folder it held, keeping the other folders it holds and every line it did not write', async () => {

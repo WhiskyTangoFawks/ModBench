@@ -13,8 +13,8 @@ public interface ISourceAdapter
 
     bool IsSourceMod(RegisteredPlugin plugin);
 
-    /// <summary>True exactly when <paramref name="sourceFolder"/> is a source mod's: it holds a repository whose <c>main</c>
-    /// exists, or a repository above it, the modlist repository, holds it and its build file.</summary>
+    /// <summary>True exactly when <paramref name="sourceFolder"/> is a source mod's: it holds the build file, and a
+    /// repository of its own whose <c>main</c> exists, or none, in a repository whose index holds the build file.</summary>
     bool IsSourceMod(string sourceFolder);
 
     /// <summary>Why the plugin's source does not read though its mod is a source mod: no folder, twin folders, or an unlistable plugin
@@ -62,8 +62,8 @@ public interface ISourceAdapter
     /// <c>Init &lt;mod&gt;</c>, of its files, then any repair. Without <paramref name="commit"/>, neither.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null, IReadOnlyList<string>? ignored = null,
-        SourceModIn heldIn = SourceModIn.NewRepository);
+        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
+        SourceModIn heldIn);
 
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);

@@ -102,6 +102,6 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
 
         return source.Init(
             made.SourceFolder, made.BuildFile, verified, assets, toCommit.Commit, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null,
-            made.Manifest, made.Ignored, toCommit.In);
+            made.Manifest, made.Ignored ?? [], toCommit.In);
     }
 }

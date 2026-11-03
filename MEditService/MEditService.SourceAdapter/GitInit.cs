@@ -32,16 +32,14 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
-        IReadOnlyList<string>? ignored = null, SourceModIn heldIn = SourceModIn.NewRepository)
+        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest,
+        IReadOnlyList<string> ignored, SourceModIn heldIn)
     {
-        if (SourceRepositoryGit.HoldsSourceMod(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
+        if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder) || SourceRepositoryGit.HoldsSourceMod(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' is already a source mod's source folder, or holds a repository.");
         if (!commit && repair is not null)
             throw new ArgumentException("A repair is a commit, so an init that commits nothing cannot hold one.", nameof(repair));
-        var git = heldIn == SourceModIn.NewRepository ? SourceRepositoryGit.Own(sourceFolder) : SourceRepositoryGit.Holding(sourceFolder);
-        if (heldIn == SourceModIn.ModlistRepository && !git.Exists)
-            throw SourceStopException.Inaccessible($"no repository holds '{sourceFolder}', so it cannot be put in the modlist repository");
+        var git = heldIn == SourceModIn.NewRepository ? SourceRepositoryGit.Own(sourceFolder) : SourceRepositoryGit.Above(sourceFolder);
 
         WriteJournal journal = new(sourceFolder);
         try
@@ -50,23 +48,12 @@ internal static class GitInit
             WriteEachPlugin(sourceFolder, plugins, journal);
             foreach (var asset in assets)
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
-            if (heldIn == SourceModIn.NewRepository)
-            {
-                if (!git.Exists)
-                    journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
-                CreateRepository(git);
-            }
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored ?? [])));
+            git.BeginInit(journal);
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
-            if (heldIn == SourceModIn.ModlistRepository)
-            {
-                var head = git.HeadCommit();
-                journal.RecordUndo(() => git.PutBack(head), description: $"what the modlist repository holds of '{sourceFolder}'");
-            }
             Track(git, journal, sourceFolder, commit, plugins, repair);
-            if (heldIn == SourceModIn.NewRepository)
-                git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitDone);
+            git.FinishInit();
         }
         catch (Exception ex)
         {
@@ -75,12 +62,11 @@ internal static class GitInit
         }
     }
 
-    // The modlist repository holds more than the source folder, so a commit there names the folder's paths.
     private static void Track(
         SourceRepositoryGit git, WriteJournal journal, string sourceFolder, bool commit,
         IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins, (PluginAddress Plugin, TreeCommit Commit)? repair)
     {
-        string[] paths = git.IsOwn ? [] : ["--", "."];
+        var paths = git.FolderPaths;
         git.Run(["add", "-A", .. paths]);
         if (commit)
         {
@@ -114,7 +100,7 @@ internal static class GitInit
         }
     }
 
-    private static void CreateRepository(SourceRepositoryGit git)
+    internal static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
         git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitPending);

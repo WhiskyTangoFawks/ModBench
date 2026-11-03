@@ -30,7 +30,7 @@ public sealed class CreatePluginTraceTests : HostedTests
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         var folder = OtherTool.ModFolderOf(fx, Origin);
         var sourceFolder = Directory.CreateDirectory(Path.Combine(fx.Root, "source", Origin)).FullName;
-        foreach (var entry in new[] { ".git", ".gitignore", "plugin-source" })
+        foreach (var entry in new[] { ".git", ".gitignore", "build.json", "plugin-source" })
             Directory.Move(Path.Combine(folder, entry), Path.Combine(sourceFolder, entry));
 
         var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder, sourceFolder });

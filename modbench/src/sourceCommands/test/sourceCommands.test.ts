@@ -428,6 +428,26 @@ describe('sourceCommands versionInGit', () => {
       expect(sourceFolderLines(fake.calls).at(-1)).toEqual({ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: false });
     });
 
+    it.each([['answers no mod', undefined], ['cannot take the lines back', 'the ignore list is locked']])(
+      'leaves out again every source folder when mEdit refuses the whole call, and says so when it %s', async (_, takingBackFails) => {
+        const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), {
+          ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true,
+          refusals: (call) => (call.verb === 'writeSourceFolderLines' && !call.held ? takingBackFails : undefined),
+        });
+        const client = new InMemoryMEditClient();
+        client.setCommandHandler('versionInGit', () => Promise.resolve({ refused: true, message: 'git was not found on PATH.' }));
+
+        const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inModlist);
+
+        expect(sourceFolderLines(fake.calls).at(-1)).toEqual({ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: false });
+        expect(outcome).toEqual({
+          refused: true,
+          message: takingBackFails === undefined
+            ? 'git was not found on PATH.'
+            : 'git was not found on PATH. The ignore list still lets in /source/ModA, which no mod was put in: the ignore list is locked',
+        });
+      });
+
     it('refuses each mod, handing mEdit nothing, when the ignore list cannot let its source folder in', async () => {
       const { client, handed } = committing();
       const adapter = modsAt({
