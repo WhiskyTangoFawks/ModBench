@@ -131,6 +131,22 @@ describe('update manifest', () => {
     });
   });
 
+  it('reports a downloaded file whose page could not be read only for the mod whose manifest names it', async () => {
+    const OTHER = { ...INSTALLED, path: '/downloads/Other.7z', hash: 'OTHERHASH0=' };
+    const { update } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: {
+        installations: new Map([['ModA', read(INSTALLED)]]),
+        downloadedFilesHashed: { files: [{ ...INSTALLED, pageUnreadable: 'EISDIR' }, { ...OTHER, pageUnreadable: 'EISDIR' }], notes: [] },
+      },
+    });
+
+    const result = await update(['ModA']);
+
+    expect(result.notes).toEqual([{ mod: 'ModA', note: 'the page of ModA-1.0.7z could not be read, so its manifest names no host: EISDIR' }]);
+    expect(result.repositoryNotes).toEqual([]);
+  });
+
   it('names the direct URL of the downloaded file\'s metadata, not the Nexus file the mod\'s metadata names', async () => {
     const { update, manifestOf } = await over({
       files: { ModA: { 'a.nif': HA } },

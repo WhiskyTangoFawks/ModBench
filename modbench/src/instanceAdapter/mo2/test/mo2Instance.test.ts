@@ -1884,6 +1884,16 @@ describe('the MO2 Instance adapter', () => {
           ['a page with no file and a modid of another mod', metaWith('gameName=Fallout4\r\nmodid=601\r\n', []), pageOf('600'), '600', 0],
         ] as const;
 
+        it('reads the page of a mod of a game Modbench does not support on that game\'s domain, and writes it back as held', async () => {
+          const skyrimPage = 'https://www.nexusmods.com/skyrim/mods/600?tab=files&file_id=901';
+          const held = await holding(metaWith('gameName=Skyrim\r\nmodid=600\r\n', [['600', '901']]));
+
+          expect(expectKind(await adapter.modMetadata(PATCH), 'read').answer.installationFile?.page).toBe(skyrimPage);
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: skyrimPage } }, TRASH);
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+        });
+
         it.each(WRITTEN)('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
           await holding(text);
 
@@ -2169,18 +2179,24 @@ describe('the MO2 Instance adapter', () => {
         expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ version: '1.2.3' }] });
       });
 
-      it('says which game a file comes from when the registry has no Nexus domain for it, and names no page', async () => {
+      it('gives a file of a game Modbench does not support the page its metadata names, on that game\'s domain', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=Skyrim\r\nmodID=7\r\nfileID=78\r\n');
+
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ page: 'https://www.nexusmods.com/skyrim/mods/7?tab=files&file_id=78' }], notes: [] });
+      });
+
+      it('names no page and no note for a file of a game with no domain', async () => {
         await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=EnderalSE\r\nmodID=7\r\n');
 
         const { files, notes } = await hashing().downloadedFilesHashed();
 
-        expect([files[0]?.page, notes]).toEqual([undefined, [expect.stringContaining(`${DOWNLOADED_FILE} comes from 'EnderalSE'`)]]);
+        expect([files[0]?.page, notes]).toEqual([undefined, []]);
       });
 
-      it('names no unknown game for a file that names a direct URL', async () => {
+      it('keeps the direct URL of a file of a game with no domain that names a mod ID', async () => {
         await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=EnderalSE\r\nmodID=7\r\ndirectURL=https://example.com/a.7z\r\n');
 
-        expect((await hashing().downloadedFilesHashed()).notes).toEqual([]);
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ page: undefined, directUrl: 'https://example.com/a.7z' }], notes: [] });
       });
 
       it('costs a file its page alone, saying why, when its metadata cannot be read', async () => {
@@ -2188,8 +2204,8 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
 
         expect(await hashing().downloadedFilesHashed()).toMatchObject({
-          files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: undefined, hash: 'yMPjZVarjmw=' }],
-          notes: [expect.stringContaining(`the page of ${DOWNLOADED_FILE} could not be read`) as unknown],
+          files: [{ path: join(root, 'downloads', DOWNLOADED_FILE), page: undefined, hash: 'yMPjZVarjmw=', pageUnreadable: expect.any(String) as unknown }],
+          notes: [],
         });
       });
 
