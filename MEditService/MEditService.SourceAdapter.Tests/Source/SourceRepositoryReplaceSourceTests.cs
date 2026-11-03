@@ -227,7 +227,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void AReplaceIntoAModFolderAnotherToolRemoved_NamesTheMissingRepository_AndRecreatesNothing()
+    public void AReplaceIntoAModFolderAnotherToolRemoved_SaysItIsNoSourceFolder_AndRecreatesNothing()
     {
         var repository = Repository;
         AnotherTool.Delete(_modFolder);
@@ -235,7 +235,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         var refused = Assert.IsType<SourceFailure.Inaccessible>(
             repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{}")], Sha).Failed());
 
-        Assert.Contains("holds no repository", refused.Reason, StringComparison.Ordinal);
+        Assert.Contains("is no source mod's source folder", refused.Reason, StringComparison.Ordinal);
         Assert.False(Directory.Exists(_modFolder));
     }
 

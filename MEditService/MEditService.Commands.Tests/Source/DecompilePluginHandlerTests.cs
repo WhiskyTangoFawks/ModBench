@@ -33,8 +33,8 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             new LoadOrderEntry("First.esp", Path.Combine(_sourceMod, "First.esp"), SourceModName, 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
         ]));
-        var committed = TestEditService.InitSourceModHandler(_holder)
-            .InitSourceModAsync(ToInitSourceMod.In(_holder.Held?.Snapshot, SourceModName))
+        var committed = TestEditService.VersionInGitHandler(_holder)
+            .VersionInGitAsync(ToVersionInGit.In(_holder.Held?.Snapshot, SourceModName))
             .GetAwaiter().GetResult().Value();
         Assert.Equal([CompiledPlugin("First.esp")], Assert.Single(committed.Applied).Plugins);
         WritePlugin(_sourceMod, "Second.esp", "SecondNpc");

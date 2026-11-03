@@ -25,7 +25,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var before = new ScratchDirectory("medit-stale-header-before-");
         var original = Path.Combine(before, fileName);
         File.Copy(scratch.PluginPath, original);
-        await scratch.InitSourceModAsync();
+        await scratch.VersionInGitAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
@@ -35,7 +35,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitSourceMod_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
+    public async Task VersionInGit_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
     {
         using var scratch = new CompiledPluginScratch(StaleHeaderPlugins.SettingsFileName);
         FormKey? extra = null;
@@ -47,10 +47,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             return deserialized;
         }
 
-        var result = await scratch.InitSourceModAsync(DeserializeThenAddAnNpc);
+        var result = await scratch.VersionInGitAsync(DeserializeThenAddAnNpc);
 
         Assert.False(result.Applied);
-        Assert.Equal(InitSourceModRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
 
         var extraFormKey = extra
             ?? throw new InvalidOperationException("Expected DeserializeThenAddAnNpc to run and set extra.");
@@ -79,8 +79,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             _holder.Apply(_loadOrder);
         }
 
-        public async Task<PluginInitialized> InitSourceModAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
-            (await InitSourceModEveryPluginOf.ModAsync(
+        public async Task<PluginInitialized> VersionInGitAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
+            (await VersionInGitEveryPluginOf.ModAsync(
                 _loadOrder, Plugin.Origin,
                 deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : null)).Only();
 

@@ -38,6 +38,7 @@ const reads: Parameters<typeof modValueOver>[0] = {
   flaggedHash: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
+  sourceFolderTracked: () => Promise.resolve(false),
 };
 
 const EMPTY: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() };

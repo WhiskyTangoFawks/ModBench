@@ -225,9 +225,13 @@ const OTHER_MANIFESTS: OwnLines = {
   leftOut: ['# Manifests outside the mod folders, the rest left out', '# End of manifests outside the mod folders, the rest left out'],
   letIn: ['# Manifests outside the mod folders', '# End of manifests outside the mod folders'],
 };
+const SOURCE_FOLDERS: OwnLines = {
+  leftOut: ['# Source folders this repository holds, the rest left out', '# End of source folders this repository holds, the rest left out'],
+  letIn: ['# Source folders this repository holds', '# End of source folders this repository holds'],
+};
 const WHITELIST_LAST_LINE = whitelistIgnoreList(undefined).trimEnd().split('\n').at(-1);
 
-const markersOf = (role: Role): Markers[] => [SOURCE_MODS[role], OTHER_MANIFESTS[role]];
+const markersOf = (role: Role): Markers[] => [SOURCE_MODS[role], OTHER_MANIFESTS[role], SOURCE_FOLDERS[role]];
 
 function afterLeftOutBlocks(lines: readonly string[], at: number): number {
   const markers = markersOf('leftOut').find(([first]) => first === lines[at]);
@@ -282,6 +286,22 @@ export const withSourceModLines = (ignoreList: string, folderNames: readonly str
   withOwnLines(ignoreList, SOURCE_MODS, folderNames.length === 0 ? [] : [
     `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, ...folderNames.map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),
   ]);
+
+const SOURCE_FOLDERS_LET_IN = `!/${SOURCE_MODS_FOLDER}/`;
+
+/** An ignore list that lets in each source folder of `folderNames`, or with `held` false leaves each out, every other line
+ *  kept; each folder's own `.gitignore` says what of it is held. Undefined when the markers do not pair. */
+export function withSourceFolderLines(ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined {
+  const lines = ignoreList.split(/\r?\n/);
+  const [first, last] = SOURCE_FOLDERS.letIn;
+  const begin = lines.indexOf(first);
+  const letIn = new Set(begin === -1 ? [] : lines.slice(begin + 1, lines.indexOf(last, begin)).filter((line) => line !== SOURCE_FOLDERS_LET_IN));
+  for (const line of folderNames.map((name) => `${SOURCE_FOLDERS_LET_IN}${escapedForIgnoreList(name)}`)) {
+    if (held) letIn.add(line);
+    else letIn.delete(line);
+  }
+  return withOwnLines(ignoreList, SOURCE_FOLDERS, letIn.size === 0 ? [] : [SOURCE_FOLDERS_LET_IN, `/${SOURCE_MODS_FOLDER}/*`, ...letIn]);
+}
 
 // Each folder above a manifest is let in once, before the folders and the manifest it holds.
 function otherManifestLines(manifests: readonly (readonly string[])[]): string[] {

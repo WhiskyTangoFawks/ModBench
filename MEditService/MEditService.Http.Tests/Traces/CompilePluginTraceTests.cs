@@ -26,7 +26,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     {
         var fx = ThreeMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.InitSourceMod([Origin, OtherOrigin])).EnsureSuccessStatusCode();
+        (await Client.VersionInGit([Origin, OtherOrigin])).EnsureSuccessStatusCode();
         return fx;
     }
 

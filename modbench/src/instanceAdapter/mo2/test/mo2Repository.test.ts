@@ -470,6 +470,87 @@ describe('the MO2 adapter\'s repository', () => {
     expect(shown.sort()).toEqual([...listed, '.gitignore'].sort());
   });
 
+  describe('a source folder the modlist repository holds', () => {
+    const OWN_IGNORE_LIST = `*\n!/.gitignore\n!/${BUILD_FILE}\n`;
+    async function sourceFolder(name: string): Promise<string> {
+      await put(`source/${name}/.gitignore`, OWN_IGNORE_LIST);
+      await put(`source/${name}/${BUILD_FILE}`, '{}');
+      await put(`source/${name}/left out.txt`);
+      return join(root, 'source', name);
+    }
+    const shown = (): string[] =>
+      runGit('status', '--porcelain', '-z', '--untracked-files=all', '--', 'source').split('\0').filter(Boolean).map((line) => line.slice(3)).sort();
+
+    it('is a source mod\'s folder, and shows git what its own ignore list lets in, and no other source folder', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const held = await sourceFolder('Mod A');
+      await sourceFolder('Mod B');
+
+      await adapter.writeSourceFolderLines([held], true);
+
+      expect([...(await adapter.sourceRepositories()).keys()]).toEqual(['Mod A', 'Mod B']);
+      expect(shown()).toEqual([`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort());
+    });
+
+    it('leaves out a folder it held, keeping the other folders it holds and every line it did not write', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const [a, b] = [await sourceFolder('Mod A'), await sourceFolder('Mod B')];
+      await adapter.writeSourceFolderLines([a, b], true);
+      await writeFile(join(root, '.gitignore'), `${await readFile(join(root, '.gitignore'), 'utf8')}mine\n`);
+
+      await adapter.writeSourceFolderLines([a], false);
+
+      expect(shown()).toEqual([`source/Mod B/${BUILD_FILE}`, 'source/Mod B/.gitignore'].sort());
+      expect((await readFile(join(root, '.gitignore'), 'utf8')).split('\n')).toContain('mine');
+    });
+
+    it('is tracked, so a clone checks it out, once the instance repository holds its build file', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const held = await sourceFolder('Mod A');
+      await adapter.writeSourceFolderLines([held], true);
+      const before = await adapter.sourceFolderTracked('Mod A');
+
+      runGit('add', '-A', '--', 'source');
+
+      expect([before, await adapter.sourceFolderTracked('Mod A'), await adapter.sourceFolderTracked('Mod [A]')]).toEqual([false, true, false]);
+    });
+
+    it('is no submodule, though the modlist repository has a remote', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      runGit('remote', 'add', 'origin', 'https://example.test/modlist.git');
+      await adapter.writeIgnoreList();
+      await adapter.writeSourceFolderLines([await sourceFolder('Mod A')], true);
+
+      expect(await everySourceModNamedForItsRepository(adapter)).toEqual({ notes: [], other: [] });
+      expect(existsSync(join(root, '.gitmodules'))).toBe(false);
+    });
+
+    it('is refused when it is not a folder of the source folder, writing nothing', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const before = await readFile(join(root, '.gitignore'), 'utf8');
+
+      await expect(adapter.writeSourceFolderLines([join(root, 'mods', 'Mod A')], true)).rejects.toThrow('is not a folder of');
+      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(before);
+    });
+
+    it('writes no ignore list where there is none', async () => {
+      const adapter = await instance();
+
+      await adapter.writeSourceFolderLines([await sourceFolder('Mod A')], true);
+
+      expect(existsSync(join(root, '.gitignore'))).toBe(false);
+    });
+  });
+
   describe('a source mod with a remote is a submodule', () => {
     const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
     async function sourceMod(folder: string, remote?: string): Promise<string> {

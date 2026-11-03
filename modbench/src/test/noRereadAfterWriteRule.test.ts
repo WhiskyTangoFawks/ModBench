@@ -90,10 +90,10 @@ new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } })
     ),
     fails('the call of a module-level helper that re-reads, made after a write', lines(
       'function refreshAfterWrite(deps) { deps.refreshTree(); deps.refreshMatchingPlugins(); }',
-      'async function dispatchInitSourceMod(deps, mods) { await deps.commands.initSourceMod(mods); refreshAfterWrite(deps); }',
+      'async function dispatchVersionInGit(deps, mods) { await deps.commands.initSourceMod(mods); refreshAfterWrite(deps); }',
     ), 2),
     fails('the call of a helper declared after the function that calls it', lines(
-      'async function dispatchInitSourceMod(deps, mods) { await deps.commands.initSourceMod(mods); refreshAfterWrite(deps); }',
+      'async function dispatchVersionInGit(deps, mods) { await deps.commands.initSourceMod(mods); refreshAfterWrite(deps); }',
       'function refreshAfterWrite(deps) { deps.refreshTree(); }',
     )),
     fails('the call of an arrow helper that re-reads, made after a write', lines(

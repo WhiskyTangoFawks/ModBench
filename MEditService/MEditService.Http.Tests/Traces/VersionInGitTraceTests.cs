@@ -10,7 +10,7 @@ namespace MEditService.Http.Tests.Traces;
 public sealed class VersionInGitTraceTests : HostedTests
 {
     private const string Plugin = "Initialized.esp";
-    private const string Origin = "InitializedMod";
+    private const string Origin = "VersionedMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-init-mod")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew("InitializedNpc"), origin: Origin)
@@ -26,7 +26,7 @@ public sealed class VersionInGitTraceTests : HostedTests
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var response = await Client.InitSourceMod(Origin);
+        var response = await Client.VersionInGit(Origin);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -37,7 +37,7 @@ public sealed class VersionInGitTraceTests : HostedTests
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(
-            "init-source-mod-progress", e => e.TryGetProperty("initSourceModPhase", out var phase) && phase.GetString() == "Committing");
+            "version-in-git-progress", e => e.TryGetProperty("versionInGitPhase", out var phase) && phase.GetString() == "Committing");
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Origin);
 
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
@@ -54,11 +54,11 @@ public sealed class VersionInGitTraceTests : HostedTests
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
-        var response = await Client.PostAsJsonAsync("/init-source-mod", new
+        var response = await Client.PostAsJsonAsync("/version-in-git", new
         {
             mods = new[]
             {
-                new { name = Origin, modFolder, commit = true, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
+                new { name = Origin, modFolder, @in = "NewRepository", commit = true, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
             },
         });
 
@@ -74,15 +74,16 @@ public sealed class VersionInGitTraceTests : HostedTests
     public static TheoryData<string, string> NotARequestToInit => new()
     {
         { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a folder", """{"mods": [{"name": "InitializedMod", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without commit", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"buildFile": "{}"}}]}""" },
-        { "a mod without a build file", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
-        { "a manifest without its file name", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
-        { "a manifest without its text", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
-        { "a manifest file name that is a path", """{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a folder", """{"mods": [{"name": "VersionedMod", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without commit", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without the repository that holds it", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"buildFile": "{}"}}]}""" },
+        { "a mod without a build file", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
+        { "a manifest without its file name", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
+        { "a manifest without its text", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
+        { "a manifest file name that is a path", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]
@@ -91,7 +92,7 @@ public sealed class VersionInGitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostJson("/init-source-mod", body);
+        var response = await Client.PostJson("/version-in-git", body);
 
         Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
@@ -105,8 +106,8 @@ public sealed class VersionInGitTraceTests : HostedTests
         await Loaded();
 
         var response = await Client.PostJson(
-            "/init-source-mod",
-            $$$"""{"mods": [{"name": "InitializedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
+            "/version-in-git",
+            $$$"""{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -118,7 +119,7 @@ public sealed class VersionInGitTraceTests : HostedTests
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
 
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsCompiledPlugin(Plugin);

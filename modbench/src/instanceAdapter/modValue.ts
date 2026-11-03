@@ -35,7 +35,7 @@ export async function sourceFolderValueOver(
   return folderValueOver({ ...reads, filesIn }, folder);
 }
 
-type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule' | 'flaggedHash'>;
+type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule' | 'sourceFolderTracked' | 'flaggedHash'>;
 
 // None when the game folder is not found.
 async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<FileRead<HashedPath[] | undefined>> {
@@ -65,7 +65,8 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
       const flaggedHash = await reads.flaggedHash(hash, flags);
       if (flaggedHash !== undefined) flaggedHashes.set(path, flaggedHash);
     }
-    const repositoryHosted = asked.repository !== undefined && !('lacks' in await reads.submodule(asked.repository));
+    const repositoryHosted = asked.repository !== undefined
+      && (!('lacks' in await reads.submodule(asked.repository)) || await reads.sourceFolderTracked(asked.repository));
     return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryHosted };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };

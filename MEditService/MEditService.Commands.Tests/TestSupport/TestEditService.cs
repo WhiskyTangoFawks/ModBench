@@ -53,10 +53,10 @@ internal static class TestEditService
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 
-    internal static InitSourceModHandler InitSourceModHandler(
+    internal static VersionInGitHandler VersionInGitHandler(
         LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
         ISourceAdapter? source = null) =>
-        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<InitSourceModHandler>();
+        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<VersionInGitHandler>();
 
     internal static BuildModHandler BuildModHandler(LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
         Over(holder, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();

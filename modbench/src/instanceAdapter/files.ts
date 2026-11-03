@@ -20,7 +20,7 @@ export function isRepository(sourceFolder: string): Promise<boolean> {
   return exists(join(sourceFolder, GIT_DIR));
 }
 
-/** The git directory whose presence is what "source mod" means (ADR-0007). */
+/** The git directory, whose presence makes a folder a repository. */
 export const GIT_DIR = '.git';
 
 const TEMP_PREFIX = '.medit_tmp_';

@@ -8,7 +8,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { ModToInitSourceMod } from '../../client';
+import type { ModToVersionInGit } from '../../client';
 import type { BuildMod, BuildOutcome } from '../../client/MEditClient';
 import type { InstallationFileReader } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstallationFileReader } from '../../test/fakeInstallationFileReader';
@@ -483,7 +483,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     if (ignore.length > 0) await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore, flags: new Map(), files: new Map() });
     for (const path of ignore) await put(`mods/Mod/${path}`, 'the game wrote this');
     const client = new InMemoryMEditClient();
-    const handed: ModToInitSourceMod[] = [];
+    const handed: ModToVersionInGit[] = [];
     client.setCommandHandler('initSourceMod', async ([mod]) => {
       if (mod === undefined) throw new Error('no mod');
       handed.push(mod);
@@ -501,7 +501,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     });
     const trashed: string[] = [];
     const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
-    expect(await commands.initSourceMod(['Mod'], { commit: true })).toMatchObject({ refused: [] });
+    expect(await commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true })).toMatchObject({ refused: [] });
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
     const restoreSourceFolder = async (): Promise<string | undefined> => {
       const folder = join(root, 'mods', 'Mod');
@@ -598,18 +598,18 @@ describe('version in git over an instance on disk', () => {
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
     const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
-    return { client, initSourceMod: () => commands.initSourceMod(['Mod'], { commit: true }) };
+    return { client, versionInGit: () => commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true }) };
   }
 
   it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
-    const { client, initSourceMod } = await aModWithItsManifest();
-    const handed: ModToInitSourceMod[] = [];
+    const { client, versionInGit } = await aModWithItsManifest();
+    const handed: ModToVersionInGit[] = [];
     client.setCommandHandler('initSourceMod', (mods) => {
       handed.push(...mods);
       return Promise.resolve({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     });
 
-    const outcome = await initSourceMod();
+    const outcome = await versionInGit();
 
     const [sent] = handed;
     expect(sent?.repository).toMatchObject({ sourceFolder: join(root, 'source', 'Mod'), assets: ['a.nif'] });
@@ -620,9 +620,9 @@ describe('version in git over an instance on disk', () => {
   });
 
   it('refuses a mod whose folder\'s manifest names the game folder when the game folder was not found, handing mEdit nothing', async () => {
-    const { client, initSourceMod } = await aModWithItsManifest({ packages: [{ kind: 'gameFolder' }] });
+    const { client, versionInGit } = await aModWithItsManifest({ packages: [{ kind: 'gameFolder' }] });
 
-    const outcome = await initSourceMod();
+    const outcome = await versionInGit();
 
     expect([outcome, client.calls]).toEqual([
       { landed: [], refused: [{ item: 'Mod', reason: 'its manifest names the game folder, and the game folder was not found' }] }, [],
@@ -649,14 +649,14 @@ describe('version in git of a mod several downloaded files yield, over an instan
     for (const file of folderFiles) await put(`mods/Multi/${file}`, file === 'own.txt' ? 'mine' : `bytes of ${file}`);
     for (const name of Object.keys(YIELDS)) await put(`downloads/${name}`, `the downloaded ${name}`);
     const client = new InMemoryMEditClient();
-    const handed: ModToInitSourceMod[] = [];
+    const handed: ModToVersionInGit[] = [];
     client.setCommandHandler('initSourceMod', (mods) => {
       handed.push(...mods);
       return Promise.resolve({ landed: [], refused: [] });
     });
     const adapter = adapterOver(root, { installationFileReader: readerOfEachFile });
     const noting = { ...adapter, downloadedFilesHashed: async () => ({ ...await adapter.downloadedFilesHashed(), notes }) };
-    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).initSourceMod(['Multi'], { commit: true });
+    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['Multi'], { where: 'NewRepository', commit: true });
     const repository = handed[0]?.repository;
     const manifest = readManifest(repository?.manifest ?? '');
     assert('manifest' in manifest);

@@ -609,7 +609,7 @@ export interface InstanceReading extends InstanceGame {
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
   /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
-  /** Every repository in the source folder, its folder by its name. */
+  /** Every source mod's folder in the source folder, a repository or one the modlist repository holds, by its name. */
   readonly sourceRepositories: ReadonlyMap<string, string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
@@ -652,7 +652,7 @@ export interface InstanceAdapter {
   downloadedFiles(): Promise<DownloadedFiles>;
   /** The downloaded file `path` names, however the path is spelled; undefined when it names none; or why the downloaded files could not be read. */
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
-  /** Every repository in the source folder now, its folder by its name. */
+  /** Every source mod's folder in the source folder now, a repository or one the modlist repository holds, by its name. */
   sourceRepositories(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each
@@ -727,12 +727,17 @@ export interface InstanceAdapter {
   /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder. Writes
    *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
   writeOtherManifestLines(): Promise<void>;
+  /** Lets the instance repository hold each source folder of `sourceFolders`, or with `held` false leaves each out. Writes
+   *  nothing without an ignore list; rejects, writing nothing, for a folder outside the source folder or an unpaired marker. */
+  writeSourceFolderLines(sourceFolders: readonly string[], held: boolean): Promise<void>;
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */
   submodule(name: string): Promise<Submodule | { readonly lacks: string }>;
   /** Each submodule `.gitmodules` names in the source folder whose folder holds no repository. */
   unclonedSubmodules(): Promise<readonly UnclonedSubmodule[]>;
+  /** Whether the instance repository tracks the source folder named `name`, by its build file, so a clone checks it out. */
+  sourceFolderTracked(name: string): Promise<boolean>;
   /** Whether the instance folder holds a repository now, read from disk. */
   repositoryOnDisk(): Promise<boolean>;
   /** Takes back the repository `git init` made. Rejects, removing nothing, when it holds a commit or a ref. */

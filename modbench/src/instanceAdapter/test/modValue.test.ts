@@ -48,6 +48,7 @@ describe('a mod as a value', () => {
     flaggedHash: () => Promise.resolve(undefined),
     gameFilesTakenBy: () => Promise.resolve({ kind: 'read' as const, answer: { gameFiles: [], notes: [] } }),
     submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : { lacks: 'no submodule' }),
+    sourceFolderTracked: (name: string) => Promise.resolve(name === 'Tracked'),
   };
 
   it('holds each downloaded file asked for', async () => {
@@ -72,7 +73,7 @@ describe('a mod as a value', () => {
     expect(value).toMatchObject({ kind: 'read', flaggedHashes: new Map([['a.esp', 'KKKKKKKKKKA=']]) });
   });
 
-  it.each([['Hosted', true], ['Local', false]])('says whether the repository %s is a submodule', async (repository, hosted) => {
+  it.each([['Hosted', true], ['Tracked', true], ['Local', false]])('says whether a clone gets the repository %s: a submodule, or a source folder the instance repository tracks', async (repository, hosted) => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository });
 
     expect(value).toMatchObject({ kind: 'read', repositoryHosted: hosted });

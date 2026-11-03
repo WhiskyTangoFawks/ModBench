@@ -47,7 +47,7 @@ export type StatusValues =
     readonly gameFiles: readonly HashedPath[] | undefined;
     /** The hash of each plugin `flagged` asks for once restore set its flags, by its path; none for a plugin restore has not. */
     readonly flaggedHashes: ReadonlyMap<string, string>;
-    /** Whether the repository asked for is a submodule, which a clone fetches from its remote. */
+    /** Whether a clone gets the repository asked for: a submodule it fetches from its remote, or a source folder the instance repository tracks. */
     readonly repositoryHosted: boolean;
   }
   | { readonly kind: 'unreadable'; readonly reason: string }

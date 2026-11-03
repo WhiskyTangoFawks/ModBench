@@ -134,7 +134,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/init-source-mod": {
+    "/version-in-git": {
         parameters: {
             query?: never;
             header?: never;
@@ -143,8 +143,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed to main when asked. A mod lands or is refused whole. Progress is the init-source-mod-progress notification. */
-        post: operations["InitSourceMod"];
+        /** @description Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the modlist repository it sits in, holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed when asked: in a new repository to main, in the modlist repository only the source folder's paths. A mod lands or is refused whole. Progress is the version-in-git-progress notification. */
+        post: operations["VersionInGit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1296,26 +1296,6 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
-        /** @enum {string} */
-        InitSourceModPhase: "Parsing" | "Serializing" | "Committing";
-        /** @enum {string} */
-        InitSourceModRefusal: "None" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
-        InitSourceModRefused: {
-            item: string;
-            refusal: components["schemas"]["InitSourceModRefusal"];
-            message: string;
-        };
-        InitSourceModRequest: {
-            mods: components["schemas"]["ModToInitSourceModRequest"][];
-        };
-        InitSourceModResult: {
-            applied: components["schemas"]["InitializedMod"][];
-            refused: components["schemas"]["InitSourceModRefused"][];
-        };
-        InitializedMod: {
-            mod: string;
-            plugins: components["schemas"]["PluginAddress"][];
-        };
         InteriorCellBlock: {
             /** Format: int32 */
             number: number;
@@ -1383,11 +1363,12 @@ export interface components {
             replaced: components["schemas"]["ReplacedTree"][];
             ignored: string[];
         };
-        ModToInitSourceModRequest: {
+        ModToVersionInGitRequest: {
             name: string;
             modFolder: string;
             repository: components["schemas"]["NewRepositoryRequest"];
             commit?: boolean | null;
+            in?: components["schemas"]["SourceModIn"] | null;
         };
         ModlistProgress: {
             mod?: string | null;
@@ -1430,7 +1411,7 @@ export interface components {
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
-            initSourceModPhase?: components["schemas"]["InitSourceModPhase"] | null;
+            versionInGitPhase?: components["schemas"]["VersionInGitPhase"] | null;
         };
         PathHop: {
             kind: string;
@@ -1704,6 +1685,8 @@ export interface components {
             applied: components["schemas"]["PluginFileFlagsSet"][];
             refused: components["schemas"]["PluginFileFlagRefused"][];
         };
+        /** @enum {string} */
+        SourceModIn: "NewRepository" | "ModlistRepository";
         SourceMove: {
             from: string;
             to: string;
@@ -1744,6 +1727,26 @@ export interface components {
         };
         UnsavedDocumentsRequest: {
             documents: components["schemas"]["DocumentChange"][];
+        };
+        /** @enum {string} */
+        VersionInGitPhase: "Parsing" | "Serializing" | "Committing";
+        /** @enum {string} */
+        VersionInGitRefusal: "None" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        VersionInGitRefused: {
+            item: string;
+            refusal: components["schemas"]["VersionInGitRefusal"];
+            message: string;
+        };
+        VersionInGitRequest: {
+            mods: components["schemas"]["ModToVersionInGitRequest"][];
+        };
+        VersionInGitResult: {
+            applied: components["schemas"]["VersionedMod"][];
+            refused: components["schemas"]["VersionInGitRefused"][];
+        };
+        VersionedMod: {
+            mod: string;
+            plugins: components["schemas"]["PluginAddress"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -2138,7 +2141,7 @@ export interface operations {
             };
         };
     };
-    InitSourceMod: {
+    VersionInGit: {
         parameters: {
             query?: never;
             header?: never;
@@ -2147,7 +2150,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InitSourceModRequest"];
+                "application/json": components["schemas"]["VersionInGitRequest"];
             };
         };
         responses: {
@@ -2157,7 +2160,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InitSourceModResult"];
+                    "application/json": components["schemas"]["VersionInGitResult"];
                 };
             };
             /** @description Bad Request */

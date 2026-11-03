@@ -1,13 +1,16 @@
 import { join } from 'node:path';
-import { ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from '../files';
+import { exists, ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from '../files';
+import { BUILD_FILE } from '../../wire/sourceMod';
 import { sourceRootDir } from './layout';
 
-/** Each repository in the source folder, its folder by its name. */
+/** Each source mod's folder in the source folder, by its name: a repository, or a folder the modlist repository holds,
+ *  which holds its build file. */
 export async function sourceRepositoriesIn(instanceRoot: string): Promise<ReadonlyMap<string, string>> {
   const root = sourceRootDir(instanceRoot);
   const repositories = new Map<string, string>();
   for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink), [])).sort()) {
-    if (await isRepository(join(root, name))) repositories.set(name, join(root, name));
+    const folder = join(root, name);
+    if (await isRepository(folder) || await exists(join(folder, BUILD_FILE))) repositories.set(name, folder);
   }
   return repositories;
 }

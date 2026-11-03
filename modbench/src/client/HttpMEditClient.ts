@@ -21,7 +21,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
-  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToInitSourceMod, type InitSourceModOutcome, type InitSourceModProgress,
+  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -415,15 +415,15 @@ class HttpMEditClient implements MEditClient {
 
   /** ADR-0007; commands.md, A selection is one gesture, and each item lands on its own. */
   async initSourceMod(
-    mods: readonly ModToInitSourceMod[], options: { onProgress?: (status: InitSourceModProgress) => void } = {},
-  ): Promise<InitSourceModOutcome | WriteRefused> {
-    // The POST stays blocking, so progress rides the init-source-mod-progress notification alongside it.
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('init-source-mod-progress', options.onProgress) : () => {};
+    mods: readonly ModToVersionInGit[], options: { onProgress?: (status: VersionInGitProgress) => void } = {},
+  ): Promise<VersionInGitOutcome | WriteRefused> {
+    // The POST stays blocking, so progress rides the version-in-git-progress notification alongside it.
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('version-in-git-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
         verb: 'version in git', noun: 'mod', items: mods.map((mod) => mod.name),
         op: (counted) => `initSourceMod(${counted})`,
-        post: () => this.apiClient.POST('/init-source-mod', { body: { mods: [...mods] } }),
+        post: () => this.apiClient.POST('/version-in-git', { body: { mods: [...mods] } }),
         outcome: selectionOutcome,
       });
     } finally {

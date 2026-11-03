@@ -60,18 +60,19 @@ internal static class Wire
         return problem;
     }
 
-    internal static Task<HttpResponseMessage> InitSourceMod(this HttpClient client, string mod) =>
-        client.InitSourceMod([mod]);
+    internal static Task<HttpResponseMessage> VersionInGit(this HttpClient client, string mod) =>
+        client.VersionInGit([mod]);
 
     /// <summary>Each mod with no asset, and a build file that takes nothing.</summary>
-    internal static Task<HttpResponseMessage> InitSourceMod(this HttpClient client, IEnumerable<string> mods) =>
-        client.PostAsJsonAsync("/init-source-mod", new
+    internal static Task<HttpResponseMessage> VersionInGit(this HttpClient client, IEnumerable<string> mods) =>
+        client.PostAsJsonAsync("/version-in-git", new
         {
             mods = mods.Select(name => new
             {
                 name,
                 modFolder = client.ModFolderSentFor(name),
                 commit = true,
+                @in = "NewRepository",
                 repository = new
                 {
                     sourceFolder = client.SourceFolderSentFor(name),
@@ -273,7 +274,7 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Init source mod's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
+    /// <summary>Version in git's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
     /// reports the plugin compiled before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsCompiledPlugin(this HttpClient client, string name)
     {

@@ -25,7 +25,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     public async Task DecompilingACompiledPluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
     {
         await Loaded();
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         OtherTool.WritesThePlugin(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), Plugin), mod => mod.Npcs.AddNew("UpgradedNpc"));
 
@@ -50,7 +50,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     public async Task DecompilingAPluginWhoseSourceHasWorkingTreeChanges_AnswersItRefusedUntilForced()
     {
         await Loaded();
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         var sourceFile = Directory.EnumerateFiles(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), "plugin-source"), "*.json", SearchOption.AllDirectories).First();
         File.AppendAllText(sourceFile, " ");
 

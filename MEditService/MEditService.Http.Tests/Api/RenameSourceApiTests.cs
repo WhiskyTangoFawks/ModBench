@@ -26,7 +26,7 @@ public sealed class RenameSourceApiTests : HostedTests
     private async Task CompiledPlugin()
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
     }
 
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
