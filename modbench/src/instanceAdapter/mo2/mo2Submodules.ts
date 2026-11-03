@@ -5,14 +5,14 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, isRepository, remove, write } from '../files';
+import { exists, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
-import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
+import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines, type SourceRepositories } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceFoldersTracked } from './sourceModFolders';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 
 interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 
@@ -90,6 +90,26 @@ async function entryWritten(instanceRoot: string, file: string, { name, url, bra
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.path`, sourceModPath(name));
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.url`, url);
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.branch`, branch);
+}
+
+/** The source folders that hold a repository of their own: those `.gitmodules` names, or `submodules`, and the rest. */
+export async function sourceRepositoriesOf(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<SourceRepositories> {
+  const entries = submodules ?? new Set(await sourceEntries(instanceRoot, submodulesFile(instanceRoot)));
+  const folders = await readOrAbsent(() => listFolders(sourceRootDir(instanceRoot), ignoreSkippedLink), []);
+  const withoutEntry: string[] = [];
+  for (const name of folders) if (!entries.has(name) && await isRepository(join(sourceRootDir(instanceRoot), name))) withoutEntry.push(name);
+  return { submodules: [...entries], withoutEntry };
+}
+
+async function sourceModLinesWritten(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<void> {
+  const file = ignoreListFile(instanceRoot);
+  if (!(await exists(file))) return;
+  const repositories = await sourceRepositoriesOf(instanceRoot, submodules);
+  await putIfChanged(file, (before) => {
+    const after = withSourceModLines(before, repositories);
+    if (after === undefined) throw new Error(`${file} has a source mods marker with no match, so its source mod lines are left as they are`);
+    return after;
+  });
 }
 
 // A hook outside the repository's own git directory would run in every repository that reads it.
@@ -182,18 +202,16 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
           other.push(`the entry of source/${name} could not be removed from ${file}: ${errorMessage(err)}`);
         }
       }
-      const ignoreFile = ignoreListFile(instanceRoot);
-      if (await exists(ignoreFile)) {
-        try {
-          const before = await get(ignoreFile);
-          const after = withSourceModLines(before, [...kept]);
-          if (after === undefined) other.push(`${ignoreFile} has a source mods marker with no match, so its source mod lines are left as they are`);
-          else if (after !== before) await write(ignoreFile, after);
-        } catch (err) {
-          other.push(`${ignoreFile} could not be written: ${errorMessage(err)}`);
-        }
+      try {
+        await sourceModLinesWritten(instanceRoot, kept);
+      } catch (err) {
+        other.push(errorMessage(err));
       }
       return { notes, other };
+    },
+
+    async writeSourceModLines() {
+      if (await isRepository(instanceRoot)) await sourceModLinesWritten(instanceRoot);
     },
 
     sourceHost: (folder) => sourceHostOf(folder).then(

@@ -18,9 +18,7 @@ interface PlacedMods<R> {
   readonly outcome: R | WriteRefused;
   readonly notMade: ReadonlyMap<string, string>;
   readonly notLinked: ReadonlyMap<string, string>;
-  readonly notTakenBack: ReadonlyMap<string, string>;
   readonly notes: readonly string[];
-  readonly withLinesLeft: <T>(refused: readonly ItemRefusal<T>[], modOf: (item: T) => string) => ItemRefusal<T>[];
 }
 
 /** The flow version in git shares (sourceCommands/newRepository.ts, `modsPlaced`), handed in by the composition root. */
@@ -74,11 +72,11 @@ export async function decompileAndRepair(
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
   if (isRefused(placed)) return { applied: false, refusal: placed.message };
-  const { outcome, notMade, notLinked, notTakenBack, notes } = placed;
-  if (isRefused(outcome)) return { applied: false, refusal: [outcome.message, ...notTakenBack.values()].join(' ') };
+  const { outcome, notMade, notLinked, notes } = placed;
+  if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
   const notMadePlugins = plugins.filter(({ origin }) => notMade.has(origin)).map((item) => ({
     item, reason: `${item.origin} is not a source mod, and a source folder cannot be made for it: ${notMade.get(item.origin) ?? ''}`,
   }));
-  const refused = placed.withLinesLeft([...notMadePlugins, ...outcome.refused, ...firstLandedOf(outcome.landed, notLinked)], ({ origin }) => origin);
+  const refused = [...notMadePlugins, ...outcome.refused, ...firstLandedOf(outcome.landed, notLinked)];
   return { applied: true, outcome: { landed: outcome.landed, refused }, ...notes.length === 0 ? {} : { notes } };
 }

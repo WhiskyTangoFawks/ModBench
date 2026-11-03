@@ -415,96 +415,27 @@ describe('sourceCommands versionInGit', () => {
     expect([handed, outcome.refused]).toEqual([[], [{ item: 'ModA', reason: `its '${path.split('/')[0] ?? path}' is where its source folder holds its own` }]]);
   });
 
+  const IGNORE_LIST_VERBS = new Set(['writeSourceModLines','writeHeldWholeLines', 'writeOtherManifestLines']);
+  const ignoreListWrites = (calls: readonly AdapterCall[]) => calls.filter((call) => IGNORE_LIST_VERBS.has(call.verb));
+  const landingA = (client: InMemoryMEditClient, log: string[] = []): void => {
+    client.setCommandHandler('versionInGit', () => {
+      log.push('versionInGit');
+      return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
+    });
+  };
+
   describe('in the instance repository', () => {
     const inInstanceRepository = { where: 'InstanceRepository', commit: true } as const;
-    const sourceFolderLines = (calls: readonly AdapterCall[]) => calls.filter((call) => call.verb === 'writeSourceFolderLines');
 
-    it('lets each source folder into the instance repository before mEdit puts it there', async () => {
+    it('writes nothing in the instance\'s ignore list, so the commit mEdit makes holds only what version in git put under git (plugins.md, Version in git, story 3)', async () => {
       const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
-      const linesWhenSent: unknown[] = [];
-      client.setCommandHandler('versionInGit', (mods) => {
-        linesWhenSent.push(sourceFolderLines(fake.calls), mods.map((mod) => mod.sourceFolder.in));
-        return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
-      });
+      const handed: ModToVersionInGit[] = [];
+      client.setCommandHandler('versionInGit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }); });
 
       await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
 
-      expect(linesWhenSent).toEqual([[{ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: true }], ['InstanceRepository']]);
-      expect(sourceFolderLines(fake.calls)).toHaveLength(1);
-    });
-
-    it('leaves out again the source folder of a mod mEdit refused', async () => {
-      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
-      const client = new InMemoryMEditClient();
-      client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'its plugin is malformed' }] }));
-
-      await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
-
-      expect(sourceFolderLines(fake.calls).at(-1)).toEqual({ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: false });
-    });
-
-    it.each([['answers no mod', undefined], ['cannot take the lines back', 'the ignore list is locked']])(
-      'leaves out again every source folder when mEdit refuses the whole call, and says so when it %s', async (_, takingBackFails) => {
-        const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), {
-          ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true,
-          refusals: (call) => (call.verb === 'writeSourceFolderLines' && !call.held ? takingBackFails : undefined),
-        });
-        const client = new InMemoryMEditClient();
-        client.setCommandHandler('versionInGit', () => Promise.resolve({ refused: true, message: 'git was not found on PATH.' }));
-
-        const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
-
-        expect(sourceFolderLines(fake.calls).at(-1)).toEqual({ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: false });
-        expect(outcome).toEqual({
-          refused: true,
-          message: takingBackFails === undefined
-            ? 'git was not found on PATH.'
-            : 'git was not found on PATH. The ignore list still lets in /source/ModA, which no mod was put in: the ignore list is locked',
-        });
-      });
-
-    it('adds what stays in the ignore list to the reason of the mod it concerns, and of no other', async () => {
-      const [onA, onB] = [hashed({ 'ModA.esp': 'P' }), hashed({ 'ModB.esp': 'Q' }, '/instance/mods/ModB')];
-      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), {
-        folderFiles: new Map([...onA.folderFiles ?? [], ...onB.folderFiles ?? []]), hashes: new Map([...onA.hashes ?? [], ...onB.hashes ?? []]), repositoryOnDisk: true,
-        refusals: (call) => (call.verb === 'writeSourceFolderLines' && !call.held ? 'the ignore list is locked' : undefined),
-      });
-      const client = new InMemoryMEditClient();
-      client.setCommandHandler('versionInGit', () => Promise.resolve({
-        landed: [{ mod: 'ModA', plugins: [] }], refused: [{ item: 'ModB', reason: 'its plugin is malformed.' }],
-      }));
-
-      const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA', 'ModB'], inInstanceRepository);
-
-      expect(outcome).toMatchObject({
-        refused: [
-          { item: 'ModB', reason: 'its plugin is malformed. The ignore list still lets in /source/ModB, which no mod was put in: the ignore list is locked' },
-          { item: 'ModA', reason: expect.not.stringContaining('ignore list') as unknown },
-        ],
-      });
-    });
-
-    it('leaves out again every source folder, and throws what mEdit threw, when the call fails', async () => {
-      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
-      const client = new InMemoryMEditClient();
-      client.setCommandHandler('versionInGit', () => Promise.reject(new Error('the connection dropped')));
-
-      await expect(sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository))
-        .rejects.toThrow('the connection dropped');
-
-      expect(sourceFolderLines(fake.calls).at(-1)).toEqual({ verb: 'writeSourceFolderLines', sourceFolders: ['/source/ModA'], held: false });
-    });
-
-    it('refuses each mod, handing mEdit nothing, when the ignore list cannot let its source folder in', async () => {
-      const { client, handed } = committing();
-      const adapter = modsAt({
-        ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true, refusals: (call) => (call.verb === 'writeSourceFolderLines' ? 'a marker with no match' : undefined),
-      });
-
-      const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
-
-      expect([handed, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: 'a marker with no match' }] }]);
+      expect([handed.map(({ sourceFolder }) => sourceFolder.in), ignoreListWrites(fake.calls)]).toEqual([['InstanceRepository'], []]);
     });
 
     it('refuses the whole selection, writing nothing, while the instance holds no repository', async () => {
@@ -513,7 +444,47 @@ describe('sourceCommands versionInGit', () => {
 
       const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
 
-      expect([handed, sourceFolderLines(fake.calls), outcome]).toEqual([[], [], { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' }]);
+      expect([handed, ignoreListWrites(fake.calls), outcome]).toEqual([[], [], { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' }]);
+    });
+  });
+
+  describe('in a new repository', () => {
+    const inNewRepository = { where: 'NewRepository', commit: true } as const;
+
+    it('leaves each repository it made out of the instance repository once mEdit made it, so none shows there as a nested one', async () => {
+      const log: string[] = [];
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), hashed({ 'ModA.esp': 'P' }));
+      const client = new InMemoryMEditClient();
+      landingA(client, log);
+      const logging = { ...fake.adapter, writeSourceModLines: () => { log.push('writeSourceModLines'); return fake.adapter.writeSourceModLines(); } };
+
+      await sourceCommands({ client, adapter: logging, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inNewRepository);
+
+      expect(log).toEqual(['versionInGit', 'writeSourceModLines']);
+    });
+
+    it('writes nothing in the instance\'s ignore list when mEdit made no repository', async () => {
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), hashed({ 'ModA.esp': 'P' }));
+      const { client } = committing();
+
+      await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inNewRepository);
+
+      expect(ignoreListWrites(fake.calls)).toEqual([]);
+    });
+
+    it('names a mod whose repository the instance\'s ignore list could not leave out, as the commit that happened', async () => {
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), {
+        ...hashed({ 'ModA.esp': 'P' }), refusals: (call) => (call.verb === 'writeSourceModLines' ? 'a marker with no match' : undefined),
+      });
+      const client = new InMemoryMEditClient();
+      landingA(client);
+
+      const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inNewRepository);
+
+      expect(outcome).toMatchObject({
+        landed: [{ mod: 'ModA' }],
+        refused: [{ item: 'ModA', reason: expect.stringMatching(/^was committed, but .*the instance repository's ignore list could not leave its repository out: a marker with no match\.$/) as unknown }],
+      });
     });
   });
 
