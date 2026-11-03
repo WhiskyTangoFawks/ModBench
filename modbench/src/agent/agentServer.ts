@@ -103,6 +103,8 @@ A plugin with source is a text file in a repository: edit it with your file tool
 
 A SELECT reads only the views: select_rows says which.
 
+Read Nexus yourself where it needs no key: its GraphQL endpoint, https://api.nexusmods.com/v2/graphql, answers mod search by name, a mod's requirements, its files with their IDs and changelogs, and MD5 lookup. A fetch of a nexusmods.com page is refused with a Cloudflare challenge.
+
 Ask Modbench what the files cannot answer.`;
 
 const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'sourceLanguage'];
