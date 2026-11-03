@@ -787,8 +787,8 @@ export interface InstanceAdapter extends DataFileReads {
   /** The `folders` git holds whole: a new file in one would not be ignored and no file in it is. Not one outside the
    *  instance or through a symlink; none without a repository. Rejects when git cannot list the instance. */
   foldersHeldWhole(folders: readonly string[]): Promise<ReadonlySet<string>>;
-  /** The files git holds in each of `folders`, by path in it: one it tracks, or a new one it does not ignore. None outside
-   *  the instance or through a symlink, unless the folder is a repository. Rejects when git cannot list a repository. */
+  /** The files git holds in each of `folders`, by path in it: tracked, or new and not ignored. None outside the instance
+   *  or through a symlink, unless the folder is a repository. */
   filesHeldByGit(folders: readonly string[]): Promise<ReadonlyMap<string, readonly string[]>>;
   /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`, less the
    *  files git holds there. */
