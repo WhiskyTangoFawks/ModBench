@@ -110,6 +110,19 @@ describe('the MO2 adapter\'s repository', () => {
         .toEqual(['masterlist.yaml', 'prelude.yaml', 'userlist.yaml']);
     });
 
+    it('lets the repository hold each separator\'s folder by its metadata, which a clone needs, and no mod\'s metadata', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await put('mods/Group [1]_separator/meta.ini', '[General]\r\n');
+      await put('mods/Group [1]_separator/notes.txt');
+      await put('mods/Mod A/meta.ini', '[General]\r\n');
+
+      await adapter.writeIgnoreList();
+
+      expect(runGit('status', '--porcelain', '--untracked-files=all', '--', 'mods').split('\n').filter((line) => line !== '').map((line) => line.slice(3)))
+        .toEqual(['"mods/Group [1]_separator/meta.ini"']);
+    });
+
     it('takes back only its own lines, keeping a line another program added after them', async () => {
       const adapter = await instance();
       await put('.gitignore', 'mine\n');
