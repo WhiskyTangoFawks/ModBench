@@ -227,7 +227,11 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
 
     commitFolder: async (folder, message) => {
       const names = namesIn(modsDir(instanceRoot), [folder]);
-      await commitFolder(instanceRoot, folder, message, (list) => withHeldWholeLines(list, names, true));
+      await commitFolder(instanceRoot, folder, message, (list) => {
+        const lines = withHeldWholeLines(list, names, true);
+        if (lines === undefined) throw new Error('the .gitignore HEAD holds has a marker of the mod folders held whole with no match, so the lines that let the folder in cannot be committed');
+        return lines;
+      });
     },
   };
 }

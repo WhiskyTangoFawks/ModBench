@@ -12,7 +12,7 @@ import { adapterOver, managerOver } from '../../../test/mo2/adapterOver';
 import type { GamePlace } from '../../instanceAdapter';
 import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
-import { whitelistIgnoreList, withSourceModLines } from '../layout';
+import { whitelistIgnoreList, withHeldWholeLines, withSourceModLines } from '../layout';
 import { BUILD_FILE } from '../../../wire/sourceMod';
 
 let root: string;
@@ -584,24 +584,37 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
-    it('is committed with the lines that let it in, and no other line of the ignore list', async () => {
+    async function committed(ignoreList: string): Promise<Awaited<ReturnType<typeof instance>>> {
       const adapter = await instance();
       runGit('init', '--quiet');
       runGit('config', 'user.name', 't');
       runGit('config', 'user.email', 't@t');
-      await adapter.writeIgnoreList();
+      await put('.gitignore', ignoreList);
       runGit('add', '.gitignore');
       runGit('commit', '--quiet', '-m', 'Base');
-      await writeFile(join(root, '.gitignore'), `${await readFile(join(root, '.gitignore'), 'utf8')}mine\n`);
+      return adapter;
+    }
+
+    it('is committed with the lines that let it in, and no other line of the ignore list', async () => {
+      const adapter = await committed(whitelistIgnoreList(undefined));
+      await put('.gitignore', `${whitelistIgnoreList(undefined)}mine\n`);
       const held = await modFolder('Mod [A]');
       await adapter.writeHeldWholeLines([held], true);
 
       await adapter.commitFolder(held, 'Init Mod [A]');
 
-      const committed = runGit('show', 'HEAD:.gitignore');
-      expect([committed, runGit('ls-tree', '-r', '--name-only', 'HEAD', '--', 'mods').split('\n').filter(Boolean)]).toEqual([
-        (await readFile(join(root, '.gitignore'), 'utf8')).replace('mine\n', ''), ['mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/meta.ini', 'mods/Mod [A]/textures/a.dds'],
-      ]);
+      expect(runGit('show', 'HEAD:.gitignore')).toBe((await readFile(join(root, '.gitignore'), 'utf8')).replace('mine\n', ''));
+    });
+
+    it('is refused, committing nothing, naming the ignore list, when the one HEAD holds has an unpaired marker', async () => {
+      const unpaired = (withHeldWholeLines(whitelistIgnoreList(undefined), ['Other'], true) ?? '').trimEnd().split('\n').slice(0, -1).join('\n');
+      const adapter = await committed(`${unpaired}\n`);
+      await put('.gitignore', whitelistIgnoreList(undefined));
+      const held = await modFolder('Mod [A]');
+      await adapter.writeHeldWholeLines([held], true);
+
+      await expect(adapter.commitFolder(held, 'Init Mod [A]')).rejects.toThrow('.gitignore HEAD holds');
+      expect(runGit('log', '--format=%s').trim()).toBe('Base');
     });
   });
 
