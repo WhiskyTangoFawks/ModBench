@@ -24,17 +24,17 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
     {
         var provided = ProvidedBy(loadOrder, toCommit.Name);
 
-        if (source.IsSourceMod(toCommit.Repository.SourceFolder))
+        if (source.IsSourceMod(toCommit.SourceFolder.Path))
         {
             return Refused(VersionInGitRefusal.AlreadyInitialized,
-                $"'{toCommit.Repository.SourceFolder}' is already a source mod's source folder. To put a plugin's source into its working tree, decompile it.");
+                $"'{toCommit.SourceFolder.Path}' is already a source mod's source folder. To put a plugin's source into its working tree, decompile it.");
         }
 
         // A .git with no main that Modbench did not make is someone else's, never written to (ADR-0003).
-        if (source.HoldsAnotherRepository(toCommit.Repository.SourceFolder))
+        if (source.HoldsAnotherRepository(toCommit.SourceFolder.Path))
         {
             return Refused(VersionInGitRefusal.AlreadyInitialized,
-                $"'{toCommit.Repository.SourceFolder}' already holds a repository with no main branch, made outside Modbench.");
+                $"'{toCommit.SourceFolder.Path}' already holds a repository with no main branch, made outside Modbench.");
         }
 
         var verified = new List<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)>();
@@ -72,7 +72,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
         }
 
         setPhase(VersionInGitPhase.Committing);
-        List<FileToCopy> assets = [.. toCommit.Repository.Assets.Select(path => new FileToCopy(path, () => modFolders.OpenFile(toCommit.ModFolder, path)))];
+        List<FileToCopy> assets = [.. toCommit.SourceFolder.Assets.Select(path => new FileToCopy(path, () => modFolders.OpenFile(toCommit.ModFolder, path)))];
         if (Commit(toCommit, verified, assets, repair) is { } failure)
         {
             logger.LogWarning("Refused to version {Mod} in git: {Reason}", toCommit.Name, failure.Reason);
@@ -93,15 +93,15 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
     private SourceFailure? Commit(
         ModToVersionInGit toCommit, List<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> verified, List<FileToCopy> assets, RepairedInInit? repair)
     {
-        var made = toCommit.Repository;
+        var made = toCommit.SourceFolder;
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Initializing {SourceFolder} in {Repository} with {PluginCount} plugin(s), {FileCount} source files and {AssetCount} asset(s)",
-                made.SourceFolder, toCommit.In, verified.Count, verified.Sum(v => v.Tree.Count), assets.Count);
+                made.Path, made.In, verified.Count, verified.Sum(v => v.Tree.Count), assets.Count);
         }
 
         return source.Init(
-            made.SourceFolder, made.BuildFile, verified, assets, toCommit.Commit, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null,
-            made.Manifest, made.Ignored ?? [], toCommit.In);
+            made.Path, made.BuildFile, verified, assets, toCommit.Commit, repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null,
+            made.Manifest, made.Ignored ?? [], made.In);
     }
 }

@@ -72,10 +72,10 @@ internal static class Wire
                 name,
                 modFolder = client.ModFolderSentFor(name),
                 commit = true,
-                @in = "NewRepository",
-                repository = new
+                sourceFolder = new
                 {
-                    sourceFolder = client.SourceFolderSentFor(name),
+                    path = client.SourceFolderSentFor(name),
+                    @in = "NewRepository",
                     assets = Array.Empty<string>(),
                     buildFile = "{\"files\": []}",
                 },

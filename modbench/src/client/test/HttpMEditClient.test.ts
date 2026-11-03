@@ -175,7 +175,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
 }
 
 const modToVersionInGit = (name: string) => ({
-  name, modFolder: `/instance/mods/${name}`, commit: true, repository: { sourceFolder: `/instance/source/${name}`, assets: ['a.dds'], buildFile: '{}' },
+  name, modFolder: `/instance/mods/${name}`, commit: true, sourceFolder: { path: `/instance/source/${name}`, in: 'NewRepository' as const, assets: ['a.dds'], buildFile: '{}' },
 });
 const modToBuild = (name: string) => ({
   name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, exclude: ['b.dds'], step: { pack: [{ path: `${name}.ba2`, files: ['a.dds'] }] },
@@ -275,10 +275,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
       reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.' }] },
       path: '/plugins/decompile', body: { plugins: [first, second], force: true } },
-    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, newRepository: modToVersionInGit('ModA').repository }], false),
+    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], false),
       answer: { applied: [first], refused: [] },
       reads: { landed: [first], refused: [] },
-      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, newRepository: modToVersionInGit('ModA').repository }], force: false } },
+      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], force: false } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
       answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },
       path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },

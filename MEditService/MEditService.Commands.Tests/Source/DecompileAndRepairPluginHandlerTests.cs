@@ -3,6 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -79,6 +80,23 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecompileAndRepair_InAModWithNoRepository_AskedForTheModlistRepository_CommitsItsSourceFolderThere_AndMakesNoRepositoryOfItsOwn()
+    {
+        var modlistRepository = Path.Combine(_root, ".git");
+        GitProbe.Run(modlistRepository, _root, "init", "-q", "-b", "main");
+        GitProbe.Run(modlistRepository, _root, "config", "user.name", "Test");
+        GitProbe.Run(modlistRepository, _root, "config", "user.email", "test@localhost");
+        var plugin = AddToNewMod(Lossless.Malformed);
+        var sourceFolder = Path.Combine(_root, "source", NewModName);
+
+        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder, SourceModIn.ModlistRepository)));
+
+        Assert.Equal([plugin], result.Applied);
+        Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_root, 3));
+        Assert.Contains($"source/{NewModName}/plugin-source/{Malformed}/", Git(_root, "ls-tree", "-r", "--name-only", "HEAD"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DecompileAndRepair_OfTwoMalformedPluginsOfAModWithNoRepository_LandsBoth()
     {
         var first = AddToNewMod(Lossless.Malformed);
@@ -95,7 +113,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfTwoPluginsOfAModWithNoRepository_TheSecondRefused_SaysTheNewRepositoryHoldsNoSourceForIt()
+    public async Task DecompileAndRepair_OfTwoPluginsOfAModWithNoRepository_TheSecondRefused_SaysTheSourceFolderMadeHoldsNoSourceForIt()
     {
         var first = AddToNewMod(Lossless.Malformed);
         var second = AddToNewMod(NoRepairFixture.Malformed with { FileName = "NoRepair.esp" });
@@ -106,7 +124,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal([first], result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal((second, DecompileAndRepairRefusal.NoRepair), (refused.Item, refused.Refusal));
-        Assert.EndsWith("The repository made for its mod holds no source for it.", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith("The source folder made for its mod holds no source for it.", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -202,7 +220,9 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     private PluginToRepair ToRepair(PluginAddress plugin) => new(plugin, MadeIn(_newMod));
 
-    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.BuildFile);
+    private static SourceFolderContents MadeIn(string folder, params string[] assets) => MadeIn(folder, SourceModIn.NewRepository, assets);
+
+    private static SourceFolderContents MadeIn(string folder, SourceModIn heldIn, params string[] assets) => new(folder, heldIn, assets, SourceInits.BuildFile);
 
     private string StrayFile()
     {

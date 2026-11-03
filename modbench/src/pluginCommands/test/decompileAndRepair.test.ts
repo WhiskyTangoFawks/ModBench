@@ -6,29 +6,44 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { MEditClient } from '../../client';
+import { isRefused, type MEditClient, type PluginAddress, type SourceModIn } from '../../client';
+import type { PlaceMods } from '../decompileAndRepair';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
+const OTHER = { name: 'Other.esp', origin: 'Quay' };
 const REFUSED = { item: { name: 'Clean.esp', origin: 'Harbor' }, reason: 'Clean.esp is not malformed.' };
-const MADE = { modFolder: '/mods/Harbor', repository: { sourceFolder: '/source/Harbor', assets: ['a.dds'], buildFile: '{}' } };
+const MADE = { modFolder: '/mods/Harbor', sourceFolder: { path: '/source/Harbor', in: 'NewRepository' as const, assets: ['a.dds'], buildFile: '{}' } };
+
+interface Placing {
+  notMade: Record<string, string>;
+  notLinked: Record<string, string>;
+  notTakenBack: Record<string, string>;
+  whole: string | undefined;
+}
 
 describe('decompileAndRepair', () => {
   let client: InMemoryMEditClient;
-  let made: typeof MADE | { refusal: string };
-  let linked: string[];
-  let notLinked: string | undefined;
-  const repairIn = (sourceMods: Record<string, string>, force = false) => {
-    const newRepositories = {
-      of: (mod: string) => Promise.resolve(mod === 'Harbor' ? made : { refusal: 'unasked' }),
-      notLinked: (madeFor: ReadonlyMap<string, unknown>, committed: readonly string[]) => {
-        linked.push(...committed.filter((mod) => madeFor.has(mod)));
-        const why = notLinked;
-        return Promise.resolve(new Map(why === undefined ? [] : committed.map((mod) => [mod, why] as const)));
-      },
+  let placing: Placing;
+  let requests: { readonly mods: readonly string[]; readonly where: SourceModIn }[];
+  let asked: number;
+  let picked: SourceModIn | undefined;
+
+  const placeMods: PlaceMods = async (request, run, landedBy) => {
+    requests.push(request);
+    const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where } }]));
+    if (placing.whole !== undefined) return { refused: true, message: placing.whole };
+    const outcome = await run(made);
+    const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
+    const left = new Map(Object.entries(placing.notTakenBack));
+    return {
+      outcome, notMade: new Map(Object.entries(placing.notMade)), notTakenBack: left,
+      notLinked: new Map(Object.entries(placing.notLinked).filter(([mod]) => landed.has(mod))),
+      withLinesLeft: (refused, modOf) => refused.map((entry) => ({ ...entry, reason: [entry.reason, left.get(modOf(entry.item))].filter(Boolean).join(' ') })),
     };
-    return pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(sourceMods) })).adapter, client, newRepositories)
-      .decompileAndRepair([MALFORMED], force);
   };
+  const repairIn = (sourceMods: Record<string, string>, force = false, plugins: readonly PluginAddress[] = [MALFORMED]) =>
+    pluginCommandsWith(fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(sourceMods) })).adapter, client, placeMods)
+      .decompileAndRepair(plugins, force, () => { asked += 1; return Promise.resolve(picked); });
   const sent = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => call.args);
   const landingEach: MEditClient['decompileAndRepair'] = (plugins) => Promise.resolve({
     landed: plugins.map(({ plugin }) => plugin),
@@ -38,48 +53,75 @@ describe('decompileAndRepair', () => {
   beforeEach(() => {
     client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndRepair', landingEach);
-    made = MADE;
-    linked = [];
-    notLinked = undefined;
+    placing = { notMade: {}, notLinked: {}, notTakenBack: {}, whole: undefined };
+    requests = [];
+    asked = 0;
+    picked = 'NewRepository';
   });
 
-  it('repairs each plugin, a mod with no repository handed the one version in git makes', async () => {
+  it('repairs each plugin, a mod that is not a source mod handed the source folder made for it', async () => {
     expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [REFUSED] } });
-    expect(sent()).toEqual([[[{ plugin: MALFORMED, newRepository: MADE.repository }], true]]);
+    expect(sent()).toEqual([[[{ plugin: MALFORMED, sourceFolder: MADE.sourceFolder }], true]]);
   });
 
-  it('makes a repaired mod with no repository a source mod: its folder\'s manifest names the one made (source.md, Decompile and repair, story 4)', async () => {
-    await repairIn({}, true);
+  it('asks where git holds the mods that are not source mods once, and places them there (source.md, Decompile and repair, story 4)', async () => {
+    picked = 'ModlistRepository';
 
-    expect(linked).toEqual(['Harbor']);
+    await repairIn({}, true, [MALFORMED, OTHER, { name: 'Second.esp', origin: 'Harbor' }]);
+
+    expect([asked, requests]).toEqual([1, [{ mods: ['Harbor', 'Quay'], where: 'ModlistRepository' }]]);
   });
 
-  it('names a repaired mod whose folder\'s manifest could not name its repository', async () => {
-    notLinked = 'its manifest could not name its repository: EACCES';
+  it('does not ask where when every plugin is in a source mod, and hands the plugin alone', async () => {
+    await repairIn({ Harbor: '/source/Harbor' }, false);
+
+    expect([asked, requests, sent()]).toEqual([0, [{ mods: [], where: 'NewRepository' }], [[[{ plugin: MALFORMED }], false]]]);
+  });
+
+  it('changes nothing when the pick is dismissed', async () => {
+    picked = undefined;
+
+    expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
+    expect([sent(), requests]).toEqual([[], []]);
+  });
+
+  it('names a repaired mod whose folder could not be linked, as the repair that happened', async () => {
+    placing.notLinked = { Harbor: 'its manifest could not name its repository: EACCES' };
 
     expect(await repairIn({}, true)).toEqual({ applied: true, outcome: {
       landed: [MALFORMED], refused: [REFUSED, { item: MALFORMED, reason: 'was repaired, but its manifest could not name its repository: EACCES.' }],
     } });
   });
 
-  it('hands a mod a repository builds no new one, and links nothing', async () => {
-    await repairIn({ Harbor: '/source/Harbor' }, true);
+  it('refuses a plugin whose mod no source folder can be made for, naming why, and repairs nothing for it', async () => {
+    placing.notMade = { Harbor: 'its metadata could not be read: EACCES' };
 
-    expect([sent(), linked]).toEqual([[[[{ plugin: MALFORMED }], true]], []]);
-  });
-
-  it('sends the force it was given', async () => {
-    await repairIn({ Harbor: '/source/Harbor' }, false);
-
-    expect(sent().map(([, force]) => force)).toEqual([false]);
-  });
-
-  it('refuses a plugin whose mod has no repository and cannot be given one, naming why, and repairs nothing for it', async () => {
-    made = { refusal: 'its metadata could not be read: EACCES' };
-
-    const outcome = await repairIn({}, true);
-
-    expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: MALFORMED, reason: 'Harbor has no repository, and one cannot be made: its metadata could not be read: EACCES' }] } });
+    expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: MALFORMED, reason: 'Harbor has no repository, and one cannot be made: its metadata could not be read: EACCES' }] } });
     expect(sent()).toEqual([]);
+  });
+
+  it('refuses the whole gesture, repairing nothing, when placing the mods does', async () => {
+    placing.whole = 'The instance holds no repository to put a mod in: git init makes one.';
+
+    expect(await repairIn({}, true)).toEqual({ applied: false, refusal: placing.whole });
+    expect(sent()).toEqual([]);
+  });
+
+  it('adds what stays in the ignore list to the reason of the plugins of the mod it concerns only', async () => {
+    placing.notTakenBack = { Quay: 'The ignore list still lets in /source/Quay.' };
+    client.setCommandHandler('decompileAndRepair', (plugins) => Promise.resolve({
+      landed: [], refused: plugins.map(({ plugin }) => ({ item: plugin, reason: 'refused.' })),
+    }));
+
+    expect(await repairIn({}, true, [MALFORMED, OTHER])).toEqual({ applied: true, outcome: { landed: [], refused: [
+      { item: MALFORMED, reason: 'refused.' }, { item: OTHER, reason: 'refused. The ignore list still lets in /source/Quay.' },
+    ] } });
+  });
+
+  it('says what stays in the ignore list when mEdit refuses the whole repair', async () => {
+    placing.notTakenBack = { Harbor: 'The ignore list still lets in /source/Harbor.' };
+    client.setCommandHandler('decompileAndRepair', () => Promise.resolve({ refused: true, message: 'mEdit is busy.' }));
+
+    expect(await repairIn({}, true)).toEqual({ applied: false, refusal: 'mEdit is busy. The ignore list still lets in /source/Harbor.' });
   });
 });

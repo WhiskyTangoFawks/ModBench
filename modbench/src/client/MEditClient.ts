@@ -153,11 +153,11 @@ export interface VersionInGitOutcome {
  *  has none. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
-/** A mod to version in git, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
+/** A mod to version in git, and the source folder made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
 export type ModToVersionInGit = components['schemas']['ModToVersionInGitRequest'];
 
-/** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
-export type NewRepository = components['schemas']['NewRepositoryRequest'];
+/** The source folder made for a mod, the repository that holds it, its assets by path in the mod folder, and its manifest. */
+export type SourceFolderRequest = components['schemas']['SourceFolderRequest'];
 
 /** Which repository holds the source folder version in git makes: a new one of its own, or the modlist repository. */
 export type SourceModIn = components['schemas']['SourceModIn'];

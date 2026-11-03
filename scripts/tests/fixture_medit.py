@@ -167,9 +167,9 @@ def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
 
 def version_in_git(fixture: Fixture, mod: str) -> None:
     call('POST', fixture.url + '/version-in-git', {'mods': [{
-        'name': mod, 'modFolder': str(fixture.instance / 'mods' / mod), 'commit': True, 'in': 'NewRepository',
-        'repository': {
-            'sourceFolder': str(source_folder(fixture.instance, mod)), 'assets': [],
+        'name': mod, 'modFolder': str(fixture.instance / 'mods' / mod), 'commit': True,
+        'sourceFolder': {
+            'path': str(source_folder(fixture.instance, mod)), 'in': 'NewRepository', 'assets': [],
             'buildFile': json.dumps({'output': mod})}}]})
 
 

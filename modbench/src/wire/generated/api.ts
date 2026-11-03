@@ -1366,9 +1366,8 @@ export interface components {
         ModToVersionInGitRequest: {
             name: string;
             modFolder: string;
-            repository: components["schemas"]["NewRepositoryRequest"];
+            sourceFolder: components["schemas"]["SourceFolderRequest"];
             commit?: boolean | null;
-            in?: components["schemas"]["SourceModIn"] | null;
         };
         ModlistProgress: {
             mod?: string | null;
@@ -1391,14 +1390,6 @@ export interface components {
             plugin?: components["schemas"]["PluginAddress"] | null;
             formKey?: string | null;
             editorId?: string | null;
-        };
-        NewRepositoryRequest: {
-            sourceFolder: string;
-            assets?: string[] | null;
-            buildFile: string;
-            manifestFile?: string | null;
-            manifest?: string | null;
-            ignored?: string[] | null;
         };
         NotificationEvent: {
             kind: string;
@@ -1509,7 +1500,7 @@ export interface components {
         };
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
-            newRepository?: components["schemas"]["NewRepositoryRequest"] | null;
+            sourceFolder?: components["schemas"]["SourceFolderRequest"] | null;
         };
         ProblemDetails: {
             type?: string | null;
@@ -1684,6 +1675,15 @@ export interface components {
         SetPluginFileFlagsResult: {
             applied: components["schemas"]["PluginFileFlagsSet"][];
             refused: components["schemas"]["PluginFileFlagRefused"][];
+        };
+        SourceFolderRequest: {
+            path: string;
+            in?: components["schemas"]["SourceModIn"] | null;
+            assets?: string[] | null;
+            buildFile: string;
+            manifestFile?: string | null;
+            manifest?: string | null;
+            ignored?: string[] | null;
         };
         /** @enum {string} */
         SourceModIn: "NewRepository" | "ModlistRepository";
