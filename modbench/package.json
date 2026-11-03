@@ -751,6 +751,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.downloadedFile.download",
+        "title": "Download File from Nexus",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.downloadedFile.exclude",
         "title": "Exclude Downloaded File",
         "category": "Modbench"
@@ -967,6 +972,10 @@
         {
           "command": "modbench.downloadedFile.queryInfo",
           "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsFile && modbench.nexus.loggedIn"
+        },
+        {
+          "command": "modbench.downloadedFile.download",
+          "when": "modbench.folder == instance && modbench.nexus.premium"
         },
         {
           "command": "modbench.downloadedFile.exclude",

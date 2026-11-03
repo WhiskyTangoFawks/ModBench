@@ -55,15 +55,15 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerNexusCommands } from '../nexusCommands';
-import { LOGGED_IN_KEY } from '../../test/manifest';
+import { LOGGED_IN_KEY, PREMIUM_KEY } from '../../test/manifest';
 import { nexusLogin } from '../../instanceCommands/nexusLogin';
-import { acceptingGoodKey, GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
+import { acceptingGoodKey, GOOD_KEY, json, nexusAnswering } from '../../nexus/test/nexusDouble';
 import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { present } from '../../ports/present';
 
-function registered(secretsFail?: 'get' | 'delete') {
-  const over = nexusAnswering(acceptingGoodKey);
+function registered(secretsFail?: 'get' | 'delete', account?: Response) {
+  const over = nexusAnswering(account === undefined ? acceptingGoodKey : () => account);
   if (secretsFail === 'get') over.secrets.get = () => Promise.reject(new Error('keyring locked'));
   if (secretsFail === 'delete') over.secrets.delete = () => Promise.reject(new Error('keyring locked'));
   const { reporter, reporterFor, tags } = tagRecordingReporterFor();
@@ -137,17 +137,18 @@ describe('Log in', () => {
     expect(reporter.shownFailures).toEqual([]);
   });
 
-  it('sends one request for a key accepted twice while the check is in flight', async () => {
+  it('validates a key accepted twice while the check is in flight once, and asks once more whether it is Premium', async () => {
     const { sent } = registered();
     const { box } = openPrompt();
     box.value = GOOD_KEY;
 
     await Promise.all([box.accept(), box.accept()]);
 
-    expect(sent).toHaveLength(1);
+    await vi.waitFor(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
+    expect(sent).toHaveLength(2);
   });
 
-  it('sends one request for the key it accepts, closes the prompt, and marks the user logged in', async () => {
+  it('validates the key it accepts once, closes the prompt, and marks the user logged in', async () => {
     const { sent } = registered();
     const { box, done } = openPrompt();
     box.value = GOOD_KEY;
@@ -155,8 +156,18 @@ describe('Log in', () => {
     await box.accept();
     await done;
 
-    expect(sent).toHaveLength(1);
     await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
+    await vi.waitFor(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
+    expect(sent).toHaveLength(2);
+  });
+});
+
+describe('Premium', () => {
+  it.each([[true], [false]])('marks the user as Premium when Nexus says so: %s', async (premium) => {
+    const { nexus } = registered(undefined, json({ is_premium: premium }));
+    await nexus.keep(GOOD_KEY);
+
+    await vi.waitFor(() => expect(contextKeys.get(PREMIUM_KEY)).toBe(premium));
   });
 });
 
