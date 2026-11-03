@@ -27,7 +27,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     managerNames: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     managerRunning: { kind: 'notRunning' },
     gameName: 'Fallout 4',
-    gameRelease: 'Fallout4',
+    blueprintLoadsLast: false,
     nexusDomainOf: nexusDomainForMetaGame,
     entryKey,
     gameFolder: GAME_FOLDER_NOT_FOUND,

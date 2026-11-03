@@ -214,9 +214,8 @@ export function blueprintLoadsLastIn(release: string | undefined): boolean {
   return (release === undefined ? undefined : GAME_PATHS[release])?.blueprintLoadsLast === true;
 }
 
-/** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's listing
- *  order, none for a release the table holds no row for, then those its Creation Club list names. The
- *  order the game loads in is `inGameOrder`'s. */
+/** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's
+ *  listing order (none for an unknown release), then the Creation Club list's. */
 export function loadedWithNoLineOf(release: string | undefined, creationClubList: readonly string[]): readonly string[] {
   const masters = (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
   return [...masters, ...creationClubList];
