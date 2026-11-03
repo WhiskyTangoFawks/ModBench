@@ -4,6 +4,7 @@ import { failureReason, isReadFailed } from '../wire/readFailed';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
 const RECHECK_MS = 250;
+const NOT_YET_ANSWERABLE: ReadonlySet<string> = new Set(['refused', 'no-load-order']);
 
 interface Deps {
   client: Pick<MEditClient, 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -43,6 +44,7 @@ export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly st
 }
 
 function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClient['getPluginIndexing']>>): Verdict {
+  if (isReadFailed(answer) && NOT_YET_ANSWERABLE.has(answer.failed)) return { kind: 'waiting' };
   if (isReadFailed(answer)) return { kind: 'failed', why: `plugin ${plugin.name} (${failureReason(answer)})` };
   if (answer.state === 'AsOnDisk') return { kind: 'done' };
   if (answer.state === 'ReadFailed') return { kind: 'failed', why: `plugin ${plugin.name} could not be read: ${answer.reason ?? 'mEdit gave no reason'}` };

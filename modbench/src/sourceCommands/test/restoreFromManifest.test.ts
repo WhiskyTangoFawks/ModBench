@@ -652,7 +652,7 @@ describe('restore from manifest', () => {
     });
 
     it.each([
-      ['cannot be answered of by mEdit', { failed: 'refused', refusal: 'mEdit cannot say.' } as const, 0, 'was restored, but plugin C.esp (mEdit cannot say.)'],
+      ['is not answered of by mEdit', { failed: 'timed-out', cause: 'mEdit cannot say.' } as const, 0, 'was restored, but plugin C.esp (mEdit cannot say.)'],
       ['could not be read by mEdit', { state: 'ReadFailed', reason: 'C.esp is not a plugin.' } as const, 0, 'was restored, but plugin C.esp could not be read: C.esp is not a plugin.'],
     ])('names a mod whose plugin %s, and restores the source mod after it', async (_case, indexing, wait, reason) => {
       const { restore, client } = await aSourceModAfterTwoMods();
@@ -665,6 +665,21 @@ describe('restore from manifest', () => {
       expect(await outcome).toEqual({
         landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }, { mod: 'ModA', written: [], namedByNoLine: [] }], refused: [{ item: 'ModC', reason }],
       });
+    });
+
+    it('waits while mEdit says a read is not yet answerable', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { failed: 'no-load-order' });
+      let ended = false;
+
+      const outcome = restore(['ModA', 'ModB', 'ModC']).finally(() => { ended = true; });
+      await waiting(client);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const endedBeforeIndexed = ended;
+      client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
+      client.emit(loadOrderStatusEventFixture());
+
+      expect([endedBeforeIndexed, (await outcome).refused]).toEqual([false, []]);
     });
 
     it('waits on no mod before a mod that is not a source mod', async () => {

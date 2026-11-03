@@ -97,9 +97,29 @@ describe('sourceCommands build, between mods', () => {
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });
 
-  it('lands a mod whose plugin mEdit cannot say of, naming why, and refuses the mods after it', async () => {
+  it.each([
+    ['refused', { failed: 'refused', refusal: 'mEdit cannot say yet.' }],
+    ['no-load-order', { failed: 'no-load-order' }],
+  ] as const)('keeps waiting while mEdit answers %s, a read not yet answerable', async (_kind, answer) => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
-    client.setQueryAnswer('getPluginIndexing', { failed: 'refused', refusal: 'mEdit cannot say.' });
+    client.setQueryAnswer('getPluginIndexing', answer);
+
+    const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    for (let minute = 0; minute < 3; minute++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.waitFor(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
+    }
+    expect(builtMods(client)).toEqual(['ModB']);
+    client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
+    client.emit(loadOrderStatusEventFixture());
+
+    expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
+  });
+
+  it.each(['no-answer', 'timed-out', 'unreachable', 'unreadable', 'local'] as const)('lands a mod whose plugin read failed as %s, naming why, and refuses the mods after it', async (failed) => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+    client.setQueryAnswer('getPluginIndexing', { failed, cause: 'mEdit cannot say.' });
 
     const outcome = built();
     await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
