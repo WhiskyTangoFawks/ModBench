@@ -1297,6 +1297,15 @@ describe('the agent server, running a gesture', () => {
       options: { name: 'Lone.esp' },
     },
     {
+      name: 'plugin_load_after carries the plugins as its Argument and the file names they load after as an Option',
+      value: PLUGGED,
+      tool: 'plugin_load_after',
+      args: { argument: [{ name: 'Solo.esp' }], options: { after: [{ name: 'Same.esp' }] } },
+      command: 'modbench.plugin.loadAfter',
+      argument: [SOLO],
+      options: { after: [{ name: 'Same.esp' }] },
+    },
+    {
       name: 'separator_add anchors on a mod',
       value: CONFLICTED,
       tool: 'separator_add',
@@ -1685,6 +1694,15 @@ describe('the agent server, running a gesture', () => {
 
       expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'Could not move plugins.', detail: 'A.esp is a master.' }) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
+    });
+
+    it('refuses a load after that names an origin, which LOOT does not key a rule by, firing nothing', async () => {
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'plugin_load_after', { argument: [{ name: 'Solo.esp' }], options: { after: [{ name: 'Same.esp', origin: 'ModA' }] } });
+
+      expect(answer.isError).toBe(true);
+      expect(fired.calls).toEqual([]);
     });
 
     it('refuses a create that leaves out its argument, naming it', async () => {

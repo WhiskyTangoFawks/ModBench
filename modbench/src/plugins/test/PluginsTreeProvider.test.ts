@@ -855,11 +855,11 @@ describe('PluginsTreeProvider — the places a load after offers are the active 
   it('offers each enabled line outside the selection, in the order the view shows them', () => {
     const tree = treeOf();
 
-    expect(tree.loadAfterPlaces(['B.esp'])).toEqual(['A.esp', 'D.esp']);
+    expect(tree.loadAfterPlaces(['B.esp'])).toEqual(['Fallout4.esm', 'A.esp', 'D.esp']);
 
     tree.setViewDirection('winningAtTop');
 
-    expect(tree.loadAfterPlaces(['b.ESP'])).toEqual(['D.esp', 'A.esp']);
+    expect(tree.loadAfterPlaces(['b.ESP'])).toEqual(['D.esp', 'A.esp', 'Fallout4.esm']);
   });
 });
 

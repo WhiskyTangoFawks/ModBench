@@ -50,7 +50,7 @@ export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
   commands: PluginCommands;
-  writeRules: LoadAfterDeps['writeRules'];
+  changeUserlist: LoadAfterDeps['changeUserlist'];
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
@@ -177,7 +177,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
       userlistPath: () => tree.userlistPath(), moves: () => tree.facts.rows.suggestedMoves(),
     }), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     registerLoadAfterCommand({
-      writeRules: deps.writeRules, instance, reporter: reporterFor('pluginListTree.loadAfter'), places: (names) => tree.loadAfterPlaces(names),
+      changeUserlist: deps.changeUserlist, instance, reporter: reporterFor('pluginListTree.loadAfter'), places: (names) => tree.loadAfterPlaces(names),
     }, selected.rows),
     registerApplySuggestedMoveCommand({
       commands, instance, reporter: reporterFor('pluginListTree.applySuggestedMove'), movesOf: (plugin) => tree.facts.rows.suggestedMovesOf(plugin),

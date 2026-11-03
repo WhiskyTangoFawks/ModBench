@@ -256,8 +256,8 @@ const APPLY_SUGGESTED_MOVE = gestureInput(
 );
 
 const LOAD_AFTER = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { after: the plugins they load after, [{ name, origin? }] as list_plugins shows them }`,
-  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ after: z.array(PLUGIN_NAME) }) }),
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { after: the plugin file names they load after, [{ name }] }`,
+  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ after: z.array(z.object({ name: z.string() }).strict()) }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 

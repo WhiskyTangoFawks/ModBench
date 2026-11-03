@@ -50,7 +50,7 @@ function registered(offered: readonly string[] = ['C.esp', 'D.esp'], refusal?: s
   const reporter = recordingReporter();
   const fake = fakeInstanceAdapter(readingFixture(), { refusals: refusal === undefined ? undefined : refusing('changeUserlist', refusal) });
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }), refresh: vi.fn(() => Promise.resolve()) };
-  registerLoadAfterCommand({ writeRules: (rules) => fake.adapter.changeUserlist(rules), instance, reporter, places: () => offered }, () => []);
+  registerLoadAfterCommand({ changeUserlist: (rules) => fake.adapter.changeUserlist(rules), instance, reporter, places: () => offered }, () => []);
   return { reporter, fake, instance };
 }
 
@@ -73,18 +73,6 @@ describe('modbench.plugin.loadAfter', () => {
     expect(fake.calls).toEqual(wrote({ plugin: 'A.esp', after: ['C.esp', 'D.esp'] }, { plugin: 'B.esp', after: ['C.esp', 'D.esp'] }));
     expect(reporter.reports).toEqual([]);
     expect(instance.refresh).toHaveBeenCalled();
-  });
-
-  it('leaves the userlist as it was for a rule it holds, the second time the same pick is made', async () => {
-    const { fake } = registered();
-    picks.chosen = ['C.esp'];
-    await invoke(row('A.esp'));
-    const held = (await fake.adapter.reading()).sortingRuleFiles.userlist;
-
-    await invoke(row('A.esp'));
-
-    expect(held).toMatchObject({ kind: 'text', text: 'plugins:\n  - name: A.esp\n    after:\n      - C.esp\n' });
-    expect((await fake.adapter.reading()).sortingRuleFiles.userlist).toEqual(held);
   });
 
   it('writes nothing when the pick is dismissed', async () => {

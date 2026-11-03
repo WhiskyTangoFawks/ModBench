@@ -154,7 +154,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, writeRules: () => Promise.resolve(), commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
+    instance, changeUserlist: () => Promise.resolve(), commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
     pluginSync, modStatuses: NO_MOD_STATUSES,
     channel: silentChannel,
     log: () => undefined,

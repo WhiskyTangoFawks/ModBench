@@ -28,7 +28,7 @@ export interface PluginsDeps {
   sourceEditing: PluginsViewDeps['sourceEditing'];
 }
 
-type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'writeRules' | 'modStatuses'> & {
+type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'changeUserlist' | 'modStatuses'> & {
   syncPlugins: PluginSyncRun;
 };
 

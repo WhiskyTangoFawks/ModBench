@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { LoadAfter as RuleToWrite } from '../sortingRules/lootMetadata';
+import type { LoadAfter } from '../sortingRules/lootMetadata';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
@@ -12,24 +12,22 @@ import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import type { PluginsTreeNode } from './pluginRows';
 
 export interface LoadAfterDeps {
-  /** Adds the rules to the userlist, bound to the instance by the composition root. */
-  writeRules: (rules: readonly RuleToWrite[]) => Promise<unknown>;
+  changeUserlist: (additions: readonly LoadAfter[]) => Promise<unknown>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
-  /** The active plugins outside `selected`, in the order the view shows them. */
   places: (selected: readonly string[]) => readonly string[];
 }
 
-interface LoadAfter {
+interface Choice {
   readonly plugins: readonly PluginAddress[];
   readonly after: readonly string[];
 }
 
 /** `modbench.plugin.loadAfter` (commands.md): each selected plugin loads after each plugin picked. */
 export function registerLoadAfterCommand(
-  { writeRules, instance, reporter, places }: LoadAfterDeps, viewSelection: () => readonly PluginsTreeNode[],
+  { changeUserlist, instance, reporter, places }: LoadAfterDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, LoadAfter, GestureResult<PluginAddress>, { after: { name: string }[] }> = {
+  const gesture: AgentGesture<PluginsTreeNode, Choice, GestureResult<PluginAddress>, { after: { name: string }[] }> = {
     fromView: async (entry) => {
       const plugins = pluralArgument(entry, 'plugin').map(({ plugin, origin }) => ({ name: plugin.name, origin }));
       if (plugins.length === 0) return undefined;
@@ -48,7 +46,7 @@ export function registerLoadAfterCommand(
     },
     run: async ({ plugins, after }) => {
       try {
-        await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => writeRules(plugins.map(({ name }) => ({ plugin: name, after }))));
+        await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => changeUserlist(plugins.map(({ name }) => ({ plugin: name, after }))));
         return { applied: true, outcome: { landed: plugins, refused: [] } };
       } catch (e) {
         return { applied: false, refusal: 'Could not write the load after.', detail: errorMessage(e) };

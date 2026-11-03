@@ -551,8 +551,8 @@ export class PluginsTreeProvider
   /** plugins.md, Load after, story 1: the active plugins outside the selection, in the order the view shows them. */
   loadAfterPlaces(names: readonly string[]): string[] {
     return this.rowsInViewOrder()
-      .filter((row): row is PluginNode => row instanceof PluginNode && this.isEnabled(row) && !names.some((name) => pluginNameKey(name) === pluginNameKey(row.plugin.name)))
-      .map((row) => row.plugin.name);
+      .filter((row) => (row instanceof ImplicitMasterNode || this.isEnabled(row)) && !names.some((name) => pluginNameKey(name) === pluginNameKey(pluginFileOf(row))))
+      .map(pluginFileOf);
   }
 
   /** plugins.md, Move: the block lands as a drop there lands. A drop on the row of a plugin the

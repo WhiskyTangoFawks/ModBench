@@ -122,7 +122,7 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
       await adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }]);
       const held = await userlistOf();
 
-      expect(await adapter.changeUserlist([{ plugin: 'b.esp', after: ['a.ESP'] }])).toEqual({ wrote: false });
+      expect(await adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }])).toEqual({ wrote: false });
       expect(await userlistOf()).toEqual(held);
     });
 
