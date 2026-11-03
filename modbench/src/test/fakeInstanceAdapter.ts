@@ -49,6 +49,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     archiveList: [],
     archiveListNotes: [],
     dataFolderArchives: { kind: 'unresolved' },
+    dataFolderFiles: { kind: 'unresolved' },
     profiles: ['Default'],
     modFolders: undefined,
     gameFolderLinks: 0,
