@@ -558,7 +558,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await textsBelow(join(root, 'source', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
   });
 
-  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (modlist-repository.md, Update manifest, story 2)', async () => {
+  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (instance-repository.md, Update manifest, story 2)', async () => {
     const { adapter } = await anInstalledModDecompiled();
     const manifests = async (): Promise<string[]> => [
       await readFile(join(root, 'source', 'Mod', 'Mod.manifest.json'), 'utf8'), await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8'),

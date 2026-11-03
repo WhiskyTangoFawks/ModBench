@@ -8,7 +8,7 @@ const folder = join('/instance', 'mods', 'Mod');
 const manifestFile = join(folder, 'MOD.Manifest.json');
 const held = (over: Partial<ModStatus>): ModStatus => status('Mod', { manifestFile, ...over });
 
-describe('a mod\'s unfinished states, each on the file it concerns (modlist-repository.md, Status, story 2)', () => {
+describe('a mod\'s unfinished states, each on the file it concerns (instance-repository.md, Status, story 2)', () => {
   it('has none for a folder that matches its manifest', () => {
     expect(statusProblems(held({}), folder)).toEqual([]);
   });

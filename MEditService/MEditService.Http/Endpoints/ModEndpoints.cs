@@ -31,9 +31,9 @@ internal static class ModEndpoints
             .WithName("VersionInGit")
             .WithTags("Mods")
             .WithDescription(
-                "Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the modlist repository it sits in, holding " +
+                "Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the instance repository it sits in, holding " +
                 "the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, " +
-                "committed when asked: in a new repository to main, in the modlist repository only the source folder's paths. " +
+                "committed when asked: in a new repository to main, in the instance repository only the source folder's paths. " +
                 "A mod lands or is refused whole. Progress is the version-in-git-progress notification.")
             .Produces<VersionInGitResult>()
             .ProducesProblem(400)
@@ -185,7 +185,7 @@ internal sealed record SourceFolderRequest(
     IReadOnlyList<string>? Ignored = null)
 {
     internal const string NotWhole =
-        "A source folder to make needs its path, in: NewRepository or ModlistRepository, forward-slash paths in the mod folder for its assets, and its build file.";
+        "A source folder to make needs its path, in: NewRepository or InstanceRepository, forward-slash paths in the mod folder for its assets, and its build file.";
 
     internal string? WhyNotWhole =>
         !string.IsNullOrWhiteSpace(Path) && In is not null && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null

@@ -1,4 +1,4 @@
-// modlist-repository.md, Status: a mod's folder against its manifest, the rule the Mod status box and mod commands' upgrade
+// instance-repository.md, Status: a mod's folder against its manifest, the rule the Mod status box and mod commands' upgrade
 // check both read.
 
 import { isManifestPath } from '../repositoriesLib/manifestPath';
@@ -140,7 +140,7 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
   return { lacking, files };
 }
 
-/** The mod's folder against its manifest (modlist-repository.md, Status). Which files no package holds waits for every
+/** The mod's folder against its manifest (instance-repository.md, Status). Which files no package holds waits for every
  *  package to be on this machine. */
 export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {
   if (read === undefined) return nothing(mod.name, { noManifest: true });

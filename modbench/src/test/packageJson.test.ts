@@ -1013,7 +1013,7 @@ describe('package.json build\'s palette entry', () => {
   });
 });
 
-describe('package.json git init, update manifest and restore from manifest follow modlist-repository.md, Menus and keys', () => {
+describe('package.json git init, update manifest and restore from manifest follow instance-repository.md, Menus and keys', () => {
   const hasRepository = { ...inInstance, [HAS_REPOSITORY_KEY]: true, [REPOSITORY_SET_UP_KEY]: true };
   const unsetUpRepository = { ...inInstance, [HAS_REPOSITORY_KEY]: true, [REPOSITORY_SET_UP_KEY]: false };
   const onRow = (view: string, viewItem: string, facts: Context): [string, string][] =>

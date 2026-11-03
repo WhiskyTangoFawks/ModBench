@@ -3,7 +3,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { OtherManifest } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
+import { instanceRepositoryCommands } from '../instanceRepositoryCommands';
 import type { HostGit } from '../../ports/repository';
 import { hostGitFailingToActivate, hostGitRecordingInits } from './hostGitDouble';
 import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
@@ -13,14 +13,14 @@ const STOCK_GAME: OtherManifest = { name: 'Stock Game/', folder: '/instance/Stoc
 function commandsOver(answers: InstanceAnswers = {}, hostGit?: HostGit<string>) {
   const adapter = fakeInstanceAdapter(readingFixture(), answers);
   const repositories: string[] = [];
-  const commands = modlistRepositoryCommands({
+  const commands = instanceRepositoryCommands({
     client: new InMemoryMEditClient(), adapter: adapter.adapter, nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: '/instance',
     hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks: recordingTasks(),
   });
   return { commands, adapter, repositories };
 }
 
-describe('modlistRepositoryCommands git init', () => {
+describe('instanceRepositoryCommands git init', () => {
   it('writes the ignore list, makes the instance folder a repository, then makes it refuse a push of a pin its remote lacks and hold paths by path tokens', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
@@ -135,7 +135,7 @@ describe('modlistRepositoryCommands git init', () => {
   });
 });
 
-describe('modlistRepositoryCommands other manifests', () => {
+describe('instanceRepositoryCommands other manifests', () => {
   it('are the folders outside the mod folders the Instance adapter finds a manifest in, each folder it could not read refused', async () => {
     const { commands } = commandsOver({ otherManifests: [STOCK_GAME], unsearched: [{ name: 'logs/', reason: 'EACCES' }] });
 

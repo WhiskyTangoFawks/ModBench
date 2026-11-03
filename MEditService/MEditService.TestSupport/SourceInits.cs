@@ -12,7 +12,7 @@ public static class SourceInits
         source.Init(sourceFolder, BuildFile, plugins, [], commit: true);
 
     /// <summary>An init that names no repair, manifest or ignored path a test does not name, in a new repository unless
-    /// it names the modlist repository.</summary>
+    /// it names the instance repository.</summary>
     public static SourceFailure? Init(
         this ISourceAdapter source, string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null,

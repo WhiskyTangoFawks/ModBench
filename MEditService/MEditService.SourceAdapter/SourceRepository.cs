@@ -52,7 +52,7 @@ internal sealed class SourceRepository : ISourceRepository
             release, mod.Name, DiskFiles.Instance, stamps);
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> is a source mod's, in a repository of its own or the
-    /// modlist repository.</summary>
+    /// instance repository.</summary>
     internal static bool IsSourceMod(string sourceFolder) => SourceRepositoryGit.HoldsSourceMod(sourceFolder);
 
     internal static bool IsSourceMod(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsSourceMod(mod);

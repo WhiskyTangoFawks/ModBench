@@ -1276,6 +1276,15 @@ describe('the agent server, running a gesture', () => {
       options: { force: true },
     },
     {
+      name: 'plugin_decompile_and_repair carries where and force as Options',
+      value: PLUGGED,
+      tool: 'plugin_decompile_and_repair',
+      args: { argument: [{ name: 'Solo.esp' }], options: { where: 'InstanceRepository', force: true } },
+      command: 'modbench.plugin.decompileAndRepair',
+      argument: [SOLO],
+      options: { where: 'InstanceRepository', force: true },
+    },
+    {
       name: 'plugin_move carries the drop as an Option',
       value: PLUGGED,
       tool: 'plugin_move',

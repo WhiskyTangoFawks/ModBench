@@ -22,9 +22,9 @@ import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import type { ModlistRepositoryCommands } from '../../sourceCommands/modlistRepositoryCommands';
+import type { InstanceRepositoryCommands } from '../../sourceCommands/instanceRepositoryCommands';
 
-const gitInit = vi.fn<ModlistRepositoryCommands['gitInit']>();
+const gitInit = vi.fn<InstanceRepositoryCommands['gitInit']>();
 const GIT_INIT = 'modbench.modlist.gitInit';
 const REFUSAL = '/instance already holds a repository.';
 

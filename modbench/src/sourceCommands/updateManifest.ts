@@ -201,7 +201,7 @@ async function updateMod(
   return { landed: { mod: mod.name, manifestWritten: written, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes } };
 }
 
-// modlist-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
+// instance-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
 async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly string[]> {
   try {
     await adapter.writeOtherManifestLines();

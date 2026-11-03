@@ -20,13 +20,13 @@ VS Code edits files, and git stores files, neither work natively with binaries. 
 
 ### A mod is its manifest
 
-Git does not hold gigabytes of binary files and assets. So the modlist repository holds each mod as a manifest of it's installed files. The profiles and MO2's modlist configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest, which git tracks. To change branches, you simply commit any existing changes, git checkout as normal, and restore any changed mods from their manifests.
+Git does not hold gigabytes of binary files and assets. So the instance repository holds each mod as a manifest of it's installed files. The profiles and MO2's modlist configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest, which git tracks. To change branches, you simply commit any existing changes, git checkout as normal, and restore any changed mods from their manifests.
 
 The instance stays MO2's, in MO2's own format, so you can switch between MO2 and Modbench: close one, then open the other. Nothing Modbench does breaks using the list in MO2.
 
 ### A plugin is its source
 
-A plugin is a binary file: git cannot diff it, and VS Code cannot edit it. Modbench shows any plugin's records in a record panel familiar to xEdit users, but to edit a plugin, you decompile it first. Modbench uses Mutagen to decompile a mod's plugins into JSON for editing (similar to Spriggit), in a git repository of the mod's own in the `source/` folder, alongside `mods/`. Each record edit is then a change to one file, which you review in VS Code's Source Control. A source mod with a git remote becomes a submodule of the modlist repository, and restoring the modlist clones it.
+A plugin is a binary file: git cannot diff it, and VS Code cannot edit it. Modbench shows any plugin's records in a record panel familiar to xEdit users, but to edit a plugin, you decompile it first. Modbench uses Mutagen to decompile a mod's plugins into JSON for editing (similar to Spriggit), in a git repository of the mod's own in the `source/` folder, alongside `mods/`. Each record edit is then a change to one file, which you review in VS Code's Source Control. A source mod with a git remote becomes a submodule of the instance repository, and restoring the modlist clones it.
 
 A build reconstructs the binary plugin from its source on demand, and places it in the mod's folder in `mods/` as a build artifact.
 
@@ -57,7 +57,7 @@ What works today:
 - Mods: install from a file or a folder, FOMOD installers with their choices, separators, order, enable, and the downloads folder.
 - Plugins: plugin order and checkboxes, and each active plugin's records in a tree.
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
-- Version control: the modlist repository, source mods and build.
+- Version control: the instance repository, source mods and build.
 - Publishing: Wabbajack's publisher tags on mods, folders and files, and none of Modbench's own files in what it ships.
 
 Planned:

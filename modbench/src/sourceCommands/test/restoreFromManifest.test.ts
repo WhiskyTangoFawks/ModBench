@@ -544,7 +544,7 @@ describe('restore from manifest', () => {
       });
     });
 
-    it('is built from a repository the source folder holds that is no submodule, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
+    it('is built from a repository the source folder holds that is no submodule, cloning nothing (instance-repository.md, Restore from manifest, story 1)', async () => {
       const { restore, client } = await sourceMod({ pins: new Map() });
 
       const outcome = await restore(['ModA']);

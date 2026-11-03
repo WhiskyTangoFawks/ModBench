@@ -8,7 +8,7 @@ export interface StatusProblem {
   readonly message: string;
 }
 
-/** Each unfinished state of a mod, on the file it concerns (modlist-repository.md, Status, story 2). */
+/** Each unfinished state of a mod, on the file it concerns (instance-repository.md, Status, story 2). */
 export function statusProblems(status: ModStatus, folder: string): StatusProblem[] {
   const installation = status.installationFileProblem === undefined ? [] : [{ file: folder, message: status.installationFileProblem }];
   if (status.noManifest) return [{ file: folder, message: 'No manifest.' }, ...installation];
@@ -32,7 +32,7 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
 const packageNoun = (pkg: ManifestPackage): string =>
   (pkg.kind === 'gameFolder' ? 'the game folder' : `${pkg.kind === 'repository' ? 'repository' : 'installation file'} '${pkg.name}'`);
 
-/** A mod made from several packages, on its manifest (modlist-repository.md, Status, story 6). */
+/** A mod made from several packages, on its manifest (instance-repository.md, Status, story 6). */
 export function severalPackagesNote(status: ModStatus, holdsPlugin: boolean): StatusProblem | undefined {
   const { packages, manifestFile } = status;
   if (packages.length < 2 || manifestFile === undefined) return undefined;

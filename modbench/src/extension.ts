@@ -62,7 +62,7 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
 import { fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
-import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
+import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryCommands';
 import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
@@ -178,7 +178,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(reportSubscriberThrows(instance, reporterFor));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
+  const modlist = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);

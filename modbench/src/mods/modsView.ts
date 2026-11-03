@@ -34,7 +34,7 @@ import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
 import { registerVersionInGitCommand } from './versionInGitCommand';
-import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
+import type { InstanceRepositoryCommands } from '../sourceCommands/instanceRepositoryCommands';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
 import type { CheckForUpdates } from '../modCommands/checkForUpdates';
@@ -56,7 +56,7 @@ interface SourceGestureDeps {
 }
 
 type ManifestDeps = Pick<ManifestGestureDeps, 'toolboxView' | 'say'> & {
-  commands: ManifestGestureDeps['commands'] & Pick<ModlistRepositoryCommands, 'ignoreFiles'>;
+  commands: ManifestGestureDeps['commands'] & Pick<InstanceRepositoryCommands, 'ignoreFiles'>;
 };
 
 interface ModsViewDeps {
@@ -107,7 +107,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const own = <T extends vscode.Disposable>(disposable: T): T => { owned.push(disposable); return disposable; };
   const nexusRow = nexusRowInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.downloadsView], 'modbench.mod.nexusRowIn');
   const sourceGestureRows = selectionInFocusedView(own, focusedView, [MODS_KEY_ARGS.view, deps.sourceGestures.pluginsView], 'modbench.mod.sourceGestureRowsIn');
-  const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // modlist-repository.md, Status, story 1
+  const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // instance-repository.md, Status, story 1
   const open = new OpenRows(instance);
   const provider = new ModListProvider({ instance, statuses, open, reporter: reporterFor('modlist.drop') });
   const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {

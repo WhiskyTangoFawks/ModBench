@@ -1,10 +1,10 @@
-// What a row says of its mod's status against its manifest (modlist-repository.md, Status).
+// What a row says of its mod's status against its manifest (instance-repository.md, Status).
 
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 
 const counted = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
-// modlist-repository.md, Status, story 1.
+// instance-repository.md, Status, story 1.
 const differs = ({ differing, namedByNoLine, gone }: ModStatus): boolean => differing.length + namedByNoLine.length + gone.length > 0;
 
 /** What a mod row's description says of its status (mods.md, A row). */
@@ -21,7 +21,7 @@ export const lackedLine = ({ gone }: ModStatus): string | undefined =>
 /** Each file of the mod whose row says differs, by its path on disk. */
 export const differingFiles = ({ differing, namedByNoLine }: ModStatus): ReadonlySet<string> => new Set([...differing, ...namedByNoLine]);
 
-/** Whether the mod counts in the view's badge (modlist-repository.md, Status, story 4). */
+/** Whether the mod counts in the view's badge (instance-repository.md, Status, story 4). */
 export const countsInBadge = (status: ModStatus): boolean => status.noManifest || differs(status);
 
 /** Each file of the mod whose row says ignored, by its path on disk. */

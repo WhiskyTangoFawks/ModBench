@@ -93,21 +93,21 @@ public sealed class VersionInGitHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_InTheModlistRepository_CommitsThePluginsSourceThere_AndMakesNoRepositoryOfItsOwn()
+    public async Task Init_InTheInstanceRepository_CommitsThePluginsSourceThere_AndMakesNoRepositoryOfItsOwn()
     {
-        var modlistRepository = Path.Combine(_instanceRoot, ".git");
-        GitProbe.Run(modlistRepository, _instanceRoot, "init", "-q", "-b", "main");
-        GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.name", "Test");
-        GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.email", "test@localhost");
+        var instanceRepository = Path.Combine(_instanceRoot, ".git");
+        GitProbe.Run(instanceRepository, _instanceRoot, "init", "-q", "-b", "main");
+        GitProbe.Run(instanceRepository, _instanceRoot, "config", "user.name", "Test");
+        GitProbe.Run(instanceRepository, _instanceRoot, "config", "user.email", "test@localhost");
 
         var result = await InitWith(new ModToVersionInGit(
-            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.ModlistRepository, [], SourceInits.BuildFile), Commit: true));
+            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.InstanceRepository, [], SourceInits.BuildFile), Commit: true));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.False(Path.Exists(Path.Combine(SourceFolder, ".git")));
         Assert.Contains(
             $"source/{Origin}/plugin-source/{PluginName}/",
-            GitProbe.Run(modlistRepository, _instanceRoot, "ls-tree", "-r", "--name-only", "main"), StringComparison.Ordinal);
+            GitProbe.Run(instanceRepository, _instanceRoot, "ls-tree", "-r", "--name-only", "main"), StringComparison.Ordinal);
     }
 
     [Fact]

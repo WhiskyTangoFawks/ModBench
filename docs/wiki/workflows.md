@@ -1,6 +1,6 @@
 # Workflows
 
-Modbench keeps two kinds of git repositories. The modlist repository in the Mod Manager instance folder, and a mod repository, for each decompiled mod. The modlist repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's repository, in `source/`, holds that mod's plugin source, its assets and its build file. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
+Modbench keeps two kinds of git repositories. The instance repository in the Mod Manager instance folder, and a mod repository, for each decompiled mod. The instance repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's repository, in `source/`, holds that mod's plugin source, its assets and its build file. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
 
 ## The 2 Step Process for Modlists Management in Git
 
@@ -12,7 +12,7 @@ Because a git repo can't hold gigabytes of files, Modbench is setup to commit a 
 
 With no mod selected, Update Manifests and Restore from Manifests… act on every mod. Both are in the overflow menu of the Source Control view's title bar.
 
-## The modlist repository
+## The instance repository
 
 ### Put a modlist in git
 
@@ -42,13 +42,13 @@ Restore needs each installation file a manifest names in your downloads folder. 
 
 ### Set up a modlist on another machine
 
-Clone the modlist repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. Then restore. The repository holds a token in place of each path to the instance folder, the game folder or the downloads folder, and restore puts this machine's paths there. Restore also clones each source mod that has a remote, and builds it.
+Clone the instance repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. Then restore. The repository holds a token in place of each path to the instance folder, the game folder or the downloads folder, and restore puts this machine's paths there. Restore also clones each source mod that has a remote, and builds it.
 
 ## Source mods
 
-Version in Git puts any mod under git as a source mod, with its source folder in `source/`. Pick a new repository of its own, or the modlist repository. Git holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit of those files alone when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
+Version in Git puts any mod under git as a source mod, with its source folder in `source/`. Pick a new repository of its own, or the instance repository. Git holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit of those files alone when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
 
-While the instance holds a repository, Version in Git also offers the mod's whole folder in the modlist repository. Git then holds every file of the mod folder, and the mod is not a source mod.
+While the instance holds a repository, Version in Git also offers the mod's whole folder in the instance repository. Git then holds every file of the mod folder, and the mod is not a source mod.
 
 The mod's manifest goes to the trash, since git holds everything it recorded. A mod whose manifest ignores files is refused, naming them: git would hold them too.
 
@@ -58,13 +58,13 @@ The mod folder's name and the files you exclude belong to the modlist, not the s
 
 ### Publish a source mod
 
-Give the source mod's repository a remote, and push it. The next Update Manifests makes it a submodule of the modlist repository, pinned at its commit, and Source Control shows the change to commit. A source mod in the modlist repository is published when you push the modlist.
+Give the source mod's repository a remote, and push it. The next Update Manifests makes it a submodule of the instance repository, pinned at its commit, and Source Control shows the change to commit. A source mod in the instance repository is published when you push the modlist.
 
-Push the source mod before the modlist. A modlist repository made by Git Init Modlist refuses a push that pins a commit the source mod's remote lacks, so the modlist never pins a commit a clone cannot fetch.
+Push the source mod before the modlist. An instance repository made by Git Init Modlist refuses a push that pins a commit the source mod's remote lacks, so the modlist never pins a commit a clone cannot fetch.
 
 Restore never moves a source mod repository you have checked out at another commit. It skips that mod and names the commit.
 
-A source mod's repository with no remote stays out of the modlist repository. Its mod row says its package has no host, so you see what a clone cannot rebuild.
+A source mod's repository with no remote stays out of the instance repository. Its mod row says its package has no host, so you see what a clone cannot rebuild.
 
 ## Workflows
 

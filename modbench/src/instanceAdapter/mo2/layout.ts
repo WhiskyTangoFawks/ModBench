@@ -201,7 +201,7 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
-/** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
+/** The whitelist (instance-repository.md, The repository, story 2): each mod's metadata stays out. */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...Object.values(SORTING_RULE_FILES).map((file) => `!/${file}`),

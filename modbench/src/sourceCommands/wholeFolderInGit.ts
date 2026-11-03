@@ -1,4 +1,4 @@
-// commands.md, version in git: the mod's whole folder in the modlist repository. The folder's files are let into the
+// commands.md, version in git: the mod's whole folder in the instance repository. The folder's files are let into the
 // ignore list, so git holds everything its manifest recorded and the manifest goes to the trash (ADR-0022).
 
 import type { VersionInGitOutcome, VersionInGitProgress, WriteRefused } from '../client';
@@ -8,7 +8,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { heldManifestIn } from './heldManifest';
-import { NO_MODLIST_REPOSITORY } from './newRepository';
+import { NO_INSTANCE_REPOSITORY } from './newRepository';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
 
 type Adapter = Pick<InstanceAdapter,
@@ -21,7 +21,7 @@ interface WholeFolderRequest {
 }
 
 // Files a manifest ignores would be held, and a line leaving them out would leave the folder not whole
-// (modlist-repository.md, The manifest, story 11).
+// (instance-repository.md, The manifest, story 11).
 async function whyNotWhole(mod: string, folder: string, sourceMods: SourceMods): Promise<string | undefined> {
   if (sourceMods.folderOf(mod) !== undefined) return 'is a source mod, which git holds by its source folder';
   const manifest = await heldManifestIn(folder);
@@ -84,7 +84,7 @@ async function whyNotLanded(
 export async function modsPutWholeInGit(
   adapter: Adapter, trash: MoveToTrash, { mods, commit, onProgress }: WholeFolderRequest,
 ): Promise<VersionInGitOutcome | WriteRefused> {
-  if (!(await adapter.repositoryOnDisk())) return { refused: true, message: NO_MODLIST_REPOSITORY };
+  if (!(await adapter.repositoryOnDisk())) return { refused: true, message: NO_INSTANCE_REPOSITORY };
   const { folders, refused } = await foldersToHold(adapter, mods);
   if (folders.size === 0) return { landed: [], refused };
   // git adds nothing the ignore list leaves out, so the folders are let in first.

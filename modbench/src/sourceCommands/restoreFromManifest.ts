@@ -1,4 +1,4 @@
-// modlist-repository.md, Restore from manifest: each mod's folder made what its manifest says, read and written through the
+// instance-repository.md, Restore from manifest: each mod's folder made what its manifest says, read and written through the
 // Instance adapter; a source mod rebuilt by mEdit from its repository, a submodule at the commit the instance repository pins.
 
 import { basename, join } from 'node:path';
@@ -60,7 +60,7 @@ export type RestoreStatus =
   | { readonly phase: 'Downloading'; readonly file: string }
   | { readonly phase: 'Restoring'; readonly mod: string; readonly modsDone: number; readonly modsTotal: number };
 
-/** Every other manifest (modlist-repository.md, Every mod, story 1), and each folder the search could not read, or the
+/** Every other manifest (instance-repository.md, Every mod, story 1), and each folder the search could not read, or the
  *  search itself, refused on its own (commands.md, A selection is one gesture, and each item lands on its own). */
 export interface OtherManifests { readonly others: readonly OtherManifest[]; readonly refused: readonly ItemRefusal<string>[] }
 
@@ -171,7 +171,7 @@ type InstallationFilePackage = Extract<ManifestPackage, { kind: 'installationFil
 
 const isInstallationFile = (pkg: ManifestPackage): pkg is InstallationFilePackage => pkg.kind === 'installationFile';
 
-// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the
+// instance-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the
 // file that holds its bytes, else downloaded.
 async function installationFilesFor(pass: FolderPass, manifest: Manifest): Promise<{ readonly held: readonly InstallationFile[] } | { readonly refusal: string }> {
   const { adapter, nexus } = pass.deps;
@@ -241,7 +241,7 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
   }));
 }
 
-// modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
+// instance-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
 // whose exclusion changed moved, and every file the manifest does not name sent to the trash.
 async function restoreFromPackages(
   pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>, through?: ModFolder,
@@ -383,7 +383,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   };
 }
 
-// modlist-repository.md, The manifest, story 3: the mod's metadata is written from its packages as install writes it.
+// instance-repository.md, The manifest, story 3: the mod's metadata is written from its packages as install writes it.
 async function metadataRefusal(pass: Pass, folder: string, manifest: Manifest): Promise<{ readonly refusal: string } | undefined> {
   const packages = manifest.packages.filter(isInstallationFile).map(({ name, packageVersion }) => ({ name, ...packageVersion === undefined ? {} : { version: packageVersion } }));
   if (packages.length === 0) return undefined;
@@ -417,7 +417,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
 
 const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;
 
-// modlist-repository.md, Restore from manifest, story 6: a submodule the source folder lacks is cloned first.
+// instance-repository.md, Restore from manifest, story 6: a submodule the source folder lacks is cloned first.
 async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (status: RestoreStatus) => void): Promise<readonly ItemRefusal<string>[]> {
   const uncloned = await adapter.unclonedSubmodules();
   const refused: ItemRefusal<string>[] = uncloned.flatMap((submodule) => ('lacks' in submodule ? [{ item: submodule.name, reason: notCloned(submodule.lacks) }] : []));
@@ -430,7 +430,7 @@ async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (
   return [...refused, ...cloned.refused.map(({ item, message }) => ({ item: nameOf.get(item) ?? item, reason: notCloned(message) }))];
 }
 
-// modlist-repository.md, The repository, story 5: a hook does not travel with a clone, so restore writes it as git init does.
+// instance-repository.md, The repository, story 5: a hook does not travel with a clone, so restore writes it as git init does.
 async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
   try {
     if (await adapter.repositoryOnDisk()) await adapter.refuseUnpublishedPins();
@@ -440,7 +440,7 @@ async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undef
   return undefined;
 }
 
-// modlist-repository.md, The repository, story 3: a clone holds a path token where its game path is until restore puts
+// instance-repository.md, The repository, story 3: a clone holds a path token where its game path is until restore puts
 // this machine's path there, so restore writes them before it reads the game folder.
 async function pathTokensWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
   try {

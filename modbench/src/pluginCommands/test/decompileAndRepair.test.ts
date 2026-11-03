@@ -63,9 +63,9 @@ describe('decompileAndRepair', () => {
   });
 
   it('places the mods that are not source mods once each, in the repository it is given (source.md, Decompile and repair, story 4)', async () => {
-    await repairIn({}, true, [MALFORMED, OTHER, { name: 'Second.esp', origin: 'Harbor' }], 'ModlistRepository');
+    await repairIn({}, true, [MALFORMED, OTHER, { name: 'Second.esp', origin: 'Harbor' }], 'InstanceRepository');
 
-    expect(requests).toEqual([{ mods: ['Harbor', 'Quay'], where: 'ModlistRepository' }]);
+    expect(requests).toEqual([{ mods: ['Harbor', 'Quay'], where: 'InstanceRepository' }]);
   });
 
   it('places no mod when every plugin is in a source mod, and hands the plugin alone', async () => {

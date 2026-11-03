@@ -31,7 +31,7 @@ function over(initial: readonly ModStatus[], plugins: InstanceValue['plugins'] =
 
 const messagesOn = (collection: FakeDiagnosticCollection, file: string) => (collection.get(Uri.file(file)) ?? []).map(({ message, severity }) => [message, severity]);
 
-describe('the Problems panel follows Mod status (modlist-repository.md, Status, story 2)', () => {
+describe('the Problems panel follows Mod status (instance-repository.md, Status, story 2)', () => {
   it('shows a warning on the folder of a mod with no manifest', async () => {
     const { collection } = over([packaged('ModA', { noManifest: true })]);
 

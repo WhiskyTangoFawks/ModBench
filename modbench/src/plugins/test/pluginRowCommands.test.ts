@@ -473,7 +473,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
     it('hands the one answer to both batches a replace confirmation makes', async () => {
       outsideSourceMods.mockResolvedValue(['ModA']);
-      picking('ModlistRepository');
+      picking('InstanceRepository');
       const client = new InMemoryMEditClient();
       client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', changedSource);
       client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', clean);
@@ -483,7 +483,37 @@ describe('modbench.plugin.decompileAndRepair', () => {
       await handler(rows[0], rows);
 
       expect(showQuickPick).toHaveBeenCalledOnce();
-      expect(repaired.map(({ force, where }) => [force, where])).toEqual([[true, 'ModlistRepository'], [false, 'ModlistRepository']]);
+      expect(repaired.map(({ force, where }) => [force, where])).toEqual([[true, 'InstanceRepository'], [false, 'InstanceRepository']]);
+    });
+
+    describe('for the agent', () => {
+      const calling = (options: { where?: SourceModIn }) => new AgentCall([{ kind: 'plugin', plugin: MALFORMED }], options);
+
+      it.each<SourceModIn>(['NewRepository', 'InstanceRepository'])('puts a mod that is not a source mod where its options say, %s', async (where) => {
+        outsideSourceMods.mockResolvedValue(['ModA']);
+        const { handler, repaired } = registered();
+
+        await handler(calling({ where }));
+
+        expect(repaired).toEqual([{ plugins: [MALFORMED], force: false, where }]);
+      });
+
+      it('refuses a request that leaves out where while a plugin\'s mod is not a source mod, naming the option, and repairs nothing', async () => {
+        outsideSourceMods.mockResolvedValue(['ModA']);
+        const { handler, repaired } = registered();
+
+        await expect(handler(calling({}))).rejects.toThrow(/\bwhere\b/);
+
+        expect(repaired).toEqual([]);
+      });
+
+      it('repairs without where when every plugin is in a source mod', async () => {
+        const { handler, repaired } = registered();
+
+        await handler(calling({}));
+
+        expect(repaired.length).toBe(1);
+      });
     });
 
     it('asks nothing when every plugin is in a source mod', async () => {

@@ -56,7 +56,7 @@ async function noRepository(folder: string | undefined): Promise<string> {
 }
 
 // mods.md, A source mod, story 2: the build keeps the exclusions the folder holds, and those its manifest records, and the
-// paths its manifest ignores (modlist-repository.md, The manifest, story 11).
+// paths its manifest ignores (instance-repository.md, The manifest, story 11).
 async function keptByBuildIn(adapter: Adapter, folder: string): Promise<{ exclude: readonly string[]; ignore: readonly string[] } | { readonly reason: string }> {
   try {
     const held = await manifestIn(folder);
@@ -140,8 +140,8 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
   };
 }
 
-/** Where git holds a mod: its source folder in a repository of its own or the modlist repository, or its whole folder in
- *  the modlist repository. */
+/** Where git holds a mod: its source folder in a repository of its own or the instance repository, or its whole folder in
+ *  the instance repository. */
 export type VersionInGitWhere = SourceModIn | 'WholeFolder';
 
 type VersionInGitOptions = {
