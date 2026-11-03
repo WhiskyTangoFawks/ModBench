@@ -346,7 +346,7 @@ export const SETTINGS_FILE_PATTERN = `/${SETTINGS_FILE_NAME}`;
 export const PROFILE_INIS_PATTERN = `/${PROFILES}/*/*.${anyCase('ini')}`;
 
 /** Each mod's metadata file as git's attributes match it. */
-export const MOD_META_FILES_PATTERN = `/${MODS}/*/${MOD_META_FILE_NAME}`;
+export const MOD_META_FILES_PATTERN = `/${MODS}/*/${anyCase(MOD_META_FILE_NAME)}`;
 
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
 export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>

@@ -26,11 +26,9 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
 
 /** A folder's files that git does not hold, by their own paths: its manifest names those and no others
- *  (instance-repository.md, The manifest, story 5). `heldByGit` lists the files git holds in `folder`. */
-export async function unheldFolderValueOver(
-  reads: FolderReads, heldByGit: (folder: string) => Promise<readonly string[]>, folder: string,
-): Promise<FolderValue> {
-  const held = new Set(await heldByGit(folder));
+ *  (instance-repository.md, The manifest, story 5). */
+export async function unheldFolderValueOver(reads: FolderReads, heldByGit: readonly string[], folder: string): Promise<FolderValue> {
+  const held = new Set(heldByGit);
   const filesIn = async (at: string): Promise<readonly string[]> => (await reads.filesIn(at)).filter((path) => !isGitsOwn(path) && !held.has(path));
   return folderValueOver({ ...reads, filesIn }, folder);
 }
@@ -53,12 +51,12 @@ async function gameFilesOver(reads: ModReads, folder: string, paths: readonly st
 const cloneGets = async (reads: ModReads, repository: string): Promise<boolean> =>
   !('lacks' in await reads.submodule(repository)) || reads.sourceFolderTracked(repository);
 
-/** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. Nothing
- *  of the folder is read when no manifest is `asked` for. */
-export async function modValueOver(reads: ModReads, folder: string, asked: PackagesAsked | undefined): Promise<StatusValues> {
+/** What a mod's status reads of the instance besides its manifest and the files git holds in it; a read that rejects
+ *  leaves the rest unreadable. Nothing of the folder is read when no manifest is `asked` for. */
+export async function modValueOver(reads: ModReads, folder: string, asked: PackagesAsked | undefined, heldByGit: readonly string[]): Promise<StatusValues> {
   if (asked === undefined) return { kind: 'notAsked' };
   try {
-    const folderValue = await folderValueOver(reads, folder);
+    const folderValue = await unheldFolderValueOver(reads, heldByGit, folder);
     const downloadedFiles = new Map<string, FileRead<InstallationFile | undefined>>();
     for (const name of asked.installationFiles) downloadedFiles.set(name, await reads.downloadedFile(name));
     const gameFiles: FileRead<HashedPath[] | undefined> = asked.gameFiles === undefined ? { kind: 'read', answer: [] } : await gameFilesOver(reads, folder, asked.gameFiles);

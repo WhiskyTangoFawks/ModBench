@@ -11,9 +11,10 @@ const isInside = (instanceRoot: string, folder: string): boolean => {
   return inInstance !== '' && inInstance !== '..' && !inInstance.startsWith(`..${sep}`) && !isAbsolute(inInstance);
 };
 
-const gitPath = (instanceRoot: string, folder: string): string => relative(instanceRoot, folder).split(sep).join('/');
+/** `folder`'s path in the instance repository. */
+export const gitPath = (instanceRoot: string, folder: string): string => relative(instanceRoot, folder).split(sep).join('/');
 
-const splitNul = (output: string): string[] => output.split('\0').filter((path) => path !== '');
+export const splitNul = (output: string): string[] => output.split('\0').filter((path) => path !== '');
 
 async function runsThroughSymlink(instanceRoot: string, folder: string): Promise<boolean> {
   let walked = instanceRoot;
@@ -42,12 +43,18 @@ async function listIgnoredPaths(instanceRoot: string): Promise<string[]> {
   return splitNul(await git(instanceRoot, 'ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'));
 }
 
-export async function foldersHeldWhole(instanceRoot: string, folders: readonly string[]): Promise<ReadonlySet<string>> {
-  if (!await isRepository(instanceRoot)) return new Set();
+/** Each of `folders` the instance repository can hold a file in: inside the instance, and reached through no symlink. */
+export async function foldersInReach(instanceRoot: string, folders: readonly string[]): Promise<string[]> {
   const reachable: string[] = [];
   for (const folder of folders) {
     if (isInside(instanceRoot, folder) && !await runsThroughSymlink(instanceRoot, folder)) reachable.push(folder);
   }
+  return reachable;
+}
+
+export async function foldersHeldWhole(instanceRoot: string, folders: readonly string[]): Promise<ReadonlySet<string>> {
+  if (!await isRepository(instanceRoot)) return new Set();
+  const reachable = await foldersInReach(instanceRoot, folders);
   if (reachable.length === 0) return new Set();
   const probesOf = (folder: string): string[] => {
     const inFolder = gitPath(instanceRoot, folder);

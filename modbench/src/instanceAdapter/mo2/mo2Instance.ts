@@ -14,9 +14,9 @@ import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
 import { filesBelow } from './mo2Files';
-import { git } from '../git';
 import { commitFolder } from '../commitFolder';
 import { foldersHeldWhole } from '../foldersHeldWhole';
+import { filesHeldByGit } from '../filesHeldByGit';
 import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
@@ -36,7 +36,7 @@ import { dataFileReads } from '../gameFolder/dataFileReads';
 import { textHash } from '../fileContents/contentDigest';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
 import { parseModlist } from './codecs/modlistText';
-import { get, isRepository } from '../files';
+import { get } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
 import { gamePlacesOf } from '../gameFolder/gamePlaces';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
@@ -62,11 +62,6 @@ export type Mo2InstanceOptions = {
  *  root asks before an Instance exists. */
 export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
-}
-
-async function filesGitHolds(instanceRoot: string, folder: string): Promise<string[]> {
-  if (!(await isRepository(folder)) && !(await isRepository(instanceRoot))) return [];
-  return (await git(folder, 'ls-files', '-z', '--cached', '--others', '--exclude-standard')).split('\0').filter((path) => path !== '');
 }
 
 export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {
@@ -103,9 +98,10 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     folderValue: (folder) => folderValueOver(adapter, folder),
     foldersHeldWhole: (folders) => foldersHeldWhole(instanceRoot, folders),
     commitFolder: (folder, message) => commitFolder(instanceRoot, folder, message),
-    unheldFolderValue: (folder) => unheldFolderValueOver(adapter, (at) => filesGitHolds(instanceRoot, at), folder),
+    filesHeldByGit: (folders) => filesHeldByGit(instanceRoot, folders),
+    unheldFolderValue: async (folder) => unheldFolderValueOver(adapter, (await filesHeldByGit(instanceRoot, [folder])).get(folder) ?? [], folder),
     trashingReplaced,
-    modValue: (folder, asked) => modValueOver(adapter, folder, asked),
+    modValue: (folder, asked, heldByGit) => modValueOver(adapter, folder, asked, heldByGit),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
   return adapter;

@@ -221,7 +221,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: provided.map((name) => fileIn('/mods/Provider', name)), folders: [], notes: [] }]]),
     }), { repositoryOnDisk: repository !== undefined });
     const asked: string[] = [];
-    const reading = { ...fake.adapter, modValue: (folder: string, wanted: Parameters<typeof fake.adapter.modValue>[1]) => { asked.push(basename(folder)); return fake.adapter.modValue(folder, wanted); } };
+    const reading = { ...fake.adapter, modValue: (...args: Parameters<typeof fake.adapter.modValue>) => { asked.push(basename(args[0])); return fake.adapter.modValue(...args); } };
     const result = await pluginSyncOver(reading)();
     return { fake, result, asked };
   };
