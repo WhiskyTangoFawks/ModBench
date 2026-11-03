@@ -10,7 +10,7 @@ import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSub
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
-import { sourceFoldersTracked } from './sourceRepositories';
+import { sourceFoldersTracked } from './sourceModFolders';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 

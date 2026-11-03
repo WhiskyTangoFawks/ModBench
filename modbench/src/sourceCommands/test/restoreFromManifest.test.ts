@@ -67,7 +67,7 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
   const hashes = new Map<string, HashedFile>(inFolders.flatMap(([folder, inFolder]) =>
     Object.entries(inFolder).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
+    readingFixture({ gameFolder, sourceModFolders: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
     { folderFiles: new Map(inFolders.map(([folder, inFolder]) => [folder, Object.keys(inFolder)])), hashes, ...answers });
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);

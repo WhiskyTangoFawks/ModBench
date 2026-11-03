@@ -22,7 +22,7 @@ const fileOf = (mod: string, relativePath: string): FileToIgnore => ({ origin: {
 
 function over(held: Partial<Manifest> | undefined, files: Record<string, string>, sourceFolders: Record<string, string> = {}, answers: InstanceAnswers = {}) {
   const folder = join(root, 'mods', 'ModA');
-  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(sourceFolders) }), {
+  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(sourceFolders) }), {
     folderFiles: new Map([[folder, Object.keys(files)]]),
     hashes: new Map(Object.entries(files).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)),
     ...answers,

@@ -611,7 +611,7 @@ export interface InstanceReading extends InstanceGame {
   /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
   /** Every source mod's folder in the source folder, a repository or one the modlist repository holds, by its name. */
-  readonly sourceRepositories: ReadonlyMap<string, string>;
+  readonly sourceModFolders: ReadonlyMap<string, string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
   /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
@@ -654,7 +654,7 @@ export interface InstanceAdapter {
   /** The downloaded file `path` names, however the path is spelled; undefined when it names none; or why the downloaded files could not be read. */
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
   /** Every source mod's folder in the source folder now, a repository or one the modlist repository holds, by its name. */
-  sourceRepositories(): Promise<ReadonlyMap<string, string>>;
+  sourceModFolders(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each
    *  file Modbench keeps in the instance is in its ignore list, every other entry as written. */

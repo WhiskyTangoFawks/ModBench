@@ -56,7 +56,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     runtimeOutput: { origin: 'overwrite', folder: undefined, files: [], folders: [], notes: [] },
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
-    sourceRepositories: new Map(),
+    sourceModFolders: new Map(),
     holdsRepository: false,
     repositorySetUp: false,
     watchNotes: [],
@@ -163,7 +163,7 @@ export interface InstanceAnswers {
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceRepositories' | 'otherManifests', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -344,7 +344,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       if (listed.kind === 'unresolved') return { kind: 'unreadable', reason: listed.reason };
       return { kind: 'read', answer: listed.files?.find((file) => file.path === path) };
     },
-    sourceRepositories: () => unreadable('sourceRepositories', current.sourceRepositories),
+    sourceModFolders: () => unreadable('sourceModFolders', current.sourceModFolders),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     publisherTags: answers.publisherTags ?? [],
     changePublisherTag: (change, tag, paths) =>

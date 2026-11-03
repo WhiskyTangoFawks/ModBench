@@ -15,7 +15,7 @@ export async function sourceFoldersTracked(instanceRoot: string, names: readonly
 
 /** Each source mod's folder in the source folder, by its name: one that holds its build file, and either a repository of
  *  its own or none, its build file in the instance repository's index. */
-export async function sourceRepositoriesIn(instanceRoot: string): Promise<ReadonlyMap<string, string>> {
+export async function sourceModFoldersIn(instanceRoot: string): Promise<ReadonlyMap<string, string>> {
   const root = sourceRootDir(instanceRoot);
   const withBuildFile: { readonly name: string; readonly own: boolean }[] = [];
   for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink), [])).sort()) {

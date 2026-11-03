@@ -1681,11 +1681,11 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
         await writeFile(join(root, 'source', 'No Repository', BUILD_FILE), '{}');
 
-        expect(await adapter.sourceRepositories()).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')]]));
+        expect(await adapter.sourceModFolders()).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')]]));
       });
 
       it('lists none when the instance has no source folder', async () => {
-        expect(await adapter.sourceRepositories()).toEqual(new Map());
+        expect(await adapter.sourceModFolders()).toEqual(new Map());
       });
     });
 

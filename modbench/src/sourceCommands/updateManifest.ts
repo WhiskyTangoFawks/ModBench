@@ -10,7 +10,7 @@ import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolder
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceRepositories' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
+  'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
   | 'downloadedFilesHashed' | 'folderValue' | 'sourceFolderValue' | 'fileStamp' | 'nexusFileAt' | 'flaggedHash' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
@@ -232,7 +232,7 @@ export async function updateManifest(
 ): Promise<UpdateManifestResult> {
   const { adapter } = deps;
   const order = await adapter.modOrder();
-  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const game = await gameToHand(adapter, sourceMods);
   const folders = foldersOf(adapter, others);
   const refused: ItemRefusal<string>[] = [];

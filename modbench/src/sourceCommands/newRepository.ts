@@ -20,7 +20,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue' | 'repositoryOnDisk' | 'writeSourceFolderLines'>
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'repositoryOnDisk' | 'writeSourceFolderLines'>
   & FolderRestoreAdapter;
 
 /** The source folder version in git makes for a mod, and the repository that holds it. */
@@ -210,7 +210,7 @@ export async function modsPlaced<R>(
   const notMade = new Map<string, string>();
   let notes: readonly string[] = [];
   if (mods.length > 0) {
-    const game = await gameToHand(adapter, await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name })));
+    const game = await gameToHand(adapter, await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name })));
     const downloaded = await downloadedPackagesOf(adapter);
     notes = downloaded.notes;
     for (const [at, mod] of mods.entries()) {

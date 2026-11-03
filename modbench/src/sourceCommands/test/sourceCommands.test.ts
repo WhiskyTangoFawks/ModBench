@@ -33,7 +33,7 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 
 const fakeAdapter = (answers: InstanceAnswers = {}, gameRelease = 'Fallout4') =>
   fakeInstanceAdapter(readingFixture({
-    gameRelease, modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES),
+    gameRelease, modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(SOURCES),
   }), answers).adapter;
 
 const recorded = async (mod: string): Promise<Manifest | undefined> => {
@@ -143,7 +143,7 @@ describe('sourceCommands build', () => {
   ])('refuses a mod whose repository %s, naming why, before anything is written', async (_case, arrange, reason, flags) => {
     await arrange();
     const client = new InMemoryMEditClient();
-    const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }));
+    const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }));
 
     const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
@@ -153,7 +153,7 @@ describe('sourceCommands build', () => {
 
 describe('sourceCommands build, in mod order', () => {
   const ORDER = [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'separator', name: 'Group', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }] as const;
-  const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) })).adapter;
+  const winningFirst = () => fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(SOURCES) })).adapter;
 
   it('builds the mods from the losing end of mod order, the winning mod last, whatever order they were asked in', async () => {
     const client = new InMemoryMEditClient();
@@ -257,7 +257,7 @@ describe('sourceCommands build, in mod order', () => {
     const decompiling = async (answer: Awaited<ReturnType<InMemoryMEditClient['build']>>) => {
       await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'decompile', paths: ['A.esp', 'B.esp'] }] }));
       const client = new InMemoryMEditClient();
-      const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
+      const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(SOURCES) }));
       const log: unknown[] = [];
       const adapter = { ...fake.adapter, trashFileIn: (...[folder, path, trash, asPath]: Parameters<typeof fake.adapter.trashFileIn>) => {
         log.push({ trashed: path, in: folder, as: asPath });
@@ -306,7 +306,7 @@ describe('sourceCommands build, in mod order', () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [{ kind: 'pack', archives: [{ path: 'ModA.ba2', files: ['textures/a.dds'] }] }] }));
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), packed: ['Textures/a.dds'] }], refused: [] }));
-    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
+    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(SOURCES) }));
 
     await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
@@ -318,7 +318,7 @@ describe('sourceCommands build, in mod order', () => {
     await writeManifestIn(folderOf('ModA'), { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: ['Textures/a.dds'], flags: new Map(), files: new Map() });
     const client = new InMemoryMEditClient();
     client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), packed: ['Textures/a.dds', 'Textures/b.dds'] }], refused: [] }));
-    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceRepositories: repositoriesOf(SOURCES) }));
+    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(SOURCES) }));
 
     await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
@@ -363,7 +363,7 @@ describe('sourceCommands build over a folder it cannot read', () => {
 });
 
 describe('sourceCommands versionInGit', () => {
-  const modsAt = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), answers).adapter;
+  const modsAt = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), answers).adapter;
   const FOLDER = '/instance/mods/ModA';
   const hashed = (files: Record<string, string>, folder = FOLDER): InstanceAnswers => ({
     folderFiles: new Map([[folder, Object.keys(files)]]),
@@ -404,7 +404,7 @@ describe('sourceCommands versionInGit', () => {
     const sourceFolderLines = (calls: readonly AdapterCall[]) => calls.filter((call) => call.verb === 'writeSourceFolderLines');
 
     it('lets each source folder into the modlist repository before mEdit puts it there', async () => {
-      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
       const linesWhenSent: unknown[] = [];
       client.setCommandHandler('versionInGit', (mods) => {
@@ -419,7 +419,7 @@ describe('sourceCommands versionInGit', () => {
     });
 
     it('leaves out again the source folder of a mod mEdit refused', async () => {
-      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
       client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'its plugin is malformed' }] }));
 
@@ -430,7 +430,7 @@ describe('sourceCommands versionInGit', () => {
 
     it.each([['answers no mod', undefined], ['cannot take the lines back', 'the ignore list is locked']])(
       'leaves out again every source folder when mEdit refuses the whole call, and says so when it %s', async (_, takingBackFails) => {
-        const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), {
+        const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), {
           ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true,
           refusals: (call) => (call.verb === 'writeSourceFolderLines' && !call.held ? takingBackFails : undefined),
         });
@@ -450,7 +450,7 @@ describe('sourceCommands versionInGit', () => {
 
     it('adds what stays in the ignore list to the reason of the mod it concerns, and of no other', async () => {
       const [onA, onB] = [hashed({ 'ModA.esp': 'P' }), hashed({ 'ModB.esp': 'Q' }, '/instance/mods/ModB')];
-      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), {
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), {
         folderFiles: new Map([...onA.folderFiles ?? [], ...onB.folderFiles ?? []]), hashes: new Map([...onA.hashes ?? [], ...onB.hashes ?? []]), repositoryOnDisk: true,
         refusals: (call) => (call.verb === 'writeSourceFolderLines' && !call.held ? 'the ignore list is locked' : undefined),
       });
@@ -470,7 +470,7 @@ describe('sourceCommands versionInGit', () => {
     });
 
     it('leaves out again every source folder, and throws what mEdit threw, when the call fails', async () => {
-      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
       client.setCommandHandler('versionInGit', () => Promise.reject(new Error('the connection dropped')));
 
@@ -493,7 +493,7 @@ describe('sourceCommands versionInGit', () => {
 
     it('refuses the whole selection, writing nothing, while the instance holds no repository', async () => {
       const { client, handed } = committing();
-      const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), hashed({ 'ModA.esp': 'P' }));
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), hashed({ 'ModA.esp': 'P' }));
 
       const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inModlist);
 

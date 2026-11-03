@@ -38,7 +38,7 @@ function install(
 
 describe('installMod', () => {
   it('refuses a source mod as the mod to upgrade, naming its build file, and installs nothing', async () => {
-    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(mods, UPGRADED.name), sourceRepositories: repositoriesOf({ [UPGRADED.name]: '/source/vats' }) }));
+    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(mods, UPGRADED.name), sourceModFolders: repositoriesOf({ [UPGRADED.name]: '/source/vats' }) }));
 
     const result = await modCommands(fake.adapter).installMod(INSTALLATION_FILE, UPGRADED, NO_TRASH);
 

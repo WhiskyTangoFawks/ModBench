@@ -283,7 +283,7 @@ describe('uninstall over the selection', () => {
   ])('warns, and reports no failed uninstall, of a mod uninstalled whose %s', async (_case, answers, message, detail) => {
     const reporter = recordingReporter();
 
-    register(commandsOver(mods, answers, { sourceRepositories: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) }).commands, { reporter });
+    register(commandsOver(mods, answers, { sourceModFolders: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) }).commands, { reporter });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([{ severity: 'warning', message, detail }]);
@@ -1005,7 +1005,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   const fileRow = new FileNode(modA, { kind: 'mod', name: 'Mod A' }, file('mods/Mod A', 'a.dds'), 'a.dds');
   const eachWriteInOrder: InstanceAnswers = { refusals: (call) => { progressSteps.push(call.verb); return undefined; } };
   const commands = () => commandsOver(mods, eachWriteInOrder, {
-    sourceRepositories: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }),
+    sourceModFolders: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }),
     modFiles: new Map([['Mod A', { origin: 'Mod A', folder: '/instance/mods/Mod A', files: [fileRow.file], folders: [], notes: [] }]]),
   }).commands;
   const reporter = () => recordingReporter();
