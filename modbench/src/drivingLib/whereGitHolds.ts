@@ -8,7 +8,7 @@ const OPTIONS = [
 ] as const;
 
 // commands.md, No dead entries: the modlist repository is a choice only while the instance holds one, and a pick of one
-// choice is not shown. A gesture that cannot hold a mod's whole folder does not offer it.
+// choice is not shown.
 export function pickWhereGitHolds(holdsRepository: boolean, gesture: string): Promise<SourceModIn | undefined>;
 export function pickWhereGitHolds(holdsRepository: boolean, gesture: string, offersWholeFolder: true): Promise<SourceModIn | 'WholeFolder' | undefined>;
 export async function pickWhereGitHolds(holdsRepository: boolean, gesture: string, offersWholeFolder = false): Promise<SourceModIn | 'WholeFolder' | undefined> {
