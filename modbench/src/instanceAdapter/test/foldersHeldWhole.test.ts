@@ -22,16 +22,18 @@ async function instanceIgnoring(ignoreList: string, files: readonly string[]): P
 }
 
 const WHITELIST = '/*\n!/.gitignore\n!/mods/\n/mods/*\n!/mods/*/\n/mods/*/*\n!/mods/*/*.manifest.json\n';
-const FILES = ['mods/Held/a.esp', 'mods/Held/meta.ini', 'mods/Held/textures/b.dds', 'mods/Kept/a.esp', 'mods/Kept/meta.ini'];
+const FILES = ['mods/Cloned/Cloned.manifest.json', 'mods/Held/a.esp', 'mods/Held/meta.ini', 'mods/Held/textures/b.dds', 'mods/Kept/a.esp', 'mods/Kept/meta.ini'];
 const LETS_IN_HELD = '!/mods/Held/**\n';
 
 describe('the folders git holds whole', () => {
   it.each([
     ['a folder the ignore list lets in by hand', true, LETS_IN_HELD, [], 'mods/Held'],
     ['a folder the ignore list leaves out', false, LETS_IN_HELD, [], 'mods/Kept'],
-    ['a folder let in whose subfolder is ignored', false, `${LETS_IN_HELD}/mods/Held/textures/\n`, [], 'mods/Held'],
-    ['a folder git tracks though the ignore list would leave it out', true, '', ['add', '-f', 'mods/Kept'], 'mods/Kept'],
-    ['a folder git tracks in part', false, '', ['add', '-f', 'mods/Kept/a.esp'], 'mods/Kept'],
+    ['a folder let in by git\'s own line for it', true, '!/mods/Held/*\n', [], 'mods/Held'],
+    ['a folder the hand-written pattern lets in', true, '!mods/Held*/**\n', [], 'mods/Held'],
+    ['a folder holding only its manifest, as a clone leaves it', false, '', [], 'mods/Cloned'],
+    ['a folder holding only its tracked manifest', false, '', ['add', 'mods/Cloned'], 'mods/Cloned'],
+    ['a folder git tracks though the ignore list would leave out a new file', false, '', ['add', '-f', 'mods/Kept'], 'mods/Kept'],
     ['a folder outside the instance', false, LETS_IN_HELD, [], '../elsewhere'],
   ])('reads %s, held: %s', async (_case, held, ignoreList, git, folder) => {
     await instanceIgnoring(`${WHITELIST}${ignoreList}`, FILES);
