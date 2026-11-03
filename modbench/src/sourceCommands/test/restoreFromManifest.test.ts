@@ -652,7 +652,7 @@ describe('restore from manifest', () => {
     });
 
     it.each([
-      ['never reaches the record index', { state: 'NotYet' } as const, 121_000, 'was restored, but plugin C.esp did not reach the record index within 120 seconds'],
+      ['cannot be answered of by mEdit', { failed: 'refused', refusal: 'mEdit cannot say.' } as const, 0, 'was restored, but plugin C.esp (mEdit cannot say.)'],
       ['could not be read by mEdit', { state: 'ReadFailed', reason: 'C.esp is not a plugin.' } as const, 0, 'was restored, but plugin C.esp could not be read: C.esp is not a plugin.'],
     ])('names a mod whose plugin %s, and restores the source mod after it', async (_case, indexing, wait, reason) => {
       const { restore, client } = await aSourceModAfterTwoMods();

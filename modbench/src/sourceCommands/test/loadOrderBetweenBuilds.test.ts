@@ -80,20 +80,34 @@ describe('sourceCommands build, between mods', () => {
     expect(alone).toEqual({ landed: [landedOf('ModB')], refused: [] });
   });
 
-  it.each<[string, { state: 'NotYet' } | { failed: 'refused'; refusal: string }, string]>([
-    ['never reaches the record index as on disk', NOT_YET, 'plugin B.esp did not reach the record index within 120 seconds'],
-    ['mEdit cannot say', { failed: 'refused', refusal: 'mEdit cannot say.' }, 'mEdit cannot say.'],
-  ])('lands a mod whose plugin %s, naming why, and refuses the mods after it', async (_case, answer, why) => {
+  it('waits past two minutes while mEdit still indexes the plugin, then builds the next mod', async () => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
-    client.setQueryAnswer('getPluginIndexing', answer);
+    client.setQueryAnswer('getPluginIndexing', NOT_YET);
 
     const outcome = built();
     await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
-    await vi.advanceTimersByTimeAsync(121_000);
+    for (let minute = 0; minute < 10; minute++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.waitFor(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
+    }
+    expect(builtMods(client)).toEqual(['ModB']);
+    client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
+    client.emit(loadOrderStatusEventFixture());
+
+    expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
+  });
+
+  it('lands a mod whose plugin mEdit cannot say of, naming why, and refuses the mods after it', async () => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+    client.setQueryAnswer('getPluginIndexing', { failed: 'refused', refusal: 'mEdit cannot say.' });
+
+    const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await vi.advanceTimersByTimeAsync(1_000);
 
     expect(builtMods(client)).toEqual(['ModB']);
     expect(await outcome).toMatchObject({
-      landed: [{ mod: 'ModB', failure: expect.stringContaining(why) as unknown }],
+      landed: [{ mod: 'ModB', failure: expect.stringContaining('mEdit cannot say.') as unknown }],
       refused: [{ item: 'ModA', reason: expect.stringContaining(`was not built: ModB's plugin B.esp`) as unknown }],
     });
   });

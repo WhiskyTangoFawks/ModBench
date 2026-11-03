@@ -3,7 +3,6 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
-const LOAD_ORDER_WAIT_MS = 120_000;
 const RECHECK_MS = 250;
 
 interface Deps {
@@ -12,10 +11,10 @@ interface Deps {
 }
 
 interface Held { readonly mod: string; readonly plugin: PluginAddress }
-type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting'; readonly why: string } | { readonly kind: 'failed'; readonly why: string };
+type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting' } | { readonly kind: 'failed'; readonly why: string };
 type Standing = { readonly mod: string } & Verdict;
 
-/** Why mEdit's rows are not of each mod's plugins as on disk, by mod, once a read has failed or the bound passes. An aborted `signal` ends the wait (ADR-0003). */
+/** Why mEdit's rows are not of each mod's plugins as on disk, by mod, once a read has failed. Waits while mEdit still indexes a plugin; an aborted `signal` ends the wait (ADR-0003). */
 export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
   const reading = await adapter.reading();
   const held: Held[] = mods.flatMap((mod) => {
@@ -24,33 +23,30 @@ export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly st
     return files.files.filter((file) => !file.excluded && isPluginAtRoot(file.relativePath)).map((file) => ({ mod, plugin: { name: file.relativePath, origin: files.origin } }));
   });
   const standings = (): Promise<Standing[]> => Promise.all(held.map(async ({ mod, plugin }) => ({ mod, ...standingOf(plugin, await client.getPluginIndexing(plugin)) })));
-  const whyByMod = (now: readonly Standing[], timedOut: boolean): Map<string, string> => {
+  const whyByMod = (now: readonly Standing[]): Map<string, string> => {
     const why = new Map<string, string[]>();
     for (const standing of now) {
-      if (standing.kind === 'done' || (standing.kind === 'waiting' && !timedOut)) continue;
-      why.set(standing.mod, [...(why.get(standing.mod) ?? []), standing.kind === 'failed' ? standing.why : `${standing.why} did not reach the record index within ${String(LOAD_ORDER_WAIT_MS / 1000)} seconds`]);
+      if (standing.kind === 'failed') why.set(standing.mod, [...(why.get(standing.mod) ?? []), standing.why]);
     }
     return new Map([...why].map(([mod, whys]) => [mod, whys.join('; ')]));
   };
 
-  const deadline = Date.now() + LOAD_ORDER_WAIT_MS;
   for (;;) {
     const next = nextStatusOrRecheck(client, signal);
     const now = await standings();
-    const settled = now.every(({ kind }) => kind !== 'waiting');
-    if (settled || signal?.aborted === true || Date.now() >= deadline) {
+    if (now.every(({ kind }) => kind !== 'waiting') || signal?.aborted === true) {
       next.cancel();
-      return whyByMod(now, !settled && signal?.aborted !== true);
+      return whyByMod(now);
     }
     await next.woken;
   }
 }
 
 function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClient['getPluginIndexing']>>): Verdict {
-  if (isReadFailed(answer)) return { kind: 'waiting', why: `plugin ${plugin.name} (${failureReason(answer)})` };
+  if (isReadFailed(answer)) return { kind: 'failed', why: `plugin ${plugin.name} (${failureReason(answer)})` };
   if (answer.state === 'AsOnDisk') return { kind: 'done' };
   if (answer.state === 'ReadFailed') return { kind: 'failed', why: `plugin ${plugin.name} could not be read: ${answer.reason ?? 'mEdit gave no reason'}` };
-  return { kind: 'waiting', why: `plugin ${plugin.name}` };
+  return { kind: 'waiting' };
 }
 
 function nextStatusOrRecheck(client: Pick<MEditClient, 'onLoadOrderStatus'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {
