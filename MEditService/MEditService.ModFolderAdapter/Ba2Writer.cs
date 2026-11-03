@@ -1,5 +1,6 @@
-using System.IO.Compression;
 using System.Text;
+using ICSharpCode.SharpZipLib.Zip.Compression;
+using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
 using K4os.Compression.LZ4;
 
 namespace MEditService.ModFolderAdapter;
@@ -106,7 +107,7 @@ internal static class Ba2Writer
         switch (codec)
         {
             case Ba2Codec.Zlib:
-                using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                using (var zlib = new DeflaterOutputStream(output, new Deflater(Deflater.DEFAULT_COMPRESSION)) { IsStreamOwner = false })
                     content.CopyTo(zlib);
                 break;
             case Ba2Codec.Lz4Block:
