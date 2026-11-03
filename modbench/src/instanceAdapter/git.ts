@@ -15,6 +15,8 @@ function gitWith(env: NodeJS.ProcessEnv | undefined): { git: Git; gitFed: GitFed
     git: async (folder, ...args) => (await execFileAsync('git', ['-C', folder, ...args], options)).stdout,
     gitFed: async (folder, input, ...args) => {
       const running = execFileAsync('git', ['-C', folder, ...args], options);
+      // git that exits before it reads its input closes the pipe; its exit says why.
+      running.child.stdin?.on('error', () => undefined);
       running.child.stdin?.end(input);
       return (await running).stdout;
     },
