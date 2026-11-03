@@ -221,7 +221,7 @@ export function isIncompatibilityPresent(path: string, facts: ConditionFacts): E
   const matched = REGEX_PATH.test(path) ? matching(facts.files().names, path) : { found: [path] };
   if ('problem' in matched) return cannot(matched.problem);
   const active = new Set(facts.activePlugins().map(fold));
-  return yes(REGEX_PATH.test(path) || matched.found.some((file) => !PLUGIN.test(file) || active.has(fold(file))));
+  return yes(matched.found.some((file) => !PLUGIN.test(file) || active.has(fold(file))));
 }
 
 function withAnswer(facts: ConditionFacts, read: FileRead, use: (value: ReadValue) => boolean): Evaluation {
