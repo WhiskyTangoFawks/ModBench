@@ -32,7 +32,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
-import type { PluginShown } from '../../drivingLib/pluginsShown';
+import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -77,8 +77,13 @@ const statuses = { current: () => { statusRead.asked += 1; return Promise.resolv
 
 const NOT_READ: PluginShown = { statuses: [], readOnly: null, compiled: null, masters: null };
 const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Map() };
-const pluginsShown = { shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ };
-afterEach(() => { shownRead.answer = new Map(); });
+const sortingRead: { rules: ReturnType<PluginsShown['brokenRules']>[number][]; moves: ReturnType<PluginsShown['suggestedMoves']>[number][] } = { rules: [], moves: [] };
+const pluginsShown = {
+  shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ,
+  brokenRules: () => sortingRead.rules,
+  suggestedMoves: () => sortingRead.moves,
+};
+afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; });
 
 const copyAnswers: InstanceAnswers = {};
 
@@ -132,7 +137,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_sorting_rules', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
   });
 
   it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
@@ -236,6 +241,23 @@ describe('the agent server, given an instance value', () => {
     expect(await read(client, 'list_plugins')).toMatchObject({ plugins: [
       { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
       { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
+    ] });
+  });
+
+  it('reads each broken sorting rule in its words, with its level, its plugins and the move it offers', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+    const master: (typeof sortingRead.rules)[number] = { level: 'error', reason: 'A.esp loads before its master B.esp.', plugins: [{ origin: 'Big Rocks', filename: 'A.esp' }, { origin: 'Big Rocks', filename: 'B.esp' }] };
+    const dirty: (typeof sortingRead.rules)[number] = { level: 'info', reason: 'A.esp is dirty.', plugins: [{ origin: 'Big Rocks', filename: 'A.esp' }] };
+    sortingRead.rules = [master, dirty];
+    sortingRead.moves = [{ rule: master, mover: { name: 'A.esp', origin: 'Big Rocks' }, drop: { kind: 'after', name: 'B.esp' } }];
+
+    expect(await read(client, 'list_sorting_rules')).toEqual({ rules: [
+      {
+        rule: 'A.esp loads before its master B.esp.', level: 'error',
+        plugins: [{ name: 'A.esp', origin: 'Big Rocks' }, { name: 'B.esp', origin: 'Big Rocks' }],
+        suggestedMove: { plugin: { name: 'A.esp', origin: 'Big Rocks' }, side: 'after', beside: 'B.esp' },
+      },
+      { rule: 'A.esp is dirty.', level: 'info', plugins: [{ name: 'A.esp', origin: 'Big Rocks' }] },
     ] });
   });
 
@@ -516,6 +538,7 @@ describe('the agent server, given an instance value', () => {
 
     it.each([
       ['list_plugins', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
+      ['list_sorting_rules', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
       ['list_problems', ['No masterlist', 'a source problem']],
       ['read_record', ['mEdit is Running', 'plugins read failed', 'a source problem']],
     ])('reach %s with its own sources, instance lines first', async (tool, own) => {

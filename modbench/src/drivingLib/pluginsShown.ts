@@ -8,6 +8,22 @@ export interface PluginShown {
   readonly masters: readonly string[] | null;
 }
 
+/** A broken sorting rule as the Plugins view's Sorting rules show it (plugins.md, Sorting rules). */
+interface SortingRuleShown {
+  readonly level: 'error' | 'warning' | 'info';
+  readonly reason: string;
+  readonly plugins: readonly { readonly origin: string; readonly filename: string }[];
+}
+
+/** The move that keeps `rule`: `mover` goes directly `drop.kind` of the plugin `drop.name`, in load order. */
+interface SuggestedMoveShown {
+  readonly rule: SortingRuleShown;
+  readonly mover: PluginAddress;
+  readonly drop: { readonly kind: string; readonly name?: string };
+}
+
 export interface PluginsShown {
   shown(plugin: PluginAddress): PluginShown;
+  brokenRules(): readonly SortingRuleShown[];
+  suggestedMoves(): readonly SuggestedMoveShown[];
 }

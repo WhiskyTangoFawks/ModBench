@@ -18,6 +18,7 @@ import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS, type DeploymentRead } from './instanceReads';
 import { LIST_PLUGINS } from './listPlugins';
+import { LIST_SORTING_RULES } from './listSortingRules';
 import { withNotRestored } from './notRestored';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
@@ -113,6 +114,7 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   for (const read of INSTANCE_READS) register(server, log, reading(...read.reads), { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
+  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_SORTING_RULES, input: NO_INPUT }, () => LIST_SORTING_RULES.of(pluginsShown));
   register(server, log, reading('instance', 'modList'), { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
   register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
