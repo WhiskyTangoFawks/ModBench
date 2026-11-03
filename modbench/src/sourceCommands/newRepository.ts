@@ -219,15 +219,15 @@ export async function modsPlaced<R>(
   }
   const outcome = await run(made);
   const landed = [...new Set(isRefused(outcome) ? [] : landedBy(outcome))];
-  const notLinked = await foldersNotLinked(adapter, made, landed);
+  const unfinished = await foldersNotLinked(adapter, made, landed);
   const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : undefined;
   if (notLeftOut !== undefined) {
     for (const mod of landed) {
-      const why = notLinked.get(mod);
-      notLinked.set(mod, why === undefined ? notLeftOut : `${why}; ${notLeftOut}`);
+      const why = unfinished.get(mod);
+      unfinished.set(mod, why === undefined ? notLeftOut : `${why}; ${notLeftOut}`);
     }
   }
-  return { outcome, notMade, notLinked, notes };
+  return { outcome, notMade, notLinked: unfinished, notes };
 }
 
 /** `modsPlaced` bound to one instance, as decompile and repair is handed it. */

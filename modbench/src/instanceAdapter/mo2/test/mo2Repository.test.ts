@@ -510,6 +510,18 @@ describe('the MO2 adapter\'s repository', () => {
       expect([untracked, [...(await adapter.sourceModFolders()).keys()], await readFile(join(root, '.gitignore'), 'utf8')]).toEqual([[], ['Mod A'], before]);
     });
 
+    it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) lets in no link and no loose file beside it, which a clone on another machine could not use', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceFolder('Mod A');
+      await put('source/notes.md');
+      await put('elsewhere/Linked/build.json');
+      await symlink(join(root, 'elsewhere', 'Linked'), join(root, 'source', 'Linked'));
+
+      expect(shown()).toEqual([`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort());
+    });
+
     it('is held by git as its own ignore list says, and never whole', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');

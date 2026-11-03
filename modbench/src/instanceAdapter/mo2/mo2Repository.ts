@@ -181,13 +181,10 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
       const file = ignoreListFile(instanceRoot);
       const existed = await exists(file);
       let appended = '';
-      // The whitelist lets in every source folder, so one with a repository of its own and no entry is left out from the start.
-      const repositories = await sourceRepositoriesOf(instanceRoot);
-      await putIfChanged(file, (before) => {
+      await putIfChanged(file, async (before) => {
         const whitelisted = whitelistAfter(before, whitelist);
-        const lines = withSourceModLines('', repositories) ?? '';
-        const sourceModLines = whitelisted === '' || lines.trim() === '' ? '' : lines;
-        appended = whitelisted + (before.includes('\r\n') ? sourceModLines.replaceAll('\n', '\r\n') : sourceModLines);
+        const after = whitelisted === '' ? before : withSourceModLines(before + whitelisted, await sourceRepositoriesOf(instanceRoot)) ?? before + whitelisted;
+        appended = after.startsWith(before) ? after.slice(before.length) : whitelisted;
         return before + appended;
       }, { ifMissing: '' });
       return async () => {

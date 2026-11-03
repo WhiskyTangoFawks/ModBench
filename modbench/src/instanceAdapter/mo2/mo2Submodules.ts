@@ -210,7 +210,9 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       return { notes, other };
     },
 
-    writeSourceModLines: () => sourceModLinesWritten(instanceRoot),
+    async writeSourceModLines() {
+      if (await isRepository(instanceRoot)) await sourceModLinesWritten(instanceRoot);
+    },
 
     sourceHost: (folder) => sourceHostOf(folder).then(
       (answer) => ({ kind: 'read' as const, answer }), (err: unknown) => ({ kind: 'unreadable' as const, reason: errorMessage(err) })),
