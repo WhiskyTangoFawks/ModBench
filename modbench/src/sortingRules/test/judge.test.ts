@@ -116,4 +116,10 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
 
     expect(judge(['Creation.esm', 'Mod.esm'], facts, (filename) => filename === 'Creation.esm').map(({ rule }) => rule)).toEqual(['master']);
   });
+
+  it('judges no master flag between two plugins the game loads with no line', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esm': { master: true } });
+
+    expect(judge(['A.esp', 'B.esm'], facts, () => true)).toEqual([]);
+  });
 });
