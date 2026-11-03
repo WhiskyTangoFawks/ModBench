@@ -108,7 +108,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.rules(), this.deps.lines());
+    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.lines(), this.deps.rules());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);

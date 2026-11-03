@@ -7,7 +7,7 @@ interface SuggestedMoveActionsDeps {
   moves: () => readonly OfferedMove[];
 }
 
-/** plugins.md, Sorting rules, story 5: apply suggested move as a code action on the line of the userlist that states the broken rule. */
+/** plugins.md, Sorting rules, story 5. */
 export function suggestedMoveActions({ userlistPath, moves }: SuggestedMoveActionsDeps) {
   return {
     provideCodeActions(document: { readonly uri: { toString(): string } }, range: { readonly start: { readonly line: number }; readonly end: { readonly line: number } }): vscode.CodeAction[] {
