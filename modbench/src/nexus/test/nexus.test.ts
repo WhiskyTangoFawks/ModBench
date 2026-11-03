@@ -337,6 +337,7 @@ describe('downloading a file', () => {
     const { result, sent } = await downloading(servingFile78('the bytes'));
 
     expect(result.found && await new Response(result.bytes).text()).toBe('the bytes');
+    expect(result.found && result.fileName).toBe('Sleep-7-1-2.7z');
     expect(result.found && result.info).toEqual({
       game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', modVersion: '1.0', versionFromNewest: true, fileCategory: 1, fileTime: 1700000000,
       description: 'Main file', modName: 'Sleep & Save', category: 12, author: 'Someone', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1',
@@ -348,6 +349,7 @@ describe('downloading a file', () => {
   it.each([
     ['says Nexus does not hold a file it answers 404 for', { [FILE_78.record]: new Response('', { status: 404 }) }, 'Nexus does not hold this file.'],
     ['says only a Premium account gets a download link when Nexus forbids one', { [FILE_78.link]: new Response('', { status: 403 }) }, 'Nexus gives a download link to a Premium account alone.'],
+    ['says Nexus named no file name when the file record has none', { [FILE_78.record]: json({ file_id: 78, name: 'Main' }) }, 'Nexus named no file name for the file.'],
     ['says Nexus named no server when its list is empty', { [FILE_78.link]: json([]) }, 'Nexus named no server to download the file from.'],
     ['names the status the server answers', { [FILE_78.server]: new Response('', { status: 410 }) }, 'The server Nexus named answered 410.'],
     ['says why the server cannot be reached', { [FILE_78.server]: new Error('ECONNRESET') }, 'Could not reach the server Nexus named: ECONNRESET'],
@@ -358,11 +360,32 @@ describe('downloading a file', () => {
   });
 });
 
+describe("listing a mod's files", () => {
+  const LIST = 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files.json';
+  const entry = { file_id: 78, name: 'Main', version: '1.2', category_id: 1, category_name: 'MAIN', file_name: 'Sleep-7-1-2.7z' };
+
+  it('names each file by its ID, name, version and category', async () => {
+    const { nexus } = await nexusServing({ [LIST]: json({ files: [entry], file_updates: [] }) });
+
+    expect(await nexus.filesOf({ game: 'fallout4', modID: '7' })).toEqual({ found: true, files: [{ fileID: '78', name: 'Main', version: '1.2', category: 'MAIN' }] });
+  });
+
+  it.each([
+    ['says why Nexus does not answer', {}, 'Nexus does not hold this mod.'],
+    ['refuses a list in a form it does not read', { [LIST]: json({ files: 'none' }) }, 'Nexus answered its file list in a form Modbench does not read.'],
+  ])('%s', async (_name, answers, reason) => {
+    const { nexus } = await nexusServing(answers);
+
+    expect(await nexus.filesOf({ game: 'fallout4', modID: '7' })).toEqual({ found: false, reason });
+  });
+});
+
 describe('asking Nexus while logged out', () => {
   it.each<[string, (nexus: Nexus) => Promise<unknown>]>([
     ['a mod\'s newest version', (nexus) => nexus.newestVersion({ game: 'fallout4', modId: '7' })],
     ['which file has an MD5', (nexus) => nexus.fileByMd5({ games: ['fallout4'], md5: 'd41d8cd98f00b204e9800998ecf8427e', fileName: 'a.7z' })],
     ['which file of a mod bears a name', (nexus) => nexus.fileByName({ game: 'fallout4', modID: '7', fileName: 'a.7z' })],
+    ["a mod's files", (nexus) => nexus.filesOf({ game: 'fallout4', modID: '7' })],
     ['to download a file', (nexus) => nexus.download({ game: 'fallout4', modID: '7', fileID: '78' })],
   ])('refuses %s, asking nothing', async (_case, ask) => {
     const { nexus, sent } = await nexusServing(servingFile78('the bytes'), false);

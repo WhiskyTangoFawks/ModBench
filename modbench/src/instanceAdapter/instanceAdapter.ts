@@ -701,6 +701,8 @@ export interface InstanceAdapter extends DataFileReads {
   }): Promise<{ readonly files: readonly InstallationFile[]; readonly notes: readonly string[] }>;
   /** The file on Nexus a page names, or its mod alone; undefined when it is no Nexus page. */
   nexusFileAt(page: string): NexusPage | undefined;
+  /** The Nexus games to ask about a file of the instance's game, in the mod manager's order; rejects when Nexus has none for it. */
+  nexusGames(): Promise<readonly string[]>;
   /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */
   downloadedFileQuery(name: string): Promise<FileRead<DownloadedFileQuery | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
@@ -819,8 +821,8 @@ export interface InstanceAdapter extends DataFileReads {
   /** Writes what Nexus names of a downloaded file into its metadata, made when it has none. Keeps every value `info` does not name. Rejects, writing nothing, when the instance's game has no name in Nexus's terms. */
   writeNexusFileInfo(name: string, info: NexusFileInfo): Promise<Marked>;
   /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`, and
-   *  puts nothing when it is not. Refuses a name the downloads folder holds, writing nothing. */
-  putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
+   *  puts nothing when it is not; any bytes when no hash is given. Refuses a name the downloads folder holds, writing nothing. */
+  putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash?: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
   /** Puts a copy of the downloaded file at `from` as the downloaded file `name`, with its metadata. Refuses a name the
    *  downloads folder holds, writing nothing. */
   copyDownloadedFile(from: string, name: string): Promise<void>;
