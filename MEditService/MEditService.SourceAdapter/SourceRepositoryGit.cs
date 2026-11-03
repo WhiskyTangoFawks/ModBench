@@ -186,9 +186,8 @@ internal sealed class SourceRepositoryGit
         return TryRun(out var stdout, "cat-file", "-p", $"HEAD:./{ToGitPath(relativePath)}") ? stdout : null;
     }
 
-    /// <summary>Each path under the plugin's tree that git status names, relative to the source folder, with its
-    /// index-column code; null when git cannot say. It names both ends of a move and every untracked or ignored
-    /// file.</summary>
+    /// <summary>Each path in the source folder under the plugin's tree that git status names, with its index-column code;
+    /// null when git cannot say. It names both ends of a move and every untracked or ignored file.</summary>
     internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName)
     {
         if (!TryRun(out var stdout,
