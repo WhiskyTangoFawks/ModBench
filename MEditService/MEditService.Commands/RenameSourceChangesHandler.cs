@@ -16,7 +16,7 @@ public sealed class RenameSourceChangesHandler
         (_loadOrder, _source, _unsaved) = (loadOrder, source, unsaved);
 
     /// <summary>The changes renaming the plugin's source makes over the unsaved documents mEdit holds, which stand in for
-    /// their files, written nowhere (ADR-0001); none for a plugin with no plugin source. Refuses with <see cref="RenameSourceRefusal.NoLoadOrder"/> when none is held.</summary>
+    /// their files, written nowhere (ADR-0001); none for a plugin with no plugin source.</summary>
     public RenameSourceResult RenameSource(PluginAddress plugin, string newName)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
