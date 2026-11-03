@@ -33,6 +33,24 @@ const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
 
+describe('PluginFacts — the sorting rules are judged once a reconcile completes (plugins.md, A row, Plugin)', () => {
+  const heldElsewhereRefusal = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
+  const failedIndexRefusal = { kind: 'failed', message: 'the record index threw' } as const;
+  it.each([
+    ['while indexing', scenes(), 'Still indexing…'],
+    ['when the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndexRefusal), failedIndexRefusal.message],
+    ['when another window holds the record index', (facts: PluginFacts) => facts.refused(heldElsewhereRefusal), heldElsewhereRefusal.message],
+    ['when mEdit is unreachable', (facts: PluginFacts) => facts.unreachable('mEdit is down'), 'mEdit is down'],
+    ['after a reconcile', lackingMasters(), undefined],
+    ['while a later snapshot indexes', scenes(lackingMasters(), (facts) => facts.indexed([A], [])), undefined],
+  ] as const)('says why they are not judged %s', (_label, scene, reason) => {
+    const facts = new PluginFacts();
+    scene(facts);
+
+    expect(facts.sortingNotJudged()).toBe(reason);
+  });
+});
+
 describe('PluginFacts — the tooltip names the origin (plugins.md, A row, Plugin, Tooltip)', () => {
   it('names the game folder as the user reads it', () => {
     expect(new PluginFacts().tooltipLines({ name: 'A.esp', origin: 'Data/' })).toEqual(['A.esp', 'the game folder']);
