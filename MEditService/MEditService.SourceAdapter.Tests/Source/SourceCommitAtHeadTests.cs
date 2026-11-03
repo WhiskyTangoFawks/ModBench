@@ -60,7 +60,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Theory]
-    [InlineData("core.autocrlf", "false")]
     [InlineData("core.longpaths", "true")]
     [InlineData("core.quotePath", "false")]
     [InlineData("commit.gpgsign", "false")]

@@ -9,7 +9,6 @@ public sealed class SourceRepositoryInitConfigTests
     private static void Init(string modFolder) => Assert.Null(TestAdapters.Source().Init(modFolder, [PluginBaselines.OneRecordOf("Test.esp")]));
 
     [Theory]
-    [InlineData("core.autocrlf", "false")]
     [InlineData("core.longpaths", "true")]
     [InlineData("core.quotePath", "false")]
     [InlineData("commit.gpgsign", "false")]

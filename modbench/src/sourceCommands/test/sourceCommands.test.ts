@@ -390,7 +390,7 @@ describe('sourceCommands versionInGit', () => {
     expect(mod?.repository.buildFile).toBe('{"version":1,"steps":[\n{"copy":["scripts","textures"]},\n{"compile":["ModA.esp"]}\n]}\n');
   });
 
-  it.each(['build.json', 'Plugin-Source/notes.txt', '.gitignore'])('refuses a mod that holds %s, where its source folder holds its own, handing mEdit nothing', async (path) => {
+  it.each(['build.json', 'Plugin-Source/notes.txt', '.gitignore', '.gitattributes'])('refuses a mod that holds %s, where its source folder holds its own, handing mEdit nothing', async (path) => {
     const { client, handed } = committing();
     const adapter = modsAt(hashed({ 'ModA.esp': 'P', [path]: 'X' }));
 

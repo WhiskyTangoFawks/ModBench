@@ -50,6 +50,9 @@ internal static class GitInit
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
             git.BeginInit(journal);
             journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
+            // plugins.md, Version in git, story 4, whatever the user's git config converts. Its own .gitignore leaves it
+            // untracked (story 2), so a clone's endings follow its own config.
+            journal.Write(Path.Combine(sourceFolder, ".gitattributes"), "* -text\n"u8.ToArray());
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             Track(git, journal, sourceFolder, commit, plugins, repair);
@@ -111,7 +114,6 @@ internal static class GitInit
     /// <summary>How Modbench sets every source repository it makes, by init or by clone.</summary>
     internal static readonly (string Key, string Value)[] Settings =
     [
-        ("core.autocrlf", "false"),
         // Git for Windows refuses a path past 260 characters unless told otherwise, and a source folder's
         // plugin source nests deep.
         ("core.longpaths", "true"),

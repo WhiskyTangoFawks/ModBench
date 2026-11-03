@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { folderValueOver, modValueOver } from '../modValue';
+import { folderValueOver, modValueOver, sourceFolderValueOver } from '../modValue';
 
 const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
 
@@ -36,6 +36,16 @@ describe('a folder as a value', () => {
 
   it('says its file system does not ignore case when no file name has a case to change', async () => {
     expect((await folderValueOver(reads(['123.456'], true), '/mods/Mod')).ignoresCase).toBe(false);
+  });
+});
+
+describe('a source folder as a value', () => {
+  it('holds only the files git neither holds nor owns, so its manifest names no attributes file version in git leaves untracked', async () => {
+    const { files } = await sourceFolderValueOver(
+      reads(['.git/config', '.gitattributes', '.gitignore', 'build.json', 'textures/a.dds']), () => Promise.resolve(['.gitignore', 'build.json']), '/source/Mod',
+    );
+
+    expect([...files.keys()]).toEqual(['textures/a.dds']);
   });
 });
 
