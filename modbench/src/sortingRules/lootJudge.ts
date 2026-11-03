@@ -175,8 +175,7 @@ function judgeGroups(
 }
 
 /** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages that apply.
- *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread.
- *  The game places a plugin it loads with no line, so no load after or group holds it to a place. */
+ *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread. */
 export function judgeLoot(
   order: readonly PluginRef[], rules: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
   loadedWithNoLine: (filename: string) => boolean,
