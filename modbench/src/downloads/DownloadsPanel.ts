@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { DownloadedFileSortColumn } from './downloadedFileRows';
 import type { DeletedDownloadedFile, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
+import type { Download } from '../downloadedFileCommands/download';
 import type { QueriedFile, QueryInfo } from '../downloadedFileCommands/queryInfo';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
@@ -147,6 +148,41 @@ export function registerDownloadsQueryInfoCommand(
   queryInfo: QueryInfo, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable {
   return registerAgentGesture('modbench.downloadedFile.queryInfo', viewSelection, queryInfoGesture(queryInfo, instance, reporter));
+}
+
+interface NexusFileRequest {
+  readonly mod: string;
+  readonly file?: string;
+}
+
+function downloadGesture(
+  download: Download, instance: Pick<Instance, 'refresh'>, reporter: Reporter,
+): AgentGesture<DownloadsTreeNode, NexusFileRequest, GestureResult<string>, NexusFileRequest> {
+  return {
+    fromView: async () => {
+      const mod = await vscode.window.showInputBox({ prompt: 'Nexus mod ID or page address', placeHolder: 'ID, or https://www.nexusmods.com/…' });
+      if (!mod) return undefined;
+      const listed = await download.filesOf(mod);
+      if (!listed.applied) { reporter.report('error', listed.refusal); return undefined; }
+      if (listed.named !== undefined) return { mod, file: listed.named };
+      const picked = await vscode.window.showQuickPick(
+        listed.files.map((file) => ({ label: file.name, description: `${file.version} ${file.category}`, file: file.fileID })), { placeHolder: 'File to download' });
+      return picked === undefined ? undefined : { mod, file: picked.file };
+    },
+    fromAgent: ({ options }) => options,
+    run: (wanted) => runDownloadsWriting(instance, async (): Promise<GestureResult<string>> => {
+      const result = await download.download(wanted);
+      return result.applied ? { applied: true, outcome: { landed: [result.name], refused: [] } } : result;
+    }),
+    report: (result) => {
+      if (!result.applied) reporter.report('error', result.refusal, result.detail);
+      else reporter.landed(`Downloaded "${result.outcome.landed.join('", "')}".`);
+    },
+  };
+}
+
+export function registerDownloadsDownloadCommand(download: Download, instance: Pick<Instance, 'refresh'>, reporter: Reporter): vscode.Disposable {
+  return registerAgentGesture('modbench.downloadedFile.download', () => [], downloadGesture(download, instance, reporter));
 }
 
 // Sorting and excluded-row filtering already happen inside DownloadsProvider's load(), so these

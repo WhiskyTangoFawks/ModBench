@@ -139,6 +139,12 @@ const DOWNLOADED_FILES = gestureInput(
     downloadedFilesNamed(value.downloadedFiles, argument.map(({ name }) => name)).map((name) => ({ kind: 'downloadedFile' as const, name })), {}),
 );
 
+const DOWNLOAD = gestureInput(
+  'options: { mod: the Nexus mod, by its ID in the instance\'s game or by the address of its Nexus page, file?: the ID of its file to download, which a page address with a file may name instead; a request that names no file is refused, listing the mod\'s files }',
+  z.object({ options: z.object({ mod: z.union([z.string(), z.number()]), file: z.union([z.string(), z.number()]).optional() }) }),
+  (_value, { options: { mod, file } }) => new AgentCall([], { mod: String(mod), file: file === undefined ? undefined : String(file) }),
+);
+
 const INSTALL_SOURCE = z.union([
   z.object({ kind: z.literal('downloadedFile'), name: z.string() }),
   z.object({ kind: z.enum(['archive', 'folder']), path: z.string() }),
@@ -321,6 +327,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.removePublisherTag', PUBLISHER_TAG_ROWS],
   ['modbench.mod.install', INSTALL],
   ['modbench.downloadedFile.queryInfo', DOWNLOADED_FILES],
+  ['modbench.downloadedFile.download', DOWNLOAD],
   ['modbench.downloadedFile.exclude', DOWNLOADED_FILES],
   ['modbench.downloadedFile.include', DOWNLOADED_FILES],
   ['modbench.downloadedFile.delete', DOWNLOADED_FILES],

@@ -55,7 +55,8 @@ import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 type DownloadsViewDeps = Parameters<typeof createDownloadsView>[0];
 
 const downloadsViewDeps = (instance: InstanceView & Pick<Instance, 'refresh'>): DownloadsViewDeps => ({
-  commands: downloadedFileCommands(fakeInstanceAdapter().adapter), queryInfo: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [] } }), instance, reporterFor: recordingReporter,
+  commands: downloadedFileCommands(fakeInstanceAdapter().adapter), queryInfo: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [] } }),
+  download: { filesOf: () => Promise.resolve({ applied: true, files: [] }), download: () => Promise.resolve({ applied: false, refusal: 'not under test' }) }, instance, reporterFor: recordingReporter,
   trash: () => Promise.resolve(),
   channel: { warn: () => undefined },
 });
