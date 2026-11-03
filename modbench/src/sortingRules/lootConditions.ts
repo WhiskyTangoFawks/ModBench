@@ -1,5 +1,8 @@
 import { compareVersions, versionInDescription } from './lootVersion';
 
+/** Whether the game finds a file in its Data folder; `unknown` while the folder cannot be listed. */
+export type Presence = 'present' | 'absent' | 'unknown';
+
 /** A read of one file's bytes or version resource, which the Instance adapter answers. `path` is relative to the
  *  Data folder, and may leave it with `../`. */
 export interface FileRead {
@@ -13,8 +16,7 @@ export class Unevaluable extends Error {}
 export interface ConditionFacts {
   /** Every file the Data folder holds, relative to it with `/`. */
   files: () => readonly string[];
-  /** Whether the Data folder holds the file; `undefined` when the instance cannot say. */
-  isPresent: (path: string) => boolean | undefined;
+  isPresent: (path: string) => Presence;
   /** The filenames of the active plugins. */
   activePlugins: () => readonly string[];
   /** `undefined` while mEdit has not read the plugin. */
@@ -207,11 +209,14 @@ function checksumTest(args: readonly Argument[]): { path: string; expected: numb
   return { path: stringArgument(args, 0, 'checksum'), expected: parseInt(expected, 16) };
 }
 
-const presentOrUnknown = (path: string, facts: ConditionFacts): boolean => {
-  const present = facts.isPresent(path);
-  if (present === undefined) throw new Unevaluable(`the instance cannot say whether "${path}" is present`);
-  return present;
-};
+const leavesData = (path: string): boolean => path.startsWith('../');
+
+function presentOrUnknown(path: string, facts: ConditionFacts): boolean {
+  if (leavesData(path)) return facts.answer({ kind: 'readable', path }) === true;
+  const presence = facts.isPresent(path);
+  if (presence === 'unknown') throw new Unevaluable("the game's Data folder cannot be listed");
+  return presence === 'present';
+}
 
 /** Whether the file is installed as `file()` says: a name with a regular expression in its filename needs only a match. */
 export function isFilePresent(path: string, facts: ConditionFacts): boolean {
@@ -290,6 +295,7 @@ function readsIn(node: Node): FileRead[] {
   const path = node.args[0]?.kind === 'string' ? node.args[0].text : undefined;
   if (path === undefined) return [];
   switch (node.name) {
+    case 'file': return leavesData(path) && !REGEX_PATH.test(path) ? [{ kind: 'readable', path }] : [];
     case 'readable': return [{ kind: 'readable', path }];
     case 'checksum': return [{ kind: 'checksum', path }];
     case 'version': return PLUGIN.test(path) ? [] : [{ kind: 'version', path }];

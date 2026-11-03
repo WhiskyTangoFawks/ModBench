@@ -448,6 +448,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,
+    dataFileChecksum: () => Promise.resolve(undefined),
+    dataFileVersion: () => Promise.resolve(undefined),
+    dataFileReadable: () => Promise.resolve(false),
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
       return write({ verb: 'changeModOrder', profile, changes }, () => {

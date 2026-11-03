@@ -17,7 +17,7 @@ const value = instanceValueFixture({
   dataFolderFiles: { kind: 'listed', files: new Set(['f4se/plugins/game.dll', 'fallout4 - main.ba2']) },
 });
 
-describe('fileIsPresent: a file the game finds in its Data folder', () => {
+describe('filePresence: a file the game finds in its Data folder', () => {
   it.each([
     ['a file a mod provides, in any case and with either slash', 'f4se\\plugins\\X.dll'],
     ['a plugin a mod provides', 'provided.ESP'],

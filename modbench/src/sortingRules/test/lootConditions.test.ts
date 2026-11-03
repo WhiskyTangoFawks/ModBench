@@ -15,7 +15,7 @@ function factsOf(world: World): ConditionFacts {
   const files = world.files ?? [];
   return {
     files: () => files,
-    isPresent: (path) => files.some((file) => file.toLowerCase() === path.toLowerCase()),
+    isPresent: (path) => (files.some((file) => file.toLowerCase() === path.toLowerCase()) ? 'present' : 'absent'),
     activePlugins: () => world.active ?? [],
     isMaster: (plugin) => world.masters?.[plugin],
     description: (plugin) => world.descriptions?.[plugin],
@@ -66,11 +66,15 @@ describe('evaluateCondition: the functions', () => {
     expect([value('file("Meshes/A.nif")', { files: ['meshes/a.nif'] }), value('file("B.nif")', { files: ['a.nif'] })]).toEqual([true, false]);
   });
 
+  it('reads file() of a path out of the Data folder as readable', () => {
+    expect(value('file("../f4se_loader.exe")', { answers: { 'readable:../f4se_loader.exe': true } })).toBe(true);
+  });
+
   it('says file() cannot be evaluated when the instance cannot say whether the file is present', () => {
-    const facts = { ...factsOf({}), isPresent: () => undefined };
+    const facts: ConditionFacts = { ...factsOf({}), isPresent: () => 'unknown' };
 
     expect(evaluateCondition('file("A.esp") or active("A.esp")', facts)).toEqual({
-      kind: 'unevaluable', reason: 'the instance cannot say whether "A.esp" is present',
+      kind: 'unevaluable', reason: "the game's Data folder cannot be listed",
     });
   });
 
@@ -152,7 +156,7 @@ describe('readFileFacts: the Instance adapter\'s answers to the reads a conditio
     version: async (path: string, field: 'file' | 'product') => (path === '../G.exe' ? `${field} 1.2` : undefined),
     readable: async (path: string) => path === '../G.exe',
   };
-  const instance = { files: () => [], isPresent: () => false };
+  const instance: Pick<ConditionFacts, 'files' | 'isPresent'> = { files: () => [], isPresent: () => 'absent' };
 
   it('evaluates a condition over what was read', async () => {
     const reads: FileRead[] = [
@@ -183,6 +187,10 @@ describe('readsOf: the file reads a condition needs', () => {
         { kind: 'productVersion', path: 'x.dll' },
       ]);
     expect(readsOf('active(')).toEqual([]);
+  });
+
+  it('names readable for file() out of the Data folder', () => {
+    expect(readsOf('file("../f4se_loader.exe")')).toEqual([{ kind: 'readable', path: '../f4se_loader.exe' }]);
   });
 
   it('names no file read for what mEdit or the instance value answers', () => {

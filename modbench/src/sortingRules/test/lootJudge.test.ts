@@ -18,7 +18,7 @@ interface World {
 
 const factsOf = ({ present = [], active = [], answers = {} }: World): ConditionFacts => ({
   files: () => present,
-  isPresent: (path) => present.some((name) => name.toLowerCase() === path.toLowerCase()),
+  isPresent: (path) => (present.some((name) => name.toLowerCase() === path.toLowerCase()) ? 'present' : 'absent'),
   activePlugins: () => active,
   isMaster: () => false,
   description: () => undefined,
@@ -146,11 +146,11 @@ describe('judgeLoot: LOOT\'s rules held against a plugin order', () => {
   it('breaks, at Warning, a requirement whose presence the instance cannot tell, instead of reading it as missing', () => {
     const broken = judgeLoot([at('A.esp')], {
       ...rules({ masterlist: text('plugins:\n  - name: A.esp\n    req: [B.esp]\n') }),
-      facts: { ...factsOf({}), isPresent: () => undefined },
+      facts: { ...factsOf({}), isPresent: () => 'unknown' },
     }, () => 'nonMasters');
 
     expect(broken.map(({ rule, level, reason }) => [rule, level, reason])).toEqual([
-      ['condition', 'warning', '"A.esp": a requirement cannot be evaluated (the instance cannot say whether "B.esp" is present), so "B.esp" is not checked.'],
+      ['condition', 'warning', '"A.esp": a requirement cannot be evaluated (the game\'s Data folder cannot be listed), so "B.esp" is not checked.'],
     ]);
   });
 

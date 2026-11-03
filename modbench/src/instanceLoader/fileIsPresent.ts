@@ -2,10 +2,10 @@ import type { InstanceValue } from './instance';
 
 type PresenceFacts = Pick<InstanceValue, 'files' | 'plugins' | 'pluginsLoadedWithNoLine' | 'dataFolderPlugins' | 'dataFolderFiles'>;
 
-/** Whether the game finds the file in its Data folder, as LOOT sees it; unknown while the Data folder cannot be listed and
- *  nothing else provides the file. A plugins.txt line that no file provides is not a file. */
 export type Presence = 'present' | 'absent' | 'unknown';
 
+/** Whether the game finds the file in its Data folder, as LOOT sees it; unknown while the Data folder cannot be listed and
+ *  nothing else provides the file. A plugins.txt line that no file provides is not a file. */
 export function filePresence(facts: PresenceFacts, relativePath: string): Presence {
   const normalised = relativePath.replace(/\\/g, '/');
   const folded = normalised.toLowerCase();
@@ -19,5 +19,3 @@ export function filePresence(facts: PresenceFacts, relativePath: string): Presen
   if (found) return 'present';
   return dataFolderPlugins.kind === 'listed' && dataFolderFiles.kind === 'listed' ? 'absent' : 'unknown';
 }
-
-export const fileIsPresent = (facts: PresenceFacts, relativePath: string): boolean => filePresence(facts, relativePath) === 'present';

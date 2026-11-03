@@ -30,7 +30,7 @@ function lootPartition({ master, blueprint }: { master: boolean; blueprint: bool
 }
 
 // No metadata: only the game's own sorting rules are judged.
-const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () => [], isPresent: () => true, answer: () => undefined } };
+const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () => [], isPresent: () => 'present', answer: () => undefined } };
 
 /** LOOT's rules, and what the instance says of the files their conditions name. */
 export type LootInput = Omit<LootRules, 'facts'> & { files: FileFacts };
