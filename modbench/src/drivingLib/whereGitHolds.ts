@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { SourceModIn } from '../wire/sourceModIn';
+import type { SourceModIn } from '../wire/pluginAddress';
 
 // commands.md, No dead entries: the modlist repository is a choice only while the instance holds one, and a pick of one
 // choice is not shown.
