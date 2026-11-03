@@ -1,9 +1,14 @@
+using MEditService.Codec.Schema;
+
 namespace MEditService.RecordIndex.Queries;
 
 // Single owner of ADR-0018's two-axis model's decision rules, so a rule change cannot drift
 // between the sites that fold per-plugin values through them.
 internal static class ConflictRules
 {
+    // A Partial Form copy's own fields take no part (ADR-0018); its header and EditorID do.
+    public static bool IsOwnField(FieldMetadata member) => !member.IsRecordHeaderMember && !member.IsEditorId;
+
     // A plugin takes part with an absent value too, since a copy that drops a field changes it
     // (xEdit); a Partial Form plugin takes part only where it holds a value; a plugin in templatedPlugins never.
     private static List<(string Plugin, int LoadOrderIndex)> TakingPart(

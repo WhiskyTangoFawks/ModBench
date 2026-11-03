@@ -40,7 +40,7 @@ internal sealed class PluginIngest
     internal sealed record PreparedRecord(
         string RecordType, string FormKey, string Body, string ContentHash, List<FormReferenceRow> Refs,
         List<string> Masters, List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
-        string? EditorId, string? ParseDiagnosis);
+        string? EditorId, string? ParseDiagnosis, string? ComparedHash);
 
     // ADR-0005, from the one stream that carries the documents. A DuckDB appender holds its rows
     // outside DuckDB's memory limit until it is disposed, so each batch disposes its own, inside the
@@ -271,11 +271,12 @@ internal sealed class PluginIngest
         }
 
         // The stamp is the source document's, children and all: it is what validation compares a
-        // tree's file against.
+        // tree's file against. A refused document is a stub, with no values to compare.
+        var body = ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release);
         return new PreparedRecord(
-            document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
-            _contentStamp(document.Text), refs,
-            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis);
+            document.RecordType, document.FormKey, body, _contentStamp(document.Text), refs,
+            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis,
+            refused ? null : ComparedHash.Of(body, schema, _release));
     }
 
     private static void AppendPrepared(
@@ -293,6 +294,7 @@ internal sealed class PluginIngest
         row.AppendValue(prepared.ParseDiagnosis);
         row.AppendValue(prepared.Masters);
         row.AppendValue(RecordMasters.PluginNamedBy(prepared.FormKey));
+        row.AppendValue(prepared.ComparedHash);
         row.EndRow();
     }
 

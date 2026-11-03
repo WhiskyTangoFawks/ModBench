@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -116,11 +117,12 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
+        var stored = Stored(recordType, body);
         DuckDbSql.Execute(_connection, """
-            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, form_key_plugin)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6, $7)
-            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), _contentStamp(body),
-            RecordMasters.PluginNamedBy(formKey));
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, form_key_plugin, compared_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6, $7, $8)
+            """, formKey, key.Name, key.Origin, recordType, stored, _contentStamp(body),
+            RecordMasters.PluginNamedBy(formKey), ComparedHashOf(recordType, stored));
     }
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
@@ -132,14 +134,18 @@ internal sealed class WorkingTreeOverlay
         // editor_id follows the body: it is a projection of the document; otherwise a renamed record
         // would keep listing under its old EditorID. record_type is not re-derived: a record cannot
         // change type.
+        var stored = Stored(recordType, body);
         DuckDbSql.Execute(_connection, """
             UPDATE mirror.records
-            SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
+            SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID'), compared_hash = $6
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, Stored(recordType, body), _contentStamp(body));
+            """, formKey, key.Name, key.Origin, stored, _contentStamp(body), ComparedHashOf(recordType, stored));
     }
 
     private string Stored(string recordType, string body) => ContainerDocumentEdits.WithChildSlotsCut(body, recordType, _release);
+
+    private string? ComparedHashOf(string recordType, string stored) =>
+        _schemas.TryGetValue(recordType, out var schema) && !schema.IsHeader ? ComparedHash.Of(stored, schema, _release) : null;
 
     // Rebuilt for one record through the same collectors ingest uses, so an edit cannot
     // leave derived answers describing bytes that are gone.
