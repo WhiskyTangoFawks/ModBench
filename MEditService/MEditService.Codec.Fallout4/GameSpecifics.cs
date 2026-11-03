@@ -40,10 +40,11 @@ internal static class GameSpecifics
     ];
 
     public static bool Normalizes(IMajorRecordGetter record) =>
-        record is IQuestGetter || FunctionConditions.CanReach(record.GetType());
+        record is IQuestGetter || Targets.CanReach(record.GetType()) || FunctionConditions.CanReach(record.GetType());
 
     public static void Normalize(IMajorRecord copy)
     {
+        Targets.ForEach(copy, DefaultTargetAsRead);
         FunctionConditions.ForEach(copy, node =>
         {
             if (node is FunctionConditionData data) KeepTheWrittenParameterViews(data);
@@ -66,5 +67,16 @@ internal static class GameSpecifics
         else data.ParameterOneRecord.SetToNull();
         if (two.GetCategory() == Condition.ParameterCategory.Form) data.ParameterTwoNumber = 0;
         else data.ParameterTwoRecord.SetToNull();
+    }
+
+    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
+
+    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
+    // empty reference.
+    private static void DefaultTargetAsRead(object node)
+    {
+        var radius = (LocationTargetRadius)node;
+        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
+            radius.Target = new LocationTarget();
     }
 }

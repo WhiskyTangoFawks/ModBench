@@ -33,10 +33,18 @@ internal static class GameSpecifics
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter _) => [];
 
-    public static bool Normalizes(IMajorRecordGetter _) => false;
+    public static bool Normalizes(IMajorRecordGetter record) => Targets.CanReach(record.GetType());
 
-    public static void Normalize(IMajorRecord _)
+    public static void Normalize(IMajorRecord copy) => Targets.ForEach(copy, DefaultTargetAsRead);
+
+    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
+
+    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
+    // empty reference.
+    private static void DefaultTargetAsRead(object node)
     {
-        // Skyrim's rewrite respells nothing beyond the group fields every game shares.
+        var radius = (LocationTargetRadius)node;
+        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
+            radius.Target = new LocationTarget();
     }
 }
