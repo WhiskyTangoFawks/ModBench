@@ -13,7 +13,7 @@ import { inModOrder } from './inModOrder';
 import { modsPlaced, type MadeSourceFolder } from './newRepository';
 import { modsPutWholeInGit } from './wholeFolderInGit';
 import type { StepTasks } from './steps';
-import { whyNotIndexed } from './whyNotIndexed';
+import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -24,6 +24,7 @@ interface SourceCommandsDeps {
     | 'repositoryOnDisk' | 'writeSourceModLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
+  loadOrderSnapshot: LoadOrderSnapshot;
   tasks: StepTasks;
   trash: MoveToTrash;
 }
@@ -91,7 +92,7 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved, loadOrderSnapshot, tasks, trash }: SourceCommandsDeps) {
   const sourceModsNow = async (): Promise<SourceMods> =>
     sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const toBuild = (sourceMods: SourceMods, asked: readonly string[], everySource: boolean): readonly string[] =>
@@ -113,7 +114,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
         const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
         // source.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
-        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
+        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter, loadOrderSnapshot }, [previous])).get(previous);
         if (previous !== undefined && why !== undefined) {
           const waited = previous;
           landed = landed.map((built) => (built.mod === waited ? { ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` } : built));

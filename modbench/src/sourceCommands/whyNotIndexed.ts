@@ -1,56 +1,67 @@
 import type { MEditClient, PluginAddress } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import { failureReason, isNotYetAnswerable, isReadFailed } from '../wire/readFailed';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
-const LOAD_ORDER_WAIT_MS = 120_000;
 const RECHECK_MS = 250;
+
+/** The instance's current load order for mEdit: the snapshot it sends, the reason it sends none, or nothing to send. */
+export type LoadOrderSnapshot = () => { readonly refusal: string } | { readonly plugins: unknown } | undefined;
 
 interface Deps {
   client: Pick<MEditClient, 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter, 'reading'>;
+  loadOrderSnapshot: LoadOrderSnapshot;
 }
 
-interface Held { readonly mod: string; readonly plugin: PluginAddress }
-type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting'; readonly why: string } | { readonly kind: 'failed'; readonly why: string };
-type Standing = { readonly mod: string } & Verdict;
+const NOTHING_TO_SEND = 'mEdit was handed no load order: the game folder, its plugins or its archives could not be read';
 
-/** Why mEdit's rows are not of each mod's plugins as on disk, by mod, once a read has failed or the bound passes. An aborted `signal` ends the wait (ADR-0003). */
-export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
+interface Held { readonly mod: string; readonly plugin: PluginAddress }
+type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting' } | { readonly kind: 'failed'; readonly why: string };
+type Standing = Held & Verdict;
+
+/** Why mEdit's rows are not of each enabled mod's root plugins as on disk, by mod: only a failed read gives one. Waits until every plugin settles or an aborted `signal` ends it (ADR-0003). */
+export async function whyNotIndexed({ client, adapter, loadOrderSnapshot }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
   const reading = await adapter.reading();
   const held: Held[] = mods.flatMap((mod) => {
     const files = reading.mods.some((entry) => entry.kind === 'mod' && entry.name === mod && entry.enabled) ? reading.modFiles.get(mod) : undefined;
     if (files === undefined) return [];
     return files.files.filter((file) => !file.excluded && isPluginAtRoot(file.relativePath)).map((file) => ({ mod, plugin: { name: file.relativePath, origin: files.origin } }));
   });
-  const standings = (): Promise<Standing[]> => Promise.all(held.map(async ({ mod, plugin }) => ({ mod, ...standingOf(plugin, await client.getPluginIndexing(plugin)) })));
-  const whyByMod = (now: readonly Standing[], timedOut: boolean): Map<string, string> => {
+  const standings = (): Promise<Standing[]> => Promise.all(held.map(async ({ mod, plugin }) => ({ mod, plugin, ...standingOf(plugin, await client.getPluginIndexing(plugin)) })));
+  const whyByMod = (now: readonly Standing[]): Map<string, string> => {
     const why = new Map<string, string[]>();
     for (const standing of now) {
-      if (standing.kind === 'done' || (standing.kind === 'waiting' && !timedOut)) continue;
-      why.set(standing.mod, [...(why.get(standing.mod) ?? []), standing.kind === 'failed' ? standing.why : `${standing.why} did not reach the record index within ${String(LOAD_ORDER_WAIT_MS / 1000)} seconds`]);
+      if (standing.kind === 'failed') why.set(standing.mod, [...(why.get(standing.mod) ?? []), standing.why]);
     }
     return new Map([...why].map(([mod, whys]) => [mod, whys.join('; ')]));
   };
 
-  const deadline = Date.now() + LOAD_ORDER_WAIT_MS;
+  const unsent = (now: readonly Standing[]): Standing[] => {
+    const snapshot = loadOrderSnapshot();
+    if (snapshot !== undefined && !('refusal' in snapshot)) return [...now];
+    return now.map((standing): Standing => (standing.kind === 'waiting'
+      ? { ...standing, kind: 'failed', why: `plugin ${standing.plugin.name} (${snapshot === undefined ? NOTHING_TO_SEND : snapshot.refusal})` }
+      : standing));
+  };
+
   for (;;) {
     const next = nextStatusOrRecheck(client, signal);
-    const now = await standings();
-    const settled = now.every(({ kind }) => kind !== 'waiting');
-    if (settled || signal?.aborted === true || Date.now() >= deadline) {
+    const now = unsent(await standings());
+    if (now.every(({ kind }) => kind !== 'waiting') || signal?.aborted === true) {
       next.cancel();
-      return whyByMod(now, !settled && signal?.aborted !== true);
+      return whyByMod(now);
     }
     await next.woken;
   }
 }
 
 function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClient['getPluginIndexing']>>): Verdict {
-  if (isReadFailed(answer)) return { kind: 'waiting', why: `plugin ${plugin.name} (${failureReason(answer)})` };
+  if (isReadFailed(answer) && isNotYetAnswerable(answer)) return { kind: 'waiting' };
+  if (isReadFailed(answer)) return { kind: 'failed', why: `plugin ${plugin.name} (${failureReason(answer)})` };
   if (answer.state === 'AsOnDisk') return { kind: 'done' };
   if (answer.state === 'ReadFailed') return { kind: 'failed', why: `plugin ${plugin.name} could not be read: ${answer.reason ?? 'mEdit gave no reason'}` };
-  return { kind: 'waiting', why: `plugin ${plugin.name}` };
+  return { kind: 'waiting' };
 }
 
 function nextStatusOrRecheck(client: Pick<MEditClient, 'onLoadOrderStatus'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {

@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { describe, it, expect } from 'vitest';
 import { recordingTasks } from '../../test/recordingTasks';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -15,7 +16,7 @@ function commandsOver(answers: InstanceAnswers = {}, hostGit?: HostGit<string>) 
   const repositories: string[] = [];
   const commands = instanceRepositoryCommands({
     client: new InMemoryMEditClient(), adapter: adapter.adapter, nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: '/instance',
-    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), tasks: recordingTasks(),
+    hostGit: hostGit ?? hostGitRecordingInits(repositories), trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(),
   });
   return { commands, adapter, repositories };
 }
