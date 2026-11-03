@@ -303,8 +303,9 @@ describe('the agent server, given an instance value', () => {
     const noLine = [{ name: 'Starfield.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/g/Starfield.esm' }, { name: 'BlueprintShips-Starfield.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/g/BlueprintShips-Starfield.esm' }];
     const { client } = await clientOf(new FakeInstance({ ...VALUE, blueprintLoadsLast: true, pluginsLoadedWithNoLine: noLine }));
 
-    const { plugins } = await read(client, 'list_plugins') as { plugins: { name: string }[] };
-    expect(plugins.map(({ name }) => name)).toEqual(['Starfield.esm', 'A.esp', 'B.esp', 'BlueprintShips-Starfield.esm']);
+    expect(await read(client, 'list_plugins')).toMatchObject({ plugins: [
+      { name: 'Starfield.esm' }, { name: 'A.esp' }, { name: 'B.esp' }, { name: 'BlueprintShips-Starfield.esm' },
+    ] });
   });
 
   it('reads what the Plugins view shows of each plugin, its own by origin: its statuses, whether it is read-only, whether it is a compiled plugin and its masters', async () => {
