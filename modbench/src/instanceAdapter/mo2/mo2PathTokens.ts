@@ -12,7 +12,7 @@ import {
   folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilter, type FolderName, type TokenFilter, type PathSpelling, type TokenFolders, type TokenProgram,
 } from '../pathTokens';
 import { readDownloadDirectory } from './codecs/modOrganizerIni';
-import { defaultDownloadsDir, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
+import { defaultDownloadsDir, MOD_META_FILES_PATTERN, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
 import type { Mo2Context } from './mo2Context';
 
@@ -33,8 +33,8 @@ const ACCOUNT_TOKEN = '{account}';
 const IN_SETTINGS = String.raw`/^\[Settings\]/,/^\[/`;
 
 interface CoveredFile {
-  /** As git's attributes match it. */
-  readonly pattern: string;
+  /** As git's attributes match them. */
+  readonly patterns: readonly string[];
   readonly driver: string;
   readonly spelling: PathSpelling;
   readonly holdsAccounts: boolean;
@@ -43,10 +43,10 @@ interface CoveredFile {
 
 // The mod manager's configuration holds the accounts, so its filter is a driver of its own.
 const coveredFiles = (publisherFile: ConfigurationFile | undefined): CoveredFile[] => [
-  { pattern: SETTINGS_FILE_PATTERN, driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true, blanked: RECENT_DIRECTORIES_DROPPED },
-  { pattern: PROFILE_INIS_PATTERN, driver: 'modbench-tokens', spelling: SPELLING, holdsAccounts: false },
+  { patterns: [SETTINGS_FILE_PATTERN], driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true, blanked: RECENT_DIRECTORIES_DROPPED },
+  { patterns: [PROFILE_INIS_PATTERN, MOD_META_FILES_PATTERN], driver: 'modbench-tokens', spelling: SPELLING, holdsAccounts: false },
   ...(publisherFile === undefined ? [] : [
-    { pattern: `/${publisherFile.name}`, driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false, blanked: publisherFile.blanked },
+    { patterns: [`/${publisherFile.name}`], driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false, blanked: publisherFile.blanked },
   ]),
 ];
 
@@ -70,7 +70,7 @@ function accountTokens(settings: string): TokenProgram {
 async function attributesWritten(instanceRoot: string, covered: readonly CoveredFile[]): Promise<Undo> {
   const file = resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'info/attributes')).trim());
   await mkdir(dirname(file), { recursive: true });
-  const lines = covered.map(({ pattern, driver }) => `${pattern} filter=${driver} diff=${driver}`);
+  const lines = covered.flatMap(({ patterns, driver }) => patterns.map((pattern) => `${pattern} filter=${driver} diff=${driver}`));
   let added: string[] = [];
   await putIfChanged(file, (before) => {
     const held = new Set(before.split(/\r?\n/));

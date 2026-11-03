@@ -25,9 +25,9 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
 
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/') || path === '.gitattributes';
 
-/** A source folder's files that git does not hold, by their own paths: a source folder's manifest names those and no
- *  others (instance-repository.md, The manifest, story 5). `heldByGit` lists the files git holds in `folder`. */
-export async function sourceFolderValueOver(
+/** A folder's files that git does not hold, by their own paths: its manifest names those and no others
+ *  (instance-repository.md, The manifest, story 5). `heldByGit` lists the files git holds in `folder`. */
+export async function unheldFolderValueOver(
   reads: FolderReads, heldByGit: (folder: string) => Promise<readonly string[]>, folder: string,
 ): Promise<FolderValue> {
   const held = new Set(await heldByGit(folder));

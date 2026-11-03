@@ -93,6 +93,15 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([token]));
   });
 
+  it('holds a mod\'s meta.ini by its tokens, for a mod whose whole folder the repository holds', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'mods/ModA/meta.ini', `[General]\r\ninstallationFile=${onWineDrive(root, '/')}/downloads/x.7z\r\n`);
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'mods/ModA/meta.ini')).toBe('[General]\r\ninstallationFile={instance folder:/}/downloads/x.7z\r\n');
+  });
+
   it('holds the game folder by its own token', async () => {
     const game = await gameFolder();
     const { root, adapter } = await instanceRepository([], game);

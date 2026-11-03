@@ -23,7 +23,7 @@ import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
-  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
+  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'unheldFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
 
@@ -132,8 +132,8 @@ async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile
 
 /** What restoring one folder from its packages asks of the instance. */
 export type FolderRestoreAdapter = Pick<InstanceAdapter,
-  'gameRelease' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'sourceFolderValue'
-  | 'folderValue' | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
+  'gameRelease' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'unheldFolderValue'
+  | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
 
 interface FolderPass {
   readonly deps: {
@@ -244,13 +244,13 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
 // instance-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
 // whose exclusion changed moved, and every file the manifest does not name sent to the trash.
 async function restoreFromPackages(
-  pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>, through?: ModFolder,
+  pass: FolderPass, mod: string, folder: string, manifest: Manifest, through?: ModFolder,
 ): Promise<Answer> {
   const { adapter, client } = pass.deps;
   if (client === undefined && manifest.flags.size > 0) return { refusal: skipped('its manifest sets flags, which need mEdit') };
   let against: FolderAgainst;
   try {
-    against = folderAgainst(manifest, await valueOf(folder), await flaggedHashesOf(adapter, manifest));
+    against = folderAgainst(manifest, await adapter.unheldFolderValue(folder), await flaggedHashesOf(adapter, manifest));
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
@@ -340,7 +340,7 @@ async function sourceFolderRestored(
   const held = await manifestHeld(sourceFolder);
   if (held === undefined) return { written: [], namedByNoLine: [] };
   if ('refusal' in held) return held;
-  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, (at) => pass.deps.adapter.sourceFolderValue(at), through);
+  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, through);
   if ('refusal' in answer) return answer;
   const inSource = (paths: readonly string[]): string[] => paths.map((path) => `${basename(sourceFolder)}/${path}`);
   return { written: inSource(answer.landed.written), namedByNoLine: inSource(answer.landed.namedByNoLine) };
@@ -406,7 +406,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   if (marked !== undefined) return { refusal: skipped(`its manifest names '${marked}', which carries the mod manager's mark for an excluded file`) };
   const repository = repositoryOf(held.manifest);
   if (repository === undefined) {
-    const restored = await restoreFromPackages(pass, mod, folder, held.manifest, (at) => pass.deps.adapter.folderValue(at));
+    const restored = await restoreFromPackages(pass, mod, folder, held.manifest);
     return 'refusal' in restored ? restored : (await metadataRefusal(pass, folder, held.manifest)) ?? restored;
   }
   const sourceFolder = pass.sourceMods.folderOf(mod);

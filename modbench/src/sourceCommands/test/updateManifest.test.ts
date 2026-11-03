@@ -95,6 +95,14 @@ describe('update manifest', () => {
     ]);
   });
 
+  it('names no file git holds in a mod\'s folder (The manifest, story 5)', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA, 'config.ini': HB } }, answers: { heldByGit: new Map([[join(modsDir, 'ModA'), ['config.ini']]]) } });
+
+    await update(['ModA']);
+
+    expect(await manifestOf('ModA')).toEqual({ manifest: { ...EMPTY, files: holding({ 'a.nif': HA }) } });
+  });
+
   it('names the installation file as a package with its file on Nexus as its host, and none of the mod\'s metadata (Query info, story 1)', async () => {
     const page = 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2';
     const { update, manifestOf } = await over({
@@ -227,7 +235,7 @@ describe('update manifest', () => {
     const unreadable = { path: 'Game.mem', excluded: false, read: { kind: 'unreadable' as const, reason: 'EBUSY: resource busy' } };
     const { update, manifestOf } = await over({
       files: { ModA: {} },
-      adapterOver: { folderValue: () => Promise.resolve({ files: new Map([['Game.mem', unreadable]]), exclude: [], ignoresCase: false }) },
+      adapterOver: { unheldFolderValue: () => Promise.resolve({ files: new Map([['Game.mem', unreadable]]), exclude: [], ignoresCase: false }) },
     });
     await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, ignore: ['Game.mem'] });
 
@@ -331,7 +339,7 @@ describe('update manifest', () => {
 
     it('a file of which could not be read, naming why', async () => {
       const unreadable = { files: new Map([['a.nif', { path: 'a.nif', excluded: false, read: { kind: 'unreadable' as const, reason: 'EACCES: permission denied' } }]]), exclude: [], ignoresCase: false };
-      const { result } = await refusedBy({ files: { ModA: { 'a.nif': HA }, ModB: {} }, adapterOver: { folderValue: (folder) => Promise.resolve(folder.endsWith('ModA') ? unreadable : { files: new Map(), exclude: [], ignoresCase: false }) } });
+      const { result } = await refusedBy({ files: { ModA: { 'a.nif': HA }, ModB: {} }, adapterOver: { unheldFolderValue: (folder) => Promise.resolve(folder.endsWith('ModA') ? unreadable : { files: new Map(), exclude: [], ignoresCase: false }) } });
 
       expect([result.refused, result.landed.map(({ mod }) => mod)]).toEqual([[{ item: 'ModA', reason: 'was not updated: a file could not be read: EACCES: permission denied' }], ['ModB']]);
     });
