@@ -975,7 +975,7 @@
         },
         {
           "command": "modbench.downloadedFile.download",
-          "when": "modbench.folder == instance && modbench.nexus.loggedIn"
+          "when": "modbench.folder == instance && modbench.nexus.premium"
         },
         {
           "command": "modbench.downloadedFile.exclude",

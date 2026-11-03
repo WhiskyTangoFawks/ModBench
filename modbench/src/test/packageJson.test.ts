@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, Uri,
 } from './vscodeMock';
-import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, REPOSITORY_SET_UP_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, PREMIUM_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, REPOSITORY_SET_UP_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE, RETIRED_AHEAD_OF_CODE } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -1142,6 +1142,16 @@ describe('package.json Downloads palette entries', () => {
     expect(requires(when, 'focusedView == modbench.downloads')).toBe(true);
     expect(requires(when, IN_AN_INSTANCE)).toBe(true);
     expect(requires(when, term)).toBe(true);
+  });
+});
+
+describe('package.json download palette entry', () => {
+  it.each([
+    ['a Premium account in an instance', { [FOLDER_KEY]: 'instance', [PREMIUM_KEY]: true }, true],
+    ['an account without Premium', { [FOLDER_KEY]: 'instance', [LOGGED_IN_KEY]: true, [PREMIUM_KEY]: false }, false],
+    ['no instance', { [PREMIUM_KEY]: true }, false],
+  ])('is offered to %s: %s', (_who, facts, offered) => {
+    expect(paletteOffers('modbench.downloadedFile.download', facts)).toBe(offered);
   });
 });
 

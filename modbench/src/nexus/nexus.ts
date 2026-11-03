@@ -15,7 +15,7 @@ export interface SecretStore {
   onDidChange: (listener: (change: { key: string }) => void) => Disposable;
 }
 
-type KeyCheck = { valid: true } | { valid: false; reason: string };
+type KeyCheck = { valid: true; premium: boolean } | { valid: false; reason: string };
 
 interface NexusFile extends InstalledFile {
   readonly game: string;
@@ -51,6 +51,8 @@ const firstServerOf = (links: unknown): string | undefined => {
 export interface Nexus {
   /** Asks Nexus whether `key` works. Keeps nothing. */
   check: (key: string) => Promise<KeyCheck>;
+  /** Whether the kept key is a Premium account's, as Nexus says when it validates the key; false when logged out or Nexus cannot say. */
+  premium: () => Promise<boolean>;
   keep: (key: string) => Promise<void>;
   forget: () => Promise<void>;
   loggedIn: () => Promise<boolean>;
@@ -94,15 +96,26 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
     const key = await secrets.get(KEY_NAME);
     return key === undefined ? { found: false, reason: NOT_LOGGED_IN } : use(key, (path, notFound) => read(key, path, { notFound }));
   };
-  return {
-    check: async (key) => {
-      try {
-        const { ok, status } = await get(key, '/v1/users/validate.json');
-        if (ok) return { valid: true };
-        return { valid: false, reason: status === 401 ? 'Nexus refused this key.' : `Nexus answered ${status}.` };
-      } catch (error) {
-        return { valid: false, reason: `Could not reach Nexus: ${errorMessage(error)}` };
+  const check = async (key: string): Promise<KeyCheck> => {
+    try {
+      const response = await get(key, '/v1/users/validate.json');
+      const { ok, status } = response;
+      if (ok) {
+        const account: unknown = await response.json().catch(() => undefined);
+        return { valid: true, premium: typeof account === 'object' && account !== null && 'is_premium' in account && account.is_premium === true };
       }
+      return { valid: false, reason: status === 401 ? 'Nexus refused this key.' : `Nexus answered ${status}.` };
+    } catch (error) {
+      return { valid: false, reason: `Could not reach Nexus: ${errorMessage(error)}` };
+    }
+  };
+  return {
+    check,
+    premium: async () => {
+      const key = await secrets.get(KEY_NAME);
+      if (key === undefined) return false;
+      const checked = await check(key);
+      return checked.valid && checked.premium;
     },
     keep: async (key) => { await secrets.store(KEY_NAME, key); },
     forget: async () => { await secrets.delete(KEY_NAME); },

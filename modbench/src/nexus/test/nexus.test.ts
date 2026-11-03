@@ -18,8 +18,33 @@ describe('checking a key', () => {
   it('accepts a key Nexus accepts, and keeps nothing', async () => {
     const { nexus, secrets } = nexusAnswering(acceptingGoodKey);
 
-    expect(await nexus.check(GOOD_KEY)).toEqual({ valid: true });
+    expect(await nexus.check(GOOD_KEY)).toEqual({ valid: true, premium: false });
     expect(secrets.held.size).toBe(0);
+  });
+
+  it('says a key is a Premium account\'s when Nexus says so', async () => {
+    const { nexus } = nexusAnswering(() => json({ name: 'someone', is_premium: true }));
+
+    expect(await nexus.check(GOOD_KEY)).toEqual({ valid: true, premium: true });
+  });
+
+  it.each([
+    ['a Premium account', json({ is_premium: true }), true],
+    ['an account without Premium', json({ is_premium: false }), false],
+    ['an answer that says nothing of Premium', json({}), false],
+    ['Nexus refusing the key since', new Response('', { status: 401 }), false],
+    ['Nexus out of reach', new Error('ENOTFOUND'), false],
+  ])('knows the kept key is %s: %s', async (_account, answer, premium) => {
+    const { nexus } = nexusAnswering(() => answer);
+    await nexus.keep(GOOD_KEY);
+
+    expect(await nexus.premium()).toBe(premium);
+  });
+
+  it('is not Premium while logged out, asking nothing', async () => {
+    const { nexus, sent } = nexusAnswering(() => json({ is_premium: true }));
+
+    expect([await nexus.premium(), sent]).toEqual([false, []]);
   });
 
   it.each([
