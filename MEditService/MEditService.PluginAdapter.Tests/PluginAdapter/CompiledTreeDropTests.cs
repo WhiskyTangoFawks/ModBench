@@ -3,6 +3,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -22,7 +23,7 @@ public sealed class CompiledTreeDropTests
         var drop = Assert.Single(await DropsOf(mod));
 
         Assert.Equal(quest.FormKey.ToString(), drop.Record.FormKey);
-        Assert.Equal(["Aliases[1]"], drop.Paths);
+        Assert.Equal("Aliases", drop.Field);
     }
 
     [Fact]
@@ -36,7 +37,7 @@ public sealed class CompiledTreeDropTests
             new QuestCollectionAlias { Collection = [new CollectionAlias { AliasID = 4 }] },
         ];
 
-        Assert.Equal(["Aliases[1]"], Assert.Single(await DropsOf(mod)).Paths);
+        Assert.Equal("Aliases", Assert.Single(await DropsOf(mod)).Field);
     }
 
     [Fact]
@@ -52,8 +53,8 @@ public sealed class CompiledTreeDropTests
         var drops = await DropsOf(mod);
 
         Assert.Equal(
-            [(faction.FormKey.ToString(), new[] { "Ranks[0]", "Ranks[1]" }), (npc.FormKey.ToString(), new[] { "Attacks[0]" })],
-            drops.Select(drop => (drop.Record.FormKey, drop.Paths.ToArray())).OrderBy(drop => drop.FormKey, StringComparer.Ordinal));
+            [(faction.FormKey.ToString(), "Ranks"), (npc.FormKey.ToString(), "Attacks")],
+            drops.Select(drop => (drop.Record.FormKey, drop.Field)).OrderBy(drop => drop.FormKey, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -88,19 +89,69 @@ public sealed class CompiledTreeDropTests
         Assert.Empty(await DropsOf(mod));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(5)]
-    public async Task DropsIn_OfAUnionThatReadsBackAsAnotherKind_NamesNothing_ForTheKindIsMutagensToDecide(int data)
+    [Fact]
+    public async Task DropsIn_OfAUnionOfAKindMutagenNeverReadsForItsType_NamesIt()
     {
         var mod = NewMod();
         mod.Factions.AddNew("Faction").VendorLocation = new LocationTargetRadius
         {
             Radius = 1,
-            Target = new LocationFallback { Type = LocationTargetRadius.LocationType.NearReference, Data = data },
+            Target = new LocationFallback { Type = LocationTargetRadius.LocationType.NearReference, Data = 5 },
         };
 
+        Assert.Equal("VendorLocation.Target.MutagenObjectType", Assert.Single(await DropsOf(mod)).Field);
+    }
+
+    [Fact]
+    public async Task DropsIn_OfMutagensDefaultLocationTarget_NamesNothing_ForAnEditThatLeavesTheTargetWritesIt()
+    {
+        var mod = NewMod();
+        mod.Factions.AddNew("Faction").VendorLocation = new LocationTargetRadius { Radius = 1 };
+
         Assert.Empty(await DropsOf(mod));
+    }
+
+    [Fact]
+    public async Task DropsIn_OfAPackageWhoseDataIsOutOfKeyOrder_NamesNothing_ThoughMutagenWritesItSortedByKey()
+    {
+        var mod = NewMod();
+        var package = mod.Packages.AddNew("Package");
+        package.Data.Add(2, new PackageDataInt { Data = 7 });
+        package.Data.Add(1, new PackageDataInt());
+
+        Assert.Empty(await DropsOf(mod));
+    }
+
+    [Fact]
+    public async Task DropsIn_OfAPackageDataEntryWithNoValue_NamesThePackagesData_ThoughItsOtherEntriesSurvive()
+    {
+        var mod = NewMod();
+        var package = mod.Packages.AddNew("Package");
+        package.Data.Add(3, new APackageData());
+        package.Data.Add(5, new PackageDataInt { Data = 7 });
+
+        var drop = Assert.Single(await DropsOf(mod));
+
+        Assert.Equal((package.FormKey.ToString(), "Data"), (drop.Record.FormKey, drop.Field));
+    }
+
+    [Fact]
+    public async Task DropsIn_OfAStringInAPluginNotLocalized_NamesNothing_ThoughItsLanguageIsNotTheOneMutagenReadsItIn()
+    {
+        var mod = NewMod();
+        mod.Doors.AddNew("Door").Name = new TranslatedString(Language.French, "La Porte");
+
+        Assert.Empty(await DropsOf(mod));
+    }
+
+    [Fact]
+    public async Task DropsIn_OfAStringInALocalizedPlugin_NamesIt_WhenItsOneTextIsInALanguageTheReadDoesNotGive()
+    {
+        var mod = NewMod();
+        mod.UsingLocalization = true;
+        mod.Doors.AddNew("Door").Name = new TranslatedString(Language.French, "La Porte");
+
+        Assert.Equal("Name", Assert.Single(await DropsOf(mod)).Field);
     }
 
     private static Fallout4Mod NewMod() => new(Plugin, Fallout4Release.Fallout4);
