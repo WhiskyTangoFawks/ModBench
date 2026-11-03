@@ -249,6 +249,12 @@ export class PluginFacts {
     }
   }
 
+  /** Why no judging has landed yet; `undefined` once one has, and a later snapshot keeps its answer until the new one lands. */
+  sortingNotJudged(): string | undefined {
+    if (this.judgedActiveOrder !== undefined) return undefined;
+    return this.expansionOverride?.message ?? 'The record index is still indexing.';
+  }
+
   /** Every broken sorting rule, once each, as the last judging found them. */
   brokenRules(): readonly BrokenRule[] {
     return this.broken;

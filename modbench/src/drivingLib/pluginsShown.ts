@@ -24,6 +24,8 @@ interface SuggestedMoveShown {
 
 export interface PluginsShown {
   shown(plugin: PluginAddress): PluginShown;
+  /** Why the order has not been judged yet; `undefined` once it has. No rules before then is not yet checked, not none broken. */
+  sortingNotJudged(): string | undefined;
   brokenRules(): readonly SortingRuleShown[];
   suggestedMoves(): readonly SuggestedMoveShown[];
 }

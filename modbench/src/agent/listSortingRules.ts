@@ -1,3 +1,4 @@
+import { Refusal } from '../drivingLib/refusal';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 
 export const LIST_SORTING_RULES = {
@@ -6,6 +7,8 @@ export const LIST_SORTING_RULES = {
     + 'A rule a move keeps also has suggestedMove: the plugin to move, and the plugin beside which it goes, on which side, in load order. '
     + 'Pass a rule\'s words as the rule option of apply suggested move, with that plugin as its argument.',
   of: (view: PluginsShown) => {
+    const notJudged = view.sortingNotJudged();
+    if (notJudged !== undefined) throw new Refusal(`The sorting rules are not judged yet: ${notJudged}`);
     const moves = view.suggestedMoves();
     return {
       rules: view.brokenRules().map(({ reason, level, plugins }) => {

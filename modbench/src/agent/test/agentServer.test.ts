@@ -77,13 +77,14 @@ const statuses = { current: () => { statusRead.asked += 1; return Promise.resolv
 
 const NOT_READ: PluginShown = { statuses: [], readOnly: null, compiled: null, masters: null };
 const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Map() };
-const sortingRead: { rules: ReturnType<PluginsShown['brokenRules']>[number][]; moves: ReturnType<PluginsShown['suggestedMoves']>[number][] } = { rules: [], moves: [] };
+const sortingRead: { rules: ReturnType<PluginsShown['brokenRules']>[number][]; moves: ReturnType<PluginsShown['suggestedMoves']>[number][]; notJudged?: string } = { rules: [], moves: [] };
 const pluginsShown = {
   shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ,
+  sortingNotJudged: () => sortingRead.notJudged,
   brokenRules: () => sortingRead.rules,
   suggestedMoves: () => sortingRead.moves,
 };
-afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; });
+afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; sortingRead.notJudged = undefined; });
 
 const copyAnswers: InstanceAnswers = {};
 
@@ -259,6 +260,15 @@ describe('the agent server, given an instance value', () => {
       },
       { rule: 'A.esp is dirty.', level: 'info', plugins: [{ name: 'A.esp', origin: 'Big Rocks' }] },
     ] });
+  });
+
+  it('refuses the sorting rules while the order is not judged, naming why, rather than answer no rules', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+    sortingRead.notJudged = 'The record index is still indexing.';
+
+    expect(await call(client, 'list_sorting_rules')).toEqual({
+      isError: true, text: 'The sorting rules are not judged yet: The record index is still indexing.',
+    });
   });
 
   it('refuses in part when the game folder is not found, answering the lines with why the plugins loaded with no line are missing, in the Output', async () => {

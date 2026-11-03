@@ -42,7 +42,7 @@ export interface PluginFactsFeedDeps {
 
 export type PluginRowFacts = Pick<PluginFacts,
   'expansion' | 'indexFailureMessage' | 'heldElsewhereMessage' | 'readFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
-  | 'mastersOf' | 'shown' | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions' | 'suggestedMoves' | 'suggestedMovesOf' | 'brokenRules'>;
+  | 'mastersOf' | 'shown' | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions' | 'suggestedMoves' | 'suggestedMovesOf' | 'brokenRules' | 'sortingNotJudged'>;
 
 /** mEdit's answers about each plugin, ordered into the facts the Plugins tree's rows read: the
  *  reconcile narrator's events go in; row queries and one change event come out. Pulled once per
