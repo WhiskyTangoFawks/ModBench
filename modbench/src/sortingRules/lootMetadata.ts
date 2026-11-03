@@ -1,4 +1,4 @@
-import { isMap, isNode, isSeq, LineCounter, parseDocument } from 'yaml';
+import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
 
 type SortingRuleFile = { readonly path: string } & (
   | { readonly kind: 'text'; readonly text: string }
@@ -362,4 +362,51 @@ export function rulesReader(): (files: SortingRuleFiles) => ReadRules {
     last = { files, ...readRules(files) };
     return last;
   };
+}
+
+/** A plugin and the plugins it loads after. */
+export interface LoadAfter {
+  readonly plugin: string;
+  readonly after: readonly string[];
+}
+
+const sameName = (a: unknown, b: string): boolean => typeof a === 'string' && a.toLowerCase() === b.toLowerCase();
+
+const nameOf = (item: unknown): unknown => {
+  const value = isScalar(item) ? item.value : item;
+  return isMap(value) ? value.get('name') : value;
+};
+
+function pluginsOf(doc: Document): YAMLSeq {
+  if (doc.errors.length > 0) throw new Error(`The userlist does not parse: ${doc.errors[0]?.message}`);
+  if (doc.contents === null) doc.contents = doc.createNode({});
+  if (!isMap(doc.contents)) throw new Error('The userlist is not a map.');
+  const plugins = doc.contents.get('plugins', true);
+  if (isSeq(plugins)) return plugins;
+  if (plugins !== undefined && !(isScalar(plugins) && plugins.value === null)) throw new Error('The userlist\'s "plugins" is not a list.');
+  const made = doc.createNode([]) as YAMLSeq;
+  doc.contents.set('plugins', made);
+  return made;
+}
+
+/** Adds the afters the plugin's entry lacks, and answers whether it did. */
+function addAfters(doc: Document, plugins: YAMLSeq, { plugin, after }: LoadAfter): boolean {
+  const entry = plugins.items.find((item): item is YAMLMap => isMap(item) && sameName(nameOf(item), plugin));
+  const held = entry?.get('after', true);
+  const heldNames = isSeq(held) ? held.items.map(nameOf) : [];
+  const missing = after.filter((name) => !heldNames.some((have) => sameName(have, name)));
+  if (missing.length === 0) return false;
+  if (entry === undefined) plugins.add(doc.createNode({ name: plugin, after: missing }));
+  else if (isSeq(held)) for (const name of missing) held.add(doc.createNode(name));
+  else entry.set('after', doc.createNode(missing));
+  return true;
+}
+
+/** The userlist's text with each plugin loading after the plugins given, as LOOT writes it. Every other byte stays, so a
+ *  comment or an anchor survives; the text itself when it holds every rule. Throws, for a text that is not a map. */
+export function addLoadAfter(text: string | undefined, additions: readonly LoadAfter[]): string {
+  const doc = parseDocument(text ?? '');
+  const plugins = pluginsOf(doc);
+  const changes = additions.map((addition) => addAfters(doc, plugins, addition));
+  return changes.some(Boolean) ? doc.toString({ flowCollectionPadding: false }) : text ?? '';
 }

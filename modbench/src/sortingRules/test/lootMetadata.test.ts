@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rulesReader, type SortingRuleFiles } from '../lootMetadata';
+import { addLoadAfter, rulesReader, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
 type SortingRuleFile = SortingRuleFiles['masterlist'];
@@ -246,5 +246,77 @@ plugins:
     }));
 
     expect(groups.filter(({ name }) => name === 'late').map(({ after }) => after.map((step) => step.name))).toEqual([['aside', 'early']]);
+  });
+});
+
+describe('addLoadAfter: a load after written into the userlist', () => {
+  it('makes the userlist of an absent file', () => {
+    expect(addLoadAfter(undefined, [{ plugin: 'A.esp', after: ['B.esp', 'C.esp'] }])).toBe(`plugins:
+  - name: A.esp
+    after:
+      - B.esp
+      - C.esp
+`);
+  });
+
+  it('writes what readRules reads back as the load afters', () => {
+    const written = addLoadAfter(undefined, [{ plugin: 'A.esp', after: ['B.esp'] }, { plugin: 'D.esp', after: ['B.esp'] }]);
+
+    const { entries, problems } = readRules(filesOf({ userlist: text(written) }));
+
+    expect(problems).toEqual([]);
+    expect(entries.map(({ name, after }) => [name, after.map((file) => file.name)])).toEqual([['A.esp', ['B.esp']], ['D.esp', ['B.esp']]]);
+  });
+
+  it('keeps a comment and an anchor the file holds', () => {
+    const original = `# my rules
+groups: &groups
+  - name: late
+plugins:
+  - name: X.esp # keep
+    after: [Y.esp]
+`;
+
+    const written = addLoadAfter(original, [{ plugin: 'A.esp', after: ['B.esp'] }]);
+
+    expect(written.startsWith(original.trimEnd())).toBe(true);
+    expect(written).toContain('name: A.esp');
+  });
+
+  it('adds to the entry the plugin has, matching its name in any case', () => {
+    const written = addLoadAfter('plugins:\n  - name: a.ESP\n    after: [Y.esp]\n', [{ plugin: 'A.esp', after: ['B.esp'] }]);
+
+    const { entries } = readRules(filesOf({ userlist: text(written) }));
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.after.map((file) => file.name)).toEqual(['Y.esp', 'B.esp']);
+  });
+
+  it('adds an after to an entry that has none', () => {
+    const written = addLoadAfter('plugins:\n  - name: A.esp\n    msg: [{type: say, content: hi}]\n', [{ plugin: 'A.esp', after: ['B.esp'] }]);
+
+    const { entries } = readRules(filesOf({ userlist: text(written) }));
+
+    expect(entries[0]?.after.map((file) => file.name)).toEqual(['B.esp']);
+    expect(entries[0]?.msg).toHaveLength(1);
+  });
+
+  it('returns the text unchanged when it holds every rule, whether the after is a name or a map, in any case', () => {
+    const original = "plugins:\n  - name: A.esp\n    after:\n      - b.ESP\n      - {name: C.esp, display: c}\n";
+
+    expect(addLoadAfter(original, [{ plugin: 'A.esp', after: ['B.esp', 'C.esp'] }])).toBe(original);
+  });
+
+  it('adds only the afters the entry lacks', () => {
+    const written = addLoadAfter('plugins:\n  - name: A.esp\n    after: [B.esp]\n', [{ plugin: 'A.esp', after: ['B.esp', 'C.esp'] }]);
+
+    const { entries } = readRules(filesOf({ userlist: text(written) }));
+
+    expect(entries[0]?.after.map((file) => file.name)).toEqual(['B.esp', 'C.esp']);
+  });
+
+  it('rejects, writing nothing, a text that is not a YAML map of plugins', () => {
+    expect(() => addLoadAfter('- just\n- a list\n', [{ plugin: 'A.esp', after: ['B.esp'] }])).toThrow();
+    expect(() => addLoadAfter('plugins: [unclosed', [{ plugin: 'A.esp', after: ['B.esp'] }])).toThrow();
   });
 });
