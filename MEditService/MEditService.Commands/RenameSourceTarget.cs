@@ -5,11 +5,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>The plugin a rename of its source acts on and the mod that provides it.</summary>
+/// <summary>The plugin a rename acts on and the mod that provides it.</summary>
 internal sealed record RenameSourceTarget(RegisteredPlugin Plugin, PluginProvider.FromMod Mod)
 {
-    internal static string NotCompiledPluginMessage(PluginAddress plugin) => $"{plugin.Name} has no plugin source, so there is none to rename.";
-
     /// <summary>The target, or why renaming the plugin's source to <paramref name="newName"/> is refused before any write.</summary>
     internal static bool Of(
         ISourceAdapter source, LoadOrderSnapshot loadOrder, PluginAddress plugin, string newName,
@@ -26,7 +24,7 @@ internal sealed record RenameSourceTarget(RegisteredPlugin Plugin, PluginProvide
                 $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so there is no source to rename.");
         }
         else if (loaded.Provider is not PluginProvider.FromMod mod)
-            refusal = (RenameSourceRefusal.NotCompiledPlugin, NotCompiledPluginMessage(plugin));
+            refusal = (RenameSourceRefusal.NotInAMod, $"{plugin.Name} from '{plugin.Origin}' is in no mod, so it is not renamed.");
         else
             target = new RenameSourceTarget(loaded, mod);
         return target is not null;

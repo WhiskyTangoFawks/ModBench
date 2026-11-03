@@ -48,13 +48,13 @@ public enum RenameSourceRefusal
     /// <summary>No loaded plugin is the file name and origin the gesture named.</summary>
     PluginNotLoaded,
 
-    /// <summary>The plugin has no plugin source, so there is none to rename.</summary>
-    NotCompiledPlugin,
+    /// <summary>The plugin is in no mod: the game's, or one no mod provides.</summary>
+    NotInAMod,
 
     /// <summary>A plugin source of the mod already holds the new name, compared without case.</summary>
     NameTaken,
 
-    /// <summary>A file of the plugin source is no JSON document; the way out is mending it.</summary>
+    /// <summary>A file of the plugin source is no JSON document, or the source folder holds its folder twice; the way out is mending it.</summary>
     UnreadableSource,
 
     /// <summary>The tree name sent is not a spelling of the plugin's file name, compared without case.</summary>

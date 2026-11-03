@@ -100,14 +100,36 @@ public sealed class RenameSourceHandlerTests : IDisposable
     [Theory]
     [InlineData("Other.esp", NonSourceModName)]
     [InlineData("Loose.esp", SourceModName)]
-    public void RenameSource_OfAPluginWithNoPluginSource_RefusesIt_AndWritesNothing(string plugin, string origin)
+    public void RenameSource_OfAPluginWithNoPluginSource_AnswersNoChanges_AndMovesNothing(string plugin, string origin)
     {
         var result = RenameSource(new PluginAddress(plugin, origin), "New.esp");
 
-        Assert.Equal(RenameSourceRefusal.NotCompiledPlugin, result.Refusal);
-        Assert.Contains(plugin, result.Message, StringComparison.Ordinal);
+        Assert.Equal((null, [], [], []), (result.Refusal, result.Changes.Require().Moves, result.Changes.Require().Deletions, result.Changes.Require().Documents));
         Assert.False(Directory.Exists(PluginSourceRoot.In(_sourceMod, "New.esp")));
         Assert.False(Directory.Exists(PluginSourceRoot.In(_nonSourceMod, "New.esp")));
+    }
+
+    [Fact]
+    public void RenameSource_OfAPluginInNoMod_RefusesIt()
+    {
+        var result = RenameSource(new PluginAddress(MasterName, PluginOrigin.DataDirectory), "New.esm");
+
+        Assert.Equal(RenameSourceRefusal.NotInAMod, result.Refusal);
+        Assert.Contains(MasterName, result.Message, StringComparison.Ordinal);
+    }
+
+    [PosixFact]
+    public void RenameSource_OfAPluginWhoseSourceHasTwinFolders_RefusesItNamingThem_AndWritesNothing()
+    {
+        var sources = Path.GetDirectoryName(PluginSourceRoot.In(_sourceMod, Old.Name)).Require();
+        Directory.Move(Path.Combine(sources, Old.Name), Path.Combine(sources, "OLD.ESP"));
+        Directory.CreateDirectory(Path.Combine(sources, "old.esp"));
+
+        var result = RenameSource(Old, "New.esp");
+
+        Assert.Equal(RenameSourceRefusal.UnreadableSource, result.Refusal);
+        Assert.Contains("OLD.ESP and old.esp", result.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(PluginSourceRoot.In(_sourceMod, "New.esp")));
     }
 
     [Fact]

@@ -42,7 +42,7 @@ import { present } from '../../ports/present';
 const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', name: origin } }) as const;
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
-const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
+const CHANGES = { treeName: 'Patch.esp', moves: [{ from: '/m/plugin-source/Patch.esp', to: '/m/plugin-source/Renamed.esp' }], deletions: [], documents: [] };
 
 function setup(selection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();

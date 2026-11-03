@@ -3,7 +3,7 @@
 
 import type { TailOf } from '../coreLib/boundCommand';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
+import type { PluginAddress } from '../wire/pluginAddress';
 import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
@@ -22,8 +22,7 @@ export type PluginRenameResult =
   | { applied: false; reported: string }
   | { applied: false; sourceRenamed: boolean; refusal: string; detail?: string };
 
-const fileOriginOf = (origin: string): FileOrigin =>
-  origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin };
+const fileOriginOf = (origin: string): FileOrigin => ({ kind: 'mod', name: origin });
 
 async function renameRefusal(
   access: PluginRenameAccess, plugin: PluginAddress, newName: string, creatableExtensions: readonly string[],
@@ -53,13 +52,14 @@ async function renamePlugin(
   const unapplied = await source.apply(changes);
   if (unapplied !== undefined) return { applied: false, reported: unapplied };
 
+  const sourceRenamed = changes.moves.length + changes.deletions.length + changes.documents.length > 0;
   const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
-  if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
+  if (isRefused(moved)) return { applied: false, sourceRenamed, refusal: moved.message };
   try {
     await access.adapter.renamePlugin(fileOriginOf(plugin.origin), plugin.name, newName);
     return { applied: true };
   } catch (err) {
-    return { applied: false, sourceRenamed: true, refusal: errorMessage(err) };
+    return { applied: false, sourceRenamed, refusal: errorMessage(err) };
   }
 }
 
