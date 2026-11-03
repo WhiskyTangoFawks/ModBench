@@ -49,6 +49,7 @@ describe('nexusDomainForMetaGame', () => {
     ['Skyrim Special Edition', 'skyrimspecialedition'],
     ['Fallout 4 VR', 'fallout4'],
     ['SkyrimVR', 'skyrimspecialedition'],
+    ['Skyrim', 'skyrim'],
   ])('maps %s, as a mod\'s or a downloaded file\'s metadata spells it, to its Nexus domain', (game, domain) => {
     expect(nexusDomainForMetaGame(game)).toBe(domain);
   });
