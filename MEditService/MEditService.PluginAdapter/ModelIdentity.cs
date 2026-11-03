@@ -82,7 +82,9 @@ internal static class ModelIdentity
 
             var changed = FirstDifference(originalRecord, recompiledRecord, recompiled.GameRelease) is null
                 ? null
-                : FirstDifference(game.NormalizeEncoding(originalRecord), game.NormalizeEncoding(recompiledRecord), recompiled.GameRelease);
+                : FirstDifference(
+                    game.NormalizeEncoding(originalRecord, recompiled.UsingLocalization),
+                    game.NormalizeEncoding(recompiledRecord, recompiled.UsingLocalization), recompiled.GameRelease);
             if (changed != null) yield return (originalRecord, changed);
         }
     }

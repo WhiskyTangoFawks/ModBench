@@ -103,6 +103,15 @@ public sealed class CompiledTreeDropTests
     }
 
     [Fact]
+    public async Task DropsIn_OfMutagensDefaultLocationTarget_NamesNothing_ForAnEditThatLeavesTheTargetWritesIt()
+    {
+        var mod = NewMod();
+        mod.Factions.AddNew("Faction").VendorLocation = new LocationTargetRadius { Radius = 1 };
+
+        Assert.Empty(await DropsOf(mod));
+    }
+
+    [Fact]
     public async Task DropsIn_OfAPackageWhoseDataIsOutOfKeyOrder_NamesNothing_ThoughMutagenWritesItSortedByKey()
     {
         var mod = NewMod();
@@ -114,7 +123,7 @@ public sealed class CompiledTreeDropTests
     }
 
     [Fact]
-    public async Task DropsIn_OfAPackageDataEntryWithNoValue_NamesIt_ThoughTheEntryAtItsIndexInThePluginHoldsOne()
+    public async Task DropsIn_OfAPackageDataEntryWithNoValue_NamesThePackagesData_ThoughItsOtherEntriesSurvive()
     {
         var mod = NewMod();
         var package = mod.Packages.AddNew("Package");
@@ -133,6 +142,16 @@ public sealed class CompiledTreeDropTests
         mod.Doors.AddNew("Door").Name = new TranslatedString(Language.French, "La Porte");
 
         Assert.Empty(await DropsOf(mod));
+    }
+
+    [Fact]
+    public async Task DropsIn_OfAStringInALocalizedPlugin_NamesIt_WhenItsOneTextIsInALanguageTheReadDoesNotGive()
+    {
+        var mod = NewMod();
+        mod.UsingLocalization = true;
+        mod.Doors.AddNew("Door").Name = new TranslatedString(Language.French, "La Porte");
+
+        Assert.Equal("Name", Assert.Single(await DropsOf(mod)).Field);
     }
 
     private static Fallout4Mod NewMod() => new(Plugin, Fallout4Release.Fallout4);

@@ -65,13 +65,15 @@ internal sealed class GameCodec : IGameCodec
         return clone;
     }
 
-    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized)
     {
+        var type = record.GetType();
         if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)
-            && !StringHolders.CanReach(record.GetType()))
+            && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
             return record;
         var copy = record.DeepCopy();
-        StringHolders.ForEach(copy, InDefaultLanguage);
+        Targets.ForEach(copy, DefaultTargetAsRead);
+        if (!localized) StringHolders.ForEach(copy, InDefaultLanguage);
         switch (copy)
         {
             case Cell cell:
@@ -112,8 +114,19 @@ internal sealed class GameCodec : IGameCodec
 
     private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
 
-    // A plugin that is not localized writes a string's one text and never its language, so a reread
-    // holds that text in the language the read gives (TranslatedStringValues.WithText).
+    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
+
+    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
+    // empty reference.
+    private static void DefaultTargetAsRead(object node)
+    {
+        var radius = (LocationTargetRadius)node;
+        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
+            radius.Target = new LocationTarget();
+    }
+
+    // A plugin that is not localized writes a string's one text and never its language, so its reread
+    // holds that text in the language the read gives.
     private static void InDefaultLanguage(object holder)
     {
         foreach (var property in StringProperties(holder.GetType()))
