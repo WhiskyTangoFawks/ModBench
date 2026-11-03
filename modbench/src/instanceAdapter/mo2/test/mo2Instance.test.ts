@@ -726,6 +726,49 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
+    describe('the game folder\'s files', () => {
+      let game: string;
+
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-data-files-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: game, dataFolder });
+
+      it('answers every file at any depth of the Data folder, by its path in it in lower case', async () => {
+        const data = join(game, 'Data');
+        await mkdir(join(data, 'F4SE', 'Plugins'), { recursive: true });
+        await writeFile(join(data, 'Fallout4 - Main.ba2'), '');
+        await writeFile(join(data, 'F4SE', 'Plugins', 'X.dll'), '');
+
+        expect(await source.gameFolderFiles(found(data), ignoreLink)).toEqual({ kind: 'listed', files: new Set(['fallout4 - main.ba2', 'f4se/plugins/x.dll']) });
+      });
+
+      it('answers no file that is a hard link, and hands over the link', async () => {
+        const data = join(game, 'Data');
+        await mkdir(join(data, 'F4SE'), { recursive: true });
+        await writeFile(join(game, 'Real.dll'), '');
+        await link(join(game, 'Real.dll'), join(data, 'F4SE', 'Hard.dll'));
+        const ignored: string[] = [];
+
+        expect(await source.gameFolderFiles(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', files: new Set() });
+        expect(ignored).toEqual([join(data, 'F4SE', 'Hard.dll')]);
+      });
+
+      it('answers unresolved when the game folder was not found', async () => {
+        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
+
+        expect(await source.gameFolderFiles(notFound, ignoreLink)).toEqual({ kind: 'unresolved' });
+      });
+
+      it('answers unreadable, with why, when the Data folder cannot be listed', async () => {
+        const files = await source.gameFolderFiles(found(join(game, 'Missing')), ignoreLink);
+
+        expect(expectKind(files, 'unreadable').reason).toMatch(/ENOENT/);
+      });
+    });
+
     describe('LOOT\'s metadata files, at the instance root', () => {
       it('answers each file\'s text, and a file that is not there as absent', async () => {
         await writeFile(join(root, 'masterlist.yaml'), 'plugins: []\n');
@@ -1280,9 +1323,9 @@ describe('the MO2 Instance adapter', () => {
     it.each([
       ['Fallout4.esm', true],
       ['Patch.ESP', true],
-      ['cc.Esl', true],
-      ['readme.txt', false],
-    ])('follows the plugins at the root of the game folder\'s Data folder, in any case, as another tool may write a plugin\'s extension in capitals: %s heard %s', async (name, heard) => {
+      ['F4SE/Plugins/x.dll', true],
+      ['readme.txt', true],
+    ])('follows everything under the game folder\'s Data folder, so a file the game folder holds is heard: %s heard %s', async (name, heard) => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
