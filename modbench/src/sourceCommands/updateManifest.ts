@@ -4,7 +4,7 @@ import { exclusionsOfFiles, isUnderAny, ownFilesOf, sourceModsOf, writeManifestI
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { heldManifestIn } from './heldManifest';
-import { setAsideHeldWhole } from './heldWhole';
+import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';

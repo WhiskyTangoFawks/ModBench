@@ -505,9 +505,10 @@ describe('sourceCommands versionInGit', () => {
     const wholeFolder = (commit: boolean) => ({ where: 'WholeFolder', commit }) as const;
     const FOLDER_C = (): string => folderOf('ModC');
     const verbs = (calls: readonly AdapterCall[]) => calls.filter((call) => ['writeHeldWholeLines', 'trashFileIn', 'commitFolder'].includes(call.verb));
-    async function modWithManifest(mod: string): Promise<void> {
+    async function modWithManifest(mod: string, ignore: string[] = []): Promise<void> {
       await mkdir(folderOf(mod), { recursive: true });
-      await writeManifestIn(folderOf(mod), { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() });
+      for (const path of ignore) await writeFile(join(folderOf(mod), path), 'x');
+      await writeManifestIn(folderOf(mod), { packages: [], exclude: [], ignore, flags: new Map(), files: new Map() });
     }
     const over = (answers: InstanceAnswers = {}, sourceMods: Record<string, string> = {}) => fakeInstanceAdapter(
       readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA', 'ModC', 'ModD'), sourceModFolders: repositoriesOf(sourceMods) }),
@@ -545,7 +546,7 @@ describe('sourceCommands versionInGit', () => {
 
       expect(outcome).toEqual({
         landed: [{ mod: 'ModC', plugins: [] }],
-        refused: [{ item: 'ModA', reason: 'is a source mod, which git holds by its source folder' }, { item: 'ModD', reason: 'is held whole by git already' }],
+        refused: [{ item: 'ModD', reason: 'is held whole by git already' }, { item: 'ModA', reason: 'is a source mod, which git holds by its source folder' }],
       });
     });
 
@@ -587,6 +588,62 @@ describe('sourceCommands versionInGit', () => {
         [{ verb: 'writeHeldWholeLines', modFolders: [FOLDER_C()], held: true }],
         { landed: [], refused: [{ item: 'ModC', reason: 'was put under git, but could not be committed: nothing to commit' }] },
       ]);
+    });
+
+    it('refuses a mod whose manifest ignores files, naming them, since the folder would hold them, and writes nothing for it', async () => {
+      await modWithManifest('ModC', ['save.dat', 'cache.bin']);
+      const fake = over();
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect([verbs(fake.calls), outcome]).toEqual([[], {
+        landed: [], refused: [{ item: 'ModC', reason: 'its manifest ignores cache.bin, save.dat, which git would then hold' }],
+      }]);
+    });
+
+    it('refuses a mod whose name gives it no folder, and lands the rest', async () => {
+      const fake = over();
+
+      const outcome = await versioned(committing().client, fake, ['a/b', 'ModC']);
+
+      expect(outcome).toEqual({ landed: [{ mod: 'ModC', plugins: [] }], refused: [{ item: 'a/b', reason: 'its name gives it no folder' }] });
+    });
+
+    it('names the ignore list that still lets in the folder when it could not be taken back', async () => {
+      await modWithManifest('ModC');
+      const fake = over({
+        refusals: (call) => (call.verb === 'trashFileIn' ? 'the trash is full' : call.verb === 'writeHeldWholeLines' && !call.held ? 'a marker with no match' : undefined),
+      });
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect(outcome).toEqual({
+        landed: [],
+        refused: [{ item: 'ModC', reason: `its manifest could not go to the trash: the trash is full The ignore list still lets in ${FOLDER_C()}: a marker with no match` }],
+      });
+    });
+
+    it('refuses a mod whose folder git still leaves out, such as by .git/info/exclude, taking its line back, and commits nothing', async () => {
+      const fake = over({ leftOutByGit: new Set([FOLDER_C()]) });
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect([verbs(fake.calls), outcome]).toEqual([[
+        { verb: 'writeHeldWholeLines', modFolders: [FOLDER_C()], held: true },
+        { verb: 'writeHeldWholeLines', modFolders: [FOLDER_C()], held: false },
+      ], {
+        landed: [], refused: [{ item: 'ModC', reason: 'its folder is still left out by git, though the ignore list lets it in, such as by .git/info/exclude.' }],
+      }]);
+    });
+
+    it('says the mod and the phase while it commits', async () => {
+      const fake = over();
+      const phases: (string | null | undefined)[] = [];
+
+      await sourceCommands({ client: committing().client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() })
+        .versionInGit(['ModC'], { ...wholeFolder(true), onProgress: (status) => { phases.push(status.phase); } });
+
+      expect(phases).toEqual([undefined, 'Committing']);
     });
   });
 

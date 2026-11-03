@@ -15,7 +15,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
-import { setAsideHeldWhole } from './heldWhole';
+import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';

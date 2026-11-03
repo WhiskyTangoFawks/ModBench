@@ -129,6 +129,8 @@ export interface InstanceAnswers {
   heldByGit?: ReadonlyMap<string, readonly string[]>;
   /** The mod folders whose whole git holds. */
   heldWholeByGit?: ReadonlySet<string>;
+  /** The mod folders git still leaves out after the ignore list lets them in, such as by .git/info/exclude. */
+  leftOutByGit?: ReadonlySet<string>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -283,6 +285,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
   const flaggedHashes = new Map(answers.flaggedHashes);
+  const letInByLines = new Set<string>();
   const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
   const listeners = new Set<() => void>();
   let readings = 0;
@@ -420,7 +423,12 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     writeSourceFolderLines: (sourceFolders, held) => record({ verb: 'writeSourceFolderLines', sourceFolders, held }, undefined),
-    writeHeldWholeLines: (modFolders, held) => record({ verb: 'writeHeldWholeLines', modFolders, held }, undefined),
+    writeHeldWholeLines: (modFolders, held) => write({ verb: 'writeHeldWholeLines', modFolders, held }, () => {
+      for (const folder of modFolders) {
+        if (held) letInByLines.add(folder);
+        else letInByLines.delete(folder);
+      }
+    }),
     commitFolder: (folder, message) => record({ verb: 'commitFolder', folder, message }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
@@ -433,7 +441,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
     folderValue: (folder) => folderValueOver(adapter, folder),
-    foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true))),
+    foldersHeldWhole: (folders) => Promise.resolve(new Set(
+      folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),
+    )),
     sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,

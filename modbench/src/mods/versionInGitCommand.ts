@@ -30,8 +30,6 @@ interface VersionInGitOptions { readonly commit: boolean; readonly where: Versio
 
 type VersionInGitGiven = ModsGiven & VersionInGitOptions;
 
-const makesSourceMods = (where: VersionInGitWhere): boolean => where !== 'WholeFolder';
-
 // commands.md, `version in git`: the modlist repository is a choice only while the instance holds one, and a pick of
 // one choice is not shown.
 async function pickWhere(holdsRepository: boolean): Promise<VersionInGitWhere | undefined> {
@@ -80,6 +78,7 @@ async function versionModsInGit(
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   const progress = progressIn(invokedFrom);
+  const makesSourceMods = options.where !== 'WholeFolder';
   const result = await runWritingGesture(invokedFrom, instance, async (): Promise<VersionedInGit> => {
     try {
       progress.say(versionInGitProgressMessage(firstMod, undefined));
@@ -88,14 +87,14 @@ async function versionModsInGit(
         onProgress: (status) => { progress.say(versionInGitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
       if (isRefused(result)) return { applied: false, refusal: result.message };
-      if (makesSourceMods(options.where) && result.landed.length > 0) await onCommitted();
+      if (makesSourceMods && result.landed.length > 0) await onCommitted();
       const { notes = [], ...outcome } = result;
       return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Version in git:', detail, severity: 'warning' as const })) } };
     } finally {
       progress.say(undefined);
     }
   });
-  const lastLanded = result.applied && makesSourceMods(options.where) ? result.outcome.landed.at(-1) : undefined;
+  const lastLanded = result.applied && makesSourceMods ? result.outcome.landed.at(-1) : undefined;
   if (!result.applied || lastLanded === undefined) return result;
   const unshown = await showInExplorer(instance.value.paths.sourceDirs.get(lastLanded.mod), lastLanded.mod);
   return unshown === undefined ? result : { ...result, partial: [...result.partial ?? [], unshown] };
@@ -121,7 +120,7 @@ function reportVersioned(
   if (refused.length + refusedRows.length > 0) {
     reportRefused(reporter, mods.length, { refused, plugins: landed.flatMap((mod) => mod.plugins), refusedPlugins: refusedRows });
   } else if (landed.length > 0) {
-    const [one, many] = makesSourceMods(where) ? ['a source mod', 'source mods'] : ['held whole by git', 'held whole by git'];
+    const [one, many] = where !== 'WholeFolder' ? ['a source mod', 'source mods'] : ['held whole by git', 'held whole by git'];
     reporter.landed(mods.length === 1 ? `"${mods[0]}" is ${one}.` : `${mods.length} mods are ${many}.`);
   }
 }

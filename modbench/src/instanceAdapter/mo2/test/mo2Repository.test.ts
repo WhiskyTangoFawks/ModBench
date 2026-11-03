@@ -542,23 +542,6 @@ describe('the MO2 adapter\'s repository', () => {
       expect(existsSync(join(root, '.gitmodules'))).toBe(false);
     });
 
-    it('is refused when it is not a folder of the source folder, writing nothing', async () => {
-      const adapter = await instance();
-      runGit('init', '--quiet');
-      await adapter.writeIgnoreList();
-      const before = await readFile(join(root, '.gitignore'), 'utf8');
-
-      await expect(adapter.writeSourceFolderLines([join(root, 'mods', 'Mod A')], true)).rejects.toThrow('is not a folder of');
-      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(before);
-    });
-
-    it('writes no ignore list where there is none', async () => {
-      const adapter = await instance();
-
-      await adapter.writeSourceFolderLines([await sourceFolder('Mod A')], true);
-
-      expect(existsSync(join(root, '.gitignore'))).toBe(false);
-    });
   });
 
   describe('a mod folder the modlist repository holds whole', () => {
@@ -588,31 +571,37 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
-    it('keeps every line it did not write', async () => {
+  });
+
+  describe.each([
+    { lines: 'a source folder', folderIn: 'source', elsewhere: 'mods', write: (a: Awaited<ReturnType<typeof instance>>, folders: string[]) => a.writeSourceFolderLines(folders, true) },
+    { lines: 'a mod folder held whole', folderIn: 'mods', elsewhere: 'source', write: (a: Awaited<ReturnType<typeof instance>>, folders: string[]) => a.writeHeldWholeLines(folders, true) },
+  ])('the lines for $lines', ({ folderIn, elsewhere, write }) => {
+    it('keep every line it did not write', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       await writeFile(join(root, '.gitignore'), `${await readFile(join(root, '.gitignore'), 'utf8')}mine\n`);
 
-      await adapter.writeHeldWholeLines([await modFolder('Mod A')], true);
+      await write(adapter, [join(root, folderIn, 'Mod A')]);
 
       expect((await readFile(join(root, '.gitignore'), 'utf8')).split('\n')).toContain('mine');
     });
 
-    it('is refused when it is not a folder of mods, writing nothing', async () => {
+    it('are refused for a folder that is not one of its parent, writing nothing', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       const before = await readFile(join(root, '.gitignore'), 'utf8');
 
-      await expect(adapter.writeHeldWholeLines([join(root, 'source', 'Mod A')], true)).rejects.toThrow('is not a folder of');
+      await expect(write(adapter, [join(root, elsewhere, 'Mod A')])).rejects.toThrow('is not a folder of');
       expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(before);
     });
 
-    it('writes no ignore list where there is none', async () => {
+    it('write no ignore list where there is none', async () => {
       const adapter = await instance();
 
-      await adapter.writeHeldWholeLines([await modFolder('Mod A')], true);
+      await write(adapter, [join(root, folderIn, 'Mod A')]);
 
       expect(existsSync(join(root, '.gitignore'))).toBe(false);
     });
