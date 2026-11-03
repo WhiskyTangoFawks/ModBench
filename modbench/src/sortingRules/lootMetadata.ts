@@ -68,6 +68,9 @@ const MESSAGE_LEVELS: Record<string, RuleLevel> = { say: 'info', warn: 'warning'
 // LOOT reads a name holding any of these as a regular expression over the whole file name.
 const REGEX_NAME = /[:\\*?|]/;
 
+/** The branch of LOOT's repositories whose metadata format this parser reads. */
+export const METADATA_BRANCH = 'v0.29';
+
 // The largest real masterlist with its prelude resolves 368 aliases; a file that needs far more is an alias bomb.
 const MAX_ALIASES = 4000;
 

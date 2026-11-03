@@ -171,6 +171,12 @@ const INSTALL = gestureInput(
 
 const NO_INPUT = gestureInput('', z.object({}), () => new AgentCall([], {}));
 
+const UPDATE_MASTERLIST = gestureInput(
+  'options: { force?: true to replace uncommitted changes to the masterlist, which is otherwise refused, naming the files }',
+  z.object({ options: z.object({ force: z.boolean().optional() }).optional() }),
+  (_value, { options }) => new AgentCall([], { force: options?.force }),
+);
+
 const SWITCH_PROFILE = gestureInput(
   'argument: the one profile, { name } as list_profiles names it',
   z.object({ argument: z.array(z.object({ name: z.string() })) }),
@@ -336,6 +342,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.instance.deploy', NO_INPUT],
   ['modbench.instance.purge', NO_INPUT],
   ['modbench.instance.moveToOverwrite', MOVE_TO_OVERWRITE],
+  ['modbench.instance.updateMasterlist', UPDATE_MASTERLIST],
   ['modbench.instance.logOut', NO_INPUT],
   ['modbench.mod.updateManifest', UPDATE_MANIFEST],
   ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],

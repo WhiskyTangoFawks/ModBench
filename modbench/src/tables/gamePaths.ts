@@ -6,6 +6,8 @@ import { join, parse } from 'node:path';
 export interface GamePathInfo {
   /** The game's name as an instance's settings spell it. */
   readonly gameName: string;
+  /** The game's repository in LOOT's organisation. */
+  readonly lootRepository: string;
   /** The Nexus slug — the {game} segment of nexusmods.com/{game}/mods/{id}. */
   readonly nexusSlug: string;
   /** The other releases whose files the mod manager also accepts as this game's, by the short names it knows them by, in the order it asks Nexus about them. */
@@ -96,33 +98,33 @@ const SKYRIM_ARCHIVES: ArchiveLists = {
 
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
-    gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
+    gameName: 'Fallout 4', nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
     pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
-    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
     pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
   Starfield: {
-    gameName: 'Starfield', nexusSlug: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
+    gameName: 'Starfield', nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
@@ -194,6 +196,11 @@ export function shortNameForNexusDomain(domain: string): string | undefined {
  *  the autodetector's signal to give up rather than guess a folder. */
 export function gamePathInfoForRelease(release: string): GamePathInfo | undefined {
   return GAME_PATHS[release];
+}
+
+/** The release's repository in LOOT's organisation; none for a release the table holds no row for. */
+export function lootRepositoryOf(release: string): string | undefined {
+  return GAME_PATHS[release]?.lootRepository;
 }
 
 /** The game's programs in the game folder; none for no release, or a release the table holds no row for. */

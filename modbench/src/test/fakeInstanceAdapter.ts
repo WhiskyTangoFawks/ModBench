@@ -80,6 +80,7 @@ export type AdapterCall =
   | { readonly verb: 'trashDownloadedFile'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
   | { readonly verb: 'changeUserlist'; readonly additions: readonly LoadAfter[] }
+  | { readonly verb: 'changeMasterlist'; readonly masterlist: string; readonly prelude: string }
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
@@ -187,6 +188,8 @@ export interface InstanceAnswers {
   uncloned?: Awaited<ReturnType<InstanceAdapter['unclonedSubmodules']>>;
   /** The reason a trashed downloaded file's metadata is left behind. */
   metadataLeftBehind?: string;
+  /** The masterlist and prelude files git holds uncommitted changes of. */
+  uncommittedMasterlist?: readonly string[];
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
   /** The reason reading a file of an origin fails, or `undefined` when it reads. */
@@ -515,6 +518,22 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         current = { ...current, sortingRuleFiles: { ...current.sortingRuleFiles, userlist: { path: userlist.path, kind: 'text', text: after } } };
         return { wrote: true };
       }),
+    changeMasterlist: ({ masterlist, prelude }) =>
+      write({ verb: 'changeMasterlist', masterlist, prelude }, () => {
+        const files = current.sortingRuleFiles;
+        const held = (file: typeof files.masterlist) => (file.kind === 'text' ? file.text : undefined);
+        if (held(files.masterlist) === masterlist && held(files.prelude) === prelude) return { wrote: false };
+        current = {
+          ...current,
+          sortingRuleFiles: {
+            ...files,
+            masterlist: { path: files.masterlist.path, kind: 'text', text: masterlist },
+            prelude: { path: files.prelude.path, kind: 'text', text: prelude },
+          },
+        };
+        return { wrote: true };
+      }),
+    uncommittedMasterlist: () => Promise.resolve(answers.uncommittedMasterlist ?? []),
     selectProfile: (profile) =>
       write({ verb: 'selectProfile', profile }, () => {
         const wrote = profile !== current.profile;

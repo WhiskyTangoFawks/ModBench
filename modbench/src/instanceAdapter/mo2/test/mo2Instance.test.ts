@@ -3226,6 +3226,38 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
+  describe('the masterlist', () => {
+    const git = (...args: string[]) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' });
+
+    it('is written whole with the prelude at the instance root, and a second identical write changes nothing', async () => {
+      const files = { masterlist: 'plugins: []\n', prelude: 'common: []\n' };
+
+      expect(await adapter.changeMasterlist(files)).toEqual({ wrote: true });
+      expect(await adapter.changeMasterlist(files)).toEqual({ wrote: false });
+
+      expect([await readFile(join(root, 'masterlist.yaml'), 'utf8'), await readFile(join(root, 'prelude.yaml'), 'utf8')]).toEqual(['plugins: []\n', 'common: []\n']);
+    });
+
+    it('has no uncommitted change in an instance that is not a repository', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'a');
+
+      expect(await adapter.uncommittedMasterlist()).toEqual([]);
+    });
+
+    it('names the metadata files git holds changes of, those edited and those never committed', async () => {
+      await writeFile(join(root, 'masterlist.yaml'), 'a');
+      git('init', '-q');
+      git('add', 'masterlist.yaml');
+      git('commit', '-q', '-m', 'pin');
+      expect(await adapter.uncommittedMasterlist()).toEqual([]);
+
+      await writeFile(join(root, 'masterlist.yaml'), 'edited');
+      await writeFile(join(root, 'prelude.yaml'), 'new');
+
+      expect(await adapter.uncommittedMasterlist()).toEqual(['masterlist.yaml', 'prelude.yaml']);
+    });
+  });
+
   describe('the selected profile', () => {
     it('selects a profile, touching the settings alone', async () => {
       const before = await snapshotTree(root);
