@@ -79,6 +79,19 @@ describe('plugins.txt corpus', () => {
     expect(enabled).toContain('NonAsciiRetexture.esp');
   });
 
+  it('loadAfter makes the userlist, touching no other file, and writes the rule once', async () => {
+    const before = await snapshotTree(dir);
+    const userlist = join(dir, 'userlist.yaml');
+
+    const result = await pluginCommandsOver(dir).loadAfter(['Patch Mod.esp'], ['NonAsciiRetexture.esp']);
+    const again = await pluginCommandsOver(dir).loadAfter(['Patch Mod.esp'], ['NonAsciiRetexture.esp']);
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set(['userlist.yaml']));
+    expect(result).toEqual({ applied: true, wrote: true });
+    expect(again).toEqual({ applied: true, wrote: false });
+    expect(await readFile(userlist, 'utf8')).toBe('plugins:\n  - name: Patch Mod.esp\n    after:\n      - NonAsciiRetexture.esp\n');
+  });
+
   it('syncPlugins converges the fixture on disk, touching only plugins.txt and loadorder.txt', async () => {
     const sync = await syncWithGameFolderHolding(dir, 'ccsbjfo4003-grenade.esl');
     const before = await snapshotTree(dir);

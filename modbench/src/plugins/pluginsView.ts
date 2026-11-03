@@ -31,7 +31,7 @@ import { createdRecordSelection } from './createdRecordSelection';
 import { registerDecompileAndRepairCommand, registerDecompileCommand, type DecompileDeps } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerApplySuggestedMoveCommand } from './applySuggestedMoveCommand';
-import { registerLoadAfterCommand, type LoadAfterDeps } from './loadAfterCommand';
+import { registerLoadAfterCommand } from './loadAfterCommand';
 import { suggestedMoveActions } from './suggestedMoveActions';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
@@ -50,7 +50,6 @@ export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
   commands: PluginCommands;
-  changeUserlist: LoadAfterDeps['changeUserlist'];
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: RecordBrowser;
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
@@ -177,7 +176,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
       userlistPath: () => tree.userlistPath(), moves: () => tree.facts.rows.suggestedMoves(),
     }), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     registerLoadAfterCommand({
-      changeUserlist: deps.changeUserlist, instance, reporter: reporterFor('pluginListTree.loadAfter'), places: (names) => tree.loadAfterPlaces(names),
+      commands, instance, reporter: reporterFor('pluginListTree.loadAfter'), places: (names) => tree.loadAfterPlaces(names),
     }, selected.rows),
     registerApplySuggestedMoveCommand({
       commands, instance, reporter: reporterFor('pluginListTree.applySuggestedMove'), movesOf: (plugin) => tree.facts.rows.suggestedMovesOf(plugin),

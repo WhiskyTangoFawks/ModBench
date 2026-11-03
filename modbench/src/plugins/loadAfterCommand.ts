@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { LoadAfter } from '../sortingRules/lootMetadata';
+import type { PluginCommands } from '../pluginCommands/plugins';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
@@ -12,7 +12,7 @@ import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import type { PluginsTreeNode } from './pluginRows';
 
 export interface LoadAfterDeps {
-  changeUserlist: (additions: readonly LoadAfter[]) => Promise<unknown>;
+  commands: Pick<PluginCommands, 'loadAfter'>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   places: (selected: readonly string[]) => readonly string[];
@@ -25,7 +25,7 @@ interface Choice {
 
 /** `modbench.plugin.loadAfter` (commands.md): each selected plugin loads after each plugin picked. */
 export function registerLoadAfterCommand(
-  { changeUserlist, instance, reporter, places }: LoadAfterDeps, viewSelection: () => readonly PluginsTreeNode[],
+  { commands, instance, reporter, places }: LoadAfterDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   const gesture: AgentGesture<PluginsTreeNode, Choice, GestureResult<PluginAddress>, { after: { name: string }[] }> = {
     fromView: async (entry) => {
@@ -46,10 +46,12 @@ export function registerLoadAfterCommand(
     },
     run: async ({ plugins, after }) => {
       try {
-        await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => changeUserlist(plugins.map(({ name }) => ({ plugin: name, after }))));
-        return { applied: true, outcome: { landed: plugins, refused: [] } };
+        const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.loadAfter(plugins.map(({ name }) => name), after));
+        return result.applied
+          ? { applied: true, outcome: { landed: plugins, refused: [] } }
+          : { applied: false, refusal: 'Could not write the load after.', detail: result.refusal };
       } catch (e) {
-        return { applied: false, refusal: 'Could not write the load after.', detail: errorMessage(e) };
+        return { applied: false, refusal: 'Failed to write the load after.', detail: errorMessage(e) };
       }
     },
     report: (result) => {

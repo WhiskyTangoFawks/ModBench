@@ -1,4 +1,4 @@
-import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, stringify, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
+import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, stringify, type Document, type Pair, type YAMLMap, type YAMLSeq } from 'yaml';
 
 type SortingRuleFile = { readonly path: string } & (
   | { readonly kind: 'text'; readonly text: string }
@@ -441,8 +441,12 @@ class Userlist {
     return this.text.slice(first - this.columnOf(first), first).search(/-\s*$/);
   }
 
-  appendPlugins(root: unknown, entries: readonly LoadAfter[]): void {
-    this.insertLinesAfter(isMap(root) ? endOf(root) : startOf(root), 0, ['plugins:', ...entries.flatMap((entry) => entryLines(entry).map((line) => `  ${line}`))]);
+  appendPlugins(end: number, entries: readonly LoadAfter[]): void {
+    this.insertLinesAfter(end, 0, ['plugins:', ...entries.flatMap((entry) => entryLines(entry).map((line) => `  ${line}`))]);
+  }
+
+  fillBarePlugins(key: Pair, entries: readonly LoadAfter[]): void {
+    this.insertLinesAfter(endOf(key.value), this.columnOf(startOf(key.key)) + 2, entries.flatMap(entryLines));
   }
 
   addEntry(plugins: YAMLSeq, entry: LoadAfter): void {
@@ -468,14 +472,18 @@ class Userlist {
   }
 }
 
-function pluginsOf(doc: Document): YAMLSeq | undefined {
+type PluginsFound = { kind: 'absent'; end: number } | { kind: 'bare'; key: Pair } | { kind: 'list'; seq: YAMLSeq };
+
+function pluginsOf(doc: Document): PluginsFound {
   if (doc.errors.length > 0) throw new Error(`The userlist does not parse: ${doc.errors[0]?.message}`);
-  if (doc.contents === null || (isScalar(doc.contents) && doc.contents.value === null)) return undefined;
-  if (!isMap(doc.contents)) throw new Error('The userlist is not a map.');
-  const plugins = doc.contents.get('plugins', true);
-  if (plugins === undefined) return undefined;
-  if (!isSeq(plugins)) throw new Error('The userlist\'s "plugins" is not a list.');
-  return plugins;
+  const root = doc.contents;
+  if (root === null || (isScalar(root) && root.value === null)) return { kind: 'absent', end: doc.range?.[1] ?? 0 };
+  if (!isMap(root)) throw new Error('The userlist is not a map.');
+  const key = root.items.find((pair) => isScalar(pair.key) && pair.key.value === 'plugins');
+  if (key === undefined) return { kind: 'absent', end: endOf(root) };
+  if (isSeq(key.value)) return { kind: 'list', seq: key.value };
+  if (isScalar(key.value) && key.value.value === null && key.value.range?.[0] === key.value.range?.[1]) return { kind: 'bare', key };
+  throw new Error('The userlist\'s "plugins" is not a list.');
 }
 
 const distinct = (names: readonly string[]): string[] => names.filter((name, at) => names.findIndex((other) => sameName(other, name)) === at);
@@ -493,7 +501,8 @@ function mergedByPlugin(additions: readonly LoadAfter[]): LoadAfter[] {
  *  else, so a comment, anchor or spacing stays. Throws for a text that is not a map of plugins. */
 export function addLoadAfter(source: string, additions: readonly LoadAfter[]): string {
   const doc = parseDocument(source);
-  const plugins = pluginsOf(doc);
+  const found = pluginsOf(doc);
+  const plugins = found.kind === 'list' ? found.seq : undefined;
   const userlist = new Userlist(source);
   const fresh: LoadAfter[] = [];
   for (const { plugin, after } of mergedByPlugin(additions)) {
@@ -505,7 +514,10 @@ export function addLoadAfter(source: string, additions: readonly LoadAfter[]): s
     if (entry !== undefined) userlist.addAfters(entry, entry.get('after', true), missing);
     else fresh.push({ plugin, after: missing });
   }
-  if (plugins === undefined) { if (fresh.length > 0) userlist.appendPlugins(doc.contents, fresh); }
-  else for (const addition of fresh) userlist.addEntry(plugins, addition);
+  if (fresh.length > 0) {
+    if (plugins !== undefined) for (const addition of fresh) userlist.addEntry(plugins, addition);
+    else if (found.kind === 'bare') userlist.fillBarePlugins(found.key, fresh);
+    else if (found.kind === 'absent') userlist.appendPlugins(found.end, fresh);
+  }
   return userlist.edited ? userlist.result() : source;
 }

@@ -352,7 +352,7 @@ plugins:
     expect(addLoadAfter(original, [])).toBe(original);
   });
 
-  it.each(['- just\n- a list\n', 'plugins: [unclosed'])('rejects %j, writing nothing', (original) => {
+  it.each(['- just\n- a list\n', 'plugins: [unclosed', 'plugins: ~\n', 'plugins: 3\n'])('rejects %j, writing nothing', (original) => {
     expect(() => addLoadAfter(original, [{ plugin: 'A.esp', after: ['B.esp'] }])).toThrow();
   });
 
@@ -376,6 +376,14 @@ plugins:
     const { entries, problems } = readRules(filesOf({ userlist: text(written) }));
     expect(problems).toEqual([]);
     expect(entries.map(({ after }) => after.map((file) => file.name).filter((name) => name !== 'Z.esp'))).toEqual([['B.esp', 'C.esp']]);
+  });
+
+  it.each([
+    ['a file holding only a comment', '# mine\n', '# mine\nplugins:\n  - name: A.esp\n    after:\n      - B.esp\n'],
+    ['a bare plugins key', 'plugins:\n', 'plugins:\n  - name: A.esp\n    after:\n      - B.esp\n'],
+    ['a bare plugins key with a comment', 'groups: []\nplugins: # mine\nmore: 1\n', 'groups: []\nplugins: # mine\n  - name: A.esp\n    after:\n      - B.esp\nmore: 1\n'],
+  ])('adds the plugins list after %s', (_, original, expected) => {
+    expect(addLoadAfter(original, [{ plugin: 'A.esp', after: ['B.esp'] }])).toBe(expected);
   });
 
   it('adds the plugins list before a document end marker, not in a second document', () => {

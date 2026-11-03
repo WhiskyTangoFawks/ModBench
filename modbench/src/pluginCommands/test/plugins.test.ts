@@ -388,3 +388,22 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     expect(fake.calls).toEqual(synced([]));
   });
 });
+
+describe('loadAfter', () => {
+  it('hands the userlist each plugin with the plugins it loads after', async () => {
+    const fake = fakeInstanceAdapter();
+
+    const result = await pluginCommandsWith(fake.adapter).loadAfter(['A.esp', 'B.esp'], ['C.esp']);
+
+    expect(result).toEqual({ applied: true, wrote: true });
+    expect(fake.calls).toEqual([{ verb: 'changeUserlist', additions: [{ plugin: 'A.esp', after: ['C.esp'] }, { plugin: 'B.esp', after: ['C.esp'] }] }]);
+  });
+
+  it('refuses with the reason the userlist cannot be changed', async () => {
+    const fake = fakeInstanceAdapter(readingFixture(), { refusals: refusing('changeUserlist', 'The userlist is not a map.') });
+
+    const result = await pluginCommandsWith(fake.adapter).loadAfter(['A.esp'], ['C.esp']);
+
+    expect(result).toEqual({ applied: false, refusal: 'The userlist is not a map.' });
+  });
+});

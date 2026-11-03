@@ -38,6 +38,7 @@ import { PluginNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture, refusing } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
@@ -50,7 +51,7 @@ function registered(offered: readonly string[] = ['C.esp', 'D.esp'], refusal?: s
   const reporter = recordingReporter();
   const fake = fakeInstanceAdapter(readingFixture(), { refusals: refusal === undefined ? undefined : refusing('changeUserlist', refusal) });
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }), refresh: vi.fn(() => Promise.resolve()) };
-  registerLoadAfterCommand({ changeUserlist: (rules) => fake.adapter.changeUserlist(rules), instance, reporter, places: () => offered }, () => []);
+  registerLoadAfterCommand({ commands: pluginCommandsWith(fake.adapter), instance, reporter, places: () => offered }, () => []);
   return { reporter, fake, instance };
 }
 

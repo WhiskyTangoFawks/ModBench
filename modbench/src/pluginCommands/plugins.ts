@@ -223,6 +223,16 @@ export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
   return () => syncPlugins(adapter);
 }
 
+// `modbench.plugin.loadAfter`: each plugin loads after each of the others, as a rule in the userlist.
+async function loadAfter(adapter: InstanceAdapter, plugins: readonly string[], after: readonly string[]): Promise<CommandResult> {
+  try {
+    const { wrote } = await adapter.changeUserlist(plugins.map((plugin) => ({ plugin, after })));
+    return { applied: true, wrote };
+  } catch (err) {
+    return refuse(err);
+  }
+}
+
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
 export function pluginCommands({ adapter, client, newRepositories }: {
   adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; newRepositories: PlaceMods;
@@ -230,6 +240,7 @@ export function pluginCommands({ adapter, client, newRepositories }: {
   return {
     setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),
     setPluginsEnabled: (...args: TailOf<typeof setPluginsEnabled>) => setPluginsEnabled(adapter, ...args),
+    loadAfter: (...args: TailOf<typeof loadAfter>) => loadAfter(adapter, ...args),
     reorderPlugins: (...args: TailOf<typeof reorderPlugins>) => reorderPlugins({ adapter, client }, ...args),
     decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client, newRepositories }, ...args),
     ...pluginRenameCommands({ adapter, client }),
