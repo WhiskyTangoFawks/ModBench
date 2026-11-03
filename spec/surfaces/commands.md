@@ -209,6 +209,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | exclude / include | writes | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files excluded in the metadata the mod manager keeps for them, or clear the mark. | update-load-order-file |
 | delete | writes | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Send downloaded files to the trash. | update-load-order-file |
 | query info | writes | `modbench.downloadedFile.queryInfo` | downloaded files | - | MO2 Downloads, Query Info (MD5) | Look each file up on Nexus, and write what Nexus knows of it in its metadata. | - |
+| download | writes | `modbench.downloadedFile.download` | - | a Nexus mod and its file | MO2 Downloads | Fetch a file from Nexus into the downloads. | - |
 | open | reads | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open metadata | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the file that holds a downloaded file's metadata in an editor tab. | none |
 | sort | reads | `modbench.downloadedFile.sort` | - | field; direction | MO2 Downloads | Choose the field the downloaded files sort by. | none |

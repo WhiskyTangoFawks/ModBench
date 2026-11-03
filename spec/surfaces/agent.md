@@ -18,6 +18,7 @@ As a user, I want:
 8. My agent to read every state a view shows me, as data, so what I can see it can check. Cites: story 6; Minimal by default
 9. My agent to understand each reply clearly, so it works effectively.
 10. Each reply to my agent to be concise, so it is token efficient. Cites: Minimal by default; Never silently wrong
+11. My agent to read Nexus itself where Nexus needs no key, and to learn from Modbench how. Cites: story 6
 
 ## Names
 
@@ -61,6 +62,7 @@ As a user, I want:
 4. Each gesture my agent runs to be a tool of its own, named for the gesture, so I approve each as I approve any of its tools, and my agent learns its Argument and Options, and their types, from Modbench. Cites: Any agent, story 4; ADR-0021
 5. My agent never to log in: logging in hands it my Nexus API key, a secret it never holds. Log out it requests as I do.
 6. My agent's install of a FOMOD to name its choices by step, group and option, as the installer shows them. A request whose choices leave a step I would see unanswered is refused, and the refusal lists that step's groups and options, so my agent answers step by step. The author's defaults are what my picker pre-selects; my agent names its own choices (commands.md, The entry point supplies what it knows). A step that needs no pick is answered with none, and my agent may ask for Manual in place of choices. A FOMOD that names a file missing from what it installs is refused, naming each file, and my agent requests it again with install anyway. Cites: Names, story 2; mods-fomod.md, What Install does, story 2
+7. My agent's download that names no file to be refused, listing the mod's files as the pick shows them, each as my agent can name it. Cites: Reporting, story 2; downloads.md, Download, story 2
 
 ## Reporting
 
