@@ -76,7 +76,7 @@ public sealed class VersionInGitHandlerTests : IDisposable
         File.WriteAllText(Path.Combine(settings, "Settings.ini"), "[General]");
         var sourceFolder = Path.Combine(_instanceRoot, "source", "Settings");
 
-        var result = await InitWith(new ModToVersionInGit("Settings", settings, new SourceFolderContents(sourceFolder, ["Settings.ini"], SourceInits.BuildFile), SourceModIn.NewRepository, Commit: true));
+        var result = await InitWith(new ModToVersionInGit("Settings", settings, new SourceFolderContents(sourceFolder, SourceModIn.NewRepository, ["Settings.ini"], SourceInits.BuildFile), Commit: true));
 
         Assert.Empty(Assert.Single(result.Applied).Plugins);
         Assert.Equal("[General]", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "main:Settings.ini"));
@@ -85,7 +85,7 @@ public sealed class VersionInGitHandlerTests : IDisposable
     [Fact]
     public async Task Init_AskedNotToCommit_WritesTheSourceFolderAndCommitsNothing()
     {
-        var result = await InitWith(new ModToVersionInGit(Origin, _mod.Folder, new SourceFolderContents(SourceFolder, [], SourceInits.BuildFile), SourceModIn.NewRepository, Commit: false));
+        var result = await InitWith(new ModToVersionInGit(Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.NewRepository, [], SourceInits.BuildFile), Commit: false));
 
         Assert.Single(result.Applied);
         Assert.True(File.Exists(Path.Combine(SourceFolder, "build.json")));
@@ -101,7 +101,7 @@ public sealed class VersionInGitHandlerTests : IDisposable
         GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.email", "test@localhost");
 
         var result = await InitWith(new ModToVersionInGit(
-            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, [], SourceInits.BuildFile), SourceModIn.ModlistRepository, Commit: true));
+            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.ModlistRepository, [], SourceInits.BuildFile), Commit: true));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.False(Path.Exists(Path.Combine(SourceFolder, ".git")));
@@ -146,7 +146,7 @@ public sealed class VersionInGitHandlerTests : IDisposable
     }
 
     private Task<VersionInGitResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
-        InitWith(new ModToVersionInGit(Origin, _mod.Folder, new SourceFolderContents(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile)), SourceModIn.NewRepository, Commit: true));
+        InitWith(new ModToVersionInGit(Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.NewRepository, assets, Encoding.UTF8.GetBytes(buildFile)), Commit: true));
 
     private async Task<VersionInGitResult> InitWith(ModToVersionInGit mod)
     {

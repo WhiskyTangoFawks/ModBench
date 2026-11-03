@@ -46,7 +46,7 @@ public sealed class DecompileAndRepairPluginHandler
             cancel.ThrowIfCancellationRequested();
             var answer = await RepairOneAsync(loadOrder, item, selected, leftOutOfANewSourceFolder, force, cancel);
             return answer is ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refusing(var refusal, var message) && leftOutOfANewSourceFolder.Contains(item.Plugin)
-                ? Refused(refusal, $"{message} The repository made for its mod holds no source for it.")
+                ? Refused(refusal, $"{message} The source folder made for its mod holds no source for it.")
                 : answer;
         });
         return repaired.ToAnswer(
@@ -65,7 +65,7 @@ public sealed class DecompileAndRepairPluginHandler
         var target = RepairTarget.Of(_repairer, loadOrder, item.Plugin);
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
         var (plugin, mod) = (RepairTarget.Diagnosed)target;
-        var sourceFolder = mod.SourceFolder ?? item.SourceFolder?.SourceFolder;
+        var sourceFolder = mod.SourceFolder ?? item.SourceFolder?.Path;
         if (sourceFolder is null)
             return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
         var inSourceMod = _source.IsSourceMod(sourceFolder);
@@ -95,7 +95,7 @@ public sealed class DecompileAndRepairPluginHandler
                 return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} has no repository, and the request hands none to make.");
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
-                loadOrder, new ModToVersionInGit(mod.Name, mod.Folder, made, item.In, Commit: true),
+                loadOrder, new ModToVersionInGit(mod.Name, mod.Folder, made, Commit: true),
                 leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
             if (init is ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");

@@ -30,8 +30,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
                 new
                 {
                     plugin,
-                    sourceFolder = new { sourceFolder = Client.SourceFolderSentFor(Origin), buildFile = "{}" },
-                    @in = "NewRepository",
+                    sourceFolder = new { path = Client.SourceFolderSentFor(Origin), @in = "NewRepository", buildFile = "{}" },
                 },
             },
             force = false,
@@ -47,7 +46,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { sourceFolder = "s" }, @in = "NewRepository" } },
+            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { path = "s", @in = "NewRepository" } } },
             force = false,
         });
 
@@ -61,7 +60,7 @@ public sealed class DecompileAndRepairApiTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { sourceFolder = "s", buildFile = "{}" } } },
+            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { path = "s", buildFile = "{}" } } },
             force = false,
         });
 

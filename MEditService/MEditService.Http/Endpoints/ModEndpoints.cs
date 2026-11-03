@@ -50,22 +50,17 @@ internal static class ModEndpoints
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
             return EndpointMapping.BadRequest("At least one mod is required.");
-        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.ModFolder) || mod.Repository.WhyNotWhole == SourceFolderRequest.NotWhole))
+        if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.ModFolder) || mod.SourceFolder.WhyNotWhole == SourceFolderRequest.NotWhole))
             return EndpointMapping.BadRequest(SourceFolderRequest.NotWhole);
         if (mods.Any(mod => mod.Commit is null))
             return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksCommit);
-        if (mods.Any(mod => mod.Repository.WhyNotWhole == SourceFolderRequest.ManifestLacksItsFile))
+        if (mods.Any(mod => mod.SourceFolder.WhyNotWhole == SourceFolderRequest.ManifestLacksItsFile))
             return EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsFile);
-        if (mods.Any(mod => mod.Repository.WhyNotWhole == SourceFolderRequest.ManifestLacksItsText))
+        if (mods.Any(mod => mod.SourceFolder.WhyNotWhole == SourceFolderRequest.ManifestLacksItsText))
             return EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsText);
-        if (mods.Any(mod => mod.Repository.WhyNotWhole == SourceFolderRequest.ManifestFileIsAPath))
+        if (mods.Any(mod => mod.SourceFolder.WhyNotWhole == SourceFolderRequest.ManifestFileIsAPath))
             return EndpointMapping.BadRequest(SourceFolderRequest.ManifestFileIsAPath);
-        List<ModToVersionInGit> toVersion = [];
-        foreach (var mod in mods)
-        {
-            if (mod.In is not { } heldIn) return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksIn);
-            toVersion.Add(new ModToVersionInGit(mod.Name, mod.ModFolder, mod.Repository.ToSourceFolderContents(), heldIn, mod.Commit == true));
-        }
+        List<ModToVersionInGit> toVersion = [.. mods.Select(mod => new ModToVersionInGit(mod.Name, mod.ModFolder, mod.SourceFolder.ToSourceFolderContents(), mod.Commit == true))];
 
         return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion), EndpointMapping.Refusal);
     }
@@ -177,25 +172,23 @@ internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint F
 /// <summary>The mods to version in git (ADR-0013).</summary>
 internal sealed record VersionInGitRequest(IReadOnlyList<ModToVersionInGitRequest> Mods);
 
-/// <summary>A mod by name and folder, the source folder version in git makes for it, the repository that holds it, and
-/// whether it commits.</summary>
-internal sealed record ModToVersionInGitRequest(string Name, string ModFolder, SourceFolderRequest Repository, bool? Commit, SourceModIn? In)
+/// <summary>A mod by name and folder, the source folder version in git makes for it, and whether it commits.</summary>
+internal sealed record ModToVersionInGitRequest(string Name, string ModFolder, SourceFolderRequest SourceFolder, bool? Commit)
 {
     internal const string LacksCommit = "A mod to version in git needs commit: true to commit what it tracks, or false to leave it uncommitted.";
-    internal const string LacksIn = "A mod to version in git needs in: NewRepository or ModlistRepository.";
 }
 
-/// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its
-/// assets by path, its build file's text, and its manifest's name and text.</summary>
+/// <summary>The source folder made for a mod, the repository that holds it, and what the extension hands its first commit
+/// (ADR-0016): its assets by path, its build file's text, and its manifest's name and text.</summary>
 internal sealed record SourceFolderRequest(
-    string SourceFolder, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null,
+    string Path, SourceModIn? In, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null,
     IReadOnlyList<string>? Ignored = null)
 {
     internal const string NotWhole =
-        "A new repository needs its source folder, forward-slash paths in the mod folder for its assets, and its build file.";
+        "A source folder to make needs its path, in: NewRepository or ModlistRepository, forward-slash paths in the mod folder for its assets, and its build file.";
 
     internal string? WhyNotWhole =>
-        !string.IsNullOrWhiteSpace(SourceFolder) && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null
+        !string.IsNullOrWhiteSpace(Path) && In is not null && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null
             ? WhyManifestIsNotWhole
             : NotWhole;
 
@@ -216,7 +209,7 @@ internal sealed record SourceFolderRequest(
         !string.IsNullOrWhiteSpace(name) && name is not ("." or "..") && name.IndexOfAny(['/', '\\']) < 0;
 
     internal SourceFolderContents ToSourceFolderContents() =>
-        new(SourceFolder, Assets ?? [], Utf8(BuildFile), ManifestFile is { } name && Manifest is { } text ? new RootFile(name, Utf8(text)) : null, Ignored);
+        new(Path, In ?? throw new InvalidOperationException(NotWhole), Assets ?? [], Utf8(BuildFile), ManifestFile is { } name && Manifest is { } text ? new RootFile(name, Utf8(text)) : null, Ignored);
 
     private static byte[] Utf8(string text) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text);
 }

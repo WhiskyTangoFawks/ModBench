@@ -47,7 +47,7 @@ internal static class ToVersionInGit
     /// <summary>Each mod with the source folder the load order's provider names for it, or its own name when none
     /// does.</summary>
     internal static IReadOnlyList<ModToVersionInGit> In(LoadOrderSnapshot? loadOrder, params string[] mods) =>
-        [.. mods.Select(mod => new ModToVersionInGit(mod, ProviderOf(loadOrder, mod)?.Folder ?? mod, new SourceFolderContents(SourceFolderOf(loadOrder, mod), [], SourceInits.BuildFile), SourceModIn.NewRepository, Commit: true))];
+        [.. mods.Select(mod => new ModToVersionInGit(mod, ProviderOf(loadOrder, mod)?.Folder ?? mod, new SourceFolderContents(SourceFolderOf(loadOrder, mod), SourceModIn.NewRepository, [], SourceInits.BuildFile), Commit: true))];
 
     private static PluginProvider.FromMod? ProviderOf(LoadOrderSnapshot? loadOrder, string mod) =>
         loadOrder?.Plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>()

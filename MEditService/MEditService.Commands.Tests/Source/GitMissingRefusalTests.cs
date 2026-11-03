@@ -5,6 +5,7 @@ using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -40,7 +41,7 @@ public sealed class GitMissingRefusalTests : IDisposable
 
     private static readonly Gesture DecompileAndRepair = new("decompile-and-repair", (services, mod, force) =>
         Whole(services.GetRequiredService<DecompileAndRepairPluginHandler>()
-            .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, new SourceFolderContents(mod.ModFolder, [], SourceInits.BuildFile))], force)));
+            .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, new SourceFolderContents(mod.ModFolder, SourceModIn.NewRepository, [], SourceInits.BuildFile))], force)));
 
     private static readonly Gesture Build = new("build", (services, mod, _) => Whole(services.GetRequiredService<BuildModHandler>().BuildAsync(
         [new ModToBuild(SourceEditFixture.ModFolderOrigin, mod.ModFolder, mod.ModFolder, new BuildStep.Copy(["a.nif"]))], new InstanceToBuild("", null))));

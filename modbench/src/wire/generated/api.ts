@@ -1366,9 +1366,8 @@ export interface components {
         ModToVersionInGitRequest: {
             name: string;
             modFolder: string;
-            repository: components["schemas"]["SourceFolderRequest"];
+            sourceFolder: components["schemas"]["SourceFolderRequest"];
             commit?: boolean | null;
-            in?: components["schemas"]["SourceModIn"] | null;
         };
         ModlistProgress: {
             mod?: string | null;
@@ -1502,7 +1501,6 @@ export interface components {
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
             sourceFolder?: components["schemas"]["SourceFolderRequest"] | null;
-            in?: components["schemas"]["SourceModIn"] | null;
         };
         ProblemDetails: {
             type?: string | null;
@@ -1679,7 +1677,8 @@ export interface components {
             refused: components["schemas"]["PluginFileFlagRefused"][];
         };
         SourceFolderRequest: {
-            sourceFolder: string;
+            path: string;
+            in?: components["schemas"]["SourceModIn"] | null;
             assets?: string[] | null;
             buildFile: string;
             manifestFile?: string | null;

@@ -58,7 +58,7 @@ public sealed class VersionInGitTraceTests : HostedTests
         {
             mods = new[]
             {
-                new { name = Origin, modFolder, @in = "NewRepository", commit = true, repository = new { sourceFolder, assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
+                new { name = Origin, modFolder, commit = true, sourceFolder = new { path = sourceFolder, @in = "NewRepository", assets = new[] { "textures/added.dds" }, buildFile = "the build file" } },
             },
         });
 
@@ -74,16 +74,16 @@ public sealed class VersionInGitTraceTests : HostedTests
     public static TheoryData<string, string> NotARequestToInit => new()
     {
         { "no mod", """{"mods": []}""" },
-        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a folder", """{"mods": [{"name": "VersionedMod", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without commit", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without the repository that holds it", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}"}}]}""" },
-        { "a mod without a source folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"buildFile": "{}"}}]}""" },
-        { "a mod without a build file", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s"}}]}""" },
-        { "an asset outside the mod folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
-        { "a manifest without its file name", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifest": "{}"}}]}""" },
-        { "a manifest without its text", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
-        { "a manifest file name that is a path", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
+        { "a mod without a name", """{"mods": [{"name": "", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
+        { "a mod without a folder", """{"mods": [{"name": "VersionedMod", "commit": true, "sourceFolder": {"path": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without commit", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}"}}]}""" },
+        { "a mod without the repository that holds it", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "buildFile": "{}"}}]}""" },
+        { "a mod without a source folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"in": "NewRepository", "buildFile": "{}"}}]}""" },
+        { "a mod without a build file", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository"}}]}""" },
+        { "an asset outside the mod folder", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "assets": ["../a.dds"], "buildFile": "{}"}}]}""" },
+        { "a manifest without its file name", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", "manifest": "{}"}}]}""" },
+        { "a manifest without its text", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", "manifestFile": "M.manifest.json"}}]}""" },
+        { "a manifest file name that is a path", """{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", "manifestFile": "../M.manifest.json", "manifest": "{}"}}]}""" },
     };
 
     [Theory]
@@ -107,7 +107,7 @@ public sealed class VersionInGitTraceTests : HostedTests
 
         var response = await Client.PostJson(
             "/version-in-git",
-            $$$"""{"mods": [{"name": "VersionedMod", "modFolder": "m", "in": "NewRepository", "commit": true, "repository": {"sourceFolder": "s", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
+            $$$"""{"mods": [{"name": "VersionedMod", "modFolder": "m", "commit": true, "sourceFolder": {"path": "s", "in": "NewRepository", "buildFile": "{}", {{{manifestMembers}}}}}]}""");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(named, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
