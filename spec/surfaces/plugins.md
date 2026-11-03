@@ -203,7 +203,7 @@ As a user, I want:
 As a user, I want:
 
 1. One pick of where git holds the mod, then one of whether to commit, with not committing first. While it runs, the view's message line names the mod and the phase. Cites: catalog `version in git`; instance-repository.md, The repository, story 7
-2. Git to track, of a source mod's source folder, the plugin source, the mod's assets, the build file, the manifest and `.gitignore`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
+2. Git to track, of a source mod's source folder, the plugin source, the mod's assets, the build file, the manifest, `.gitignore` and `.gitattributes`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
 3. When I pick it, a commit, `Init <mod>`, of only what version in git put under git.
 4. Each file's line endings kept as written.
 5. Version in git that refuses any plugin to write nothing, naming each refused plugin and why.
