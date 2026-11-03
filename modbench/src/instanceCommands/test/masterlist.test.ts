@@ -45,4 +45,5 @@ describe('uncommitted', () => {
     const commands = masterlistCommands({ adapter, lootMetadata: { fetch: serving('a', 'b') } });
 
     expect(await commands.uncommitted()).toEqual({ applied: false, refusal: 'git: not found' });
-  });});
+  });
+});

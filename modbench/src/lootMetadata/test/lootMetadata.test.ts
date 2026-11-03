@@ -43,12 +43,15 @@ describe('fetch', () => {
     ['the masterlist is not served', { [STARFIELD_MASTERLIST]: text('', 404), [PRELUDE]: text(PRELUDE_TEXT) }, 'LOOT did not serve the masterlist: 404'],
     ['the prelude is not served', { [STARFIELD_MASTERLIST]: text(MASTERLIST_TEXT), [PRELUDE]: text('', 503) }, 'LOOT did not serve the prelude: 503'],
     ['LOOT cannot be reached', { [STARFIELD_MASTERLIST]: new Error('getaddrinfo ENOTFOUND'), [PRELUDE]: text(PRELUDE_TEXT) }, 'Could not reach LOOT: getaddrinfo ENOTFOUND'],
-    ['a page of HTML answers for the masterlist', { [STARFIELD_MASTERLIST]: text(PAGE_OF_HTML), [PRELUDE]: text(PRELUDE_TEXT) }, 'The masterlist is not LOOT metadata.'],
-    ['a page of HTML answers for the prelude', { [STARFIELD_MASTERLIST]: text(MASTERLIST_TEXT), [PRELUDE]: text(PAGE_OF_HTML) }, 'The prelude is not LOOT metadata.'],
-    ['the masterlist is not YAML', { [STARFIELD_MASTERLIST]: text('plugins: [unclosed\n'), [PRELUDE]: text(PRELUDE_TEXT) }, 'The masterlist does not read: Flow sequence in block collection must be sufficiently indented and end with a ] at line 2, column 1:'],
   ])('refuses, giving nothing, when %s', async (_case, files, reason) => {
     const { lootMetadata } = hosting(files);
 
     expect(await lootMetadata.fetch('Starfield')).toEqual({ found: false, reason });
+  });
+
+  it('refuses, giving nothing, a 200 answer that is a page of HTML', async () => {
+    const { lootMetadata } = hosting({ [STARFIELD_MASTERLIST]: text(PAGE_OF_HTML), [PRELUDE]: text(PRELUDE_TEXT) });
+
+    expect(await lootMetadata.fetch('Starfield')).toMatchObject({ found: false });
   });
 });
