@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/lootMetadata"
+  },
+  "references": [
+    { "path": "../ports" },
+    { "path": "../sortingRules" },
+    { "path": "../tables" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

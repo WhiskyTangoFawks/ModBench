@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addLoadAfter, rulesReader, type SortingRuleFiles } from '../lootMetadata';
+import { addLoadAfter, metadataProblem, rulesReader, type MetadataTexts, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
 type SortingRuleFile = SortingRuleFiles['masterlist'];
@@ -421,5 +421,24 @@ plugins:
     expect(problems).toEqual([]);
     expect(entries[0]?.msg[0]?.text).toBe('hi\n\n\n');
     expect(entries[0]?.after.map((file) => file.name)).toEqual(['B.esp']);
+  });
+});
+
+describe('metadataProblem: whether texts read as LOOT\'s masterlist and prelude', () => {
+  const MASTERLIST = 'plugins:\n  - name: A.esp\n';
+  const PRELUDE = '- &anchor x\n';
+
+  it.each<[string, MetadataTexts, string]>([
+    ['a masterlist that is a page of HTML', { masterlist: '<!DOCTYPE html>\n<html><body>Sign in to the network</body></html>\n', prelude: PRELUDE }, 'The masterlist is not LOOT metadata.'],
+    ['a masterlist that is a map of no LOOT key', { masterlist: 'title: Sign in\nmessage: the network needs you to log in\n', prelude: PRELUDE }, 'The masterlist is not LOOT metadata.'],
+    ['a prelude that is a page of HTML', { masterlist: MASTERLIST, prelude: '<html><body>Sign in</body></html>\n' }, 'The prelude is not LOOT metadata.'],
+    ['a masterlist that is not YAML', { masterlist: 'plugins: [unclosed\n', prelude: PRELUDE }, 'The masterlist does not read: '],
+    ['a masterlist with an alias no anchor defines', { masterlist: 'plugins:\n  - *missing\n', prelude: PRELUDE }, 'The masterlist does not read: '],
+  ])('names %s', (_case, texts, start) => {
+    expect(metadataProblem(texts)?.startsWith(start)).toBe(true);
+  });
+
+  it('finds none in a masterlist and prelude that read, the masterlist using the prelude\'s anchors', () => {
+    expect(metadataProblem({ masterlist: 'prelude:\nplugins:\n  - name: A.esp\n    after: [*anchor]\n', prelude: PRELUDE })).toBeUndefined();
   });
 });

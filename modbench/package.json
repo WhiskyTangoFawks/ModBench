@@ -489,6 +489,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.updateMasterlist",
+        "title": "Update Masterlist",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.instance.logIn",
         "title": "Enter API Key Manually",
         "category": "Modbench"
@@ -1221,6 +1226,10 @@
         },
         {
           "command": "modbench.instance.moveToOverwrite",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.instance.updateMasterlist",
           "when": "modbench.folder == instance"
         },
         {
