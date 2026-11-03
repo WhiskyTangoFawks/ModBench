@@ -69,6 +69,27 @@ describe('readRules: LOOT\'s masterlist, prelude and userlist as sorting rules',
     expect([entries[0]?.req[0]?.condition, entries[0]?.msg[0]?.condition]).toEqual(['active("C.esp")', 'file("D.esp")']);
   });
 
+  it('reads a plugin\'s dirty cleaning data, with its counts, utility, detail and condition', () => {
+    const { entries, problems } = readRules(filesOf({ masterlist: text(`plugins:
+  - name: A.esp
+    dirty:
+      - {crc: 0x6462841A, util: 'FO4Edit v4', itm: 51, udr: 38, nav: 1, detail: 'Clean it.', condition: 'active("B.esp")'}
+      - {crc: 0x95CE281B, util: 'FO4Edit v4'}
+`) }));
+
+    expect(problems).toEqual([]);
+    expect(entries[0]?.dirty).toEqual([
+      { crc: 0x6462841a, utility: 'FO4Edit v4', itm: 51, udr: 38, nav: 1, detail: 'Clean it.', condition: 'active("B.esp")', source: { file: 'masterlist', line: 3 } },
+      { crc: 0x95ce281b, utility: 'FO4Edit v4', itm: 0, udr: 0, nav: 0, source: { file: 'masterlist', line: 4 } },
+    ]);
+  });
+
+  it('names cleaning data that has no crc or no utility, on its line', () => {
+    const { entries, problems } = readRules(filesOf({ userlist: text('plugins:\n  - name: A.esp\n    dirty:\n      - {util: x}\n      - {crc: 0x1}\n') }));
+
+    expect([entries[0]?.dirty, problems.map(({ line }) => line)]).toEqual([[], [3, 4]]);
+  });
+
   it('matches an exact name without case, and a regex name against the whole file name', () => {
     const { entries } = readRules(filesOf({ masterlist: text(`plugins:
   - name: 'Exact.esp'

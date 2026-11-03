@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { PluginFacts, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
+import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
-import type { LootRules } from '../sortingRules/lootJudge';
+import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
+import { readsNamed } from '../sortingRules/lootJudge';
 import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
 
@@ -21,7 +22,9 @@ export interface PluginFactsFeedDeps {
   /** Every plugins.txt line, enabled or not, in load order: the order a move is written into. */
   lines: () => readonly PluginAddress[];
   /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
-  rules: () => LootRules & Pick<ReadRules, 'files' | 'problems'>;
+  rules: () => ReadRules;
+  /** What the instance says of the files the reads name: the Data folder, and the Instance adapter's reads. */
+  fileFacts: (reads: readonly FileRead[]) => Promise<FileFacts>;
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
@@ -108,7 +111,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.lines(), this.deps.rules());
+    const active = this.deps.activePlugins();
+    const loot = await this.lootRules(active);
+    if (generation !== this.generation) return undefined;
+    this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
@@ -129,9 +135,20 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishRuleFiles(ruleFileDiagnostics(files, problems, this.facts.brokenRules()));
   }
 
+  private async lootRules(active: readonly PluginAddress[]): Promise<LootInput> {
+    const { entries, groups } = this.deps.rules();
+    const files = await this.deps.fileFacts(readsNamed(active.map(({ name, origin }) => ({ origin, filename: name })), entries));
+    return { entries, groups, files };
+  }
+
   /** LOOT's rules changed: the order the last reconcile judged is judged again. Before that reconcile there is nothing to judge. */
-  rulesChanged(): void {
-    if (!this.facts.rejudged(this.deps.rules())) return;
+  async rulesChanged(): Promise<void> {
+    const generation = this.generation;
+    const judged = this.facts.judgedOrder();
+    if (judged === undefined) return;
+    const loot = await this.lootRules(judged);
+    if (generation !== this.generation) return;
+    this.facts.rejudged(loot);
     this.publishSorting();
     this.changed.fire();
   }

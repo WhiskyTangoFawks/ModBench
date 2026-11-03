@@ -52,7 +52,8 @@ internal sealed class RecordQueries(
                 IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
                 HasParseFailure: parseFailures.Contains(plugin.Key),
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
-                _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList());
+                _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList(),
+                content.Description);
         }
 
         if (filter.Current is null)

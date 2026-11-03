@@ -67,6 +67,7 @@ import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { deployCommands } from './instanceCommands/deploy';
 import { deployedPath, hardlinkDeployment } from './deployment/deployment';
+import type { FileReads } from './sortingRules/lootConditions';
 import { pluginsTxtPlace } from './deployment/pluginsTxtPlace';
 import { registerDeployCommands } from './toolbox/deployGesture';
 import { present } from './ports/present';
@@ -183,6 +184,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(registerModSyncCommand(modSync));
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    fileReads: unreadFiles,
   }));
   const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
@@ -272,6 +274,10 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
     dispose,
   };
 }
+
+const readsNotYetSupported = (): Promise<never> => Promise.reject(new Error('the Instance adapter does not read files yet'));
+
+const unreadFiles: FileReads = { checksum: readsNotYetSupported, version: readsNotYetSupported, readable: readsNotYetSupported };
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(afterTrust(isInstance, () => { start(context); }));

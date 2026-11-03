@@ -1170,7 +1170,7 @@ describe('PluginsTreeProvider — the message line takes the first message that 
       sortingRuleFiles: { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Missing.esp]\n' } },
     });
 
-    expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']);
+    await vi.waitFor(() => expect(errors.at(-1)?.map(({ text }) => text)).toEqual(['"A.esp" requires "Missing.esp", which is missing.']));
   });
 
   it('puts no rows over a record filter that matched nothing', async () => {

@@ -24,6 +24,7 @@ export function pluginsTreeOver(
     publishSortingInfo: () => undefined,
     publishRuleFiles: () => undefined,
     modStatuses: NO_MOD_STATUSES,
+    fileReads: { checksum: async () => undefined, version: async () => undefined, readable: async () => false },
     reporter: recordingReporter(),
     ...overrides,
   });

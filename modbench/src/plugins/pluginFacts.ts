@@ -1,6 +1,7 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
 import { offeredMoves, type OfferedMove } from '../pluginCommands/pluginOrder';
+import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
@@ -29,7 +30,10 @@ function lootPartition({ master, blueprint }: { master: boolean; blueprint: bool
 }
 
 // No metadata: only the game's own sorting rules are judged.
-const NO_LOOT_RULES: LootRules = { entries: [], groups: [], isPresent: () => true };
+const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () => [], isPresent: () => true, answer: () => undefined } };
+
+/** LOOT's rules, and what the instance says of the files their conditions name. */
+export type LootInput = Omit<LootRules, 'facts'> & { files: FileFacts };
 
 export type StatusIcon = 'error' | 'warning';
 
@@ -67,6 +71,7 @@ interface PluginRead {
   master: boolean;
   blueprint: boolean;
   parseFailure: boolean;
+  description: string;
 }
 
 // plugins.md, A row, Plugin: each status's words and tooltip line.
@@ -116,6 +121,7 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
+  private readsByFilename = new Map<string, PluginRead | undefined>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
   private sortingNames: PluginAddress[] = [];
@@ -169,7 +175,7 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge, and every plugins.txt line, which a move is written into. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootRules = NO_LOOT_RULES): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -182,10 +188,13 @@ export class PluginFacts {
 
   /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed. A no-op
    *  before the first reconcile completes, as the order is not judged before then. */
-  rejudged(loot: LootRules): boolean {
-    if (this.judgedActiveOrder === undefined) return false;
-    this.judgeSorting(this.judgedActiveOrder, loot);
-    return true;
+  rejudged(loot: LootInput): void {
+    if (this.judgedActiveOrder !== undefined) this.judgeSorting(this.judgedActiveOrder, loot);
+  }
+
+  /** The active order the last reconcile judged. */
+  judgedOrder(): readonly PluginAddress[] | undefined {
+    return this.judgedActiveOrder;
   }
 
   /** The facts alone, leaving which plugins are held as they are and the sorting statuses as the
@@ -193,16 +202,19 @@ export class PluginFacts {
   refreshed(plugins: readonly PluginMetadata[]): void {
     answered(this.factsRead);
     const reads = new ByPluginAddress<PluginRead>();
+    const readOf = new Map<string, PluginRead | undefined>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       reads.set(p, {
         readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
-        masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint,
+        masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint, description: p.description ?? '',
       });
+      if (!readOf.has(p.name.toLowerCase())) readOf.set(p.name.toLowerCase(), reads.get(p));
       matches.set(p, p.hasMatchingRecords);
     }
     this.reads = reads;
+    this.readsByFilename = readOf;
     this.sourceUnreadableProblems = plugins.flatMap((p) => p.pluginSourceUnreadable == null ? [] : [{
       plugin: p.name, origin: p.origin, text: `Plugin source unreadable: ${p.pluginSourceUnreadable.reason}`,
       decompileRepairs: p.pluginSourceUnreadable.decompileRepairs,
@@ -225,12 +237,12 @@ export class PluginFacts {
   }
 
   // A plugin mEdit has not read is not judged by the rules that need its facts, but is present in the order.
-  private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootRules): void {
+  private judgeSorting(activeOrder: readonly PluginAddress[], loot: LootInput): void {
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
     const factsOf = this.factsOver(activeOrder);
     const broken = [
       ...judge(activeOrder.map(({ name }) => name), factsOf),
-      ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), loot, (filename) => {
+      ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), { ...loot, facts: this.conditionFacts(activeOrder, loot.files) }, (filename) => {
         const address = addressOf.get(filename.toLowerCase());
         const read = address && this.reads.get(address);
         return read && lootPartition(read);
@@ -247,6 +259,16 @@ export class PluginFacts {
         this.sorting.append(address, rule);
       }
     }
+  }
+
+  private conditionFacts(activeOrder: readonly PluginAddress[], files: FileFacts): ConditionFacts {
+    const read = (plugin: string): PluginRead | undefined => this.readsByFilename.get(plugin.toLowerCase());
+    return {
+      ...files,
+      activePlugins: () => activeOrder.map(({ name }) => name),
+      isMaster: (plugin) => read(plugin)?.master,
+      description: (plugin) => read(plugin)?.description,
+    };
   }
 
   /** plugins.md, A row, Plugin: a sorting status shows once the snapshot is indexed. */

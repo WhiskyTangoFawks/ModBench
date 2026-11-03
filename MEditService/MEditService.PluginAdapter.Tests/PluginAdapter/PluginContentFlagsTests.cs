@@ -56,6 +56,28 @@ public sealed class PluginContentFlagsTests
     }
 
     [Fact]
+    public void ReadContent_Description_IsTheHeadersDescription()
+    {
+        var content = ReadFallout4("Described.esp", mod => mod.ModHeader.Description = "Patch v2.0.5");
+
+        Assert.Equal("Patch v2.0.5", content.Description);
+    }
+
+    [Fact]
+    public void ReadContent_Description_IsNullForAHeaderWithNone()
+    {
+        Assert.Null(ReadFallout4("Plain.esp", _ => { }).Description);
+    }
+
+    [Fact]
+    public void ReadContent_Description_IsReadForStarfieldToo()
+    {
+        var content = ReadStarfield("Described.esp", mod => mod.ModHeader.Description = "Patch v2.0.5");
+
+        Assert.Equal("Patch v2.0.5", content.Description);
+    }
+
+    [Fact]
     public void ReadContent_RecordCount_IsEveryRecordThePluginHolds_ThoseInsideAContainerToo()
     {
         var content = ReadFallout4("Counted.esp", mod =>

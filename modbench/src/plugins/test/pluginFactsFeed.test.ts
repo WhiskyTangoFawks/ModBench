@@ -16,8 +16,7 @@ const filesWith = (masterlist: string, userlist = ''): SortingRuleFiles => ({
   prelude: { path: '/instance/prelude.yaml', kind: 'absent' },
   userlist: userlist === '' ? { path: USERLIST, kind: 'absent' } : { path: USERLIST, kind: 'text', text: userlist },
 });
-const rulesOf = (files: SortingRuleFiles, present: readonly string[] = []): ReturnType<PluginFactsFeedDeps['rules']> =>
-  ({ ...rulesReader()(files), isPresent: (filename) => present.includes(filename) });
+const rulesOf = (files: SortingRuleFiles): ReturnType<PluginFactsFeedDeps['rules']> => rulesReader()(files);
 const NO_RULES = rulesOf(filesWith('plugins: []\n'));
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
@@ -54,9 +53,11 @@ interface FeedOptions {
   readonly activePlugins?: () => readonly PluginAddress[];
   readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   readonly rules?: () => ReturnType<PluginFactsFeedDeps['rules']>;
+  readonly present?: readonly string[];
+  readonly asked?: (reads: unknown) => void;
 }
 
-function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES }: FeedOptions = {}) {
+function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked }: FeedOptions = {}) {
   const client = clientFindingNoDefects();
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
@@ -66,6 +67,7 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
   const feed = new PluginFactsFeed({
     client, shownPlugins, activePlugins, rules, lines: activePlugins,
+    fileFacts: async (reads) => (asked?.(reads), { files: () => present, isPresent: (path) => present.includes(path), answer: () => undefined }),
     publishSortingInfo: sortingInfo.push,
     publishRuleFiles: ruleFiles.push,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,
@@ -129,6 +131,38 @@ describe('PluginFactsFeed', () => {
     expect(sortingErrors.items).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod', text: '"A.esp" requires "Missing.esp", which is missing.' }]]);
   });
 
+  it('holds a LOOT condition on a plugin\'s version against the description mEdit sends', async () => {
+    const rules = rulesOf(filesWith(`plugins:
+  - name: A.esp
+    msg:
+      - {type: say, content: Old., condition: 'version("A.esp", <, "2.0")'}
+      - {type: say, content: New., condition: 'version("A.esp", >=, "2.0")'}
+`));
+    const { feed, client, sortingInfo } = feedOver({ activePlugins: () => [A], rules: () => rules, present: ['A.esp'] });
+    client.setQueryAnswer('getPlugins', [held({ description: 'Patch v2.0.5' })]);
+
+    await feed.reconciled([]);
+
+    expect(sortingInfo.items.flat().map(({ text }) => text)).toEqual(['New.']);
+  });
+
+  it('asks for the file reads the conditions of the active plugins name, and the checksum of one with cleaning data', async () => {
+    const rules = rulesOf(filesWith(`plugins:
+  - name: A.esp
+    msg: [{type: say, content: m, condition: 'readable("../G.exe")'}]
+    dirty: [{crc: 0x1, util: u}]
+  - name: Other.esp
+    msg: [{type: say, content: m, condition: 'readable("../H.exe")'}]
+`));
+    const asked: unknown[] = [];
+    const { feed, client } = feedOver({ activePlugins: () => [A], rules: () => rules, asked: (reads) => asked.push(reads) });
+    client.setQueryAnswer('getPlugins', [held()]);
+
+    await feed.reconciled([]);
+
+    expect(asked).toEqual([[{ kind: 'readable', path: '../G.exe' }, { kind: 'checksum', path: 'A.esp' }]]);
+  });
+
   it('shows a LOOT say message in the tooltip and the Problems panel at Info, and sets no icon or status', async () => {
     const rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    msg: [{type: say, content: Read the page.}]\n'));
     const { feed, client, sortingInfo } = feedOver({ activePlugins: () => [A], rules: () => rules });
@@ -152,8 +186,8 @@ describe('PluginFactsFeed', () => {
   });
 
   it('publishes a rule the userlist states on its line in the userlist', async () => {
-    const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n'), ['B.esp']);
-    const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules });
+    const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    inc: [B.esp]\n'));
+    const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules, present: ['B.esp'] });
     client.setQueryAnswer('getPlugins', [held()]);
 
     await feed.reconciled([]);
@@ -166,12 +200,12 @@ describe('PluginFactsFeed', () => {
     const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules });
     client.setQueryAnswer('getPlugins', [held()]);
     rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
-    feed.rulesChanged();
+    await feed.rulesChanged();
     const beforeReconcile = sortingErrors.items.length;
 
     await feed.reconciled([]);
     rules = NO_RULES;
-    feed.rulesChanged();
+    await feed.rulesChanged();
 
     expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
   });

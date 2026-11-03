@@ -45,6 +45,18 @@ export interface LootGroup {
   after: { name: string; source: RuleSource }[];
 }
 
+/** LOOT's record that the plugin with this CRC-32 is dirty. */
+export interface CleaningData {
+  crc: number;
+  utility: string;
+  itm: number;
+  udr: number;
+  nav: number;
+  detail?: string;
+  condition?: string;
+  source: RuleSource;
+}
+
 export interface LootEntry {
   name: string;
   group?: { name: string; source: RuleSource };
@@ -54,6 +66,7 @@ export interface LootEntry {
   inc: LootFile[];
   after: LootFile[];
   msg: LootMessage[];
+  dirty: CleaningData[];
 }
 
 /** A sorting rule file that does not read, or a part of it that does not. `line` is zero-based, absent for a whole file. */
@@ -177,7 +190,7 @@ class FileReader {
     this.entries.push({
       name, matches, exact: !REGEX_NAME.test(name), ...group === undefined ? {} : { group },
       req: this.files(node, plain, 'req'), inc: this.files(node, plain, 'inc'), after: this.files(node, plain, 'after'),
-      msg: this.messages(node, plain),
+      msg: this.messages(node, plain), dirty: this.cleaningData(node, plain),
     });
   }
 
@@ -238,6 +251,25 @@ class FileReader {
       const condition = stringOf(value.condition) ?? stringOf(value.constraint);
       if (condition !== undefined) file.condition = condition;
       return [file];
+    });
+  }
+
+  private cleaningData(entry: unknown, plain: Record<string, unknown>): CleaningData[] {
+    return this.items(entry, plain, 'dirty').flatMap(({ value, line }): CleaningData[] => {
+      const source = this.located(line);
+      if (source === undefined || !isRecord(value)) return [];
+      const utility = stringOf(value.util);
+      if (typeof value.crc !== 'number' || utility === undefined) {
+        this.problem(line, 'Cleaning data has no crc or no util.');
+        return [];
+      }
+      const count = (field: unknown): number => (typeof field === 'number' ? field : 0);
+      const data: CleaningData = { crc: value.crc, utility, itm: count(value.itm), udr: count(value.udr), nav: count(value.nav), source };
+      const detail = contentOf(value.detail, undefined);
+      if (detail !== undefined) data.detail = detail;
+      const condition = stringOf(value.condition);
+      if (condition !== undefined) data.condition = condition;
+      return [data];
     });
   }
 

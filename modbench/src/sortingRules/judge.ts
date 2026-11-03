@@ -20,7 +20,7 @@ export interface PluginRef {
 export const addressOfRef = ({ origin, filename }: PluginRef): { name: string; origin: string } => ({ name: filename, origin });
 
 export interface BrokenRule {
-  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'group' | 'message' | 'condition';
+  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'group' | 'message' | 'cleaning' | 'condition';
   level: RuleLevel;
   plugins: PluginRef[];
   reason: string;

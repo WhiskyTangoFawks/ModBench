@@ -1497,6 +1497,7 @@ export interface components {
             hasParseFailure: boolean;
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
+            description?: string | null;
         };
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
