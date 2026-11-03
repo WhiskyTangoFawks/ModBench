@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
-import { writeManifestIn, type Manifest, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, writeManifestIn, type Manifest, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { Nexus } from '../../nexus/nexus';
 import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
@@ -606,6 +606,19 @@ describe('restore from manifest', () => {
       client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...BUILT, refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: 'A.esp was not compiled: it holds an error.' }] }], refused: [] }));
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not finished: A.esp was not compiled: it holds an error.' }]);
+    });
+
+    it('leaves its manifest as it was when its build did not make a plugin it names', async () => {
+      const { restore, client } = await sourceMod();
+      const before = await manifestIn(folderOf('ModA'));
+      const unreadable = 'A.esp\'s plugin source is unreadable, so it cannot be compiled.';
+      client.setCommandHandler('build', () => Promise.resolve({
+        landed: [{ ...BUILT, made: [{ path: 'b.nif', vouchedFor: true }], refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: unreadable }] }], refused: [],
+      }));
+
+      await restore(['ModA']);
+
+      expect(await manifestIn(folderOf('ModA'))).toEqual(before);
     });
 
     it('is skipped with its build\'s reason when the build refused it', async () => {
