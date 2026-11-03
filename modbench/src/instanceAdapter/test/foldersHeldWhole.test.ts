@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { foldersHeldWhole } from '../foldersHeldWhole';
@@ -27,13 +27,14 @@ const LETS_IN_HELD = '!/mods/Held/**\n';
 
 describe('the folders git holds whole', () => {
   it.each([
-    ['a folder the ignore list lets in by hand', true, LETS_IN_HELD, [], 'mods/Held'],
+    ['a folder the ignore list lets in with one line for the folder', true, LETS_IN_HELD, [], 'mods/Held'],
     ['a folder the ignore list leaves out', false, LETS_IN_HELD, [], 'mods/Kept'],
-    ['a folder let in by git\'s own line for it', true, '!/mods/Held/*\n', [], 'mods/Held'],
+    ['a folder let in with git\'s own line for its files', true, '!/mods/Held/*\n', [], 'mods/Held'],
     ['a folder let in whose subfolder is ignored', false, `${LETS_IN_HELD}/mods/Held/textures/\n`, [], 'mods/Held'],
-    ['a folder the hand-written pattern lets in', true, '!mods/Held*/**\n', [], 'mods/Held'],
-    ['a folder holding only its manifest, as a clone leaves it', false, '', [], 'mods/Cloned'],
-    ['a folder holding only its tracked manifest', false, '', ['add', 'mods/Cloned'], 'mods/Cloned'],
+    ['a folder let in by a pattern that matches its name', true, '!mods/Held*/**\n', [], 'mods/Held'],
+    ['a folder let in whose new subfolders are ignored, none on disk', false, '!/mods/Cloned/*\n/mods/Cloned/*/\n', [], 'mods/Cloned'],
+    ['a folder holding only its manifest, untracked', false, '', [], 'mods/Cloned'],
+    ['a folder holding only its manifest, tracked as a clone leaves it', false, '', ['add', 'mods/Cloned'], 'mods/Cloned'],
     ['a folder git tracks though the ignore list would leave out a new file', false, '', ['add', '-f', 'mods/Kept'], 'mods/Kept'],
     ['a folder outside the instance', false, LETS_IN_HELD, [], '../elsewhere'],
   ])('reads %s, held: %s', async (_case, held, ignoreList, git, folder) => {
@@ -43,7 +44,25 @@ describe('the folders git holds whole', () => {
     expect([...await foldersHeldWhole(root, [join(root, folder)])]).toEqual(held ? [join(root, folder)] : []);
   });
 
-  it('holds none while the instance holds no repository', async () => {
+  it('answers each folder of a batch by itself', async () => {
+    await instanceIgnoring(`${WHITELIST}${LETS_IN_HELD}`, FILES);
+
+    expect([...await foldersHeldWhole(root, [join(root, 'mods/Held'), join(root, 'mods/Kept')])]).toEqual([join(root, 'mods/Held')]);
+  });
+
+  it.each([
+    ['a mod folder that is a symlink', 'mods/Linked'],
+    ['a folder below a symlinked mods folder', 'linked-mods/Held'],
+  ])('holds %s as not whole and still answers the others', async (_case, linked) => {
+    await instanceIgnoring(`${WHITELIST}${LETS_IN_HELD}`, FILES);
+    const target = join(root, 'elsewhere');
+    await mkdir(join(target, 'Held'), { recursive: true });
+    await symlink(target, join(root, linked.startsWith('mods/') ? linked : 'linked-mods'));
+
+    expect([...await foldersHeldWhole(root, [join(root, linked), join(root, 'mods/Held')])]).toEqual([join(root, 'mods/Held')]);
+  });
+
+  it('holds none while the instance holds no repository',async () => {
     root = await mkdtemp(join(tmpdir(), 'modbench-held-whole-'));
     expect([...await foldersHeldWhole(root, [join(root, 'mods/Held')])]).toEqual([]);
   });
