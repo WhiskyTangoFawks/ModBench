@@ -13,7 +13,7 @@ A manifest restores its folder from its packages ([ADR-0022](../adr/0022-git-hol
 
 ## Who writes it
 
-Modbench writes every manifest (modlist-repository.md, Update manifest; source.md, Build; plugins.md, Version in git) but its `flags`, which the user writes.
+Modbench writes every manifest (instance-repository.md, Update manifest; source.md, Build; plugins.md, Version in git) but its `flags`, which the user writes.
 
 ## Canonical text
 
