@@ -27,7 +27,7 @@ public sealed class RenameSourceChangesHandler
         if (!_source.SourceReads(loaded))
         {
             return _source.WhySourceDoesNotRead(loaded) is { } why and not SourceFailure.NotCarried
-                ? Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {why.Reason}")
+                ? Unreadable(plugin, why)
                 : RenameSourceResult.Landed(SourceChanges.None, plugin.Name);
         }
 
@@ -36,7 +36,7 @@ public sealed class RenameSourceChangesHandler
         {
             return failure switch
             {
-                SourceFailure.Unreadable => Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {failure.Reason}"),
+                SourceFailure.Unreadable => Unreadable(plugin, failure),
                 SourceFailure.GitUnavailable => Refused(RenameSourceRefusal.GitUnavailable, failure.Reason),
                 _ => Refused(RenameSourceRefusal.WriteFailed, $"Could not rename {plugin.Name}'s source: {failure.Reason}"),
             };
@@ -51,4 +51,7 @@ public sealed class RenameSourceChangesHandler
     }
 
     private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => RenameSourceResult.Refused(refusal, message);
+
+    private static RenameSourceResult Unreadable(PluginAddress plugin, SourceFailure why) =>
+        Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {why.Reason}");
 }

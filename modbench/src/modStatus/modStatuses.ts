@@ -13,13 +13,13 @@ export interface StatusSource {
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
 }
 
-type ModIn = ModAt & { readonly sourceFolder?: string };
+type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string };
 
 interface Listening {
   dispose(): void;
 }
 
-function modsAt(value: StatusSource): ModIn[] {
+function modsAt(value: StatusSource): ModAndSourceFolder[] {
   const keyOf = (entry: EntryRef): string => `${entry.kind}:${value.entryKey(entry)}`;
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
@@ -135,7 +135,7 @@ export class ModStatuses {
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
-  private async statusOf(mod: ModIn, heldWhole: boolean, heldByGit: readonly string[]): Promise<ModStatus> {
+  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<ModStatus> {
     const [status, installed, buildFile] = await Promise.all([
       heldWhole ? heldWholeStatus(mod.name) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name),
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),

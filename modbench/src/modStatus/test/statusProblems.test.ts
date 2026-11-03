@@ -50,13 +50,16 @@ describe('a mod\'s unfinished states, each on the file it concerns (instance-rep
     ['with a manifest', held({})],
     ['with none', status('Mod', { noManifest: true })],
     ['held whole by git', status('Mod', { heldWhole: true })],
-  ])('puts each path its build file names that the source folder lacks on the build file, %s', (_manifest, mod) => {
+  ])('puts each path its build file names that the source folder lacks, and each it cannot read, on the build file, %s', (_manifest, mod) => {
     const file = join('/instance', 'source', 'Mod', 'build.json');
-    const lacks = [{ step: 'compile', path: 'Old.esp' }, { step: 'copy', path: 'meshes' }] as const;
+    const buildFile = {
+      file, lacks: [{ step: 'compile', path: 'Old.esp' }, { step: 'copy', path: 'meshes' }] as const, unreadable: ["'locked' could not be read: EACCES"],
+    };
 
-    expect(statusProblems({ ...mod, buildFile: { file, lacks } }, folder)).toEqual(expect.arrayContaining([
+    expect(statusProblems({ ...mod, buildFile }, folder).filter((problem) => problem.file === file)).toEqual([
       { file, message: "Its compile step names 'Old.esp', whose plugin source the source folder lacks." },
       { file, message: "Its copy step names 'meshes', which the source folder lacks." },
-    ]));
+      { file, message: "'locked' could not be read: EACCES." },
+    ]);
   });
 });

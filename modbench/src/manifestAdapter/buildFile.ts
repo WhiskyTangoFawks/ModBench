@@ -48,10 +48,12 @@ export interface BuildFileLack {
   readonly path: string;
 }
 
-/** The build file a source folder holds, by its path, against that folder. */
+/** The build file a source folder holds, by its path, against that folder; `unreadable`, why it or a path it names could not
+ *  be read, each as a clause. */
 export interface BuildFileAgainst {
   readonly file: string;
   readonly lacks: readonly BuildFileLack[];
+  readonly unreadable: readonly string[];
 }
 
 export type BuildFileRead = { readonly buildFile: BuildFile } | { readonly refused: string };

@@ -5,7 +5,8 @@ import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
 import type { Manifest } from '../../manifestAdapter/manifestAdapter';
-import { buildFileText, writeManifestIn } from '../../manifestAdapter/manifestAdapter';
+import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
+import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type StatusSource } from '../modStatuses';
 
 let root: string;
@@ -114,18 +115,16 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await writeManifestIn(mod, EMPTY);
     const source = join(root, 'source', 'ModA');
     await mkdir(source, { recursive: true });
-    await writeFile(join(source, 'build.json'), buildFileText({ steps: [{ kind: 'compile', paths: ['Renamed.esp'] }] }));
+    await writeBuildFile(source, buildFileOf({ steps: [{ kind: 'compile', paths: ['Renamed.esp'] }] }));
     const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } });
     const statuses = statusesLogging();
 
     statuses.derive(value);
-    const lacking = (await statuses.current()).get('ModA')?.buildFile;
+    const lacking = (await statuses.current()).get('ModA')?.buildFile?.lacks;
     await mkdir(join(source, 'plugin-source', 'Renamed.esp'), { recursive: true });
     statuses.derive(value);
 
-    expect([lacking, (await statuses.current()).get('ModA')?.buildFile]).toEqual([
-      { file: join(source, 'build.json'), lacks: [{ step: 'compile', path: 'Renamed.esp' }] }, { file: join(source, 'build.json'), lacks: [] },
-    ]);
+    expect([lacking, (await statuses.current()).get('ModA')?.buildFile?.lacks]).toEqual([[{ step: 'compile', path: 'Renamed.esp' }], []]);
   });
 
   it('carries the packages its manifest names', async () => {

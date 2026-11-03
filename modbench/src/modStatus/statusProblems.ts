@@ -11,8 +11,10 @@ export interface StatusProblem {
 const lackMessage = ({ step, path }: BuildFileLack): string =>
   `Its ${step} step names '${path}', ${step === 'compile' ? 'whose plugin source' : 'which'} the source folder lacks.`;
 
+const sentence = (clause: string): string => `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.`;
+
 const buildFileProblems = ({ buildFile }: ModStatus): StatusProblem[] =>
-  buildFile === undefined ? [] : buildFile.lacks.map((lack) => ({ file: buildFile.file, message: lackMessage(lack) }));
+  (buildFile === undefined ? [] : [...buildFile.lacks.map(lackMessage), ...buildFile.unreadable.map(sentence)].map((message) => ({ file: buildFile.file, message })));
 
 /** Each unfinished state of a mod, on the file it concerns (instance-repository.md, Status, story 2). */
 export function statusProblems(status: ModStatus, folder: string): StatusProblem[] {
@@ -27,7 +29,7 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     (manifestFile === undefined ? [] : messages.map((message) => ({ file: manifestFile, message })));
   return [
     ...outsideManifest,
-    ...onManifest(status.unreadable === undefined ? [] : [`${status.unreadable.charAt(0).toUpperCase()}${status.unreadable.slice(1)}.`]),
+    ...onManifest(status.unreadable === undefined ? [] : [sentence(status.unreadable)]),
     ...onFiles(status.differing, 'Differs from its manifest.'),
     ...onFiles(status.namedByNoLine, 'No line of the mod\'s manifest names this file.'),
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),

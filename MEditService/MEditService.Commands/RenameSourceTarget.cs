@@ -21,7 +21,7 @@ internal sealed record RenameSourceTarget(RegisteredPlugin Plugin, PluginProvide
         else if (loadOrder.Plugin(plugin) is not { } loaded)
         {
             refusal = (RenameSourceRefusal.PluginNotLoaded,
-                $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so there is no source to rename.");
+                $"{plugin.Name} from '{plugin.Origin}' is not in the load order, so it is not renamed.");
         }
         else if (loaded.Provider is not PluginProvider.FromMod mod)
             refusal = (RenameSourceRefusal.NotInAMod, $"{plugin.Name} from '{plugin.Origin}' is in no mod, so it is not renamed.");

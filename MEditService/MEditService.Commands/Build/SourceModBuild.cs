@@ -239,8 +239,9 @@ internal sealed class SourceModBuild
         ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins, Func<string, bool> leavesUnwritten)
     {
         var twins = plugins.GroupBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase).Where(named => named.Count() > 1).ToList();
-        var unsourced = plugins.Where(plugin => _source.WhySourceDoesNotRead(plugin) is SourceFailure.NotCarried).ToList();
-        List<RegisteredPlugin> compilable = [.. plugins.Except(twins.SelectMany(named => named)).Except(unsourced)];
+        var untwinned = plugins.Except(twins.SelectMany(named => named)).ToList();
+        var unsourced = untwinned.Where(plugin => _source.WhySourceDoesNotRead(plugin) is SourceFailure.NotCarried).ToList();
+        List<RegisteredPlugin> compilable = [.. untwinned.Except(unsourced)];
         var compiled = await _compile.CompileAsync(compilable, leavesUnwritten);
         return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. unsourced.Select(plugin => UnsourcedRefused(mod, plugin)), .. compiled.Refused]);
     }

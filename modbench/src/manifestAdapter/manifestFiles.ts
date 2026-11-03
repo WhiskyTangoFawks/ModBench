@@ -91,8 +91,11 @@ async function buildFileAt(sourceFolder: string): Promise<{ readonly file: strin
 /** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */
 export const buildFileIn = async (sourceFolder: string): Promise<BuildFileRead | undefined> => (await buildFileAt(sourceFolder))?.read;
 
-// A path that cannot be read is held: the build says why it cannot read it.
-const holds = (path: string): Promise<boolean> => access(path).then(() => true, (err: unknown) => !['ENOENT', 'ENOTDIR'].includes(errnoCode(err) ?? ''));
+const couldNotRead = (what: string, err: unknown): string => `${what} could not be read: ${errorMessage(err)}`;
+
+// Whether the path names something, or why it cannot tell.
+const heldAt = (path: string): Promise<boolean | { readonly unreadable: unknown }> =>
+  access(path).then(() => true, (err: unknown) => (['ENOENT', 'ENOTDIR'].includes(errnoCode(err) ?? '') ? false : { unreadable: err }));
 
 // The paths a step reads from the source folder: a compile step's name plugin sources.
 const readBy = (step: BuildStep): { readonly step: BuildFileLack['step']; readonly paths: readonly string[] } | undefined => {
@@ -104,22 +107,35 @@ const readBy = (step: BuildStep): { readonly step: BuildFileLack['step']; readon
   }
 };
 
-/** Each path a build file step reads from `sourceFolder` that names nothing there; a plugin source is found in any case,
- *  as mEdit finds it. None when the folder holds no build file it can read. */
+/** Each path a build file step reads from `sourceFolder` that names nothing there, and why what it cannot read is
+ *  unreadable. A plugin source is found in any case, as mEdit finds it. None when the folder holds no build file. */
 export async function buildFileAgainst(sourceFolder: string): Promise<BuildFileAgainst | undefined> {
-  const unreadable = () => undefined;
-  const [at, listed] = await Promise.all([buildFileAt(sourceFolder).catch(unreadable), entriesIn(join(sourceFolder, PLUGIN_SOURCE_FOLDER)).catch(unreadable)]);
-  if (at === undefined || listed === undefined || 'refused' in at.read) return undefined;
-  const sources = new Set(listed.filter((entry) => entry.isDirectory()).map(({ name }) => name.toLowerCase()));
+  let at: Awaited<ReturnType<typeof buildFileAt>>;
+  try {
+    at = await buildFileAt(sourceFolder);
+  } catch (err) {
+    return { file: join(sourceFolder, BUILD_FILE), lacks: [], unreadable: [couldNotRead('its build file', err)] };
+  }
+  if (at === undefined) return undefined;
+  if ('refused' in at.read) return { file: at.file, lacks: [], unreadable: [at.read.refused] };
+  const unreadable: string[] = [];
+  const sources = await entriesIn(join(sourceFolder, PLUGIN_SOURCE_FOLDER)).then(
+    (entries) => new Set(entries.filter((entry) => entry.isDirectory()).map(({ name }) => name.toLowerCase())),
+    (err: unknown) => {
+      unreadable.push(couldNotRead('its plugin sources', err));
+      return undefined;
+    },
+  );
   const lacks: BuildFileLack[] = [];
   for (const { step, paths } of at.read.buildFile.steps.flatMap((built) => readBy(built) ?? [])) {
     for (const path of paths) {
-      const held = step === 'compile' ? sources.has(path.toLowerCase()) : await holds(join(sourceFolder, path));
-      if (!held) lacks.push({ step, path });
+      const held = step === 'compile' ? sources?.has(path.toLowerCase()) ?? true : await heldAt(join(sourceFolder, path));
+      if (typeof held === 'object') unreadable.push(couldNotRead(`'${path}'`, held.unreadable));
+      else if (!held) lacks.push({ step, path });
     }
-    if (step === 'decompile') for (const path of paths) sources.add(path.toLowerCase());
+    if (step === 'decompile') for (const path of paths) sources?.add(path.toLowerCase());
   }
-  return { file: at.file, lacks };
+  return { file: at.file, lacks, unreadable };
 }
 
 /** What a folder holds of its manifest: the read, none when it holds none, and the path as the folder spells it. */

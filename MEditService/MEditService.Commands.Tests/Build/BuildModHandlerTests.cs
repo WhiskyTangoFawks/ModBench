@@ -260,6 +260,18 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACompileOfTwinsWithNoPluginSource_RefusesEachOnce_AsTwins()
+    {
+        await InitializedWithALocalizedPlugin();
+
+        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Compile(["Other.esp", "other.esp"])));
+
+        Assert.Equal(
+            [("Other.esp", CompileRefusal.TwinPluginSources), ("other.esp", CompileRefusal.TwinPluginSources)],
+            built.Refused.Select(refused => (refused.Item.Name, refused.Refusal)));
+    }
+
+    [Fact]
     public async Task ACompileOfAPluginWithNoPluginSource_RefusesIt_NamingTheBuildFileAndThePlugin_AndCompilesTheRest()
     {
         await InitializedWithALocalizedPlugin();

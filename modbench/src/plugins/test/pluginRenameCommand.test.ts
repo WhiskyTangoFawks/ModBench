@@ -190,6 +190,17 @@ describe('modbench.plugin.rename', () => {
     ]);
   });
 
+  it('names the plugin when the file and lines of a plugin with no plugin source failed', async () => {
+    showInputBox.mockResolvedValueOnce('Renamed.esp');
+    const { client, instanceAnswers, reporter, run } = setup();
+    client.setCommandResult('getRenameSourceChanges', { ...CHANGES, moves: [] });
+    instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
+
+    await run(row());
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not rename "Patch.esp" (ModA): its file and lines were not renamed.', detail: 'disk full' }]);
+  });
+
   it('names the plugin and says its source was renamed when the file and lines failed after it', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { instanceAnswers, reporter, run } = setup();

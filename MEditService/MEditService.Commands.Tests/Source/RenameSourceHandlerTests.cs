@@ -192,6 +192,14 @@ public sealed class RenameSourceHandlerTests : IDisposable
     private MoveLastWrittenHandler Moving => TestEditService.Over(_holder).GetRequiredService<MoveLastWrittenHandler>();
 
     [Fact]
+    public void MoveLastWritten_OfAPluginInAModThatIsNoSourceMod_HasNothingToMove_AndRefusesNothing()
+    {
+        var result = Moving.MoveLastWritten(new PluginAddress("Other.esp", NonSourceModName), "Other.esp", "New.esp");
+
+        Assert.Null(result.Refusal);
+    }
+
+    [Fact]
     public void MoveLastWritten_ForATreeNameSpelledInAnotherCase_IsAccepted()
     {
         Directory.Move(PluginSourceRoot.In(_sourceMod, Old.Name), Path.Combine(_sourceMod, "plugin-source", "OLD.ESP"));
