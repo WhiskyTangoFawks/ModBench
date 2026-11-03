@@ -3,6 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -352,18 +353,20 @@ internal static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var requested = req.Plugins ?? [];
-        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.NotWhole))
-            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole));
-        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
-            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile));
-        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
-            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsText));
-        if (requested.Any(p => p.NewRepository?.WhyNotWhole == NewRepositoryRequest.ManifestFileIsAPath))
-            return Task.FromResult(EndpointMapping.BadRequest(NewRepositoryRequest.ManifestFileIsAPath));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.NotWhole))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.NotWhole));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.ManifestLacksItsFile))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsFile));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.ManifestLacksItsText))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsText));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.ManifestFileIsAPath))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.ManifestFileIsAPath));
+        if (requested.Any(p => p.SourceFolder is not null && p.In is null))
+            return Task.FromResult(EndpointMapping.BadRequest(PluginToRepairRequest.LacksIn));
         return OverPlugins([.. requested.Select(p => p.Plugin)], _ => EndpointMapping.Answered(
             "Decompile and repair", logger,
             repairHandler.DecompileAndRepairAsync(
-                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.NewRepository?.ToNewRepository()))], req.Force),
+                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.SourceFolder?.ToSourceFolderContents(), p.In ?? SourceModIn.NewRepository))], req.Force),
             EndpointMapping.Refusal));
     }
 
@@ -433,8 +436,11 @@ internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 internal sealed record DecompileAndRepairRequest(IReadOnlyList<PluginToRepairRequest> Plugins, bool Force);
 
-/// <summary>A plugin, and the repository made for its mod when it has none.</summary>
-internal sealed record PluginToRepairRequest(PluginAddress Plugin, NewRepositoryRequest? NewRepository = null);
+/// <summary>A plugin, and when its mod is not a source mod the source folder made for it and the repository that holds it.</summary>
+internal sealed record PluginToRepairRequest(PluginAddress Plugin, SourceFolderRequest? SourceFolder = null, SourceModIn? In = null)
+{
+    internal const string LacksIn = "A source folder to make needs in: NewRepository or ModlistRepository.";
+}
 
 /// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
 /// Position is an exterior cell's grid position, and only a worldspace takes one.</summary>

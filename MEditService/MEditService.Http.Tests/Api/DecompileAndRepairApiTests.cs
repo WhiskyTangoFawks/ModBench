@@ -30,7 +30,8 @@ public sealed class DecompileAndRepairApiTests : HostedTests
                 new
                 {
                     plugin,
-                    newRepository = new { sourceFolder = Client.SourceFolderSentFor(Origin), buildFile = "{}" },
+                    sourceFolder = new { sourceFolder = Client.SourceFolderSentFor(Origin), buildFile = "{}" },
+                    @in = "NewRepository",
                 },
             },
             force = false,
@@ -40,13 +41,27 @@ public sealed class DecompileAndRepairApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ARepairHandingANewRepositoryWithNoBuildFile_Is400()
+    public async Task ARepairHandingASourceFolderWithNoBuildFile_Is400()
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
         var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, newRepository = new { sourceFolder = "s" } } },
+            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { sourceFolder = "s" }, @in = "NewRepository" } },
+            force = false,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ARepairHandingASourceFolderWithNoRepositoryToHoldIt_Is400()
+    {
+        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+
+        var response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
+        {
+            plugins = new[] { new { plugin = new { name = Fixture.Malformed.FileName, origin = Origin }, sourceFolder = new { sourceFolder = "s", buildFile = "{}" } } },
             force = false,
         });
 

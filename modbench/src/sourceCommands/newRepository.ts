@@ -2,7 +2,7 @@
 // files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
-import type { NewRepository } from '../client';
+import type { SourceFolderRequest } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileText, exclusionsOfFiles, isUnderAny, manifestIn, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, writeManifestIn, type BuildStep, type Manifest,
@@ -19,13 +19,13 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue'>
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceRepositories' | 'entryKey' | 'folderValue' | 'repositoryOnDisk' | 'writeSourceFolderLines'>
   & FolderRestoreAdapter;
 
 /** The repository a mod's version in git makes. */
 export interface MadeRepository {
   readonly modFolder: string;
-  readonly repository: NewRepository;
+  readonly repository: SourceFolderRequest;
 }
 
 function pluginsAndTheirStringsFiles(paths: readonly string[], gameRelease: string): Set<string> {
@@ -174,11 +174,31 @@ export async function foldersNotLinked(
   return notLinked;
 }
 
-/** The repository version in git makes for each mod decompile and repair asks for, read as the instance is now. */
+export const NO_MODLIST_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
+
+/** Why the modlist repository cannot hold `sourceFolders`: git adds nothing the ignore list leaves out, so they are let in first. */
+export async function foldersNotLetIn(adapter: Pick<Adapter, 'repositoryOnDisk' | 'writeSourceFolderLines'>, sourceFolders: readonly string[]): Promise<string | undefined> {
+  if (!(await adapter.repositoryOnDisk())) return NO_MODLIST_REPOSITORY;
+  return adapter.writeSourceFolderLines(sourceFolders, true).then(() => undefined, errorMessage);
+}
+
+/** What still lets in `sourceFolders` no mod was put in. */
+export async function linesLeftIn(adapter: Pick<Adapter, 'writeSourceFolderLines'>, sourceFolders: readonly string[]): Promise<string[]> {
+  if (sourceFolders.length === 0) return [];
+  return adapter.writeSourceFolderLines(sourceFolders, false).then(
+    () => [], (err: unknown) => [`The ignore list still lets in ${sourceFolders.join(', ')}, which no mod was put in: ${errorMessage(err)}`]);
+}
+
+/** The repository version in git makes for each mod decompile and repair asks for, read as the instance is now, and the
+ *  modlist repository's ignore-list lines for the source folders it holds. */
 export const newRepositoriesOver = (adapter: Adapter): {
   readonly of: (mod: string) => Promise<MadeRepository | { readonly refusal: string }>;
   readonly notLinked: (made: ReadonlyMap<string, MadeRepository>, committed: readonly string[]) => Promise<ReadonlyMap<string, string>>;
+  readonly letIn: (sourceFolders: readonly string[]) => Promise<string | undefined>;
+  readonly takeBack: (sourceFolders: readonly string[]) => Promise<string[]>;
 } => ({
+  letIn: (sourceFolders) => foldersNotLetIn(adapter, sourceFolders),
+  takeBack: (sourceFolders) => linesLeftIn(adapter, sourceFolders),
   of: async (mod) => {
     const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
     return newRepositoryOf(adapter, mod, await gameToHand(adapter, sourceMods), (await downloadedPackagesOf(adapter)).files);

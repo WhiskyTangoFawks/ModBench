@@ -157,7 +157,7 @@ export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 export type ModToVersionInGit = components['schemas']['ModToVersionInGitRequest'];
 
 /** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
-export type NewRepository = components['schemas']['NewRepositoryRequest'];
+export type SourceFolderRequest = components['schemas']['SourceFolderRequest'];
 
 /** Which repository holds the source folder version in git makes: a new one of its own, or the modlist repository. */
 export type SourceModIn = components['schemas']['SourceModIn'];

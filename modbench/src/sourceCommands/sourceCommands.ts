@@ -11,7 +11,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { gameToHand } from './gameFolderFacts';
 import { inModOrder } from './inModOrder';
-import { downloadedPackagesOf, foldersNotLinked, newRepositoryOf, type MadeRepository } from './newRepository';
+import { downloadedPackagesOf, foldersNotLetIn, foldersNotLinked, linesLeftIn, newRepositoryOf, NO_MODLIST_REPOSITORY, type MadeRepository } from './newRepository';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
@@ -47,12 +47,6 @@ async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readon
   } catch (err) {
     return { reason: `was not built: its build file could not be read: ${errorMessage(err)}.` };
   }
-}
-
-async function linesLeftIn(adapter: Adapter, sourceFolders: readonly string[]): Promise<string[]> {
-  if (sourceFolders.length === 0) return [];
-  return adapter.writeSourceFolderLines(sourceFolders, false).then(
-    () => [], (err: unknown) => [`The ignore list still lets in ${sourceFolders.join(', ')}, which no mod was put in: ${errorMessage(err)}`]);
 }
 
 // A manifest that cannot be read names no repository, and says why.
@@ -174,14 +168,14 @@ async function modsVersionedInGit(
   { client, adapter }: VersionInGitDeps, sourceMods: SourceMods, mods: readonly string[], { commit, where, onProgress }: VersionInGitOptions,
 ): Promise<InitializedSourceMod | WriteRefused> {
   const inModlist = where === 'ModlistRepository';
-  if (inModlist && !(await adapter.repositoryOnDisk())) return { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' };
+  if (inModlist && !(await adapter.repositoryOnDisk())) return { refused: true, message: NO_MODLIST_REPOSITORY };
   const { made, refused, notes } = await repositoriesMade(adapter, sourceMods, mods, onProgress);
   const noted = (more: readonly string[]) => (notes.length + more.length === 0 ? {} : { notes: [...notes, ...more] });
   if (made.size === 0) return { landed: [], refused, ...noted([]) };
   const sourceFolders = (names: Iterable<string>): string[] => [...names].flatMap((mod) => made.get(mod)?.repository.sourceFolder ?? []);
   if (inModlist) {
     // git adds nothing the ignore list leaves out, so the folders are let in first.
-    const unwritten = await adapter.writeSourceFolderLines(sourceFolders(made.keys()), true).then(() => undefined, errorMessage);
+    const unwritten = await foldersNotLetIn(adapter, sourceFolders(made.keys()));
     if (unwritten !== undefined) return { landed: [], refused: [...refused, ...[...made.keys()].map((item) => ({ item, reason: unwritten }))], ...noted([]) };
   }
   const sent: ModToVersionInGit[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit, in: where }));

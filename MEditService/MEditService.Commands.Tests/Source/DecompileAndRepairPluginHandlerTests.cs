@@ -3,6 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -76,6 +77,24 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Empty(Git(_newMod, "status", "--porcelain"));
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
         await AssertCompilesAsync(plugin);
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_InAModWithNoRepository_AskedForTheModlistRepository_CommitsItsSourceFolderThere_AndMakesNoRepositoryOfItsOwn()
+    {
+        var modlistRepository = Path.Combine(_root, ".git");
+        GitProbe.Run(modlistRepository, _root, "init", "-q", "-b", "main");
+        GitProbe.Run(modlistRepository, _root, "config", "user.name", "Test");
+        GitProbe.Run(modlistRepository, _root, "config", "user.email", "test@localhost");
+        var plugin = AddToNewMod(Lossless.Malformed);
+        var sourceFolder = Path.Combine(_root, "source", NewModName);
+
+        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder), SourceModIn.ModlistRepository));
+
+        Assert.Equal([plugin], result.Applied);
+        Assert.False(Path.Exists(Path.Combine(sourceFolder, ".git")));
+        Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_root, 3));
+        Assert.Contains($"source/{NewModName}/plugin-source/{Malformed}/", Git(_root, "ls-tree", "-r", "--name-only", "HEAD"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -202,7 +221,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     private PluginToRepair ToRepair(PluginAddress plugin) => new(plugin, MadeIn(_newMod));
 
-    private static NewRepository MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.BuildFile);
+    private static SourceFolderContents MadeIn(string folder, params string[] assets) => new(folder, assets, SourceInits.BuildFile);
 
     private string StrayFile()
     {

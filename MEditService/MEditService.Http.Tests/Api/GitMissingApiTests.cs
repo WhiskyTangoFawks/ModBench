@@ -45,7 +45,7 @@ public sealed class GitMissingApiTests : HostedTests
         var plugin = new { name = fixture.Malformed.FileName, origin = Origin };
         var response = await WithGitMissing(() => Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            plugins = new[] { new { plugin, sourceFolder = Client.SourceFolderSentFor(Origin) } },
+            plugins = new[] { new { plugin } },
             force = false,
         }));
 

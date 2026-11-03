@@ -5,7 +5,7 @@ namespace MEditService.Commands.Build;
 
 /// <summary>A mod to version in git, by name and folder, the source folder made for it, and the repository that holds
 /// it. Without <paramref name="Commit"/> the repository holds its files as staged changes.</summary>
-public sealed record ModToVersionInGit(string Name, string ModFolder, NewRepository Repository, SourceModIn In, bool Commit);
+public sealed record ModToVersionInGit(string Name, string ModFolder, SourceFolderContents Repository, SourceModIn In, bool Commit);
 
 /// <summary>Why version in git refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
