@@ -10,6 +10,5 @@ internal static class PluginFlagPredicates
     /// <summary>MO2's rule (pluginlist.cpp, ESPInfo): the blueprint bit counts only on a
     /// master-flagged plugin, or one named .esm or .esl.</summary>
     internal static bool IsBlueprint(IModFlagsGetter mod, string fileName, int headerFlags, int blueprintFlag) =>
-        (headerFlags & blueprintFlag) != 0
-        && (PluginFlags.IsMaster(mod, fileName) || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase));
+        (headerFlags & blueprintFlag) != 0 && PluginFlags.IsMaster(mod, fileName);
 }

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import type { PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
-import { PluginFacts, placeOf, type PluginPlace } from '../pluginFacts';
+import { PluginFacts, placeOf, type LootInput, type PluginPlace } from '../pluginFacts';
+import { rulesReader } from '../../sortingRules/lootMetadata';
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 
@@ -125,11 +126,17 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
-  it('judges no rule on the place of a plugin the game loads with no line', () => {
+  it('judges no rule of the game\'s or LOOT\'s on the place of a plugin the game loads with no line', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], [A]);
+    const { entries, groups } = rulesReader()({
+      masterlist: { path: '/instance/masterlist.yaml', kind: 'text', text: 'plugins:\n  - name: B.esp\n    after: [A.esp]\n' },
+      prelude: { path: '/instance/prelude.yaml', kind: 'absent' },
+      userlist: { path: '/instance/userlist.yaml', kind: 'absent' },
+    });
+    const files: LootInput['files'] = { files: () => ({ names: [], complete: true }), isPresent: () => 'present', answer: () => ({ kind: 'read', value: undefined }) };
+    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], [A], { entries, groups, files });
 
-    expect(facts.tooltipLines(A)).not.toContain(MASTER_FLAG_LINE);
+    expect(facts.tooltipLines(A).filter((line) => line.startsWith('Warning'))).toEqual([]);
   });
 
   it('keeps the last sorting statuses through a re-read, until a reconcile judges again', () => {
