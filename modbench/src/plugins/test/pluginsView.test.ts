@@ -36,6 +36,7 @@ vi.mock('vscode', () => {
     DiagnosticSeverity, Uri: { ...Uri, parse: uriParse },
     StatusBarAlignment: { Left: 1 },
     Position: class { constructor(public line: number, public character: number) {} },
+    CodeActionKind: { QuickFix: 'quickfix' },
     CodeLens: class { constructor(public range: unknown, public command: unknown) {} },
     Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
     window: {
@@ -75,6 +76,7 @@ vi.mock('vscode', () => {
         h.lenses.push(provider);
         return disposable();
       },
+      registerCodeActionsProvider: () => disposable(),
     },
     commands: {
       ...filterBoxCommandsMock(state),

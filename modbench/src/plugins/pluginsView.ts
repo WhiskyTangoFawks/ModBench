@@ -30,6 +30,8 @@ import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
 import { registerDecompileAndRepairCommand, registerDecompileCommand, type DecompileDeps } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
+import { registerApplySuggestedMoveCommand } from './applySuggestedMoveCommand';
+import { suggestedMoveActions } from './suggestedMoveActions';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { makeShowRecordFilter, registerFilterCommands } from './recordFilterCommands';
@@ -169,6 +171,12 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.window.registerFileDecorationProvider(new ImplicitMasterDecorationProvider(() => tree.lockedRowUris())),
     nameFilter,
     ...keyContextSubscriptions,
+    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, suggestedMoveActions({
+      userlistPath: () => tree.userlistPath(), moves: () => tree.facts.rows.suggestedMoves(),
+    }), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+    registerApplySuggestedMoveCommand({
+      commands, instance, reporter: reporterFor('pluginListTree.applySuggestedMove'), movesOf: (plugin) => tree.facts.rows.suggestedMovesOf(plugin),
+    }, selected.rows),
     selected, view, tree, changedOutsideDiagnostics, failedToReadDiagnostics, sourceUnreadableDiagnostics, loadDiagnostics,
   );
   return {

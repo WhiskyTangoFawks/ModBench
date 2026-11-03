@@ -26,6 +26,21 @@ interface Move {
   readonly drop: PluginsDrop;
 }
 
+/** The write both gestures that move plugins end in. */
+export async function movePlugins(
+  commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  plugins: readonly PluginAddress[], drop: PluginsDrop,
+): Promise<GestureResult<PluginAddress>> {
+  try {
+    const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
+    return result.applied
+      ? { applied: true, outcome: { landed: plugins, refused: [] } }
+      : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
+  } catch (e) {
+    return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };
+  }
+}
+
 /** `modbench.plugin.move`: the plugins and the drop where they land. Left out, the plugins are the
  *  view's selection and the drop is picked. A tree drop is one entry point into it. */
 export function registerPluginMoveCommand(
@@ -42,16 +57,7 @@ export function registerPluginMoveCommand(
       return drop && { plugins, drop };
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), drop: options.drop }),
-    run: async ({ plugins, drop }) => {
-      try {
-        const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
-        return result.applied
-          ? { applied: true, outcome: { landed: plugins, refused: [] } }
-          : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
-      } catch (e) {
-        return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };
-      }
-    },
+    run: ({ plugins, drop }) => movePlugins(commands, instance, plugins, drop),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },

@@ -600,3 +600,32 @@ describe('PluginFacts — what a row shows of its plugin, as data for the agent 
     expect(new PluginFacts().shown(A)).toEqual({ statuses: [], readOnly: null, compiled: null, masters: null });
   });
 });
+
+describe('PluginFacts — the suggested move of a broken sorting rule (plugins.md, Sorting rules, story 5)', () => {
+  it('offers the plugin that moves, and flags only its row', () => {
+    const facts = new PluginFacts();
+    masterFlagAfterB()(facts);
+
+    expect(facts.suggestedMoves().map(({ mover, drop }) => ({ mover, drop }))).toEqual([
+      { mover: { origin: 'SomeMod', filename: 'A.esp' }, drop: { kind: 'before', name: 'B.esp' } },
+    ]);
+    expect(facts.contextFlags(A)).toContain('suggestedMove');
+    expect(facts.contextFlags(B)).not.toContain('suggestedMove');
+  });
+
+  it('offers none for a rule about one plugin', () => {
+    const facts = new PluginFacts();
+    lackingMasters('Ghost.esm')(facts);
+
+    expect(facts.suggestedMoves()).toEqual([]);
+    expect(facts.contextFlags(A)).not.toContain('suggestedMove');
+  });
+
+  it('offers no move the last judging did not find', () => {
+    const facts = new PluginFacts();
+    masterFlagAfterB()(facts);
+    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [A, B]);
+
+    expect(facts.suggestedMoves()).toEqual([]);
+  });
+});

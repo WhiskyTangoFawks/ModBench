@@ -216,6 +216,10 @@ export class PluginsTreeProvider
     return this.instance.sequence === 0 ? [] : sortingRuleFileLines(this.rules);
   }
 
+  userlistPath(): string {
+    return this.rules.files.userlist.path;
+  }
+
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows
   // (States 1), a record filter matching nothing (States 5): the first that holds.
   private firstHeldMessage(): string | undefined {
