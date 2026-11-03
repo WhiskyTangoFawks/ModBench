@@ -223,7 +223,6 @@ export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
   return () => syncPlugins(adapter);
 }
 
-// `modbench.plugin.loadAfter`: each plugin loads after each of the others, as a rule in the userlist.
 async function loadAfter(adapter: InstanceAdapter, plugins: readonly string[], after: readonly string[]): Promise<CommandResult> {
   try {
     const { wrote } = await adapter.changeUserlist(plugins.map((plugin) => ({ plugin, after })));
