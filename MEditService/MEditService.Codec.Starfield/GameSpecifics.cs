@@ -44,7 +44,9 @@ internal static class GameSpecifics
                 [17] = 5,
             },
             FunctionsWithoutParameters: new HashSet<byte>(),
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
+        // Mutagen's WriteWorldspacesParallel writes a worldspace's fields without WriteMajorRecord's deleted return.
+        KeptWhenDeleted: new HashSet<string> { "WRLD" });
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [

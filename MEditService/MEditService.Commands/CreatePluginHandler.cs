@@ -19,8 +19,9 @@ public sealed class CreatePluginHandler
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source));
+    internal CreatePluginHandler(
+        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, ILogger<CreatePluginHandler> logger) =>
+        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)

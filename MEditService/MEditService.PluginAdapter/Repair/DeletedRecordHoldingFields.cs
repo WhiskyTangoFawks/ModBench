@@ -12,10 +12,9 @@ internal sealed class DeletedRecordHoldingFields : IMalformation
 
     public bool ReadsOnlyDeleted => true;
 
-    // Mutagen alone keeps a deleted worldspace's fields.
     public IEnumerable<Malformed> Detect(InspectedRecord record)
     {
-        if (record.Types.IsWorldspace(record.Type)) yield break;
+        if (record.Shapes.KeptWhenDeleted.Contains(record.Type)) yield break;
 
         var isReference = record.Types.IsReference(record.Type);
         var held = record.Subrecords.Where(sub => !(isReference && sub.Signature == BaseRecord)).ToList();

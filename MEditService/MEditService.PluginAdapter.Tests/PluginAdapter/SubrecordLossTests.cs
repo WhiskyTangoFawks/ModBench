@@ -5,6 +5,8 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
@@ -146,6 +148,7 @@ public sealed class SubrecordLossTests : IDisposable
     [Theory]
     [InlineData("REFR", "NAME", "DATA")]
     [InlineData("NPC_", "EDID", "FULL")]
+    [InlineData("CELL", "EDID", "FULL")]
     public async Task ADeletedRecordHoldingAFieldMutagenDoesNotWrite_IsMalformed_NotALoss(string type, string tolerated, string other)
     {
         var original = Record(type, 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord(tolerated, [1]), Subrecord(other, [2]));
@@ -156,6 +159,28 @@ public sealed class SubrecordLossTests : IDisposable
         Assert.Null(comparison.Loss);
         var cause = Assert.Single(comparison.DeletedRecordCauses ?? []);
         Assert.Equal(("deleted-record-holds-fields", $"{type} 00000801"), (cause.Diagnosis.DefectClass, cause.Diagnosis.Anchor?[..13]));
+    }
+
+    [Fact]
+    public async Task ADeletedWorldspaceHoldingFields_IsNotMalformed_SinceMutagenWritesItWhole()
+    {
+        var deleted = Record("WRLD", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("EDID", "World"u8.ToArray()));
+
+        Assert.Null((await ComparisonAsync(deleted, deleted)).DeletedRecordCauses);
+    }
+
+    [Fact]
+    public void MutagenWritesADeletedCellAsItsHeaderAlone_AndADeletedWorldspaceWhole()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.AddInteriorCells(new Cell(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "DeletedCell", MajorRecordFlagsRaw = (int)DeletedFlag.Bit });
+        mod.Worldspaces.Add(new Worldspace(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "DeletedWorld", MajorRecordFlagsRaw = (int)DeletedFlag.Bit });
+        using var stream = new MemoryStream();
+        mod.WriteToBinary(stream);
+
+        var held = PluginBinaryWalk.Records(stream.ToArray(), GameRelease.Fallout4).ToDictionary(r => r.RecordType.Type, r => r.ContentLength);
+
+        Assert.Equal((0, true), (held["CELL"], held["WRLD"] > 0));
     }
 
     [Fact]

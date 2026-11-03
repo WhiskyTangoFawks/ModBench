@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
@@ -15,7 +16,7 @@ internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal
 
 /// <summary>Init and decompile both read a plugin into its plugin source through this one gate.
 /// </summary>
-internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter)
+internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter, SchemaReflector schemaReflector)
 {
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel, bool namesRepair = true)
@@ -39,6 +40,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         onParsed();
+        source = source with { Files = DeletedReferenceBases.Dropped(source.Files, loadOrder.GameRelease, schemaReflector) };
         if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, plugin.Strings, namesRepair, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 

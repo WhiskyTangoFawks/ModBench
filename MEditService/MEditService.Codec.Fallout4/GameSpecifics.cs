@@ -31,7 +31,9 @@ internal static class GameSpecifics
         EntryPoints: new(
             EpftByFunction: new Dictionary<byte, byte> { [1] = 1, [2] = 1, [3] = 1, [5] = 8, [9] = 4, [10] = 5, [12] = 8, [13] = 8, [14] = 8 },
             FunctionsWithoutParameters: new HashSet<byte> { 6 },
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
+        // Mutagen's WriteWorldspacesParallel writes a worldspace's fields without WriteMajorRecord's deleted return.
+        KeptWhenDeleted: new HashSet<string> { "WRLD" });
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [

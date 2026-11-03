@@ -29,6 +29,10 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
         return new(flags, write.Held ^ write.Next, deletes, makesPartialForm, refills, heldPersistent);
     }
 
+    /// <summary>The emptying of a record already flagged Deleted, as a delete leaves it.</summary>
+    internal static RecordEmptying OfDeleted(Document record) =>
+        new(RecordFlagsWrite.HeldBy(record), Changed: 0, Deletes: true, MakesPartialForm: false, Refills: false, HeldPersistent: false);
+
     /// <summary>The nearest copy to the left of <paramref name="formKey"/> that is neither, on a refill.</summary>
     internal LeftCopy? RefillFrom(LoadOrderResolution.MastersWalk masters, RecordTableSchema schema, string? formKey) =>
         Refills && formKey is not null ? masters.NearestCopy(formKey, _ => true, EmptyingBits(schema)) : null;
