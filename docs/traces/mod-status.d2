@@ -18,9 +18,9 @@ mods.label: Mods
 
 instanceloader -> activation: value {class: loadorder}
 activation -> modstatus: value {class: loadorder}
-modstatus -> manifestadapter: "get: each mod's manifest" {class: track}
-instance -> manifestadapter: manifests {class: track}
-manifestadapter -> modstatus: "each mod's manifest" {class: track}
+modstatus -> manifestadapter: "get: each mod's manifest · its build file against its source folder" {class: track}
+instance -> manifestadapter: "manifests · build files · source folders" {class: track}
+manifestadapter -> modstatus: "each mod's manifest · what its build file names that its source folder lacks" {class: track}
 modstatus -> instanceadapter: "get: each mod's files, hashed, its metadata, each package's entries, its downloaded files and the game folder" {class: track}
 instance -> instanceadapter: "each mod's files · metadata · the hash index" {class: track}
 instanceadapter -> modstatus: "each mod's files, hashed, its metadata, each package's entries, its downloaded files and the game folder" {class: track}

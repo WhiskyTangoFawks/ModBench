@@ -114,7 +114,7 @@ internal static class EndpointMapping
             RenameSourceRefusal.NotAPluginFile or RenameSourceRefusal.TreeNameNotThePlugins => 400,
             RenameSourceRefusal.PluginNotLoaded => 404,
             // The request is sound; the plugin's present state refuses it until that state changes.
-            RenameSourceRefusal.NotCompiledPlugin or RenameSourceRefusal.NameTaken => 409,
+            RenameSourceRefusal.NotInAMod or RenameSourceRefusal.NameTaken => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             RenameSourceRefusal.GitUnavailable or RenameSourceRefusal.WriteFailed => 500,
             // Well-formed, addressed at something real, and its source holds a file nothing can read.

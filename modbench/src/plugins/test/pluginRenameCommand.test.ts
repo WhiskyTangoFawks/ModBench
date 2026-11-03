@@ -42,7 +42,7 @@ import { present } from '../../ports/present';
 const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', name: origin } }) as const;
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
-const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
+const CHANGES = { treeName: 'Patch.esp', moves: [{ from: '/m/plugin-source/Patch.esp', to: '/m/plugin-source/Renamed.esp' }], deletions: [], documents: [] };
 
 function setup(selection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
@@ -188,6 +188,17 @@ describe('modbench.plugin.rename', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin', detail: undefined },
     ]);
+  });
+
+  it('names the plugin when the file and lines of a plugin with no plugin source failed', async () => {
+    showInputBox.mockResolvedValueOnce('Renamed.esp');
+    const { client, instanceAnswers, reporter, run } = setup();
+    client.setCommandResult('getRenameSourceChanges', { ...CHANGES, moves: [] });
+    instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
+
+    await run(row());
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not rename "Patch.esp" (ModA): its file and lines were not renamed.', detail: 'disk full' }]);
   });
 
   it('names the plugin and says its source was renamed when the file and lines failed after it', async () => {

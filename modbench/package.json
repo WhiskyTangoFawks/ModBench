@@ -1058,7 +1058,7 @@
         },
         {
           "command": "modbench.plugin.rename",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCompiledPlugin"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePluginInMod"
         },
         {
           "command": "modbench.plugin.move",
@@ -1810,7 +1810,7 @@
         },
         {
           "command": "modbench.plugin.rename",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bcompiledPlugin\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\b(inSourceMod|inNonSourceMod)\\b/",
           "group": "2_change@3"
         },
         {
@@ -2039,7 +2039,7 @@
       {
         "command": "modbench.plugin.rename",
         "key": "f2",
-        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.singleCompiledPlugin"
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.singlePluginInMod"
       },
       {
         "command": "modbench.record.delete",
