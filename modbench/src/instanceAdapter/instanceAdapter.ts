@@ -611,7 +611,7 @@ export interface InstanceReading extends InstanceGame {
   /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
   /** Every source mod's folder in the source folder, a repository or one the modlist repository holds, by its name. */
-  readonly sourceRepositories: ReadonlyMap<string, string>;
+  readonly sourceModFolders: ReadonlyMap<string, string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
   /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
@@ -654,7 +654,7 @@ export interface InstanceAdapter {
   /** The downloaded file `path` names, however the path is spelled; undefined when it names none; or why the downloaded files could not be read. */
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
   /** Every source mod's folder in the source folder now, a repository or one the modlist repository holds, by its name. */
-  sourceRepositories(): Promise<ReadonlyMap<string, string>>;
+  sourceModFolders(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each
    *  file Modbench keeps in the instance is in its ignore list, every other entry as written. */
@@ -731,6 +731,11 @@ export interface InstanceAdapter {
   /** Lets the instance repository hold each source folder of `sourceFolders`, or with `held` false leaves each out. Writes
    *  nothing without an ignore list; rejects, writing nothing, for a folder outside the source folder or an unpaired marker. */
   writeSourceFolderLines(sourceFolders: readonly string[], held: boolean): Promise<void>;
+  /** Lets the instance repository hold the files of each mod folder of `modFolders`, or with `held` false leaves them out.
+   *  Writes nothing without an ignore list; rejects, writing nothing, for a folder outside the mods folder or an unpaired marker. */
+  writeHeldWholeLines(modFolders: readonly string[], held: boolean): Promise<void>;
+  /** Commits the files of `folder` that the instance repository holds, and only them, as `message`. Rejects when git does. */
+  commitFolder(folder: string, message: string): Promise<void>;
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */

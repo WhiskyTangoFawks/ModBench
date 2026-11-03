@@ -214,8 +214,8 @@ export const whitelistIgnoreList = (publisherFileName: string | undefined): stri
 type Markers = readonly [first: string, last: string];
 
 // Git's last matching line wins: what leaves a folder out sits before the user's lines, and what lets a file in after.
-interface OwnLines { readonly leftOut: Markers; readonly letIn: Markers }
-type Role = keyof OwnLines;
+interface OwnLines { readonly leftOut?: Markers; readonly letIn: Markers }
+type Role = 'leftOut' | 'letIn';
 
 const SOURCE_MODS: OwnLines = {
   leftOut: ['# Source mods with a remote, the rest left out', '# End of source mods with a remote, the rest left out'],
@@ -229,9 +229,14 @@ const SOURCE_FOLDERS: OwnLines = {
   leftOut: ['# Source folders this repository holds, the rest left out', '# End of source folders this repository holds, the rest left out'],
   letIn: ['# Source folders this repository holds', '# End of source folders this repository holds'],
 };
+// A mod folder held whole needs no line to leave the rest out: the whitelist leaves out every mod's files already.
+const HELD_WHOLE: OwnLines = { letIn: ['# Mod folders this repository holds whole', '# End of mod folders this repository holds whole'] };
 const WHITELIST_LAST_LINE = whitelistIgnoreList(undefined).trimEnd().split('\n').at(-1);
 
-const markersOf = (role: Role): Markers[] => [SOURCE_MODS[role], OTHER_MANIFESTS[role], SOURCE_FOLDERS[role]];
+const markersOf = (role: Role): Markers[] => [SOURCE_MODS, OTHER_MANIFESTS, SOURCE_FOLDERS, HELD_WHOLE].flatMap((kind) => {
+  const markers = kind[role];
+  return markers === undefined ? [] : [markers];
+});
 
 function afterLeftOutBlocks(lines: readonly string[], at: number): number {
   const markers = markersOf('leftOut').find(([first]) => first === lines[at]);
@@ -277,7 +282,7 @@ function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]
   if (lines.at(-1) === '') lines.pop();
   const letIn = own.filter((line) => line.startsWith('!'));
   const leftOut = own.filter((line) => !line.startsWith('!'));
-  return placed(lines, 'leftOut', kind.leftOut, leftOut) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
+  return (kind.leftOut === undefined || placed(lines, 'leftOut', kind.leftOut, leftOut)) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
 }
 
 /** An ignore list with the lines of `folderNames`, the source mods with a remote. Undefined when their markers do not
@@ -292,15 +297,26 @@ const SOURCE_FOLDERS_LET_IN = `!/${SOURCE_MODS_FOLDER}/`;
 /** An ignore list that lets in each source folder of `folderNames`, or with `held` false leaves each out, every other line
  *  kept; each folder's own `.gitignore` says what of it is held. Undefined when the markers do not pair. */
 export function withSourceFolderLines(ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined {
-  const lines = ignoreList.split(/\r?\n/);
-  const [first, last] = SOURCE_FOLDERS.letIn;
-  const begin = lines.indexOf(first);
-  const letIn = new Set(begin === -1 ? [] : lines.slice(begin + 1, lines.indexOf(last, begin)).filter((line) => line !== SOURCE_FOLDERS_LET_IN));
-  for (const line of folderNames.map((name) => `${SOURCE_FOLDERS_LET_IN}${escapedForIgnoreList(name)}`)) {
-    if (held) letIn.add(line);
-    else letIn.delete(line);
+  const letIn = withLinesOf(ignoreList, SOURCE_FOLDERS.letIn, folderNames.map((name) => `${SOURCE_FOLDERS_LET_IN}${escapedForIgnoreList(name)}`), held);
+  const lines = letIn.filter((line) => line !== SOURCE_FOLDERS_LET_IN);
+  return withOwnLines(ignoreList, SOURCE_FOLDERS, lines.length === 0 ? [] : [SOURCE_FOLDERS_LET_IN, `/${SOURCE_MODS_FOLDER}/*`, ...lines]);
+}
+
+/** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every
+ *  other line kept. Undefined when the markers do not pair. */
+export const withHeldWholeLines = (ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined =>
+  withOwnLines(ignoreList, HELD_WHOLE, withLinesOf(ignoreList, HELD_WHOLE.letIn, folderNames.map((name) => `!/${MODS}/${escapedForIgnoreList(name)}/*`), held));
+
+// The lines between `markers` with each of `lines` added, or with `held` false taken out.
+function withLinesOf(ignoreList: string, [first, last]: Markers, lines: readonly string[], held: boolean): string[] {
+  const all = ignoreList.split(/\r?\n/);
+  const begin = all.indexOf(first);
+  const kept = new Set(begin === -1 ? [] : all.slice(begin + 1, all.indexOf(last, begin)));
+  for (const line of lines) {
+    if (held) kept.add(line);
+    else kept.delete(line);
   }
-  return withOwnLines(ignoreList, SOURCE_FOLDERS, letIn.size === 0 ? [] : [SOURCE_FOLDERS_LET_IN, `/${SOURCE_MODS_FOLDER}/*`, ...letIn]);
+  return [...kept];
 }
 
 // Each folder above a manifest is let in once, before the folders and the manifest it holds.

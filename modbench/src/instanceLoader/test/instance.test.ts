@@ -181,7 +181,7 @@ describe('Instance — the value', () => {
   it('carries each mod a repository builds as a source mod, with that repository as its source folder, and each repository alone as a source mod', async () => {
     const { instance } = loader({
       mods: [mod('Harder VATS'), mod('[NODELETE] Radfall'), mod('Plain')],
-      sourceRepositories: repositoriesOf(
+      sourceModFolders: repositoriesOf(
         { 'Harder VATS': '/source/Harder VATS', '[nodelete] radfall': '/source/Renamed From', 'Cloned And Unlisted': '/source/Cloned And Unlisted' },
       ),
     });
@@ -206,7 +206,7 @@ describe('Instance — the value', () => {
   });
 
   it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build names', async () => {
-    const { instance } = loader({ mods: [mod('Harder VATS')], sourceRepositories: repositoriesOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
+    const { instance } = loader({ mods: [mod('Harder VATS')], sourceModFolders: repositoriesOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
 
     await instance.refresh();
 
@@ -747,7 +747,7 @@ describe('Instance — game folder and the archives the game loads', () => {
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
-    const { instance } = loader({ mods: [mod('Radfall')], sourceRepositories: repositoriesOf({ Radfall: '/source/Radfall' }) });
+    const { instance } = loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Radfall: '/source/Radfall' }) });
 
     await instance.refresh();
 
@@ -867,7 +867,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     const { instance } = loader({
       ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
       modFiles: new Map([['Consumer', filesOfMod('Consumer', 'DLCCoast.esm')]]),
-      sourceRepositories: repositoriesOf({ Consumer: '/source/Consumer Source' }),
+      sourceModFolders: repositoriesOf({ Consumer: '/source/Consumer Source' }),
     });
 
     await instance.refresh();

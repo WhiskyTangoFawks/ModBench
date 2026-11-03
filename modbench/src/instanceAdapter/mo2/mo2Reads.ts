@@ -23,7 +23,7 @@ import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
-import { sourceRepositoriesIn } from './sourceRepositories';
+import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
 import { errnoCode } from '../../ports/errno';
 import { holdsPathToken } from '../pathTokens';
@@ -137,7 +137,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     originRootFiles: (origin, folders) => originFilesIn(context, origin, true, folders),
 
-    sourceRepositories: () => sourceRepositoriesIn(instanceRoot),
+    sourceModFolders: () => sourceModFoldersIn(instanceRoot),
 
     async sortingRuleFiles() {
       const paths = sortingRuleFilePaths(instanceRoot);
@@ -164,7 +164,7 @@ const indexed = (listing: readonly ModFolder[]): ModFolders => {
 
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceRepositories'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceModFolders'> {
   const { instanceRoot } = context;
   const reads: ReturnType<typeof mo2Reads> = {
     profiles: () => source.profiles(ignoreSkippedLink),
@@ -183,7 +183,7 @@ export function mo2Reads(
       return undefined;
     }),
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
-    sourceRepositories: () => source.sourceRepositories(),
+    sourceModFolders: () => source.sourceModFolders(),
     modFolderPath: (name, among) => modFolderNamed(context, name, among === undefined ? 'list' : indexed(among)),
     foldersRefused: (folders, asked) => foldersRefused(instanceRoot, folders, asked),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),

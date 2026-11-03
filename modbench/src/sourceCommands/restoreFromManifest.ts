@@ -15,14 +15,14 @@ import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
-import { setAsideHeldWhole } from './heldWhole';
+import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
+  'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
@@ -461,7 +461,7 @@ export async function restoreFromManifest(
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(adapter);
   const notClonedYet = await submodulesCloned(deps, options.onProgress);
   const order = await adapter.modOrder();
-  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const ordered = await inModOrder(adapter, namesOf(asked, others));
   const { folders, refused: refusedFolder, notSearched } = await foldersCompared(adapter, ordered, others, sourceMods);
   const refusedNames = new Set(refusedFolder.map(({ item }) => item));

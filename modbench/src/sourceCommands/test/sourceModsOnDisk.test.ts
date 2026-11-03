@@ -409,7 +409,7 @@ describe('build over an instance on disk, of a source mod renamed outside Modben
     await build();
     const renamed = join(root, 'mods', 'Renamed');
     await rename(join(root, 'mods', 'Mod'), renamed);
-    const before = { status: await statusNow(adapter, { name: 'Renamed', folder: renamed }), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
+    const before = { status: await statusNow(adapter, { name: 'Renamed', folder: renamed }), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
 
     const outcome = await commands.build(['Renamed']);
 

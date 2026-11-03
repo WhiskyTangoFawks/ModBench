@@ -11,16 +11,17 @@ import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { inModOrder } from './inModOrder';
 import { modsPlaced, type MadeSourceFolder } from './newRepository';
+import { modsPutWholeInGit } from './wholeFolderInGit';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceModFolders'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'sourceFolderValue'
-    | 'repositoryOnDisk' | 'writeSourceFolderLines'>;
+    | 'repositoryOnDisk' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -92,7 +93,7 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
 export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: SourceCommandsDeps) {
   const sourceModsNow = async (): Promise<SourceMods> =>
-    sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+    sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const toBuild = (sourceMods: SourceMods, asked: readonly string[], everySource: boolean): readonly string[] =>
     (everySource ? [...sourceMods.folders.keys()] : asked);
   return {
@@ -132,23 +133,26 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       return { landed, refused };
     },
 
-    /** A mod whose name gives it no source folder, or whose files or metadata cannot be read, is refused here, naming why,
-     *  and mEdit makes the rest source mods. */
+    /** A mod that cannot go where `options.where` says is refused here, naming why. mEdit makes the rest source mods, and
+     *  is not asked for a whole folder. */
     versionInGit: async (mods: readonly string[], options: VersionInGitOptions): Promise<InitializedSourceMod | WriteRefused> =>
-      modsVersionedInGit({ client, adapter }, mods, options),
+      options.where === 'WholeFolder' ? modsPutWholeInGit(adapter, trash, { mods, ...options }) : modsVersionedInGit({ client, adapter }, mods, options),
   };
 }
 
-interface VersionInGitOptions {
+/** Where git holds a mod: its source folder in a repository of its own or the modlist repository, or its whole folder in
+ *  the modlist repository. */
+export type VersionInGitWhere = SourceModIn | 'WholeFolder';
+
+type VersionInGitOptions = {
   readonly commit: boolean;
-  readonly where: SourceModIn;
   readonly onProgress?: (status: InitProgress) => void;
-}
+} & ({ readonly where: SourceModIn } | { readonly where: 'WholeFolder' });
 
 type VersionInGitDeps = Pick<SourceCommandsDeps, 'client' | 'adapter'>;
 
 async function modsVersionedInGit(
-  { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: VersionInGitOptions,
+  { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: Extract<VersionInGitOptions, { readonly where: SourceModIn }>,
 ): Promise<InitializedSourceMod | WriteRefused> {
   const sentOver = async (made: ReadonlyMap<string, MadeSourceFolder>): Promise<VersionInGitOutcome | WriteRefused> => {
     if (made.size === 0) return { landed: [], refused: [] };

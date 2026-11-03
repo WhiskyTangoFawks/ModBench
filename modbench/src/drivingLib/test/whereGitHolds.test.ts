@@ -19,6 +19,15 @@ describe('pickWhereGitHolds', () => {
     expect(showQuickPick.mock.calls[0]?.[1]).toEqual({ placeHolder: 'Decompile and repair: where git holds the mod' });
   });
 
+  it('offers the mod\'s whole folder last when the gesture can hold it', async () => {
+    showQuickPick.mockResolvedValue({ label: 'The mod\'s whole folder in the modlist repository', where: 'WholeFolder' });
+
+    const picked = await pickWhereGitHolds(true, 'Version in git', true);
+
+    expect(picked).toBe('WholeFolder');
+    expect(showQuickPick.mock.calls[0]?.[0].map(({ where }) => where)).toEqual(['NewRepository', 'ModlistRepository', 'WholeFolder']);
+  });
+
   it('shows nothing, and answers a new repository, while the instance holds none', async () => {
     expect(await pickWhereGitHolds(false, 'Decompile and repair')).toBe('NewRepository');
     expect(showQuickPick).not.toHaveBeenCalled();

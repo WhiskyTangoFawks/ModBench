@@ -56,7 +56,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     runtimeOutput: { origin: 'overwrite', folder: undefined, files: [], folders: [], notes: [] },
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
-    sourceRepositories: new Map(),
+    sourceModFolders: new Map(),
     holdsRepository: false,
     repositorySetUp: false,
     watchNotes: [],
@@ -100,6 +100,8 @@ export type AdapterCall =
   | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
   | { readonly verb: 'writeOtherManifestLines' }
   | { readonly verb: 'writeSourceFolderLines'; readonly sourceFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'writeHeldWholeLines'; readonly modFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'commitFolder'; readonly folder: string; readonly message: string }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly fomod?: FomodAnswer }
@@ -127,6 +129,8 @@ export interface InstanceAnswers {
   heldByGit?: ReadonlyMap<string, readonly string[]>;
   /** The mod folders whose whole git holds. */
   heldWholeByGit?: ReadonlySet<string>;
+  /** The mod folders git still leaves out after the ignore list lets them in, such as by .git/info/exclude. */
+  leftOutByGit?: ReadonlySet<string>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -163,7 +167,7 @@ export interface InstanceAnswers {
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceRepositories' | 'otherManifests', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -281,6 +285,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
   const flaggedHashes = new Map(answers.flaggedHashes);
+  const letInByLines = new Set<string>();
   const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
   const listeners = new Set<() => void>();
   let readings = 0;
@@ -344,7 +349,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       if (listed.kind === 'unresolved') return { kind: 'unreadable', reason: listed.reason };
       return { kind: 'read', answer: listed.files?.find((file) => file.path === path) };
     },
-    sourceRepositories: () => unreadable('sourceRepositories', current.sourceRepositories),
+    sourceModFolders: () => unreadable('sourceModFolders', current.sourceModFolders),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     publisherTags: answers.publisherTags ?? [],
     changePublisherTag: (change, tag, paths) =>
@@ -418,6 +423,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     writeSourceFolderLines: (sourceFolders, held) => record({ verb: 'writeSourceFolderLines', sourceFolders, held }, undefined),
+    writeHeldWholeLines: (modFolders, held) => write({ verb: 'writeHeldWholeLines', modFolders, held }, () => {
+      for (const folder of modFolders) {
+        if (held) letInByLines.add(folder);
+        else letInByLines.delete(folder);
+      }
+    }),
+    commitFolder: (folder, message) => record({ verb: 'commitFolder', folder, message }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
@@ -429,7 +441,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
     folderValue: (folder) => folderValueOver(adapter, folder),
-    foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true))),
+    foldersHeldWhole: (folders) => Promise.resolve(new Set(
+      folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),
+    )),
     sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,

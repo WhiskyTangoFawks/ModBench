@@ -86,7 +86,7 @@ export async function installMod(
   if (target.kind === 'upgrade') {
     try {
       const { adapter } = deps;
-      const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+      const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
       if (sourceMods.builds(target.name)) return { applied: false, refusal: sourceModRefusal(target.name) };
     } catch (err) {
       return refuse(err);

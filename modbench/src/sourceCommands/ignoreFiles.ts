@@ -75,7 +75,7 @@ export async function ignoreFiles(
     if (file.origin.kind !== 'mod') { refused.push({ item: file, reason: 'Overwrite is not a mod.' }); continue; }
     byMod.set(file.origin.name, [...byMod.get(file.origin.name) ?? [], { file, path: adapter.ownPath(file.relativePath) }]);
   }
-  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const written = new Map<string, FileOfMod[]>();
   for (const [mod, ofMod] of byMod) {
     const changed = await changedFor(adapter, mod, ofMod, ignore);

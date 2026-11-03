@@ -43,7 +43,7 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const folderFiles = new Map(folders.map(([folder, held]) => [folder, Object.keys(held)]));
   const hashes = new Map(folders.flatMap(([folder, held]) => Object.entries(held).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
+    readingFixture({ gameFolder, sourceModFolders: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
     { folderFiles, hashes, ...answers });
   const deps = { adapter: { ...fake.adapter, ...adapterOver } };
   return {

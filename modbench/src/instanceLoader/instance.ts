@@ -474,7 +474,7 @@ export class Instance implements Subscription {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
       creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles,
     } = reading;
-    const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceRepositories, (name) => adapter.entryKey({ kind: 'mod', name }));
+    const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceModFolders, (name) => adapter.entryKey({ kind: 'mod', name }));
     this.tellReading(reading, sourceMods);
     const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles);
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);

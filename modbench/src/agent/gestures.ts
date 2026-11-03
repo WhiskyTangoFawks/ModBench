@@ -53,8 +53,8 @@ const MODS = gestureInput(
 
 const VERSION_IN_GIT = gestureInput(
   `${MODS_TAKES}; options: { where: 'NewRepository' for a source mod in a new repository, 'ModlistRepository' for a source mod in the `
-  + `modlist repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
-  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ where: z.enum(['NewRepository', 'ModlistRepository']), commit: z.boolean() }) }),
+  + `modlist repository, 'WholeFolder' for the mod's whole folder in the modlist repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
+  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ where: z.enum(['NewRepository', 'ModlistRepository', 'WholeFolder']), commit: z.boolean() }) }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
 

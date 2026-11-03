@@ -48,6 +48,10 @@ Clone the modlist repository: the clone is the instance folder. Log in to Nexus,
 
 Version in Git puts any mod under git as a source mod, with its source folder in `source/`. Pick a new repository of its own, or the modlist repository. Git holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit of those files alone when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
 
+While the instance holds a repository, Version in Git also offers the mod's whole folder in the modlist repository. Git then holds every file of the mod folder, and the mod is not a source mod.
+
+The mod's manifest goes to the trash, since git holds everything it recorded. A mod whose manifest ignores files is refused, naming them: git would hold them too.
+
 The build file is yours: Modbench writes the first one and never rewrites it. Build makes the mod folder exactly what the build file makes, and records it in a manifest in the mod folder, like any other mod's. When a build comes out differently on another machine, from a tool or the load order, the manifest changes and Source Control shows it.
 
 The mod folder's name and the files you exclude belong to the modlist, not the source. Renaming the mod or excluding a file never touches the repository, and the next build keeps it.
