@@ -18,7 +18,7 @@ public sealed class ClearFieldApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx, Origin)).EnsureSuccessStatusCode();
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx, Origin);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var created = await Client.CreateRecord(Plugin, Origin, "npc_");

@@ -42,23 +42,24 @@ internal static class GitCli
         if (exitCode != 0) throw Failed("submodule", args, exitCode, stderr);
     }
 
-    internal static string Run(string gitDir, string workTree, params string[] args)
+    /// <summary>Runs git in <paramref name="at"/>, a folder of <paramref name="workTree"/>, where a pathspec is relative to it.</summary>
+    internal static string Run(string gitDir, string workTree, string at, params string[] args)
     {
-        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, args);
+        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, at, args);
         if (exitCode != 0) throw Failed(args[0], args, exitCode, stderr);
         return stdout;
     }
 
     /// <summary>Runs git without throwing on a non-zero exit — for existence checks
     /// (<c>git cat-file -e</c>) where "not found" is an expected, non-exceptional outcome.</summary>
-    internal static bool TryRun(string gitDir, string workTree, out string stdout, params string[] args) =>
-        RunForExitCode(gitDir, workTree, out stdout, args) == 0;
+    internal static bool TryRun(string gitDir, string workTree, string at, out string stdout, params string[] args) =>
+        RunForExitCode(gitDir, workTree, at, out stdout, args) == 0;
 
     /// <summary>For a command whose exit code is its answer, as <c>git grep</c>'s 1 is "nothing
     /// matched".</summary>
-    internal static int RunForExitCode(string gitDir, string workTree, out string stdout, params string[] args)
+    internal static int RunForExitCode(string gitDir, string workTree, string at, out string stdout, params string[] args)
     {
-        var (exitCode, output, _) = Execute(gitDir, workTree, args);
+        var (exitCode, output, _) = Execute(gitDir, workTree, at, args);
         stdout = output;
         return exitCode;
     }
@@ -87,9 +88,9 @@ internal static class GitCli
         return psi;
     }
 
-    private static ProcessStartInfo StartInfo(string gitDir, string workTree, string[] args)
+    private static ProcessStartInfo StartInfo(string gitDir, string workTree, string at, string[] args)
     {
-        var psi = StartInfo(args, workTree);
+        var psi = StartInfo(args, at);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
         // A read that refreshes git's index takes index.lock, which fails the commit or rebase the
@@ -98,12 +99,12 @@ internal static class GitCli
         return psi;
     }
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args) =>
-        Execute(StartInfo(gitDir, workTree, args), workTree, CancellationToken.None);
+    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string at, string[] args) =>
+        Execute(StartInfo(gitDir, workTree, at, args), at, CancellationToken.None);
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string workTree, CancellationToken cancel)
+    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string at, CancellationToken cancel)
     {
-        using var process = Start(psi, workTree);
+        using var process = Start(psi, at);
         using var stopping = cancel.Register(() => process.Kill(entireProcessTree: true));
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
@@ -122,13 +123,13 @@ internal static class GitCli
 
     // Starting git throws Win32Exception both for a git that cannot run and for a working directory
     // that is gone; the working directory standing leaves only git.
-    private static Process Start(ProcessStartInfo psi, string workTree)
+    private static Process Start(ProcessStartInfo psi, string at)
     {
         try
         {
             return Process.Start(psi) ?? throw SourceStopException.GitUnavailable();
         }
-        catch (Win32Exception ex) when (Directory.Exists(workTree))
+        catch (Win32Exception ex) when (Directory.Exists(at))
         {
             throw SourceStopException.GitUnavailable(ex);
         }

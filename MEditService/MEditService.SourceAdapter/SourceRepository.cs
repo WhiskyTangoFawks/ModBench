@@ -31,7 +31,7 @@ internal sealed class SourceRepository : ISourceRepository
     private SourceRepository(string sourceFolder, GameRelease release, string modName, ISourceFiles files, TreeStamps stamps)
     {
         (_sourceFolder, _release, _modName, Files, _stamps) = (sourceFolder, release, modName, files, stamps);
-        _git = new SourceRepositoryGit(sourceFolder);
+        _git = SourceRepositoryGit.Holding(sourceFolder);
         Locator = new SourceRepositoryLocator(sourceFolder, release, files);
         Layout = new SourceRepositoryLayout(sourceFolder, release, Locator, files);
         Writes = new SourceRepositoryWrites(sourceFolder, release, Locator, Layout, _git, files);
@@ -51,9 +51,9 @@ internal sealed class SourceRepository : ISourceRepository
         new(mod.SourceFolder ?? throw new InvalidOperationException($"'{mod.Name}' is not a source mod, so it has no source folder."),
             release, mod.Name, DiskFiles.Instance, stamps);
 
-    /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
-    /// exists.</summary>
-    internal static bool IsSourceMod(string sourceFolder) => SourceRepositoryGit.HoldsRepository(sourceFolder);
+    /// <summary>True exactly when <paramref name="sourceFolder"/> is a source mod's, in a repository of its own or the
+    /// modlist repository.</summary>
+    internal static bool IsSourceMod(string sourceFolder) => SourceRepositoryGit.HoldsSourceMod(sourceFolder);
 
     internal static bool IsSourceMod(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsSourceMod(mod);
 

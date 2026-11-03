@@ -10,7 +10,7 @@ import { handlers, showQuickPick, createQuickPick, executeCommand, PluginRowStan
 
 import { registerVersionInGitCommand } from '../versionInGitCommand';
 import { instanceValueFixture, modOfOriginIn } from '../../test/mo2/instanceValueFixture';
-import { type InitSourceModOutcome, type InitSourceModProgress, type PluginAddress, type WriteRefused } from '../../client';
+import { type VersionInGitOutcome, type VersionInGitProgress, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -51,38 +51,42 @@ describe('modbench.mod.versionInGit', () => {
   const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
   function versionInGitCommands() {
-    let answer: InitSourceModOutcome | WriteRefused = { landed: [], refused: [] };
+    let answer: VersionInGitOutcome | WriteRefused = { landed: [], refused: [] };
     const sent: string[][] = [];
     const commits: boolean[] = [];
-    const progressListeners: (((status: InitSourceModProgress) => void) | undefined)[] = [];
+    const wheres: (string | null | undefined)[] = [];
+    const progressListeners: (((status: VersionInGitProgress) => void) | undefined)[] = [];
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('initSourceMod', (mods, options) => {
+    client.setCommandHandler('versionInGit', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
       commits.push(...mods.map((mod) => mod.commit === true));
+      wheres.push(...mods.map((mod) => mod.in));
       progressListeners.push(options?.onProgress);
       return Promise.resolve(answer);
     });
     return {
       ...sourceCommands({
-        client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') })).adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn()
+        client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') }), { repositoryOnDisk: true }).adapter,
+        saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn(),
       }),
-      answers: (next: InitSourceModOutcome | WriteRefused) => { answer = next; },
+      answers: (next: VersionInGitOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,
       commits: () => commits,
+      wheres: () => wheres,
       progressListeners: () => progressListeners,
     };
   }
 
   function invokeVersionInGit(
     commands: ReturnType<typeof versionInGitCommands>, onCommitted = vi.fn().mockResolvedValue(undefined),
-    paletteSelection: () => readonly unknown[] = () => [],
+    paletteSelection: () => readonly unknown[] = () => [], holdsRepository = false,
   ) {
     const said: (string | undefined)[] = [];
     const saidInMods: (string | undefined)[] = [];
     const progressIn = (view: string) => ({ say: (message: string | undefined) => (view === 'modbench.modList' ? saidInMods : said).push(message) });
     const reporter = recordingReporter();
     registerVersionInGitCommand({
-      progressIn, instance: { ...instanceThatReads, value: instanceWithSourceFolders }, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
+      progressIn, instance: { ...instanceThatReads, value: { ...instanceWithSourceFolders, holdsRepository } }, commands, reporter, onCommitted, pluginsView: 'modbench.pluginListTree', modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.versionInGit'), 'the version in git command registerVersionInGitCommand registers'),
@@ -97,7 +101,7 @@ describe('modbench.mod.versionInGit', () => {
 
     await handler(row(FIRST));
 
-    expect(commands.sent()).toEqual([['ModA']]);
+    expect([commands.sent(), commands.wheres()]).toEqual([[['ModA']], ['NewRepository']]);
     expect(createQuickPick).not.toHaveBeenCalled();
     expect(showQuickPick).toHaveBeenCalledOnce();
     expect(reporter.landings).toEqual(['"ModA" is a source mod.']);
@@ -123,6 +127,38 @@ describe('modbench.mod.versionInGit', () => {
     await handler(row(FIRST));
 
     expect(commands.commits()).toEqual([false]);
+  });
+
+  it('while the instance holds a repository, asks first where git holds the mod, a new repository first', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
+    const { handler } = invokeVersionInGit(versionInGitCommands(), undefined, undefined, true);
+
+    await handler(row(FIRST));
+
+    expect(showQuickPick.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ where: 'NewRepository' }), expect.objectContaining({ where: 'ModlistRepository' }),
+    ]);
+  });
+
+  it('hands mEdit the repository picked, then the commit picked', async () => {
+    showQuickPick.mockResolvedValueOnce({ where: 'ModlistRepository' }).mockResolvedValueOnce({ commit: true });
+    const commands = versionInGitCommands();
+    commands.answers({ landed: [modA([FIRST])], refused: [] });
+    const { handler, reporter } = invokeVersionInGit(commands, undefined, undefined, true);
+
+    await handler(row(FIRST));
+
+    expect([commands.wheres(), commands.commits(), reporter.landings]).toEqual([['ModlistRepository'], [true], ['"ModA" is a source mod.']]);
+  });
+
+  it('puts nothing under git and writes nothing on Esc at where git holds the mod', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
+    const commands = versionInGitCommands();
+    const { handler, onCommitted, reporter } = invokeVersionInGit(commands, undefined, undefined, true);
+
+    await handler(row(FIRST));
+
+    expect([commands.sent(), reporter.reports, showQuickPick.mock.calls.length, onCommitted.mock.calls.length]).toEqual([[], [], 1, 0]);
   });
 
   it('puts nothing under git and writes nothing on Esc at the pick', async () => {
@@ -210,7 +246,7 @@ describe('modbench.mod.versionInGit', () => {
   it('warns of a note on a downloaded file that could not be read whole, and the mod still lands', async () => {
     const commands = {
       ...versionInGitCommands(),
-      initSourceMod: () => Promise.resolve({ landed: [modA([FIRST])], refused: [], notes: ['the hash index could not be written'] }),
+      versionInGit: () => Promise.resolve({ landed: [modA([FIRST])], refused: [], notes: ['the hash index could not be written'] }),
     };
     const { handler, reporter, onCommitted } = invokeVersionInGit(commands);
 
@@ -271,13 +307,13 @@ describe('modbench.mod.versionInGit', () => {
 
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
     const commands = versionInGitCommands();
-    commands.answers({ refused: true, message: 'Could not version in git 1 mod — git was not found on PATH.' });
+    commands.answers({ refused: true, message: 'Could not put 1 mod under git — git was not found on PATH.' });
     const { handler, onCommitted, reporter } = invokeVersionInGit(commands);
 
     await handler(row(OTHER));
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not version in git 1 mod — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not put 1 mod under git — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).not.toHaveBeenCalled();
@@ -311,8 +347,8 @@ describe('modbench.mod.versionInGit', () => {
   });
 
   describe('called by the agent', () => {
-    const calling = (...mods: string[]) => callingWith({ commit: true }, ...mods);
-    const callingWith = (options: { commit: boolean }, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
+    const calling = (...mods: string[]) => callingWith({ commit: true, where: 'NewRepository' }, ...mods);
+    const callingWith = (options: { commit: boolean; where: string }, ...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), options);
 
     it('puts the mods given under git, never the selection, reporting nothing, and answers the outcome', async () => {
       const commands = versionInGitCommands();
@@ -329,13 +365,13 @@ describe('modbench.mod.versionInGit', () => {
       expect(reporter.landings).toEqual([]);
     });
 
-    it('hands mEdit the commit the call gives, and asks no pick', async () => {
+    it('hands mEdit the repository and the commit the call gives, and asks no pick', async () => {
       const commands = versionInGitCommands();
-      const { handler } = invokeVersionInGit(commands);
+      const { handler } = invokeVersionInGit(commands, undefined, undefined, true);
 
-      await handler(callingWith({ commit: false }, 'ModA'));
+      await handler(callingWith({ commit: false, where: 'ModlistRepository' }, 'ModA'));
 
-      expect([commands.commits(), showQuickPick.mock.calls.length]).toEqual([[false], 0]);
+      expect([commands.wheres(), commands.commits(), showQuickPick.mock.calls.length]).toEqual([['ModlistRepository'], [false], 0]);
     });
 
     it('answers the refusal of the whole call', async () => {

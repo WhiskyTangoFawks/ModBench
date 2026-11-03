@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -10,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class InitSourceModHandlerTests : IDisposable
+public sealed class VersionInGitHandlerTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -19,7 +20,7 @@ public sealed class InitSourceModHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly PluginProvider.FromMod _mod;
 
-    public InitSourceModHandlerTests()
+    public VersionInGitHandlerTests()
     {
         _mod = new PluginProvider.FromMod(
             Origin,
@@ -46,10 +47,10 @@ public sealed class InitSourceModHandlerTests : IDisposable
     public async Task Init_OverTheHeldLoadOrder_PutsThePluginsSourceInItsSourceFolder_AndWritesNothingInItsModFolder()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.InitSourceModHandler(_holder);
+        var handler = TestEditService.VersionInGitHandler(_holder);
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
-        var result = (await handler.InitSourceModAsync(ToInitSourceMod.In(Snapshot, Origin))).Value();
+        var result = (await handler.VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin))).Value();
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
@@ -60,9 +61,9 @@ public sealed class InitSourceModHandlerTests : IDisposable
     public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.InitSourceModHandler(_holder);
+        var handler = TestEditService.VersionInGitHandler(_holder);
 
-        var result = (await handler.InitSourceModAsync(ToInitSourceMod.In(Snapshot, Origin, Origin.ToUpperInvariant()))).Value();
+        var result = (await handler.VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin, Origin.ToUpperInvariant()))).Value();
 
         Assert.Equal([Origin], result.Applied.Select(mod => mod.Mod));
         Assert.Empty(result.Refused);
@@ -75,7 +76,7 @@ public sealed class InitSourceModHandlerTests : IDisposable
         File.WriteAllText(Path.Combine(settings, "Settings.ini"), "[General]");
         var sourceFolder = Path.Combine(_instanceRoot, "source", "Settings");
 
-        var result = await InitWith(new ModToInitSourceMod("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile), Commit: true));
+        var result = await InitWith(new ModToVersionInGit("Settings", settings, new NewRepository(sourceFolder, ["Settings.ini"], SourceInits.BuildFile), SourceModIn.NewRepository, Commit: true));
 
         Assert.Empty(Assert.Single(result.Applied).Plugins);
         Assert.Equal("[General]", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "main:Settings.ini"));
@@ -84,11 +85,29 @@ public sealed class InitSourceModHandlerTests : IDisposable
     [Fact]
     public async Task Init_AskedNotToCommit_WritesTheSourceFolderAndCommitsNothing()
     {
-        var result = await InitWith(new ModToInitSourceMod(Origin, _mod.Folder, new NewRepository(SourceFolder, [], SourceInits.BuildFile), Commit: false));
+        var result = await InitWith(new ModToVersionInGit(Origin, _mod.Folder, new NewRepository(SourceFolder, [], SourceInits.BuildFile), SourceModIn.NewRepository, Commit: false));
 
         Assert.Single(result.Applied);
         Assert.True(File.Exists(Path.Combine(SourceFolder, "build.json")));
         Assert.Equal(string.Empty, GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "for-each-ref", "refs/heads"));
+    }
+
+    [Fact]
+    public async Task Init_InTheModlistRepository_CommitsThePluginsSourceThere_AndMakesNoRepositoryOfItsOwn()
+    {
+        var modlistRepository = Path.Combine(_instanceRoot, ".git");
+        GitProbe.Run(modlistRepository, _instanceRoot, "init", "-q", "-b", "main");
+        GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.name", "Test");
+        GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.email", "test@localhost");
+
+        var result = await InitWith(new ModToVersionInGit(
+            Origin, _mod.Folder, new NewRepository(SourceFolder, [], SourceInits.BuildFile), SourceModIn.ModlistRepository, Commit: true));
+
+        Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
+        Assert.False(Path.Exists(Path.Combine(SourceFolder, ".git")));
+        Assert.Contains(
+            $"source/{Origin}/plugin-source/{PluginName}/",
+            GitProbe.Run(modlistRepository, _instanceRoot, "ls-tree", "-r", "--name-only", "main"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -116,7 +135,7 @@ public sealed class InitSourceModHandlerTests : IDisposable
         {
             var refused = Assert.Single((await InitWith(["textures/held.dds"], "{}")).Refused);
 
-            Assert.Equal(InitSourceModRefusal.CommitFailed, refused.Refusal);
+            Assert.Equal(VersionInGitRefusal.CommitFailed, refused.Refusal);
             Assert.Contains("held.dds", refused.Message, StringComparison.Ordinal);
             Assert.False(Directory.Exists(Path.Combine(SourceFolder, ".git")));
         }
@@ -126,13 +145,13 @@ public sealed class InitSourceModHandlerTests : IDisposable
         }
     }
 
-    private Task<InitSourceModResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
-        InitWith(new ModToInitSourceMod(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile)), Commit: true));
+    private Task<VersionInGitResult> InitWith(IReadOnlyList<string> assets, string buildFile) =>
+        InitWith(new ModToVersionInGit(Origin, _mod.Folder, new NewRepository(SourceFolder, assets, Encoding.UTF8.GetBytes(buildFile)), SourceModIn.NewRepository, Commit: true));
 
-    private async Task<InitSourceModResult> InitWith(ModToInitSourceMod mod)
+    private async Task<VersionInGitResult> InitWith(ModToVersionInGit mod)
     {
         _holder.Apply(Snapshot);
-        return (await TestEditService.InitSourceModHandler(_holder).InitSourceModAsync([mod])).Value();
+        return (await TestEditService.VersionInGitHandler(_holder).VersionInGitAsync([mod])).Value();
     }
 
     private void WriteInModFolder(string path, string text)

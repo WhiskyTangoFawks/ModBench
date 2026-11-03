@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { folderValueOver, modValueOver } from '../modValue';
+import { folderValueOver, modValueOver, sourceFolderValueOver } from '../modValue';
 
 const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
 
@@ -39,6 +39,16 @@ describe('a folder as a value', () => {
   });
 });
 
+describe('a source folder as a value', () => {
+  it('holds only the files git neither holds nor owns, so its manifest names no attributes file version in git leaves untracked', async () => {
+    const { files } = await sourceFolderValueOver(
+      reads(['.git/config', '.gitattributes', '.gitignore', 'build.json', 'textures/a.dds']), () => Promise.resolve(['.gitignore', 'build.json']), '/source/Mod',
+    );
+
+    expect([...files.keys()]).toEqual(['textures/a.dds']);
+  });
+});
+
 describe('a mod as a value', () => {
   const PLACE = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
   const modReads = {
@@ -48,6 +58,7 @@ describe('a mod as a value', () => {
     flaggedHash: () => Promise.resolve(undefined),
     gameFilesTakenBy: () => Promise.resolve({ kind: 'read' as const, answer: { gameFiles: [], notes: [] } }),
     submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : { lacks: 'no submodule' }),
+    sourceFolderTracked: (name: string) => Promise.resolve(name === 'Tracked'),
   };
 
   it('holds each downloaded file asked for', async () => {
@@ -72,7 +83,7 @@ describe('a mod as a value', () => {
     expect(value).toMatchObject({ kind: 'read', flaggedHashes: new Map([['a.esp', 'KKKKKKKKKKA=']]) });
   });
 
-  it.each([['Hosted', true], ['Local', false]])('says whether the repository %s is a submodule', async (repository, hosted) => {
+  it.each([['Hosted', true], ['Tracked', true], ['Local', false]])('says whether a clone gets the repository %s: a submodule, or a source folder the instance repository tracks', async (repository, hosted) => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository });
 
     expect(value).toMatchObject({ kind: 'read', repositoryHosted: hosted });

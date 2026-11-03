@@ -13,8 +13,8 @@ from tests.fixture_medit import (
     Fixture,
     call,
     fixture_medit,
-    init_source_mod,
     plugin_entry,
+    version_in_git,
     window_of,
 )
 
@@ -83,8 +83,8 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         cls.fixture = cls.enterClassContext(fixture_medit())
         cls.created = Created()
         cls.names = itertools.count()
-        init_source_mod(cls.fixture, PATCH.origin)
-        init_source_mod(cls.fixture, CONDITIONS.origin)
+        version_in_git(cls.fixture, PATCH.origin)
+        version_in_git(cls.fixture, CONDITIONS.origin)
         cls.enterClassContext(window_of(cls.fixture.url))
         cls.enterClassContext(watching(cls.fixture, cls.created))
         player_holder = cls.enabled('MBDevPlayerHolder.esp')

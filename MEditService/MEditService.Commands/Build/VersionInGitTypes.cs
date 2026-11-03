@@ -1,19 +1,20 @@
 using System.Text.Json.Serialization;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to init source mod, by name and folder, and the repository made for it. Without
-/// <paramref name="Commit"/> the repository holds its files as working-tree changes.</summary>
-public sealed record ModToInitSourceMod(string Name, string ModFolder, NewRepository Repository, bool Commit);
+/// <summary>A mod to version in git, by name and folder, the source folder made for it, and the repository that holds
+/// it. Without <paramref name="Commit"/> the repository holds its files as staged changes.</summary>
+public sealed record ModToVersionInGit(string Name, string ModFolder, NewRepository Repository, SourceModIn In, bool Commit);
 
-/// <summary>Why init source mod refused (ADR-0019): each value is a different way out, and the
+/// <summary>Why version in git refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum InitSourceModRefusal
+public enum VersionInGitRefusal
 {
     None,
 
-    /// <summary>The mod's source folder already holds a repository.</summary>
+    /// <summary>The mod's source folder is already a source mod's, or holds a repository.</summary>
     AlreadyInitialized,
 
     /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed

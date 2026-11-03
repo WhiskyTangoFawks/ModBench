@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -14,36 +15,48 @@ public sealed record FileToCopy(string Path, Func<Stream> Open);
 /// <summary>A file at the root of a new repository, by its name there.</summary>
 public sealed record RootFile(string Name, byte[] Content);
 
-/// <summary>Makes a mod's repository: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, or none when asked. An init that
-/// fails writes nothing and never deletes a repository it did not make (ADR-0003).</summary>
+/// <summary>Which repository holds the source folder version in git makes (plugins.md, Version in git, story 1).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SourceModIn
+{
+    /// <summary>A repository of its own, made in the source folder.</summary>
+    NewRepository,
+
+    /// <summary>The modlist repository, which the source folder sits in.</summary>
+    ModlistRepository,
+}
+
+/// <summary>Puts a mod's source folder under git, with one commit, <c>Init &lt;mod&gt;</c>, of its paths alone when
+/// asked. A failed init writes nothing and deletes no repository it did not make (ADR-0003).</summary>
 internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest = null,
-        IReadOnlyList<string>? ignored = null)
+        IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest,
+        IReadOnlyList<string> ignored, SourceModIn heldIn)
     {
-        if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
-            throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
+        if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder) || SourceRepositoryGit.HoldsSourceMod(sourceFolder))
+            throw new InvalidOperationException($"'{sourceFolder}' is already a source mod's source folder, or holds a repository.");
         if (!commit && repair is not null)
             throw new ArgumentException("A repair is a commit, so an init that commits nothing cannot hold one.", nameof(repair));
+        var git = heldIn == SourceModIn.NewRepository ? SourceRepositoryGit.Own(sourceFolder) : SourceRepositoryGit.Above(sourceFolder);
 
         WriteJournal journal = new(sourceFolder);
-        var git = new SourceRepositoryGit(sourceFolder);
         try
         {
             journal.CreateDirectory(sourceFolder);
             WriteEachPlugin(sourceFolder, plugins, journal);
             foreach (var asset in assets)
                 journal.Copy(Path.Combine(sourceFolder, asset.Path), asset.Open);
-            if (!git.Exists)
-                journal.RecordUndo(() => { if (git.Exists) git.Delete(); }, path: git.GitDirectory);
-            CreateRepository(git);
-            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored ?? [])));
+            git.BeginInit(journal);
+            journal.Write(Path.Combine(sourceFolder, ".gitignore"), Encoding.UTF8.GetBytes(GitignoreContent(manifest, assets, ignored)));
+            // plugins.md, Version in git, story 4, whatever the user's git config converts. Its own .gitignore leaves it
+            // untracked (story 2), so a clone's endings follow its own config.
+            journal.Write(Path.Combine(sourceFolder, ".gitattributes"), "* -text\n"u8.ToArray());
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
             Track(git, journal, sourceFolder, commit, plugins, repair);
-            git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitDone);
+            git.FinishInit();
         }
         catch (Exception ex)
         {
@@ -56,15 +69,16 @@ internal static class GitInit
         SourceRepositoryGit git, WriteJournal journal, string sourceFolder, bool commit,
         IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins, (PluginAddress Plugin, TreeCommit Commit)? repair)
     {
-        git.Run("add", "-A");
+        var paths = git.FolderPaths;
+        git.Run(["add", "-A", .. paths]);
         if (commit)
         {
-            git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
+            git.Run(["commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}", .. paths]);
             if (repair is var (repaired, repairCommit))
             {
                 SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired.Name, SourceRepositoryLayout.PristineFilesOf(repaired.Name, repairCommit.Tree));
-                git.Run("add", "-A");
-                git.Run("commit", "-q", "-m", repairCommit.Message);
+                git.Run(["add", "-A", .. paths]);
+                git.Run(["commit", "-q", "-m", repairCommit.Message, .. paths]);
             }
         }
         foreach (var (_, plugin) in plugins)
@@ -89,7 +103,7 @@ internal static class GitInit
         }
     }
 
-    private static void CreateRepository(SourceRepositoryGit git)
+    internal static void CreateRepository(SourceRepositoryGit git)
     {
         git.Run("init", "-q", "-b", "main");
         git.Run("config", $"{SourceRepositoryGit.InitMarkSection}.{SourceRepositoryGit.InitMarkKey}", SourceRepositoryGit.InitPending);
@@ -100,7 +114,6 @@ internal static class GitInit
     /// <summary>How Modbench sets every source repository it makes, by init or by clone.</summary>
     internal static readonly (string Key, string Value)[] Settings =
     [
-        ("core.autocrlf", "false"),
         // Git for Windows refuses a path past 260 characters unless told otherwise, and a source folder's
         // plugin source nests deep.
         ("core.longpaths", "true"),

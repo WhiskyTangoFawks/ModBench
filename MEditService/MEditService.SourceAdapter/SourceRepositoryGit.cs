@@ -1,23 +1,129 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using MEditService.RepositoriesLib;
+
 namespace MEditService.SourceAdapter;
 
-/// <summary>The git repository under one source folder (ADR-0007): whether it is a source mod, what it
-/// committed, and the refs that remember the binary Modbench last wrote. Every verb tolerates the
-/// folder having vanished since last observed.</summary>
-internal sealed class SourceRepositoryGit(string sourceFolder)
+/// <summary>The git repository holding one source folder (ADR-0007), its own or the modlist repository: whether it is a
+/// source mod, what it committed, and the refs naming the binary Modbench last wrote.</summary>
+internal abstract class SourceRepositoryGit
 {
     private const string BinaryTrailer = "Binary-SHA256";
     private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
     private const string EmptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-    private readonly string _sourceFolder = sourceFolder;
-    private readonly string _gitDir = GitDirOf(sourceFolder);
+    private readonly string _sourceFolder;
+    private readonly string _workTree;
+    private readonly string _gitDir;
+
+    private SourceRepositoryGit(string sourceFolder, string workTree) =>
+        (_sourceFolder, _workTree, _gitDir) = (sourceFolder, workTree, GitDirOf(workTree));
+
+    /// <summary>The repository of the source folder's own <c>.git</c>, made yet or not.</summary>
+    internal static SourceRepositoryGit Own(string sourceFolder) => new OwnRepository(sourceFolder);
+
+    /// <summary>The modlist repository, the nearest one above the source folder, as git finds it.</summary>
+    internal static SourceRepositoryGit Above(string sourceFolder) => new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder);
+
+    /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
+    internal static SourceRepositoryGit Holding(string sourceFolder) => HoldsGit(sourceFolder) ? Own(sourceFolder) : Above(sourceFolder);
+
+    private protected abstract string SourceFolderInWorkTree { get; }
+
+    /// <summary>The pathspec that limits an add or a commit to the source folder.</summary>
+    internal abstract string[] FolderPaths { get; }
+
+    /// <summary>Makes the repository ready to take the source folder's files, undone by <paramref name="journal"/>.</summary>
+    internal abstract void BeginInit(WriteJournal journal);
+
+    /// <summary>Marks an init that took the source folder's files as finished.</summary>
+    internal abstract void FinishInit();
+
+    // The commit a clone builds the source folder from; empty when the repository holds none of it.
+    private protected abstract string SourceCommit();
+
+    private sealed class OwnRepository(string sourceFolder) : SourceRepositoryGit(sourceFolder, sourceFolder)
+    {
+        private protected override string SourceFolderInWorkTree => "";
+
+        internal override string[] FolderPaths => [];
+
+        internal override void BeginInit(WriteJournal journal)
+        {
+            if (!Exists) journal.RecordUndo(() => { if (Exists) Delete(); }, path: GitDirectory);
+            GitInit.CreateRepository(this);
+        }
+
+        internal override void FinishInit() => Run("config", $"{InitMarkSection}.{InitMarkKey}", InitDone);
+
+        // The modlist repository pins HEAD.
+        private protected override string SourceCommit() => "HEAD";
+    }
+
+    private sealed class RepositoryAbove(string sourceFolder, string workTree) : SourceRepositoryGit(sourceFolder, workTree)
+    {
+        private string? _sourceFolderInWorkTree;
+
+        private protected override string SourceFolderInWorkTree => _sourceFolderInWorkTree ??= Run("rev-parse", "--show-prefix").Trim();
+
+        internal override string[] FolderPaths => ["--", "."];
+
+        internal override void BeginInit(WriteJournal journal)
+        {
+            if (!Exists) throw SourceStopException.Inaccessible($"no repository holds '{_sourceFolder}', so it cannot be put in the modlist repository");
+            var head = HeadCommit();
+            journal.RecordUndo(() => PutBack(head), description: $"what the modlist repository holds of '{_sourceFolder}'");
+        }
+
+        internal override void FinishInit() { }
+
+        private protected override string SourceCommit() => Run("log", "-1", "--format=%H", "HEAD", "--", ".").Trim();
+    }
+
+    /// <summary>True exactly when <paramref name="sourceFolder"/> holds the build file, and either a repository of its own
+    /// that <see cref="HoldsRepository"/>, or no <c>.git</c> inside a repository whose index holds that build file.</summary>
+    internal static bool HoldsSourceMod(string sourceFolder)
+    {
+        if (!File.Exists(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName))) return false;
+        if (HoldsGit(sourceFolder)) return HoldsRepository(sourceFolder);
+        return WorkTreeAbove(sourceFolder) is { } workTree && TracksBuildFile(sourceFolder, workTree);
+    }
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c> exists, or one init
-    /// was asked to commit nothing. Any other <c>.git</c> is <see cref="HoldsAnotherRepository"/>.</summary>
+    /// committed nothing in. Any other <c>.git</c> is <see cref="HoldsAnotherRepository"/>.</summary>
     internal static bool HoldsRepository(string sourceFolder)
     {
         var gitDir = GitDirOf(sourceFolder);
         return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || InitFinished(gitDir));
+    }
+
+    private static bool HoldsGit(string folder)
+    {
+        var dotGit = Path.Combine(folder, ".git");
+        return Directory.Exists(dotGit) || File.Exists(dotGit);
+    }
+
+    // Read off the file system, not by running git: every read of a compiled plugin asks this.
+    private static string? WorkTreeAbove(string sourceFolder)
+    {
+        for (var folder = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceFolder))); folder is not null; folder = Path.GetDirectoryName(folder))
+        {
+            if (HoldsGit(folder)) return folder;
+        }
+        return null;
+    }
+
+    private static readonly ConcurrentDictionary<string, StampGatedMemo<StrongBox<bool>>> s_tracksBuildFile = new(StringComparer.Ordinal);
+
+    // Every read of a compiled plugin asks this, so git is asked again only once the index file changed.
+    private static bool TracksBuildFile(string sourceFolder, string workTree)
+    {
+        var gitDir = GitDirOf(workTree);
+        var folder = Path.GetFullPath(sourceFolder);
+        var memo = s_tracksBuildFile.GetOrAdd(folder, _ => new StampGatedMemo<StrongBox<bool>>(TimeProvider.System));
+        return memo.Of(Path.Combine(gitDir, "index"), () => new StrongBox<bool>(
+            GitCli.TryRun(gitDir, workTree, folder, out var listed, "ls-files", "--", LiteralPathspec(SourceRepositoryLayout.BuildFileName)) && listed.Length > 0))
+            ?.Value ?? false;
     }
 
     internal const string InitMarkSection = "medit";
@@ -34,13 +140,13 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     }
 
     // A submodule git checks out holds a .git file naming its git directory, as gitrepository-layout(5) has it.
-    private static string GitDirOf(string sourceFolder)
+    private static string GitDirOf(string workTree)
     {
         const string GitFile = "gitdir: ";
-        var dotGit = Path.Combine(sourceFolder, ".git");
+        var dotGit = Path.Combine(workTree, ".git");
         if (!File.Exists(dotGit)) return dotGit;
         var line = File.ReadLines(dotGit).FirstOrDefault() ?? "";
-        return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), sourceFolder) : dotGit;
+        return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), workTree) : dotGit;
     }
 
     // Whether Modbench's init finished here, with a commit or without. Its mark says "pending" until then, so a crashed
@@ -89,9 +195,10 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         Directory.Delete(_gitDir, recursive: true);
     }
 
-    internal string Run(params string[] args) => GitCli.Run(_gitDir, _sourceFolder, args);
+    // Run in the source folder, so a pathspec is relative to it.
+    internal string Run(params string[] args) => GitCli.Run(_gitDir, _workTree, _sourceFolder, args);
 
-    internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _sourceFolder, out stdout, args);
+    internal bool TryRun(out string stdout, params string[] args) => GitCli.TryRun(_gitDir, _workTree, _sourceFolder, out stdout, args);
 
     /// <summary>The commit at HEAD, or null before the first commit of an init that committed nothing.</summary>
     internal string? HeadCommit()
@@ -105,11 +212,36 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     private bool RefIsStored(string gitRef) =>
         File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
 
-    internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all").Length > 0;
+    /// <summary>HEAD and the index of the source folder's paths back at <paramref name="head"/>; with none, the branch is
+    /// unborn again and the index holds none of them. What else is staged stays staged.</summary>
+    internal void PutBack(string? head)
+    {
+        if (head is null)
+        {
+            DropBranchAtHead();
+            Run("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", ".");
+            return;
+        }
+        Run("reset", "-q", "--soft", head);
+        Run("reset", "-q", head, "--", ".");
+    }
 
-    /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit at HEAD.</summary>
-    internal bool RemoteHoldsHead(string remote) =>
-        HeadCommit() is null || Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+    /// <summary>Before the first commit there is no commit to go back to: the branch HEAD names is dropped.</summary>
+    internal void DropBranchAtHead()
+    {
+        if (TryRun(out var branch, "symbolic-ref", "-q", "HEAD") && CommitOf(branch.Trim()) is not null) Run("update-ref", "-d", branch.Trim());
+    }
+
+    internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all", "--", ".").Length > 0;
+
+    /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit a clone builds the source folder from:
+    /// HEAD of its own repository, which the modlist repository pins, or the last commit touching it in the modlist repository.</summary>
+    internal bool RemoteHoldsTheSource(string remote)
+    {
+        if (HeadCommit() is null) return true;
+        var source = SourceCommit();
+        return source.Length == 0 || Run("for-each-ref", "--contains", source, "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+    }
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.
@@ -122,14 +254,13 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
     /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
     internal string? ReadCommittedSourceText(string relativePath)
     {
-        if (!HoldsRepository(_sourceFolder)) return null;
+        if (!HoldsSourceMod(_sourceFolder)) return null;
 
-        return TryRun(out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}") ? stdout : null;
+        return TryRun(out var stdout, "cat-file", "-p", $"HEAD:./{ToGitPath(relativePath)}") ? stdout : null;
     }
 
-    /// <summary>Each path under the plugin's tree that git status names, with its index-column code;
-    /// null when git cannot say. It names both ends of a move and every untracked or ignored
-    /// file.</summary>
+    /// <summary>Each path in the source folder under the plugin's tree that git status names, with its index-column code;
+    /// null when git cannot say. It names both ends of a move and every untracked or ignored file.</summary>
     internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName)
     {
         if (!TryRun(out var stdout,
@@ -142,16 +273,17 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
         var entries = new List<(char, string)>();
         foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
         {
-            // "XY path": a shorter entry is one this parse cannot read.
-            if (entry.Length < 4) return null;
-            entries.Add((entry[0], entry[3..]));
+            // "XY path", the path from the work tree's root: a shorter entry, or one outside the source folder, is one
+            // this parse cannot read.
+            if (entry.Length < 4 || !entry[3..].StartsWith(SourceFolderInWorkTree, StringComparison.Ordinal)) return null;
+            entries.Add((entry[0], entry[(3 + SourceFolderInWorkTree.Length)..]));
         }
         return entries;
     }
 
     internal IReadOnlyList<string> LastWrittenBinarySha256s(string pluginFileName)
     {
-        if (!HoldsRepository(_sourceFolder)) return [];
+        if (!HoldsSourceMod(_sourceFolder)) return [];
 
         if (!TryRun(out var body, "log", "-1", "--format=%B", LastCompileRef(pluginFileName)))
             return [];
@@ -232,24 +364,25 @@ internal sealed class SourceRepositoryGit(string sourceFolder)
             .Select(line => line[prefix.Length..].Trim());
     }
 
-    // The one place refs/medit/last-compile/<plugin> is built. Almost every real plugin name is
-    // ref-unsafe, so the filename is percent-encoded, which keeps it injective.
-    private static string LastCompileRef(string plugin)
+    // The one place the last-compile ref is built, under the source folder's path, since one repository's source
+    // folders can each hold a plugin of one name (ADR-0012). Each component is percent-encoded, which keeps it injective.
+    private string LastCompileRef(string plugin)
     {
         // An empty name is an upstream bug: encoding it would yield a ref ending in "/", which git rejects
         // too.
         if (string.IsNullOrEmpty(plugin))
             throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
 
-        return $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
+        var folder = string.Concat(SourceFolderInWorkTree.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(segment => $"{EncodeRefComponent(segment)}/"));
+        return $"refs/medit/last-compile/{folder}{EncodeRefComponent(plugin)}";
     }
 
     // Percent-encodes every byte outside ASCII alnum/-/_, plus '.' where a literal one would make a
     // component git rejects (leading, trailing, "..", trailing ".lock"). '%' is always escaped, which
     // keeps this injective.
-    private static string EncodeRefComponent(string plugin)
+    private static string EncodeRefComponent(string component)
     {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(plugin);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(component);
         var endsWithDotLock = bytes.Length >= 5
             && bytes[^5] == (byte)'.' && bytes[^4] == (byte)'l' && bytes[^3] == (byte)'o'
             && bytes[^2] == (byte)'c' && bytes[^1] == (byte)'k';

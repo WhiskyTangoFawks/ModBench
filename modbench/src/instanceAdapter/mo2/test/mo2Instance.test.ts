@@ -14,6 +14,7 @@ import { NO_DETECTORS } from '../../../test/noDetectors';
 import { eventually, writtenAndHeard } from '../../../test/eventually';
 import { present } from '../../../ports/present';
 import { expectKind } from '../../../test/expectKind';
+import { BUILD_FILE } from '../../../wire/sourceMod';
 
 vi.mock('vscode', () => fakeVscodeModule());
 const real = vi.hoisted(() => ({
@@ -1674,9 +1675,11 @@ describe('the MO2 Instance adapter', () => {
         expect(adapter.sourceFolder('../Harder VATS')).toBeUndefined();
       });
 
-      it('lists every repository under the source folder by its name, with its folder, and no folder without a `.git`', async () => {
+      it('lists every repository under the source folder that holds its build file by its name, with its folder, and no folder without a `.git` the instance repository does not track', async () => {
         await mkdir(join(root, 'source', 'Harder VATS', '.git'), { recursive: true });
+        await writeFile(join(root, 'source', 'Harder VATS', BUILD_FILE), '{}');
         await mkdir(join(root, 'source', 'No Repository'), { recursive: true });
+        await writeFile(join(root, 'source', 'No Repository', BUILD_FILE), '{}');
 
         expect(await adapter.sourceRepositories()).toEqual(new Map([['Harder VATS', join(root, 'source', 'Harder VATS')]]));
       });

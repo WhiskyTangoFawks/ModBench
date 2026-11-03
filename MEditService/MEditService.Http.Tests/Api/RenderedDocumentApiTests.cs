@@ -40,7 +40,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
 
     private async Task<(string FileName, string Text)> WrittenByInit(ScatteredFixtureData fx, string pattern)
     {
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         var written = Directory.EnumerateFiles(ModFolderOf(fx), pattern, SearchOption.AllDirectories).Single();
         return (Path.GetFileName(written), File.ReadAllText(written));
     }
@@ -72,7 +72,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     {
         var fx = await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();

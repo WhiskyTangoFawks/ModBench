@@ -7,18 +7,18 @@ import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../fileContents/hashIndex';
-import type { DeployedPath, FileRead, GameFile, GamePlace, InstanceAdapter, UnsearchedFolder } from '../instanceAdapter';
+import { isBareName, type DeployedPath, type FileRead, type GameFile, type GamePlace, type InstanceAdapter, type UnsearchedFolder } from '../instanceAdapter';
 import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
-  sourceRootDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceModLines,
+  sourceRootDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceFolderLines, withSourceModLines,
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines'> & Pick<ManagerAdapter, 'filesKept'>;
 
 // A manifest outside the mod folders, by the names of the folders down to it and its own.
 interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
@@ -99,7 +99,22 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
   });
 }
 
-const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
+async function sourceFolderLinesWritten(instanceRoot: string, sourceFolders: readonly string[], held: boolean): Promise<void> {
+  const file = ignoreListFile(instanceRoot);
+  const names = sourceFolders.map((folder) => {
+    const name = relative(sourceRootDir(instanceRoot), folder);
+    if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${sourceRootDir(instanceRoot)}, so the instance repository's ignore list does not name it`);
+    return name;
+  });
+  if (!(await exists(file))) return;
+  await putIfChanged(file, (before) => {
+    const after = withSourceFolderLines(before, names, held);
+    if (after === undefined) throw new Error(`${file} has a marker of the source folders it holds with no match, so their lines are left as they are`);
+    return after;
+  });
+}
+
+const lowerCased =(names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
 function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
@@ -214,6 +229,8 @@ export function mo2Repository(
     },
 
     writeOtherManifestLines: () => otherManifestLinesWritten(context),
+
+    writeSourceFolderLines: (sourceFolders, held) => sourceFolderLinesWritten(instanceRoot, sourceFolders, held),
 
     gameFiles,
 

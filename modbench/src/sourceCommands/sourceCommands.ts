@@ -1,5 +1,5 @@
 import {
-  isRefused, type ModToInitSourceMod, type InitSourceModOutcome, type InitSourceModProgress, type MEditClient, type WriteRefused,
+  isRefused, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type MEditClient, type SourceModIn, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
@@ -16,11 +16,12 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'initSourceMod' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
-    | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'sourceFolderValue'>;
+    | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'sourceFolderValue'
+    | 'repositoryOnDisk' | 'writeSourceFolderLines'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -28,10 +29,10 @@ interface SourceCommandsDeps {
 }
 
 /** A mod's progress through version in git, reading its files here before mEdit's phases. */
-export type InitProgress = Omit<InitSourceModProgress, 'phase'> & { phase?: InitSourceModProgress['phase'] | 'ReadingFiles' };
+export type InitProgress = Omit<VersionInGitProgress, 'phase'> & { phase?: VersionInGitProgress['phase'] | 'ReadingFiles' };
 
 /** What version in git answers; `notes` is why a downloaded file could not be read whole, which leaves the packages right. */
-export type InitializedSourceMod = InitSourceModOutcome & { readonly notes?: readonly string[] };
+export type InitializedSourceMod = VersionInGitOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
@@ -46,6 +47,12 @@ async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readon
   } catch (err) {
     return { reason: `was not built: its build file could not be read: ${errorMessage(err)}.` };
   }
+}
+
+async function linesLeftIn(adapter: Adapter, sourceFolders: readonly string[]): Promise<string[]> {
+  if (sourceFolders.length === 0) return [];
+  return adapter.writeSourceFolderLines(sourceFolders, false).then(
+    () => [], (err: unknown) => [`The ignore list still lets in ${sourceFolders.join(', ')}, which no mod was put in: ${errorMessage(err)}`]);
 }
 
 // A manifest that cannot be read names no repository, and says why.
@@ -134,29 +141,56 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
 
     /** A mod whose name gives it no source folder, or whose files or metadata cannot be read, is refused here, naming why,
      *  and mEdit makes the rest source mods. */
-    initSourceMod: async (
-      mods: readonly string[], { commit, onProgress }: { commit: boolean; onProgress?: (status: InitProgress) => void },
-    ): Promise<InitializedSourceMod | WriteRefused> => {
-      const made = new Map<string, MadeRepository>();
-      const refused: ItemRefusal<string>[] = [];
-      const sourceMods = await sourceModsNow();
-      const game = await gameToHand(adapter, sourceMods);
-      const downloaded = await downloadedPackagesOf(adapter);
-      const notes = downloaded.notes.length > 0 ? { notes: downloaded.notes } : {};
-      for (const [at, mod] of mods.entries()) {
-        onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
-        const decided = await newRepositoryOf(adapter, mod, game, downloaded.files);
-        if ('refusal' in decided) refused.push({ item: mod, reason: decided.refusal });
-        else made.set(mod, decided);
-      }
-      if (made.size === 0) return { landed: [], refused, ...notes };
-      const sent: ModToInitSourceMod[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit }));
-      const outcome = await client.initSourceMod(sent, onProgress === undefined ? {} : { onProgress });
-      if (isRefused(outcome)) return outcome;
-      const notLinked = [...await foldersNotLinked(adapter, made, outcome.landed.map(({ mod }) => mod))].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'initialized'}, but ${why}.` }));
-      return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked], ...notes };
-    },
+    versionInGit: async (mods: readonly string[], options: VersionInGitOptions): Promise<InitializedSourceMod | WriteRefused> =>
+      modsVersionedInGit({ client, adapter }, await sourceModsNow(), mods, options),
   };
+}
+
+interface VersionInGitOptions {
+  readonly commit: boolean;
+  readonly where: SourceModIn;
+  readonly onProgress?: (status: InitProgress) => void;
+}
+
+type VersionInGitDeps = Pick<SourceCommandsDeps, 'client' | 'adapter'>;
+
+async function repositoriesMade(
+  adapter: Adapter, sourceMods: SourceMods, mods: readonly string[], onProgress: VersionInGitOptions['onProgress'],
+): Promise<{ readonly made: Map<string, MadeRepository>; readonly refused: ItemRefusal<string>[]; readonly notes: readonly string[] }> {
+  const made = new Map<string, MadeRepository>();
+  const refused: ItemRefusal<string>[] = [];
+  const game = await gameToHand(adapter, sourceMods);
+  const downloaded = await downloadedPackagesOf(adapter);
+  for (const [at, mod] of mods.entries()) {
+    onProgress?.({ mod, modsDone: at, modsTotal: mods.length, phase: 'ReadingFiles' });
+    const decided = await newRepositoryOf(adapter, mod, game, downloaded.files);
+    if ('refusal' in decided) refused.push({ item: mod, reason: decided.refusal });
+    else made.set(mod, decided);
+  }
+  return { made, refused, notes: downloaded.notes };
+}
+
+async function modsVersionedInGit(
+  { client, adapter }: VersionInGitDeps, sourceMods: SourceMods, mods: readonly string[], { commit, where, onProgress }: VersionInGitOptions,
+): Promise<InitializedSourceMod | WriteRefused> {
+  const inModlist = where === 'ModlistRepository';
+  if (inModlist && !(await adapter.repositoryOnDisk())) return { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' };
+  const { made, refused, notes } = await repositoriesMade(adapter, sourceMods, mods, onProgress);
+  const noted = (more: readonly string[]) => (notes.length + more.length === 0 ? {} : { notes: [...notes, ...more] });
+  if (made.size === 0) return { landed: [], refused, ...noted([]) };
+  const sourceFolders = (names: Iterable<string>): string[] => [...names].flatMap((mod) => made.get(mod)?.repository.sourceFolder ?? []);
+  if (inModlist) {
+    // git adds nothing the ignore list leaves out, so the folders are let in first.
+    const unwritten = await adapter.writeSourceFolderLines(sourceFolders(made.keys()), true).then(() => undefined, errorMessage);
+    if (unwritten !== undefined) return { landed: [], refused: [...refused, ...[...made.keys()].map((item) => ({ item, reason: unwritten }))], ...noted([]) };
+  }
+  const sent: ModToVersionInGit[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit, in: where }));
+  const outcome = await client.versionInGit(sent, onProgress === undefined ? {} : { onProgress });
+  const landed = new Set(isRefused(outcome) ? [] : outcome.landed.map(({ mod }) => mod));
+  const notTakenBack = inModlist ? await linesLeftIn(adapter, sourceFolders([...made.keys()].filter((mod) => !landed.has(mod)))) : [];
+  if (isRefused(outcome)) return { ...outcome, message: [outcome.message, ...notTakenBack].join(' ') };
+  const notLinked = [...await foldersNotLinked(adapter, made, [...landed])].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'put under git'}, but ${why}.` }));
+  return { landed: outcome.landed, refused: [...outcome.refused, ...refused, ...notLinked], ...noted(notTakenBack) };
 }
 
 export type SourceCommands = ReturnType<typeof sourceCommands>;

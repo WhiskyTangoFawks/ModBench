@@ -22,7 +22,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     public static TheoryData<Route> NoLoadOrderRoutes =>
     [
         new("GET /plugins", (client, _) => client.GetAsync("/plugins")),
-        new("POST /init-source-mod", (client, _) => client.InitSourceMod(Origin)),
+        new("POST /version-in-git", (client, _) => client.VersionInGit(Origin)),
         new("POST /plugins/decompile", (client, _) => client.Decompile([("New.esp", Origin)])),
         new(
             "POST /plugins/decompile-and-repair",

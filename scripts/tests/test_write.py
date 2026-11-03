@@ -14,8 +14,8 @@ from tests.fixture_medit import (
     changed,
     fixture_medit,
     holding_unsaved,
-    init_source_mod,
     source_folder,
+    version_in_git,
     watcher_resends_load_order,
     window_of,
 )
@@ -26,7 +26,7 @@ NEW_PLUGIN = 'MBDevNew.esp'
 class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = self.enterContext(fixture_medit())
-        init_source_mod(self.fixture, CONDITIONS.origin)
+        version_in_git(self.fixture, CONDITIONS.origin)
         self.source = source_folder(self.fixture.instance, CONDITIONS.origin)
         self.enterContext(window_of(self.fixture.url))
 

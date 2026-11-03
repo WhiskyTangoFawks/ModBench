@@ -97,6 +97,7 @@ export type AdapterCall =
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
   | { readonly verb: 'writeOtherManifestLines' }
+  | { readonly verb: 'writeSourceFolderLines'; readonly sourceFolders: readonly string[]; readonly held: boolean }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly fomod?: FomodAnswer }
@@ -405,6 +406,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     scriptEnvironmentFile: { path: () => '/instance/.env', read: () => Promise.resolve(''), write: () => Promise.resolve() },
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, () => record({ verb: 'takeBackIgnoreList' }, undefined)),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
+    sourceFolderTracked: () => Promise.resolve(false),
     sourceHost: (folder) => Promise.resolve(answers.hosts?.get(folder) ?? { kind: 'read', answer: { kind: 'noRemote' } }),
     submodule: (name) => Promise.resolve(answers.pins?.get(name) ?? { lacks: `no answer fixed for ${name}` }),
     unclonedSubmodules: () => Promise.resolve(answers.uncloned ?? []),
@@ -413,6 +415,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeSubmodules: (acted) => record({ verb: 'writeSubmodules', acted }, answers.submodules ?? { notes: [], other: [] }),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
+    writeSourceFolderLines: (sourceFolders, held) => record({ verb: 'writeSourceFolderLines', sourceFolders, held }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),

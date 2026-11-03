@@ -11,13 +11,13 @@ public sealed class MasterPruningRoundTripGateTests
     [Theory]
     [InlineData(UnusedMasterPlugins.RecordlessFileName)]
     [InlineData(UnusedMasterPlugins.OverridesFileName)]
-    public async Task InitSourceMod_OfAGeneratedPluginWithUnusedMasters_AcceptsDespiteThePrunedMaster(string fileName)
+    public async Task VersionInGit_OfAGeneratedPluginWithUnusedMasters_AcceptsDespiteThePrunedMaster(string fileName)
     {
         var generated = UnusedMasterPlugins.Named(fileName);
         using var scratch = new PrunedMasterScratch(generated, "UnusedMasterMod");
         Assert.Equal(generated.Masters, scratch.DeclaredMasters());
 
-        await scratch.InitSourceModAsync();
+        await scratch.VersionInGitAsync();
 
         Assert.True(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
@@ -48,8 +48,8 @@ public sealed class MasterPruningRoundTripGateTests
             return [.. overlay.ModHeader.MasterReferences.Select(m => m.Master.FileName.String)];
         }
 
-        public async Task<PluginInitialized> InitSourceModAsync() =>
-            (await InitSourceModEveryPluginOf.ModAsync(_loadOrder, _origin)).Only();
+        public async Task<PluginInitialized> VersionInGitAsync() =>
+            (await VersionInGitEveryPluginOf.ModAsync(_loadOrder, _origin)).Only();
 
         public void Dispose()
         {

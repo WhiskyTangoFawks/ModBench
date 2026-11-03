@@ -32,8 +32,8 @@ public sealed class GitMissingRefusalTests : IDisposable
     private static readonly Gesture Decompile = new("decompile", (services, mod, force) => Whole(services.GetRequiredService<DecompilePluginHandler>()
         .DecompileAsync([mod.Plugin], force)));
 
-    private static readonly Gesture InitSourceMod = new("init-source-mod", (services, mod, _) =>
-        Whole(services.GetRequiredService<InitSourceModHandler>().InitSourceModAsync(ToInitSourceMod.In(null, SourceEditFixture.ModFolderOrigin))));
+    private static readonly Gesture VersionInGit = new("version-in-git", (services, mod, _) =>
+        Whole(services.GetRequiredService<VersionInGitHandler>().VersionInGitAsync(ToVersionInGit.In(null, SourceEditFixture.ModFolderOrigin))));
 
     private static readonly Gesture Compile = new("compile", (services, mod, _) => Whole(services.GetRequiredService<CompilePluginHandler>()
         .CompileAsync([mod.Plugin])));
@@ -56,7 +56,7 @@ public sealed class GitMissingRefusalTests : IDisposable
         services.GetRequiredService<RenameSourceChangesHandler>().RenameSource(mod.Plugin, "Renamed.esp")
             .Match(_ => ("Landed", ""), (refusal, message) => (refusal.ToString(), message))));
 
-    public static TheoryData<Gesture> Every { get; } = [Delete, Copy, Decompile, InitSourceMod, Compile, DecompileAndRepair, Build, Edit, Create, RenameSource];
+    public static TheoryData<Gesture> Every { get; } = [Delete, Copy, Decompile, VersionInGit, Compile, DecompileAndRepair, Build, Edit, Create, RenameSource];
 
     public static TheoryData<Gesture> ThatWriteWhenTheSourceHoldsChanges { get; } = [Decompile, Compile];
 
