@@ -19,7 +19,6 @@ import type { Depot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
-export type { Presence } from '../sortingRules/lootConditions';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';

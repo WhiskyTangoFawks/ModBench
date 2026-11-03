@@ -1,4 +1,4 @@
-import type { Presence } from '../instanceAdapter/instanceAdapter';
+import type { Presence } from '../sortingRules/lootConditions';
 import type { InstanceValue } from './instance';
 
 type PresenceFacts = Pick<InstanceValue, 'files' | 'plugins' | 'pluginsLoadedWithNoLine' | 'dataFolderPlugins' | 'dataFolderFiles'>;
@@ -19,17 +19,18 @@ export function filePresence(facts: PresenceFacts, relativePath: string): Presen
   return dataFolderPlugins.kind === 'listed' && dataFolderFiles.kind === 'listed' ? 'absent' : 'unknown';
 }
 
-/** The files the game finds in its Data folder, `complete` while both listings of the folder read. */
+/** The files the game finds in its Data folder, each once whatever its case and source, `complete` while both listings of the folder read. */
 export function filesPresent(facts: PresenceFacts): { names: readonly string[]; complete: boolean } {
   const { files, plugins, pluginsLoadedWithNoLine = [], dataFolderPlugins, dataFolderFiles } = facts;
+  const named = [
+    ...[...files].map(({ relativePath }) => relativePath),
+    ...plugins.flatMap(({ name, path }) => (path === undefined ? [] : [name])),
+    ...pluginsLoadedWithNoLine.map(({ name }) => name),
+    ...dataFolderPlugins.kind === 'listed' ? dataFolderPlugins.names : [],
+    ...dataFolderFiles.kind === 'listed' ? dataFolderFiles.files : [],
+  ];
   return {
-    names: [
-      ...[...files].map(({ relativePath }) => relativePath),
-      ...plugins.flatMap(({ name, path }) => (path === undefined ? [] : [name])),
-      ...pluginsLoadedWithNoLine.map(({ name }) => name),
-      ...dataFolderPlugins.kind === 'listed' ? dataFolderPlugins.names : [],
-      ...dataFolderFiles.kind === 'listed' ? dataFolderFiles.files : [],
-    ],
+    names: [...new Map(named.map((name) => [name.toLowerCase(), name])).values()],
     complete: dataFolderPlugins.kind === 'listed' && dataFolderFiles.kind === 'listed',
   };
 }

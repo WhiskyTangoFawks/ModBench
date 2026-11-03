@@ -62,6 +62,16 @@ describe('filesPresent: every file the game finds in its Data folder', () => {
     });
   });
 
+  it('lists a file once whichever sources and cases name it', () => {
+    const overlapping = new FileConflictLookup();
+    overlapping.set({ relativePath: 'Provided.esp', winner: '/m/Provided.esp', winnerOrigin: { kind: 'mod', name: 'M' }, providers: [{ kind: 'mod', name: 'M' }] });
+    const { names } = filesPresent({
+      ...value, files: overlapping, dataFolderFiles: { kind: 'listed', files: new Set(['fallout4.esm']) },
+    });
+
+    expect([...names].filter((name) => /^(provided\.esp|fallout4\.esm)$/i.test(name))).toHaveLength(2);
+  });
+
   it('is incomplete while a listing of the Data folder is missing, and still lists what it has', () => {
     const listing = filesPresent({ ...value, dataFolderFiles: { kind: 'unreadable', reason: 'EACCES' } });
 

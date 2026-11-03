@@ -8,6 +8,7 @@
     { "path": "../instanceAdapter" },
     { "path": "../manifestAdapter" },
     { "path": "../ports" },
+    { "path": "../sortingRules" },
     { "path": "../tables" },
     { "path": "../wire" }
   ],
