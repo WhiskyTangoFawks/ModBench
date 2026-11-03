@@ -274,10 +274,10 @@ export type FomodAnswer =
   | { readonly kind: 'dialog'; readonly dialog: FomodDialog; readonly steps: readonly FomodStepChoice[] }
   | { readonly kind: 'manual' };
 
-/** A FOMOD its installer installed, with each file its archive lacks and anything else it said; or a plain copy, and
- *  why its installer did not run. */
+/** A FOMOD its installer installed, with each file its archive lacks, anything else it said, and the steps of the
+ *  choices that no step the user reached on its page took; or a plain copy, and why its installer did not run. */
 export type FomodLanded =
-  | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[] }
+  | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[]; readonly unused?: readonly string[] }
   | { readonly kind: 'plainCopy'; readonly why: string };
 
 /** An install that landed, and how, when its package is a FOMOD; or none, because the target's folder is there for a

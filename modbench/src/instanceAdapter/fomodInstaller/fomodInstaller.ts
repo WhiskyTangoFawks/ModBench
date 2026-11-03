@@ -61,8 +61,8 @@ interface Driver {
   readonly finish: () => Promise<void>;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
   readonly ended: () => Stopped | undefined;
-  // The choices that no step the installer showed took.
-  readonly untaken: () => readonly FomodStepChoice[];
+  // The steps of the choices that no step the installer showed took. Throws where they refuse the install.
+  readonly unused: () => readonly string[];
 }
 
 const TAKES: Record<types.GroupType, string> = {
@@ -115,13 +115,16 @@ const holdsPick = (type: types.GroupType, count: number, total: number): boolean
   }
 };
 
-// The options a group takes for the choice: those named, each required one, and all of a group that takes all.
-function picksFor(step: Step, group: Group, choice: FomodGroupChoice | undefined): readonly Option[] {
-  const named = choice?.options ?? [];
+function optionsNamed(step: Step, group: Group, named: readonly string[]): readonly Option[] {
   refuseAmbiguous('option', group.options.map((option) => option.name), named, `Group "${shown(group.name)}" of step "${shown(step.name)}"`);
   const unknown = named.filter((name) => !group.options.some((option) => sameName(option.name, name)));
   if (unknown.length > 0) throw new Error(`Group "${shown(group.name)}" of step "${shown(step.name)}" has no option ${quoted(unknown)}. ${stepLines(step)}`);
-  const picked = group.options.filter((option) => named.some((name) => sameName(option.name, name)));
+  return group.options.filter((option) => named.some((name) => sameName(option.name, name)));
+}
+
+// The options a group takes for the choice: those named, each required one, and all of a group that takes all.
+function picksFor(step: Step, group: Group, choice: FomodGroupChoice | undefined): readonly Option[] {
+  const picked = optionsNamed(step, group, choice?.options ?? []);
   const unusable = picked.filter((option) => option.type === 'NotUsable');
   if (unusable.length > 0) throw new Error(`${quoted(unusable.map((option) => shown(option.name)))} cannot be picked. ${stepLines(step)}`);
   const picks = group.options.filter((option) => picked.includes(option) || option.type === 'Required' || group.type === 'SelectAll');
@@ -131,7 +134,6 @@ function picksFor(step: Step, group: Group, choice: FomodGroupChoice | undefined
   return picks;
 }
 
-// Each group of the step, beside the choice that names it.
 function groupsNamed(step: Step, choice: FomodStepChoice): readonly (readonly [Group, FomodGroupChoice | undefined])[] {
   const groups = groupsOf(step);
   refuseAmbiguous('group', groups.map((group) => group.name), choice.groups.map(({ group }) => group), `Step "${shown(step.name)}"`);
@@ -148,12 +150,12 @@ const answerFor = (step: Step, choice: FomodStepChoice): EngineRequest[] => [
   { kind: 'continue', forward: true, stepId: step.id },
 ];
 
-// The groups the choice names, picked as it names them; the others keep the author's defaults.
+// mods-fomod.md, Groups and options, story 4.
 const seedFor = (step: Step, choice: FomodStepChoice): EngineRequest[] =>
   groupsNamed(step, choice).flatMap(([group, named]) => (named === undefined ? [] : [selectionOf(step, group, named)]));
 
 // Each step shown takes the first untaken choice of its name.
-function choiceTaker(choices: readonly FomodStepChoice[]): { readonly take: (step: Step) => FomodStepChoice | undefined; readonly untaken: () => readonly FomodStepChoice[] } {
+function choiceTaker(choices: readonly FomodStepChoice[]): { readonly take: (step: Step) => FomodStepChoice | undefined; readonly untaken: () => readonly string[] } {
   const taken = new Set<number>();
   return {
     take: (step) => {
@@ -162,8 +164,17 @@ function choiceTaker(choices: readonly FomodStepChoice[]): { readonly take: (ste
       taken.add(at);
       return choices[at];
     },
-    untaken: () => choices.filter((_, i) => !taken.has(i)),
+    untaken: () => choices.flatMap(({ step }, i) => (taken.has(i) ? [] : [step])),
   };
+}
+
+// The engine reports every step, shown or not, so each name a choice gives is checked before the page opens.
+function refuseNamesNotHeld(steps: readonly Step[], choices: readonly FomodStepChoice[]): void {
+  for (const choice of choices) {
+    const step = steps.find((one) => sameName(one.name, choice.step));
+    if (step === undefined) throw new Error(`The installer has no step "${shown(choice.step)}". Its steps are ${quoted(steps.map((one) => shown(one.name)))}.`);
+    for (const [group, named] of groupsNamed(step, choice)) optionsNamed(step, group, named?.options ?? []);
+  }
 }
 
 const UNATTENDED = {
@@ -195,14 +206,20 @@ function choosing({ steps: choices, installAnyway }: Extract<FomodAnswer, { read
     if (installAnyway !== true) throw new Error(`The FOMOD names files its archive does not hold: ${missing.join(', ')}. Request it again with install anyway to land it without them.`);
     return Promise.resolve(true);
   };
-  return { ...UNATTENDED, step: answer, confirmMissing, untaken: taker.untaken };
+  const unused = (): readonly string[] => {
+    const untaken = taker.untaken();
+    if (untaken.length > 0) throw new Error(`The installer shows no step ${quoted(untaken)} for the choices given.`);
+    return [];
+  };
+  return { ...UNATTENDED, step: answer, confirmMissing, unused };
 }
 
-// The user answers on a page. A step first reached opens on the choices given for it. An installer with no step to
-// show finishes at once, and the page then shows its header and Install alone.
+// The user answers on a page. An installer with no step to show finishes at once, and the page then shows its header
+// and Install alone.
 function conversing({ dialog, steps: choices }: Extract<FomodAnswer, { readonly kind: 'dialog' }>): Driver {
   const taker = choiceTaker(choices);
-  const reached = new Set<number>();
+  const seeded = new Set<number>();
+  let namesChecked = false;
   let module = '';
   let headerImage = '';
   let about: About = NO_ABOUT;
@@ -245,9 +262,11 @@ function conversing({ dialog, steps: choices }: Extract<FomodAnswer, { readonly 
       about = await aboutIn(root, files);
     },
     step: ({ steps, current, cause }) => {
+      if (!namesChecked) refuseNamesNotHeld(steps, choices);
+      namesChecked = true;
       const step = steps[current];
-      if (cause === 'move' && step !== undefined && !reached.has(step.id)) {
-        reached.add(step.id);
+      if (cause === 'move' && step !== undefined && !seeded.has(step.id)) {
+        seeded.add(step.id);
         const choice = taker.take(step);
         const seed = choice === undefined ? [] : seedFor(step, choice);
         if (seed.length > 0) return seed;
@@ -277,7 +296,7 @@ function conversing({ dialog, steps: choices }: Extract<FomodAnswer, { readonly 
       }
     },
     ended: () => ended,
-    untaken: () => [],
+    unused: taker.untaken,
   };
 }
 
@@ -430,8 +449,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
   const stopped = driver.ended();
   if (stopped !== undefined) return stopped;
   if (run.result === null) throw new Error('The FOMOD\'s installer stopped before it installed anything.');
-  const untaken = driver.untaken().map(({ step }) => step);
-  if (untaken.length > 0) throw new Error(`The installer shows no step ${quoted(untaken)} for the choices given.`);
+  const unused = driver.unused();
   const { instructions } = run.result;
   const fatal = instructions.find(({ type, value }) => type === 'error' && value === 'fatal');
   if (fatal !== undefined) return { kind: 'refused', why: fatal.source.replaceAll('\n', '; ') };
@@ -441,7 +459,8 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
   const finished = driver.ended() ?? (missing.length > 0 && !(await driver.confirmMissing(missing)) ? { kind: 'cancelled' as const } : undefined);
   if (finished !== undefined) return finished;
   await land(root, files, into, instructions);
-  return { kind: 'installer', missing, notes: errors.flatMap(({ source, missing: each }) => (each === undefined ? [source] : [])) };
+  const notes = errors.flatMap(({ source, missing: each }) => (each === undefined ? [source] : []));
+  return { kind: 'installer', missing, notes, ...(unused.length > 0 && { unused }) };
 }
 
 const driverFor = (answer: Extract<FomodAnswer, { readonly kind: 'choices' | 'dialog' }>): Driver =>

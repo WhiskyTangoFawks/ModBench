@@ -97,7 +97,7 @@ describe('the FOMOD installer', () => {
     expect(await filesLanded()).toEqual(['Core.esp', 'textures/B.esp']);
   });
 
-  it('refuses choices that leave a step it shows unanswered, listing the step\'s groups and options with their descriptions, and naming the Option that hands the user the installer', async () => {
+  it('refuses choices that leave a step it shows unanswered, listing the step\'s groups and options with their descriptions, and naming the Option that hands the user the installer, and lands nothing', async () => {
     await release(TWO_STEPS, TWO_STEPS_FILES);
 
     await expect(install(choose(['Main', { Pick: ['Option B'] }]))).rejects.toThrow(
@@ -655,12 +655,25 @@ describe('the FOMOD installer', () => {
         expect(selectedIn(page.states.at(-1))).toEqual([[false, true]]);
       });
 
-      it('refuses a choice that names an option the step does not have', async () => {
+      it.each([
+        ['a step the installer does not have', choose(['Nowhere', {}]), 'The installer has no step "Nowhere". Its steps are "Main", "Only for B".'],
+        ['a group of a step not yet reached', choose(['Only for B', { Extrs: [] }]), 'Step "Only for B" has no group "Extrs".'],
+        ['an option of a step not yet reached', choose(['Only for B', { Extras: ['Extar'] }]), 'Group "Extras" of step "Only for B" has no option "Extar".'],
+      ])('refuses a choice that names %s before the page shows a step', async (_, choices, refusal) => {
+        await release(TWO_STEPS, TWO_STEPS_FILES);
+        let shows = 0;
+
+        await expect(answered([CANCEL], { choices, onShow: () => { shows += 1; } })).rejects.toThrow(refusal);
+        expect(shows).toBe(0);
+      });
+
+      it('lands the user\'s install, naming the steps of the choices the user did not reach', async () => {
         await release(TWO_STEPS, TWO_STEPS_FILES);
 
-        const opened = answered([CANCEL], { choices: choose(['Main', { Pick: ['Option C'] }]) });
+        const { landing } = await answered([INSTALL], { choices: choose(['Main', { Pick: ['Option A'] }], ['Only for B', { Extras: [] }]) });
 
-        await expect(opened).rejects.toThrow('Group "Pick" of step "Main" has no option "Option C".');
+        expect(landing).toMatchObject({ fomod: { kind: 'installer', missing: [], notes: [], unused: ['Only for B'] } });
+        expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
       });
     });
 

@@ -295,6 +295,9 @@ describe('modbench.mod.install called by the agent', () => {
       { message: '"Bar" lacks files its FOMOD names and its archive does not hold:', detail: 'gone.esp, gone', severity: 'warning' },
       { message: '"Bar": its FOMOD\'s installer says', detail: 'Installer failed', severity: 'warning' },
     ]],
+    ['without the choices for steps the user did not reach on its page', { kind: 'installer', missing: [], notes: [], unused: ['Only for B', 'Extras'] } as const, [
+      { message: '"Bar" was installed without the choices for steps the user did not reach:', detail: 'Only for B, Extras', severity: 'warning' },
+    ]],
   ])('answers a FOMOD that landed %s, each a partial failure the agent reads with its Output line', async (_, fomod, partial) => {
     const reporter = recordingReporter();
 
