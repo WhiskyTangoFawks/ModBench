@@ -1,25 +1,29 @@
-import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { access, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
-import { BUILD_FILE } from '../wire/sourceMod';
-import type { BuildFileRead } from './buildFile';
+import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
+import type { BuildFileAgainst, BuildFileLack, BuildFileRead, BuildStep } from './buildFile';
 import { readBuildFile } from './buildFileRead';
 import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
 import { packagesAsked } from './manifestPackages';
 
-async function fileNamesIn(folder: string): Promise<string[]> {
+async function entriesIn(folder: string): Promise<Dirent[]> {
   try {
-    return (await readdir(folder, { withFileTypes: true })).filter((entry) => entry.isFile()).map(({ name }) => name).sort(ordinal);
+    return await readdir(folder, { withFileTypes: true });
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return [];
     throw err;
   }
 }
+
+const fileNamesIn = async (folder: string): Promise<string[]> =>
+  (await entriesIn(folder)).filter((entry) => entry.isFile()).map(({ name }) => name).sort(ordinal);
 
 // A name in any case, so a folder reads alike on Windows and Linux.
 const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
@@ -77,11 +81,45 @@ export async function writeManifestIn(folder: string, manifest: Manifest): Promi
   return true;
 }
 
-/** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */
-export async function buildFileIn(sourceFolder: string): Promise<BuildFileRead | undefined> {
+async function buildFileAt(sourceFolder: string): Promise<{ readonly file: string; readonly read: BuildFileRead } | undefined> {
   const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
-  if (other !== undefined) return { refused: twoBuildFiles(one ?? '', other) };
-  return one === undefined ? undefined : readBuildFile(await textAt(join(sourceFolder, one)));
+  if (one === undefined) return undefined;
+  const file = join(sourceFolder, one);
+  return { file, read: other === undefined ? readBuildFile(await textAt(file)) : { refused: twoBuildFiles(one, other) } };
+}
+
+/** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */
+export const buildFileIn = async (sourceFolder: string): Promise<BuildFileRead | undefined> => (await buildFileAt(sourceFolder))?.read;
+
+// A path that cannot be read is held: the build says why it cannot read it.
+const holds = (path: string): Promise<boolean> => access(path).then(() => true, (err: unknown) => !['ENOENT', 'ENOTDIR'].includes(errnoCode(err) ?? ''));
+
+// The paths a step reads from the source folder: a compile step's name plugin sources.
+const readBy = (step: BuildStep): { readonly step: BuildFileLack['step']; readonly paths: readonly string[] } | undefined => {
+  switch (step.kind) {
+    case 'decompile': case 'compile': case 'copy': return { step: step.kind, paths: step.paths };
+    case 'unpack': return { step: 'unpack', paths: step.archives.map(({ path }) => path) };
+    case 'script': return { step: 'script', paths: [step.script] };
+    case 'pack': case 'task': case 'defaultScript': return undefined;
+  }
+};
+
+/** The build file `sourceFolder` holds against it: each path a step reads from it that names nothing there. A plugin
+ *  source is found in any case, as mEdit finds it. None when it holds no build file, or one or its plugin sources it cannot read. */
+export async function buildFileAgainst(sourceFolder: string): Promise<BuildFileAgainst | undefined> {
+  const unreadable = () => undefined;
+  const [at, listed] = await Promise.all([buildFileAt(sourceFolder).catch(unreadable), entriesIn(join(sourceFolder, PLUGIN_SOURCE_FOLDER)).catch(unreadable)]);
+  if (at === undefined || listed === undefined || 'refused' in at.read) return undefined;
+  const sources = new Set(listed.filter((entry) => entry.isDirectory()).map(({ name }) => name.toLowerCase()));
+  const lacks: BuildFileLack[] = [];
+  for (const { step, paths } of at.read.buildFile.steps.flatMap((built) => readBy(built) ?? [])) {
+    for (const path of paths) {
+      const held = step === 'compile' ? sources.has(path.toLowerCase()) : await holds(join(sourceFolder, path));
+      if (!held) lacks.push({ step, path });
+    }
+    if (step === 'decompile') for (const path of paths) sources.add(path.toLowerCase());
+  }
+  return { file: at.file, lacks };
 }
 
 /** What a folder holds of its manifest: the read, none when it holds none, and the path as the folder spells it. */

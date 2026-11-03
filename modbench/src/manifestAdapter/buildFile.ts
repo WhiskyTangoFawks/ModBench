@@ -42,6 +42,18 @@ export interface BuildFile {
 
 export const BUILD_FILE_VERSION = 1;
 
+/** A path a step reads from the source folder that names nothing there: of a compile step, a plugin with no plugin source. */
+export interface BuildFileLack {
+  readonly step: 'decompile' | 'compile' | 'copy' | 'unpack' | 'script';
+  readonly path: string;
+}
+
+/** The build file a source folder holds, by its path, against that folder. */
+export interface BuildFileAgainst {
+  readonly file: string;
+  readonly lacks: readonly BuildFileLack[];
+}
+
 export type BuildFileRead = { readonly buildFile: BuildFile } | { readonly refused: string };
 
 const lineOf = (step: BuildStep): Record<string, unknown> => {
