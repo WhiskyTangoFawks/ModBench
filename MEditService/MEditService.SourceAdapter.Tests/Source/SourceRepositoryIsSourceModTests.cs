@@ -127,8 +127,18 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
 
     private void MakeTree(string? folder = null) => Directory.CreateDirectory(Path.Combine(folder ?? _sourceFolder, "plugin-source", PluginAt.Name));
 
+    [Fact]
+    public void ARepositoryWithMainButNoBuildFile_IsNoSourceMod()
+    {
+        CommitOnMain();
+        File.Delete(Path.Combine(_sourceFolder, "build.json"));
+
+        Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
+    }
+
     private void CommitOnMain(string? folder = null)
     {
+        File.WriteAllText(Path.Combine(folder ?? _sourceFolder, "build.json"), "{}");
         Git(folder ?? _sourceFolder, "init", "-q", "-b", "main");
         Git(folder ?? _sourceFolder, "-c", "user.name=Test", "-c", "user.email=test@localhost", "commit", "-q", "--allow-empty", "-m", "First");
     }

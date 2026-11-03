@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type InitSourceModOutcome, type PluginAddress } from '../client';
+import { isRefused, type VersionInGitOutcome, type PluginAddress, type SourceModIn } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
@@ -16,7 +16,7 @@ export interface VersionInGitDeps {
   /** The message line of the view the gesture was fired from, which the phase line goes on. */
   progressIn: (view: string) => { say: (message: string | undefined) => void };
   instance: Pick<Instance, 'refresh' | 'value'>;
-  commands: Pick<SourceCommands, 'initSourceMod'>;
+  commands: Pick<SourceCommands, 'versionInGit'>;
   reporter: Reporter;
   onCommitted: () => Promise<void>;
   modOfOrigin: (origin: string) => string | undefined;
@@ -24,18 +24,35 @@ export interface VersionInGitDeps {
   pluginsView: string;
 }
 
-type VersionedInGit = GestureResult<InitSourceModOutcome['landed'][number], string>;
+type VersionedInGit = GestureResult<VersionInGitOutcome['landed'][number], string>;
 
-interface VersionInGitOptions { readonly commit: boolean }
+interface VersionInGitOptions { readonly commit: boolean; readonly where: SourceModIn }
 
 type VersionInGitGiven = ModsGiven & VersionInGitOptions;
+
+// commands.md, `version in git`: the modlist repository is a choice only while the instance holds one, and a pick of
+// one choice is not shown.
+async function pickWhere(holdsRepository: boolean): Promise<SourceModIn | undefined> {
+  if (!holdsRepository) return 'NewRepository';
+  const picked = await vscode.window.showQuickPick([
+    { label: 'A source mod in a new repository', where: 'NewRepository' as const },
+    { label: 'A source mod in the modlist repository', where: 'ModlistRepository' as const },
+  ], { placeHolder: 'Version in git: where git holds the mod' });
+  return picked?.where;
+}
 
 // plugins.md, Version in git, story 1: not committing comes first.
 async function pickWhetherToCommit(): Promise<boolean | undefined> {
   const picked = await vscode.window.showQuickPick(
-    [{ label: 'Do not commit', commit: false }, { label: 'Commit to main', commit: true }], { placeHolder: 'Version in git' },
+    [{ label: 'Do not commit', commit: false }, { label: 'Commit', commit: true }], { placeHolder: 'Version in git' },
   );
   return picked?.commit;
+}
+
+async function pickOptions(holdsRepository: boolean): Promise<VersionInGitOptions | undefined> {
+  const where = await pickWhere(holdsRepository);
+  const commit = where === undefined ? undefined : await pickWhetherToCommit();
+  return where === undefined || commit === undefined ? undefined : { where, commit };
 }
 
 /** commands.md, `version in git`: the mods of Mods rows, plugin rows, a column header, or the palette's
@@ -44,18 +61,18 @@ export function registerVersionInGitCommand(deps: VersionInGitDeps, paletteSelec
   const gesture: AgentGesture<unknown, VersionInGitGiven, VersionedInGit, VersionInGitOptions> = {
     fromView: async (entry) => {
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
-      const commit = targets.mods.length === 0 ? false : await pickWhetherToCommit();
-      return commit === undefined ? undefined : { ...targets, commit, invokedFrom: viewOf(entry.selection, deps.pluginsView) };
+      const options = targets.mods.length === 0 ? { where: 'NewRepository' as const, commit: false } : await pickOptions(deps.instance.value.holdsRepository);
+      return options === undefined ? undefined : { ...targets, ...options, invokedFrom: viewOf(entry.selection, deps.pluginsView) };
     },
-    fromAgent: ({ argument, options }) => ({ ...givenByAgent(argument), commit: options.commit }),
-    run: ({ mods, commit, invokedFrom }) => versionModsInGit(deps, mods, commit, invokedFrom),
+    fromAgent: ({ argument, options }) => ({ ...givenByAgent(argument), commit: options.commit, where: options.where }),
+    run: ({ mods, commit, where, invokedFrom }) => versionModsInGit(deps, mods, { commit, where }, invokedFrom),
     report: (result, { mods, refusedRows }) => reportVersioned(deps.reporter, result, mods, refusedRows),
   };
   return registerAgentGesture('modbench.mod.versionInGit', paletteSelection, gesture, isClickedRow);
 }
 
 async function versionModsInGit(
-  { progressIn, instance, commands, onCommitted }: VersionInGitDeps, mods: readonly string[], commit: boolean, invokedFrom: string,
+  { progressIn, instance, commands, onCommitted }: VersionInGitDeps, mods: readonly string[], options: VersionInGitOptions, invokedFrom: string,
 ): Promise<VersionedInGit> {
   const [firstMod] = mods;
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
@@ -63,8 +80,8 @@ async function versionModsInGit(
   const result = await runWritingGesture(invokedFrom, instance, async (): Promise<VersionedInGit> => {
     try {
       progress.say(versionInGitProgressMessage(firstMod, undefined));
-      const result = await commands.initSourceMod(mods, {
-        commit,
+      const result = await commands.versionInGit(mods, {
+        ...options,
         onProgress: (status) => { progress.say(versionInGitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
       if (isRefused(result)) return { applied: false, refusal: result.message };
@@ -106,7 +123,7 @@ function reportVersioned(
 }
 
 interface VersionInGitReport {
-  refused: InitSourceModOutcome['refused'];
+  refused: VersionInGitOutcome['refused'];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
 }

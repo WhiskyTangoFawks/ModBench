@@ -181,8 +181,8 @@ internal sealed class SourceRepositoryWrites(
     internal void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
     {
         // A source folder another tool removed is not written back into being.
-        if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
-            throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+        if (!SourceRepositoryGit.HoldsSourceMod(_sourceFolder))
+            throw SourceStopException.Inaccessible($"'{_sourceFolder}' is no source mod's source folder, so {pluginFileName}'s source has nowhere to go.");
 
         var journal = new WriteJournal(_sourceFolder);
         try
@@ -203,8 +203,8 @@ internal sealed class SourceRepositoryWrites(
     /// plugin's tree; answers each tree's place now and path before, after those an earlier write left aside.</summary>
     internal IReadOnlyList<AsideTree> ReplaceSourceMovingAside(string pluginFileName, IReadOnlyList<string> trees, IReadOnlyList<TreeFile> files, string binarySha256)
     {
-        if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
-            throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+        if (!SourceRepositoryGit.HoldsSourceMod(_sourceFolder))
+            throw SourceStopException.Inaccessible($"'{_sourceFolder}' is no source mod's source folder, so {pluginFileName}'s source has nowhere to go.");
 
         var stranded = SourceRepositoryLayout.AsideIn(_sourceFolder);
         var journal = new WriteJournal(_sourceFolder);
@@ -230,8 +230,8 @@ internal sealed class SourceRepositoryWrites(
     /// branch holds it, all or nothing: what else is staged stays staged.</summary>
     internal void CommitRepair(string pluginFileName, TreeCommit baseline, TreeCommit repaired, string binarySha256)
     {
-        if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
-            throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+        if (!SourceRepositoryGit.HoldsSourceMod(_sourceFolder))
+            throw SourceStopException.Inaccessible($"'{_sourceFolder}' is no source mod's source folder, so {pluginFileName}'s source has nowhere to go.");
 
         var journal = new WriteJournal(_sourceFolder);
         var source = SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName));
@@ -270,7 +270,7 @@ internal sealed class SourceRepositoryWrites(
     {
         if (head is null)
         {
-            git.Run("update-ref", "-d", "refs/heads/main");
+            git.DropBranchAtHead();
             git.Run("add", "-A", "--", source);
             return;
         }

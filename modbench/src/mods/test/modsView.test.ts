@@ -96,6 +96,7 @@ const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () =>
   flaggedHash: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
+  sourceFolderTracked: () => Promise.resolve(false),
   }, folder, asked),
 });
 
@@ -398,12 +399,12 @@ describe('the Mods view says the phase of a version in git fired from it', () =>
     let release = () => undefined;
     const running = new Promise<{ landed: []; refused: [] }>((resolve) => { release = () => { resolve({ landed: [], refused: [] }); }; });
     const deps = otherDeps();
-    const sourceGestures = { ...deps.sourceGestures, commands: { ...deps.sourceGestures.commands, initSourceMod: () => running } };
+    const sourceGestures = { ...deps.sourceGestures, commands: { ...deps.sourceGestures.commands, versionInGit: () => running } };
     const mods = createModsView({ ...deps, sourceGestures, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     const { view } = mods;
     const handler = present(h.state.commands.get('modbench.mod.versionInGit'), 'the version in git command createModsView registers');
 
-    const fired = handler(new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true }));
+    const fired = handler(new AgentCall([{ kind: 'mod', name: 'Source mod Patch Mod' }], { commit: true, where: 'NewRepository' }));
 
     await waitForMessage(view, (m) => m === 'Version in git "Source mod Patch Mod"…', 'the phase line');
     expect(mods.standingLines()).toEqual([]);

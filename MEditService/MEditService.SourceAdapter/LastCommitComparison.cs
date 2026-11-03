@@ -52,7 +52,7 @@ internal static class LastCommitComparison
                 entry.Path.Replace('/', Path.DirectorySeparatorChar), entry.Code is not ('?' or '!' or 'A')));
         }
 
-        if (SourceRepositoryGit.HoldsRepository(sourceFolder))
+        if (SourceRepositoryGit.HoldsSourceMod(sourceFolder))
             throw SourceStopException.GitFailed($"git cannot report what changed in '{sourceFolder}'.");
 
         var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);

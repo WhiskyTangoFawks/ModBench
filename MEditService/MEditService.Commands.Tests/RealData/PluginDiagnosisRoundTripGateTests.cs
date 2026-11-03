@@ -11,14 +11,14 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task InitSourceMod_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformedAndNoGesture()
+    public async Task VersionInGit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformedAndNoGesture()
     {
         using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitSourceModRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains(MisshapedPerkPlugin.Anchor, result.Message);
         Assert.Contains("malformed", result.Message);
@@ -27,14 +27,14 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitSourceMod_OfAMismatchedFnamPlugin_NamesMutagensMishandlingAndNoRecordOrGesture()
+    public async Task VersionInGit_OfAMismatchedFnamPlugin_NamesMutagensMishandlingAndNoRecordOrGesture()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitSourceModRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
         Assert.Contains("All FNAM strings should be the same", result.Message);
         Assert.Contains("blocked upstream: Mutagen #687", result.Message);
         Assert.Contains("Mutagen mishandles", result.Message);
@@ -49,36 +49,36 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(Malformations))]
-    public async Task InitSourceMod_OfAMalformedPlugin_NamesTheGestureOnlyWhenARepairAnswersIt(MalformationFixture fixture)
+    public async Task VersionInGit_OfAMalformedPlugin_NamesTheGestureOnlyWhenARepairAnswersIt(MalformationFixture fixture)
     {
         using var scratch = new RealFixtureScratch(fixture.Malformed);
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
-        Assert.Equal(InitSourceModRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
         Assert.Contains("malformed plugin", result.Message, StringComparison.Ordinal);
         Assert.Contains(fixture.Diagnosis, result.Message, StringComparison.Ordinal);
         Assert.Equal(fixture.Change is not null, result.Message.Contains("Decompile and repair", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task InitSourceMod_WhenMutagenFailsAtOneRecord_NamesThatRecordNotAnotherMalformedOne()
+    public async Task VersionInGit_WhenMutagenFailsAtOneRecord_NamesThatRecordNotAnotherMalformedOne()
     {
         using var scratch = new RealFixtureScratch(MalformationFixtures.ShortRegionBesideAWrongCountRace);
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
         Assert.Contains("HarborRace", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("HarborRegion", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task InitSourceMod_OfAPluginWithTrailingJunkTheMalformationScanCannotWalk_SaysSoAndDoesNotCallThePluginCorrect()
+    public async Task VersionInGit_OfAPluginWithTrailingJunkTheMalformationScanCannotWalk_SaysSoAndDoesNotCallThePluginCorrect()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
         File.AppendAllText(Path.Combine(scratch.ModFolder, MismatchedFnamPlugin.Plugin.FileName), "junk");
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
         Assert.Contains("could not be checked for malformations", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
@@ -86,11 +86,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitSourceMod_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrectOrNameTheGesture()
+    public async Task VersionInGit_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrectOrNameTheGesture()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.PluginWithAShortRegion);
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
         Assert.Contains("Mutagen mishandles", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
@@ -99,14 +99,14 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitSourceMod_WhenNothingClassifiesTheFailureAndAnotherRecordIsMalformed_NamesThatRecordAndNoGesture()
+    public async Task VersionInGit_WhenNothingClassifiesTheFailureAndAnotherRecordIsMalformed_NamesThatRecordAndNoGesture()
     {
         var plugin = new GeneratedPlugin("Unclassified.esp", RawPlugin.Plugin(RawPlugin.Tes4(0x802, 4),
             RawPlugin.Group("MISC", RawPlugin.Record("MISC", 0x00000800, RawPlugin.EditorId("HarborMisc"), RawPlugin.Subrecord("FULL", "x"u8.ToArray()), OverlongSubrecord)),
             RawPlugin.Group("REGN", RawPlugin.Record("REGN", 0x00000801, RawPlugin.EditorId("HarborRegion"), RawPlugin.Subrecord("RDAT", new byte[6])))));
         using var scratch = new RealFixtureScratch(plugin);
 
-        var result = await scratch.InitSourceModAsync();
+        var result = await scratch.VersionInGitAsync();
 
         Assert.Contains("HarborRegion", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
@@ -135,13 +135,13 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         public List<LogEntry> Log { get; } = [];
 
-        public async Task<PluginInitialized> InitSourceModAsync()
+        public async Task<PluginInitialized> VersionInGitAsync()
         {
             var holder = new LoadOrderHolder();
             holder.Apply(_loadOrder);
             var handler = TestEditService.Over(holder, logging: logging => logging.AddProvider(new CollectingLoggerProvider(Log)))
-                .GetRequiredService<InitSourceModHandler>();
-            return (await handler.InitSourceModAsync(ToInitSourceMod.In(_loadOrder, Origin))).Only();
+                .GetRequiredService<VersionInGitHandler>();
+            return (await handler.VersionInGitAsync(ToVersionInGit.In(_loadOrder, Origin))).Only();
         }
 
         public void Dispose()

@@ -10,7 +10,7 @@ public sealed class RepairedPluginRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(RepairedFixtures))]
-    public async Task InitSourceMod_OfAMalformedPluginEveryRepairOfWhichIsMade_PassesTheRoundTripGate(MalformationFixture fixture)
+    public async Task VersionInGit_OfAMalformedPluginEveryRepairOfWhichIsMade_PassesTheRoundTripGate(MalformationFixture fixture)
     {
         const string Origin = "RepairedFixtureMod";
         using var modFolder = new ScratchDirectory("medit-repaired-mod-");
@@ -21,7 +21,7 @@ public sealed class RepairedPluginRoundTripGateTests
         var adapter = TestAdapters.Mutagen();
         var repaired = adapter.WriteRepaired(malformed, Path.Combine(modFolder, fixture.Malformed.FileName), GameRelease.Fallout4).Answered().Path;
 
-        var result = (await InitSourceModEveryPluginOf.ModAsync(EmptyMasterStubs.LoadOrderOver(repaired, Origin, dataFolder), Origin)).Only();
+        var result = (await VersionInGitEveryPluginOf.ModAsync(EmptyMasterStubs.LoadOrderOver(repaired, Origin, dataFolder), Origin)).Only();
 
         Assert.True(result.Applied, result.Message);
     }

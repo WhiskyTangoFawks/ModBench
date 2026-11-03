@@ -11,7 +11,7 @@ export const repositoryOf = (manifest: Pick<Manifest, 'packages'>): RepositoryPa
 export const isAddress = (text: string): boolean => URL.canParse(text);
 
 /** `pkg` as a problem names it when it has no host (modlist-repository.md, The manifest, story 5); none when it has one.
- *  `repositoryHosted`: whether a repository package's repository is a submodule. */
+ *  `repositoryHosted`: whether a clone gets a repository package's repository. */
 export function packageWithoutHost(pkg: ManifestPackage, repositoryHosted: boolean): string[] {
   switch (pkg.kind) {
     case 'installationFile': return pkg.host === undefined ? [`installation file '${pkg.name}'`] : [];

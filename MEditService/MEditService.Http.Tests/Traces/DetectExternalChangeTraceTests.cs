@@ -20,7 +20,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
     {
         var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;

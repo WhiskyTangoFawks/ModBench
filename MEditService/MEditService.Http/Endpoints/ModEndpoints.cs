@@ -27,14 +27,15 @@ internal static class ModEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        app.MapPost("/init-source-mod", InitSourceMod)
-            .WithName("InitSourceMod")
+        app.MapPost("/version-in-git", VersionInGit)
+            .WithName("VersionInGit")
             .WithTags("Mods")
             .WithDescription(
-                "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
-                "plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed to main when asked. " +
-                "A mod lands or is refused whole. Progress is the init-source-mod-progress notification.")
-            .Produces<InitSourceModResult>()
+                "Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the modlist repository it sits in, holding " +
+                "the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, " +
+                "committed when asked: in a new repository to main, in the modlist repository only the source folder's paths. " +
+                "A mod lands or is refused whole. Progress is the version-in-git-progress notification.")
+            .Produces<VersionInGitResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
@@ -42,8 +43,8 @@ internal static class ModEndpoints
         return app;
     }
 
-    // init-source-mod: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> InitSourceMod(InitSourceModRequest req, InitSourceModHandler initSourceModHandler, ILoggerFactory loggerFactory)
+    // version-in-git: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
+    internal static async Task<IResult> VersionInGit(VersionInGitRequest req, VersionInGitHandler versionInGitHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -52,18 +53,21 @@ internal static class ModEndpoints
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.ModFolder) || mod.Repository.WhyNotWhole == NewRepositoryRequest.NotWhole))
             return EndpointMapping.BadRequest(NewRepositoryRequest.NotWhole);
         if (mods.Any(mod => mod.Commit is null))
-            return EndpointMapping.BadRequest(ModToInitSourceModRequest.LacksCommit);
+            return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksCommit);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsFile))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsFile);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestLacksItsText))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestLacksItsText);
         if (mods.Any(mod => mod.Repository.WhyNotWhole == NewRepositoryRequest.ManifestFileIsAPath))
             return EndpointMapping.BadRequest(NewRepositoryRequest.ManifestFileIsAPath);
+        List<ModToVersionInGit> toVersion = [];
+        foreach (var mod in mods)
+        {
+            if (mod.In is not { } heldIn) return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksIn);
+            toVersion.Add(new ModToVersionInGit(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), heldIn, mod.Commit == true));
+        }
 
-        return await EndpointMapping.Answered(
-            "Init source mod", logger,
-            initSourceModHandler.InitSourceModAsync([.. mods.Select(mod => new ModToInitSourceMod(mod.Name, mod.ModFolder, mod.Repository.ToNewRepository(), mod.Commit == true))]),
-            EndpointMapping.Refusal);
+        return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion), EndpointMapping.Refusal);
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
@@ -170,13 +174,15 @@ internal sealed record Ba2VariantRequest(uint Version, bool Compressed);
 
 internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint FileFlags);
 
-/// <summary>The mods to init source mod (ADR-0013).</summary>
-internal sealed record InitSourceModRequest(IReadOnlyList<ModToInitSourceModRequest> Mods);
+/// <summary>The mods to version in git (ADR-0013).</summary>
+internal sealed record VersionInGitRequest(IReadOnlyList<ModToVersionInGitRequest> Mods);
 
-/// <summary>A mod by name and folder, the repository its init source mod makes, and whether it commits.</summary>
-internal sealed record ModToInitSourceModRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool? Commit)
+/// <summary>A mod by name and folder, the source folder version in git makes for it, the repository that holds it, and
+/// whether it commits.</summary>
+internal sealed record ModToVersionInGitRequest(string Name, string ModFolder, NewRepositoryRequest Repository, bool? Commit, SourceModIn? In)
 {
-    internal const string LacksCommit = "A mod to init needs commit: true to commit what it tracks, or false to leave it uncommitted.";
+    internal const string LacksCommit = "A mod to version in git needs commit: true to commit what it tracks, or false to leave it uncommitted.";
+    internal const string LacksIn = "A mod to version in git needs in: NewRepository or ModlistRepository.";
 }
 
 /// <summary>The source folder a mod's repository is made in, and what the extension hands its first commit (ADR-0016): its

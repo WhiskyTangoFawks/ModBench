@@ -13,8 +13,8 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     public SourceCommitAtHeadTests()
     {
         _submodule = new PinnedSubmodule(_root);
-        _commits["first"] = _submodule.Commit(("readme.txt", "first"));
-        _commits["second"] = _submodule.Commit(("readme.txt", "second"));
+        _commits["first"] = _submodule.Commit(("readme.txt", "first"), ("build.json", "{}"));
+        _commits["second"] = _submodule.Commit(("readme.txt", "second"), ("build.json", "{}"));
     }
 
     public void Dispose()
@@ -60,7 +60,6 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Theory]
-    [InlineData("core.autocrlf", "false")]
     [InlineData("core.longpaths", "true")]
     [InlineData("core.quotePath", "false")]
     [InlineData("commit.gpgsign", "false")]

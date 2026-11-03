@@ -165,9 +165,9 @@ def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
     return instance / 'source' / mod
 
 
-def init_source_mod(fixture: Fixture, mod: str) -> None:
-    call('POST', fixture.url + '/init-source-mod', {'mods': [{
-        'name': mod, 'modFolder': str(fixture.instance / 'mods' / mod), 'commit': True,
+def version_in_git(fixture: Fixture, mod: str) -> None:
+    call('POST', fixture.url + '/version-in-git', {'mods': [{
+        'name': mod, 'modFolder': str(fixture.instance / 'mods' / mod), 'commit': True, 'in': 'NewRepository',
         'repository': {
             'sourceFolder': str(source_folder(fixture.instance, mod)), 'assets': [],
             'buildFile': json.dumps({'output': mod})}}]})

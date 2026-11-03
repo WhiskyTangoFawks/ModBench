@@ -121,7 +121,7 @@ export async function newRepositoryOf(
 
 // A source folder holds the mod's files at their own paths, beside its own (wire/sourceMod.ts).
 function takenBySourceFolder(entries: readonly string[], manifestFile: string): string | undefined {
-  const own = [BUILD_FILE, PLUGIN_SOURCE_FOLDER, '.gitignore', '.git', manifestFile];
+  const own = [BUILD_FILE, PLUGIN_SOURCE_FOLDER, '.gitignore', '.gitattributes', '.git', manifestFile];
   const taken = entries.find((entry) => own.some((name) => name.toLowerCase() === entry.toLowerCase()));
   return taken === undefined ? undefined : `its '${taken}' is where its source folder holds its own`;
 }

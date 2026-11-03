@@ -77,8 +77,8 @@ internal static class EndpointMapping
     internal static IResult Refusal(SelectionRefusal<RecordEditRefusal> refusal) =>
         RecordEditProblem(refusal.Refusal, refusal.Message, path: null);
 
-    internal static IResult Refusal(SelectionRefusal<InitSourceModRefusal> refusal) =>
-        WholeSelection(refusal, InitSourceModRefusal.NoLoadOrder, InitSourceModRefusal.GitUnavailable);
+    internal static IResult Refusal(SelectionRefusal<VersionInGitRefusal> refusal) =>
+        WholeSelection(refusal, VersionInGitRefusal.NoLoadOrder, VersionInGitRefusal.GitUnavailable);
 
     internal static IResult Refusal(SelectionRefusal<BuildRefusal> refusal) =>
         WholeSelection(refusal, BuildRefusal.NoLoadOrder, BuildRefusal.GitUnavailable);

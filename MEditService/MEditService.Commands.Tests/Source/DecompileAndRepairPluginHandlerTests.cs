@@ -30,8 +30,8 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
         WriteCleanPlugin(_sourceMod, "First.esp");
         Load(Entry(_sourceMod, "First.esp"));
-        Assert.Single(TestEditService.InitSourceModHandler(_holder)
-            .InitSourceModAsync(ToInitSourceMod.In(_holder.Held?.Snapshot, SourceModName)).GetAwaiter().GetResult().Value().Applied);
+        Assert.Single(TestEditService.VersionInGitHandler(_holder)
+            .VersionInGitAsync(ToVersionInGit.In(_holder.Held?.Snapshot, SourceModName)).GetAwaiter().GetResult().Value().Applied);
     }
 
     public void Dispose() => _root.Dispose();

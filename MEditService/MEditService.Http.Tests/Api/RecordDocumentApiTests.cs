@@ -22,7 +22,7 @@ public sealed class RecordDocumentApiTests : HostedTests
     private async Task<ScatteredFixtureData> CompiledPlugin()
     {
         var fx = await NonCompiledPlugin();
-        (await Client.InitSourceMod(Origin)).EnsureSuccessStatusCode();
+        (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;

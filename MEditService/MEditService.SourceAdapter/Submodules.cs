@@ -10,18 +10,18 @@ internal static class Submodules
     /// <c>origin</c>, else the first remote by name, as last fetched, lacks HEAD. None with no repository or no remote.</summary>
     internal static (bool Uncommitted, bool Unpushed)? RemoteOf(string sourceFolder)
     {
-        var git = new SourceRepositoryGit(sourceFolder);
+        var git = SourceRepositoryGit.Holding(sourceFolder);
         if (!git.Exists) return null;
         var remotes = git.Run("remote").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var remote = remotes.Contains(Origin) ? Origin : remotes.Order(StringComparer.Ordinal).FirstOrDefault();
-        return remote is null ? null : (git.HoldsUncommittedChanges(), !git.RemoteHoldsHead(remote));
+        return remote is null ? null : (git.HoldsUncommittedChanges(), !git.RemoteHoldsTheSource(remote));
     }
 
     internal static SubmoduleHead CommitAtHead(Submodule submodule, CancellationToken cancel)
     {
         var cloned = HoldsNothing(submodule.Folder);
         if (cloned) Clone(submodule, cancel);
-        var git = new SourceRepositoryGit(submodule.Folder);
+        var git = SourceRepositoryGit.Own(submodule.Folder);
         if (!git.Exists) throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
         var head = git.HeadCommit() ?? throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no commit.");
         var detachedAtThePin = head == submodule.Pin && git.Run("branch", "--show-current").Length == 0;
@@ -65,7 +65,7 @@ internal static class Submodules
             {
                 throw SourceStopException.GitFailed($"its remote holds no commit {submodule.Pin}");
             }
-            var git = new SourceRepositoryGit(submodule.Folder);
+            var git = SourceRepositoryGit.Own(submodule.Folder);
             foreach (var (key, value) in GitInit.Settings) git.Run("config", key, value);
             GitInit.EnsureCommitIdentity(git);
             if (!SourceRepositoryGit.HoldsRepository(submodule.Folder) && !git.TryRun(out _, "branch", "--track", "main", $"{Origin}/main"))
@@ -80,7 +80,7 @@ internal static class Submodules
 
     private static bool LacksPin(Submodule submodule)
     {
-        var git = new SourceRepositoryGit(submodule.Folder);
+        var git = SourceRepositoryGit.Own(submodule.Folder);
         return git.Exists && !git.TryRun(out _, "cat-file", "-e", $"{submodule.Pin}^{{commit}}");
     }
 

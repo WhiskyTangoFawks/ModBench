@@ -44,7 +44,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'init-source-mod-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'version-in-git-progress', 'external-change',
   'record-filter-cleared',
 ] as const;
 
@@ -56,7 +56,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
  *  `NotificationEvent`, carrying only the fields its kind uses. */
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
-  'init-source-mod-progress': InitSourceModProgress;
+  'version-in-git-progress': VersionInGitProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
   'record-filter-cleared': components['schemas']['RecordFilterClearedNotification'];
   'rows-changed': { plugin: PluginAddress; keys: string[] };
@@ -141,11 +141,11 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 
 export type { PluginAddress };
 
-type InitializedMod = components['schemas']['InitializedMod'];
+type VersionedMod = components['schemas']['VersionedMod'];
 
 /** Version in git's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
-export interface InitSourceModOutcome {
-  landed: readonly InitializedMod[];
+export interface VersionInGitOutcome {
+  landed: readonly VersionedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 
@@ -154,10 +154,13 @@ export interface InitSourceModOutcome {
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
 /** A mod to version in git, and the repository made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
-export type ModToInitSourceMod = components['schemas']['ModToInitSourceModRequest'];
+export type ModToVersionInGit = components['schemas']['ModToVersionInGitRequest'];
 
 /** The repository made for a mod with none: its source folder, its assets by path in the mod folder, and its manifest. */
 export type NewRepository = components['schemas']['NewRepositoryRequest'];
+
+/** Which repository holds the source folder version in git makes: a new one of its own, or the modlist repository. */
+export type SourceModIn = components['schemas']['SourceModIn'];
 
 /** A mod to build, as the extension hands it (ADR-0016): the paths it excludes, and the built-in step of its build file to run. */
 export type BuildMod = components['schemas']['BuildModRequest'];
@@ -188,7 +191,7 @@ export interface BuildOutcome {
 type ModlistProgress = components['schemas']['ModlistProgress'];
 
 /** A mod's progress through version in git: its place in the selection and the step it is at. */
-export type InitSourceModProgress = ModlistProgress & { phase?: components['schemas']['InitSourceModPhase'] | null };
+export type VersionInGitProgress = ModlistProgress & { phase?: components['schemas']['VersionInGitPhase'] | null };
 
 /** A source mod's repository as the instance repository pins it: the folder git checks it out in, the pin and its branch. */
 export type Submodule = components['schemas']['SubmoduleRequest'];
@@ -235,7 +238,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  initSourceMod(mods: readonly ModToInitSourceMod[], options?: { onProgress?: (status: InitSourceModProgress) => void }): Promise<InitSourceModOutcome | WriteRefused>;
+  versionInGit(mods: readonly ModToVersionInGit[], options?: { onProgress?: (status: VersionInGitProgress) => void }): Promise<VersionInGitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,

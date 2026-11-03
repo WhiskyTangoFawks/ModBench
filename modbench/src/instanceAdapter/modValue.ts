@@ -23,7 +23,7 @@ export async function folderValueOver(reads: FolderReads, folder: string): Promi
   return { files, exclude: [...exclude], ignoresCase: cased !== undefined && (await reads.fileStamp(join(folder, otherCase(cased)))).kind === 'read' };
 }
 
-const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
+const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/') || path === '.gitattributes';
 
 /** A source folder's files that git does not hold, by their own paths: a source folder's manifest names those and no
  *  others (modlist-repository.md, The manifest, story 5). `heldByGit` lists the files git holds in `folder`. */
@@ -35,7 +35,7 @@ export async function sourceFolderValueOver(
   return folderValueOver({ ...reads, filesIn }, folder);
 }
 
-type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule' | 'flaggedHash'>;
+type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule' | 'sourceFolderTracked' | 'flaggedHash'>;
 
 // None when the game folder is not found.
 async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<FileRead<HashedPath[] | undefined>> {
@@ -49,6 +49,9 @@ async function gameFilesOver(reads: ModReads, folder: string, paths: readonly st
   }
   return { kind: 'read', answer: files };
 }
+
+const cloneGets = async (reads: ModReads, repository: string): Promise<boolean> =>
+  !('lacks' in await reads.submodule(repository)) || reads.sourceFolderTracked(repository);
 
 /** What a mod's status reads of the instance besides its manifest; a read that rejects leaves the rest unreadable. Nothing
  *  of the folder is read when no manifest is `asked` for. */
@@ -65,7 +68,7 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
       const flaggedHash = await reads.flaggedHash(hash, flags);
       if (flaggedHash !== undefined) flaggedHashes.set(path, flaggedHash);
     }
-    const repositoryHosted = asked.repository !== undefined && !('lacks' in await reads.submodule(asked.repository));
+    const repositoryHosted = asked.repository !== undefined && await cloneGets(reads, asked.repository);
     return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryHosted };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
