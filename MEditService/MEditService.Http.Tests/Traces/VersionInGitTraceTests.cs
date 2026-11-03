@@ -67,7 +67,7 @@ public sealed class VersionInGitTraceTests : HostedTests
         var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => !path.StartsWith("plugin-source/", StringComparison.Ordinal));
-        Assert.Equal([".gitignore", "build.json", "textures/added.dds"], committed);
+        Assert.Equal([".gitattributes", ".gitignore", "build.json", "textures/added.dds"], committed);
         Assert.Equal("the build file", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "HEAD:build.json"));
     }
 
