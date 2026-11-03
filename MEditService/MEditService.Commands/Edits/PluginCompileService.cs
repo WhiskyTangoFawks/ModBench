@@ -72,7 +72,7 @@ internal sealed class PluginCompileService(
         {
             return PluginCompileOutcome.Refused(
                 CompileRefusal.SourceDoesNotParse,
-                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))}");
+                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))} {RegenerateTheSource}");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);

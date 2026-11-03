@@ -34,11 +34,4 @@ describe('applying the changes mEdit answered', () => {
     expect(await applyAnswered(applying, [CHANGES], [A])).toBe('EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.');
     expect(refreshed).toEqual([A]);
   });
-
-  it('applies no edit when mEdit answered no changes', async () => {
-    const { applying, applied, refreshed } = source();
-
-    expect(await applyAnswered(applying, [], [A])).toBeUndefined();
-    expect([applied, refreshed]).toEqual([[], [A]]);
-  });
 });

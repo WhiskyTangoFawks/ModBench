@@ -256,6 +256,25 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(['.esp', '.esm', '.esl']));
       return;
     }
+    if (method === 'POST' && url === '/plugins/rename-source-changes') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const asked: unknown = JSON.parse(body);
+        if (!isRecord(asked) || typeof asked.name !== 'string') throw new Error(`expected a rename body naming a plugin, got: ${body}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ treeName: asked.name, moves: [], deletions: [], documents: [] }));
+      });
+      return;
+    }
+    if (method === 'POST' && url === '/plugins/move-last-written') {
+      req.on('data', () => {});
+      req.on('end', () => {
+        res.writeHead(204);
+        res.end();
+      });
+      return;
+    }
     if (method === 'POST' && url === '/plugins/create') {
       let body = '';
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
@@ -628,6 +647,20 @@ describe('a gesture the agent runs', () => {
     assert.strictEqual(answer.isError, false, answer.text);
     assert.strictEqual(await agentModEnabled(), true);
     assert.ok(readFileSync(modlistPath, 'utf8').includes('+Agent Mod'));
+  });
+
+  it('renames a plugin with no plugin source, mEdit answering no source changes', async () => {
+    writeFileSync(modlistPath, '+Agent Mod\r\n');
+    writeFileSync(path.join(modDir, 'Plain.esp'), '');
+    await waitFor('the agent to read Plain.esp in Agent Mod', async () => {
+      const read = await callTool('list_plugins');
+      return read.text.includes('Plain.esp');
+    });
+
+    const answer = await callTool('plugin_rename', { argument: { name: 'Plain.esp', origin: 'Agent Mod' }, options: { name: 'Renamed.esp' } });
+
+    assert.strictEqual(answer.isError, false, answer.text);
+    assert.deepStrictEqual(readdirSync(modDir).filter((file) => file.endsWith('.esp')), ['Renamed.esp']);
   });
 
   it('reads the Toolbox\'s deployment folder from the setting the live wiring reads', async () => {

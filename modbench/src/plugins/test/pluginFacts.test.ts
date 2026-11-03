@@ -25,7 +25,7 @@ const lackingMasters = (...ghosts: string[]): Scene => (facts) => facts.reconcil
 const missingMaster = (ghost: string) => `"${ghost}" is a master of "A.esp", and is missing or not active.`;
 const masterFlagAfterB = (overrides: Partial<PluginMetadata> = {}): Scene => (facts) =>
   facts.reconciled([held({ isMaster: true, ...overrides }), held({ name: 'B.esp' })], [], [B, A], [B, A]);
-const MASTER_FLAG_LINE = 'Warning: "A.esp" has the master flag, so the game loads it before "B.esp", which has not.';
+const MASTER_FLAG_LINE = 'Warning: "A.esp" loads as a master, by its master flag or its extension, so before "B.esp", which does not.';
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], [], [], []);
 const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], [], [], []);
 const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], [], [], []);

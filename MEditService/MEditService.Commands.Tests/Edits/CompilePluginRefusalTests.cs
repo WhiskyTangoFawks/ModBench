@@ -48,6 +48,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, npcFile)}: RaceOld", refused.Message, StringComparison.Ordinal);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, otherFile)}: EditorTypo", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith("Decompile the plugin to regenerate the source.", refused.Message, StringComparison.Ordinal);
         Assert.Empty(answer.Applied);
     }
 }
