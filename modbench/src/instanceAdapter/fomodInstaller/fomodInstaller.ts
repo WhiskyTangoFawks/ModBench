@@ -327,15 +327,15 @@ async function filesUnder(root: string): Promise<string[]> {
 async function scriptFolder(root: string, files: readonly string[]): Promise<{ readonly root: string; dispose(): Promise<void> }> {
   const config = files.find((file) => keyOf(file) === MODULE_CONFIG);
   const text = config === undefined ? undefined : await releaseXmlText(join(root, config));
-  if (text === undefined) return { root, dispose: () => Promise.resolve() };
+  if (config === undefined || text === undefined) return { root, dispose: () => Promise.resolve() };
   const keys = files.map(keyOf);
   const holds = (folder: string): boolean => {
     const key = keyOf(folder).replace(/\/+$/, '');
     return key === '' || keys.some((file) => file.startsWith(`${key}/`));
   };
   const script = await makeTempDir(ownTempPrefix(root, 'fomodScript'));
-  await ensureDir(join(script, 'fomod'));
-  await write(join(script, 'fomod', 'ModuleConfig.xml'), moduleConfigForEngine(text, holds));
+  await ensureDir(join(script, dirname(config)));
+  await write(join(script, config), moduleConfigForEngine(text, holds));
   return { root: script, dispose: () => remove(script) };
 }
 
