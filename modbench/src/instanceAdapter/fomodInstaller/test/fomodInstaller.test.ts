@@ -121,6 +121,48 @@ describe('the FOMOD installer', () => {
     await expect(install(choices)).rejects.toThrow(refusal);
   });
 
+  it('matches a group and an option by the name the installer shows, without the spaces around it', async () => {
+    await release(config(steps(step('Main', group('Pick ', 'SelectExactlyOne',
+      option(' Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option B', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: ['Option A'] }]));
+
+    expect(await filesLanded()).toEqual(['A.esp']);
+  });
+
+  it('refuses a name that two options show alike once the spaces around it are gone', async () => {
+    await release(config(steps(step('Main', group('Pick', 'SelectAny',
+      option('Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option A ', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await expect(install(choose(['Main', { Pick: ['Option A'] }]))).rejects.toThrow('more than one option named "Option A"');
+  });
+
+  it('goes on past two options alike once trimmed when no choice names them', async () => {
+    await release(config(steps(step('Main', group('Pick', 'SelectAny',
+      option('Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option A ', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: [] }]));
+
+    expect(await filesLanded()).toEqual([]);
+  });
+
+  it('refuses a group name that two groups show alike, and goes on when no choice names it', async () => {
+    const twins = (name: string): string => group(name, 'SelectAny', option('Option A', file('a/A.esp', 'A.esp'), 'Optional'));
+    await release(config(steps(step('Main', twins('Pick') + twins('Pick ') + group('Other', 'SelectAny', option('Option B', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await expect(install(choose(['Main', { Pick: [] }]))).rejects.toThrow('Step "Main" has more than one group named "Pick"');
+    await install(choose(['Main', { Other: ['Option B'] }]));
+    expect(await filesLanded()).toEqual(['B.esp']);
+  });
+
+  it('matches a step by the name the installer shows, without the spaces around it', async () => {
+    await release(config(steps(step(' Main ', group('Pick', 'SelectAny', option('Option A', file('a/A.esp', 'A.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: ['Option A'] }]));
+
+    expect(await filesLanded()).toEqual(['A.esp']);
+  });
+
   describe('each option\'s type', () => {
     const notUsableWhileActive = `<plugin name="Not usable here"><description/><files>${file('f/c.esp', 'c.esp')}</files>`
       + '<typeDescriptor><dependencyType><defaultType name="Optional"/><patterns><pattern><dependencies>'
