@@ -24,5 +24,8 @@ function gitWith(env: NodeJS.ProcessEnv | undefined): { git: Git; gitFed: GitFed
 /** What git answers in `folder`, and what it answers handed `input`. */
 export const { git, gitFed } = gitWith(undefined);
 
+/** git, staging into the index at `index` and not the repository's. */
+export const gitStagingInto = (index: string): { git: Git; gitFed: GitFed } => gitWith({ ...process.env, GIT_INDEX_FILE: index });
+
 /** git, each object it writes kept in `objects` and out of the repository. */
 export const gitWritingInto = (objects: string): { git: Git; gitFed: GitFed } => gitWith({ ...process.env, GIT_OBJECT_DIRECTORY: objects });
