@@ -75,6 +75,18 @@ describe('modbench.plugin.loadAfter', () => {
     expect(instance.refresh).toHaveBeenCalled();
   });
 
+  it('leaves the userlist as it was for a rule it holds, the second time the same pick is made', async () => {
+    const { fake } = registered();
+    picks.chosen = ['C.esp'];
+    await invoke(row('A.esp'));
+    const held = (await fake.adapter.reading()).sortingRuleFiles.userlist;
+
+    await invoke(row('A.esp'));
+
+    expect(held).toMatchObject({ kind: 'text', text: 'plugins:\n  - name: A.esp\n    after:\n      - C.esp\n' });
+    expect((await fake.adapter.reading()).sortingRuleFiles.userlist).toEqual(held);
+  });
+
   it('writes nothing when the pick is dismissed', async () => {
     const { fake } = registered();
 
