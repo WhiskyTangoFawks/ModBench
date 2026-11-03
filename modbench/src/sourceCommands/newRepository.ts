@@ -173,7 +173,7 @@ async function foldersNotLinked(
   return notLinked;
 }
 
-const NO_MODLIST_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
+export const NO_MODLIST_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
 
 async function linesLeftIn(adapter: Pick<Adapter, 'writeSourceFolderLines'>, sourceFolder: string): Promise<string | undefined> {
   return adapter.writeSourceFolderLines([sourceFolder], false).then(
@@ -220,11 +220,10 @@ export async function modsPlaced<R>(
       else made.set(mod, decided);
     }
   }
-  const folderOf = (mod: string): string => made.get(mod)?.sourceFolder.path ?? mod;
-  const takenBack = async (unlanded: readonly string[]): Promise<Map<string, string>> => {
+  const takenBack = async (isUnlanded: (mod: string) => boolean): Promise<Map<string, string>> => {
     const left = new Map<string, string>();
-    for (const mod of inModlist ? unlanded : []) {
-      const why = await linesLeftIn(adapter, folderOf(mod));
+    for (const [mod, { sourceFolder }] of inModlist ? made : []) {
+      const why = isUnlanded(mod) ? await linesLeftIn(adapter, sourceFolder.path) : undefined;
       if (why !== undefined) left.set(mod, why);
     }
     return left;
@@ -241,11 +240,11 @@ export async function modsPlaced<R>(
   try {
     outcome = await run(made);
   } catch (err) {
-    const left = await takenBack([...made.keys()]);
+    const left = await takenBack(() => true);
     throw left.size === 0 ? err : new Error(`${errorMessage(err)} ${[...left.values()].join(' ')}`, { cause: err });
   }
   const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
-  const notTakenBack = await takenBack([...made.keys()].filter((mod) => !landed.has(mod)));
+  const notTakenBack = await takenBack((mod) => !landed.has(mod));
   const notLinked = isRefused(outcome) ? new Map<string, string>() : await foldersNotLinked(adapter, made, [...landed]);
   const withLinesLeft = <T>(refused: readonly ItemRefusal<T>[], modOf: (item: T) => string): ItemRefusal<T>[] => refused.map((entry) => {
     const stays = notTakenBack.get(modOf(entry.item));

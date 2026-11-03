@@ -136,8 +136,18 @@ describe('modbench.mod.versionInGit', () => {
     await handler(row(FIRST));
 
     expect(showQuickPick.mock.calls[0]?.[0]).toEqual([
-      expect.objectContaining({ where: 'NewRepository' }), expect.objectContaining({ where: 'ModlistRepository' }),
+      expect.objectContaining({ where: 'NewRepository' }), expect.objectContaining({ where: 'ModlistRepository' }), expect.objectContaining({ where: 'WholeFolder' }),
     ]);
+  });
+
+  it('puts a mod\'s whole folder in the modlist repository without asking mEdit, and shows no source in the Explorer', async () => {
+    showQuickPick.mockResolvedValueOnce({ where: 'WholeFolder' }).mockResolvedValueOnce({ commit: true });
+    const commands = versionInGitCommands();
+    const { handler, onCommitted, reporter } = invokeVersionInGit(commands, undefined, undefined, true);
+
+    await handler(row(FIRST));
+
+    expect([commands.sent(), revealed(), reporter.landings, reporter.reports, onCommitted.mock.calls.length]).toEqual([[], [], ['"ModA" is held whole by git.'], [], 0]);
   });
 
   it('hands mEdit the repository picked, then the commit picked', async () => {

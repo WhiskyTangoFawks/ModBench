@@ -100,6 +100,8 @@ export type AdapterCall =
   | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
   | { readonly verb: 'writeOtherManifestLines' }
   | { readonly verb: 'writeSourceFolderLines'; readonly sourceFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'writeHeldWholeLines'; readonly modFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'commitFolder'; readonly folder: string; readonly message: string }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly fomod?: FomodAnswer }
@@ -418,6 +420,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     writeSourceFolderLines: (sourceFolders, held) => record({ verb: 'writeSourceFolderLines', sourceFolders, held }, undefined),
+    writeHeldWholeLines: (modFolders, held) => record({ verb: 'writeHeldWholeLines', modFolders, held }, undefined),
+    commitFolder: (folder, message) => record({ verb: 'commitFolder', folder, message }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),

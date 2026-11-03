@@ -15,6 +15,7 @@ import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
 import { filesBelow } from './mo2Files';
 import { git } from '../git';
+import { commitFolder } from '../commitFolder';
 import { foldersHeldWhole } from '../foldersHeldWhole';
 import { folderValueOver, modValueOver, sourceFolderValueOver } from '../modValue';
 import type { Mo2Context } from './mo2Context';
@@ -94,6 +95,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),
     foldersHeldWhole: (folders) => foldersHeldWhole(instanceRoot, folders),
+    commitFolder: (folder, message) => commitFolder(instanceRoot, folder, message),
     sourceFolderValue: (folder) => sourceFolderValueOver(adapter, async (at) => (await git(at, 'ls-files', '-z')).split('\0').filter((path) => path !== ''), folder),
     trashingReplaced,
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),

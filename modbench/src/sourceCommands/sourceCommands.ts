@@ -11,6 +11,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { inModOrder } from './inModOrder';
 import { modsPlaced, type MadeSourceFolder } from './newRepository';
+import { modsHeldWhole } from './wholeFolder';
 import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
@@ -20,7 +21,7 @@ interface SourceCommandsDeps {
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceModFolders'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'sourceFolderValue'
-    | 'repositoryOnDisk' | 'writeSourceFolderLines'>;
+    | 'repositoryOnDisk' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
   tasks: StepTasks;
@@ -135,20 +136,24 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
     /** A mod whose name gives it no source folder, or whose files or metadata cannot be read, is refused here, naming why,
      *  and mEdit makes the rest source mods. */
     versionInGit: async (mods: readonly string[], options: VersionInGitOptions): Promise<InitializedSourceMod | WriteRefused> =>
-      modsVersionedInGit({ client, adapter }, mods, options),
+      options.where === 'WholeFolder' ? modsHeldWhole(adapter, trash, { mods, ...options }) : modsVersionedInGit({ client, adapter }, mods, { ...options, where: options.where }),
   };
 }
 
+/** Where git holds a mod: its source folder in a repository of its own or the modlist repository, or its whole folder in
+ *  the modlist repository. */
+export type VersionInGitWhere = SourceModIn | 'WholeFolder';
+
 interface VersionInGitOptions {
   readonly commit: boolean;
-  readonly where: SourceModIn;
+  readonly where: VersionInGitWhere;
   readonly onProgress?: (status: InitProgress) => void;
 }
 
 type VersionInGitDeps = Pick<SourceCommandsDeps, 'client' | 'adapter'>;
 
 async function modsVersionedInGit(
-  { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: VersionInGitOptions,
+  { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: VersionInGitOptions & { readonly where: SourceModIn },
 ): Promise<InitializedSourceMod | WriteRefused> {
   const sentOver = async (made: ReadonlyMap<string, MadeSourceFolder>): Promise<VersionInGitOutcome | WriteRefused> => {
     if (made.size === 0) return { landed: [], refused: [] };

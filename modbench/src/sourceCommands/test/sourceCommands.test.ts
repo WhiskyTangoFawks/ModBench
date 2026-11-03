@@ -501,6 +501,95 @@ describe('sourceCommands versionInGit', () => {
     });
   });
 
+  describe('as the mod\'s whole folder in the modlist repository', () => {
+    const wholeFolder = (commit: boolean) => ({ where: 'WholeFolder', commit }) as const;
+    const FOLDER_C = (): string => folderOf('ModC');
+    const verbs = (calls: readonly AdapterCall[]) => calls.filter((call) => ['writeHeldWholeLines', 'trashFileIn', 'commitFolder'].includes(call.verb));
+    async function modWithManifest(mod: string): Promise<void> {
+      await mkdir(folderOf(mod), { recursive: true });
+      await writeManifestIn(folderOf(mod), { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() });
+    }
+    const over = (answers: InstanceAnswers = {}, sourceMods: Record<string, string> = {}) => fakeInstanceAdapter(
+      readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA', 'ModC', 'ModD'), sourceModFolders: repositoriesOf(sourceMods) }),
+      { repositoryOnDisk: true, ...answers },
+    );
+    const versioned = (client: InMemoryMEditClient, fake: ReturnType<typeof over>, mods: string[], commit = true) =>
+      sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(mods, wholeFolder(commit));
+
+    it('lets the folder into the repository, sends the mod\'s manifest to the trash, then commits the folder as Init <mod>, handing mEdit nothing', async () => {
+      await modWithManifest('ModC');
+      const { client, handed } = committing();
+      const fake = over();
+
+      const outcome = await versioned(client, fake, ['ModC']);
+
+      expect([handed, verbs(fake.calls), outcome]).toEqual([[], [
+        { verb: 'writeHeldWholeLines', modFolders: [FOLDER_C()], held: true },
+        { verb: 'trashFileIn', folder: FOLDER_C(), relativePath: 'ModC.manifest.json' },
+        { verb: 'commitFolder', folder: FOLDER_C(), message: 'Init ModC' },
+      ], { landed: [{ mod: 'ModC', plugins: [] }], refused: [] }]);
+    });
+
+    it('commits nothing when asked not to', async () => {
+      const fake = over();
+
+      const outcome = await versioned(committing().client, fake, ['ModC'], false);
+
+      expect([verbs(fake.calls).map((call) => call.verb), outcome]).toEqual([['writeHeldWholeLines'], { landed: [{ mod: 'ModC', plugins: [] }], refused: [] }]);
+    });
+
+    it('refuses a source mod, which git holds by its source folder, and a mod git holds whole already, naming why, and lands the rest', async () => {
+      const fake = over({ heldWholeByGit: new Set([folderOf('ModD')]) }, { ModA: '/source/ModA' });
+
+      const outcome = await versioned(committing().client, fake, ['ModA', 'ModC', 'ModD']);
+
+      expect(outcome).toEqual({
+        landed: [{ mod: 'ModC', plugins: [] }],
+        refused: [{ item: 'ModA', reason: 'is a source mod, which git holds by its source folder' }, { item: 'ModD', reason: 'is held whole by git already' }],
+      });
+    });
+
+    it('refuses the selection, writing nothing, while the instance holds no repository', async () => {
+      const fake = over({ repositoryOnDisk: false });
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect([verbs(fake.calls), outcome]).toEqual([[], { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' }]);
+    });
+
+    it('refuses each mod when the ignore list cannot let its folder in', async () => {
+      const fake = over({ refusals: (call) => (call.verb === 'writeHeldWholeLines' ? 'a marker with no match' : undefined) });
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect(outcome).toEqual({ landed: [], refused: [{ item: 'ModC', reason: 'a marker with no match' }] });
+    });
+
+    it('takes the folder back out of the repository, and refuses the mod, when its manifest could not go to the trash', async () => {
+      await modWithManifest('ModC');
+      const fake = over({ refusals: (call) => (call.verb === 'trashFileIn' ? 'the trash is full' : undefined) });
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect([verbs(fake.calls).map((call) => call.verb), outcome]).toEqual([
+        ['writeHeldWholeLines', 'trashFileIn', 'writeHeldWholeLines'],
+        { landed: [], refused: [{ item: 'ModC', reason: 'its manifest could not go to the trash: the trash is full' }] },
+      ]);
+      expect(verbs(fake.calls).at(-1)).toEqual({ verb: 'writeHeldWholeLines', modFolders: [FOLDER_C()], held: false });
+    });
+
+    it('refuses a mod committed with nothing, but keeps its folder in the repository', async () => {
+      const fake = over({ refusals: (call) => (call.verb === 'commitFolder' ? 'nothing to commit' : undefined) });
+
+      const outcome = await versioned(committing().client, fake, ['ModC']);
+
+      expect([verbs(fake.calls).filter((call) => call.verb === 'writeHeldWholeLines'), outcome]).toEqual([
+        [{ verb: 'writeHeldWholeLines', modFolders: [FOLDER_C()], held: true }],
+        { landed: [], refused: [{ item: 'ModC', reason: 'was put under git, but could not be committed: nothing to commit' }] },
+      ]);
+    });
+  });
+
   it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, version in git)', async () => {
     const folder = folderOf('ModA');
     const client = new InMemoryMEditClient();

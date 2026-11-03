@@ -731,6 +731,11 @@ export interface InstanceAdapter {
   /** Lets the instance repository hold each source folder of `sourceFolders`, or with `held` false leaves each out. Writes
    *  nothing without an ignore list; rejects, writing nothing, for a folder outside the source folder or an unpaired marker. */
   writeSourceFolderLines(sourceFolders: readonly string[], held: boolean): Promise<void>;
+  /** Lets the instance repository hold the files of each mod folder of `modFolders`, or with `held` false leaves them out.
+   *  Writes nothing without an ignore list; rejects, writing nothing, for a folder outside the mods folder or an unpaired marker. */
+  writeHeldWholeLines(modFolders: readonly string[], held: boolean): Promise<void>;
+  /** Commits the files of `folder` that the instance repository holds, and only them, as `message`. Rejects when git does. */
+  commitFolder(folder: string, message: string): Promise<void>;
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type VersionInGitOutcome, type PluginAddress, type SourceModIn } from '../client';
+import { isRefused, type VersionInGitOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
@@ -7,7 +7,7 @@ import { isClickedRow } from '../drivingLib/gestureEntry';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
-import type { SourceCommands } from '../sourceCommands/sourceCommands';
+import type { SourceCommands, VersionInGitWhere } from '../sourceCommands/sourceCommands';
 import { versionInGitProgressMessage } from './versionInGitProgress';
 import { pluginRowName } from '../wire/pluginAddress';
 import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
@@ -26,17 +26,20 @@ export interface VersionInGitDeps {
 
 type VersionedInGit = GestureResult<VersionInGitOutcome['landed'][number], string>;
 
-interface VersionInGitOptions { readonly commit: boolean; readonly where: SourceModIn }
+interface VersionInGitOptions { readonly commit: boolean; readonly where: VersionInGitWhere }
 
 type VersionInGitGiven = ModsGiven & VersionInGitOptions;
 
+const makesSourceMods = (where: VersionInGitWhere): boolean => where !== 'WholeFolder';
+
 // commands.md, `version in git`: the modlist repository is a choice only while the instance holds one, and a pick of
 // one choice is not shown.
-async function pickWhere(holdsRepository: boolean): Promise<SourceModIn | undefined> {
+async function pickWhere(holdsRepository: boolean): Promise<VersionInGitWhere | undefined> {
   if (!holdsRepository) return 'NewRepository';
   const picked = await vscode.window.showQuickPick([
     { label: 'A source mod in a new repository', where: 'NewRepository' as const },
     { label: 'A source mod in the modlist repository', where: 'ModlistRepository' as const },
+    { label: 'The mod\'s whole folder in the modlist repository', where: 'WholeFolder' as const },
   ], { placeHolder: 'Version in git: where git holds the mod' });
   return picked?.where;
 }
@@ -66,7 +69,7 @@ export function registerVersionInGitCommand(deps: VersionInGitDeps, paletteSelec
     },
     fromAgent: ({ argument, options }) => ({ ...givenByAgent(argument), commit: options.commit, where: options.where }),
     run: ({ mods, commit, where, invokedFrom }) => versionModsInGit(deps, mods, { commit, where }, invokedFrom),
-    report: (result, { mods, refusedRows }) => reportVersioned(deps.reporter, result, mods, refusedRows),
+    report: (result, { mods, refusedRows, where }) => reportVersioned(deps.reporter, result, mods, refusedRows, where),
   };
   return registerAgentGesture('modbench.mod.versionInGit', paletteSelection, gesture, isClickedRow);
 }
@@ -85,14 +88,14 @@ async function versionModsInGit(
         onProgress: (status) => { progress.say(versionInGitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
       if (isRefused(result)) return { applied: false, refusal: result.message };
-      if (result.landed.length > 0) await onCommitted();
+      if (makesSourceMods(options.where) && result.landed.length > 0) await onCommitted();
       const { notes = [], ...outcome } = result;
       return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Version in git:', detail, severity: 'warning' as const })) } };
     } finally {
       progress.say(undefined);
     }
   });
-  const lastLanded = result.applied ? result.outcome.landed.at(-1) : undefined;
+  const lastLanded = result.applied && makesSourceMods(options.where) ? result.outcome.landed.at(-1) : undefined;
   if (!result.applied || lastLanded === undefined) return result;
   const unshown = await showInExplorer(instance.value.paths.sourceDirs.get(lastLanded.mod), lastLanded.mod);
   return unshown === undefined ? result : { ...result, partial: [...result.partial ?? [], unshown] };
@@ -110,7 +113,7 @@ async function showInExplorer(folder: string | undefined, mod: string): Promise<
 }
 
 function reportVersioned(
-  reporter: Reporter, result: VersionedInGit, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[],
+  reporter: Reporter, result: VersionedInGit, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[], where: VersionInGitWhere,
 ): void {
   if (!result.applied) { reporter.report('error', result.refusal); return; }
   reportPartial(reporter, result.partial);
@@ -118,7 +121,8 @@ function reportVersioned(
   if (refused.length + refusedRows.length > 0) {
     reportRefused(reporter, mods.length, { refused, plugins: landed.flatMap((mod) => mod.plugins), refusedPlugins: refusedRows });
   } else if (landed.length > 0) {
-    reporter.landed(mods.length === 1 ? `"${mods[0]}" is a source mod.` : `${mods.length} mods are source mods.`);
+    const [one, many] = makesSourceMods(where) ? ['a source mod', 'source mods'] : ['held whole by git', 'held whole by git'];
+    reporter.landed(mods.length === 1 ? `"${mods[0]}" is ${one}.` : `${mods.length} mods are ${many}.`);
   }
 }
 

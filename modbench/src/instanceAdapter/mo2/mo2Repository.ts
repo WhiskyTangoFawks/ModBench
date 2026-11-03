@@ -12,13 +12,13 @@ import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
-  sourceRootDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceFolderLines, withSourceModLines,
+  sourceRootDir, submodulesFile, whitelistIgnoreList, withHeldWholeLines, withOtherManifestLines, withSourceFolderLines, withSourceModLines,
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines' | 'writeHeldWholeLines'> & Pick<ManagerAdapter, 'filesKept'>;
 
 // A manifest outside the mod folders, by the names of the folders down to it and its own.
 interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
@@ -99,17 +99,20 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
   });
 }
 
-async function sourceFolderLinesWritten(instanceRoot: string, sourceFolders: readonly string[], held: boolean): Promise<void> {
+// The lines of folders of `root`, written in the ignore list when the instance has one.
+async function folderLinesWritten(
+  instanceRoot: string, root: string, folders: readonly string[], kept: string, withLines: (ignoreList: string, names: readonly string[]) => string | undefined,
+): Promise<void> {
   const file = ignoreListFile(instanceRoot);
-  const names = sourceFolders.map((folder) => {
-    const name = relative(sourceRootDir(instanceRoot), folder);
-    if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${sourceRootDir(instanceRoot)}, so the instance repository's ignore list does not name it`);
+  const names = folders.map((folder) => {
+    const name = relative(root, folder);
+    if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${root}, so the instance repository's ignore list does not name it`);
     return name;
   });
   if (!(await exists(file))) return;
   await putIfChanged(file, (before) => {
-    const after = withSourceFolderLines(before, names, held);
-    if (after === undefined) throw new Error(`${file} has a marker of the source folders it holds with no match, so their lines are left as they are`);
+    const after = withLines(before, names);
+    if (after === undefined) throw new Error(`${file} has a marker of the ${kept} it holds with no match, so their lines are left as they are`);
     return after;
   });
 }
@@ -230,7 +233,11 @@ export function mo2Repository(
 
     writeOtherManifestLines: () => otherManifestLinesWritten(context),
 
-    writeSourceFolderLines: (sourceFolders, held) => sourceFolderLinesWritten(instanceRoot, sourceFolders, held),
+    writeSourceFolderLines: (sourceFolders, held) =>
+      folderLinesWritten(instanceRoot, sourceRootDir(instanceRoot), sourceFolders, 'source folders', (list, names) => withSourceFolderLines(list, names, held)),
+
+    writeHeldWholeLines: (modFolders, held) =>
+      folderLinesWritten(instanceRoot, modsDir(instanceRoot), modFolders, 'mod folders held whole', (list, names) => withHeldWholeLines(list, names, held)),
 
     gameFiles,
 

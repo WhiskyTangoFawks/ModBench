@@ -27,7 +27,8 @@ const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
 
 export const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
 
-const manifestsIn = async (folder: string): Promise<string[]> => (await fileNamesIn(folder)).filter(isManifestPath);
+/** The names of the manifests `folder` holds, whatever they are named. */
+export const manifestsIn = async (folder: string): Promise<string[]> => (await fileNamesIn(folder)).filter(isManifestPath);
 
 const manifestFileIn = async (folder: string): Promise<string> => join(folder, (await manifestsIn(folder))[0] ?? manifestNameOf(folder));
 

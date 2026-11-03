@@ -561,6 +561,63 @@ describe('the MO2 adapter\'s repository', () => {
     });
   });
 
+  describe('a mod folder the modlist repository holds whole', () => {
+    const shown = (): string[] =>
+      runGit('status', '--porcelain', '-z', '--untracked-files=all', '--', 'mods').split('\0').filter(Boolean).map((line) => line.slice(3)).sort();
+    async function modFolder(name: string): Promise<string> {
+      await put(`mods/${name}/${name}.esp`);
+      await put(`mods/${name}/textures/a.dds`);
+      await put(`mods/${name}/meta.ini`);
+      return join(root, 'mods', name);
+    }
+
+    it('shows git every file of the folder, and no other mod\'s, and leaves it out again', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const held = await modFolder('Mod [A]');
+      await modFolder('Mod B');
+
+      await adapter.writeHeldWholeLines([held], true);
+      const whole = shown();
+      const heldByGit = [...await adapter.foldersHeldWhole([held, join(root, 'mods', 'Mod B')])];
+      await adapter.writeHeldWholeLines([held], false);
+
+      expect([whole, heldByGit, shown()]).toEqual([
+        ['mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/meta.ini', 'mods/Mod [A]/textures/a.dds'].sort(), [held], [],
+      ]);
+    });
+
+    it('keeps every line it did not write', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await writeFile(join(root, '.gitignore'), `${await readFile(join(root, '.gitignore'), 'utf8')}mine\n`);
+
+      await adapter.writeHeldWholeLines([await modFolder('Mod A')], true);
+
+      expect((await readFile(join(root, '.gitignore'), 'utf8')).split('\n')).toContain('mine');
+    });
+
+    it('is refused when it is not a folder of mods, writing nothing', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      const before = await readFile(join(root, '.gitignore'), 'utf8');
+
+      await expect(adapter.writeHeldWholeLines([join(root, 'source', 'Mod A')], true)).rejects.toThrow('is not a folder of');
+      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(before);
+    });
+
+    it('writes no ignore list where there is none', async () => {
+      const adapter = await instance();
+
+      await adapter.writeHeldWholeLines([await modFolder('Mod A')], true);
+
+      expect(existsSync(join(root, '.gitignore'))).toBe(false);
+    });
+  });
+
   describe('a source mod with a remote is a submodule', () => {
     const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
     async function sourceMod(folder: string, remote?: string): Promise<string> {
