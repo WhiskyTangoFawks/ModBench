@@ -264,10 +264,10 @@ describe('the agent server, given an instance value', () => {
 
   it('refuses the sorting rules while the order is not judged, naming why, rather than answer no rules', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
-    sortingRead.notJudged = 'The record index is still indexing.';
+    sortingRead.notJudged = 'Still indexing…';
 
     expect(await call(client, 'list_sorting_rules')).toEqual({
-      isError: true, text: 'The sorting rules are not judged yet: The record index is still indexing.',
+      isError: true, text: 'The sorting rules are not judged yet: Still indexing…',
     });
   });
 

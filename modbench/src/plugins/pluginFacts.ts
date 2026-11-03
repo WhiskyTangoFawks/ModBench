@@ -249,10 +249,10 @@ export class PluginFacts {
     }
   }
 
-  /** Why no judging has landed yet; `undefined` once one has, and a later snapshot keeps its answer until the new one lands. */
+  /** plugins.md, A row, Plugin: a sorting status shows once the snapshot is indexed. */
   sortingNotJudged(): string | undefined {
     if (this.judgedActiveOrder !== undefined) return undefined;
-    return this.expansionOverride?.message ?? 'The record index is still indexing.';
+    return this.expansionOverride?.message ?? 'Still indexing…';
   }
 
   /** Every broken sorting rule, once each, as the last judging found them. */

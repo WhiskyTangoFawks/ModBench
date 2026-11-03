@@ -14,15 +14,16 @@ interface SortingRuleShown {
   readonly plugins: readonly { readonly origin: string; readonly filename: string }[];
 }
 
+// `drop` is in load order, as OfferedMove's.
 interface SuggestedMoveShown {
   readonly rule: SortingRuleShown;
   readonly mover: PluginAddress;
-  readonly drop: { readonly kind: string; readonly name?: string };
+  readonly drop: { readonly kind: 'before' | 'after'; readonly name: string };
 }
 
 export interface PluginsShown {
   shown(plugin: PluginAddress): PluginShown;
-  /** Why the order has not been judged yet; `undefined` once it has. No rules before then is not yet checked, not none broken. */
+  /** No rules before the order is judged is not yet checked, not none broken. */
   sortingNotJudged(): string | undefined;
   brokenRules(): readonly SortingRuleShown[];
   suggestedMoves(): readonly SuggestedMoveShown[];

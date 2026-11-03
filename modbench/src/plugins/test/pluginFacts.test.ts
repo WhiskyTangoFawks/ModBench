@@ -37,7 +37,7 @@ describe('PluginFacts — the sorting rules are judged once a reconcile complete
   const heldElsewhereRefusal = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
   const failedIndexRefusal = { kind: 'failed', message: 'the record index threw' } as const;
   it.each([
-    ['while indexing', scenes(), 'The record index is still indexing.'],
+    ['while indexing', scenes(), 'Still indexing…'],
     ['when the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndexRefusal), failedIndexRefusal.message],
     ['when another window holds the record index', (facts: PluginFacts) => facts.refused(heldElsewhereRefusal), heldElsewhereRefusal.message],
     ['when mEdit is unreachable', (facts: PluginFacts) => facts.unreachable('mEdit is down'), 'mEdit is down'],
