@@ -19,7 +19,7 @@ import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
-import { whyNotIndexed } from './whyNotIndexed';
+import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
@@ -33,6 +33,7 @@ export interface RestoreDeps {
   readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   readonly adapter: Adapter;
   readonly nexus: Pick<Nexus, 'download'>;
+  readonly loadOrderSnapshot: LoadOrderSnapshot;
   readonly trash: MoveToTrash;
   readonly tasks: StepTasks;
 }

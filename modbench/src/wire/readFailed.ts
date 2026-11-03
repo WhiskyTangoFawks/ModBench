@@ -26,6 +26,9 @@ export function isReadFailed(answer: unknown): answer is ReadFailed {
   return typeof failed === 'string' && Object.hasOwn(IN_FRONT_END_WORDS, failed);
 }
 
+/** A read mEdit cannot answer yet, whose answer comes once its load order or its reading settles. */
+export const isNotYetAnswerable = (failure: ReadFailed): boolean => failure.failed === 'refused' || failure.failed === 'no-load-order';
+
 /** What a surface says of a failed read: the sentence it carries when it has one, else the kind in the
  *  front end's words. */
 export const failureReason = (failure: ReadFailed): string =>

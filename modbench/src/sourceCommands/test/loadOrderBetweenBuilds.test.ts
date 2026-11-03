@@ -1,3 +1,5 @@
+import type { LoadOrderSnapshot } from '../whyNotIndexed';
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,11 +21,11 @@ const NOT_YET = { state: 'NotYet' } as const;
 const AS_ON_DISK = { state: 'AsOnDisk' } as const;
 const savedAll = () => Promise.resolve([]);
 
-const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>) => {
+const buildingModBThenModA = (mods: ReturnType<typeof pluginFilesHeld>, loadOrderSnapshot: LoadOrderSnapshot = ORDER_SENT) => {
   const client = new InMemoryMEditClient();
   client.setCommandHandler('build', (sent: readonly BuildMod[]) => Promise.resolve({ landed: sent.map(({ name }) => builtOf(name)), refused: [] }));
   const adapter = fakeInstanceAdapter(readingFixture({ mods: [...ORDER], modFolders: modFoldersIn(join(root, 'mods'), 'ModA', 'ModB'), sourceModFolders: repositoriesOf(SOURCES), ...mods })).adapter;
-  const built = (mods: readonly string[] = ['ModA', 'ModB']) => sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(mods);
+  const built = (mods: readonly string[] = ['ModA', 'ModB']) => sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot, tasks: recordingTasks(), trash: vi.fn() }).build(mods);
   return { client, built };
 };
 const builtMods = (client: InMemoryMEditClient): unknown[] => client.calls.filter((call) => call.method === 'build').map((call) => JSON.stringify(call.args[0]).match(/"name":"(\w+)"/)?.[1]);
@@ -80,20 +82,72 @@ describe('sourceCommands build, between mods', () => {
     expect(alone).toEqual({ landed: [landedOf('ModB')], refused: [] });
   });
 
-  it.each<[string, { state: 'NotYet' } | { failed: 'refused'; refusal: string }, string]>([
-    ['never reaches the record index as on disk', NOT_YET, 'plugin B.esp did not reach the record index within 120 seconds'],
-    ['mEdit cannot say', { failed: 'refused', refusal: 'mEdit cannot say.' }, 'mEdit cannot say.'],
-  ])('lands a mod whose plugin %s, naming why, and refuses the mods after it', async (_case, answer, why) => {
+  it('waits past two minutes while mEdit still indexes the plugin, then builds the next mod', async () => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+    client.setQueryAnswer('getPluginIndexing', NOT_YET);
+
+    const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    for (let minute = 0; minute < 10; minute++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.waitFor(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
+    }
+    expect(builtMods(client)).toEqual(['ModB']);
+    client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
+    client.emit(loadOrderStatusEventFixture());
+
+    expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
+  });
+
+  it.each([
+    ['refused', { failed: 'refused', refusal: 'mEdit cannot say yet.' }],
+    ['no-load-order', { failed: 'no-load-order' }],
+  ] as const)('keeps waiting while mEdit answers %s, a read not yet answerable', async (_kind, answer) => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
     client.setQueryAnswer('getPluginIndexing', answer);
 
     const outcome = built();
     await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
-    await vi.advanceTimersByTimeAsync(121_000);
+    for (let minute = 0; minute < 3; minute++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.waitFor(() => { expect(askedOfMEdit(client).length).toBeGreaterThan(minute); });
+    }
+    expect(builtMods(client)).toEqual(['ModB']);
+    client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
+    client.emit(loadOrderStatusEventFixture());
+
+    expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
+  });
+
+  it.each(['no-answer', 'timed-out', 'unreachable', 'unreadable', 'local'] as const)('lands a mod whose plugin read failed as %s, naming why, and refuses the mods after it', async (failed) => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+    client.setQueryAnswer('getPluginIndexing', { failed, cause: 'mEdit cannot say.' });
+
+    const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await vi.advanceTimersByTimeAsync(1_000);
 
     expect(builtMods(client)).toEqual(['ModB']);
     expect(await outcome).toMatchObject({
-      landed: [{ mod: 'ModB', failure: expect.stringContaining(why) as unknown }],
+      landed: [{ mod: 'ModB', failure: expect.stringContaining('mEdit cannot say.') as unknown }],
+      refused: [{ item: 'ModA', reason: expect.stringContaining(`was not built: ModB's plugin B.esp`) as unknown }],
+    });
+  });
+
+  it.each<[string, ReturnType<LoadOrderSnapshot>, string]>([
+    ['refuses it', { refusal: 'ModB has no mod folder.' }, 'ModB has no mod folder.'],
+    ['holds none', undefined, 'mEdit was handed no load order'],
+  ])('lands a mod whose plugin mEdit has not indexed, naming why, and refuses the mods after it, when the instance %s to send', async (_case, snapshot, why) => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin, () => snapshot);
+    client.setQueryAnswer('getPluginIndexing', NOT_YET);
+
+    const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(builtMods(client)).toEqual(['ModB']);
+    expect(await outcome).toMatchObject({
+      landed: [{ mod: 'ModB', failure: expect.stringContaining(`plugin B.esp (${why}`) as unknown }],
       refused: [{ item: 'ModA', reason: expect.stringContaining(`was not built: ModB's plugin B.esp`) as unknown }],
     });
   });

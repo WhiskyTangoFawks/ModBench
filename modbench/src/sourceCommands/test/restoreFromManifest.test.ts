@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -71,7 +72,7 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
     { folderFiles: new Map(inFolders.map(([folder, inFolder]) => [folder, Object.keys(inFolder)])), hashes, ...answers });
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);
-  const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), tasks: steps };
+  const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: steps };
   return {
     fake, client, hashes, steps, deps,
     restore: (asked: readonly string[], options: Parameters<typeof restoreFromManifest>[2] = {}) => restoreFromManifest(deps, asked, options, false, []),
@@ -652,7 +653,7 @@ describe('restore from manifest', () => {
     });
 
     it.each([
-      ['never reaches the record index', { state: 'NotYet' } as const, 121_000, 'was restored, but plugin C.esp did not reach the record index within 120 seconds'],
+      ['is not answered of by mEdit', { failed: 'timed-out', cause: 'mEdit cannot say.' } as const, 0, 'was restored, but plugin C.esp (mEdit cannot say.)'],
       ['could not be read by mEdit', { state: 'ReadFailed', reason: 'C.esp is not a plugin.' } as const, 0, 'was restored, but plugin C.esp could not be read: C.esp is not a plugin.'],
     ])('names a mod whose plugin %s, and restores the source mod after it', async (_case, indexing, wait, reason) => {
       const { restore, client } = await aSourceModAfterTwoMods();
@@ -665,6 +666,33 @@ describe('restore from manifest', () => {
       expect(await outcome).toEqual({
         landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }, { mod: 'ModA', written: [], namedByNoLine: [] }], refused: [{ item: 'ModC', reason }],
       });
+    });
+
+    it('ends the wait for the record index when a cancel aborts its signal, naming no plugin', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
+      const cancel = new AbortController();
+
+      const outcome = restore(['ModA', 'ModB', 'ModC'], { signal: cancel.signal });
+      await waiting(client);
+      cancel.abort();
+
+      expect((await outcome).refused).toEqual([]);
+    });
+
+    it('waits while mEdit says a read is not yet answerable', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { failed: 'no-load-order' });
+      let ended = false;
+
+      const outcome = restore(['ModA', 'ModB', 'ModC']).finally(() => { ended = true; });
+      await waiting(client);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const endedBeforeIndexed = ended;
+      client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
+      client.emit(loadOrderStatusEventFixture());
+
+      expect([endedBeforeIndexed, (await outcome).refused]).toEqual([false, []]);
     });
 
     it('waits on no mod before a mod that is not a source mod', async () => {
