@@ -209,7 +209,7 @@ export const whitelistIgnoreList = (publisherFileName: string | undefined): stri
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
   ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),
   // A separator is its folder, so a clone holds the folder by its metadata, and mod sync keeps its line.
-  `!/${MODS}/${separatorModName('*')}/${anyCase(MOD_META_FILE_NAME)}`,
+  `!/${MODS}/*${separatorModName('')}/${anyCase(MOD_META_FILE_NAME)}`,
 ].join('\n')}\n`;
 
 type Markers = readonly [first: string, last: string];
