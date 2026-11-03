@@ -64,10 +64,10 @@ describe('the FOMOD installer', () => {
   });
   afterEach(() => rm(base, { recursive: true, force: true }));
 
-  async function release(moduleConfig: string | Buffer, files: readonly string[]): Promise<void> {
-    for (const path of [...files, 'fomod/ModuleConfig.xml']) {
+  async function release(moduleConfig: string | Buffer, files: readonly string[], configPath = 'fomod/ModuleConfig.xml'): Promise<void> {
+    for (const path of [...files, configPath]) {
       await mkdir(dirname(join(root, path)), { recursive: true });
-      await writeFile(join(root, path), path === 'fomod/ModuleConfig.xml' ? moduleConfig : `bytes of ${path}`);
+      await writeFile(join(root, path), path === configPath ? moduleConfig : `bytes of ${path}`);
     }
   }
 
@@ -214,6 +214,13 @@ describe('the FOMOD installer', () => {
     expect(await install([])).toEqual({ kind: 'installer', missing: [], notes: [] });
     expect(await filesLanded()).toEqual(['Core.esp']);
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'), 'utf8')).toBe(unnamed);
+  });
+
+  it('installs a release whose installer folder is spelled in another case, where the filesystem tells the cases apart', async () => {
+    await release(TWO_STEPS, TWO_STEPS_FILES, 'FOMod/ModuleConfig.xml');
+
+    expect(await install(choose(['Main', { Pick: ['Option A'] }]))).toEqual({ kind: 'installer', missing: [], notes: [] });
+    expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
   });
 
   it.each([
