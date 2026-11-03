@@ -18,7 +18,7 @@ export interface GamePathInfo {
   readonly steamAppId?: string;
   /** The `steamapps/common/<name>` folder holding the install. Absent alongside `steamAppId`. */
   readonly steamFolderName?: string;
-  /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's listing order. Mutagen's `Implicits.Listings` for the release. */
+  /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's `Implicits.Listings` order for the release. */
   readonly masters: readonly string[];
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
