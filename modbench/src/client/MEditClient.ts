@@ -149,8 +149,7 @@ export interface VersionInGitOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A plugin to repair, and the source folder its mod's repository is made in when it
- *  has none. */
+/** A plugin to repair, and the source folder made for its mod when the mod is not a source mod. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
 /** A mod to version in git, and the source folder made for it: its assets and its manifest, as the extension hands them (ADR-0016). */

@@ -59,7 +59,7 @@ import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
 import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
-import { newRepositoriesOver } from './sourceCommands/newRepository';
+import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
@@ -182,7 +182,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    instance, commands: pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
   }));
   const downloads = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,

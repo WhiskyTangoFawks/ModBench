@@ -6,12 +6,12 @@ type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];
 
 /** Plugin commands bound to `adapter`, a client that answers only what a test fixes, and the flow placing mods as the test makes it. */
 export function pluginCommandsWith(
-  adapter: InstanceAdapter, client: Partial<PluginCommandsClient> = {}, newRepositories?: PlaceMods,
+  adapter: InstanceAdapter, client: Partial<PluginCommandsClient> = {}, placeMods?: PlaceMods,
 ): PluginCommands {
   const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
   return pluginCommands({
     adapter,
-    newRepositories: newRepositories ?? unanswered,
+    placeMods: placeMods ?? unanswered,
     client: {
       getPlugins: client.getPlugins?.bind(client) ?? unanswered,
       getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,

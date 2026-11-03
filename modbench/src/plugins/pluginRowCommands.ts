@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { isRefused, type MEditClient, type PluginAddress } from '../client';
+import { isRefused, type MEditClient, type PluginAddress, type SourceModIn } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Progress } from '../drivingLib/pausableProgress';
@@ -9,6 +9,7 @@ import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins';
 import { selectionArgument } from '../drivingLib/gestureEntry';
+import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
@@ -65,26 +66,34 @@ export function registerDecompileCommand(
 /** What decompile and repair needs: the command, mEdit's working-tree states, the Instance loader's refresh, its
  *  confirmation of a replaced change, and how the user is told. */
 export interface DecompileAndRepairDeps {
-  commands: Pick<PluginCommands, 'decompileAndRepair'>;
+  commands: Pick<PluginCommands, 'decompileAndRepair' | 'outsideSourceMods'>;
   client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>;
-  instance: Pick<Instance, 'refresh'>;
+  instance: Pick<Instance, 'refresh' | 'value'>;
   reporter: Reporter;
   ask: AskQuestion;
 }
 
-/** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
- *  selection, or of a Malformed entry's link in the Problems panel. */
+interface DecompileAndRepairGiven extends DecompileGiven {
+  readonly where: SourceModIn;
+}
+
+/** commands.md, `decompile and repair`: the plugins of Plugins rows or a Malformed entry. Where git holds a mod that is
+ *  not a source mod is asked once, before any send. */
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
-    fromView: (entry, _option, clicked) => {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
+    fromView: async (entry, _option, clicked) => {
       const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile and repair', replaced) } : undefined;
+      if (plugins.length === 0) return undefined;
+      const where = (await deps.commands.outsideSourceMods(plugins)).length > 0
+        ? await pickWhereGitHolds(deps.instance.value.holdsRepository, 'Decompile and repair')
+        : 'NewRepository';
+      return where === undefined ? undefined : { plugins, force: false, where, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile and repair', replaced) };
     },
-    fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
+    fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true, where: 'NewRepository' }),
     run: (given) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
-      sendAskingOverChanges(deps.client, progress, given, deps.commands.decompileAndRepair)),
+      sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where))),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
       else deps.reporter.report('error', result.refusal);

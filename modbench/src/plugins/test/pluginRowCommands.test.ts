@@ -10,10 +10,7 @@ const {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
-    showQuickPick: vi.fn<
-      (items: readonly { label: string; description?: string }[], options?: unknown) =>
-        Promise<{ label: string; description?: string }[] | undefined>
-    >(),
+    showQuickPick: vi.fn<(items: readonly { label: string; description?: string }[], options?: unknown) => Promise<unknown>>(),
     createQuickPick: vi.fn(),
     executeCommand: vi.fn().mockResolvedValue(undefined),
   };
@@ -43,7 +40,8 @@ import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import type { PluginAddress } from '../../client';
+import type { PluginAddress, SourceModIn } from '../../client';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 beforeEach(() => {
   handlers.clear();
@@ -337,23 +335,28 @@ describe('modbench.plugin.decompileAndRepair', () => {
   const clean = beneath('None');
   const changedSource = beneath('Modified');
 
-  function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = [], client = new InMemoryMEditClient()) {
+  const outsideSourceMods = vi.fn<(plugins: readonly PluginAddress[]) => Promise<string[]>>();
+  const instanceHolding = (holdsRepository: boolean) => ({ ...instanceThatReads, value: instanceValueFixture({ holdsRepository }) });
+
+  function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = [], client = new InMemoryMEditClient(), holdsRepository = false) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    const repaired: { plugins: readonly PluginAddress[]; force: boolean }[] = [];
+    const repaired: { plugins: readonly PluginAddress[]; force: boolean; where: SourceModIn }[] = [];
     registerDecompileAndRepairCommand({
       commands: {
-        decompileAndRepair: (plugins, force) => {
+        outsideSourceMods,
+        decompileAndRepair: (plugins, force, where) => {
           progressSteps.push(`decompile and repair${force ? ' forced' : ''}`);
-          repaired.push({ plugins, force });
+          repaired.push({ plugins, force, where });
           return Promise.resolve({ applied: true, outcome: { landed: [...plugins], refused: [] } });
         },
       },
       client: { getWorkingTreeStatesBeneath: (plugin) => client.getWorkingTreeStatesBeneath(plugin) },
-      instance: instanceThatReads, reporter, ask,
+      instance: instanceHolding(holdsRepository), reporter, ask,
     }, () => viewSelection);
     return { handler: present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command'), reporter, repaired, ask, client };
   }
+  beforeEach(() => { outsideSourceMods.mockResolvedValue([]); });
 
   const row = (plugin: PluginAddress) => new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
 
@@ -364,7 +367,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
     await handler(row(MALFORMED));
 
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: false, where: 'NewRepository' }]);
     expect(ask.asked).toEqual([]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'decompile and repair', 'Instance loader: read every file again', 'progress closes',
@@ -384,7 +387,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
       detail: undefined,
       buttons: ['Decompile and repair'],
     }]);
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true, where: 'NewRepository' }]);
   });
 
   it('from a Malformed entry\'s link in the Problems panel, repairs the plugin it names, not the selection', async () => {
@@ -402,7 +405,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
     const answered = await handler(new AgentCall([{ kind: 'plugin', plugin: MALFORMED }], { force: true }));
 
-    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
+    expect(repaired).toEqual([{ plugins: [MALFORMED], force: true, where: 'NewRepository' }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [] } });
     expect(ask.asked).toEqual([]);
     expect(reporter.landings).toEqual([]);
@@ -412,13 +415,80 @@ describe('modbench.plugin.decompileAndRepair', () => {
     const reporter = recordingReporter();
     const reason = 'Malformed.esp is not malformed.';
     registerDecompileAndRepairCommand({
-      commands: { decompileAndRepair: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [{ item: MALFORMED, reason }] } }) },
+      commands: { outsideSourceMods, decompileAndRepair: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [{ item: MALFORMED, reason }] } }) },
       client: { getWorkingTreeStatesBeneath: () => Promise.resolve(clean) },
-      instance: instanceThatReads, reporter, ask: scriptedDialog(),
+      instance: instanceHolding(false), reporter, ask: scriptedDialog(),
     }, () => []);
 
     await present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command')(row(MALFORMED));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not decompile and repair "Malformed.esp".', detail: `"Malformed.esp (ModA)" (${reason})` }]);
+  });
+  describe('where git holds a mod that is not a source mod', () => {
+    const picking = (where: SourceModIn | undefined) => showQuickPick.mockResolvedValue(where === undefined ? undefined : { label: where, where });
+    const changesToReplace = () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getWorkingTreeStatesBeneath', changedSource);
+      return client;
+    };
+
+    it('offers a new repository or the modlist repository, and hands the answer to the repair', async () => {
+      outsideSourceMods.mockResolvedValue(['ModA']);
+      picking('ModlistRepository');
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+      const { handler, repaired } = registered([], [], client, true);
+
+      await handler(row(MALFORMED));
+
+      expect(showQuickPick.mock.calls.map(([items]) => items)).toEqual([[expect.objectContaining({ where: 'NewRepository' }), expect.objectContaining({ where: 'ModlistRepository' })]]);
+      expect(repaired.map(({ where }) => where)).toEqual(['ModlistRepository']);
+    });
+
+    it('hands the one answer to both batches a replace confirmation makes', async () => {
+      outsideSourceMods.mockResolvedValue(['ModA']);
+      picking('ModlistRepository');
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', changedSource);
+      client.setQueryAnswerOnce('getWorkingTreeStatesBeneath', clean);
+      const { handler, repaired } = registered([], ['Decompile and repair'], client, true);
+      const rows = [row(MALFORMED), row(SELECTED)];
+
+      await handler(rows[0], rows);
+
+      expect(showQuickPick).toHaveBeenCalledOnce();
+      expect(repaired.map(({ force, where }) => [force, where])).toEqual([[true, 'ModlistRepository'], [false, 'ModlistRepository']]);
+    });
+
+    it('asks nothing, and uses a new repository, while the instance holds no repository', async () => {
+      outsideSourceMods.mockResolvedValue(['ModA']);
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+      const { handler, repaired } = registered([], [], client, false);
+
+      await handler(row(MALFORMED));
+
+      expect([showQuickPick.mock.calls, repaired.map(({ where }) => where)]).toEqual([[], ['NewRepository']]);
+    });
+
+    it('asks nothing when every plugin is in a source mod', async () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
+      const { handler, repaired } = registered([], [], client, true);
+
+      await handler(row(MALFORMED));
+
+      expect([showQuickPick.mock.calls, repaired.length]).toEqual([[], 1]);
+    });
+
+    it('changes nothing when the pick is dismissed: no confirmation, no repair', async () => {
+      outsideSourceMods.mockResolvedValue(['ModA']);
+      picking(undefined);
+      const { handler, repaired, ask } = registered([], ['Decompile and repair'], changesToReplace(), true);
+
+      await handler(row(MALFORMED));
+
+      expect([repaired, ask.asked]).toEqual([[], []]);
+    });
   });
 });
