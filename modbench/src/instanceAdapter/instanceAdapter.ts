@@ -479,6 +479,8 @@ export interface InstallationFile extends HashedDownloadedFile {
   readonly directUrl?: string;
   /** The version the downloaded file's own metadata records. */
   readonly version?: string;
+  /** Why the downloaded file's own metadata could not be read, so that `page`, `directUrl` and `version` are none. */
+  readonly pageUnreadable?: string;
 }
 
 interface MetadataInstallationFile {
