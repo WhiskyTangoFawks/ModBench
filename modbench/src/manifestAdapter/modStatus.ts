@@ -3,6 +3,7 @@
 
 import { isManifestPath } from '../repositoriesLib/manifestPath';
 import type { FolderFile, FolderValue, HashedPath, StatusValues } from '../repositoriesLib/statusValues';
+import type { BuildFileAgainst } from './buildFile';
 import type { Manifest, ManifestPackage } from './manifest';
 import type { ManifestAt } from './manifestFiles';
 import { isUnderAny } from './folderPaths';
@@ -40,6 +41,8 @@ export interface ModStatus {
   readonly packagesLacking: readonly string[];
   /** The manifest's path as the folder spells it; none when the folder holds none or it cannot be read. */
   readonly manifestFile?: string;
+  /** Its source folder's build file against that folder; none when the mod has no source folder or its build file cannot be read. */
+  readonly buildFile?: BuildFileAgainst;
   /** Why the installation file the mod manager names is missing or unreadable; none when it reads or none is named. */
   readonly installationFileProblem?: string;
   readonly unreadable?: string;

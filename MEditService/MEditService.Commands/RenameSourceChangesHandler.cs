@@ -16,7 +16,7 @@ public sealed class RenameSourceChangesHandler
         (_loadOrder, _source, _unsaved) = (loadOrder, source, unsaved);
 
     /// <summary>The changes renaming the plugin's source makes over the unsaved documents mEdit holds, which stand in for
-    /// their files, written nowhere (ADR-0001). Refuses with <see cref="RenameSourceRefusal.NoLoadOrder"/> when none is held.</summary>
+    /// their files, written nowhere (ADR-0001); none for a plugin with no plugin source.</summary>
     public RenameSourceResult RenameSource(PluginAddress plugin, string newName)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
@@ -25,14 +25,18 @@ public sealed class RenameSourceChangesHandler
             return RenameSourceResult.Refused(refused.Value.Refusal, refused.Value.Message);
         var (loaded, mod) = target;
         if (!_source.SourceReads(loaded))
-            return RenameSourceResult.Refused(RenameSourceRefusal.NotCompiledPlugin, RenameSourceTarget.NotCompiledPluginMessage(plugin));
+        {
+            return _source.WhySourceDoesNotRead(loaded) is { } why and not SourceFailure.NotCarried
+                ? Unreadable(plugin, why)
+                : RenameSourceResult.Landed(SourceChanges.None, plugin.Name);
+        }
 
         var session = _source.WriteSessionOver(mod, loadOrder.GameRelease, _unsaved.Current);
         if (!session.Repository.ChangesToRenameSource(plugin, newName).Holds(out var changes, out var failure))
         {
             return failure switch
             {
-                SourceFailure.Unreadable => Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {failure.Reason}"),
+                SourceFailure.Unreadable => Unreadable(plugin, failure),
                 SourceFailure.GitUnavailable => Refused(RenameSourceRefusal.GitUnavailable, failure.Reason),
                 _ => Refused(RenameSourceRefusal.WriteFailed, $"Could not rename {plugin.Name}'s source: {failure.Reason}"),
             };
@@ -47,4 +51,7 @@ public sealed class RenameSourceChangesHandler
     }
 
     private static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => RenameSourceResult.Refused(refusal, message);
+
+    private static RenameSourceResult Unreadable(PluginAddress plugin, SourceFailure why) =>
+        Refused(RenameSourceRefusal.UnreadableSource, $"{plugin.Name}'s source was not renamed: {why.Reason}");
 }

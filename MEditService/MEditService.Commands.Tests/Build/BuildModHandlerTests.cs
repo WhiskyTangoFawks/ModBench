@@ -260,13 +260,28 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompileOfAPluginWithNoPluginSource_RefusesIt_NamingIt_AndCompilesTheRest()
+    public async Task ACompileOfTwinsWithNoPluginSource_RefusesEachOnce_AsTwins()
+    {
+        await InitializedWithALocalizedPlugin();
+
+        var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Compile(["Other.esp", "other.esp"])));
+
+        Assert.Equal(
+            [("Other.esp", CompileRefusal.TwinPluginSources), ("other.esp", CompileRefusal.TwinPluginSources)],
+            built.Refused.Select(refused => (refused.Item.Name, refused.Refusal)));
+    }
+
+    [Fact]
+    public async Task ACompileOfAPluginWithNoPluginSource_RefusesIt_NamingTheBuildFileAndThePlugin_AndCompilesTheRest()
     {
         await InitializedWithALocalizedPlugin();
 
         var built = await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Compile([Plugin, "Other.esp"])));
 
-        Assert.Equal(["Other.esp"], built.Refused.Select(refused => refused.Item.Name));
+        var refused = Assert.Single(built.Refused);
+        Assert.Equal(
+            ("Other.esp", CompileRefusal.NoSource, $"The build file's compile step names Other.esp, and '{SourceFolder}' holds no plugin source for it."),
+            (refused.Item.Name, refused.Refusal, refused.Message));
         Assert.Equal([Plugin], built.Compiled.Select(plugin => plugin.Name));
     }
 

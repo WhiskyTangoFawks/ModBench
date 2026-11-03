@@ -14,8 +14,7 @@ public sealed class MoveLastWrittenHandler
     internal MoveLastWrittenHandler(LoadOrderHolder loadOrder, ISourceAdapter source) => (_loadOrder, _source) = (loadOrder, source);
 
     /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
-    /// <paramref name="newName"/>'s. A refusal leaves it where it was. Refuses with <see cref="RenameSourceRefusal.NoLoadOrder"/>
-    /// when no load order is held.</summary>
+    /// <paramref name="newName"/>'s; a plugin outside a source mod has none. A refusal leaves it where it was.</summary>
     public MoveLastWrittenResult MoveLastWritten(PluginAddress plugin, string treeName, string newName)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
@@ -29,6 +28,7 @@ public sealed class MoveLastWrittenHandler
 
         if (!RenameSourceTarget.Of(_source, loadOrder, plugin, newName, out var target, out var refused))
             return new MoveLastWrittenResult(refused.Value.Refusal, refused.Value.Message);
+        if (!_source.IsSourceMod(target.Plugin)) return new MoveLastWrittenResult();
 
         return _source.OverFolder(target.Mod, loadOrder.GameRelease).MoveLastWrittenTo(treeName, newName) switch
         {

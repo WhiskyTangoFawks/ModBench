@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { repositoryOf, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { repositoryOf, type BuildFileLack, type ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ManifestPackage } from '../manifestAdapter/manifest';
 
 /** A problem on the file it concerns. */
@@ -8,17 +8,28 @@ export interface StatusProblem {
   readonly message: string;
 }
 
+const lackMessage = ({ step, path }: BuildFileLack): string =>
+  `Its ${step} step names '${path}', ${step === 'compile' ? 'whose plugin source' : 'which'} the source folder lacks.`;
+
+const sentence = (clause: string): string => `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.`;
+
+const buildFileProblems = ({ buildFile }: ModStatus): StatusProblem[] =>
+  (buildFile === undefined ? [] : [...buildFile.lacks.map(lackMessage), ...buildFile.unreadable.map(sentence)].map((message) => ({ file: buildFile.file, message })));
+
 /** Each unfinished state of a mod, on the file it concerns (instance-repository.md, Status, story 2). */
 export function statusProblems(status: ModStatus, folder: string): StatusProblem[] {
-  const installation = status.installationFileProblem === undefined ? [] : [{ file: folder, message: status.installationFileProblem }];
-  if (status.noManifest) return [{ file: folder, message: 'No manifest.' }, ...installation];
+  const outsideManifest = [
+    ...status.installationFileProblem === undefined ? [] : [{ file: folder, message: status.installationFileProblem }],
+    ...buildFileProblems(status),
+  ];
+  if (status.noManifest) return [{ file: folder, message: 'No manifest.' }, ...outsideManifest];
   const onFiles = (paths: readonly string[], message: string): StatusProblem[] => paths.map((path) => ({ file: join(folder, path), message }));
   const { manifestFile } = status;
   const onManifest = (messages: readonly string[]): StatusProblem[] =>
     (manifestFile === undefined ? [] : messages.map((message) => ({ file: manifestFile, message })));
   return [
-    ...installation,
-    ...onManifest(status.unreadable === undefined ? [] : [`${status.unreadable.charAt(0).toUpperCase()}${status.unreadable.slice(1)}.`]),
+    ...outsideManifest,
+    ...onManifest(status.unreadable === undefined ? [] : [sentence(status.unreadable)]),
     ...onFiles(status.differing, 'Differs from its manifest.'),
     ...onFiles(status.namedByNoLine, 'No line of the mod\'s manifest names this file.'),
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),

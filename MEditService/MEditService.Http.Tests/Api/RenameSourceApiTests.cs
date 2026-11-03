@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -12,11 +13,11 @@ public sealed class RenameSourceApiTests : HostedTests
     private const string Plugin = "CompiledPlugin.esp";
     private const string Origin = "SourceMod";
     private const string Npc = "CompiledPluginNpc";
-    private const string NonCompiledPluginOrigin = "NonSourceMod";
+    private const string GamePlugin = "Game.esp";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("api-rename-source")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
-        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: NonCompiledPluginOrigin)
+        .WithPlugin(GamePlugin)
         .BuildScattered();
 
     protected override void DisposeFixtures() => _instance.Dispose();
@@ -97,13 +98,13 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 
     [Fact]
-    public async Task RenamingAPluginWithNoPluginSource_Is409()
+    public async Task RenamingAPluginInNoMod_Is409()
     {
         await CompiledPlugin();
 
-        var response = await RenameSource("Other.esp", NonCompiledPluginOrigin, "Renamed.esp");
+        var response = await RenameSource(GamePlugin, PluginOrigin.DataDirectory, "Renamed.esp");
 
-        Assert.Equal("NotCompiledPlugin", await RefusalOf(response, HttpStatusCode.Conflict));
+        Assert.Equal("NotInAMod", await RefusalOf(response, HttpStatusCode.Conflict));
     }
 
     [Fact]

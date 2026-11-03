@@ -21,7 +21,8 @@ public enum CompileRefusal
     /// Windows; the way out is renaming or removing one.</summary>
     TwinPluginSources,
 
-    /// <summary>The plugin's source folder holds no files; the way out is Decompile.</summary>
+    /// <summary>The plugin's source folder holds no files, or a build file compiles a plugin the source folder holds no plugin
+    /// source for; the way out is Decompile, or the build file.</summary>
     NoSource,
 
     /// <summary>A source document could not be opened, as another program holds it; the way out is

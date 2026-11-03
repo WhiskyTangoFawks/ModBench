@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BUILD_FILE } from '../../wire/sourceMod';
-import { buildFileIn, buildFileText, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
+import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../../wire/sourceMod';
+import { buildFileAgainst, buildFileIn, buildFileText, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
+import { writeBuildFile } from '../../test/buildFiles';
 
 const manifest: Manifest = { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]) };
 
@@ -146,5 +147,78 @@ describe('buildFileIn', () => {
     await writeFile(join(folder, BUILD_FILE), '{"version":1,"exclude":[]}');
 
     expect(await buildFileIn(folder)).toEqual({ refused: "its build file holds 'exclude', which Modbench does not read" });
+  });
+});
+
+describe('buildFileAgainst', () => {
+  const holding = async (paths: readonly string[]): Promise<void> => {
+    for (const path of paths) {
+      await mkdir(join(folder, path, '..'), { recursive: true });
+      await writeFile(join(folder, path), '');
+    }
+  };
+  const building = (steps: BuildFile['steps']) => writeBuildFile(folder, { steps });
+  const file = () => join(folder, BUILD_FILE);
+
+  it('names each path a step reads from the source folder that names nothing there, by its step', async () => {
+    await holding(['textures/a.dds', 'Held.ba2', 'Held.esp', `${PLUGIN_SOURCE_FOLDER}/Built.esp/npc_/1.json`, 'scripts/held.py']);
+    await building([
+      { kind: 'copy', paths: ['textures', 'meshes'] },
+      { kind: 'unpack', archives: [{ path: 'Held.ba2', files: ['a.nif'] }, { path: 'Gone.ba2', files: ['b.nif'] }] },
+      { kind: 'decompile', paths: ['Held.esp', 'Gone.esp'] },
+      { kind: 'compile', paths: ['Built.esp', 'Renamed.esp'] },
+      { kind: 'pack', archives: [{ path: 'Packed.ba2', files: ['made.nif'] }] },
+      { kind: 'script', script: 'scripts/held.py', args: [] },
+      { kind: 'script', script: 'scripts/gone.py', args: [] },
+      { kind: 'task', task: 'Zip', args: ['out.zip'] },
+    ]);
+
+    expect(await buildFileAgainst(folder)).toEqual({
+      file: file(),
+      lacks: [
+        { step: 'copy', path: 'meshes' }, { step: 'unpack', path: 'Gone.ba2' }, { step: 'decompile', path: 'Gone.esp' },
+        { step: 'compile', path: 'Renamed.esp' }, { step: 'script', path: 'scripts/gone.py' },
+      ],
+      unreadable: [],
+    });
+  });
+
+  it.each<[string, readonly string[], BuildFile['steps']]>([
+    ['in any case, as mEdit does', [`${PLUGIN_SOURCE_FOLDER}/built.esp/npc_/1.json`], [{ kind: 'compile', paths: ['Built.esp'] }]],
+    ['in a decompile step before it', ['Built.esp'], [{ kind: 'decompile', paths: ['Built.esp'] }, { kind: 'compile', paths: ['Built.esp'] }]],
+  ])('finds a compiled plugin\'s plugin source %s', async (_where, held, steps) => {
+    await holding(held);
+    await building(steps);
+
+    expect(await buildFileAgainst(folder)).toEqual({ file: file(), lacks: [], unreadable: [] });
+  });
+
+  it('says why a build file it cannot read is unreadable, and names no lack', async () => {
+    await writeFile(file(), '{"files": []}');
+
+    expect(await buildFileAgainst(folder)).toEqual({
+      file: file(), lacks: [], unreadable: ['its build file is in a format before version 1, and Modbench reads only version 1'],
+    });
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) says which plugin sources and paths it cannot read, and names none of them as lacking', async () => {
+    await holding(['locked/a.nif', `${PLUGIN_SOURCE_FOLDER}/Built.esp/npc_/1.json`]);
+    await building([{ kind: 'copy', paths: ['locked/a.nif'] }, { kind: 'compile', paths: ['Built.esp'] }]);
+    await chmod(join(folder, 'locked'), 0o000);
+    await chmod(join(folder, PLUGIN_SOURCE_FOLDER), 0o000);
+
+    try {
+      expect(await buildFileAgainst(folder)).toEqual({
+        file: file(), lacks: [],
+        unreadable: [expect.stringMatching(/^its plugin sources could not be read: .*EACCES/), expect.stringMatching(/^'locked\/a\.nif' could not be read: .*EACCES/)],
+      });
+    } finally {
+      await chmod(join(folder, 'locked'), 0o755);
+      await chmod(join(folder, PLUGIN_SOURCE_FOLDER), 0o755);
+    }
+  });
+
+  it('is none when the source folder holds no build file', async () => {
+    expect(await buildFileAgainst(folder)).toBeUndefined();
   });
 });
