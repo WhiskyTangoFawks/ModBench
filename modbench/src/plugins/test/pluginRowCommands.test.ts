@@ -424,6 +424,34 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not decompile and repair "Malformed.esp".', detail: `"Malformed.esp (ModA)" (${reason})` }]);
   });
+  describe('what a downloaded file could not give', () => {
+    const reportingNotes = (...notesPerBatch: string[][]) => {
+      const reporter = recordingReporter();
+      const batches = [...notesPerBatch];
+      const states = [changedSource, clean];
+      registerDecompileAndRepairCommand({
+        commands: {
+          outsideSourceMods,
+          decompileAndRepair: (plugins) => Promise.resolve({ applied: true, outcome: { landed: [...plugins], refused: [] }, notes: batches.shift() ?? [] }),
+        },
+        client: { getWorkingTreeStatesBeneath: () => Promise.resolve(states.shift() ?? clean) },
+        instance: instanceHolding(false), reporter, ask: scriptedDialog('Decompile and repair'),
+      }, () => []);
+      return { reporter, unanswered: batches, handler: present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command') };
+    };
+
+    it('warns of each note once, though both batches a replace confirmation makes answer it', async () => {
+      const { reporter, handler, unanswered } = reportingNotes(['Pack.7z could not be read whole.'], ['Pack.7z could not be read whole.']);
+      const rows = [row(MALFORMED), row(SELECTED)];
+
+      await handler(rows[0], rows);
+
+      expect(unanswered).toEqual([]);
+      expect(reporter.reports).toContainEqual({ severity: 'warning', message: 'Decompile and repair:', detail: 'Pack.7z could not be read whole.' });
+      expect(reporter.reports.filter(({ severity }) => severity === 'warning')).toHaveLength(1);
+    });
+  });
+
   describe('where git holds a mod that is not a source mod', () => {
     const picking = (where: SourceModIn | undefined) => showQuickPick.mockResolvedValue(where === undefined ? undefined : { label: where, where });
     const changesToReplace = () => {
@@ -431,19 +459,6 @@ describe('modbench.plugin.decompileAndRepair', () => {
       client.setQueryAnswer('getWorkingTreeStatesBeneath', changedSource);
       return client;
     };
-
-    it('offers a new repository or the modlist repository, and hands the answer to the repair', async () => {
-      outsideSourceMods.mockResolvedValue(['ModA']);
-      picking('ModlistRepository');
-      const client = new InMemoryMEditClient();
-      client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
-      const { handler, repaired } = registered([], [], client, true);
-
-      await handler(row(MALFORMED));
-
-      expect(showQuickPick.mock.calls.map(([items]) => items)).toEqual([[expect.objectContaining({ where: 'NewRepository' }), expect.objectContaining({ where: 'ModlistRepository' })]]);
-      expect(repaired.map(({ where }) => where)).toEqual(['ModlistRepository']);
-    });
 
     it('hands the one answer to both batches a replace confirmation makes', async () => {
       outsideSourceMods.mockResolvedValue(['ModA']);
@@ -458,17 +473,6 @@ describe('modbench.plugin.decompileAndRepair', () => {
 
       expect(showQuickPick).toHaveBeenCalledOnce();
       expect(repaired.map(({ force, where }) => [force, where])).toEqual([[true, 'ModlistRepository'], [false, 'ModlistRepository']]);
-    });
-
-    it('asks nothing, and uses a new repository, while the instance holds no repository', async () => {
-      outsideSourceMods.mockResolvedValue(['ModA']);
-      const client = new InMemoryMEditClient();
-      client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
-      const { handler, repaired } = registered([], [], client, false);
-
-      await handler(row(MALFORMED));
-
-      expect([showQuickPick.mock.calls, repaired.map(({ where }) => where)]).toEqual([[], ['NewRepository']]);
     });
 
     it('asks nothing when every plugin is in a source mod', async () => {

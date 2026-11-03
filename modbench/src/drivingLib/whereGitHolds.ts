@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
+import type { SourceModIn } from '../wire/sourceModIn';
 
-type SourceModIn = 'NewRepository' | 'ModlistRepository';
-
-// commands.md, `version in git`: the modlist repository is a choice only while the instance holds one, and a pick of
-// one choice is not shown.
+// commands.md, No dead entries: the modlist repository is a choice only while the instance holds one, and a pick of one
+// choice is not shown.
 export async function pickWhereGitHolds(holdsRepository: boolean, gesture: string): Promise<SourceModIn | undefined> {
   if (!holdsRepository) return 'NewRepository';
   const picked = await vscode.window.showQuickPick([

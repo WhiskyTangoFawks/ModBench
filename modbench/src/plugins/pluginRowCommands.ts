@@ -6,7 +6,7 @@ import type { Progress } from '../drivingLib/pausableProgress';
 import { columnHeaderOf } from '../wire/columnHeader';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
-import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture } from '../drivingLib/agentGesture';
 import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins';
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
@@ -77,8 +77,8 @@ interface DecompileAndRepairGiven extends DecompileGiven {
   readonly where: SourceModIn;
 }
 
-/** commands.md, `decompile and repair`: the plugins of Plugins rows or a Malformed entry. Where git holds a mod that is
- *  not a source mod is asked once, before any send. */
+/** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
+ *  selection, or of a Malformed entry's link in the Problems panel. */
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
@@ -95,8 +95,10 @@ export function registerDecompileAndRepairCommand(
     run: (given) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
       sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where))),
     report: (result, { plugins }) => {
-      if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
-      else deps.reporter.report('error', result.refusal);
+      if (result.applied) {
+        reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
+        reportPartial(deps.reporter, (result.notes ?? []).map((detail) => ({ message: 'Decompile and repair:', detail, severity: 'warning' as const })));
+      } else deps.reporter.report('error', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
@@ -155,6 +157,7 @@ async function sendBatches(batches: readonly SendBatch[], send: SendPlugins): Pr
     if (!answer.applied && answered.length === 0) return answer;
     answered.push({ batch, answer });
   }
+  const notes = [...new Set(answered.flatMap(({ answer }) => answer.applied ? answer.notes ?? [] : []))];
   return {
     applied: true,
     outcome: {
@@ -163,6 +166,7 @@ async function sendBatches(batches: readonly SendBatch[], send: SendPlugins): Pr
         ? answer.outcome.refused
         : batch.plugins.map((item) => ({ item, reason: answer.refusal }))),
     },
+    ...notes.length === 0 ? {} : { notes },
   };
 }
 

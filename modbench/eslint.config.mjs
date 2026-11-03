@@ -254,7 +254,7 @@ export default defineConfig(
         files: ['src/**/*.test.ts', 'src/test/**/*.ts', 'src/*/test/**/*.ts'],
         rules: { 'no-restricted-imports': ['error', { paths: BYTE_READ_PATHS }] },
     },
-    ...['messages', 'modByFolder', 'pluginAddress', 'wireContractChecks'].map((name) => ({
+    ...['messages', 'modByFolder', 'pluginAddress', 'sourceModIn', 'wireContractChecks'].map((name) => ({
         files: [`src/wire/${name}.ts`],
         rules: { 'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, clientSeam: false }) },
     })),

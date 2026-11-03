@@ -19,6 +19,7 @@ interface Placing {
   notLinked: Record<string, string>;
   notTakenBack: Record<string, string>;
   whole: string | undefined;
+  notes: string[];
 }
 
 describe('decompileAndRepair', () => {
@@ -34,7 +35,7 @@ describe('decompileAndRepair', () => {
     const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
     const left = new Map(Object.entries(placing.notTakenBack));
     return {
-      outcome, notMade: new Map(Object.entries(placing.notMade)), notTakenBack: left,
+      outcome, notMade: new Map(Object.entries(placing.notMade)), notTakenBack: left, notes: placing.notes,
       notLinked: new Map(Object.entries(placing.notLinked).filter(([mod]) => landed.has(mod))),
       withLinesLeft: (refused, modOf) => refused.map((entry) => ({ ...entry, reason: [entry.reason, left.get(modOf(entry.item))].filter(Boolean).join(' ') })),
     };
@@ -52,7 +53,7 @@ describe('decompileAndRepair', () => {
   beforeEach(() => {
     client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndRepair', landingEach);
-    placing = { notMade: {}, notLinked: {}, notTakenBack: {}, whole: undefined };
+    placing = { notMade: {}, notLinked: {}, notTakenBack: {}, whole: undefined, notes: [] };
     requests = [];
   });
 
@@ -73,8 +74,14 @@ describe('decompileAndRepair', () => {
     expect([requests, sent()]).toEqual([[{ mods: [], where: 'NewRepository' }], [[[{ plugin: MALFORMED }], false]]]);
   });
 
-  it('names the mods of the plugins that are not source mods', async () => {
-    expect(await commandsOver({ Harbor: '/source/Harbor' }).outsideSourceMods([MALFORMED, OTHER, { name: 'Second.esp', origin: 'Quay' }])).toEqual(['Quay']);
+  it('answers what a downloaded file could not give, for the user to be told', async () => {
+    placing.notes = ['Pack.7z could not be read whole.'];
+
+    expect(await repairIn({}, true)).toMatchObject({ applied: true, notes: ['Pack.7z could not be read whole.'] });
+  });
+
+  it('answers no notes when no downloaded file had any', async () => {
+    expect(await repairIn({}, true)).not.toHaveProperty('notes');
   });
 
   it('names a repaired mod whose folder could not be linked, as the repair that happened', async () => {

@@ -19,6 +19,7 @@ interface PlacedMods<R> {
   readonly notMade: ReadonlyMap<string, string>;
   readonly notLinked: ReadonlyMap<string, string>;
   readonly notTakenBack: ReadonlyMap<string, string>;
+  readonly notes: readonly string[];
   readonly withLinesLeft: <T>(refused: readonly ItemRefusal<T>[], modOf: (item: T) => string) => ItemRefusal<T>[];
 }
 
@@ -35,16 +36,18 @@ interface DecompileAndRepairAccess {
   readonly placeMods: PlaceMods;
 }
 
-type SourceModsAccess = Pick<DecompileAndRepairAccess, 'adapter'>;
+type SourceMods = Awaited<ReturnType<typeof sourceModsOf>>;
 
-async function sourceModsAt({ adapter }: SourceModsAccess) {
+async function sourceModsAt({ adapter }: Pick<DecompileAndRepairAccess, 'adapter'>): Promise<SourceMods> {
   return sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
 }
 
+const modsOutside = (sourceMods: SourceMods, plugins: readonly PluginAddress[]): string[] =>
+  [...new Set(plugins.map(({ origin }) => origin).filter((mod) => sourceMods.folderOf(mod) === undefined))];
+
 /** The mods of `plugins` that are not source mods, which decompile and repair makes one. */
-export async function outsideSourceMods(access: SourceModsAccess, plugins: readonly PluginAddress[]): Promise<string[]> {
-  const sourceMods = await sourceModsAt(access);
-  return [...new Set(plugins.map(({ origin }) => origin).filter((mod) => sourceMods.folderOf(mod) === undefined))];
+export async function outsideSourceMods(access: Pick<DecompileAndRepairAccess, 'adapter'>, plugins: readonly PluginAddress[]): Promise<string[]> {
+  return modsOutside(await sourceModsAt(access), plugins);
 }
 
 // source.md, Decompile and repair, story 4: one item for a mod, the first plugin of it that landed.
@@ -60,7 +63,7 @@ export async function decompileAndRepair(
 ): Promise<SelectionResult<PluginAddress>> {
   const { client, placeMods } = access;
   const sourceMods = await sourceModsAt(access);
-  const notSourceMods = await outsideSourceMods(access, plugins);
+  const notSourceMods = modsOutside(sourceMods, plugins);
   const repaired = (made: ReadonlyMap<string, MadeSourceFolder>): Promise<SelectionOutcome<PluginAddress> | WriteRefused> => {
     const toSend = plugins.flatMap((plugin): PluginToRepair[] => {
       if (sourceMods.folderOf(plugin.origin) !== undefined) return [{ plugin }];
@@ -71,11 +74,11 @@ export async function decompileAndRepair(
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
   if (isRefused(placed)) return { applied: false, refusal: placed.message };
-  const { outcome, notMade, notLinked, notTakenBack } = placed;
+  const { outcome, notMade, notLinked, notTakenBack, notes } = placed;
   if (isRefused(outcome)) return { applied: false, refusal: [outcome.message, ...notTakenBack.values()].join(' ') };
   const notMadePlugins = plugins.filter(({ origin }) => notMade.has(origin)).map((item) => ({
     item, reason: `${item.origin} is not a source mod, and a source folder cannot be made for it: ${notMade.get(item.origin) ?? ''}`,
   }));
   const refused = placed.withLinesLeft([...notMadePlugins, ...outcome.refused, ...firstLandedOf(outcome.landed, notLinked)], ({ origin }) => origin);
-  return { applied: true, outcome: { landed: outcome.landed, refused } };
+  return { applied: true, outcome: { landed: outcome.landed, refused }, ...notes.length === 0 ? {} : { notes } };
 }
