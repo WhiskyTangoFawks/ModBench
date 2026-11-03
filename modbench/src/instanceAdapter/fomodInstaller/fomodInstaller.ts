@@ -13,7 +13,7 @@ import { keyOf, resolverIn } from './releasePaths';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FomodKind } from '../gameFolder/releaseRoot';
 import { withImages, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
-import type { FomodAnswer, FomodDialog, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
+import type { FomodAnswer, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
 import { isReport, type ConditionFacts, type EngineReport, type EngineRequest } from './engineProtocol';
 
 export type { ConditionFacts } from './engineProtocol';
