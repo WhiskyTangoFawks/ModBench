@@ -1,6 +1,6 @@
 import { compareVersions, versionInDescription } from './lootVersion';
 
-/** Whether the game finds a file in its Data folder; `unknown` while the folder cannot be listed. */
+// `unknown` while the game's Data folder cannot be listed.
 type Presence = 'present' | 'absent' | 'unknown';
 
 /** A read of one file's bytes or version resource, which the Instance adapter answers. `path` is relative to the
