@@ -14,7 +14,7 @@ interface Held { readonly mod: string; readonly plugin: PluginAddress }
 type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting' } | { readonly kind: 'failed'; readonly why: string };
 type Standing = { readonly mod: string } & Verdict;
 
-/** Why mEdit's rows are not of the plugins at the root of each enabled mod, as on disk, by mod: only a failed read gives one. Waits while mEdit has not indexed a plugin or cannot yet answer for it, until every plugin settles or an aborted `signal` ends it (ADR-0003). */
+/** Why mEdit's rows are not of each enabled mod's root plugins as on disk, by mod: only a failed read gives one. Waits until every plugin settles or an aborted `signal` ends it (ADR-0003). */
 export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
   const reading = await adapter.reading();
   const held: Held[] = mods.flatMap((mod) => {
