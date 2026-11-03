@@ -20,7 +20,7 @@ async function ignoredAmong(instanceRoot: string, probes: readonly string[]): Pr
     const answer = await gitFed(instanceRoot, `${probes.join('\0')}\0`, 'check-ignore', '--no-index', '--stdin', '-z');
     return new Set(answer.split('\0').filter((path) => path !== ''));
   } catch (error) {
-    if ((error as { code?: unknown }).code === NONE_IGNORED) return new Set();
+    if (error instanceof Error && 'code' in error && error.code === NONE_IGNORED) return new Set();
     throw error;
   }
 }
