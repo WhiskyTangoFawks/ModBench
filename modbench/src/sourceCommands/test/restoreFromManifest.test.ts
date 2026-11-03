@@ -667,6 +667,18 @@ describe('restore from manifest', () => {
       });
     });
 
+    it('ends the wait for the record index when a cancel aborts its signal, naming no plugin', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
+      const cancel = new AbortController();
+
+      const outcome = restore(['ModA', 'ModB', 'ModC'], { signal: cancel.signal });
+      await waiting(client);
+      cancel.abort();
+
+      expect((await outcome).refused).toEqual([]);
+    });
+
     it('waits while mEdit says a read is not yet answerable', async () => {
       const { restore, client } = await aSourceModAfterTwoMods();
       client.setQueryAnswer('getPluginIndexing', { failed: 'no-load-order' });

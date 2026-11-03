@@ -1,10 +1,9 @@
 import type { MEditClient, PluginAddress } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import { failureReason, isNotYetAnswerable, isReadFailed } from '../wire/readFailed';
 import { isPluginAtRoot } from '../tables/pluginFile';
 
 const RECHECK_MS = 250;
-const NOT_YET_ANSWERABLE: ReadonlySet<string> = new Set(['refused', 'no-load-order']);
 
 interface Deps {
   client: Pick<MEditClient, 'getPluginIndexing' | 'onLoadOrderStatus'>;
@@ -15,7 +14,7 @@ interface Held { readonly mod: string; readonly plugin: PluginAddress }
 type Verdict = { readonly kind: 'done' } | { readonly kind: 'waiting' } | { readonly kind: 'failed'; readonly why: string };
 type Standing = { readonly mod: string } & Verdict;
 
-/** Why mEdit's rows are not of each mod's plugins as on disk, by mod, once a read has failed. Waits while mEdit still indexes a plugin; an aborted `signal` ends the wait (ADR-0003). */
+/** Why mEdit's rows are not of the plugins at the root of each enabled mod, as on disk, by mod: only a failed read gives one. Waits while mEdit has not indexed a plugin or cannot yet answer for it, until every plugin settles or an aborted `signal` ends it (ADR-0003). */
 export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly string[], signal?: AbortSignal): Promise<ReadonlyMap<string, string>> {
   const reading = await adapter.reading();
   const held: Held[] = mods.flatMap((mod) => {
@@ -44,7 +43,7 @@ export async function whyNotIndexed({ client, adapter }: Deps, mods: readonly st
 }
 
 function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClient['getPluginIndexing']>>): Verdict {
-  if (isReadFailed(answer) && NOT_YET_ANSWERABLE.has(answer.failed)) return { kind: 'waiting' };
+  if (isReadFailed(answer) && isNotYetAnswerable(answer)) return { kind: 'waiting' };
   if (isReadFailed(answer)) return { kind: 'failed', why: `plugin ${plugin.name} (${failureReason(answer)})` };
   if (answer.state === 'AsOnDisk') return { kind: 'done' };
   if (answer.state === 'ReadFailed') return { kind: 'failed', why: `plugin ${plugin.name} could not be read: ${answer.reason ?? 'mEdit gave no reason'}` };
