@@ -14,13 +14,12 @@ import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
 import { filesBelow } from './mo2Files';
-import { commitFolder } from '../commitFolder';
 import { foldersHeldWhole } from '../foldersHeldWhole';
 import { filesHeldByGit } from '../filesHeldByGit';
 import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
-import { mo2Repository } from './mo2Repository';
+import { mo2GameFiles, mo2Repository } from './mo2Repository';
 import { mo2Submodules } from './mo2Submodules';
 import { mo2PathTokens } from './mo2PathTokens';
 import { mo2PluginRename } from './mo2PluginRename';
@@ -87,7 +86,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
     nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
     gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, publisherFile), ...mo2GameFiles(context, hashes, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
     ...dataFileReads(gameFolder),
     originFileHash: hashes.originFileHash,
@@ -97,7 +96,6 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),
     foldersHeldWhole: (folders) => foldersHeldWhole(instanceRoot, folders),
-    commitFolder: (folder, message) => commitFolder(instanceRoot, folder, message),
     filesHeldByGit: (folders) => filesHeldByGit(instanceRoot, folders),
     unheldFolderValue: async (folder) => unheldFolderValueOver(adapter, (await filesHeldByGit(instanceRoot, [folder])).get(folder) ?? [], folder),
     trashingReplaced,
