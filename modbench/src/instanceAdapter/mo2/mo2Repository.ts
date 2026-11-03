@@ -19,7 +19,7 @@ import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
 
 // A manifest outside the mod folders, by the names of the folders down to it and its own.
 interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
@@ -171,26 +171,9 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
 const isModFolder = async (instanceRoot: string, folder: string): Promise<boolean> =>
   await isWithin(dirname(folder), modsDir(instanceRoot)) && await isWithin(modsDir(instanceRoot), dirname(folder));
 
-export function mo2Repository(
-  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath,
-): Mo2Repository {
+export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationFile | undefined): Mo2Repository {
   const { instanceRoot } = context;
   const whitelist = whitelistIgnoreList(publisherFile?.name);
-  const gameFiles: InstanceAdapter['gameFiles'] = async (place, modFilePaths) => {
-    const find = caseBlindFinder(place);
-    const files = new Map<string, GameFile>();
-    const unreadable: Record<string, string> = {};
-    for (const modFilePath of modFilePaths) {
-      const found = await find(modFilePath);
-      if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
-      const names = found.answer;
-      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(place.root, ...names));
-      if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
-      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
-    }
-    return { files: [...files.values()], unreadable };
-  };
 
   return {
     async writeIgnoreList() {
@@ -246,7 +229,30 @@ export function mo2Repository(
       const names = namesIn(modsDir(instanceRoot), [folder]);
       await commitFolder(instanceRoot, folder, message, (list) => withHeldWholeLines(list, names, true));
     },
+  };
+}
 
+/** Which game files a mod's files take. */
+export function mo2GameFiles(
+  { instanceRoot }: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, deployedPath: DeployedPath,
+): Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy'> {
+  const gameFiles: InstanceAdapter['gameFiles'] = async (place, modFilePaths) => {
+    const find = caseBlindFinder(place);
+    const files = new Map<string, GameFile>();
+    const unreadable: Record<string, string> = {};
+    for (const modFilePath of modFilePaths) {
+      const found = await find(modFilePath);
+      if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
+      const names = found.answer;
+      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
+      const hashed = await gameFileHash(join(place.root, ...names));
+      if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
+      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
+    }
+    return { files: [...files.values()], unreadable };
+  };
+
+  return {
     gameFiles,
 
     async gameFilesTakenBy(place, folder, paths) {
