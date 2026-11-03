@@ -249,15 +249,27 @@ async function builtByItsSteps(deps: BuildDeps, mod: SourceModToBuild, pass: Bui
 }
 
 // source.md, Build, story 10: a build that stops records each file it wrote, and keeps every other line its manifest held.
-async function stoppedAs({ adapter }: BuildDeps, mod: SourceModToBuild, made: ReadonlyMap<string, Made>, failure: string): Promise<string> {
+async function whyNotRecorded({ adapter }: BuildDeps, mod: SourceModToBuild, made: ReadonlyMap<string, Made>): Promise<string | undefined> {
   try {
     const folder = await adapter.folderValue(mod.folder);
     const previous = (await heldManifest(mod.folder))?.files ?? new Map<string, string | null>();
     await writeManifestIn(mod.folder, sourceModManifest(mod, new Map([...previous, ...filesOf(adapter.ownPath, made, folder, previous, mod.ignore)])));
-    return failure;
+    return undefined;
   } catch (err) {
-    return `${failure} Its manifest could not record what it wrote: ${errorMessage(err)}`;
+    return `Its manifest could not record what it wrote: ${errorMessage(err)}`;
   }
+}
+
+async function stoppedAs(deps: BuildDeps, mod: SourceModToBuild, made: ReadonlyMap<string, Made>, failure: string): Promise<string> {
+  const why = await whyNotRecorded(deps, mod, made);
+  return why === undefined ? failure : `${failure} ${why}`;
+}
+
+// source.md, Build, stories 8 and 9: a step that refused a file left it as it was, so the build did not finish and stops
+// as story 10 says.
+async function recordedAsStopped(deps: BuildDeps, mod: SourceModToBuild, { outcome, made }: Ran): Promise<ModBuilt> {
+  const why = await whyNotRecorded(deps, mod, made);
+  return why === undefined ? outcome : { ...outcome, failure: why };
 }
 
 // ADR-0027: each file the folder holds that no step made goes to the trash, and the manifest names the repository and each
@@ -299,5 +311,6 @@ export async function buildSourceMod(deps: BuildDeps, mod: SourceModToBuild, pas
   const { answer } = ran;
   if (!('made' in answer)) return answer;
   if (answer.failure !== undefined) return { landed: { ...answer.outcome, failure: await stoppedAs(deps, mod, answer.made, answer.failure) } };
+  if (answer.outcome.refused.length + answer.outcome.archivesRefused.length > 0) return { landed: await recordedAsStopped(deps, mod, answer) };
   return { landed: await finished(deps, mod, answer) };
 }

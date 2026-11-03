@@ -249,6 +249,22 @@ describe('sourceCommands build, in mod order', () => {
     expect([outcome, client.calls.length]).toEqual([{ landed: [{ ...landedOf('ModA'), refused, failure: 'The build stopped after its step 1, which refused a file.' }], refused: [] }, 1]);
   });
 
+  it('trashes nothing and keeps every line of its manifest but what it made when its last step refuses a plugin whose source is unreadable (source.md, Build, stories 9 and 10)', async () => {
+    const files = new Map([['A.esp', 'AAAAAAAAAAA='], ['B.esp', 'BBBBBBBBBBA=']]);
+    const before: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], flags: new Map(), files };
+    await writeManifestIn(folderOf('ModA'), before);
+    const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf(SOURCES) }), {
+      folderFiles: new Map([[folderOf('ModA'), ['B.esp']]]), hashes: new Map([[join(folderOf('ModA'), 'B.esp'), { size: 1, hash: 'BBBBBBBBBBA=' }]]),
+    });
+    const client = new InMemoryMEditClient();
+    const refused = [{ item: { name: 'A.esp', origin: 'ModA' }, reason: "A.esp's plugin source is unreadable, so it cannot be compiled." }];
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), refused }], refused: [] }));
+
+    const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect([outcome, fake.calls.filter(({ verb }) => verb === 'trashFileIn'), await recorded('ModA')]).toEqual([{ landed: [{ ...landedOf('ModA'), refused }], refused: [] }, [], before]);
+  });
+
   describe('a decompile step (source.md, Build, story 17)', () => {
     const ASIDE = [
       { aside: '.medit_tmp_1_x/A.esp', path: 'plugin-source/A.esp' },
