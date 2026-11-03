@@ -2,7 +2,7 @@
 
 import { extname } from 'node:path';
 
-export const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
+const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
 
 /** A filename's extension, lowercased, `''` for none. */
 export const fileExtension = (name: string): string => extname(name).toLowerCase();
