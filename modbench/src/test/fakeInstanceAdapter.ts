@@ -14,6 +14,7 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
 import { folderValueOver, modValueOver, sourceFolderValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
+import { addLoadAfter, type LoadAfter } from '../sortingRules/lootMetadata';
 import { READ_SORTING_RULE_FILES } from './readSortingRuleFiles';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
@@ -78,6 +79,7 @@ export type AdapterCall =
   | { readonly verb: 'copyDownloadedFile'; readonly from: string; readonly name: string }
   | { readonly verb: 'trashDownloadedFile'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
+  | { readonly verb: 'changeUserlist'; readonly additions: readonly LoadAfter[] }
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
@@ -488,6 +490,16 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
           current = { ...current, downloadedFiles: { ...current.downloadedFiles, files: current.downloadedFiles.files?.filter((file) => file.name !== name) } };
         }
         return { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const;
+      }),
+    changeUserlist: (additions) =>
+      write({ verb: 'changeUserlist', additions }, () => {
+        const { userlist } = current.sortingRuleFiles;
+        if (userlist.kind === 'unreadable') throw new Error(userlist.reason);
+        const before = userlist.kind === 'text' ? userlist.text : '';
+        const after = addLoadAfter(before, additions);
+        if (after === before) return { wrote: false };
+        current = { ...current, sortingRuleFiles: { ...current.sortingRuleFiles, userlist: { path: userlist.path, kind: 'text', text: after } } };
+        return { wrote: true };
       }),
     selectProfile: (profile) =>
       write({ verb: 'selectProfile', profile }, () => {

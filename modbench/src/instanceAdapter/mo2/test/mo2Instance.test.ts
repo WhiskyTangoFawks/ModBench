@@ -3205,6 +3205,27 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
+  describe('the userlist', () => {
+    it('is written at the instance root, beside LOOT\'s other files', async () => {
+      await adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }]);
+
+      expect(await readFile(join(root, 'userlist.yaml'), 'utf8')).toBe('plugins:\n  - name: B.esp\n    after:\n      - A.esp\n');
+    });
+
+    it('rejects, writing nothing, when the file cannot be read as a file', async () => {
+      await mkdir(join(root, 'userlist.yaml'));
+
+      await expect(adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }])).rejects.toThrow(/EISDIR/);
+    });
+
+    it('rejects, writing nothing, when the file is not a map of plugins', async () => {
+      await writeFile(join(root, 'userlist.yaml'), '- a\n- b\n');
+
+      await expect(adapter.changeUserlist([{ plugin: 'B.esp', after: ['A.esp'] }])).rejects.toThrow(/not a map/);
+      expect(await readFile(join(root, 'userlist.yaml'), 'utf8')).toBe('- a\n- b\n');
+    });
+  });
+
   describe('the selected profile', () => {
     it('selects a profile, touching the settings alone', async () => {
       const before = await snapshotTree(root);

@@ -1,4 +1,4 @@
-import { isMap, isNode, isSeq, LineCounter, parseDocument } from 'yaml';
+import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, stringify, type Document, type Pair, type YAMLMap, type YAMLSeq } from 'yaml';
 
 type SortingRuleFile = { readonly path: string } & (
   | { readonly kind: 'text'; readonly text: string }
@@ -362,4 +362,162 @@ export function rulesReader(): (files: SortingRuleFiles) => ReadRules {
     last = { files, ...readRules(files) };
     return last;
   };
+}
+
+export interface LoadAfter {
+  readonly plugin: string;
+  readonly after: readonly string[];
+}
+
+interface Insertion {
+  readonly at: number;
+  readonly text: string;
+}
+
+const sameName = (a: unknown, b: string): boolean => typeof a === 'string' && a.toLowerCase() === b.toLowerCase();
+
+const nameOf = (item: unknown): unknown => {
+  const value = isScalar(item) ? item.value : item;
+  return isMap(value) ? value.get('name') : value;
+};
+
+const scalar = (name: string, inFlow: boolean): string =>
+  inFlow && /[[\]{},]/.test(name) ? JSON.stringify(name) : stringify(name, { lineWidth: 0 }).trimEnd();
+
+const flowList = (names: readonly string[]): string => names.map((name) => scalar(name, true)).join(', ');
+
+const entryLines = ({ plugin, after }: LoadAfter): string[] =>
+  [`- name: ${scalar(plugin, false)}`, '  after:', ...after.map((name) => `    - ${scalar(name, false)}`)];
+
+const startOf = (node: unknown): number => (isNode(node) ? node.range?.[0] : undefined) ?? 0;
+const endOf = (node: unknown): number => (isNode(node) ? node.range?.[1] : undefined) ?? 0;
+
+class Userlist {
+  private readonly insertions: Insertion[] = [];
+  private readonly eol: string;
+
+  constructor(private readonly text: string) {
+    this.eol = text.includes('\r\n') ? '\r\n' : '\n';
+  }
+
+  result(): string {
+    let out = '';
+    let from = 0;
+    for (const { at, text } of [...this.insertions].sort((a, b) => a.at - b.at)) {
+      out += this.text.slice(from, at) + text;
+      from = at;
+    }
+    return out + this.text.slice(from);
+  }
+
+  get edited(): boolean { return this.insertions.length > 0; }
+
+  private insert(at: number, text: string): void { this.insertions.push({ at, text }); }
+
+  // After the last item, so a space before the closing bracket stays where it was.
+  private insertInFlow(seq: YAMLSeq, text: string): void {
+    const last = seq.items.at(-1);
+    if (last === undefined) this.insert(endOf(seq) - 1, text);
+    else this.insert(endOf(last), `, ${text}`);
+  }
+
+  // Lines go where the node ends. A node that took its newline, as a keep block scalar takes its blank lines, ends
+  // on the next line; any other ends before a comment that stays with it.
+  private insertLinesAfter(end: number, indent: number, lines: readonly string[]): void {
+    const pad = ' '.repeat(indent);
+    if (end === 0 || this.text[end - 1] === '\n') {
+      this.insert(end, lines.map((line) => pad + line + this.eol).join(''));
+      return;
+    }
+    const newline = this.text.indexOf('\n', end);
+    const lineEnd = newline < 0 ? this.text.length : newline;
+    this.insert(lineEnd > 0 && this.text[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd, lines.map((line) => this.eol + pad + line).join(''));
+  }
+
+  private columnOf(offset: number): number { return offset - (this.text.lastIndexOf('\n', offset - 1) + 1); }
+
+  private dashColumn(seq: YAMLSeq): number {
+    const first = startOf(seq.items[0]);
+    return this.text.slice(first - this.columnOf(first), first).search(/-\s*$/);
+  }
+
+  appendPlugins(end: number, entries: readonly LoadAfter[]): void {
+    this.insertLinesAfter(end, 0, ['plugins:', ...entries.flatMap((entry) => entryLines(entry).map((line) => `  ${line}`))]);
+  }
+
+  fillBarePlugins(key: Pair, entries: readonly LoadAfter[]): void {
+    this.insertLinesAfter(endOf(key.value), this.columnOf(startOf(key.key)) + 2, entries.flatMap(entryLines));
+  }
+
+  addEntry(plugins: YAMLSeq, entry: LoadAfter): void {
+    if (plugins.flow === true) {
+      this.insertInFlow(plugins, `{name: ${scalar(entry.plugin, true)}, after: [${flowList(entry.after)}]}`);
+      return;
+    }
+    this.insertLinesAfter(endOf(plugins.items.at(-1)), this.dashColumn(plugins), entryLines(entry));
+  }
+
+  addAfters(entry: YAMLMap, held: unknown, names: readonly string[]): void {
+    if (isSeq(held) && held.flow === true) {
+      this.insertInFlow(held, flowList(names));
+    } else if (isSeq(held)) {
+      this.insertLinesAfter(endOf(held.items.at(-1)), this.dashColumn(held), names.map((name) => `- ${scalar(name, false)}`));
+    } else if (held !== undefined) {
+      throw new Error('The userlist has an "after" that is not a list.');
+    } else if (entry.flow === true) {
+      this.insert(endOf(entry) - 1, `, after: [${flowList(names)}]`);
+    } else {
+      this.insertLinesAfter(endOf(entry), this.columnOf(startOf(entry.items[0]?.key)), ['after:', ...names.map((name) => `  - ${scalar(name, false)}`)]);
+    }
+  }
+}
+
+type PluginsFound = { kind: 'absent'; end: number } | { kind: 'bare'; key: Pair } | { kind: 'list'; seq: YAMLSeq };
+
+function pluginsOf(doc: Document): PluginsFound {
+  if (doc.errors.length > 0) throw new Error(`The userlist does not parse: ${doc.errors[0]?.message}`);
+  const root = doc.contents;
+  if (root === null || (isScalar(root) && root.value === null)) return { kind: 'absent', end: doc.range?.[1] ?? 0 };
+  if (!isMap(root)) throw new Error('The userlist is not a map.');
+  const key = root.items.find((pair) => isScalar(pair.key) && pair.key.value === 'plugins');
+  if (key === undefined) return { kind: 'absent', end: endOf(root) };
+  if (isSeq(key.value)) return { kind: 'list', seq: key.value };
+  if (isScalar(key.value) && key.value.value === null && key.value.range?.[0] === key.value.range?.[1]) return { kind: 'bare', key };
+  throw new Error('The userlist\'s "plugins" is not a list.');
+}
+
+const distinct = (names: readonly string[]): string[] => names.filter((name, at) => names.findIndex((other) => sameName(other, name)) === at);
+
+function mergedByPlugin(additions: readonly LoadAfter[]): LoadAfter[] {
+  const merged = new Map<string, LoadAfter>();
+  for (const { plugin, after } of additions) {
+    const same = merged.get(plugin.toLowerCase());
+    merged.set(plugin.toLowerCase(), { plugin: same?.plugin ?? plugin, after: [...same?.after ?? [], ...after] });
+  }
+  return [...merged.values()];
+}
+
+/** The userlist's text with each plugin loading after the plugins given. Splices the entry it changes and nothing
+ *  else, so a comment, anchor or spacing stays. Throws for a text that is not a map of plugins. */
+export function addLoadAfter(source: string, additions: readonly LoadAfter[]): string {
+  const doc = parseDocument(source);
+  const found = pluginsOf(doc);
+  const plugins = found.kind === 'list' ? found.seq : undefined;
+  const userlist = new Userlist(source);
+  const fresh: LoadAfter[] = [];
+  for (const { plugin, after } of mergedByPlugin(additions)) {
+    const entries = plugins?.items.filter((item): item is YAMLMap => isMap(item) && sameName(nameOf(item), plugin)) ?? [];
+    const held = entries.flatMap((entry) => { const list = entry.get('after', true); return isSeq(list) ? list.items.map(nameOf) : []; });
+    const missing = distinct(after.filter((name) => !held.some((have) => sameName(have, name))));
+    if (missing.length === 0) continue;
+    const entry = entries[0];
+    if (entry !== undefined) userlist.addAfters(entry, entry.get('after', true), missing);
+    else fresh.push({ plugin, after: missing });
+  }
+  if (fresh.length > 0) {
+    if (plugins !== undefined) for (const addition of fresh) userlist.addEntry(plugins, addition);
+    else if (found.kind === 'bare') userlist.fillBarePlugins(found.key, fresh);
+    else if (found.kind === 'absent') userlist.appendPlugins(found.end, fresh);
+  }
+  return userlist.edited ? userlist.result() : source;
 }

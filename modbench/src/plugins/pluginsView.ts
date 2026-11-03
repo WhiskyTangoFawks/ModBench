@@ -31,6 +31,7 @@ import { createdRecordSelection } from './createdRecordSelection';
 import { registerDecompileAndRepairCommand, registerDecompileCommand, type DecompileDeps } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerApplySuggestedMoveCommand } from './applySuggestedMoveCommand';
+import { registerLoadAfterCommand } from './loadAfterCommand';
 import { suggestedMoveActions } from './suggestedMoveActions';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
@@ -174,6 +175,9 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, suggestedMoveActions({
       userlistPath: () => tree.userlistPath(), moves: () => tree.facts.rows.suggestedMoves(),
     }), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+    registerLoadAfterCommand({
+      commands, instance, reporter: reporterFor('pluginListTree.loadAfter'), places: (names) => tree.loadAfterPlaces(names),
+    }, selected.rows),
     registerApplySuggestedMoveCommand({
       commands, instance, reporter: reporterFor('pluginListTree.applySuggestedMove'), movesOf: (plugin) => tree.facts.rows.suggestedMovesOf(plugin),
     }, selected.rows),
