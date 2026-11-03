@@ -1,6 +1,6 @@
-# Modlist repository
+# Instance repository
 
-The modlist repository is what git holds of an instance (The repository, story 2). Its gestures are in [commands.md](commands.md). What every view shares is in [common.md](common.md).
+The instance repository is what git holds of an instance (The repository, story 2). Its gestures are in [commands.md](commands.md). What every view shares is in [common.md](common.md).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -49,7 +49,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Git init to make the instance folder a modlist repository with no prompt, or to adopt the repository it holds and keep its history, remotes and tracked files. It writes no manifest and commits nothing. Cites: catalog `git init`; Existing tools
+1. Git init to make the instance folder a instance repository with no prompt, or to adopt the repository it holds and keep its history, remotes and tracked files. It writes no manifest and commits nothing. Cites: catalog `git init`; Existing tools
 2. Source Control, while the instance folder holds no repository, to offer git init beside git's own Initialize Repository, and to say that git init keeps the mod folders' files out of git. Cites: VS Code's Source Control welcome content
 
 ## Every mod
