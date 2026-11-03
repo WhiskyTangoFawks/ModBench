@@ -2193,6 +2193,12 @@ describe('the MO2 Instance adapter', () => {
         expect([files[0]?.page, notes]).toEqual([undefined, []]);
       });
 
+      it('keeps the direct URL of a file of a game with no domain that names a mod ID', async () => {
+        await writeFile(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`), '[General]\r\ngameName=EnderalSE\r\nmodID=7\r\ndirectURL=https://example.com/a.7z\r\n');
+
+        expect(await hashing().downloadedFilesHashed()).toMatchObject({ files: [{ page: undefined, directUrl: 'https://example.com/a.7z' }], notes: [] });
+      });
+
       it('costs a file its page alone, saying why, when its metadata cannot be read', async () => {
         await rm(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
         await mkdir(join(root, 'downloads', `${DOWNLOADED_FILE}.meta`));
