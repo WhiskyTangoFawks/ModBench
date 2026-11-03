@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterAll, describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,7 +68,7 @@ describe('modbench.mod.versionInGit', () => {
     return {
       ...sourceCommands({
         client, adapter: fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(MODS, 'ModA', 'ModB', 'ModC') }), { repositoryOnDisk: true }).adapter,
-        saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn(),
+        saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn(),
       }),
       answers: (next: VersionInGitOutcome | WriteRefused) => { answer = next; },
       sent: () => sent,

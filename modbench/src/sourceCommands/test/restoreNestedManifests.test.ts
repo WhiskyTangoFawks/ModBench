@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -32,7 +33,7 @@ async function instanceWithANestedPair() {
   const client = new InMemoryMEditClient();
   const commands = instanceRepositoryCommands({
     client, adapter: adapterOver(root), nexus: nexusAnswering(answeringFrom({})).nexus, instanceRoot: root, hostGit: hostGitRecordingInits([]),
-    trash: () => Promise.resolve(), tasks: recordingTasks(),
+    trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(),
   });
   return { commands, found: await commands.otherManifests() };
 }

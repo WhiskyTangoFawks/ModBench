@@ -179,7 +179,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(reportSubscriberThrows(instance, reporterFor));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
-  const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
+  const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
@@ -202,7 +202,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, loadOrderSnapshot: () => instance.value.loadOrderSnapshot, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
