@@ -38,7 +38,7 @@ public sealed class PluginContentFlagsTests
     [InlineData("Plain.esp", false, false)]
     [InlineData("Plain.esm", false, true)]
     [InlineData("Flagged.esp", true, true)]
-    public void ReadContent_IsMaster_IsTheHeaderFlagOrTheEsmExtension(string fileName, bool flagged, bool expected)
+    public void ReadContent_IsMaster_IsTheHeaderFlagOrAMasterExtension(string fileName, bool flagged, bool expected)
     {
         var content = ReadFallout4(fileName, mod => mod.IsMaster = flagged);
 

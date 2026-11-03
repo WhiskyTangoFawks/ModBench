@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import type { PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
-import { PluginFacts, placeOf, type LootInput, type PluginPlace } from '../pluginFacts';
-import { rulesReader } from '../../sortingRules/lootMetadata';
+import { PluginFacts, placeOf, type PluginPlace } from '../pluginFacts';
 
 const A = { name: 'A.esp', origin: 'SomeMod' };
 
@@ -126,17 +125,10 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
-  it('judges no blueprint rule, and no load after between two of them, on the plugins the game loads with no line', () => {
+  it('judges no blueprint rule on a blueprint plugin the game loads with no line', () => {
     const facts = new PluginFacts();
     const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
-    const creation = { name: 'Creation.esm', origin: 'SomeMod' };
-    const { entries, groups } = rulesReader()({
-      masterlist: { path: '/instance/masterlist.yaml', kind: 'text', text: 'plugins:\n  - name: Blueprint.esm\n    after: [Creation.esm]\n' },
-      prelude: { path: '/instance/prelude.yaml', kind: 'absent' },
-      userlist: { path: '/instance/userlist.yaml', kind: 'absent' },
-    });
-    const files: LootInput['files'] = { files: () => ({ names: [], complete: true }), isPresent: () => 'present', answer: () => ({ kind: 'read', value: undefined }) };
-    facts.reconciled([held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...creation, isMaster: true })], [], [blueprint, creation, A], [A], { entries, groups, files });
+    facts.reconciled([held(), held({ ...blueprint, isMaster: true, isBlueprint: true })], [], [blueprint, A], [A]);
 
     expect(facts.brokenRules()).toEqual([]);
   });

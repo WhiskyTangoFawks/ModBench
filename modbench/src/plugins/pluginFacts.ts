@@ -249,7 +249,7 @@ export class PluginFacts {
         const address = addressOf.get(filename.toLowerCase());
         const read = address && this.reads.get(address);
         return read && lootPartition(read);
-      }, loadedWithNoLine),
+      }),
     ];
     this.broken = broken;
     this.offered = offeredMoves(this.lineOrder.map(({ name }) => name), broken, this.factsOver(this.lineOrder));

@@ -170,7 +170,7 @@ function parse(text: string): { kind: 'parsed'; node: Node } | Unevaluable {
 const fold = (text: string): string => text.toLowerCase();
 
 const REGEX_PATH = /[:\\*?|]/;
-export const PLUGIN = /\.(esp|esm|esl)$/i;
+const PLUGIN = /\.(esp|esm|esl)$/i;
 const COMPARATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);
 const DATA_FOLDER_UNLISTED = "the game's Data folder cannot be listed";
 
@@ -212,6 +212,16 @@ function presence(path: string, facts: ConditionFacts): Evaluation {
 /** Whether the file is installed as `file()` says: a name with a regular expression in its filename needs only a match. */
 export function isFilePresent(path: string, facts: ConditionFacts): Evaluation {
   return REGEX_PATH.test(path) ? filesMatching(path, 1, facts) : presence(path, facts);
+}
+
+/** Whether an incompatibility is present as LOOT counts it (validation.cpp, checkInstallValidity): a plugin only while it is active. */
+export function isIncompatibilityPresent(path: string, facts: ConditionFacts): Evaluation {
+  const present = isFilePresent(path, facts);
+  if (present.kind === 'unevaluable' || !present.value) return present;
+  const matched = REGEX_PATH.test(path) ? matching(facts.files().names, path) : { found: [path] };
+  if ('problem' in matched) return cannot(matched.problem);
+  const active = new Set(facts.activePlugins().map(fold));
+  return yes(REGEX_PATH.test(path) || matched.found.some((file) => !PLUGIN.test(file) || active.has(fold(file))));
 }
 
 function withAnswer(facts: ConditionFacts, read: FileRead, use: (value: ReadValue) => boolean): Evaluation {

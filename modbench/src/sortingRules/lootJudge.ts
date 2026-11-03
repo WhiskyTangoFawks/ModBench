@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import { distinctReads, evaluateCondition, isFilePresent, PLUGIN, readsOf, type ConditionFacts, type Evaluation, type FileRead } from './lootConditions';
+import { distinctReads, evaluateCondition, isFilePresent, isIncompatibilityPresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
 import { DEFAULT_GROUP, type CleaningData, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
@@ -58,15 +58,8 @@ function guarded(
   return evaluation.value ? applied() : [];
 }
 
-// LOOT's own test (validation.cpp, checkInstallValidity): an incompatible plugin counts only while it is active.
-function isIncompatibilityPresent(name: string, facts: ConditionFacts): Evaluation {
-  const present = isFilePresent(name, facts);
-  if (present.kind === 'unevaluable' || !present.value || !PLUGIN.test(name)) return present;
-  return { kind: 'value', value: facts.activePlugins().some((active) => fold(active) === fold(name)) };
-}
-
 function judgePlugin(
-  order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts, loadedWithNoLine: (filename: string) => boolean,
+  order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts,
 ): BrokenRule[] {
   const plugin = order[index];
   if (plugin === undefined) return [];
@@ -89,7 +82,7 @@ function judgePlugin(
   const loadAfters = filesOf('after').flatMap((file) => checked(file, 'a load after', (): Judged => {
     const other = order.findIndex((candidate) => fold(candidate.filename) === fold(file.name));
     const target = order[other];
-    if (target === undefined || other < index || (loadedWithNoLine(plugin.filename) && loadedWithNoLine(target.filename))) return [];
+    if (target === undefined || other < index) return [];
     return [{
       rule: 'loadAfter', level: 'warning', plugins: [plugin, target], source: file.source,
       reason: `"${plugin.filename}" loads before ${shown(file)}, and should load after it.`,
@@ -184,9 +177,8 @@ function judgeGroups(
  *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread. */
 export function judgeLoot(
   order: readonly PluginRef[], rules: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
-  loadedWithNoLine: (filename: string) => boolean,
 ): BrokenRule[] {
-  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts, loadedWithNoLine)), ...judgeGroups(order, rules, partitionOf)];
+  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts)), ...judgeGroups(order, rules, partitionOf)];
 }
 
 /** The file reads `judgeLoot` needs of `order`: those of every condition on a rule of a plugin in it, and the
