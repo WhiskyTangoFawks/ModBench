@@ -248,7 +248,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const before = await snapshotTree(root);
       const dialog = { ...FOMOD_PAGE, onMove: (handler: (move: FomodMove) => void) => { setImmediate(() => handler({ kind: 'cancel' })); } };
 
-      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, trash, { kind: 'dialog', dialog });
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, trash, { kind: 'dialog', dialog, steps: [] });
 
       expect(outcome).toEqual({ landed: false, cancelled: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -256,7 +256,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
     describe('while its page waits on the user', () => {
       interface HeldPage {
-        readonly answer: { kind: 'dialog'; dialog: FomodDialog };
+        readonly answer: FomodAnswer;
         readonly shown: Promise<void>;
         readonly move: (move: FomodMove) => void;
       }
@@ -266,7 +266,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         const shown = new Promise<void>((resolve) => { shownNow = resolve; });
         let handler: (move: FomodMove) => void = () => undefined;
         const dialog: FomodDialog = { ...FOMOD_PAGE, show: () => shownNow(), onMove: (listener) => { handler = listener; } };
-        return { answer: { kind: 'dialog', dialog }, shown, move: (move) => handler(move) };
+        return { answer: { kind: 'dialog', dialog, steps: [] }, shown, move: (move) => handler(move) };
       }
       const INSTALL: FomodMove = { kind: 'continue', forward: true, stepId: 0 };
 
