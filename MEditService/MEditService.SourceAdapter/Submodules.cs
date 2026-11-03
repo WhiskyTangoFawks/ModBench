@@ -14,7 +14,7 @@ internal static class Submodules
         if (!git.Exists) return null;
         var remotes = git.Run("remote").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var remote = remotes.Contains(Origin) ? Origin : remotes.Order(StringComparer.Ordinal).FirstOrDefault();
-        return remote is null ? null : (git.HoldsUncommittedChanges(), !git.RemoteHoldsHead(remote));
+        return remote is null ? null : (git.HoldsUncommittedChanges(), !git.RemoteHoldsTheSource(remote));
     }
 
     internal static SubmoduleHead CommitAtHead(Submodule submodule, CancellationToken cancel)

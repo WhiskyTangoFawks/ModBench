@@ -238,7 +238,7 @@ class HttpMEditClient implements MEditClient {
   // A write over a selection: each item lands or is refused on its own, and the counted phrase
   // ("3 plugins") names the selection in the log line and the refusal.
   private async mutateEach<T extends { refused: { item: unknown; message: string }[] }, O>(spec: {
-    verb: string;
+    gesture: (counted: string) => string;
     noun: string;
     items: readonly unknown[];
     op: (counted: string) => string;
@@ -246,7 +246,7 @@ class HttpMEditClient implements MEditClient {
     outcome: (answer: T) => O;
   }): Promise<O | WriteRefused> {
     const counted = spec.items.length === 1 ? `1 ${spec.noun}` : `${spec.items.length} ${spec.noun}s`;
-    const answer = await this.mutate({ op: spec.op(counted), failMsg: `Could not ${spec.verb} ${counted}`, post: spec.post });
+    const answer = await this.mutate({ op: spec.op(counted), failMsg: `Could not ${spec.gesture(counted)}`, post: spec.post });
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
@@ -414,15 +414,15 @@ class HttpMEditClient implements MEditClient {
   }
 
   /** ADR-0007; commands.md, A selection is one gesture, and each item lands on its own. */
-  async initSourceMod(
+  async versionInGit(
     mods: readonly ModToVersionInGit[], options: { onProgress?: (status: VersionInGitProgress) => void } = {},
   ): Promise<VersionInGitOutcome | WriteRefused> {
     // The POST stays blocking, so progress rides the version-in-git-progress notification alongside it.
     const unsubscribe = options.onProgress ? this.notifications.onNotification('version-in-git-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
-        verb: 'version in git', noun: 'mod', items: mods.map((mod) => mod.name),
-        op: (counted) => `initSourceMod(${counted})`,
+        gesture: (counted) => `put ${counted} under git`, noun: 'mod', items: mods.map((mod) => mod.name),
+        op: (counted) => `versionInGit(${counted})`,
         post: () => this.apiClient.POST('/version-in-git', { body: { mods: [...mods] } }),
         outcome: selectionOutcome,
       });
@@ -449,7 +449,7 @@ class HttpMEditClient implements MEditClient {
     records: readonly RecordAt[],
   ): Promise<DeleteChangesOutcome | WriteRefused> {
     return this.mutateEach({
-      verb: 'delete', noun: 'record', items: records,
+      gesture: (counted) => `delete ${counted}`, noun: 'record', items: records,
       op: (counted) => `getDeleteChanges(${counted})`,
       post: () => this.apiClient.POST('/records/delete-changes', { body: { records: [...records] } }),
       outcome: appliedWithRefusals,
@@ -460,7 +460,7 @@ class HttpMEditClient implements MEditClient {
     records: readonly RecordAt[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<CopyChangesOutcome | WriteRefused> {
     return this.mutateEach({
-      verb: 'copy', noun: 'record', items: records,
+      gesture: (counted) => `copy ${counted}`, noun: 'record', items: records,
       op: (counted) => `getCopyChanges(${counted}, ${mode})`,
       post: () => this.apiClient.POST('/records/copy-changes', {
         body: { records: [...records], mode, destinations: [...destinations], replace },
@@ -471,7 +471,7 @@ class HttpMEditClient implements MEditClient {
 
   async decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     return this.mutateEach({
-      verb: 'decompile', noun: 'plugin', items: plugins,
+      gesture: (counted) => `decompile ${counted}`, noun: 'plugin', items: plugins,
       op: (counted) => `decompile(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins], force } }),
       outcome: selectionOutcome,
@@ -482,7 +482,7 @@ class HttpMEditClient implements MEditClient {
     plugins: readonly PluginToRepair[], force: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     return this.mutateEach({
-      verb: 'decompile and repair', noun: 'plugin', items: plugins,
+      gesture: (counted) => `decompile and repair ${counted}`, noun: 'plugin', items: plugins,
       op: (counted) => `decompileAndRepair(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], force } }),
       outcome: selectionOutcome,
@@ -493,7 +493,7 @@ class HttpMEditClient implements MEditClient {
    *  refused on its own. Never refreshes the tree: a build changes only bytes on disk. */
   async build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused> {
     return this.mutateEach({
-      verb: 'build', noun: 'mod', items: mods,
+      gesture: (counted) => `build ${counted}`, noun: 'mod', items: mods,
       op: (counted) => `build(${counted})`,
       post: () => this.apiClient.POST('/build', { body: { mods: [...mods], ...facts } }),
       outcome: (answer) => ({

@@ -16,7 +16,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'initSourceMod' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
@@ -169,7 +169,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
         if (unwritten !== undefined) return { landed: [], refused: [...refused, ...[...made.keys()].map((item) => ({ item, reason: unwritten }))], ...notes };
       }
       const sent: ModToVersionInGit[] = [...made].map(([name, { modFolder, repository }]) => ({ name, modFolder, repository, commit, in: where }));
-      const outcome = await client.initSourceMod(sent, onProgress === undefined ? {} : { onProgress });
+      const outcome = await client.versionInGit(sent, onProgress === undefined ? {} : { onProgress });
       if (isRefused(outcome)) return outcome;
       const landed = new Set(outcome.landed.map(({ mod }) => mod));
       const notTakenBack = inModlist ? await linesTakenBack(adapter, sourceFolders([...made.keys()].filter((mod) => !landed.has(mod)))) : [];

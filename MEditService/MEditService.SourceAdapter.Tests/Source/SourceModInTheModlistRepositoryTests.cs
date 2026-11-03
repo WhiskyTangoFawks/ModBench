@@ -101,6 +101,28 @@ public sealed class SourceModInTheModlistRepositoryTests : IDisposable
         Assert.Equal(["DECOMPILED"], repository.LastWrittenBinarySha256s(A).Value());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ABuild_IsUnpushedOnlyWhileTheRemoteLacksTheLastCommitTouchingTheSourceFolder_AndUncommittedOnlyForItsOwnChanges(bool changedSincePushed)
+    {
+        Assert.Null(InitInModlistRepository(_sourceFolder, commit: true));
+        Git("remote", "add", "origin", "https://example.com/modlist.git");
+        Git("update-ref", "refs/remotes/origin/main", "HEAD");
+        if (changedSincePushed)
+        {
+            File.WriteAllText(Path.Combine(_sourceFolder, "build.json"), "the build file, changed");
+            Git("commit", "-q", "-m", "Change the build file", "--", $"source/{TestMod.Name}/build.json");
+        }
+        StageAnotherChange();
+        Git("commit", "-q", "-m", "Another mod");
+        StageAnotherChange();
+
+        var source = TestAdapters.Source().SourceToBuild(_sourceFolder, ["build.json"]).Value();
+
+        Assert.Equal((false, changedSincePushed), (source.Uncommitted, source.Unpushed));
+    }
+
     [Fact]
     public void ARepair_CommitsThePluginsSourceAlone_AndWhatElseIsStagedStaysStaged()
     {

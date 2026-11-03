@@ -484,7 +484,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     for (const path of ignore) await put(`mods/Mod/${path}`, 'the game wrote this');
     const client = new InMemoryMEditClient();
     const handed: ModToVersionInGit[] = [];
-    client.setCommandHandler('initSourceMod', async ([mod]) => {
+    client.setCommandHandler('versionInGit', async ([mod]) => {
       if (mod === undefined) throw new Error('no mod');
       handed.push(mod);
       await put(`source/Mod/${BUILD_FILE}`, mod.repository.buildFile);
@@ -604,7 +604,7 @@ describe('version in git over an instance on disk', () => {
   it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
     const { client, versionInGit } = await aModWithItsManifest();
     const handed: ModToVersionInGit[] = [];
-    client.setCommandHandler('initSourceMod', (mods) => {
+    client.setCommandHandler('versionInGit', (mods) => {
       handed.push(...mods);
       return Promise.resolve({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
     });
@@ -650,7 +650,7 @@ describe('version in git of a mod several downloaded files yield, over an instan
     for (const name of Object.keys(YIELDS)) await put(`downloads/${name}`, `the downloaded ${name}`);
     const client = new InMemoryMEditClient();
     const handed: ModToVersionInGit[] = [];
-    client.setCommandHandler('initSourceMod', (mods) => {
+    client.setCommandHandler('versionInGit', (mods) => {
       handed.push(...mods);
       return Promise.resolve({ landed: [], refused: [] });
     });

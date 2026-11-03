@@ -166,9 +166,14 @@ internal sealed class SourceRepositoryGit
 
     internal bool HoldsUncommittedChanges() => Run("status", "--porcelain", "--untracked-files=all", "--", ".").Length > 0;
 
-    /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit at HEAD.</summary>
-    internal bool RemoteHoldsHead(string remote) =>
-        HeadCommit() is null || Run("for-each-ref", "--contains", "HEAD", "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+    /// <summary>Whether <paramref name="remote"/>, as last fetched, holds the commit a clone builds the source folder from:
+    /// HEAD of its own repository, which the modlist repository pins, or the last commit touching it in the modlist repository.</summary>
+    internal bool RemoteHoldsTheSource(string remote)
+    {
+        if (HeadCommit() is null) return true;
+        var source = IsOwn ? "HEAD" : Run("log", "-1", "--format=%H", "HEAD", "--", ".").Trim();
+        return source.Length == 0 || Run("for-each-ref", "--contains", source, "--format=%(refname)", $"refs/remotes/{remote}/").Length > 0;
+    }
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
     // its paths with Path.Combine.

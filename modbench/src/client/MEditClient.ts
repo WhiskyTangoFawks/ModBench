@@ -238,7 +238,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  initSourceMod(mods: readonly ModToVersionInGit[], options?: { onProgress?: (status: VersionInGitProgress) => void }): Promise<VersionInGitOutcome | WriteRefused>;
+  versionInGit(mods: readonly ModToVersionInGit[], options?: { onProgress?: (status: VersionInGitProgress) => void }): Promise<VersionInGitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,

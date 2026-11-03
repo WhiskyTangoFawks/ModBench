@@ -372,7 +372,7 @@ describe('sourceCommands versionInGit', () => {
   const committing = () => {
     const client = new InMemoryMEditClient();
     const handed: ModToVersionInGit[] = [];
-    client.setCommandHandler('initSourceMod', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [], refused: [] }); });
+    client.setCommandHandler('versionInGit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [], refused: [] }); });
     return { client, handed };
   };
   it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and a build file that copies every other file by the file or folder at the root holding it, then compiles each plugin (plugins.md, Version in git, story 2)', async () => {
@@ -407,7 +407,7 @@ describe('sourceCommands versionInGit', () => {
       const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
       const linesWhenSent: unknown[] = [];
-      client.setCommandHandler('initSourceMod', (mods) => {
+      client.setCommandHandler('versionInGit', (mods) => {
         linesWhenSent.push(sourceFolderLines(fake.calls), mods.map((mod) => mod.in));
         return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
       });
@@ -421,7 +421,7 @@ describe('sourceCommands versionInGit', () => {
     it('leaves out again the source folder of a mod mEdit refused', async () => {
       const fake = fakeInstanceAdapter(readingFixture({ sourceRepositories: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
-      client.setCommandHandler('initSourceMod', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'its plugin is malformed' }] }));
+      client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'its plugin is malformed' }] }));
 
       await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inModlist);
 
@@ -452,7 +452,7 @@ describe('sourceCommands versionInGit', () => {
   it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, version in git)', async () => {
     const folder = folderOf('ModA');
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('initSourceMod', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
+    client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
     const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') }), { metadata: new Map([['ModA', { version: '1.2.3' }]]) }).adapter;
 
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
@@ -463,7 +463,7 @@ describe('sourceCommands versionInGit', () => {
 
   it.each([[true, 'committed'], [false, 'put under git']])('given commit %s, names a mod whose manifest could not name its repository as %s, never as what did not happen', async (commit, done) => {
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('initSourceMod', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
+    client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
 
     const outcome = await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit });
 

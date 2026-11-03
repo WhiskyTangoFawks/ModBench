@@ -249,7 +249,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
     { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
       path: '/records/compare', body: { copies } },
-    { name: 'initSourceMod', verb: (c) => c.initSourceMod([modToVersionInGit('ModA'), modToVersionInGit('ModC')]),
+    { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA'), modToVersionInGit('ModC')]),
       answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'CommitFailed', message: 'ModC was not initialized.' }] },
       reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC was not initialized.' }] },
       path: '/version-in-git', body: { mods: [modToVersionInGit('ModA'), modToVersionInGit('ModC')] } },
@@ -405,7 +405,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
-      { name: 'initSourceMod', verb: (c) => c.initSourceMod([modToVersionInGit('ModA'), modToVersionInGit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not version in git 2 mods' },
+      { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA'), modToVersionInGit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not put 2 mods under git' },
+      { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not put 1 mod under git' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'decompile', verb: (c) => c.decompile([first, second], true), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile 2 plugins' },
     ];

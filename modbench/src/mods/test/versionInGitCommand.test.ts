@@ -57,7 +57,7 @@ describe('modbench.mod.versionInGit', () => {
     const wheres: (string | null | undefined)[] = [];
     const progressListeners: (((status: VersionInGitProgress) => void) | undefined)[] = [];
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('initSourceMod', (mods, options) => {
+    client.setCommandHandler('versionInGit', (mods, options) => {
       sent.push(mods.map((mod) => mod.name));
       commits.push(...mods.map((mod) => mod.commit === true));
       wheres.push(...mods.map((mod) => mod.in));
@@ -307,13 +307,13 @@ describe('modbench.mod.versionInGit', () => {
 
   it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
     const commands = versionInGitCommands();
-    commands.answers({ refused: true, message: 'Could not version in git 1 mod — git was not found on PATH.' });
+    commands.answers({ refused: true, message: 'Could not put 1 mod under git — git was not found on PATH.' });
     const { handler, onCommitted, reporter } = invokeVersionInGit(commands);
 
     await handler(row(OTHER));
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not version in git 1 mod — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not put 1 mod under git — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).not.toHaveBeenCalled();

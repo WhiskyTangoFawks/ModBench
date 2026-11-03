@@ -9,7 +9,7 @@ export const REREAD_AFTER_WRITE_MESSAGE =
 // Every call that writes a system of record from a view's gesture, by the name it is called under.
 export const WRITES = new Set([
     'setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins', 'appendPlugin', 'onPluginCheckboxChanged',
-    'createPlugin', 'initSourceMod', 'versionInGit', 'build', 'applyWorkspaceChanges', 'renamePlugin',
+    'createPlugin', 'versionInGit', 'build', 'applyWorkspaceChanges', 'renamePlugin',
     'setModsEnabled', 'markFiles', 'moveMods', 'moveSeparators', 'uninstallMods', 'renameSeparator', 'insertSeparator',
     'deleteSeparators', 'createEmptyMod', 'installMod',
     'excludeDownloads', 'includeDownloads', 'deleteDownloads',
