@@ -93,6 +93,8 @@ export interface InstanceValue {
   readonly entryKey: (entry: EntryRef) => string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
+  /** The game's release, as the tables name it. */
+  readonly gameRelease: string;
   /** The Nexus domain of a game as a mod's or a downloaded file's metadata names it, so a view linking to a mod page holds no
    *  game table; undefined when the tables hold none. */
   readonly nexusDomainOf: (game: string) => string | undefined;
@@ -242,6 +244,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   managerRunning: { kind: 'notRunning' },
   entryKey: (entry) => adapter.entryKey(entry),
   gameName: '',
+  gameRelease: '',
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
@@ -526,6 +529,7 @@ export class Instance implements Subscription {
       managerRunning: reading.managerRunning,
       entryKey: (entry) => adapter.entryKey(entry),
       gameName,
+      gameRelease,
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
       programVersions,

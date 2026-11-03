@@ -66,10 +66,11 @@ function plugin(
 }
 
 function valueOf(
-  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[],
+  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[], gameRelease = 'Fallout4',
 ): InstanceValue {
   const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data/' && origin !== 'overwrite/');
   return instanceValueFixture({
+    gameRelease,
     mods: mods.map((name) => ({ kind: 'mod' as const, name, enabled: true })),
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
     pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => {
@@ -107,10 +108,11 @@ function makeTree(
     publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
     publishSortingErrors: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishSortingErrors'];
     loadedWithNoLine: readonly (string | PluginAddress)[];
+    gameRelease: string;
     reporter: RecordingReporter;
   }> = {},
 ): Harness {
-  const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
+  const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine, extra.gameRelease));
   const client = extra.client ?? browserClient();
   const records = new RecordBrowser(client);
   const tree = pluginsTreeOver(instance, {
@@ -776,7 +778,7 @@ describe('PluginsTreeProvider — a plugin the game loads with no line sits wher
   const lines = () => [
     plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 }), plugin({ name: 'Ship.esm', line: 2 }),
   ];
-  const scene = () => makeTree(lines(), { loadedWithNoLine: ['Base.esm', BLUEPRINT] });
+  const scene = (gameRelease = 'Starfield') => makeTree(lines(), { loadedWithNoLine: ['Base.esm', BLUEPRINT], gameRelease });
   const facts = [
     held('Base.esm', { origin: 'Data/' }), held(BLUEPRINT, { origin: 'Data/', isMaster: true, isBlueprint: true }), held('A.esp'), held('B.esp'),
     held('Ship.esm', { isMaster: true, isBlueprint: true, masters: [BLUEPRINT] }),
@@ -788,6 +790,13 @@ describe('PluginsTreeProvider — a plugin the game loads with no line sits wher
     await reconcile(h, facts);
 
     expect(await labelsOf(h.tree)).toEqual(['Base.esm', 'A.esp', 'B.esp', BLUEPRINT, 'Ship.esm']);
+  });
+
+  it('draws it at the losing end in a release that does not load blueprint plugins last', async () => {
+    const h = scene('Fallout4');
+    await reconcile(h, facts);
+
+    expect(await labelsOf(h.tree)).toEqual(['Base.esm', BLUEPRINT, 'A.esp', 'B.esp', 'Ship.esm']);
   });
 
   it('draws it at the losing end until mEdit says it is a blueprint plugin', async () => {

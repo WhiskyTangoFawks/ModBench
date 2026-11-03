@@ -19,6 +19,7 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
+import { blueprintLoadsLastIn } from '../tables/gamePaths';
 import { inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
@@ -148,6 +149,7 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
+      blueprintLoadsLast: () => blueprintLoadsLastIn(this.instanceValue.gameRelease),
       lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
@@ -422,7 +424,7 @@ export class PluginsTreeProvider
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));
     this.rowsBlueprints = this.facts.rows.blueprintPlugins();
     return inGameOrder<PluginListNode>(
-      lockedRows, fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)), (row) => this.facts.rows.isBlueprint(addressOfRow(row)),
+      lockedRows, fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)), (row) => this.facts.rows.isBlueprint(addressOfRow(row)), blueprintLoadsLastIn(this.instanceValue.gameRelease),
     );
   }
 

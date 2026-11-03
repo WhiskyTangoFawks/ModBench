@@ -123,6 +123,7 @@ export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
+  private blueprintLoadsLast = false;
   private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
@@ -177,7 +178,7 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
    *  the active plugins in load order, which the sorting rules judge, and every plugins.txt line, which a move is written into. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES, blueprintLoadsLast = false): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -185,6 +186,7 @@ export class PluginFacts {
     this.refreshed(plugins);
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
+    this.blueprintLoadsLast = blueprintLoadsLast;
     this.judgeSorting(activeOrder, loot);
   }
 
@@ -255,7 +257,7 @@ export class PluginFacts {
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
     const activeOrder = inGameOrder(
-      treeOrder.filter(({ name }) => loadedWithNoLine(name)), treeOrder.filter(({ name }) => !loadedWithNoLine(name)), (address) => this.isBlueprint(address),
+      treeOrder.filter(({ name }) => loadedWithNoLine(name)), treeOrder.filter(({ name }) => !loadedWithNoLine(name)), (address) => this.isBlueprint(address), this.blueprintLoadsLast,
     );
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
     const factsOf = this.factsOver(activeOrder);

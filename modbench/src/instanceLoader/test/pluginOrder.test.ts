@@ -42,11 +42,11 @@ describe('the plugin order: the plugins the game loads with no line, then the li
   });
 });
 
-describe('the game\'s order: a blueprint plugin loads after every plugin that is not one', () => {
+describe('the game\'s order, where the release loads a blueprint plugin after every plugin that is not one', () => {
   const at = (name: string) => ({ name, origin: 'Mod' });
   const blueprints = (...names: string[]) => (p: { name: string }) => names.includes(p.name);
-  const orderOfNames = (noLine: string[], lines: string[], isBlueprint: (p: { name: string }) => boolean) =>
-    inGameOrder(noLine.map(at), lines.map(at), isBlueprint).map((p) => p.name);
+  const orderOfNames = (noLine: string[], lines: string[], isBlueprint: (p: { name: string }) => boolean, blueprintLoadsLast = true) =>
+    inGameOrder(noLine.map(at), lines.map(at), isBlueprint, blueprintLoadsLast).map((p) => p.name);
 
   it('places a blueprint plugin with no line after the last line that is not a blueprint plugin, and before a blueprint line', () => {
     expect(orderOfNames(['Base.esm', 'Blueprint.esm'], ['A.esp', 'B.esp', 'Ship.esm'], blueprints('Blueprint.esm', 'Ship.esm')))
@@ -59,5 +59,10 @@ describe('the game\'s order: a blueprint plugin loads after every plugin that is
 
   it('places a blueprint plugin with no line first when every line is a blueprint plugin', () => {
     expect(orderOfNames(['Blueprint.esm'], ['Ship.esm'], blueprints('Blueprint.esm', 'Ship.esm'))).toEqual(['Blueprint.esm', 'Ship.esm']);
+  });
+
+  it('places the plugins with no line before every line in a release that does not', () => {
+    expect(orderOfNames(['Base.esm', 'Blueprint.esm'], ['A.esp', 'B.esp', 'Ship.esm'], blueprints('Blueprint.esm', 'Ship.esm'), false))
+      .toEqual(['Base.esm', 'Blueprint.esm', 'A.esp', 'B.esp', 'Ship.esm']);
   });
 });

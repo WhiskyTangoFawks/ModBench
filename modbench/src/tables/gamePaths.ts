@@ -20,6 +20,8 @@ export interface GamePathInfo {
   readonly steamFolderName?: string;
   /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's `Implicits.Listings` order for the release. */
   readonly masters: readonly string[];
+  /** The release loads a blueprint plugin after every plugin that is not one. */
+  readonly blueprintLoadsLast?: true;
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
   /** The folder a mod's script-extender files sit in, under the Data folder. */
@@ -124,7 +126,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
-    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
+    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
   },
@@ -205,6 +207,11 @@ export function lootRepositoryOf(release: string): string | undefined {
 /** The game's programs in the game folder; none for no release, or a release the table holds no row for. */
 export function programsOf(release: string | undefined): Programs | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.programs;
+}
+
+/** Whether the release loads a blueprint plugin after every plugin that is not one. */
+export function blueprintLoadsLastIn(release: string | undefined): boolean {
+  return (release === undefined ? undefined : GAME_PATHS[release])?.blueprintLoadsLast === true;
 }
 
 /** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's listing

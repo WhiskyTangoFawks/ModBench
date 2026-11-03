@@ -19,6 +19,8 @@ export interface PluginFactsFeedDeps {
   shownPlugins: () => readonly PluginAddress[];
   /** The plugins the game loads, in load order: the order the sorting rules judge. */
   activePlugins: () => readonly PluginAddress[];
+  /** Whether the game's release loads a blueprint plugin after every plugin that is not one. */
+  blueprintLoadsLast: () => boolean;
   /** Every plugins.txt line, enabled or not, in load order: the order a move is written into. */
   lines: () => readonly PluginAddress[];
   /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
@@ -116,7 +118,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const active = this.deps.activePlugins();
     const loot = await this.lootRules(active);
     if (generation !== this.generation) return undefined;
-    this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot);
+    this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot, this.deps.blueprintLoadsLast());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
