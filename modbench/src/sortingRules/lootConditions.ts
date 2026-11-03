@@ -170,7 +170,7 @@ function parse(text: string): { kind: 'parsed'; node: Node } | Unevaluable {
 const fold = (text: string): string => text.toLowerCase();
 
 const REGEX_PATH = /[:\\*?|]/;
-const PLUGIN = /\.(esp|esm|esl)$/i;
+export const PLUGIN = /\.(esp|esm|esl)$/i;
 const COMPARATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);
 const DATA_FOLDER_UNLISTED = "the game's Data folder cannot be listed";
 
@@ -223,12 +223,6 @@ const activeMatching = (path: string, atLeast: number, facts: ConditionFacts): E
   const matched = matching(facts.activePlugins(), path);
   return 'problem' in matched ? cannot(matched.problem) : yes(matched.found.length >= atLeast);
 };
-
-/** LOOT's own test: an incompatible plugin counts only while it is active. */
-export function isIncompatibilityPresent(path: string, facts: ConditionFacts): Evaluation {
-  const present = isFilePresent(path, facts);
-  return present.kind === 'unevaluable' || !present.value || !PLUGIN.test(path) ? present : activeMatching(path, 1, facts);
-}
 
 type Quoted = { path: string } | Unevaluable;
 

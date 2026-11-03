@@ -409,7 +409,7 @@ const METADATA_KEYS = ['plugins', 'groups', 'bash_tags', 'globals'];
 
 const textFile = (text: string): SortingRuleFile => ({ path: '', kind: 'text', text });
 
-// Whether the text is a map holding a key of LOOT's metadata: a page of HTML parses as YAML too.
+// A page of HTML parses as YAML too.
 function isMetadata(text: string): boolean {
   const { contents } = parseDocument(text);
   return isMap(contents) && contents.items.some(({ key }) => METADATA_KEYS.includes(String(isScalar(key) ? key.value : key)));

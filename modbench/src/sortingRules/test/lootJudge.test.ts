@@ -311,17 +311,19 @@ plugins:
     });
   });
 
-  it('judges no group or load after on a plugin the game loads with no line, as the game places it', () => {
+  it('judges the groups and load afters of a plugin the game loads with no line, but no load after between two such plugins', () => {
     const masterlist = `groups:
   - name: default
   - {name: late, after: [default]}
 plugins:
-  - {name: Creation.esp, group: late, after: [Mod.esp]}
+  - {name: Creation.esp, group: late, after: [Base.esp, Mod.esp]}
 `;
     const order = ['Creation.esp', 'Base.esp', 'Mod.esp'];
+    const broken = judgeLoot(order.map(at), { ...rules({ masterlist: text(masterlist) }), facts: factsOf({ present: order, active: order }) },
+      () => 'nonMasters', (filename) => filename !== 'Mod.esp');
 
-    expect(judgeLoot(order.map(at), { ...rules({ masterlist: text(masterlist) }), facts: factsOf({ present: order, active: order }) },
-      () => 'nonMasters', (filename) => filename !== 'Mod.esp')).toEqual([]);
+    expect(broken.map(({ rule, plugins }) => [rule, ...plugins.map(({ filename }) => filename)]))
+      .toEqual([['loadAfter', 'Creation.esp', 'Mod.esp'], ['group', 'Creation.esp', 'Mod.esp']]);
   });
 });
 

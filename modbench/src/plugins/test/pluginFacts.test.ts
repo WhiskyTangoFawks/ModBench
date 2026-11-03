@@ -126,17 +126,19 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
-  it('judges no rule of the game\'s or LOOT\'s on the place of a plugin the game loads with no line', () => {
+  it('judges no blueprint rule, and no load after between two of them, on the plugins the game loads with no line', () => {
     const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    const creation = { name: 'Creation.esm', origin: 'SomeMod' };
     const { entries, groups } = rulesReader()({
-      masterlist: { path: '/instance/masterlist.yaml', kind: 'text', text: 'plugins:\n  - name: B.esp\n    after: [A.esp]\n' },
+      masterlist: { path: '/instance/masterlist.yaml', kind: 'text', text: 'plugins:\n  - name: Blueprint.esm\n    after: [Creation.esm]\n' },
       prelude: { path: '/instance/prelude.yaml', kind: 'absent' },
       userlist: { path: '/instance/userlist.yaml', kind: 'absent' },
     });
     const files: LootInput['files'] = { files: () => ({ names: [], complete: true }), isPresent: () => 'present', answer: () => ({ kind: 'read', value: undefined }) };
-    facts.reconciled([held({ isMaster: true }), held({ name: 'B.esp' })], [], [B, A], [A], { entries, groups, files });
+    facts.reconciled([held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...creation, isMaster: true })], [], [blueprint, creation, A], [A], { entries, groups, files });
 
-    expect(facts.tooltipLines(A).filter((line) => line.startsWith('Warning'))).toEqual([]);
+    expect(facts.brokenRules()).toEqual([]);
   });
 
   it('keeps the last sorting statuses through a re-read, until a reconcile judges again', () => {
