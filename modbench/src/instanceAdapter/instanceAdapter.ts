@@ -820,8 +820,8 @@ export interface InstanceAdapter extends DataFileReads {
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
   /** Writes what Nexus names of a downloaded file into its metadata, made when it has none. Keeps every value `info` does not name. Rejects, writing nothing, when the instance's game has no name in Nexus's terms. */
   writeNexusFileInfo(name: string, info: NexusFileInfo): Promise<Marked>;
-  /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`, and
-   *  puts nothing when it is not; any bytes when no hash is given. Refuses a name the downloads folder holds, writing nothing. */
+  /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`
+   *  (any bytes without one); puts nothing otherwise. Refuses a name the downloads folder holds, writing nothing. */
   putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash?: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
   /** Puts a copy of the downloaded file at `from` as the downloaded file `name`, with its metadata. Refuses a name the
    *  downloads folder holds, writing nothing. */
