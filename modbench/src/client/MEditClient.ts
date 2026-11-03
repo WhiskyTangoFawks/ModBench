@@ -9,7 +9,8 @@ import {
   type PluginLoadFailure, type CompareResult, type CompareRecordsAnswer, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
-import type { PluginAddress } from '../wire/pluginAddress';
+import type { PluginAddress, SourceModIn } from '../wire/pluginAddress';
+export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
@@ -149,8 +150,7 @@ export interface VersionInGitOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A plugin to repair, and the source folder its mod's repository is made in when it
- *  has none. */
+/** A plugin to repair, and the source folder made for its mod when the mod is not a source mod. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
 /** A mod to version in git, and the source folder made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
@@ -158,9 +158,6 @@ export type ModToVersionInGit = components['schemas']['ModToVersionInGitRequest'
 
 /** The source folder made for a mod, the repository that holds it, its assets by path in the mod folder, and its manifest. */
 export type SourceFolderRequest = components['schemas']['SourceFolderRequest'];
-
-/** Which repository holds the source folder version in git makes: a new one of its own, or the modlist repository. */
-export type SourceModIn = components['schemas']['SourceModIn'];
 
 /** A mod to build, as the extension hands it (ADR-0016): the paths it excludes, and the built-in step of its build file to run. */
 export type BuildMod = components['schemas']['BuildModRequest'];

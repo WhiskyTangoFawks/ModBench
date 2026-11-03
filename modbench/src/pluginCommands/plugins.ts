@@ -12,7 +12,7 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
 import { moveOrderRefusal } from './pluginOrder';
-import { decompileAndRepair, type DecompileAndRepairClient, type PlaceMods } from './decompileAndRepair';
+import { decompileAndRepair, outsideSourceMods, type DecompileAndRepairClient, type PlaceMods } from './decompileAndRepair';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
@@ -233,15 +233,16 @@ async function loadAfter(adapter: InstanceAdapter, plugins: readonly string[], a
 }
 
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
-export function pluginCommands({ adapter, client, newRepositories }: {
-  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; newRepositories: PlaceMods;
+export function pluginCommands({ adapter, client, placeMods }: {
+  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; placeMods: PlaceMods;
 }) {
   return {
     setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),
     setPluginsEnabled: (...args: TailOf<typeof setPluginsEnabled>) => setPluginsEnabled(adapter, ...args),
     loadAfter: (...args: TailOf<typeof loadAfter>) => loadAfter(adapter, ...args),
     reorderPlugins: (...args: TailOf<typeof reorderPlugins>) => reorderPlugins({ adapter, client }, ...args),
-    decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client, newRepositories }, ...args),
+    decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client, placeMods }, ...args),
+    outsideSourceMods: (...args: TailOf<typeof outsideSourceMods>) => outsideSourceMods({ adapter }, ...args),
     ...pluginRenameCommands({ adapter, client }),
   };
 }
