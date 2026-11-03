@@ -159,12 +159,12 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a compiled plugin) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
+| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a plugin in a mod) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record, Menus and keys, story 4) · copy… · copy value · delete (Menus and keys, story 4) |
 | Check box | enable or disable |
-| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a compiled plugin. Delete: delete records. Ctrl+C: copy value. |
+| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a plugin in a mod. Delete: delete records. Ctrl+C: copy value. |
 
 As a user, I want:
 
@@ -221,7 +221,7 @@ As a user, I want:
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. It refuses what Create plugin, story 1 refuses, and a name another plugin in its place has, compared without case. The extension may change. Cites: Windows and Linux alike; mods.md, Rename mod, story 2
 2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Cites: Never silently wrong
 3. The files in its mod that the game ties to it by name to follow it. Cites: Never silently wrong
-4. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
+4. A plugin source, when the plugin has one, renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
 
 ### Move
 
