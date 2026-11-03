@@ -151,9 +151,9 @@ public enum UnverifiedReason
 /// <summary>A record whose rewrite the comparison could not prove intact.</summary>
 public readonly record struct UnverifiedRecord(UnverifiedReason Reason, string RecordType, FormKey FormKey);
 
-/// <summary>Whether two plugin files hold the same bytes, and if not, what the rewrite emptied, dropped, lacks or left unread.</summary>
+/// <summary>Whether two plugin files hold the same bytes, and if not, what the rewrite empties, drops, lacks or left unread.</summary>
 public sealed record PluginByteComparison(
-    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, IReadOnlyList<RepairPreview>? LossCauses = null, string? DeletedRecordEmptied = null,
+    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, IReadOnlyList<RepairPreview>? LossCauses = null, IReadOnlyList<RepairPreview>? DeletedRecordCauses = null,
     UnverifiedRecord? Unverified = null);
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the

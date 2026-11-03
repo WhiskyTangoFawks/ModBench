@@ -101,10 +101,10 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.Identical)
             return null;
 
-        if (comparison.DeletedRecordEmptied is { } deleted)
+        if (comparison.DeletedRecordCauses is { } deleted)
         {
-            return $"{pluginName} does not round-trip through its own source: {deleted} is flagged Deleted and still " +
-                   "holds fields, which Mutagen does not write for a deleted record.";
+            return $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and " +
+                   $"{string.Join("; ", deleted.Select(cause => cause.Diagnosis.Describe()))}.{RepairClause(deleted, namesRepair)}";
         }
 
         if (comparison.Loss is { } loss)

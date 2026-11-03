@@ -68,7 +68,7 @@ internal sealed class GameCodec : IGameCodec
     public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized)
     {
         var type = record.GetType();
-        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
             && (localized || !StringHolders.CanReach(type)))
             return record;
         var copy = record.DeepCopy();
@@ -101,8 +101,21 @@ internal sealed class GameCodec : IGameCodec
                 ZeroTopicGroupFields(topic);
                 break;
         }
+        DeletedReferences.ForEach(copy, ClearBaseOfDeleted);
         GameSpecifics.Normalize(copy);
         return copy;
+    }
+
+    // Mutagen reads a deleted reference's base record and writes a deleted record as its header alone.
+    private const string BaseMember = "Base";
+
+    private static readonly RecordGraph DeletedReferences = new(typeof(IPlacedGetter).IsAssignableFrom);
+
+    private static void ClearBaseOfDeleted(object node)
+    {
+        if ((((IMajorRecordGetter)node).MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return;
+        var link = node.GetType().GetProperty(BaseMember)?.GetValue(node);
+        link?.GetType().GetMethod("SetToNull", Type.EmptyTypes)?.Invoke(link, null);
     }
 
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();

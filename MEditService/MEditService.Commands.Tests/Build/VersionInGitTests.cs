@@ -103,6 +103,21 @@ public sealed class VersionInGitTests
     }
 
     [Fact]
+    public async Task InitMod_OfAPluginHoldingADeletedReferenceWithOnlyItsBaseRecord_Inits()
+    {
+        using var modFolder = new ScratchDirectory("medit-init-deleted-reference-");
+        using var dataFolder = new ScratchDirectory("medit-init-deleted-reference-data-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        File.WriteAllBytes(pluginPath, DeletedReferencePlugin.Bytes("Fixture.esp"));
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
+
+        var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.True(result.Applied);
+    }
+
+    [Fact]
     public async Task InitMod_OfAMod_TakesOnlyThePluginsItProvides_NotAnotherModsPluginOfTheSameFileName()
     {
         using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
@@ -215,8 +230,16 @@ public sealed class VersionInGitTests
         {
             "deleted record holding fields",
             path => DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800)),
-            "Fixture.esp does not round-trip through its own source: NPC_ 000800:Fixture.esp is flagged Deleted " +
-            "and still holds fields, which Mutagen does not write for a deleted record."
+            "Fixture.esp does not round-trip through its own source: it is a malformed plugin, and NPC_ 00000800 (Guy) — " +
+            "deleted-record-holds-fields, repairable (drops 154 bytes): flagged Deleted and holds EDID, OBND, ACBS, RNAM, AIDT, FULL, DATA, DNAM, NAM6, NAM4, NAM8; " +
+            "Mutagen writes a deleted record as its header alone. Decompile and repair it."
+        },
+        {
+            "deleted reference holding a field beside its base record",
+            path => File.WriteAllBytes(path, DeletedReferencePlugin.Bytes("Fixture.esp", ("DATA", new byte[24]))),
+            "Fixture.esp does not round-trip through its own source: it is a malformed plugin, and REFR 00000801 — " +
+            "deleted-record-holds-fields, repairable (drops 40 bytes): flagged Deleted and holds DATA; " +
+            "Mutagen writes a deleted record as its header alone. Decompile and repair it."
         },
         {
             "record absent from the rewrite",

@@ -133,20 +133,29 @@ public sealed class SubrecordLossTests : IDisposable
     }
 
     [Fact]
-    public async Task ADeletedRecordWhoseRewriteHoldsNoSubrecord_IsNamedBySignatureAndFormKey()
+    public async Task ADeletedReferenceHoldingOnlyItsBaseRecord_IsNeitherALossNorMalformed()
     {
         var original = Record("REFR", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("NAME", [1, 2, 3, 4]));
         var rewritten = Record("REFR", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion);
 
-        Assert.Equal("REFR 000801:original.esp", (await ComparisonAsync(original, rewritten)).DeletedRecordEmptied);
+        var comparison = await ComparisonAsync(original, rewritten);
+
+        Assert.Equal((null, null), (comparison.Loss, comparison.DeletedRecordCauses));
     }
 
-    [Fact]
-    public async Task ADeletedRecordWhoseRewriteKeepsItsSubrecords_IsNotNamed()
+    [Theory]
+    [InlineData("REFR", "NAME", "DATA")]
+    [InlineData("NPC_", "EDID", "FULL")]
+    public async Task ADeletedRecordHoldingAFieldMutagenDoesNotWrite_IsMalformed_NotALoss(string type, string tolerated, string other)
     {
-        var deleted = Record("WRLD", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("EDID", "World"u8.ToArray()));
+        var original = Record(type, 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord(tolerated, [1]), Subrecord(other, [2]));
+        var rewritten = Record(type, 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion);
 
-        Assert.Null((await ComparisonAsync(deleted, Concat(deleted, AnEmptyWeapon))).DeletedRecordEmptied);
+        var comparison = await ComparisonAsync(original, rewritten);
+
+        Assert.Null(comparison.Loss);
+        var cause = Assert.Single(comparison.DeletedRecordCauses ?? []);
+        Assert.Equal(("deleted-record-holds-fields", $"{type} 00000801"), (cause.Diagnosis.DefectClass, cause.Diagnosis.Anchor?[..13]));
     }
 
     [Fact]
