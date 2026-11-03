@@ -104,8 +104,8 @@ const readBy = (step: BuildStep): { readonly step: BuildFileLack['step']; readon
   }
 };
 
-/** Each path a step of the build file in `sourceFolder` reads from it that names nothing there, a plugin source found in
- *  any case, as mEdit finds it. None when it holds no build file, or cannot read it or its plugin sources. */
+/** Each path a build file step reads from `sourceFolder` that names nothing there; a plugin source is found in any case,
+ *  as mEdit finds it. None when the folder holds no build file it can read. */
 export async function buildFileAgainst(sourceFolder: string): Promise<BuildFileAgainst | undefined> {
   const unreadable = () => undefined;
   const [at, listed] = await Promise.all([buildFileAt(sourceFolder).catch(unreadable), entriesIn(join(sourceFolder, PLUGIN_SOURCE_FOLDER)).catch(unreadable)]);
