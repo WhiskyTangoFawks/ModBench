@@ -4,7 +4,7 @@ interface PluginFacts {
   origin: string;
   masters: readonly string[];
   blueprint: boolean;
-  /** The master flag, which a plugin of the `.esm` extension also has. */
+  /** Whether the game loads it as a master, by its master flag or its extension. */
   master: boolean;
 }
 
@@ -84,7 +84,7 @@ function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): Br
     if (first === undefined || firstFacts === undefined) return [];
     return [{
       rule: 'masterFlag', level: 'warning', plugins: [refOf(flagged, facts), refOf(first, firstFacts)],
-      reason: `"${flagged}" has the master flag, so the game loads it before "${first}", which has not.`,
+      reason: `"${flagged}" loads as a master, by its master flag or its extension, so before "${first}", which does not.`,
     }];
   });
 }

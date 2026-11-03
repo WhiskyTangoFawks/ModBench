@@ -265,7 +265,7 @@ class HttpMEditClient implements MEditClient {
   ): Promise<RenameSourceChangesOutcome | WriteRefused> {
     return this.mutate<RenameSourceChangesOutcome>({
       op: `getRenameSourceChanges(${plugin.name}, ${plugin.origin})`,
-      failMsg: `Could not rename the source of "${plugin.name}"`,
+      failMsg: `Could not rename "${plugin.name}"`,
       post: () => this.apiClient.POST('/plugins/rename-source-changes', {
         body: { origin: plugin.origin, name: plugin.name, newName },
       }),

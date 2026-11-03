@@ -73,12 +73,12 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
     }]);
   });
 
-  it('breaks, at Warning, a plugin with the master flag listed after one without it, naming the first such plugin', () => {
+  it('breaks, at Warning, a plugin the game loads as a master listed after one it does not, naming the first such plugin', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esp': {}, 'C.esm': { master: true } });
 
     expect(judge(['A.esp', 'B.esp', 'C.esm'], facts)).toEqual([{
       rule: 'masterFlag', level: 'warning', plugins: [ref('C.esm'), ref('A.esp')],
-      reason: '"C.esm" has the master flag, so the game loads it before "A.esp", which has not.',
+      reason: '"C.esm" loads as a master, by its master flag or its extension, so before "A.esp", which does not.',
     }]);
   });
 

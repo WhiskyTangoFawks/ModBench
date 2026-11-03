@@ -18,7 +18,11 @@ vi.mock('vscode', () => ({
     replace(uri: { path: string }, _range: unknown, text: string) { this.made.push(['replace', uri.path, text]); }
   },
   workspace: {
-    applyEdit: (edit: { made: unknown[] }, options: unknown) => { h.applied.push(edit.made); h.options.push(options); return Promise.resolve(h.applyLands); },
+    applyEdit: (edit: { made: unknown[] }, options: unknown) => {
+      h.applied.push(edit.made);
+      h.options.push(options);
+      return Promise.resolve(h.applyLands && edit.made.length > 0);
+    },
   },
 }));
 
@@ -59,6 +63,10 @@ describe('applying workspace changes', () => {
       .rejects.toThrow('VS Code did not apply');
 
     expect(undo).toHaveBeenCalledOnce();
+  });
+
+  it('resolves when the changes hold nothing, though VS Code answers an empty edit as not applied', async () => {
+    await expect(applyWorkspaceChanges([none, none])).resolves.toBeUndefined();
   });
 
   it('changes a document through the Uri of the one the changes read', async () => {

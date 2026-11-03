@@ -17,6 +17,8 @@ export async function applyWorkspaceChanges(
   items: readonly WorkspaceChanges[],
   options: { read?: vscode.Uri; moving?: (moves: readonly FileMove[]) => () => void } = {},
 ): Promise<void> {
+  // VS Code answers an empty edit as not applied.
+  if (items.every(({ moves, deletions, documents }) => moves.length + deletions.length + documents.length === 0)) return;
   const lastWriter = new Map<string, number>();
   items.forEach(({ documents }, index) => { for (const { path } of documents) lastWriter.set(path, index); });
   const deletedLater = (path: string, index: number) =>
