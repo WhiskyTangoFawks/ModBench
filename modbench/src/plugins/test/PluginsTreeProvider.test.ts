@@ -1167,6 +1167,8 @@ describe('PluginsTreeProvider — the message line takes the first message that 
 
     instance.publish({
       ...valueOf([A_ROW()]),
+      dataFolderPlugins: { kind: 'listed', names: new Set() },
+      dataFolderFiles: { kind: 'listed', files: new Set() },
       sortingRuleFiles: { ...READ_SORTING_RULE_FILES, userlist: { path: '/instance/userlist.yaml', kind: 'text', text: 'plugins:\n  - name: A.esp\n    req: [Missing.esp]\n' } },
     });
 

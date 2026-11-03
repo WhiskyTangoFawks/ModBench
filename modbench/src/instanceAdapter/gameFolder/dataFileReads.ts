@@ -33,7 +33,7 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
     }
   };
   return {
-    dataFileChecksum: async (path, winner) => ifThere(async () => crc32Of(await located(path, winner))),
+    dataFileChecksum: async (path, winner) => ifThere(async () => parseInt(await crc32Of(await located(path, winner)), 16)),
     dataFileVersion: async (path, winner, field) => ifThere(async () => {
       const resource = await versionResourceOf(await located(path, winner));
       if (resource.kind === 'notAProgram') throw new Error(`${path} is not a Windows program`);

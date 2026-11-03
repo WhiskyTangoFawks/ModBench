@@ -23,7 +23,7 @@ interface Version {
 }
 
 function parse(text: string): Version {
-  const clean = (/^\d+(, \d+){3}$/.test(text) ? text.replace(/, /g, '.') : text).split('+')[0] ?? '';
+  const clean = (/^\d+(, \d+){3}$/.test(text) ? text.replace(/, /g, '.') : text).replace(/\+.*$/, '');
   const split = clean.search(/[-:_ ]/);
   const [release, prerelease] = split === -1 ? [clean, ''] : [clean.slice(0, split), clean.slice(split + 1)];
   return { release: release.split(/[.,]/), prerelease: prerelease === '' ? [] : prerelease.split(/[-.:_ ]/) };

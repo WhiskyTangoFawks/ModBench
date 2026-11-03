@@ -1,6 +1,5 @@
 import type { FileReads } from '../sortingRules/lootConditions';
 
-/** The Instance adapter's reads of a file, by path relative to the Data folder and the path mod order provides it from. */
 interface DataFileAdapter {
   dataFileChecksum: (path: string, winner: string | undefined) => Promise<number | undefined>;
   dataFileVersion: (path: string, winner: string | undefined, field: 'file' | 'product') => Promise<string | undefined>;

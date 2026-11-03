@@ -13,6 +13,7 @@ import type { ReconcileNarrator } from './reconcileNarrator';
 import type { PluginSyncRun } from '../pluginCommands/plugins';
 import { pluginSyncOn, registerPluginSyncCommand } from './pluginSync';
 export { PLUGINS_KEY_ARGS };
+export { fileReadsOver } from './fileReadsOver';
 
 type PluginsClient = PluginsViewDeps['client'] & ConstructorParameters<typeof RecordBrowser>[0]
   & Parameters<typeof createStatusBar>[0] & EditingDeps['client'];

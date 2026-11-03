@@ -29,11 +29,11 @@ export async function textHash(text: string): Promise<string> {
   return digest.toString('base64');
 }
 
-/** The CRC-32 LOOT's conditions compare. Streamed. */
-export async function crc32Of(path: string): Promise<number> {
+/** The CRC-32 LOOT's conditions compare, in 8 hexadecimal digits. Streamed. */
+export async function crc32Of(path: string): Promise<string> {
   let crc = 0;
   await feed(path, (chunk) => { crc = crc32(chunk, crc); });
-  return crc;
+  return crc.toString(16).padStart(8, '0');
 }
 
 /** MD5 in hex, the hash Nexus finds a file by. Streamed. */
