@@ -2,6 +2,7 @@
 
 import type { Dirent } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { commitFolder } from '../commitFolder';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
@@ -18,7 +19,7 @@ import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines' | 'writeHeldWholeLines'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
 
 // A manifest outside the mod folders, by the names of the folders down to it and its own.
 interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
@@ -99,16 +100,18 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
   });
 }
 
+const namesIn = (root: string, folders: readonly string[]): string[] => folders.map((folder) => {
+  const name = relative(root, folder);
+  if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${root}, so the instance repository's ignore list does not name it`);
+  return name;
+});
+
 // The lines of folders of `root`, written in the ignore list when the instance has one.
 async function folderLinesWritten(
   instanceRoot: string, root: string, folders: readonly string[], kept: string, withLines: (ignoreList: string, names: readonly string[]) => string | undefined,
 ): Promise<void> {
   const file = ignoreListFile(instanceRoot);
-  const names = folders.map((folder) => {
-    const name = relative(root, folder);
-    if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${root}, so the instance repository's ignore list does not name it`);
-    return name;
-  });
+  const names = namesIn(root, folders);
   if (!(await exists(file))) return;
   await putIfChanged(file, (before) => {
     const after = withLines(before, names);
@@ -238,6 +241,11 @@ export function mo2Repository(
 
     writeHeldWholeLines: (modFolders, held) =>
       folderLinesWritten(instanceRoot, modsDir(instanceRoot), modFolders, 'mod folders held whole', (list, names) => withHeldWholeLines(list, names, held)),
+
+    commitFolder: async (folder, message) => {
+      const names = namesIn(modsDir(instanceRoot), [folder]);
+      await commitFolder(instanceRoot, folder, message, (list) => withHeldWholeLines(list, names, true));
+    },
 
     gameFiles,
 

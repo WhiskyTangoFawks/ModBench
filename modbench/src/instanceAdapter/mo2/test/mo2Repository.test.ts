@@ -571,6 +571,25 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
+    it('is committed with the lines that let it in, and no other line of the ignore list', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      runGit('config', 'user.name', 't');
+      runGit('config', 'user.email', 't@t');
+      await adapter.writeIgnoreList();
+      runGit('add', '.gitignore');
+      runGit('commit', '--quiet', '-m', 'Base');
+      await writeFile(join(root, '.gitignore'), `${await readFile(join(root, '.gitignore'), 'utf8')}mine\n`);
+      const held = await modFolder('Mod [A]');
+      await adapter.writeHeldWholeLines([held], true);
+
+      await adapter.commitFolder(held, 'Init Mod [A]');
+
+      const committed = runGit('show', 'HEAD:.gitignore');
+      expect([committed, runGit('ls-tree', '-r', '--name-only', 'HEAD', '--', 'mods').split('\n').filter(Boolean)]).toEqual([
+        (await readFile(join(root, '.gitignore'), 'utf8')).replace('mine\n', ''), ['mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/meta.ini', 'mods/Mod [A]/textures/a.dds'],
+      ]);
+    });
   });
 
   describe.each([
