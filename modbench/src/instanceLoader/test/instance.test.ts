@@ -131,6 +131,14 @@ describe('Instance — the value', () => {
     expect(value.gameFolderLinks).toBe(4);
   });
 
+  it.each([['Starfield', true], ['Fallout4', false]])('carries whether the game loads a blueprint plugin last: %s, %s', async (gameRelease, answer) => {
+    const { instance } = loader({ gameRelease });
+
+    await instance.refresh();
+
+    expect(instance.value.blueprintLoadsLast).toBe(answer);
+  });
+
   it('carries whether the instance holds a repository', async () => {
     const { instance } = loader({ holdsRepository: true });
 

@@ -19,7 +19,7 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
-import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
+import { inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
@@ -136,6 +136,7 @@ export class PluginsTreeProvider
   // A new Instance value clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
   private lastBuildHadNoRows = false;
+  private rowsBlueprints = '';
   private lastLockedRowUris: ReadonlySet<string> = new Set();
   private highlighted: ReadonlySet<string> = new Set();
 
@@ -147,6 +148,7 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
+      blueprintLoadsLast: () => this.instanceValue.blueprintLoadsLast,
       lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
@@ -183,7 +185,10 @@ export class PluginsTreeProvider
       }),
       options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)),
       this.facts,
-      this.facts.onDidChange(() => this._onDidChangeTreeData.fire(undefined)),
+      this.facts.onDidChange(() => {
+        if (this.facts.rows.blueprintPlugins() !== this.rowsBlueprints) this.cache = undefined;
+        this._onDidChangeTreeData.fire(undefined);
+      }),
     );
   }
 
@@ -416,10 +421,10 @@ export class PluginsTreeProvider
     );
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));
-    return [
-      ...lockedRows,
-      ...fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
-    ];
+    this.rowsBlueprints = this.facts.rows.blueprintPlugins();
+    return inGameOrder<PluginListNode>(
+      lockedRows, fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)), (row) => this.facts.rows.isBlueprint(addressOfRow(row)), this.instanceValue.blueprintLoadsLast,
+    );
   }
 
   // plugins.md, A row, Plugin statuses: Not restored.

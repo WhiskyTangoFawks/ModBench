@@ -95,14 +95,11 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
     expect(judge(['A.esm', 'B.esp'], facts)).toEqual([]);
   });
 
-  it('judges no blueprint rule on a blueprint plugin the game loads with no line, as the game loads it last', () => {
-    const facts = factsFrom({
-      'Base.esm': { master: true }, 'Blueprint.esm': { master: true, blueprint: true }, 'Creation.esp': {}, 'Mod.esm': { master: true },
-    });
-    const noLine = new Set(['Base.esm', 'Blueprint.esm', 'Creation.esp']);
+  it('judges the order it is given, so a blueprint plugin the game loads with no line, listed before a plugin that is not one, is broken', () => {
+    const facts = factsFrom({ 'Blueprint.esm': { master: true, blueprint: true }, 'Creation.esp': {} });
+    const noLine = new Set(['Blueprint.esm']);
 
-    expect(judge(['Base.esm', 'Blueprint.esm', 'Creation.esp', 'Mod.esm'], facts, (filename) => noLine.has(filename)).map(({ rule, plugins }) => [rule, ...plugins.map(({ filename }) => filename)]))
-      .toEqual([['masterFlag', 'Mod.esm', 'Creation.esp']]);
+    expect(judge(['Blueprint.esm', 'Creation.esp'], facts, (filename) => noLine.has(filename)).map(({ rule }) => rule)).toEqual(['blueprint']);
   });
 
   it('holds a blueprint plugin with the master flag listed after one without it, as the game loads it last', () => {
