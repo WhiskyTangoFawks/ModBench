@@ -20,7 +20,7 @@ import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
 import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
-import { filePresence } from '../instanceLoader/fileIsPresent';
+import { filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
@@ -158,7 +158,7 @@ export class PluginsTreeProvider
       publishRuleFiles: options.publishRuleFiles,
       rules: () => this.rules,
       fileFacts: (reads) => readFileFacts(reads, options.fileReads, {
-        files: () => [...[...this.instanceValue.files].map(({ relativePath }) => relativePath), ...this.instanceValue.plugins.flatMap(({ name, path }) => (path === undefined ? [] : [name]))],
+        files: () => filesPresent(this.instanceValue),
         isPresent: (path) => filePresence(this.instanceValue, path),
       }),
     });

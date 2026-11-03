@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Unevaluable, type ConditionFacts, type FileRead } from '../lootConditions';
+import type { ConditionFacts, FileRead } from '../lootConditions';
 import { judgeLoot, readsNamed, type LootPartition } from '../lootJudge';
 import { rulesReader, type SortingRuleFiles } from '../lootMetadata';
 
@@ -17,15 +17,14 @@ interface World {
 }
 
 const factsOf = ({ present = [], active = [], answers = {} }: World): ConditionFacts => ({
-  files: () => present,
+  files: () => ({ names: present, complete: true }),
   isPresent: (path) => (present.some((name) => name.toLowerCase() === path.toLowerCase()) ? 'present' : 'absent'),
   activePlugins: () => active,
   isMaster: () => false,
   description: () => undefined,
   answer: ({ kind, path }: FileRead) => {
     const answer = answers[`${kind}:${path}`];
-    if (answer instanceof Error) throw new Unevaluable(answer.message);
-    return answer;
+    return answer instanceof Error ? { kind: 'unreadable', why: answer.message } : { kind: 'read', value: answer };
   },
 });
 

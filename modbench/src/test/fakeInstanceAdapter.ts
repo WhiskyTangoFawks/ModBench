@@ -125,6 +125,8 @@ export interface InstanceAnswers {
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
+  /** What a file reads as, by the path it is read from: the mod order's winner, else its path in the Data folder. */
+  dataFiles?: ReadonlyMap<string, { checksum?: number; version?: string; readable?: boolean }>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
   folderFiles?: ReadonlyMap<string, readonly string[]>;
   /** The files git holds in a source folder, by the folder. */
@@ -451,9 +453,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
     modValue: (folder, asked) => modValueOver(adapter, folder, asked),
     textHash,
-    dataFileChecksum: () => Promise.resolve(undefined),
-    dataFileVersion: () => Promise.resolve(undefined),
-    dataFileReadable: () => Promise.resolve(false),
+    dataFileChecksum: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.checksum }),
+    dataFileVersion: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.version }),
+    dataFileReadable: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.readable === true }),
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
       return write({ verb: 'changeModOrder', profile, changes }, () => {

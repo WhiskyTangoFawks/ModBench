@@ -55,9 +55,10 @@ interface FeedOptions {
   readonly rules?: () => ReturnType<PluginFactsFeedDeps['rules']>;
   readonly present?: readonly string[];
   readonly asked?: (reads: unknown) => void;
+  readonly gates?: readonly Promise<undefined>[];
 }
 
-function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked }: FeedOptions = {}) {
+function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [] }: FeedOptions = {}) {
   const client = clientFindingNoDefects();
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
@@ -65,11 +66,13 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   const sortingErrors = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const sortingInfo = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
+  let calls = 0;
   const feed = new PluginFactsFeed({
     client, shownPlugins, activePlugins, rules, lines: activePlugins,
-    fileFacts: (reads) => {
+    fileFacts: async (reads) => {
       asked?.(reads);
-      return Promise.resolve({ files: () => present, isPresent: (path) => (present.includes(path) ? 'present' : 'absent'), answer: () => undefined });
+      await gates[calls++];
+      return { files: () => ({ names: present, complete: true }), isPresent: (path) => (present.includes(path) ? 'present' : 'absent'), answer: () => ({ kind: 'read', value: undefined }) };
     },
     publishSortingInfo: sortingInfo.push,
     publishRuleFiles: ruleFiles.push,
@@ -149,6 +152,22 @@ describe('PluginFactsFeed', () => {
     expect(sortingInfo.items.flat().map(({ text }) => text)).toEqual(['New.']);
   });
 
+  it('reads is_master() and version() of the active plugin of a name, never of a disabled copy of it', async () => {
+    const rules = rulesOf(filesWith(`plugins:
+  - name: A.esp
+    msg:
+      - {type: say, content: Master., condition: 'is_master("A.esp")'}
+      - {type: say, content: Newer., condition: 'version("A.esp", >=, "2.0")'}
+`));
+    const disabled = { name: 'A.esp', origin: 'Disabled' };
+    const { feed, client, sortingInfo } = feedOver({ shownPlugins: () => [A, disabled], activePlugins: () => [A], rules: () => rules, present: ['A.esp'] });
+    client.setQueryAnswer('getPlugins', [held({ origin: 'Disabled', isMaster: true, description: 'v3.0' }), held({ isMaster: false, description: 'v1.0' })]);
+
+    await feed.reconciled([]);
+
+    expect(sortingInfo.items.flat()).toEqual([]);
+  });
+
   it('asks for the file reads the conditions of the active plugins name, and the checksum of one with cleaning data', async () => {
     const rules = rulesOf(filesWith(`plugins:
   - name: A.esp
@@ -211,6 +230,62 @@ describe('PluginFactsFeed', () => {
     await feed.rulesChanged();
 
     expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
+  });
+
+  describe('judging again as the rules change while a judgement is in flight', () => {
+    const MISSING = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
+    const errorCounts = (errors: readonly (readonly unknown[])[]) => errors.map((published) => published.length);
+
+    it('publishes the newest judgement, never an older one that resolves after it', async () => {
+      const older = deferred<undefined>();
+      let rules = NO_RULES;
+      const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules, gates: [Promise.resolve(undefined), older.promise] });
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+      rules = MISSING;
+      const first = feed.rulesChanged();
+      rules = NO_RULES;
+      await feed.rulesChanged();
+
+      older.resolve(undefined);
+      await first;
+
+      expect(errorCounts(sortingErrors.items)).toEqual([0, 0]);
+    });
+
+    it('drops a judgement of the old order that resolves after a reconcile landed the new one', async () => {
+      const slow = deferred<undefined>();
+      let rules = MISSING;
+      const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules, gates: [Promise.resolve(undefined), slow.promise] });
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+      const stale = feed.rulesChanged();
+      rules = NO_RULES;
+      await feed.reconciled([]);
+
+      slow.resolve(undefined);
+      await stale;
+
+      expect(errorCounts(sortingErrors.items)).toEqual([1, 0]);
+    });
+
+    it('judges a reconcile by the rules that stand when its reads land', async () => {
+      const slow = deferred<undefined>();
+      const reading = deferred<undefined>();
+      let rules = NO_RULES;
+      const { feed, client, sortingErrors } = feedOver({
+        activePlugins: () => [A], rules: () => rules, gates: [slow.promise], asked: () => { reading.resolve(undefined); },
+      });
+      client.setQueryAnswer('getPlugins', [held()]);
+      const reconciling = feed.reconciled([]);
+      await reading.promise;
+      rules = MISSING;
+
+      slow.resolve(undefined);
+      await reconciling;
+
+      expect(errorCounts(sortingErrors.items)).toEqual([1]);
+    });
   });
 
   it('names an unreadable plugin list on the rows and the message line, and answers undefined', async () => {

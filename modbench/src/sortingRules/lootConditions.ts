@@ -1,7 +1,7 @@
 import { compareVersions, versionInDescription } from './lootVersion';
 
 // `unknown` while the game's Data folder cannot be listed.
-type Presence = 'present' | 'absent' | 'unknown';
+export type Presence = 'present' | 'absent' | 'unknown';
 
 /** A read of one file's bytes or version resource, which the Instance adapter answers. `path` is relative to the
  *  Data folder, and may leave it with `../`. */
@@ -10,12 +10,14 @@ export interface FileRead {
   path: string;
 }
 
-/** A condition that cannot be given a value. */
-export class Unevaluable extends Error {}
+/** What a read answered: the value, or why the file could not be read. A file that is not there is a value. */
+export type FileAnswer<T> = { kind: 'read'; value: T } | { kind: 'unreadable'; why: string };
+
+type ReadValue = string | number | boolean | undefined;
 
 export interface ConditionFacts {
-  /** Every file the Data folder holds, relative to it with `/`. */
-  files: () => readonly string[];
+  /** The files the Data folder holds, relative to it with `/`; `complete` while its listing reads. */
+  files: () => { names: readonly string[]; complete: boolean };
   isPresent: (path: string) => Presence;
   /** The filenames of the active plugins. */
   activePlugins: () => readonly string[];
@@ -24,23 +26,27 @@ export interface ConditionFacts {
   /** The plugin's description, `undefined` while mEdit has not read it. */
   description: (plugin: string) => string | undefined;
   /** The answer to a `FileRead`: a CRC-32, a version, or whether the file is readable; `undefined` for a file that
-   *  does not exist or has no version. Throws `Unevaluable` for a read that failed or was not made. */
-  answer: (read: FileRead) => string | number | boolean | undefined;
+   *  does not exist or has no version. */
+  answer: (read: FileRead) => FileAnswer<ReadValue>;
 }
 
 export type FileFacts = Pick<ConditionFacts, 'files' | 'isPresent' | 'answer'>;
 
-/** What the Instance adapter reads of a file. Paths are relative to the Data folder, and may leave it with `../`.
- *  A read rejects when the file cannot be read, and resolves `undefined` or `false` when there is no such file. */
+/** What the Instance adapter reads of a file. Paths are relative to the Data folder, and may leave it with `../`. */
 export interface FileReads {
-  checksum: (path: string) => Promise<number | undefined>;
-  version: (path: string, field: 'file' | 'product') => Promise<string | undefined>;
-  readable: (path: string) => Promise<boolean>;
+  checksum: (path: string) => Promise<FileAnswer<number | undefined>>;
+  version: (path: string, field: 'file' | 'product') => Promise<FileAnswer<string | undefined>>;
+  readable: (path: string) => Promise<FileAnswer<boolean>>;
 }
 
 const readKey = ({ kind, path }: FileRead): string => `${kind}\0${path}`;
 
-function performed({ kind, path }: FileRead, reads: FileReads): Promise<string | number | boolean | undefined> {
+/** The reads without a repeat. */
+export function distinctReads(reads: readonly FileRead[]): FileRead[] {
+  return reads.filter((read, at) => reads.findIndex((other) => readKey(other) === readKey(read)) === at);
+}
+
+function performed({ kind, path }: FileRead, reads: FileReads): Promise<FileAnswer<ReadValue>> {
   switch (kind) {
     case 'checksum': return reads.checksum(path);
     case 'version': return reads.version(path, 'file');
@@ -49,31 +55,25 @@ function performed({ kind, path }: FileRead, reads: FileReads): Promise<string |
   }
 }
 
-/** The answers to `reads`, so that a condition is evaluated in one pass. A read that failed, or was not asked for, is
- *  `Unevaluable` when a condition reaches it. */
+/** The answers to `reads`, so that a condition is evaluated in one pass. A read that was not asked for is unreadable
+ *  when a condition reaches it. */
 export async function readFileFacts(
   reads: readonly FileRead[], source: FileReads, instance: Pick<ConditionFacts, 'files' | 'isPresent'>,
 ): Promise<FileFacts> {
-  type Answer = { answered: string | number | boolean | undefined } | { failed: string };
-  const answers = new Map(await Promise.all(reads.map(async (read): Promise<[string, Answer]> => {
-    try {
-      return [readKey(read), { answered: await performed(read, source) }];
-    } catch (err) {
-      return [readKey(read), { failed: err instanceof Error ? err.message : String(err) }];
-    }
-  })));
+  const answers = new Map(await Promise.all(reads.map(async (read): Promise<[string, FileAnswer<ReadValue>]> =>
+    [readKey(read), await performed(read, source)])));
   return {
     ...instance,
-    answer: (read) => {
-      const answer = answers.get(readKey(read));
-      if (answer === undefined) throw new Unevaluable(`the ${read.kind} of "${read.path}" was not read`);
-      if ('failed' in answer) throw new Unevaluable(`the ${read.kind} of "${read.path}" could not be read: ${answer.failed}`);
-      return answer.answered;
-    },
+    answer: (read) => answers.get(readKey(read)) ?? { kind: 'unreadable', why: `the ${read.kind} of "${read.path}" was not read` },
   };
 }
 
-export type Evaluation = { kind: 'value'; value: boolean } | { kind: 'unevaluable'; reason: string };
+type Unevaluable = { kind: 'unevaluable'; reason: string };
+
+export type Evaluation = { kind: 'value'; value: boolean } | Unevaluable;
+
+const yes = (value: boolean): Evaluation => ({ kind: 'value', value });
+const cannot = (reason: string): Unevaluable => ({ kind: 'unevaluable', reason });
 
 type Argument = { kind: 'string' | 'bare'; text: string };
 
@@ -84,6 +84,9 @@ type Node =
 
 const TOKEN = /\s*(?:("[^"]*")|(\(|\)|,)|([^\s(),"]+))/y;
 
+// Thrown and caught inside `parse` alone, to leave the recursive descent.
+class NotParsed extends Error {}
+
 function tokens(text: string): string[] {
   const found: string[] = [];
   TOKEN.lastIndex = 0;
@@ -91,17 +94,17 @@ function tokens(text: string): string[] {
     const match = TOKEN.exec(text);
     if (match === null) {
       if (text.slice(TOKEN.lastIndex).trim() === '') break;
-      throw new Unevaluable('it does not parse');
+      throw new NotParsed('it does not parse');
     }
     found.push(match[0].trim());
   }
   return found;
 }
 
-function parse(text: string): Node {
+function descend(text: string): Node {
   const list = tokens(text);
   let at = 0;
-  const fail = (): never => { throw new Unevaluable(`it does not parse: "${list[at] ?? 'end of condition'}" is unexpected`); };
+  const fail = (): never => { throw new NotParsed(`it does not parse: "${list[at] ?? 'end of condition'}" is unexpected`); };
   const peek = (): string | undefined => list[at];
   const take = (expected?: string): string => {
     const token = list[at];
@@ -155,42 +158,90 @@ function parse(text: string): Node {
   return root;
 }
 
+function parse(text: string): { kind: 'parsed'; node: Node } | Unevaluable {
+  try {
+    return { kind: 'parsed', node: descend(text) };
+  } catch (err) {
+    if (err instanceof NotParsed) return cannot(err.message);
+    throw err;
+  }
+}
+
 const fold = (text: string): string => text.toLowerCase();
 
 const REGEX_PATH = /[:\\*?|]/;
 const PLUGIN = /\.(esp|esm|esl)$/i;
 const COMPARATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);
+const DATA_FOLDER_UNLISTED = "the game's Data folder cannot be listed";
 
-function matching(candidates: readonly string[], path: string): string[] {
+function matching(candidates: readonly string[], path: string): { found: string[] } | { problem: string } {
+  if (!REGEX_PATH.test(path)) return { found: candidates.filter((candidate) => fold(candidate) === fold(path)) };
   const slash = path.lastIndexOf('/');
   const directory = fold(path.slice(0, slash + 1));
   let pattern: RegExp;
   try {
     pattern = new RegExp(`^(?:${path.slice(slash + 1)})$`, 'iu');
   } catch (err) {
-    throw new Unevaluable(`"${path}" is not a regular expression: ${err instanceof Error ? err.message : String(err)}`);
+    return { problem: `"${path}" is not a regular expression: ${err instanceof Error ? err.message : String(err)}` };
   }
-  return candidates.filter((candidate) => {
-    const end = candidate.lastIndexOf('/') + 1;
-    return fold(candidate.slice(0, end)) === directory && pattern.test(candidate.slice(end));
-  });
+  return {
+    found: candidates.filter((candidate) => {
+      const end = candidate.lastIndexOf('/') + 1;
+      return fold(candidate.slice(0, end)) === directory && pattern.test(candidate.slice(end));
+    }),
+  };
 }
 
-const stringArgument = (args: readonly Argument[], at: number, name: string): string => {
-  const argument = args[at];
-  if (argument?.kind !== 'string') throw new Unevaluable(`${name}() does not have a quoted argument ${at + 1}`);
-  return argument.text;
+// At least `atLeast` of the files match; with fewer, the answer is no only while the whole folder is listed.
+function filesMatching(path: string, atLeast: number, facts: ConditionFacts): Evaluation {
+  const listing = facts.files();
+  const matched = matching(listing.names, path);
+  if ('problem' in matched) return cannot(matched.problem);
+  if (matched.found.length >= atLeast) return yes(true);
+  return listing.complete ? yes(false) : cannot(DATA_FOLDER_UNLISTED);
+}
+
+const leavesData = (path: string): boolean => path.startsWith('../');
+
+function presence(path: string, facts: ConditionFacts): Evaluation {
+  if (leavesData(path)) return withAnswer(facts, { kind: 'readable', path }, (readable) => readable === true);
+  const found = facts.isPresent(path);
+  return found === 'unknown' ? cannot(DATA_FOLDER_UNLISTED) : yes(found === 'present');
+}
+
+/** Whether the file is installed as `file()` says: a name with a regular expression in its filename needs only a match. */
+export function isFilePresent(path: string, facts: ConditionFacts): Evaluation {
+  return REGEX_PATH.test(path) ? filesMatching(path, 1, facts) : presence(path, facts);
+}
+
+function withAnswer(facts: ConditionFacts, read: FileRead, use: (value: ReadValue) => boolean): Evaluation {
+  const answer = facts.answer(read);
+  return answer.kind === 'unreadable' ? cannot(answer.why) : yes(use(answer.value));
+}
+
+const activeMatching = (path: string, atLeast: number, facts: ConditionFacts): Evaluation => {
+  const matched = matching(facts.activePlugins(), path);
+  return 'problem' in matched ? cannot(matched.problem) : yes(matched.found.length >= atLeast);
 };
 
-function versionTest(name: string, args: readonly Argument[]): { path: string; test: (actual: string) => boolean } {
+type Quoted = { path: string } | Unevaluable;
+
+function quoted(args: readonly Argument[], at: number, name: string): Quoted {
+  const argument = args[at];
+  return argument?.kind === 'string' ? { path: argument.text } : { kind: 'unevaluable', reason: `${name}() does not have a quoted argument ${at + 1}` };
+}
+
+function versionTest(name: string, args: readonly Argument[]): { path: string; test: (actual: string) => boolean } | Unevaluable {
   const comparator = args[1]?.text ?? '';
-  if (args.length !== 3 || !COMPARATORS.has(comparator)) throw new Unevaluable(`${name}() is not of the form ${name}("path", comparator, "version")`);
-  const path = stringArgument(args, 0, name);
-  const given = stringArgument(args, 2, name);
+  const path = quoted(args, 0, name);
+  const given = quoted(args, 2, name);
+  if (args.length !== 3 || !COMPARATORS.has(comparator)) return { kind: 'unevaluable', reason: `${name}() is not of the form ${name}("path", comparator, "version")` };
+  if ('kind' in path) return path;
+  if ('kind' in given) return given;
   return {
-    path,
+    path: path.path,
     test: (actual) => {
-      const order = compareVersions(actual, given);
+      const order = compareVersions(actual, given.path);
       switch (comparator) {
         case '==': return order === 0;
         case '!=': return order !== 0;
@@ -203,86 +254,69 @@ function versionTest(name: string, args: readonly Argument[]): { path: string; t
   };
 }
 
-function checksumTest(args: readonly Argument[]): { path: string; expected: number } {
-  const expected = args[1]?.text ?? '';
-  if (args.length !== 2 || !/^[0-9a-f]{1,8}$/i.test(expected)) throw new Unevaluable('checksum() is not of the form checksum("path", hexadecimal)');
-  return { path: stringArgument(args, 0, 'checksum'), expected: parseInt(expected, 16) };
+const passes = (actual: ReadValue, test: (actual: string) => boolean): boolean => typeof actual === 'string' && test(actual);
+
+function pluginVersion(path: string, test: (actual: string) => boolean, facts: ConditionFacts): Evaluation {
+  const found = presence(path, facts);
+  if (found.kind === 'unevaluable' || !found.value) return found;
+  const description = facts.description(path);
+  return description === undefined ? cannot(`mEdit has not read "${path}"`) : yes(passes(versionInDescription(description), test));
 }
 
-const leavesData = (path: string): boolean => path.startsWith('../');
-
-function presentOrUnknown(path: string, facts: ConditionFacts): boolean {
-  if (leavesData(path)) return facts.answer({ kind: 'readable', path }) === true;
-  const presence = facts.isPresent(path);
-  if (presence === 'unknown') throw new Unevaluable("the game's Data folder cannot be listed");
-  return presence === 'present';
-}
-
-/** Whether the file is installed as `file()` says: a name with a regular expression in its filename needs only a match. */
-export function isFilePresent(path: string, facts: ConditionFacts): boolean {
-  if (REGEX_PATH.test(path)) return matching(facts.files(), path).length > 0;
-  return presentOrUnknown(path, facts);
-}
-
-function callValue(name: string, args: readonly Argument[], facts: ConditionFacts): boolean {
+function callValue(name: string, args: readonly Argument[], facts: ConditionFacts): Evaluation {
+  const first = quoted(args, 0, name);
+  if ('kind' in first) return first;
+  const { path } = first;
   switch (name) {
-    case 'file': return isFilePresent(stringArgument(args, 0, name), facts);
-    case 'many': return matching(facts.files(), stringArgument(args, 0, name)).length > 1;
-    case 'readable': return facts.answer({ kind: 'readable', path: stringArgument(args, 0, name) }) === true;
-    case 'active': {
-      const path = stringArgument(args, 0, name);
-      if (REGEX_PATH.test(path)) return matching(facts.activePlugins(), path).length > 0;
-      return facts.activePlugins().some((plugin) => fold(plugin) === fold(path));
-    }
-    case 'many_active': return matching(facts.activePlugins(), stringArgument(args, 0, name)).length > 1;
+    case 'file': return isFilePresent(path, facts);
+    case 'many': return filesMatching(path, 2, facts);
+    case 'readable': return withAnswer(facts, { kind: 'readable', path }, (readable) => readable === true);
+    case 'active': return activeMatching(path, 1, facts);
+    case 'many_active': return activeMatching(path, 2, facts);
     case 'is_master': {
-      const path = stringArgument(args, 0, name);
-      if (!presentOrUnknown(path, facts)) return false;
+      const found = presence(path, facts);
+      if (found.kind === 'unevaluable' || !found.value) return found;
       const master = facts.isMaster(path);
-      if (master === undefined) throw new Unevaluable(`mEdit has not read "${path}"`);
-      return master;
+      return master === undefined ? cannot(`mEdit has not read "${path}"`) : yes(master);
     }
     case 'checksum': {
-      const { path, expected } = checksumTest(args);
-      return facts.answer({ kind: 'checksum', path }) === expected;
+      const expected = args[1]?.text ?? '';
+      if (args.length !== 2 || !/^[0-9a-f]{1,8}$/i.test(expected)) return cannot('checksum() is not of the form checksum("path", hexadecimal)');
+      return withAnswer(facts, { kind: 'checksum', path }, (crc) => crc === parseInt(expected, 16));
     }
-    case 'version': {
-      const { path, test } = versionTest(name, args);
-      if (!PLUGIN.test(path)) return pass(facts.answer({ kind: 'version', path }), test);
-      if (!presentOrUnknown(path, facts)) return false;
-      const description = facts.description(path);
-      if (description === undefined) throw new Unevaluable(`mEdit has not read "${path}"`);
-      return pass(versionInDescription(description), test);
-    }
+    case 'version':
     case 'product_version': {
-      const { path, test } = versionTest(name, args);
-      return pass(facts.answer({ kind: 'productVersion', path }), test);
+      const compared = versionTest(name, args);
+      if ('kind' in compared) return compared;
+      if (name === 'product_version') return withAnswer(facts, { kind: 'productVersion', path }, (actual) => passes(actual, compared.test));
+      if (PLUGIN.test(path)) return pluginVersion(path, compared.test, facts);
+      return withAnswer(facts, { kind: 'version', path }, (actual) => passes(actual, compared.test));
     }
-    default: throw new Unevaluable(`${name}() is not a function Modbench evaluates`);
+    default: return cannot(`${name}() is not a function Modbench evaluates`);
   }
 }
 
-const pass = (actual: string | number | boolean | undefined, test: (actual: string) => boolean): boolean =>
-  typeof actual === 'string' && test(actual);
-
-function valueOf(node: Node, facts: ConditionFacts): boolean {
+function valueOf(node: Node, facts: ConditionFacts): Evaluation {
   switch (node.kind) {
     case 'call': return callValue(node.name, node.args, facts);
-    case 'not': return !valueOf(node.operand, facts);
-    case 'and': return valueOf(node.left, facts) && valueOf(node.right, facts);
-    case 'or': return valueOf(node.left, facts) || valueOf(node.right, facts);
+    case 'not': {
+      const operand = valueOf(node.operand, facts);
+      return operand.kind === 'value' ? yes(!operand.value) : operand;
+    }
+    case 'and':
+    case 'or': {
+      const left = valueOf(node.left, facts);
+      if (left.kind === 'unevaluable' || left.value === (node.kind === 'or')) return left;
+      return valueOf(node.right, facts);
+    }
   }
 }
 
 /** A LOOT condition string held against the facts. A function Modbench does not evaluate, a read that failed and a
  *  condition that does not parse are `unevaluable`, never a value. */
 export function evaluateCondition(condition: string, facts: ConditionFacts): Evaluation {
-  try {
-    return { kind: 'value', value: valueOf(parse(condition), facts) };
-  } catch (err) {
-    if (err instanceof Unevaluable) return { kind: 'unevaluable', reason: err.message };
-    throw err;
-  }
+  const parsed = parse(condition);
+  return parsed.kind === 'parsed' ? valueOf(parsed.node, facts) : parsed;
 }
 
 function readsIn(node: Node): FileRead[] {
@@ -306,12 +340,6 @@ function readsIn(node: Node): FileRead[] {
 
 /** The file reads `condition` needs, each once. None for a condition that does not parse. */
 export function readsOf(condition: string): FileRead[] {
-  let reads: FileRead[];
-  try {
-    reads = readsIn(parse(condition));
-  } catch (err) {
-    if (err instanceof Unevaluable) return [];
-    throw err;
-  }
-  return reads.filter((read, at) => reads.findIndex((other) => other.kind === read.kind && other.path === read.path) === at);
+  const parsed = parse(condition);
+  return parsed.kind === 'parsed' ? distinctReads(readsIn(parsed.node)) : [];
 }

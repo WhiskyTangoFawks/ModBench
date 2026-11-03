@@ -1,5 +1,5 @@
 import type { BrokenRule, PluginRef } from './judge';
-import { evaluateCondition, isFilePresent, readsOf, Unevaluable, type ConditionFacts, type FileRead } from './lootConditions';
+import { distinctReads, evaluateCondition, isFilePresent, readsOf, type ConditionFacts, type FileRead } from './lootConditions';
 import { DEFAULT_GROUP, type CleaningData, type LootEntry, type LootFile, type LootGroup, type RuleSource } from './lootMetadata';
 
 const fold = (filename: string): string => filename.toLowerCase();
@@ -41,41 +41,45 @@ function cleaningText({ utility, itm, udr, nav, detail }: CleaningData): string 
   return detail === undefined ? text : `${text} ${detail}`;
 }
 
+// What a rule found, or why the facts it needs cannot be told.
+type Judged = BrokenRule[] | { cannot: string };
+
+function guarded(
+  plugin: PluginRef, facts: ConditionFacts, { condition, source }: { condition?: string; source: RuleSource },
+  what: string, consequence: string, broken: () => Judged,
+): BrokenRule[] {
+  const applied = (): BrokenRule[] => {
+    const found = broken();
+    return Array.isArray(found) ? found : [unevaluated(plugin, undefined, found.cannot, what, consequence, source)];
+  };
+  if (condition === undefined) return applied();
+  const evaluation = evaluateCondition(condition, facts);
+  if (evaluation.kind === 'unevaluable') return [unevaluated(plugin, condition, evaluation.reason, what, consequence, source)];
+  return evaluation.value ? applied() : [];
+}
+
 function judgePlugin(
   order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts,
 ): BrokenRule[] {
   const plugin = order[index];
   if (plugin === undefined) return [];
   const matching = entries.filter((entry) => entry.matches(plugin.filename));
-  // A condition that is false leaves the data it guards out; one that cannot be evaluated is a Warning.
-  const guarded = (
-    { condition, source }: { condition?: string; source: RuleSource }, what: string, consequence: string, broken: () => BrokenRule[],
-  ): BrokenRule[] => {
-    const applied = (): BrokenRule[] => {
-      try {
-        return broken();
-      } catch (err) {
-        if (!(err instanceof Unevaluable)) throw err;
-        return [unevaluated(plugin, undefined, err.message, what, consequence, source)];
-      }
-    };
-    if (condition === undefined) return applied();
-    const evaluation = evaluateCondition(condition, facts);
-    if (evaluation.kind === 'unevaluable') return [unevaluated(plugin, condition, evaluation.reason, what, consequence, source)];
-    return evaluation.value ? applied() : [];
-  };
   const filesOf = (key: 'req' | 'inc' | 'after'): LootFile[] => distinct(matching.flatMap((entry) => entry[key]));
-  const checked = (file: LootFile, what: string, broken: () => BrokenRule[]): BrokenRule[] =>
-    guarded(file, what, `"${file.name}" is not checked`, broken);
-  const requirements = filesOf('req').flatMap((file) => checked(file, 'a requirement', (): BrokenRule[] => {
-    if (isFilePresent(file.name, facts)) return [];
+  const checked = (file: LootFile, what: string, broken: () => Judged): BrokenRule[] =>
+    guarded(plugin, facts, file, what, `"${file.name}" is not checked`, broken);
+  const requirements = filesOf('req').flatMap((file) => checked(file, 'a requirement', (): Judged => {
+    const present = isFilePresent(file.name, facts);
+    if (present.kind === 'unevaluable') return { cannot: present.reason };
+    if (present.value) return [];
     return [{ rule: 'requirement', level: 'error', plugins: [plugin], source: file.source, reason: withDetail(`"${plugin.filename}" requires ${shown(file)}, which is missing.`, file) }];
   }));
-  const incompatibilities = filesOf('inc').flatMap((file) => checked(file, 'an incompatibility', (): BrokenRule[] => {
-    if (!isFilePresent(file.name, facts)) return [];
+  const incompatibilities = filesOf('inc').flatMap((file) => checked(file, 'an incompatibility', (): Judged => {
+    const present = isFilePresent(file.name, facts);
+    if (present.kind === 'unevaluable') return { cannot: present.reason };
+    if (!present.value) return [];
     return [{ rule: 'incompatibility', level: 'error', plugins: [plugin], source: file.source, reason: withDetail(`"${plugin.filename}" is incompatible with ${shown(file)}, which is present.`, file) }];
   }));
-  const loadAfters = filesOf('after').flatMap((file) => checked(file, 'a load after', (): BrokenRule[] => {
+  const loadAfters = filesOf('after').flatMap((file) => checked(file, 'a load after', (): Judged => {
     const other = order.findIndex((candidate) => fold(candidate.filename) === fold(file.name));
     const target = order[other];
     if (target === undefined || other < index) return [];
@@ -85,29 +89,23 @@ function judgePlugin(
     }];
   }));
   const messages = matching.flatMap((entry) => entry.msg).flatMap((message) =>
-    guarded(message, 'a message', 'the message is not shown', () => [{ rule: 'message', level: message.level, plugins: [plugin], source: message.source, reason: message.text }]));
-  return [...requirements, ...incompatibilities, ...loadAfters, ...messages, ...judgeCleaning(plugin, matching, facts, guarded)];
+    guarded(plugin, facts, message, 'a message', 'the message is not shown', () => [{ rule: 'message', level: message.level, plugins: [plugin], source: message.source, reason: message.text }]));
+  return [...requirements, ...incompatibilities, ...loadAfters, ...messages, ...judgeCleaning(plugin, matching, facts)];
 }
 
-function judgeCleaning(
-  plugin: PluginRef, matching: readonly LootEntry[], facts: ConditionFacts,
-  guarded: (data: CleaningData, what: string, consequence: string, broken: () => BrokenRule[]) => BrokenRule[],
-): BrokenRule[] {
+function judgeCleaning(plugin: PluginRef, matching: readonly LootEntry[], facts: ConditionFacts): BrokenRule[] {
   const listed = matching.flatMap((entry) => entry.dirty);
   const first = listed[0];
   if (first === undefined) return [];
-  let checksum: ReturnType<ConditionFacts['answer']>;
-  try {
-    checksum = facts.answer({ kind: 'checksum', path: plugin.filename });
-  } catch (err) {
-    if (!(err instanceof Unevaluable)) throw err;
+  const checksum = facts.answer({ kind: 'checksum', path: plugin.filename });
+  if (checksum.kind === 'unreadable') {
     return [{
       rule: 'condition', level: 'warning', plugins: [plugin], source: first.source,
-      reason: `"${plugin.filename}": its checksum cannot be read (${err.message}), so its cleaning data is not checked.`,
+      reason: `"${plugin.filename}": its checksum cannot be read (${checksum.why}), so its cleaning data is not checked.`,
     }];
   }
-  const dirty = listed.filter((data, at) => data.crc === checksum && listed.findIndex((other) => other.crc === data.crc && other.utility === data.utility) === at);
-  return dirty.flatMap((data) => guarded(data, 'cleaning data', 'the cleaning data is not checked', () => [
+  const dirty = listed.filter((data, at) => data.crc === checksum.value && listed.findIndex((other) => other.crc === data.crc && other.utility === data.utility) === at);
+  return dirty.flatMap((data) => guarded(plugin, facts, data, 'cleaning data', 'the cleaning data is not checked', () => [
     { rule: 'cleaning', level: 'info', plugins: [plugin], source: data.source, reason: cleaningText(data) },
   ]));
 }
@@ -194,5 +192,5 @@ export function readsNamed(order: readonly PluginRef[], entries: readonly LootEn
       ...matching.some(({ dirty }) => dirty.length > 0) ? [{ kind: 'checksum' as const, path: filename }] : [],
     ];
   });
-  return reads.filter((read, at) => reads.findIndex((other) => other.kind === read.kind && other.path === read.path) === at);
+  return distinctReads(reads);
 }

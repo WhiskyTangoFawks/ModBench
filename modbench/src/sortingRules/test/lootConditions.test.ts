@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateCondition, readFileFacts, readsOf, Unevaluable, type ConditionFacts, type FileRead } from '../lootConditions';
+import { evaluateCondition, readFileFacts, readsOf, type ConditionFacts, type FileAnswer, type FileRead } from '../lootConditions';
 
 interface World {
   files?: string[];
+  listed?: boolean;
   active?: string[];
   masters?: Record<string, boolean>;
   descriptions?: Record<string, string>;
@@ -14,15 +15,14 @@ const keyOf = ({ kind, path }: FileRead): string => `${kind}:${path}`;
 function factsOf(world: World): ConditionFacts {
   const files = world.files ?? [];
   return {
-    files: () => files,
+    files: () => ({ names: files, complete: world.listed ?? true }),
     isPresent: (path) => (files.some((file) => file.toLowerCase() === path.toLowerCase()) ? 'present' : 'absent'),
     activePlugins: () => world.active ?? [],
     isMaster: (plugin) => world.masters?.[plugin],
     description: (plugin) => world.descriptions?.[plugin],
     answer: (read) => {
       const answer = world.answers?.[keyOf(read)];
-      if (answer instanceof Error) throw new Unevaluable(answer.message);
-      return answer;
+      return answer instanceof Error ? { kind: 'unreadable', why: answer.message } : { kind: 'read', value: answer };
     },
   };
 }
@@ -86,6 +86,18 @@ describe('evaluateCondition: the functions', () => {
       value('many("F4SE/Other/.*\\.dll")', world),
       value('file("F4SE/Missing/.*\\.dll")', world),
     ]).toEqual([true, true, false, false]);
+  });
+
+  it('says a pattern over the Data folder cannot be evaluated while the folder is unlisted, unless it already has enough matches', () => {
+    const world = { files: ['F4SE/Plugins/a.dll', 'F4SE/Plugins/b.dll'], listed: false };
+    const unlisted = { kind: 'unevaluable', reason: "the game's Data folder cannot be listed" };
+
+    expect([
+      value('file("F4SE/Plugins/.*\\.dll")', world),
+      value('file("F4SE/Other/.*\\.dll")', world),
+      value('many("F4SE/Plugins/a\\.dll")', world),
+      value('many("F4SE/Plugins/.*\\.dll")', world),
+    ]).toEqual([true, unlisted, unlisted, true]);
   });
 
   it('reads active() and many_active() of a plugin name or a pattern', () => {
@@ -158,11 +170,13 @@ describe('evaluateCondition: the functions', () => {
 
 describe('readFileFacts: the Instance adapter\'s answers to the reads a condition needs', () => {
   const source = {
-    checksum: (path: string) => (path === 'locked.swf' ? Promise.reject(new Error('permission denied')) : Promise.resolve(path === 'a.swf' ? 0xabc : undefined)),
-    version: (path: string, field: 'file' | 'product') => Promise.resolve(path === '../G.exe' ? `${field} 1.2` : undefined),
-    readable: (path: string) => Promise.resolve(path === '../G.exe'),
+    checksum: (path: string) => Promise.resolve<FileAnswer<number | undefined>>(
+      path === 'locked.swf' ? { kind: 'unreadable', why: 'permission denied' } : { kind: 'read', value: path === 'a.swf' ? 0xabc : undefined },
+    ),
+    version: (path: string, field: 'file' | 'product') => Promise.resolve<FileAnswer<string | undefined>>({ kind: 'read', value: path === '../G.exe' ? `${field} 1.2` : undefined }),
+    readable: (path: string) => Promise.resolve<FileAnswer<boolean>>({ kind: 'read', value: path === '../G.exe' }),
   };
-  const instance: Pick<ConditionFacts, 'files' | 'isPresent'> = { files: () => [], isPresent: () => 'absent' };
+  const instance: Pick<ConditionFacts, 'files' | 'isPresent'> = { files: () => ({ names: [], complete: true }), isPresent: () => 'absent' };
 
   it('evaluates a condition over what was read', async () => {
     const reads: FileRead[] = [
@@ -170,16 +184,18 @@ describe('readFileFacts: the Instance adapter\'s answers to the reads a conditio
     ];
     const facts = await readFileFacts(reads, source, instance);
 
-    expect(facts.answer({ kind: 'checksum', path: 'a.swf' })).toBe(0xabc);
-    expect(facts.answer({ kind: 'productVersion', path: '../G.exe' })).toBe('product 1.2');
-    expect(facts.answer({ kind: 'readable', path: '../G.exe' })).toBe(true);
+    expect([
+      facts.answer({ kind: 'checksum', path: 'a.swf' }),
+      facts.answer({ kind: 'productVersion', path: '../G.exe' }),
+      facts.answer({ kind: 'readable', path: '../G.exe' }),
+    ]).toEqual([{ kind: 'read', value: 0xabc }, { kind: 'read', value: 'product 1.2' }, { kind: 'read', value: true }]);
   });
 
   it('says a read that failed, with why, and a read nobody asked for, cannot be evaluated', async () => {
     const facts = await readFileFacts([{ kind: 'checksum', path: 'locked.swf' }], source, instance);
 
-    expect(() => facts.answer({ kind: 'checksum', path: 'locked.swf' })).toThrow('the checksum of "locked.swf" could not be read: permission denied');
-    expect(() => facts.answer({ kind: 'checksum', path: 'other.swf' })).toThrow('was not read');
+    expect(facts.answer({ kind: 'checksum', path: 'locked.swf' })).toEqual({ kind: 'unreadable', why: 'permission denied' });
+    expect(facts.answer({ kind: 'checksum', path: 'other.swf' })).toEqual({ kind: 'unreadable', why: 'the checksum of "other.swf" was not read' });
   });
 });
 

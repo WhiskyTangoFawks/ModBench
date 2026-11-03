@@ -175,7 +175,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = LocalizedStrings.FindMissingStringsFiles(
                     loaded.Getter, modPath, strings, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage);
-                return (content with { MissingStringsFiles = missing, Description = PluginDescription.Of(modPath, loadOrder.GameRelease) }, unreachable);
+                return (content with { MissingStringsFiles = missing, Description = PluginDescription.Of(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage) }, unreachable);
             }
         });
 

@@ -59,6 +59,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
+  // The order of `rulesChanged`, so only the newest judgement of an order publishes.
+  private rejudgements = 0;
 
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
@@ -135,19 +137,22 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishRuleFiles(ruleFileDiagnostics(files, problems, this.facts.brokenRules()));
   }
 
+  // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing.
   private async lootRules(active: readonly PluginAddress[]): Promise<LootInput> {
-    const { entries, groups } = this.deps.rules();
-    const files = await this.deps.fileFacts(readsNamed(active.map(({ name, origin }) => ({ origin, filename: name })), entries));
-    return { entries, groups, files };
+    for (;;) {
+      const read = this.deps.rules();
+      const files = await this.deps.fileFacts(readsNamed(active.map(({ name, origin }) => ({ origin, filename: name })), read.entries));
+      if (read === this.deps.rules()) return { entries: read.entries, groups: read.groups, files };
+    }
   }
 
   /** LOOT's rules changed: the order the last reconcile judged is judged again. Before that reconcile there is nothing to judge. */
   async rulesChanged(): Promise<void> {
-    const generation = this.generation;
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
+    const rejudgement = ++this.rejudgements;
     const loot = await this.lootRules(judged);
-    if (generation !== this.generation) return;
+    if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
     this.facts.rejudged(loot);
     this.publishSorting();
     this.changed.fire();

@@ -12,9 +12,9 @@ internal static class PluginDescription
     private static readonly RecordType DescriptionSubrecord = new("SNAM");
 
     /// <summary>The description in the plugin's header, or null for a header with none.</summary>
-    internal static string? Of(ModPath modPath, GameRelease release)
+    internal static string? Of(ModPath modPath, GameRelease release, Language language)
     {
-        var encoding = MutagenEncoding.Default.GetEncoding(release, Language.English);
+        var encoding = MutagenEncoding.Default.GetEncoding(release, language);
         foreach (var frame in ModHeaderFrame.FromPath(modPath, release).Select(pin => pin.Frame))
         {
             if (frame.RecordType != DescriptionSubrecord) continue;

@@ -30,7 +30,7 @@ function lootPartition({ master, blueprint }: { master: boolean; blueprint: bool
 }
 
 // No metadata: only the game's own sorting rules are judged.
-const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () => [], isPresent: () => 'present', answer: () => undefined } };
+const NO_LOOT_RULES: LootInput = { entries: [], groups: [], files: { files: () => ({ names: [], complete: true }), isPresent: () => 'present', answer: () => ({ kind: 'read', value: undefined }) } };
 
 /** LOOT's rules, and what the instance says of the files their conditions name. */
 export type LootInput = Omit<LootRules, 'facts'> & { files: FileFacts };
@@ -121,7 +121,7 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
-  private readsByFilename = new Map<string, PluginRead | undefined>();
+  private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
   private sortingNames: PluginAddress[] = [];
@@ -202,15 +202,16 @@ export class PluginFacts {
   refreshed(plugins: readonly PluginMetadata[]): void {
     answered(this.factsRead);
     const reads = new ByPluginAddress<PluginRead>();
-    const readOf = new Map<string, PluginRead | undefined>();
+    const readOf = new Map<string, PluginRead[]>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
-      reads.set(p, {
+      const read: PluginRead = {
         readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
         masters: p.masters, master: p.isMaster, blueprint: p.isBlueprint, description: p.description ?? '',
-      });
-      if (!readOf.has(p.name.toLowerCase())) readOf.set(p.name.toLowerCase(), reads.get(p));
+      };
+      reads.set(p, read);
+      readOf.set(p.name.toLowerCase(), [...readOf.get(p.name.toLowerCase()) ?? [], read]);
       matches.set(p, p.hasMatchingRecords);
     }
     this.reads = reads;
@@ -262,7 +263,14 @@ export class PluginFacts {
   }
 
   private conditionFacts(activeOrder: readonly PluginAddress[], files: FileFacts): ConditionFacts {
-    const read = (plugin: string): PluginRead | undefined => this.readsByFilename.get(plugin.toLowerCase());
+    const active = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
+    // The active plugin of the name is the one a rule judges; with none active, the only plugin of the name.
+    const read = (plugin: string): PluginRead | undefined => {
+      const address = active.get(plugin.toLowerCase());
+      if (address !== undefined) return this.reads.get(address);
+      const named = this.readsByFilename.get(plugin.toLowerCase());
+      return named?.length === 1 ? named[0] : undefined;
+    };
     return {
       ...files,
       activePlugins: () => activeOrder.map(({ name }) => name),

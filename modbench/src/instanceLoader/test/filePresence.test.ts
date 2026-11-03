@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FileConflictLookup } from '../fileConflictIndex';
-import { filePresence } from '../fileIsPresent';
+import { filePresence, filesPresent } from '../filePresence';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const files = new FileConflictLookup();
@@ -49,5 +49,22 @@ describe('filePresence: a file nothing provides while a listing of the Data fold
 
   it('is still present when a mod provides the file', () => {
     expect(filePresence({ ...value, dataFolderFiles: { kind: 'unreadable', reason: 'EACCES' } }, 'f4se/plugins/x.dll')).toBe('present');
+  });
+});
+
+describe('filesPresent: every file the game finds in its Data folder', () => {
+  it('lists the files of mods, the plugins and the Data folder, complete while both listings read', () => {
+    const { names, complete } = filesPresent(value);
+
+    expect({ complete, names: [...names].sort() }).toEqual({
+      complete: true,
+      names: ['DLCRobot.esm', 'F4SE/Plugins/x.dll', 'Fallout4.esm', 'Provided.esp', 'f4se/plugins/game.dll', 'fallout4 - main.ba2'],
+    });
+  });
+
+  it('is incomplete while a listing of the Data folder is missing, and still lists what it has', () => {
+    const listing = filesPresent({ ...value, dataFolderFiles: { kind: 'unreadable', reason: 'EACCES' } });
+
+    expect([listing.complete, listing.names.includes('F4SE/Plugins/x.dll')]).toEqual([false, true]);
   });
 });
