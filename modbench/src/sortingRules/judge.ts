@@ -75,11 +75,11 @@ function brokenBlueprints(order: readonly string[], factsOf: PluginFactsOf, load
   });
 }
 
-function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
+function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean): BrokenRule[] {
   return order.flatMap((flagged, index): BrokenRule[] => {
     const facts = factsOf(flagged);
     if (facts?.master !== true || facts.blueprint) return [];
-    const first = order.slice(0, index).find((other) => factsOf(other)?.master === false);
+    const first = order.slice(0, index).find((other) => factsOf(other)?.master === false && !(loadedWithNoLine(flagged) && loadedWithNoLine(other)));
     const firstFacts = first === undefined ? undefined : factsOf(first);
     if (first === undefined || firstFacts === undefined) return [];
     return [{
@@ -89,7 +89,8 @@ function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): Br
   });
 }
 
-/** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first. */
+/** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first.
+ *  A rule between two plugins the game loads with no line judges nothing the user owns. */
 export function judge(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean = () => false): BrokenRule[] {
-  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf, loadedWithNoLine), ...brokenMasterFlags(order, factsOf)];
+  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf, loadedWithNoLine), ...brokenMasterFlags(order, factsOf, loadedWithNoLine)];
 }

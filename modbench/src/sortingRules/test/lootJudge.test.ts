@@ -34,6 +34,9 @@ const judgedIn = (world: World, order: string[], masterlist: string, userlist?: 
     facts: factsOf(world),
   }, (filename) => partitions[filename] ?? 'nonMasters');
 
+const judgedWithNoLine = (order: string[], masterlist: string, noLine: string[]) =>
+  judgeLoot(order.map(at), { ...rules({ masterlist: text(masterlist) }), facts: factsOf({ present: order, active: order }) }, () => 'nonMasters', (filename) => noLine.includes(filename));
+
 const judged = (order: string[], masterlist: string, present: string[] = order, userlist?: string, partitions: Record<string, LootPartition> = {}) =>
   judgedIn({ present, active: order }, order, masterlist, userlist, partitions);
 
@@ -315,6 +318,32 @@ plugins:
 
     it('takes the group a userlist entry states over the masterlist\'s', () => {
       expect(judged(['L.esp', 'E.esp'], groups, ['L.esp', 'E.esp'], 'plugins:\n  - {name: L.esp, group: default}\n')).toEqual([]);
+    });
+  });
+
+  describe('a pair the game places', () => {
+    const masterlist = `groups:
+  - {name: early}
+  - {name: late, after: [early]}
+plugins:
+  - {name: E.esp, group: early}
+  - {name: L.esp, group: late}
+  - {name: A.esp, after: [B.esp]}
+`;
+    const rulesOf = (broken: { rule: string }[]) => broken.map(({ rule }) => rule);
+
+    it('judges no group or load after between two plugins with no line', () => {
+      expect(judgedWithNoLine(['L.esp', 'E.esp', 'A.esp', 'B.esp'], masterlist, ['L.esp', 'E.esp', 'A.esp', 'B.esp'])).toEqual([]);
+    });
+
+    it('judges a group and a load after between a plugin with a line and one with none', () => {
+      expect(rulesOf(judgedWithNoLine(['L.esp', 'E.esp', 'A.esp', 'B.esp'], masterlist, ['L.esp', 'B.esp']))).toEqual(['loadAfter', 'group']);
+    });
+
+    it('names a plugin with a line as the last of the group when a plugin with none shares it', () => {
+      const broken = judgedWithNoLine(['L.esp', 'E.esp', 'E2.esp'], `${masterlist}  - {name: E2.esp, group: early}\n`, ['L.esp', 'E2.esp']);
+
+      expect(broken.map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['L.esp', 'E.esp']]);
     });
   });
 });
